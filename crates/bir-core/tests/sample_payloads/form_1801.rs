@@ -251,7 +251,8 @@ fn form_1801_sample_with_many_rows_is_current() {
     );
 }
 
-/// Due one year after the death (decision P4-4): the penalties run from
+/// Due one year after the death (maintainer decision (1800/1801 penalties run
+/// from the due date)): the penalties run from
 /// that day; the calendar has no 1801 deadline.
 #[test]
 fn form_1801_with_tax_and_added_rows_penalty_items_follow_the_shared_model() {

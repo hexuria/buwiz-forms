@@ -18,7 +18,8 @@
 //! the filer, and Item 41 is Item 39 times the rate.
 //!
 //! Item 42 on a return for a taxable year before 2020 is computed instead
-//! (maintainer decision P4-17, 2026-10-19): 2% of Item 33 while MCIT applies,
+//! (maintainer decision (pre-2020 MCIT is 2% of gross), 2026-10-19): 2% of Item
+//! 33 while MCIT applies,
 //! the page's branch below 20 (rules/forms/1702rt-v2018c/calculations.json
 //! 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
 //! of gross"), read from the return's own Item 2 year.
@@ -54,7 +55,7 @@ const ZERO: WholePeso = WholePeso(0);
 pub const MCIT_ENTERED_FROM: u16 = 2020;
 
 /// The income tax rate of a return for a year before [`MCIT_ENTERED_FROM`]
-/// (maintainer decision P5-2, 2026-10-19): calculations.json
+/// (maintainer decision (pre-2020 1702RT computed like BIR), 2026-10-19): calculations.json
 /// 1702rt-item41-rate-tax, "For 2020+, tax due uses user-visible rate / 100
 /// times Item 39, with nonpositive net forced to zero; before 2020 it uses
 /// 30%." Item 40 shows it; before 2020 Item 41 has no zero floor.
@@ -300,7 +301,8 @@ impl Form1702RTDraft {
         let gross = p4.item_33_total_taxable_income;
         let before_2020 = self.taxable_year < MCIT_ENTERED_FROM;
         if mcit && before_2020 {
-            // Decision P4-17: computeP2Pt4I42's branch for a year before 2020
+            // Maintainer decision (pre-2020 MCIT is 2% of gross):
+            // computeP2Pt4I42's branch for a year before 2020
             // with IC 055 ticked, 2% of gross (getProduct2's Math.round).
             p4.item_42_mcit_due = two_percent(gross);
         }
@@ -374,7 +376,8 @@ impl Form1702RTDraft {
         // computeP2Pt4I40 / computeP2Pt4I41 / computeP2Pt4I43
         let net = p4.item_39_net_taxable_income_or_loss;
         if before_2020 {
-            // Decision P5-2: before 2020 the page's branch below 20 taxes
+            // Maintainer decision (pre-2020 1702RT computed like BIR): before
+            // 2020 the page's branch below 20 taxes
             // Item 39 at 30% (1702rt-item41-rate-tax), which Item 40 shows,
             // and Part V Item 57 is Item 35 times that rate / 100
             // (1702rt-item57-special-tax: "Only before 2020, Item 57 = Item
@@ -384,7 +387,7 @@ impl Form1702RTDraft {
             // The rule puts the zero floor on 2020+ only ("For 2020+, ...
             // nonpositive net forced to zero; before 2020 it uses 30%") and
             // the official body is not in the tree, so it is followed
-            // literally (round 3, F3): a negative Item 39 gives a negative
+            // literally: a negative Item 39 gives a negative
             // Item 41, as the no-floor MCIT does.
             p4.item_40_income_tax_rate_percent = RATE_BEFORE_2020_PERCENT;
             p4.item_41_normal_income_tax_due = percent_of(net, RATE_BEFORE_2020_PERCENT);
@@ -1353,7 +1356,8 @@ mod tests {
             .collect()
     }
 
-    /// Decision P4-17: a 2019 return subject to MCIT (incorporated 2015, IC
+    /// Maintainer decision (pre-2020 MCIT is 2% of gross): a 2019 return
+    /// subject to MCIT (incorporated 2015, IC
     /// 055 ticked) computes item 42 as 2% of item 33, rounded half up, over
     /// whatever it held; item 43 takes it as the larger of items 41 and 42,
     /// and items 56, 14, 16 and 21 follow.
@@ -1371,7 +1375,7 @@ mod tests {
         // 59,000.52 rounds to 59,001.
         assert_eq!(p4.item_42_mcit_due, WholePeso(59_001));
         // Item 39 is 2,950,026 - 3,140,000 = -189,974; before 2020 item 41
-        // has no floor (round 3, F3): 30% is -56,992.20.
+        // has no floor: 30% is -56,992.20.
         assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(-56_992));
         assert_eq!(p4.item_43_tax_due, WholePeso(59_001));
         assert_eq!(
@@ -1392,7 +1396,8 @@ mod tests {
         assert_eq!(fields["frm1702RT:txtPg2Pt4I42MinimumCorporate"], "59,001");
         assert_eq!(fields["frm1702RT:txtPg2Pt4I43TotalIncomeTax"], "59,001");
         // Where the regular tax is larger, item 43 stays item 41 (at the
-        // pre-2020 30%, decision P5-2: 30% of 1,510,001 is 453,000.30).
+        // pre-2020 30%, maintainer decision (pre-2020 1702RT computed like
+        // BIR): 30% of 1,510,001 is 453,000.30).
         let mut earning = sample();
         earning.taxable_year = 2019;
         earning.recompute();
@@ -1416,7 +1421,7 @@ mod tests {
         assert_eq!(two_percent(WholePeso(-26)), WholePeso(-1));
     }
 
-    /// P4-17 review item 17: a negative gross income gives a negative item
+    /// Review: a negative gross income gives a negative item
     /// 42, as the official helper computes it (no floor); item 43 still
     /// takes the larger of items 41 and 42.
     #[test]
@@ -1429,7 +1434,7 @@ mod tests {
         // 4,900,000 - 5,000,000 + 50,001 = -49,999; 2% is -999.98.
         assert_eq!(p4.item_33_total_taxable_income, WholePeso(-49_999));
         assert_eq!(p4.item_42_mcit_due, WholePeso(-1_000));
-        // Round 3 (F3): before 2020 item 41 has no floor either: item 39 is
+        // before 2020 item 41 has no floor either: item 39 is
         // -49,999 - 1,440,000 = -1,489,999, and 30% is -446,999.70.
         assert_eq!(p4.item_39_net_taxable_income_or_loss, WholePeso(-1_489_999));
         assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(-447_000));
@@ -1437,7 +1442,8 @@ mod tests {
         assert_eq!(p4.item_43_tax_due, WholePeso(-1_000));
     }
 
-    /// Decision P5-2: a 2019 return typed at 25% computes at 30% (item 40
+    /// Maintainer decision (pre-2020 1702RT computed like BIR): a 2019 return
+    /// typed at 25% computes at 30% (item 40
     /// shows 30), so item 41 is 30% of item 39 and items 43, 56, 14, 16 and
     /// 21 follow; item 57 is item 35 times 30 / 100 (calculations.json
     /// 1702rt-item57-special-tax), and an OSD return keeps it cleared.
@@ -1492,7 +1498,8 @@ mod tests {
         );
     }
 
-    /// Decisions P4-17 and P5-2 leave 2020 and later as they were: item 42
+    /// Maintainer decisions (pre-2020 MCIT is 2% of gross; pre-2020 1702RT
+    /// computed like BIR) leave 2020 and later as they were: item 42
     /// is the filer's entry while MCIT applies, item 40 the typed rate and
     /// item 57 as typed, and the totals are the same as before (the sample's
     /// pinned values, and the 1702RT sample payload hashes in

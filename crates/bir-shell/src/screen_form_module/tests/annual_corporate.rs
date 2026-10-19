@@ -1263,7 +1263,8 @@ fn pr8_form_1702ex_name_and_address_are_one_box_each() {
     assert!(!map["derived:address_line2"].trim().is_empty());
 }
 
-/// 1702EX preview.1, as decision P4-8 changes it: item 48 is the draft's
+/// 1702EX preview.1, as maintainer decision (1702EX shut rows locked like
+/// 1702MX) changes it: item 48 is the draft's
 /// first other credit, and Schedule 1 item 17d and Schedule 2 row 1 are
 /// entries, as the official page enables them at load; each takes a typed
 /// amount and the totals recompute through the form's own compute. Item 49,
@@ -1358,7 +1359,8 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
     );
 }
 
-/// Decision P4-8 on a draft stored before it: a 1702EX draft holding
+/// Maintainer decision (1702EX shut rows locked like 1702MX) on a draft stored
+/// before it: a 1702EX draft holding
 /// values in item 49, Schedule 1 items 17e-17h and Schedule 2 rows 2-3
 /// (serialized by the code at e86b1424 from PR 8's stored fixture) keeps
 /// filing them unchanged: its field map is the stored draft's, the page
@@ -2547,7 +2549,8 @@ fn pr8_form_1702mx_rates_are_typed_percents() {
 /// nonpositive net forces zero"). From 2020 it is the filer's entry while
 /// MCIT applies and item 39 is above zero; otherwise, and on every return
 /// before 2020 (where the form computes it while MCIT applies, decision
-/// P4-17), it is locked with its reason and a note, shows its value (0 on a
+/// maintainer decision (pre-2020 MCIT is 2% of gross)), it is locked with its
+/// reason and a note, shows its value (0 on a
 /// new return), and a typed amount is refused. The lock follows the answers
 /// as they are typed (the fill's `relocks`).
 #[test]
@@ -2629,7 +2632,8 @@ fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
     );
 
     // A 2019 return subject to MCIT (the profile's 2015 start, item 10):
-    // locked with the 2% rule, whatever the net (decision P4-17: computed).
+    // locked with the 2% rule, whatever the net (maintainer decision (pre-2020
+    // MCIT is 2% of gross): computed).
     let old = open_for(TIN, "1702RT", 2019, 0);
     assert_eq!(old["year"], json!(2019));
     assert_eq!(
@@ -2673,7 +2677,8 @@ fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
         refused["rejected"][&item_42],
         rows_annual_corporate::RT_MCIT_BEFORE_2020
     );
-    // What a 2019 return files (decision P4-17): item 42 is 2% of item 33,
+    // What a 2019 return files (maintainer decision (pre-2020 MCIT is 2% of
+    // gross)): item 42 is 2% of item 33,
     // and item 43 the larger of items 41 and 42 (here item 41).
     let map = agent::field_map(kind_of("1702RT").unwrap(), &old_earning["draft"]).unwrap();
     let gross = agent::parse_amount(&map[&rt("txtPg2Pt4I33TotalGross")]).unwrap();
@@ -3270,7 +3275,8 @@ fn pr8_form_1702rt_popup_alerts_name_the_printed_item() {
     );
 }
 
-/// Decision P4-17: a 2019 return subject to MCIT computes item 42 as 2% of
+/// Maintainer decision (pre-2020 MCIT is 2% of gross): a 2019 return subject to
+/// MCIT computes item 42 as 2% of
 /// item 33 (calculations.json 1702rt-item42-mcit), keeps it locked with its
 /// reason, and says why under it whatever it shows (`notes_always`); item 43
 /// takes it as the larger of items 41 and 42, and items 56, 14, 16 and 21
@@ -3309,7 +3315,7 @@ fn p4_17_a_2019_return_computes_mcit_from_gross_income() {
     // 59,000.52 rounds to 59,001.
     assert_eq!(amount(values, &item_42), 59_001.0);
     // Item 39 is 2,950,026 - 3,000,000 = -49,974; before 2020 item 41 has
-    // no floor (round 3, F3): 30% is -14,992.20.
+    // no floor: 30% is -14,992.20.
     assert_eq!(amount(values, &rt("txtPg2Pt4I39NetTaxable")), -49_974.0);
     assert_eq!(amount(values, &rt("txtPg2Pt4I41IncomeTaxDue")), -14_992.0);
     assert_eq!(amount(values, &rt("txtPg2Pt4I43TotalIncomeTax")), 59_001.0);
@@ -3350,7 +3356,8 @@ fn p4_17_a_2019_return_computes_mcit_from_gross_income() {
     assert_eq!(open_2020["notes_always"], json!([]));
 }
 
-/// Decision P4-17 on a draft stored before it: a 2019 return holding
+/// Maintainer decision (pre-2020 MCIT is 2% of gross) on a draft stored before
+/// it: a 2019 return holding
 /// another item 42 than the 2% the form now computes is never changed
 /// silently; opening it says what item 42 is now and what it held, and once
 /// saved (holding the computed amount) it opens without the notice.
@@ -3367,7 +3374,8 @@ fn p4_17_a_stored_2019_return_says_item_42_changed() {
     let id = save("1702RT", &filled["draft"])["id"].as_i64().unwrap();
     let mut stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
     assert_eq!(stored["part_iv"]["item_42_mcit_due"], json!(20_000));
-    // As a draft saved before P4-17 would hold it: the item 42 it was given.
+    // As a draft saved before maintainer decision (pre-2020 MCIT is 2% of
+    // gross) would hold it: the item 42 it was given.
     stored["part_iv"]["item_42_mcit_due"] = json!(0);
     raw_exec(
         "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
@@ -3411,7 +3419,8 @@ fn messages_of(opened: &Value) -> Vec<String> {
         .collect()
 }
 
-/// Decision P5-2: a 2019 return computes at 30%: item 40 is locked at 30
+/// Maintainer decision (pre-2020 1702RT computed like BIR): a 2019 return
+/// computes at 30%: item 40 is locked at 30
 /// with its reason and says so whatever it shows, a typed rate is refused,
 /// item 41 is 30% of item 39, and item 57 (item 35 times 30%) is locked
 /// and computed the same way. A 2020 return keeps both the filer's.
@@ -3477,7 +3486,8 @@ fn p5_2_a_2019_return_computes_at_30_percent() {
     );
 }
 
-/// Decisions P4-17 and P5-2 on a draft stored before them: a 2019 return
+/// Maintainer decisions (pre-2020 MCIT is 2% of gross; pre-2020 1702RT computed
+/// like BIR) on a draft stored before them: a 2019 return
 /// stored with item 40 at 25%, item 41 at 25% of item 39, item 42 at 0 and
 /// item 57 at 0 opens computed (30%, 30% of item 39, 2% of item 33 and
 /// item 35 times 30%) and says so item by item with the old and new
@@ -3499,7 +3509,8 @@ fn p5_2_a_stored_2019_return_says_what_changed() {
     );
     let id = save("1702RT", &filled["draft"])["id"].as_i64().unwrap();
     let mut stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
-    // As the code before P5-2 and P4-17 stored it.
+    // As the code before maintainer decision (pre-2020 1702RT computed like
+    // BIR) and maintainer decision (pre-2020 MCIT is 2% of gross) stored it.
     stored["part_iv"]["item_40_income_tax_rate_percent"] = json!(25);
     stored["part_iv"]["item_41_normal_income_tax_due"] = json!(225_000);
     stored["part_iv"]["item_42_mcit_due"] = json!(0);
@@ -3549,7 +3560,7 @@ fn p5_2_a_stored_2019_return_says_what_changed() {
         said.iter()
             .all(|m| !m.contains("2% of gross income (item 33) is 0"))
     );
-    // No incorporation date recorded (round 3, F6): MCIT cannot be applied,
+    // No incorporation date recorded: MCIT cannot be applied,
     // and the notice gives no four-year reason.
     let mut undated = young.clone();
     undated["incorporation_date"] = Value::Null;

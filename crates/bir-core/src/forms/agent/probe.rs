@@ -65,7 +65,8 @@ const USER_CHOSEN: &[(&str, &str)] = &[
          33 (decision P4-17)",
     ),
 ];
-// Decision P4-8 (2026-10-19): 1702EX item 49, Schedule 1 items 17e-17h and
+// Maintainer decision (1702EX shut rows locked like 1702MX) (2026-10-19):
+// 1702EX item 49, Schedule 1 items 17e-17h and
 // Schedule 2 rows 2-3 are no longer listed here. The official page keeps
 // them shut at load (rules/forms/1702ex-v2018c/fixtures/
 // runtime-control-inventory-v796.json: disabled), as it keeps 1702MX's

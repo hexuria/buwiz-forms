@@ -580,7 +580,8 @@ fn look_alike_fields_are_never_declared() {
     }
 }
 
-/// PR 11 golden, extended by decision P4-4: a typed due date is declared by
+/// PR 11 golden, extended by maintainer decision (1800/1801 penalties run from
+/// the due date): a typed due date is declared by
 /// the seven excise returns (D8) and by 1800 and 1801 (P4-4), and by no
 /// other form, so every other form's penalties keep their calendar due date
 /// (the `if let` in `PenaltyItems::due_date` is not taken); each form's

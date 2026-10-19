@@ -2456,7 +2456,8 @@ fn pr11_joining_the_typed_due_date_keeps_every_other_key() {
     assert_eq!(draft, expected);
 }
 
-/// Decision P4-14: an older excise return kept as entered says so under its
+/// Maintainer decision (kept note over held amounts): an older excise return
+/// kept as entered says so under its
 /// penalty boxes even when they hold 0.00 (the host lists them in
 /// `notes_always`; the page draws a lock note under a box showing a value
 /// only for those), and keeps the one-click "Use the computed amounts"
@@ -2515,11 +2516,13 @@ fn p4_14_a_kept_return_says_so_over_its_amounts() {
     }
 }
 
-/// Decision P4-14 pins every other form: a new return of every form lists
+/// Maintainer decision (kept note over held amounts) pins every other form: a
+/// new return of every form lists
 /// no box whose lock note shows whatever it holds, so the page draws every
 /// other lock note only under a blank box, as before; the exceptions are
-/// 1702RT item 42 while shut (decision P4-17) and 1702EX's rows BIR's
-/// program keeps shut (decision P4-8).
+/// 1702RT item 42 while shut (maintainer decision (pre-2020 MCIT is 2% of
+/// gross)) and 1702EX's rows BIR's
+/// program keeps shut (maintainer decision (1702EX shut rows locked like 1702MX)).
 #[test]
 fn p4_14_no_new_return_lists_a_note_shown_always() {
     setup();
@@ -2537,7 +2540,7 @@ fn p4_14_no_new_return_lists_a_note_shown_always() {
     }
 }
 
-/// Round 3 (F7): every module's "kept as entered" reason maps to the kept
+/// every module's "kept as entered" reason maps to the kept
 /// note through `KEPT_NOTES`, by the constant itself, before any prefix rule
 /// (a reworded constant starting "computed" would otherwise read as
 /// "Computed by the form."), and every module's own penalty lock is one of
@@ -2545,12 +2548,12 @@ fn p4_14_no_new_return_lists_a_note_shown_always() {
 /// note.
 #[test]
 fn every_kept_reason_maps_to_the_kept_note() {
-    for (reason, note) in KEPT_NOTES {
+    for (_, reason, note) in KEPT_NOTES {
         assert_eq!(note, NOTE_KEPT);
         assert_eq!(lock_note(reason), NOTE_KEPT, "{reason}");
         assert_eq!(lock_note_for("2200A", "any", reason), NOTE_KEPT, "{reason}");
     }
-    let table: Vec<&str> = KEPT_NOTES.iter().map(|(reason, _)| *reason).collect();
+    let table: Vec<&str> = KEPT_NOTES.iter().map(|(_, reason, _)| *reason).collect();
     for module_constant in [
         rows_income_q::KEPT_AS_ENTERED,
         rows_annual_individual::KEPT_AS_ENTERED,
@@ -2568,30 +2571,45 @@ fn every_kept_reason_maps_to_the_kept_note() {
     assert_eq!(opened["lock_notes"][key], NOTE_KEPT);
 }
 
-/// Round 4 (item 5): KEPT_NOTES is complete. Every module of
+/// KEPT_NOTES is complete. Every module of
 /// screen_form_module that declares a `KEPT_AS_ENTERED` constant has its
 /// row, and the table has no other: a new module constant without a row
 /// fails here.
 #[test]
 fn kept_notes_has_a_row_for_every_kept_constant() {
-    let dir = format!("{}/src/screen_form_module", env!("CARGO_MANIFEST_DIR"));
-    let mut declaring: Vec<String> = std::fs::read_dir(&dir)
-        .unwrap()
-        .filter_map(|entry| {
-            let path = entry.ok()?.path();
-            let source = std::fs::read_to_string(&path).ok()?;
-            let declares = source
-                .lines()
-                .any(|line| line.contains("const KEPT_AS_ENTERED: &str"));
-            declares.then(|| path.file_stem()?.to_str().map(str::to_string))
+    let root = format!("{}/src", env!("CARGO_MANIFEST_DIR"));
+    let mut sources = vec![(
+        "screen_form_module".to_string(),
+        format!("{root}/screen_form_module.rs"),
+    )];
+    for entry in std::fs::read_dir(format!("{root}/screen_form_module")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            let stem = path.file_stem().unwrap().to_str().unwrap().to_string();
+            sources.push((stem, path.to_str().unwrap().to_string()));
+        }
+    }
+    let mut declaring: Vec<String> = sources
+        .into_iter()
+        .filter(|(_, path)| {
+            std::fs::read_to_string(path).unwrap().lines().any(|line| {
+                line.contains("const KEPT_AS_ENTERED: &str")
+                    || line.contains("const KEPT_AS_ENTERED: &'static str")
+            })
         })
-        .flatten()
+        .map(|(module, _)| module)
         .collect();
     declaring.sort();
+    let mut rows: Vec<String> = KEPT_NOTES
+        .iter()
+        .map(|(module, _, _)| module.to_string())
+        .collect();
+    rows.sort();
+    let mut unique = rows.clone();
+    unique.dedup();
+    assert_eq!(unique, rows, "no module has two KEPT_NOTES rows");
     assert_eq!(
-        declaring,
-        ["rows_annual_individual", "rows_excise", "rows_income_q"],
-        "add a KEPT_NOTES row for each module constant"
+        rows, declaring,
+        "a KEPT_NOTES row for each module constant, and no other"
     );
-    assert_eq!(KEPT_NOTES.len(), declaring.len());
 }

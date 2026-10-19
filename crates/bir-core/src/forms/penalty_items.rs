@@ -27,7 +27,8 @@
 //!   whose penalties run from a date the filer types, not from the calendar
 //!   (the excise returns 2200A, 2200AN, 2200M, 2200P, 2200S and 2200T: the
 //!   removal date; 2200C: the 10th of the month after its Item 1 month;
-//!   decision P4-4, 2026-10-19: 1800, 30 days after the donation, and 1801,
+//! maintainer decision (1800/1801 penalties run from the due date), 2026-10-19:
+//! 1800, 30 days after the donation, and 1801,
 //!   one year after the death, each moved to the next business day),
 //!   declares [`PenaltyItems::typed_due_date`]. It is measured from that
 //!   date once the draft is on [`TYPED_DUE_DATE_MODEL_VERSION`] (a new
@@ -282,7 +283,8 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
 
 /// The calendar a typed due date moves on (maintainer decisions: a typed due
 /// date moves to the next working day, past weekends and official
-/// holidays): the weekends plus the official holidays the app ships, the `original_deadline` of each entry of
+/// holidays): the weekends plus the official holidays the app ships, the
+/// `original_deadline` of each entry of
 /// `DeadlineResolver::seed_2026_holiday_overrides` (built once). 1800, 1801
 /// and 2200C read it through [`next_business_day`].
 ///
@@ -317,7 +319,9 @@ pub fn deadline_calendar() -> &'static crate::calendar_rules::BusinessDayCalenda
 
 /// `date`, or the next working day after it when it is not one, on
 /// [`deadline_calendar`] (weekends and the shipped official holidays): 1800
-/// and 1801 (decision P4-4) and 2200C (D8) move their typed due dates with
+/// and 1801 (maintainer decision (1800/1801 penalties run from the due date))
+/// and 2200C (maintainer decision: excise penalties run from the typed date)
+/// move their typed due dates with
 /// it.
 pub fn next_business_day(date: NaiveDate) -> NaiveDate {
     deadline_calendar().adjust_to_next_business_day(date).0

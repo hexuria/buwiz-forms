@@ -1,19 +1,19 @@
-//! Round 3 (F9) golden: every queueable form but 1800, 1801 and 2200C, and
-//! 1601C, keeps the penalty due dates and amounts it had before PR 13
-//! (e86b1424), for a
-//! fixed set of trigger dates and filing dates around the 2026 official
-//! holidays. `penalty_due_dates_golden.txt` was written by this same module
+//! Golden: every queueable form but 1800, 1801 and 2200C, plus 1601C,
+//! keeps the penalty due dates and amounts it had before PR 13 (e86b1424),
+//! for a fixed set of trigger dates and filing dates around the 2026
+//! official holidays. `penalty_due_dates_golden.txt` was written by this same module
 //! run on the e86b1424 tree; this test recomputes it on the current code.
 //!
 //! For each form's sample drafts (`super::agent_seeds`), each penalty
 //! declaration: the due date and the computed surcharge, interest and
 //! compromise if filed on each filing date. A form whose penalties run from
-//! a date the filer types (the excise returns, D8) is joined to that model
+//! a date the filer types (the excise returns, maintainer decision (excise
+//! penalties run from the typed date)) is joined to that model
 //! and tried with each trigger date written into its `year` / `month` /
 //! `day`; a calendar form's trigger is its period, so its filing dates are
 //! what vary.
 //!
-//! Every agent seed must resolve to a form this covers (round 4): the one
+//! Every agent seed must resolve to a form this covers: the one
 //! exception is 2551Q, whose penalties come from its own engine call on the
 //! wall clock with a private deadline (form_2551q.rs `recompute`), not from
 //! the penalty-items model or its calendar, so it cannot be pinned here; a
@@ -24,7 +24,8 @@ use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use chrono::{Datelike, NaiveDate};
 use serde_json::Value;
 
-/// The forms P4-4 and round 2 change on purpose.
+/// The forms maintainer decision (1800/1801 penalties run from the due date)
+/// and round 2 change on purpose.
 const CHANGED: [&str; 3] = ["1800", "1801", "2200C"];
 
 fn day(year: i32, month: u32, day: u32) -> NaiveDate {
@@ -166,7 +167,10 @@ fn record_penalty_golden() {
 }
 
 /// 2551Q, the one seed the golden cannot pin, never reads the calendar
-/// PR 13 changed.
+/// PR 13 changed. The guard is textual: it catches a direct use of the
+/// calendar's names in form_2551q.rs, but not one reached through another
+/// module or a renamed import, nor a change in what its own engine call
+/// computes.
 #[test]
 fn form_2551q_penalties_do_not_read_the_typed_date_calendar() {
     let source = include_str!("../../src/forms/form_2551q.rs");

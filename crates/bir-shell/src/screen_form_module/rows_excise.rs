@@ -9,7 +9,8 @@
 //!   computed" until the filer chooses Edit penalties, and blanking them
 //!   ("Use the computed amounts") puts the return on the typed due date.
 //!   Nothing changes on open, so a stored draft saves back byte for byte.
-//!   Decision P4-4 (2026-10-19) puts 1800 and 1801 on the same model (their
+//!   Maintainer decision (1800/1801 penalties run from the due date,
+//!   2026-10-19) puts 1800 and 1801 on the same model (their
 //!   due date: 30 days after the donation, one year after the death), so
 //!   the kept-as-entered helpers below ([`typed_due`]) take them too.
 //! - **Printed item numbers (decision D6).** Where BIR's message names its
@@ -47,7 +48,9 @@ fn excise(kind: AgentFormKind) -> Option<QueueableKind> {
 }
 
 /// The return `kind` is if its penalties run from a date the filer types:
-/// an excise return (decision D8) or 1800 and 1801 (decision P4-4).
+/// an excise return (maintainer decision (excise penalties run from the typed
+/// date)) or 1800 and 1801 (maintainer decision (1800/1801 penalties run from
+/// the due date)).
 fn typed_due(kind: AgentFormKind) -> Option<QueueableKind> {
     match kind {
         AgentFormKind::Queueable(
@@ -146,7 +149,9 @@ fn controls(kind: QueueableKind) -> Vec<&'static str> {
 }
 
 /// [`KEPT_AS_ENTERED`] for a penalty box of an excise return stored before
-/// D8, or of a 1800 or 1801 return stored before P4-4; `None` for every
+/// maintainer decision (excise penalties run from the typed date), or of a 1800
+/// or 1801 return stored before maintainer decision (1800/1801 penalties run
+/// from the due date); `None` for every
 /// other box and form.
 pub(super) fn penalty_lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
     let kind = typed_due(kind)?;

@@ -1614,7 +1614,8 @@ fn form_1702q_a_batch_that_opens_item_15_takes_it() {
     assert_eq!(amount(&batch["values"], "frm1702q:txtTax15"), 1_000.0);
 }
 
-/// Decisions P4-14 and P5-14 on 1701Q: the stored base-era draft keeps its
+/// Maintainer decisions (kept note over held amounts; kept note on every kept
+/// group) on 1701Q: the stored base-era draft keeps its
 /// penalty column as entered (items 64A and 66A typed 125.00 and 1,000.00,
 /// 65A 0.00),
 /// locked with Edit penalties, and the host lists all three boxes in
@@ -1659,7 +1660,7 @@ fn form_1701q_kept_column_says_so_over_its_amounts() {
     }
 }
 
-/// Round 3 (F1): 1701Q drafts stored before the penalty model carry no
+/// 1701Q drafts stored before the penalty model carry no
 /// `penalty` / `spouse_penalty` key. The filer's column (64A 125.00, 65A
 /// 0.00, 66A 1,000.00) and, on a joint return, the spouse's (64B 125.00,
 /// 65B and 66B 0.00) are kept and on the return: each box is locked as
@@ -1738,7 +1739,7 @@ fn form_1701q_keyless_kept_columns_say_so_and_offer_edit() {
     }
 }
 
-/// Round 4 (item 1): after Edit penalties, a keyless 1701Q takes typed
+/// after Edit penalties, a keyless 1701Q takes typed
 /// penalties in the filer's column (64A-66A) and the spouse's (64B-66B):
 /// make_room gives the column its state, the amounts become its overrides
 /// and file; opening the stored row first changes none of its bytes.

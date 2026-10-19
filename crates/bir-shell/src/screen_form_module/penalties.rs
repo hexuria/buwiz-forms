@@ -267,8 +267,9 @@ pub(super) fn json(kind: AgentFormKind, draft: &Value) -> Value {
 
 /// Whether the group's boxes are still on the amounts the draft was stored
 /// with, before its penalties were computed: a 1701Q (PR 5) or 1701 (PR 7)
-/// column, an excise return stored before decision D8 (PR 11), or a 1800 or
-/// 1801 return stored before decision P4-4.
+/// column, an excise return stored before maintainer decision (excise penalties
+/// run from the typed date) (PR 11), or a 1800 or
+/// 1801 return stored before maintainer decision (1800/1801 penalties run from the due date).
 pub(super) fn kept(kind: AgentFormKind, group: &Group, draft: &Value) -> bool {
     super::rows_income_q::kept_as_entered(kind, &group.keys, draft)
         || super::rows_annual_individual::kept_as_entered(kind, &group.keys, draft)

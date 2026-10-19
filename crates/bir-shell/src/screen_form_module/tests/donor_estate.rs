@@ -1582,7 +1582,8 @@ fn pr10_an_untick_of_an_unshown_frequency_writes_nothing() {
     }
 }
 
-/// Decision P4-1: 1800's item 17A takes 8816764.47 and shows it as held,
+/// Maintainer decision (two-decimal amounts of any size pass): 1800's item 17A
+/// takes 8816764.47 and shows it as held,
 /// on the fill, on Check (which no longer refuses it) and after the return
 /// is saved and opened again; Check names no amount box for it.
 #[test]
@@ -1619,7 +1620,8 @@ fn p4_1_1800_item_17a_shows_and_checks_large_amounts() {
     }
 }
 
-// ------------------------------------------------------------ P4-4
+// ------------------------------------------------------------ maintainer
+// decision (1800/1801 penalties run from the due date)
 
 /// Each form's penalty boxes (Surcharge, Interest, Compromise) and the
 /// draft fields of its item 1 date.
@@ -1668,7 +1670,8 @@ fn dated(code: &str, on: chrono::NaiveDate) -> Value {
     filled
 }
 
-/// Decision P4-4: a new 1800 return is due 30 days after the donation and a
+/// Maintainer decision (1800/1801 penalties run from the due date): a new 1800
+/// return is due 30 days after the donation and a
 /// new 1801 return one year after the death (the forms' guides), each moved
 /// to the next business day. Filed later, the return computes the 25%
 /// surcharge, 12% a year interest and the RMO 7-2015 compromise on its tax
@@ -1742,7 +1745,8 @@ fn p4_4_new_returns_compute_penalties_from_their_due_date() {
     }
 }
 
-/// `(code, fixture)`: 1800 and 1801 drafts as the code before P4-4
+/// `(code, fixture)`: 1800 and 1801 drafts as the code before maintainer
+/// decision (1800/1801 penalties run from the due date)
 /// serialized them (crates/bir-core at e86b1424, the profile of
 /// `install_profile`), on penalty model 1: one per form holding typed
 /// penalties as overrides (125.25, 0.00, 1,000.00), one holding none.
@@ -1767,7 +1771,7 @@ fn store_p4_4(code: &str, fixture: &str) {
 }
 
 /// The raw stored bytes of the row `draft` was opened from, looked up by
-/// the draft's own row id (round 3, F10: not a hard-coded id), its profile
+/// the draft's own row id, its profile
 /// baseline (PR 0c, the row's last key, which a save records) set aside.
 fn stored_p4_4(draft: &Value) -> String {
     let id = draft["id"].as_i64().expect("a stored return's row id");
@@ -1778,7 +1782,8 @@ fn stored_p4_4(draft: &Value) -> String {
     }
 }
 
-/// Decision P4-4 on drafts stored before it: each opens and saves back byte
+/// Maintainer decision (1800/1801 penalties run from the due date) on drafts
+/// stored before it: each opens and saves back byte
 /// for byte (nothing is computed on open); typed penalties show as held and
 /// stay through other edits; a draft holding none keeps its 0.00 locked as
 /// "Kept as entered before penalties were computed."; and "Use the computed
@@ -1840,7 +1845,8 @@ fn p4_4_stored_returns_keep_their_penalties_until_edited() {
         assert_eq!(other["draft"]["penalty_model_version"], 1, "{code}");
         let kept: Vec<f64> = boxes.iter().map(|k| amount(&other["values"], k)).collect();
         assert_eq!(kept, shown, "{code}: kept until edited");
-        // "Use the computed amounts" joins P4-4: the item 1 date is long past
+        // "Use the computed amounts" joins maintainer decision (1800/1801
+        // penalties run from the due date): the item 1 date is long past
         // due, so the computed amounts are not zero.
         let refs: Vec<&str> = boxes.iter().map(String::as_str).collect();
         let blanks: Map<String, Value> = boxes.iter().map(|k| (k.clone(), json!(""))).collect();

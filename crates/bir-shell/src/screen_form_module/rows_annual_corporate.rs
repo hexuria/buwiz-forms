@@ -20,7 +20,8 @@
 //! - 1702RT item 42 MCIT Due takes an amount only while MCIT applies (the
 //!   form's own `subject_to_mcit`); otherwise recompute clears it, so the
 //!   host refuses it with why. Before 2020 the form computes it, 2% of item
-//!   33 (decision P4-17), and it stays locked with that reason. Its (Add more...) items read OTHERS and the
+//!   33 (maintainer decision: pre-2020 MCIT is 2% of gross), and it stays
+//!   locked with that reason. Its (Add more...) items read OTHERS and the
 //!   subtotal once the table holds two or more rows: they are then the
 //!   form's, locked and refused.
 //! - Computed boxes the probe left as "derived" say they are computed
@@ -103,7 +104,7 @@ pub(super) const RT_MCIT_REFUSAL: &str = "Item 42 applies once MCIT does: from t
 /// Item 42's lock on a return for a year before 2020 while MCIT applies
 /// (calculations.json 1702rt-item42-mcit: "Before 2020 and when IC 055 is
 /// selected, MCIT is 2% of gross"): form_1702rt_official.rs recompute
-/// computes it (decision P4-17).
+/// computes it (maintainer decision (pre-2020 MCIT is 2% of gross)).
 pub(super) const RT_MCIT_BEFORE_2020: &str =
     "For years before 2020, MCIT is 2% of gross income (item 33), which the form computes.";
 
@@ -111,12 +112,14 @@ pub(super) const RT_MCIT_BEFORE_2020: &str =
 const RT_RATE: &str = "frm1702RT:Pg2Pt4I40IncomeTaxRate";
 const RT_ITEM_57: &str = "frm1702RT:txtPg2Pt5I57SpecialAllowable";
 
-/// Item 40's lock on a return for a year before 2020 (decision P5-2,
+/// Item 40's lock on a return for a year before 2020 (maintainer decision
+/// (pre-2020 1702RT computed like BIR),
 /// calculations.json 1702rt-item41-rate-tax: "before 2020 it uses 30%").
 pub(super) const RT_RATE_BEFORE_2020: &str =
     "For years before 2020, the income tax rate is 30%, which the form uses.";
 
-/// Item 57's lock on a return for a year before 2020 (decision P5-2,
+/// Item 57's lock on a return for a year before 2020 (maintainer decision
+/// (pre-2020 1702RT computed like BIR),
 /// calculations.json 1702rt-item57-special-tax: "Only before 2020, Item 57
 /// = Item 35 times income-tax rate / 100").
 pub(super) const RT_57_BEFORE_2020: &str =
@@ -177,7 +180,8 @@ fn rt_date_path(key: &str) -> Option<&'static str> {
         .map(|(_, path)| *path)
 }
 
-/// Decision P4-8 (2026-10-19): the 1702EX "others" rows the official page
+/// Maintainer decision (1702EX shut rows locked like 1702MX) (2026-10-19): the
+/// 1702EX "others" rows the official page
 /// keeps shut at load (rules/forms/1702ex-v2018c/fixtures/
 /// runtime-control-inventory-v796.json records each `disabled: true`):
 /// item 49 Other Tax Credits/Payments, Schedule 1 items 17e-17h and
@@ -294,7 +298,7 @@ pub(super) fn fill(
 /// (calculations.json 1702rt-item42-mcit) leaves it to the filer only from
 /// 2020, while MCIT applies (item 10's four years) and item 39 is above
 /// zero. Before 2020 the form computes it while MCIT applies (decision
-/// P4-17), and clears it otherwise, as from 2020.
+/// maintainer decision (pre-2020 MCIT is 2% of gross)), and clears it otherwise, as from 2020.
 pub(super) fn rt_item_42_lock(draft: &Value) -> Option<&'static str> {
     let typed: Form1702RTDraft = serde_json::from_value(draft.clone()).ok()?;
     if !typed.subject_to_mcit() {
@@ -309,7 +313,8 @@ pub(super) fn rt_item_42_lock(draft: &Value) -> Option<&'static str> {
 }
 
 /// Item 40's or item 57's lock, if `key` is one and the return is for a
-/// year before 2020 (decision P5-2): the form computes both then.
+/// year before 2020 (maintainer decision (pre-2020 1702RT computed like BIR)):
+/// the form computes both then.
 pub(super) fn rt_before_2020_lock(draft: &Value, key: &str) -> Option<&'static str> {
     let reason = match key {
         RT_RATE => RT_RATE_BEFORE_2020,
@@ -657,10 +662,10 @@ pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Valu
 /// Boxes whose lock note shows whatever they hold (screen_form_module
 /// `notes_always`): 1702RT item 42 while it is shut, which always shows an
 /// amount (0 while MCIT does not apply, 2% of item 33 before 2020), so its
-/// note says why (decision P4-17).
+/// note says why (maintainer decision (pre-2020 MCIT is 2% of gross)).
 ///
 /// 1702EX's [`EX_ATTACHED_ROWS`] say what fills them over their 0.00 too
-/// (decision P4-8).
+/// (maintainer decision (1702EX shut rows locked like 1702MX)).
 pub(super) fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
     match kind.form_code() {
         "1702RT" => [RT_MCIT_DUE, RT_RATE, RT_ITEM_57]
@@ -816,7 +821,8 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
             for (description, _) in EX_FOLDED_LINES {
                 out.insert(format!("{EX}{description}"), json!(EX_FOLDED_WAITS));
             }
-            // P4-8: a shut row's text boxes say what fills them.
+            // maintainer decision (1702EX shut rows locked like 1702MX): a shut
+            // row's text boxes say what fills them.
             for key in ex_attached_keys().filter(|key| !ex_attached_amount(key)) {
                 out.insert(key, json!(EX_ATTACHED_NOTE));
             }
@@ -1227,8 +1233,10 @@ pub(super) fn printed_item_numbers(kind: AgentFormKind, errors: &mut [(String, S
 }
 
 /// Where `finish` keeps, for one open, what a stored 1702RT held in items
-/// 40, 41, 42 and 57 before opening recomputed them (decisions P4-17 and
-/// P5-2), each item that changed by its number; `opened_json` takes it off
+/// 40, 41, 42 and 57 before opening recomputed them (decisions maintainer
+/// decision (pre-2020 MCIT is 2% of gross) and
+/// maintainer decision (pre-2020 1702RT computed like BIR)), each item that
+/// changed by its number; `opened_json` takes it off
 /// before anything else reads the draft.
 const PRE_2020_HELD: &str = "screen_form_pre_2020_held";
 
@@ -1280,7 +1288,8 @@ pub(super) fn take_pre_2020_held(draft: &mut Value) -> Option<Map<String, Value>
     }
 }
 
-/// Decisions P4-17 and P5-2 on a draft stored before them: a return for a
+/// Maintainer decisions (pre-2020 MCIT is 2% of gross; pre-2020 1702RT computed
+/// like BIR) on a draft stored before them: a return for a
 /// year before 2020 whose items 40, 41, 42 or 57 the form now computes to
 /// another amount than they held says so on open, item by item with the
 /// old and new amounts, beside the form's own messages, so the change is
@@ -1335,7 +1344,8 @@ pub(super) fn rt_pre_2020_notices(held: Option<Map<String, Value>>, draft: &Valu
     out
 }
 
-/// The P4-17 notice's words: item 42 is now 2% of item 33.
+/// The maintainer decision (pre-2020 MCIT is 2% of gross) notice's words: item
+/// 42 is now 2% of item 33.
 pub(super) fn rt_item_42_notice_text(computed: i64, held: i64) -> String {
     format!(
         "Item 42 is now computed for years before 2020: 2% of gross income (item 33) is {}; this return held {}. Check the tax due before you file.",
@@ -1344,9 +1354,10 @@ pub(super) fn rt_item_42_notice_text(computed: i64, held: i64) -> String {
     )
 }
 
-/// The P4-17 notice's words for a return whose incorporation date (item
+/// The maintainer decision (pre-2020 MCIT is 2% of gross) notice's words for a
+/// return whose incorporation date (item
 /// 10) is fewer than four years before its taxable year, whose item 42 the
-/// form clears (round 3, F6: exactly these words; never "2% is 0").
+/// form clears.
 pub(super) fn rt_item_42_not_yet_notice_text(held: i64) -> String {
     format!(
         "Not yet subject to MCIT (fewer than four years after incorporation); this return held {}.",
@@ -1354,7 +1365,8 @@ pub(super) fn rt_item_42_not_yet_notice_text(held: i64) -> String {
     )
 }
 
-/// The P4-17 notice's words for a return with no incorporation date
+/// The maintainer decision (pre-2020 MCIT is 2% of gross) notice's words for a
+/// return with no incorporation date
 /// recorded, so MCIT cannot be applied and the form clears item 42 (round
 /// 3, F6: no four-year reason).
 pub(super) fn rt_item_42_no_date_notice_text(held: i64) -> String {
@@ -1364,14 +1376,14 @@ pub(super) fn rt_item_42_no_date_notice_text(held: i64) -> String {
     )
 }
 
-/// The P5-2 notice's words for item 40.
+/// The maintainer decision (pre-2020 1702RT computed like BIR) notice's words for item 40.
 pub(super) fn rt_rate_notice_text(rate: i64, held: i64) -> String {
     format!(
         "Item 40 is now {rate}% for years before 2020; this return held {held}%. Check the tax due before you file."
     )
 }
 
-/// The P5-2 notice's words for item 41.
+/// The maintainer decision (pre-2020 1702RT computed like BIR) notice's words for item 41.
 pub(super) fn rt_item_41_notice_text(computed: i64, held: i64) -> String {
     format!(
         "Item 41 is now computed at 30% for years before 2020: {}; this return held {}. Check the tax due before you file.",
@@ -1380,7 +1392,7 @@ pub(super) fn rt_item_41_notice_text(computed: i64, held: i64) -> String {
     )
 }
 
-/// The P5-2 notice's words for item 57.
+/// The maintainer decision (pre-2020 1702RT computed like BIR) notice's words for item 57.
 pub(super) fn rt_item_57_notice_text(computed: i64, held: i64) -> String {
     format!(
         "Item 57 is now item 35 times 30% for years before 2020: {}; this return held {}. Check it before you file.",
@@ -1406,7 +1418,8 @@ fn whole_pesos(amount: i64) -> String {
     }
 }
 
-/// Decision P4-8 on a draft stored before it: each [`EX_ATTACHED_ROWS`] row
+/// Maintainer decision (1702EX shut rows locked like 1702MX) on a draft stored
+/// before it: each [`EX_ATTACHED_ROWS`] row
 /// holding a description or an amount still files it as stored, and says
 /// so beside the form's own messages, so the filer checks it.
 fn ex_attached_notices(draft: &Value) -> Vec<Value> {
@@ -1437,7 +1450,7 @@ fn ex_attached_notices(draft: &Value) -> Vec<Value> {
     out
 }
 
-/// The P4-8 notice's words for `item`.
+/// The maintainer decision (1702EX shut rows locked like 1702MX) notice's words for `item`.
 pub(super) fn ex_attached_notice(item: &str) -> String {
     format!(
         "{item} holds an entry BIR's program keeps shut (it is filled from the attached schedule). It still files as stored; check it before you file."

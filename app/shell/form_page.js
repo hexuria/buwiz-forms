@@ -1564,7 +1564,8 @@ export class FormPageActions {
 
   /**
    * "Use it" on an item's `from` hint (1701 Part VIII item 6, decisions
-   * P4-10 and P5-13): the whole-peso amount the hint shows goes into the box
+   * maintainer decision (1701 item 6 offers Part VII item 8; Use it rounds to
+   * whole pesos): the whole-peso amount the hint shows goes into the box
    * it fills through the ordinary fill, as if typed there; the host keeps
    * or refuses it as it would a typed amount.
    */
@@ -1584,8 +1585,10 @@ export class FormPageActions {
   usePenaltyComputed(group, cx) {
     const s = this.state;
     // A column kept as entered before penalties were computed (1701Q, 1701,
-    // the excise returns stored before decision D8, 1800 and 1801 stored
-    // before decision P4-4) goes to the computed amounts the same way. The
+    // the excise returns stored before maintainer decision (excise penalties
+    // run from the typed date), 1800 and 1801 stored
+    // before maintainer decision (1800/1801 penalties run from the due date))
+    // goes to the computed amounts the same way. The
     // blanks are sent while the group is still open, so the host takes them
     // (a kept column is not `edited`); replacing typed amounts asks first
     // on every one of these forms (the host's `removes`: `choose` flushes,
@@ -2154,7 +2157,8 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
-    // A computed amount (a penalty too, until Edit penalties) shows 0.00 for zero, never an empty box.
+    // A computed amount (a penalty too, until Edit penalties) shows 0.00 for
+    // zero, never an empty box.
     const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) || ui.penaltyGroupOf(f.k) ? "0" : ""), f.w) : f.t === "date" ? shownDate(value) : value;
     // Locked and blank only with a reason: what it waits for.
     const hint = !shown ? ui.reasonFor(f.k) : "";
@@ -2213,8 +2217,9 @@ export function wholePesosOf(text) {
 }
 
 /**
- * An item's `from` hint (1701 Part VIII item 6, decisions P4-10 and
- * P5-13): what the item it comes from holds, in whole pesos (item 6 takes
+ * An item's `from` hint (1701 Part VIII item 6, maintainer decisions (1701 item
+ * 6 offers Part VII item 8;
+ * Use it rounds to whole pesos)): what the item it comes from holds, in whole pesos (item 6 takes
  * whole pesos; a rounded amount says so), and "Use it", which fills this
  * item's box with it. Only while the box takes typing and the other item
  * holds an amount; it never fills by itself.

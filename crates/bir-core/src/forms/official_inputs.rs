@@ -111,7 +111,8 @@ pub fn js_ge(a: f64, b: f64) -> bool {
 }
 
 /// Whether `value` is an amount in pesos and centavos: at most two
-/// decimals. Decided from its decimal form (maintainer decision P4-1,
+/// decimals. Decided from its decimal form (maintainer decision (two-decimal
+/// amounts of any size pass),
 /// 2026-10-19): the value is the stored double of a two-decimal amount when
 /// rounding it to centavos and back gives the same double, so 8816764.47
 /// and 1234567890.12 pass. The earlier float tolerance (`value * 100`
@@ -216,7 +217,8 @@ mod tests {
         assert!(!numbers_only("1,2"));
     }
 
-    /// The check before decision P4-1, kept here as the oracle of what
+    /// The check before maintainer decision (two-decimal amounts of any size
+    /// pass), kept here as the oracle of what
     /// passed then.
     fn tolerance_only(value: f64) -> bool {
         value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
@@ -247,7 +249,8 @@ mod tests {
             .unwrap()
     }
 
-    /// P4-1: every two-decimal amount below 1,000,000,000,000 passes,
+    /// maintainer decision (two-decimal amounts of any size pass): every
+    /// two-decimal amount below 1,000,000,000,000 passes,
     /// decided from its decimal form; the ones the float tolerance refused
     /// (about 2,000,000 and up) now pass too.
     #[test]
@@ -273,7 +276,8 @@ mod tests {
         assert!(has_cent_precision(999_999_999_999.99));
     }
 
-    /// P4-1: no value that passed the earlier check is refused now. The
+    /// maintainer decision (two-decimal amounts of any size pass): no value
+    /// that passed the earlier check is refused now. The
     /// sample covers each two-decimal amount, its neighbouring doubles (as a
     /// sum of amounts may land on), sums of amounts and arbitrary doubles.
     #[test]

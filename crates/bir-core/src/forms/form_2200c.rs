@@ -762,7 +762,8 @@ impl Form2200CDraft {
             // after the close of Item 1's month, so the penalties run from
             // the 10th of the month after it, moved to the next working day
             // on the app's deadline calendar (`penalty_items::next_business_day`,
-            // shared with 1800 and 1801 since decision P4-4).
+            // shared with 1800 and 1801 since maintainer decision (1800/1801
+            // penalties run from the due date)).
             typed_due_date: Some(|d: &Self| {
                 if !(1..=12).contains(&d.month) {
                     return None;
@@ -1157,7 +1158,8 @@ mod tests {
         assert!(submit(&amended).is_ok());
     }
 
-    /// D8 review, and decision P4-4 sharing the calendar: the 10th moves
+    /// Review of the excise typed date, and the maintainer decision (1800/1801
+    /// penalties run from the due date) sharing the calendar: the 10th moves
     /// past a holiday on the calendar it is given, and the app's deadline
     /// calendar (weekends and the seeded official holidays) moves every 10th
     /// of 2000 to 2100 exactly as the weekends-only calendar 2200C used

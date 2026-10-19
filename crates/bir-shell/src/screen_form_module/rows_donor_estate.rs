@@ -965,7 +965,8 @@ pub(super) fn removes(
         };
         removed.push((sentence, "Cleared item 15D's frequency".to_string()));
     }
-    // "Use the computed amounts" (decision P4-4): blanking a penalty group
+    // "Use the computed amounts" (maintainer decision (1800/1801 penalties run
+    // from the due date)): blanking a penalty group
     // replaces the amounts the filer typed there, so it asks first, as the
     // excise returns, 1701 and 1701Q do; a legacy draft's typed amounts are
     // never replaced silently.

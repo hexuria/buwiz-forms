@@ -4,7 +4,8 @@
 //! the page's own `formatCurrency` (`toFixed(2)` with thousands commas) and
 //! `NumWithComma`, the schedule totals (`get*_totals`), `calculate_Part4`,
 //! `computeNo18` and `calculate_Part2`, `validateForm()` with its exact alert
-//! texts, and the uploaded file (`saveEncryptedProfile`) through [`crate::official_xml`]. Background
+//! texts, and the uploaded file (`saveEncryptedProfile`) through
+//! [`crate::official_xml`]. Background
 //! information comes from the taxpayer profile the way `loadBGData()` and
 //! `sleeptime()` fill it.
 //!
@@ -371,7 +372,8 @@ impl Form1801Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
-            // Decision P4-4: a new return's penalties run from its due date,
+            // Maintainer decision (1800/1801 penalties run from the due date):
+            // a new return's penalties run from its due date,
             // one year after the date of death it carries (Item 1).
             penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
@@ -1266,7 +1268,8 @@ impl Form1801Draft {
             ],
             state: penalty,
             basic_tax_due: "Item 22", |d| d.payables().1,
-            // Decision P4-4 (2026-10-19): the return is filed within one (1)
+            // Maintainer decision (1800/1801 penalties run from the due date)
+            // (2026-10-19): the return is filed within one (1)
             // year from the decedent's death (html-frozen/1801-2018/guide.html,
             // "When and Where to File and Pay"), so the penalties run from
             // that day, moved to the next business day on the app's deadline
@@ -1431,7 +1434,8 @@ mod tests {
         NaiveDate::from_ymd_opt(year, month, day).unwrap()
     }
 
-    /// A new return (decision P4-4's model) whose decedent died on `on`,
+    /// A new return (the maintainer decision's (1800/1801 penalties run from
+    /// the due date) model) whose decedent died on `on`,
     /// with estate tax due.
     fn new_return(on: NaiveDate) -> Form1801Draft {
         let mut d = sample();
@@ -1447,7 +1451,8 @@ mod tests {
         d
     }
 
-    /// P4-4: due one year after the death, moved past a weekend to the next
+    /// maintainer decision (1800/1801 penalties run from the due date): due one
+    /// year after the death, moved past a weekend to the next
     /// business day; a death on February 29 is due on February 28; no due
     /// date until Item 1 is a date.
     #[test]
@@ -1457,7 +1462,8 @@ mod tests {
         // Saturday 2025-10-04 moves to Monday.
         assert_eq!(due(date(2024, 10, 4)), Some(date(2025, 10, 6)));
         assert_eq!(due(date(2024, 2, 29)), Some(date(2025, 2, 28)));
-        // An official holiday (maintainer decision: roll past official holidays): 2026-04-09, Araw ng Kagitingan, moves
+        // An official holiday (maintainer decision: roll past official
+        // holidays): 2026-04-09, Araw ng Kagitingan, moves
         // to Friday, April 10.
         assert_eq!(due(date(2025, 4, 9)), Some(date(2026, 4, 10)));
         let mut blank = sample();
@@ -1469,9 +1475,11 @@ mod tests {
         );
     }
 
-    /// P4-4: filed after its due date the return computes the 25%
+    /// maintainer decision (1800/1801 penalties run from the due date): filed
+    /// after its due date the return computes the 25%
     /// surcharge, 12% a year interest and the compromise on Item 22; filed
-    /// on the due date it computes none; a return stored before P4-4
+    /// on the due date it computes none; a return stored before maintainer
+    /// decision (1800/1801 penalties run from the due date)
     /// computes none until it joins.
     #[test]
     fn penalties_run_from_the_due_date() {

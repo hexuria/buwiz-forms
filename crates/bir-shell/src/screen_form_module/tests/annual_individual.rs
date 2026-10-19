@@ -2514,7 +2514,8 @@ fn form_1701_stored_draft_files_as_before() {
     assert_eq!(now["frm1701:txtPg4IPart8_1A"], "0.00");
 }
 
-/// Decision P4-10: 1701 Part VIII item 6 stays the filer's entry; its item
+/// Maintainer decision (1701 item 6 offers Part VII item 8): 1701 Part VIII
+/// item 6 stays the filer's entry; its item
 /// carries the page's hint (`from`) naming Part VII item 8, whose amount the
 /// page shows under it in whole pesos with "Use it" (tools/test_form_decisions_round_3.mjs
 /// drives the page). Nothing is copied by itself: Part VII item 8's amount
@@ -2580,7 +2581,8 @@ fn form_1701_part_viii_item_6_offers_part_vii_item_8() {
     );
 }
 
-/// Decisions P4-14 and P5-14 on 1701: the draft stored before PR 7
+/// Maintainer decisions (kept note over held amounts; kept note on every kept
+/// group) on 1701: the draft stored before PR 7
 /// (`fixtures/1701-pre-pr7.json`: no penalty state, items 27-29 typed
 /// 125.00, 0.00 and 1,000.00) keeps its column as entered, locked as kept
 /// with Edit penalties, and the host lists its boxes in `notes_always`, so

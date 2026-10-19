@@ -1461,7 +1461,8 @@ fn finish<F: QueueableForm>(
     mut draft: F,
 ) -> Result<Value, String> {
     // A stored 1702RT's items 40, 41, 42 and 57, which this compute may
-    // change (P4-17, P5-2).
+    // change (maintainer decisions: pre-2020 MCIT is 2% of gross; pre-2020
+    // 1702RT computed like BIR).
     let stored = (F::FORM_CODE == "1702RT")
         .then(|| serde_json::to_value(&draft).ok())
         .flatten();
@@ -2879,20 +2880,24 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
 }
 
 /// Each module's "kept as entered" lock reason and the note it shows, one
-/// entry per module constant (round 3, F7): `lock_note` looks a reason up
+/// entry per module constant: `lock_note` looks a reason up
 /// here by the constant itself, so a module rewording its constant keeps
 /// its note. A test fails when a module declares a `KEPT_AS_ENTERED` the
 /// table lacks.
-const KEPT_NOTES: [(&str, &str); 3] = [
-    (rows_income_q::KEPT_AS_ENTERED, NOTE_KEPT),
-    (rows_annual_individual::KEPT_AS_ENTERED, NOTE_KEPT),
-    (rows_excise::KEPT_AS_ENTERED, NOTE_KEPT),
+const KEPT_NOTES: [(&str, &str, &str); 3] = [
+    ("rows_income_q", rows_income_q::KEPT_AS_ENTERED, NOTE_KEPT),
+    (
+        "rows_annual_individual",
+        rows_annual_individual::KEPT_AS_ENTERED,
+        NOTE_KEPT,
+    ),
+    ("rows_excise", rows_excise::KEPT_AS_ENTERED, NOTE_KEPT),
 ];
 
 /// A lock's reason as a filer reads it (see the NOTE_* texts).
 fn lock_note(reason: &str) -> &'static str {
     use bir_core::forms::agent::Lock;
-    if let Some((_, note)) = KEPT_NOTES.iter().find(|(kept, _)| *kept == reason) {
+    if let Some((_, _, note)) = KEPT_NOTES.iter().find(|(_, kept, _)| *kept == reason) {
         return note;
     }
     // 2551Q's 8% penalty reasons are already the filer's words.
@@ -2922,8 +2927,9 @@ fn lock_note(reason: &str) -> &'static str {
 /// Boxes whose lock note the page draws whatever the box shows; it draws
 /// every other lock note only while its box is blank. A kept penalty
 /// group's boxes say "Kept as entered before penalties were computed." over
-/// 0.00 too (decision P4-14), and 1702RT item 42, which always shows an
-/// amount, says why it is shut (decision P4-17).
+/// 0.00 too (maintainer decision (kept note over held amounts)), and 1702RT
+/// item 42, which always shows an
+/// amount, says why it is shut (maintainer decision (pre-2020 MCIT is 2% of gross)).
 fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
     // A kept group off the return as it stands is locked as not on the
     // return, not as kept: its note keeps the blank-only rule.
@@ -2949,7 +2955,8 @@ fn opened_json(
 ) -> Result<Value, String> {
     let code = kind.form_code();
     // What a stored 1702RT draft held in items 40, 41, 42 and 57 before
-    // opening recomputed them (decisions P4-17 and P5-2; `finish` marks
+    // opening recomputed them (maintainer decisions (pre-2020 MCIT is 2% of
+    // gross; pre-2020 1702RT computed like BIR); `finish` marks
     // it), for the notices below.
     let stored_pre_2020 = rows_annual_corporate::take_pre_2020_held(&mut draft);
     let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
@@ -3944,7 +3951,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     let noted = notes_always(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms;
+    // the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
@@ -4227,7 +4235,9 @@ fn apply_screen_edits(
         }
     }
     // "Use the computed amounts" on an excise return stored before decision
-    // D8 (PR 11), or a 1800 or 1801 return stored before decision P4-4,
+    // maintainer decision (excise penalties run from the typed date) (PR 11),
+    // or a 1800 or 1801 return stored before maintainer decision (1800/1801
+    // penalties run from the due date),
     // puts it on the typed due date.
     let groups: Vec<penalties::Group> =
         penalty_groups.into_iter().map(|(group, _)| group).collect();
@@ -7833,7 +7843,8 @@ mod tests {
     }
 
     /// PR 2 review: 1601FQ item 25 waits for Amended Return Yes (the tracked
-    /// inventory records it disabled at load, and recompute keeps it only on an amended return): off with its tag and
+    /// inventory records it disabled at load, and recompute keeps it only on an
+    /// amended return): off with its tag and
     /// refusing a typed amount on a return that is not amended, open once
     /// it is.
     #[test]
@@ -13610,7 +13621,8 @@ mod tests {
             }
         }
         // Plus 2 for 1707 (PR 9): Schedules 2 and 3 row D, typed now; less
-        // 2 for 1702EX Schedule 2 rows 2 and 3, shut (decision P4-8).
+        // 2 for 1702EX Schedule 2 rows 2 and 3, shut (maintainer decision
+        // (1702EX shut rows locked like 1702MX)).
         assert_eq!(whole, 159, "boxes typed long and printed whole");
     }
 

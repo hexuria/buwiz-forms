@@ -1391,7 +1391,8 @@ pub(super) fn mark_pools(form: &mut Value, code: &str) {
 pub(super) const PART_VIII_ITEM_6: &str = "frm1701:txtPg4IPart8_6A";
 pub(super) const PART_VII_ITEM_8: &str = "frm1701:txtPg4IPart7_8A";
 
-/// Decision P4-10 (2026-10-19): 1701 Part VIII item 6 stays typed (the
+/// Maintainer decision (1701 item 6 offers Part VII item 8) (2026-10-19): 1701
+/// Part VIII item 6 stays typed (the
 /// tracked inventory records no copy from Part VII item 8, ee8aced2), and
 /// the page shows under it what Part VII item 8 holds, rounded half up to
 /// whole pesos and saying so (P5-13), with "Use it", which
@@ -1486,8 +1487,9 @@ pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
 /// typed after Edit penalties has no override to land in (round 4: a keyless
 /// 1701Q's typed 64A was refused). Give the column its (default, version 0)
 /// state first: the typed amount becomes its override and the column joins
-/// the model (form_1701_official.rs `official_recompute`; form_1701q.rs's
-/// `PenaltySlot`). `penalties::applies` uses it on its trial copy too, so a
+/// the model (form_1701_official.rs `official_recompute`; for 1701Q,
+/// form_1701q_official.rs's legacy-column join in its recompute, and
+/// penalty_items.rs `adopt_legacy_manual_penalties`). `penalties::applies` uses it on its trial copy too, so a
 /// kept keyless column reads as on the return; opening writes nothing.
 pub(super) fn make_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
     if matches!(kind.form_code(), "1701" | "1701Q") {

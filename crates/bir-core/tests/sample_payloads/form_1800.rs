@@ -113,7 +113,8 @@ fn form_1800_sample_with_many_rows_is_current() {
     );
 }
 
-/// Due 30 days after the donation (decision P4-4): the penalties run from
+/// Due 30 days after the donation (maintainer decision (1800/1801 penalties run
+/// from the due date)): the penalties run from
 /// that day; the calendar has no 1800 deadline.
 #[test]
 fn form_1800_penalty_items_follow_the_shared_model() {

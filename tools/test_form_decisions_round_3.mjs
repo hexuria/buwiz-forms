@@ -1,18 +1,22 @@
 // PR 13 (maintainer decisions, page 4): what the page does for these
 // decisions, driven through the real app/shell/form_page.js with a mocked
 // host and a small form shaped like the boxes they touch:
-//  - P4-1: a money box (1800's item 17A) typed 8816764.47 shows
+// - maintainer decision (two-decimal amounts of any size pass): a money box
+// (1800's item 17A) typed 8816764.47 shows
 //    8,816,764.47 after blur, after Check and after Save, as the host holds
 //    it.
-//  - P4-14: a kept penalty group (an older 2200 return) shows "Kept as
+// - maintainer decision (kept note over held amounts): a kept penalty group (an
+// older 2200 return) shows "Kept as
 //    entered before penalties were computed." under its boxes while they
 //    hold 0.00, because the host lists them in `notes_always`; Edit
 //    penalties and the one-click "Use the computed amounts" still work, and
 //    once the host computes the amounts the note goes. A locked box showing
 //    a value that the host does not list draws no note, as before.
-//  - P4-17: a locked box the host lists (1702RT item 42) says why under it
+// - maintainer decision (pre-2020 MCIT is 2% of gross): a locked box the host
+// lists (1702RT item 42) says why under it
 //    while it shows an amount.
-//  - P4-10: an item with a `from` hint (1701 Part VIII item 6) shows what
+// - maintainer decision (1701 item 6 offers Part VII item 8): an item with a
+// `from` hint (1701 Part VIII item 6) shows what
 //    the other item holds and "Use it", which fills the box through the
 //    ordinary fill; nothing is filled by itself.
 // Which boxes are listed, and the hint, are the host's to say (crates/
@@ -145,7 +149,8 @@ const KEPT_LOCK = "kept as entered before penalties were computed; choose Edit p
 const COMPUTED_LOCK = "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to";
 let kept = true;
 let listNotes = true;
-// A kept group holding typed amounts (1800/1801 stored before P4-4): the
+// A kept group holding typed amounts (1800/1801 stored before maintainer
+// decision (1800/1801 penalties run from the due date)): the
 // host's fill that blanks it says what it replaces (`removes`).
 let typedKept = false;
 let hostValues = {
@@ -224,7 +229,8 @@ async function openTest() {
 
 await openTest();
 
-// ---- P4-1: a large amount shows as held, typed, checked and saved.
+// ---- maintainer decision (two-decimal amounts of any size pass): a large
+// amount shows as held, typed, checked and saved.
 const box17A = ui.state.inputs.get(K("TaxCredit17A"));
 box17A.type("8816764.47");
 box17A.fire("blur");
@@ -240,7 +246,8 @@ await settle();
 assert.equal(box17A.value(), "8,816,764.47", "after Save");
 console.log("PASS P4-1: 1800 item 17A shows 8,816,764.47 typed, checked and saved.");
 
-// ---- P4-14: a kept group says so over its 0.00; a listed locked box says
+// ---- maintainer decision (kept note over held amounts): a kept group says so
+// over its 0.00; a listed locked box says
 // why over its value; any other locked box with a value stays quiet.
 assert.equal(JSON.stringify(ui.lockNotesFor(item("19"))), JSON.stringify([NOTE_KEPT]), "the kept note over 0.00");
 assert.equal(JSON.stringify(ui.lockNotesFor(item("42"))), JSON.stringify([NOTE_42]), "item 42 says why over its amount");
@@ -269,7 +276,8 @@ assert.equal(JSON.stringify(ui.lockNotesFor(item("19"))), "[]", "computed amount
 assert.equal(JSON.stringify(ui.lockNotesFor(item("42"))), JSON.stringify([NOTE_42]), "item 42 stays listed");
 console.log("PASS P4-14/P4-17: kept penalties and item 42 say why over their amounts; Use the computed amounts still works.");
 
-// ---- P4-4 (round 2): on a kept group holding typed amounts, Use the
+// ---- maintainer decision (1800/1801 penalties run from the due date): on a
+// kept group holding typed amounts, Use the
 // computed amounts asks first; Continue applies it.
 kept = true;
 typedKept = true;
@@ -287,7 +295,8 @@ assert.equal(ui.state.values[PENALTIES[0]], "11,250.00", "Continue applies the c
 typedKept = false;
 console.log("PASS P4-4: Use the computed amounts over typed penalties asks first.");
 
-// ---- P4-10: item 6 offers Part VII item 8's amount; Use it fills it.
+// ---- maintainer decision (1701 item 6 offers Part VII item 8): item 6 offers
+// Part VII item 8's amount; Use it fills it.
 kept = true;
 await openTest();
 const before = fills().length;
