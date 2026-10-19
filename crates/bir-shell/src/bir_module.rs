@@ -16,7 +16,24 @@ use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 use crate::auth_limiter;
 
 thread_local! {
-    static DATABASE: RefCell<Option<Database>> = const { RefCell::new(None) };
+    static DATABASE: RefCell<Option<std::sync::Arc<std::sync::Mutex<Database>>>> =
+        const { RefCell::new(None) };
+}
+
+/// The shared handle behind [`with_database`], exposed for host functions
+/// whose work must *release* the lock mid-call — the inbox poller re-locks
+/// internally during an IMAP fetch, so `check_inbox_now` clones this Arc,
+/// drops its guard, then polls.
+pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    DATABASE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            let (database, _path, _recovered) =
+                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+            *slot = Some(std::sync::Arc::new(std::sync::Mutex::new(database)));
+        }
+        Ok(slot.as_ref().expect("database opened").clone())
+    })
 }
 
 /// One connection for the process — the same owner-lock discipline as painted
@@ -24,15 +41,11 @@ thread_local! {
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
-    DATABASE.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        if slot.is_none() {
-            let (database, _path, _recovered) =
-                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
-            *slot = Some(database);
-        }
-        f(slot.as_ref().expect("database opened"))
-    })
+    let handle = database_handle()?;
+    let guard = handle
+        .lock()
+        .map_err(|_| HostError::new("database lock poisoned"))?;
+    f(&guard)
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -41,7 +54,9 @@ pub(crate) fn with_database<R>(
 #[cfg(test)]
 pub(crate) fn use_ephemeral_database() {
     DATABASE.with(|slot| {
-        *slot.borrow_mut() = Some(Database::open_ephemeral().expect("ephemeral database opens"));
+        *slot.borrow_mut() = Some(std::sync::Arc::new(std::sync::Mutex::new(
+            Database::open_ephemeral().expect("ephemeral database opens"),
+        )));
     });
 }
 

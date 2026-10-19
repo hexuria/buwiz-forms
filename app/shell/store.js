@@ -160,6 +160,27 @@ export class Store {
   starterPacks(tin) {
     return tin ? this.read(`packs:${tin}`, "starter_packs", [tin], []) : [];
   }
+  /** Confirmation-inbox state for one branch profile (P2-5). */
+  inboxState(tin) {
+    return tin
+      ? this.read(`inbox:${tin}`, "inbox_state", [tin], {
+          tin,
+          inbox_email: "",
+          auth_method: "AppPassword",
+          tracking_enabled: false,
+          imap_host: "imap.gmail.com",
+          has_app_password: false,
+          oauth_connected: false,
+          oauth_inbox_email: null,
+          oauth_updated_at: null,
+          still_pending: false,
+          matching_tins: [],
+          last_check_at: null,
+          last_check_status: null,
+          last_check_log: null,
+        })
+      : null;
+  }
   deadlines(from, to) {
     return this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], []).filter((d) => this.canSee(d.tin_root));
   }
