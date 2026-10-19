@@ -902,26 +902,18 @@ impl SheetType {
     /// The largest type size (pt), at most `max` and rounded down to 0.01
     /// pt, at which `text` sets within `room` pt: the width is linear in the
     /// size, `ems × size + spaces × word + characters × letter`. A text with
-    /// tabs, where a tab ends is not linear in the size, is searched over
-    /// the hundredths of a point.
+    /// tabs, where a tab ends is neither linear nor monotone in the size
+    /// (with spacing in points, a smaller size can push a tab past a
+    /// stop), is scanned down from `max` a hundredth of a point at a time
+    /// to the first size that sets.
     fn fit(&self, letter: Spacing, room: f64, text: &str, max: f64) -> f64 {
         if text.contains('\t') {
-            let sets =
-                |hundredths: i64| self.width(letter, text, hundredths as f64 / 100.0) <= room;
-            let (mut low, mut high) = (1_i64, ((max * 100.0).floor() as i64).max(1));
-            if sets(high) {
-                return floor_size(high as f64 / 100.0);
-            }
-            // `low` sets (or is the 0.01 pt floor); `high` does not.
-            while high - low > 1 {
-                let middle = low + (high - low) / 2;
-                if sets(middle) {
-                    low = middle;
-                } else {
-                    high = middle;
-                }
-            }
-            return floor_size(low as f64 / 100.0);
+            let top = ((max * 100.0).floor() as i64).max(1);
+            let size = (1..=top)
+                .rev()
+                .find(|hundredths| self.width(letter, text, *hundredths as f64 / 100.0) <= room)
+                .unwrap_or(1);
+            return floor_size(size as f64 / 100.0);
         }
         let spaces = text.chars().filter(|c| is_word_space(*c)).count() as f64;
         let chars = text.chars().count() as f64;
@@ -1014,7 +1006,14 @@ fn plain_input_size(sheet: &SheetType, width: f64, tag: &str, text: &str) -> Opt
     let letter = sheet.letter_for(classes);
     let room = input_room(width, tag);
     (sheet.width(letter, text, size) > room + FIT_EPSILON_PT)
-        .then(|| sheet.fit(letter, (room - 1.0).max(1.0), text, size))
+        .then(|| sheet.fit(letter, shrunk_room(room), text, size))
+}
+
+/// The width (pt) a shrunk value sets within in an input of `room` pt: the
+/// room less 1 pt to spare, but never under 1 pt (an input under 2 pt wide
+/// gets 1 pt). The fit test bounds a shrunk value by this same width.
+fn shrunk_room(room: f64) -> f64 {
+    (room - 1.0).max(1.0)
 }
 
 /// `tag` with `font-size:{size}pt` last in its inline style.
@@ -4922,9 +4921,8 @@ mod tests {
         assert_eq!(writer_values, vec![Some("123456"), None, None, None]);
         let (text, size) = printed_cells(&html).remove("p1c21").unwrap();
         assert_eq!(text, "123456");
-        let sheet = SheetType::of(bundle("2550m-2007").unwrap().css);
-        let width = plain_cell_width(&html, "p1c21").unwrap();
-        assert_eq!(size, Some(fit_line(&sheet, width, "123456")));
+        // At the overflow line's full 9 pt: "123456" sets within the cell.
+        assert_eq!(size, Some(9.0));
         // A branch other than 00000 prints over the sheet's 00000 (the
         // comb's inputs carry 0s as values; the html-frozen file is not
         // edited).
@@ -6188,10 +6186,11 @@ mod tests {
                                 .and_then(|size| size.parse().ok());
                             let letter = sheet.letter_for(classes);
                             if let Some(size) = shrunk {
-                                // Shrunk: it sets within the room less 1 pt.
+                                // Shrunk: it sets within the room less 1 pt
+                                // (never under 1 pt: [`shrunk_room`]).
                                 let measured = sheet.width(letter, &text, size);
                                 assert!(
-                                    measured <= room - 1.0,
+                                    measured <= shrunk_room(room),
                                     "{slug} {case} {cell}: {text:?} shrunk to {size}pt measures {measured}pt in a {room}pt box"
                                 );
                             } else {
@@ -6515,6 +6514,32 @@ mod tests {
         // A tab's most is a whole stop: 8 space advances.
         assert_eq!(Face::Arimo.ems("\t"), 8.0 * 569.0 / 2048.0);
         assert_eq!(Face::Tinos.ems("\t"), 8.0 * 512.0 / 2048.0);
+    }
+
+    /// Round 7, F1: where a tab ends is not monotone in the size, so the fit
+    /// scans down from the largest size instead of bisecting. The
+    /// reviewer's case on 0605's Tinos spacing (word -0.1071 pt, letter
+    /// 0.0113 pt) sets at 7.83 pt in Chrome; bisecting returned 5.97 pt.
+    #[test]
+    fn a_tab_fit_finds_the_largest_size_that_sets() {
+        let sheet = SheetType {
+            face: Face::Tinos,
+            word: Spacing {
+                pt: -0.1071,
+                em: 0.0,
+            },
+            ..SheetType::plain()
+        };
+        let letter = Spacing {
+            pt: 0.0113,
+            em: 0.0,
+        };
+        let text = "E  FFAEADF\t";
+        let size = sheet.fit(letter, 44.724, text, 9.0);
+        assert_eq!(size, 7.83);
+        assert!(sheet.width(letter, text, size) <= 44.724);
+        // No larger hundredth up to 9 pt sets.
+        assert!((784..=900).all(|h| sheet.width(letter, text, h as f64 / 100.0) > 44.724));
     }
 
     /// A printed size is rounded down to 0.01 pt, never to the nearest:
