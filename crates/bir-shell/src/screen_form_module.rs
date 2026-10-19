@@ -6335,11 +6335,14 @@ mod tests {
         assert_eq!(stored_trigger(id), None, "a Draft again, undated");
     }
 
-    /// Round 4, item 7: a 1606 Draft stored before P4-3 (no flag; the
-    /// fixture's bytes are such a Draft, as this build's constructor saved
-    /// it untouched) opens with the notice saying how to put it on the
-    /// calendar, and opening it leaves its stored bytes as they are. Once
-    /// its sale date is typed in full the notice is gone.
+    /// Round 4, item 7 (round 5, item 16): a 1606 Draft stored before P4-3
+    /// opens with the notice saying how to put it on the calendar, and
+    /// opening it leaves its stored bytes as they are. The fixture is real
+    /// pre-P4-3 bytes: a one-off run at 1cfb561b (before b6a03629) built
+    /// `Form1606Draft::new_from_profile` for this test's taxpayer (2026,
+    /// entry 1), saved it with `save_queueable_draft`, and printed the
+    /// stored `data_json`, committed verbatim. Once its sale date is typed
+    /// in full the notice is gone.
     #[test]
     fn a_pre_p43_1606_draft_opens_with_the_sale_date_notice() {
         const FIXTURE: &str =
