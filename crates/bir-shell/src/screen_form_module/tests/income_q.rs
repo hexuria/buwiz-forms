@@ -1613,3 +1613,48 @@ fn form_1702q_a_batch_that_opens_item_15_takes_it() {
     assert_eq!(batch["rejected"], json!({}), "{}", batch["rejected"]);
     assert_eq!(amount(&batch["values"], "frm1702q:txtTax15"), 1_000.0);
 }
+
+/// Decisions P4-14 and P5-14 on 1701Q: the stored base-era draft keeps its
+/// penalty column as entered (items 64A and 66A typed 125.00 and 1,000.00,
+/// 65A 0.00),
+/// locked with Edit penalties, and the host lists all three boxes in
+/// `notes_always`, so the page says "Kept as entered before penalties were
+/// computed." under them over the typed amount and over 0.00 alike
+/// (tools/test_form_decisions_round_3.mjs draws it).
+#[test]
+fn form_1701q_kept_column_says_so_over_its_amounts() {
+    use bir_core::forms::form_1701q::Form1701QDraft;
+    setup();
+    let typed: Form1701QDraft = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    with_database(|db| {
+        db.save_queueable_draft(&typed)
+            .map(|_| ())
+            .map_err(|e| HostError::new(e.to_string()))
+    })
+    .unwrap();
+    let opened = open(Q, 1);
+    let keys = ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"];
+    let shown: Vec<&str> = keys
+        .iter()
+        .map(|key| opened["values"][*key].as_str().unwrap())
+        .collect();
+    assert_eq!(shown, ["125.00", "0.00", "1,000.00"]);
+    let group = opened["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["keys"][0] == keys[0])
+        .unwrap();
+    assert_eq!(
+        (group["kept"].clone(), group["edited"].clone()),
+        (json!(true), json!(false))
+    );
+    let noted = strings(&opened["notes_always"]);
+    for key in keys {
+        assert!(noted.contains(key), "{key} is listed");
+        assert_eq!(
+            opened["lock_notes"][key],
+            "Kept as entered before penalties were computed."
+        );
+    }
+}

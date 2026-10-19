@@ -2579,3 +2579,64 @@ fn form_1701_part_viii_item_6_offers_part_vii_item_8() {
         rows_annual_individual::whole_peso_refusal("6")
     );
 }
+
+/// Decisions P4-14 and P5-14 on 1701: the draft stored before PR 7
+/// (`fixtures/1701-pre-pr7.json`: no penalty state, items 27-29 typed
+/// 125.00, 0.00 and 1,000.00) keeps its column as entered, locked as kept
+/// with Edit penalties, and the host lists its boxes in `notes_always`, so
+/// the page says "Kept as entered before penalties were computed." under
+/// them over the typed amounts and over 0.00 alike. Round 2 found the
+/// column read as not on the return (`penalties::applies` had no penalty
+/// state to try its overrides in); it is on the return now.
+#[test]
+fn form_1701_kept_column_says_so_over_its_amounts() {
+    use bir_core::forms::form_1701::Form1701Draft;
+    use bir_core::forms::queueable::QueueableForm;
+    setup();
+    let keys = [
+        "frm1701:txtPg1I27A",
+        "frm1701:txtPg1I28A",
+        "frm1701:txtPg1I29A",
+    ];
+    let stored: Form1701Draft =
+        serde_json::from_str(include_str!("fixtures/1701-pre-pr7.json")).unwrap();
+    let (tin, year, period) = (
+        stored.tin.clone(),
+        stored.taxable_year,
+        stored.period_column(),
+    );
+    with_database(|db| {
+        db.save_queueable_draft(&stored)
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .unwrap();
+    let opened = open_for(&tin, "1701", i64::from(year), period);
+    let shown: Vec<&str> = keys
+        .iter()
+        .map(|key| opened["values"][*key].as_str().unwrap())
+        .collect();
+    assert_eq!(shown, ["125.00", "0.00", "1,000.00"]);
+    let group = &opened["penalties"][0];
+    assert_eq!(
+        (
+            group["kept"].clone(),
+            group["edited"].clone(),
+            group["applies"].clone()
+        ),
+        (json!(true), json!(false), json!(true))
+    );
+    let noted = strings(&opened["notes_always"]);
+    for key in keys {
+        assert!(noted.contains(key), "{key} is listed");
+        assert_eq!(
+            opened["locks"][key],
+            rows_annual_individual::KEPT_AS_ENTERED,
+            "{key}"
+        );
+        assert_eq!(
+            opened["lock_notes"][key],
+            "Kept as entered before penalties were computed."
+        );
+    }
+}

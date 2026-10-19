@@ -2914,9 +2914,13 @@ fn lock_note(reason: &str) -> &'static str {
 /// 0.00 too (decision P4-14), and 1702RT item 42, which always shows an
 /// amount, says why it is shut (decision P4-17).
 fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
+    // A kept group off the return as it stands is locked as not on the
+    // return, not as kept: its note keeps the blank-only rule.
     let mut keys: Vec<String> = penalties::computed_groups(kind)
         .into_iter()
-        .filter(|group| penalties::kept(kind, group, draft))
+        .filter(|group| {
+            penalties::kept(kind, group, draft) && penalties::applies(kind, group, draft)
+        })
         .flat_map(|group| group.keys)
         .collect();
     keys.extend(rows_annual_corporate::notes_always(kind, draft));
