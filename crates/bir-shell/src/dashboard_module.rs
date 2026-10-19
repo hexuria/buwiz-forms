@@ -218,9 +218,8 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
     for branch in branches(db)? {
         // The profile's own deadline overrides apply on top of the stored
         // global ones, as the Google Calendar sync and the desktop
-        // dashboard apply them.
-        // A profile that cannot be read costs that branch its profile
-        // overrides only, never the other branches' rows.
+        // dashboard apply them. A profile that cannot be read costs that
+        // branch its profile overrides only, never the other branches' rows.
         let profile = match db.get_profile(&branch.tin) {
             Ok(profile) => profile,
             Err(read_error) => {
@@ -232,14 +231,16 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                 None
             }
         };
-        // As-needed returns of any taxable year whose due date falls in the
-        // window (an estate's year-later deadline, a return filed under
-        // another year).
+        // The as-needed rows' overrides: global, then the profile's for
+        // every Forms Set year (as the Google Calendar sync uses).
         let event_overrides = match &profile {
             Some(profile) => bir_core::forms::event_trigger::event_overrides(db, profile, &global)
                 .map_err(error)?,
             None => global.clone(),
         };
+        // As-needed returns of any taxable year whose due date falls in the
+        // window (an estate's year-later deadline, a return filed under
+        // another year).
         rows.extend(as_needed_rows(
             db,
             &branch,

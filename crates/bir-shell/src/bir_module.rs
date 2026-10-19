@@ -1015,6 +1015,8 @@ fn keep_stored_trigger_flag(
     };
     let keep = stored.is_some_and(|stored| {
         stored.get("trigger_date_entered") == Some(&serde_json::Value::Bool(true))
+            && stored.get("created_at").is_some()
+            && stored.get("created_at") == object.get("created_at")
             && fields
                 .iter()
                 .all(|field| stored.get(*field) == object.get(*field))
@@ -1033,7 +1035,14 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
     let status = filing_status(arguments.string(4)?)?;
-    let data = to_json(arguments.value(5)?);
+    let mut data = to_json(arguments.value(5)?);
+    // 2551Q and 1601C have no trigger date: a client's flag is never
+    // stored for them (their arms overlay `data` on a fresh draft).
+    if matches!(form_code.as_str(), "2551Q" | "1601C")
+        && let Some(object) = data.as_object_mut()
+    {
+        object.remove("trigger_date_entered");
+    }
     with_database(|db| {
         // The engine requires dedicated typed persistence for these two forms;
         // route them inside the host so the script keeps one uniform call.
@@ -1067,7 +1076,6 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     .map_err(|error| HostError::new(error.to_string()))
             }
             _ => {
-                let mut data = data;
                 keep_stored_trigger_flag(db, &tin, &form_code, year, quarter, &mut data)?;
                 db.save_form_draft(&tin, &form_code, year, quarter, &status, &data)
                     .map(|id| HostValue::Number(id as f64))
@@ -1968,6 +1976,7 @@ mod tests {
         };
         let gift = serde_json::json!({
             "donation_month": 9, "donation_day": 15, "donation_year": 2026,
+            "created_at": "2026-10-01T00:00:00+00:00",
             "trigger_date_entered": true,
         });
         save(gift.clone());
@@ -1992,10 +2001,46 @@ mod tests {
         .unwrap();
         save(gift.clone());
         assert_eq!(stored("trigger_date_entered"), true);
+        // Another draft (created_at) with the same date does not inherit it.
+        let mut other = gift.clone();
+        other["created_at"] = serde_json::json!("2026-10-02T00:00:00+00:00");
+        save(other);
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+        save(gift.clone());
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
         let mut moved = gift;
         moved["donation_day"] = serde_json::json!(16);
         save(moved);
         assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+    }
+
+    /// Round 4, item 9: the 2551Q and 1601C arms never store a client flag.
+    #[test]
+    fn the_typed_arms_of_the_generic_save_store_no_trigger_flag() {
+        setup();
+        for (code, slot) in [("2551Q", 1_i64), ("1601C", 1)] {
+            save_form_draft(&args(vec![
+                TIN.into(),
+                code.into(),
+                2026_i64.into(),
+                slot.into(),
+                "Draft".into(),
+                json(serde_json::json!({ "trigger_date_entered": true })),
+            ]))
+            .unwrap_or_else(|error| panic!("{code}: {error}"));
+            let stored: String = with_database(|db| {
+                Ok(db
+                    .conn_for_tests()
+                    .query_row(
+                        "SELECT data_json FROM form_drafts WHERE form_code = ?1",
+                        [code],
+                        |row| row.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap();
+            assert!(!stored.contains("trigger_date_entered"), "{code}: {stored}");
+        }
     }
 
     fn has_totp() -> bool {

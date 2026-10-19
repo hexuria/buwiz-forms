@@ -9,7 +9,7 @@
 export function recentEntry(opts) {
   // `newKey` started a new return once; reopening it from Recent opens what
   // is stored for its period.
-  const { newKey: _started, ...entry } = opts;
+  const { newKey: _started, newKeyFrom: _sample, ...entry } = opts;
   const { tin, code, year, period } = entry;
   const exact = entry.returnKey != null ? `|${entry.returnKey}` : "";
   return { ...entry, key: `${tin}|${code}|${year}|${period}${exact}` };
