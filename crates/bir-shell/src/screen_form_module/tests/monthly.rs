@@ -1990,46 +1990,79 @@ fn form_1600pt_and_1600vt_drafts_missing_boxes_open_blank() {
     }
 }
 
-/// Review round 3 (P2-4 on the page): the page's fill writes a box's JSON
-/// key, so a missing box the filer cleared or typed spaces into would come
-/// back as `""`. On 1600PT and 1600VT the host takes such a blank key out
-/// again, so the draft still lacks it and saves back byte for byte; a typed
-/// value stays (the main test above).
+/// 1600PT's and 1600VT's Part I text boxes the page fills: `(draft field,
+/// box key after the form's prefix, a value to type)`.
+const PART_I_BOXES: [(&str, &str, &str); 5] = [
+    (
+        "agent_name",
+        "txtPg1Pt1I7WithholdingAgentsName",
+        "SAMPLE AGENT CORP",
+    ),
+    (
+        "registered_address",
+        "txtPg1Pt1I8RegisteredAddress",
+        "1 SAMPLE STREET QUEZON CITY",
+    ),
+    ("zip_code", "txPg1I8ZipCode", "1100"),
+    ("contact_number", "txtPg1Pt1I9ContactNumber", "0281234567"),
+    ("email", "txtPg1Pt1I11Email", "agent@example.com"),
+];
+
+/// Store `code`'s March 2026 draft without `field` (and without the
+/// profile baseline a save adds); its row id.
+fn store_without(code: &str, field: &str) -> i64 {
+    setup();
+    let id = save(code, &open(code, 3)["draft"])["id"].as_i64().unwrap();
+    let mut stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    let object = stored.as_object_mut().unwrap();
+    object.remove(field);
+    object.remove("profile_baseline");
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&serde_json::to_string(&stored).unwrap(), &id.to_string()],
+    );
+    id
+}
+
+/// Whether the saved row of `id` holds key `field`.
+fn row_holds(id: i64, field: &str) -> bool {
+    serde_json::from_str::<Value>(&raw_row(id).1)
+        .unwrap()
+        .get(field)
+        .is_some()
+}
+
+/// P2-4 on the page, for every Part I box of both forms: the page's fill
+/// writes a box's JSON key, so a missing box the filer cleared or typed
+/// spaces into would come back as `""`; the host takes such a blank key out
+/// again, so the draft and the saved row still lack it. A typed value is
+/// kept and saved.
 #[test]
 fn form_1600pt_and_1600vt_a_blank_page_edit_keeps_a_missing_box_out() {
-    for (code, fixture, missing) in MISSING_BOXES {
-        setup();
-        let p = format!("frm{code}:");
-        let stored = stamped_today(fixture);
-        let id = save(code, &open(code, 3)["draft"])["id"].as_i64().unwrap();
-        raw_exec(
-            "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
-            &[&stored, &id.to_string()],
-        );
-        let opened = open(code, 3);
-        let (field, _) = missing[0];
-        let key = match field {
-            "contact_number" => format!("{p}txtPg1Pt1I9ContactNumber"),
-            "zip_code" => format!("{p}txPg1I8ZipCode"),
-            _ => format!("{p}txtPg1Pt1I11Email"),
-        };
-        for blank in ["", "   "] {
-            let edited = fill_unlocked(code, &opened["draft"], json!({ &key: blank }), &[&key]);
-            assert_eq!(edited["rejected"], json!({}), "{code}");
-            assert!(
-                edited["draft"].get(field).is_none(),
-                "{code}: {field} stays out after {blank:?}"
-            );
+    for code in ["1600PT", "1600VT"] {
+        for (field, tail, typed) in PART_I_BOXES {
+            let key = format!("frm{code}:{tail}");
+            let id = store_without(code, field);
+            let opened = open(code, 3);
+            assert!(opened["draft"].get(field).is_none(), "{code} {field}");
+            for blank in ["", "   "] {
+                let edited = fill_unlocked(code, &opened["draft"], json!({ &key: blank }), &[&key]);
+                assert_eq!(edited["rejected"], json!({}), "{code} {field}");
+                assert!(
+                    edited["draft"].get(field).is_none(),
+                    "{code}: {field} stays out after {blank:?}"
+                );
+                save(code, &edited["draft"]);
+                assert!(
+                    !row_holds(id, field),
+                    "{code}: {field} not saved after {blank:?}"
+                );
+            }
+            let edited = fill_unlocked(code, &opened["draft"], json!({ &key: typed }), &[&key]);
+            assert_eq!(edited["rejected"], json!({}), "{code} {field}");
+            assert_eq!(edited["draft"][field], typed, "{code} {field}");
             save(code, &edited["draft"]);
-            let saved = raw_row(id).1;
-            let saved = match saved.find(",\"profile_baseline\":") {
-                Some(at) => format!("{}}}", &saved[..at]),
-                None => saved,
-            };
-            assert!(
-                !saved.contains(&format!("\"{field}\":")),
-                "{code}: {field} not saved"
-            );
+            assert!(row_holds(id, field), "{code}: {field} typed is saved");
         }
     }
     // Other forms keep a blank the page writes (0619E's contact number).
@@ -2037,4 +2070,36 @@ fn form_1600pt_and_1600vt_a_blank_page_edit_keeps_a_missing_box_out() {
         rows_monthly::absent_part_i(kind_of("0619E").unwrap(), &json!({})),
         Vec::<&str>::new()
     );
+}
+
+/// Defence in depth (review round 4, F15): `screen_form_save` itself takes
+/// out a blank Part I key the stored draft lacks, whatever the page sends
+/// (a draft holding `"<field>": ""` it did not get from the fill); a key
+/// the stored draft holds is saved as sent, blank too.
+#[test]
+fn form_1600pt_and_1600vt_save_keeps_a_missing_box_out() {
+    for code in ["1600PT", "1600VT"] {
+        for (field, _, _) in PART_I_BOXES {
+            let id = store_without(code, field);
+            let mut draft = open(code, 3)["draft"].clone();
+            draft[field] = json!("  ");
+            save(code, &draft);
+            assert!(
+                !row_holds(id, field),
+                "{code}: a blank {field} the row lacked stays out"
+            );
+        }
+        // The row holds the key: a blank sent is saved.
+        setup();
+        let opened = open(code, 3);
+        let id = save(code, &opened["draft"])["id"].as_i64().unwrap();
+        let mut draft = open(code, 3)["draft"].clone();
+        draft["contact_number"] = json!("");
+        save(code, &draft);
+        assert_eq!(
+            serde_json::from_str::<Value>(&raw_row(id).1).unwrap()["contact_number"],
+            "",
+            "{code}"
+        );
+    }
 }

@@ -4499,6 +4499,17 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
         Some(mark) => save_amendment(db, kind, &mut draft, mark).map_err(host_error),
         None => {
             refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
+            // 1600PT/1600VT: a Part I key the stored draft lacks stays out
+            // while blank, whatever the page sent (P2-4; the fill does the
+            // same, rows_monthly::keep_absent_blank).
+            if rows_monthly::keeps_part_i(kind)
+                && let Some(stored) = stored_return(db, kind, &draft).map_err(host_error)?
+            {
+                rows_monthly::keep_absent_blank(
+                    &rows_monthly::absent_part_i(kind, &stored),
+                    &mut draft,
+                );
+            }
             agent::save_draft(kind, db, &mut draft).map_err(host_error)
         }
     })?;

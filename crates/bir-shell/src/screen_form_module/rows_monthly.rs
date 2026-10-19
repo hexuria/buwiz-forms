@@ -687,9 +687,15 @@ const KEPT_PART_I: [&str; 6] = [
     "email",
 ];
 
+/// Whether `kind` keeps a Part I field a stored draft lacks out while it is
+/// blank: 1600PT and 1600VT.
+pub(super) fn keeps_part_i(kind: AgentFormKind) -> bool {
+    matches!(kind.form_code(), "1600PT" | "1600VT")
+}
+
 /// The [`KEPT_PART_I`] fields `draft` lacks (none on other forms).
 pub(super) fn absent_part_i(kind: AgentFormKind, draft: &Value) -> Vec<&'static str> {
-    if !matches!(kind.form_code(), "1600PT" | "1600VT") {
+    if !keeps_part_i(kind) {
         return Vec::new();
     }
     KEPT_PART_I
