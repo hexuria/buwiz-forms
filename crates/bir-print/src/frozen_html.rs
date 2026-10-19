@@ -5994,29 +5994,34 @@ mod tests {
         );
     }
 
-    /// Every sheet filled with values that fit their boxes: each text join's
-    /// key holding as many characters as its smallest comb has boxes (at most
-    /// 12; 12 in a cell that is not a comb), hashed. Nothing overflows, so
-    /// the overflow sizing never runs.
+    /// Every sheet filled with values that fit their combs: each text join
+    /// whose cells are all combs holding as many characters as its smallest
+    /// comb has boxes (at most 12), hashed. Nothing overflows, so the
+    /// overflow sizing never runs.
     fn fitting_print_hash(slug: &str) -> String {
         use sha2::{Digest, Sha256};
         let loaded = bundle(slug).unwrap();
         let cells = writer_cells(slug).unwrap();
         let tags = input_tags(loaded.html);
         let grouped = grouped_input_indices(&tags);
+        // Only the joins whose every cell is a comb (its boxes are its slot
+        // inputs; a 20YY comb has two): a plain box's room is in points,
+        // not boxes, and `fitting_plain_print_hash` fills those.
         let fields: BTreeMap<String, String> = cells
             .joins
             .iter()
-            .map(|(key, ids)| {
-                // A comb's boxes are its slot inputs (a 20YY comb has two).
-                let slots = ids
+            .filter_map(|(key, ids)| {
+                let slots: Option<Vec<usize>> = ids
                     .iter()
-                    .filter_map(|cell| grouped.get(cell.as_str()))
-                    .filter(|indices| indices.iter().any(|&i| tags[i].slot.is_some()))
-                    .map(Vec::len)
-                    .min()
-                    .map_or(12, |slots| slots.min(12));
-                (key.clone(), words_of(slots.max(1)))
+                    .map(|cell| {
+                        grouped
+                            .get(cell.as_str())
+                            .filter(|indices| indices.iter().all(|&i| tags[i].slot.is_some()))
+                            .map(Vec::len)
+                    })
+                    .collect();
+                let slots = slots?.into_iter().min()?.min(12);
+                Some((key.clone(), words_of(slots.max(1))))
             })
             .collect();
         let document = filled_document(slug, &fields).unwrap();
