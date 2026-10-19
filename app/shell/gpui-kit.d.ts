@@ -28045,8 +28045,8 @@ declare module "bir" {
       existing?: ScreenFormExisting;
       /** No stored return: a fresh sample built for exactly this period. */
       sample?: ScreenFormOpened;
-      /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
-      opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
+      /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`, with `new_key_from`: the sample it was offered for, its `created_at`, which the open passes back); null: start it with New return. */
+      opens?: { year: number; period: number; key: number | null; new_key?: number | null; new_key_from?: string | null } | null;
   }
   export interface ScreenFormPenalties {
       keys: string[];

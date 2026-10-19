@@ -147,8 +147,8 @@ export interface ScreenFormSamplePeriod {
     existing?: ScreenFormExisting;
     /** No stored return: a fresh sample built for exactly this period. */
     sample?: ScreenFormOpened;
-    /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
-    opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
+    /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`, with `new_key_from`: the sample it was offered for, its `created_at`, which the open passes back); null: start it with New return. */
+    opens?: { year: number; period: number; key: number | null; new_key?: number | null; new_key_from?: string | null } | null;
 }
 export interface ScreenFormPenalties {
     keys: string[];
@@ -2079,142 +2079,238 @@ fn mark_profile_edit(draft: &mut Value, key: &str) {
 /// Which draft the host is talking about: form, TIN and the draft's
 /// `created_at`. Every draft the host builds gets its own `created_at`, and
 /// every save keeps it, so a never-saved sample and the real return it
-/// resembles are two drafts.
+/// resembles are two drafts. `None` for a draft without `created_at`: it
+/// gets no typed state at all and never shares a key with another.
 ///
 /// Known limit: `created_at` arrives in the client's draft JSON like every
 /// other field, so a crafted payload could reuse another draft's. A
 /// host-owned draft id would close that; it is future work.
 type DraftKey = (String, String, String);
 
-fn draft_key(kind: AgentFormKind, draft: &Value) -> DraftKey {
-    (
+fn draft_key(kind: AgentFormKind, draft: &Value) -> Option<DraftKey> {
+    let created = created_at(draft).filter(|created| !created.is_empty())?;
+    Some((
         kind.form_code().to_string(),
         draft["tin"].as_str().unwrap_or_default().to_string(),
-        created_at(draft).unwrap_or_default().to_string(),
-    )
+        created.to_string(),
+    ))
 }
 
-/// A draft's own trigger date, as the host records it: the draft (see
-/// [`DraftKey`]) and its date fields as JSON.
-type TriggerPrint = (DraftKey, String);
-
 thread_local! {
-    /// The trigger dates this host wrote from the page's own typed writes,
-    /// per draft. The flag a client sends back is never trusted: a save
-    /// keeps it only for a draft and date in here, or for the stored
-    /// return's own flagged date (`settle_trigger_flag`).
-    static TYPED_TRIGGERS: std::cell::RefCell<BTreeSet<TriggerPrint>> =
-        const { std::cell::RefCell::new(BTreeSet::new()) };
-    /// The trigger fields typed so far in each draft (`mark_trigger_date`):
-    /// the date counts only once every part it needs was typed.
+    /// The trigger fields this session's typed writes wrote, per draft
+    /// (`mark_trigger_date`).
     static TYPED_PARTS: std::cell::RefCell<BTreeMap<DraftKey, BTreeSet<String>>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
+    /// The trigger fields a stored draft had typed when it was opened
+    /// (its `trigger_parts_typed`; every field if it was dated), each with
+    /// the value it held: such a field still counts while it holds that
+    /// value (`seed_typed_parts`).
+    static SEEDED_PARTS: std::cell::RefCell<BTreeMap<DraftKey, BTreeMap<String, Value>>> =
         const { std::cell::RefCell::new(BTreeMap::new()) };
     /// The `MMDD` keys `screen_form_sample_period` offered from a day the
     /// filer typed, per sample draft (the sample's [`DraftKey`], year, key).
-    /// `open_screen_form` consumes one to date the new return it starts.
+    /// `open_screen_form` consumes one, once the open succeeds, to date the
+    /// new return it starts.
     static ISSUED_DATE_KEYS: std::cell::RefCell<BTreeSet<(DraftKey, u16, i64)>> =
         const { std::cell::RefCell::new(BTreeSet::new()) };
 }
 
+/// The trigger field a draft path writes (its top-level segment, when that
+/// is one of the form's trigger fields): the one matcher every trigger
+/// check uses.
+fn trigger_field_of(form_code: &str, path: &str) -> Option<&'static str> {
+    let top = path.trim_start_matches('/').split('/').next()?;
+    bir_core::forms::event_trigger::trigger_paths(form_code)
+        .iter()
+        .copied()
+        .find(|field| *field == top)
+}
+
+/// The trigger fields box `key` writes.
+fn trigger_fields_of_box(kind: AgentFormKind, key: &str) -> BTreeSet<&'static str> {
+    bound_paths(kind.definition(), key)
+        .iter()
+        .filter_map(|path| trigger_field_of(kind.form_code(), path))
+        .collect()
+}
+
 /// The trigger fields a box of the return's identity holds (the period the
 /// return was opened for, locked on the page: the excise returns' and
-/// 1600WP's month and year, 2200AN's and 2200S's whole date). The filer set
-/// them by choosing the return; they are not a constructor's guess, so they
-/// need no typing.
+/// 1600WP's month and year; 2200AN's, 2200S's and 2552's whole date). The
+/// filer set them by choosing the return; they are not a constructor's
+/// guess, so they need no typing.
 fn identity_trigger_fields(kind: AgentFormKind) -> BTreeSet<&'static str> {
-    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
     let def = kind.definition();
     def.bindings
         .iter()
         .filter(|(_, bound)| bound.lock == Some(agent::Lock::Identity))
-        .flat_map(|(key, _)| bound_paths(def, key))
-        .filter_map(|path| path.trim_start_matches('/').split('/').next())
-        .filter_map(|top| fields.iter().copied().find(|field| *field == top))
+        .flat_map(|(key, _)| trigger_fields_of_box(kind, key))
         .collect()
+}
+
+/// A trigger field holds no value (0, empty, null): cleared.
+fn is_blank_trigger(value: Option<&Value>) -> bool {
+    match value {
+        None | Some(Value::Null) => true,
+        Some(Value::Number(number)) => number.as_f64() == Some(0.0),
+        Some(Value::String(text)) => text.trim().is_empty(),
+        Some(Value::Object(object)) => object.values().all(|part| is_blank_trigger(Some(part))),
+        Some(_) => false,
+    }
+}
+
+/// The parts a stored row had typed: its `trigger_parts_typed`, and every
+/// trigger field if it was dated.
+fn stored_typed_parts(kind: AgentFormKind, stored: &Value) -> BTreeSet<String> {
+    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
+    let mut parts: BTreeSet<String> = stored["trigger_parts_typed"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|part| fields.contains(part))
+        .map(str::to_string)
+        .collect();
+    if stored["trigger_date_entered"] == true {
+        parts.extend(fields.iter().map(|field| field.to_string()));
+    }
+    parts
+}
+
+/// The parts of `draft` that count as typed: this session's typed writes,
+/// and the parts a stored row had typed (`earlier`, each with its stored
+/// value) that still hold that value. A blank field never counts.
+fn counted_parts(
+    kind: AgentFormKind,
+    draft: &Value,
+    session: &BTreeSet<String>,
+    earlier: &BTreeMap<String, Value>,
+) -> BTreeSet<String> {
+    bir_core::forms::event_trigger::trigger_paths(kind.form_code())
+        .iter()
+        .filter(|field| !is_blank_trigger(draft.get(**field)))
+        .filter(|field| {
+            session.contains(**field)
+                || earlier
+                    .get(**field)
+                    .is_some_and(|value| draft.get(**field) == Some(value))
+        })
+        .map(|field| field.to_string())
+        .collect()
+}
+
+/// Write the host's record of `draft`'s typed parts: `trigger_parts_typed`
+/// (removed when empty) and `trigger_date_entered`, set only once every
+/// part the date needs counts (the parts its identity fixes are given).
+fn write_typed_state(kind: AgentFormKind, draft: &mut Value, parts: &BTreeSet<String>) {
+    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
+    let given = identity_trigger_fields(kind);
+    // At least one part typed: a date wholly fixed by the return's identity
+    // (2200AN, 2200S, 2552) counts only once written for it (a sample).
+    let entered = !parts.is_empty()
+        && fields
+            .iter()
+            .all(|field| given.contains(field) || parts.contains(*field));
+    let set = |draft: &mut Value, field: &str, value: Option<Value>| {
+        let pointer = lifecycle_pointer(draft, field);
+        match value {
+            Some(value) => set_draft_path(draft, &pointer, value),
+            None => {
+                if let Some((parent, leaf)) = pointer.rsplit_once('/')
+                    && let Some(Value::Object(object)) = draft.pointer_mut(parent)
+                {
+                    object.remove(leaf);
+                }
+            }
+        }
+    };
+    set(
+        draft,
+        "trigger_parts_typed",
+        (!parts.is_empty()).then(|| json!(parts.iter().collect::<Vec<_>>())),
+    );
+    set(draft, "trigger_date_entered", entered.then(|| json!(true)));
+}
+
+/// Remember, for this session, the parts a stored draft had typed (see
+/// SEEDED_PARTS), so a part edited after a restart completes the date.
+fn seed_typed_parts(kind: AgentFormKind, stored: &Value) {
+    let Some(id) = draft_key(kind, stored) else {
+        return;
+    };
+    let seeded: BTreeMap<String, Value> = stored_typed_parts(kind, stored)
+        .into_iter()
+        .filter_map(|part| stored.get(&part).cloned().map(|value| (part, value)))
+        .collect();
+    if !seeded.is_empty() {
+        SEEDED_PARTS.with(|map| map.borrow_mut().insert(id, seeded));
+    }
 }
 
 /// Record that the filer wrote part of this as-needed return's trigger
 /// date (its removal, withholding, sale or transaction date, decision D8c)
-/// when box `key` writes one of the form's trigger fields. The return is
-/// dated (`trigger_date_entered`) only once every part the date needs has
-/// been typed in this draft: a part left as the constructor pre-filled it
-/// (today, or January 1) is not the filer's date. Parts the return's
-/// identity fixes count as given ([`identity_trigger_fields`]).
+/// when box `key` writes one of the form's trigger fields; a write that
+/// clears the field takes it out again. The return is dated
+/// (`trigger_date_entered`) only once every part the date needs counts
+/// ([`counted_parts`], [`write_typed_state`]): a part left as the
+/// constructor pre-filled it (today, or January 1) is not the filer's date.
 fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
-    if fields.is_empty() {
-        return;
-    }
-    let written: Vec<&str> = bound_paths(kind.definition(), key)
-        .iter()
-        .filter_map(|path| path.trim_start_matches('/').split('/').next())
-        .filter(|top| fields.contains(top))
-        .collect();
+    let written = trigger_fields_of_box(kind, key);
     if written.is_empty() {
         return;
     }
-    let id = draft_key(kind, draft);
-    let given = identity_trigger_fields(kind);
-    let complete = TYPED_PARTS.with(|parts| {
+    let Some(id) = draft_key(kind, draft) else {
+        return;
+    };
+    let session = TYPED_PARTS.with(|parts| {
         let mut parts = parts.borrow_mut();
         let typed = parts.entry(id.clone()).or_default();
-        typed.extend(written.iter().map(|top| top.to_string()));
-        fields
-            .iter()
-            .all(|field| given.contains(field) || typed.contains(*field))
-    });
-    if complete {
-        let pointer = lifecycle_pointer(draft, "trigger_date_entered");
-        set_draft_path(draft, &pointer, json!(true));
-        if let Some(print) = trigger_fingerprint(kind, draft) {
-            TYPED_TRIGGERS.with(|typed| typed.borrow_mut().insert(print));
+        for field in &written {
+            if is_blank_trigger(draft.get(*field)) {
+                typed.remove(*field);
+            } else {
+                typed.insert(field.to_string());
+            }
         }
-    }
+        typed.clone()
+    });
+    let earlier = SEEDED_PARTS.with(|map| map.borrow().get(&id).cloned().unwrap_or_default());
+    let counted = counted_parts(kind, draft, &session, &earlier);
+    write_typed_state(kind, draft, &counted);
 }
 
-/// What identifies a draft's trigger date (see [`TriggerPrint`]); `None` for
-/// a form without one.
-fn trigger_fingerprint(kind: AgentFormKind, draft: &Value) -> Option<TriggerPrint> {
-    let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
-    if fields.is_empty() {
-        return None;
-    }
-    let values: Vec<&Value> = fields
-        .iter()
-        .map(|field| draft.get(*field).unwrap_or(&Value::Null))
-        .collect();
-    Some((draft_key(kind, draft), serde_json::to_string(&values).ok()?))
-}
-
-/// Before any write of a client's draft (save, queue, cancel):
-/// `trigger_date_entered` is what the host knows, never what the client
-/// sent. It stays set only when this host wrote this draft's date from a
-/// typed write, or the stored return already held exactly this date with
-/// the flag; otherwise it is removed, on every form, so a crafted payload
-/// cannot date a pre-filled return and no client flag is ever stored.
+/// Before any write of a client's draft (save, queue, cancel, a followed
+/// save): `trigger_parts_typed` and `trigger_date_entered` are what the
+/// host knows, never what the client sent. The parts that count are the
+/// stored row's typed parts (read from the database, kept while they hold
+/// their stored value) and this session's typed writes; the flag follows
+/// from them. A form without a trigger date, or a draft without
+/// `created_at`, stores neither, so no client value is ever stored.
 fn settle_trigger_flag(
     db: &Database,
     kind: AgentFormKind,
     draft: &mut Value,
 ) -> Result<(), String> {
-    let entered = match trigger_fingerprint(kind, draft) {
-        None => false,
-        Some(print) => {
-            TYPED_TRIGGERS.with(|typed| typed.borrow().contains(&print))
-                || stored_return(db, kind, draft)?.is_some_and(|stored| {
-                    stored.get("trigger_date_entered") == Some(&Value::Bool(true))
-                        && trigger_fingerprint(kind, &stored).as_ref() == Some(&print)
-                })
+    let parts = match draft_key(kind, draft)
+        .filter(|_| !bir_core::forms::event_trigger::trigger_paths(kind.form_code()).is_empty())
+    {
+        None => BTreeSet::new(),
+        Some(id) => {
+            let earlier: BTreeMap<String, Value> = match stored_return(db, kind, draft)? {
+                Some(stored) if draft_key(kind, &stored).as_ref() == Some(&id) => {
+                    stored_typed_parts(kind, &stored)
+                        .into_iter()
+                        .filter_map(|part| stored.get(&part).cloned().map(|value| (part, value)))
+                        .collect()
+                }
+                _ => BTreeMap::new(),
+            };
+            let session =
+                TYPED_PARTS.with(|parts| parts.borrow().get(&id).cloned().unwrap_or_default());
+            counted_parts(kind, draft, &session, &earlier)
         }
     };
-    let pointer = lifecycle_pointer(draft, "trigger_date_entered");
-    if entered {
-        set_draft_path(draft, &pointer, json!(true));
-    } else if let Some((parent, leaf)) = pointer.rsplit_once('/')
-        && let Some(Value::Object(object)) = draft.pointer_mut(parent)
-    {
-        object.remove(leaf);
-    }
+    write_typed_state(kind, draft, &parts);
     Ok(())
 }
 
@@ -2678,10 +2774,13 @@ const EVALUATE_STACK: usize = 16 * 1024 * 1024;
 fn on_large_stack<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, String> {
+    // The worker runs on this thread's penalty clock (a pinned one in
+    // tests), so its compute sees the same today.
+    let clock = bir_core::forms::penalty_items::capture_clock();
     std::thread::Builder::new()
         .name("screen-form-evaluate".into())
         .stack_size(EVALUATE_STACK)
-        .spawn(work)
+        .spawn(move || clock.run(work))
         .map_err(|error| error.to_string())?
         .join()
         .map_err(|_| "validation stopped unexpectedly".to_string())
@@ -2720,6 +2819,29 @@ fn evaluate_here(
 /// filer enters its sale date; its stored bytes are left as they are.
 const UNDATED_SALE_NOTICE: &str = "Enter the sale date to put this return on the calendar.";
 
+/// What an undated pre-filled Draft's penalty boxes say (it computes none:
+/// `PenaltyItems::awaits_trigger_date`): "Enter the sale date to compute
+/// penalties." on 1606, the form's own trigger on the others. `None` once
+/// it is dated or has left Draft.
+fn undated_penalty_note(
+    kind: AgentFormKind,
+    draft: &Value,
+    status: &FilingStatus,
+) -> Option<String> {
+    let code = kind.form_code();
+    if !bir_core::forms::event_trigger::PREFILLED_TRIGGER_FORMS.contains(&code)
+        || *status != FilingStatus::Draft
+        || draft["trigger_date_entered"] == true
+    {
+        return None;
+    }
+    let trigger = bir_core::calendar_rules::event_due_rule(code)?.trigger;
+    Some(format!(
+        "Enter the {} date to compute penalties.",
+        trigger.to_lowercase()
+    ))
+}
+
 fn undated_sale_notice(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
     if kind.form_code() != "1606" || draft["status"] != "Draft" {
         return Vec::new();
@@ -2731,16 +2853,11 @@ fn undated_sale_notice(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
     if dated {
         return Vec::new();
     }
-    let def = kind.definition();
-    let fields = bir_core::forms::event_trigger::trigger_paths("1606");
-    let keys: Vec<&String> = def
+    let keys: Vec<&String> = kind
+        .definition()
         .bindings
         .keys()
-        .filter(|key| {
-            bound_paths(def, key)
-                .iter()
-                .any(|path| fields.contains(&path.trim_start_matches('/')))
-        })
+        .filter(|key| !trigger_fields_of_box(kind, key).is_empty())
         .collect();
     vec![json!({
         "field": "transaction_date",
@@ -2898,6 +3015,12 @@ fn open_screen_form(
         } else {
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?
         };
+        // A stored return the page opens brings the parts it had typed (a
+        // date typed over two sessions, a part edited after a restart).
+        if !sample && !draft["id"].is_null() {
+            seed_typed_parts(kind, &draft);
+        }
+        let mut consumed = None;
         // A new return started for the date its key names.
         if let Some(key) = new_key
             && exact.is_none()
@@ -2909,15 +3032,17 @@ fn open_screen_form(
             // is written, and dates the return, only when this host offered
             // it for the sample this open names (`screen_form_sample_period`;
             // the page passes the sample's `created_at` as `new_key_from`);
-            // the offer is consumed. A key the client sends alone writes no
-            // date at all (D8c). Other forms take the key as before.
+            // the offer is consumed once the open has succeeded. A key the
+            // client sends alone writes no date at all (D8c). Other forms
+            // take the key as before.
             let has_trigger = !bir_core::forms::event_trigger::trigger_paths(code).is_empty();
-            let issued = has_trigger
-                && typed.day.is_some()
-                && new_key_from.as_ref().is_some_and(|from| {
-                    let sample = (code.to_string(), tin.clone(), from.clone());
-                    ISSUED_DATE_KEYS.with(|issued| issued.borrow_mut().remove(&(sample, year, key)))
-                });
+            let offer = new_key_from
+                .as_ref()
+                .filter(|_| has_trigger && typed.day.is_some())
+                .map(|from| ((code.to_string(), tin.clone(), from.clone()), year, key))
+                .filter(|offer| ISSUED_DATE_KEYS.with(|issued| issued.borrow().contains(offer)));
+            let issued = offer.is_some();
+            consumed = offer;
             if !has_trigger || typed.day.is_none() || issued {
                 write_typed_period(kind, &parts, &typed, &mut draft).map_err(host_error)?;
                 write_typed_period(kind, &parts, &typed, &mut from_profile).map_err(host_error)?;
@@ -2951,6 +3076,7 @@ fn open_screen_form(
         if stored {
             let mut saved = draft.clone();
             match refuse_replacing_a_stored_return(db, kind, &saved)
+                .and_then(|()| settle_trigger_flag(db, kind, &mut saved))
                 .and_then(|()| agent::save_draft(kind, db, &mut saved))
             {
                 Ok(_) => draft = saved,
@@ -2974,6 +3100,10 @@ fn open_screen_form(
         } else {
             filed_original(db, kind, &draft).map_err(host_error)?
         };
+        // Every fallible step has run: the offer this open used is spent.
+        if let Some(offer) = consumed {
+            ISSUED_DATE_KEYS.with(|issued| issued.borrow_mut().remove(&offer));
+        }
         Ok((draft, from_profile, build, filed_original, followed))
     })?;
     Ok(async move {
@@ -3151,6 +3281,15 @@ fn opened_json(
             }
         }
     }
+    // An undated pre-filled Draft computes no penalties (decision P4-3):
+    // its penalty boxes say what they wait for.
+    if let Some(note) = undated_penalty_note(kind, &draft, &status) {
+        for group in penalties::computed_groups(kind) {
+            for key in group.keys {
+                needs.entry(key).or_insert_with(|| json!(note));
+            }
+        }
+    }
     blank_sample(&blank, &mut values, &mut errors);
     // A printed box the filer cannot fill says why while it is blank (the
     // schema's reviewed `why`).
@@ -3308,26 +3447,30 @@ fn screen_form_sample_period(
                     // is offered only for a day the filer typed: an untyped
                     // day is the constructor's, and the return it would
                     // start must stay undated (D8c). On a form with a
-                    // trigger date the day counts as typed only when the
-                    // host recorded this sample's date from the typed parts
-                    // (TYPED_TRIGGERS), and the key is recorded against
-                    // this sample draft; only that open consumes it.
-                    let has_trigger = trigger_fingerprint(kind, &draft).is_some();
+                    // trigger date the day counts only when the host itself
+                    // dated this sample from its typed parts just above
+                    // (`mark_trigger_date`; the sample is built here, so its
+                    // flag is the host's), and the key is recorded against
+                    // this sample draft, which only that open consumes. A
+                    // form whose answer opens nothing (entry-numbered) gets
+                    // no offer.
+                    let has_trigger =
+                        !bir_core::forms::event_trigger::trigger_paths(code).is_empty();
                     let day_typed = typed.day.is_some()
-                        && (!has_trigger
-                            || trigger_fingerprint(kind, &draft).is_some_and(|print| {
-                                TYPED_TRIGGERS.with(|typed| typed.borrow().contains(&print))
-                            }));
+                        && (!has_trigger || draft["trigger_date_entered"] == true);
                     let new_key = stored_period(kind, &draft).filter(|key| *key < 101 || day_typed);
-                    let issued_from = new_key.filter(|key| has_trigger && *key >= 101).map(|key| {
-                        let sample = draft_key(kind, &draft);
-                        ISSUED_DATE_KEYS
-                            .with(|issued| issued.borrow_mut().insert((sample.clone(), year, key)));
-                        sample.2
-                    });
                     let opens = if numbered {
                         Value::Null
                     } else {
+                        let issued_from = new_key
+                            .filter(|key| has_trigger && *key >= 101)
+                            .and_then(|key| {
+                                let sample = draft_key(kind, &draft)?;
+                                ISSUED_DATE_KEYS.with(|issued| {
+                                    issued.borrow_mut().insert((sample.clone(), year, key))
+                                });
+                                Some(sample.2)
+                            });
                         json!({
                             "year": year,
                             "period": period,
@@ -3865,6 +4008,19 @@ fn complete_period(
             }
         }
     };
+    // A form whose trigger date is its identity (2200AN, 2200S: the stored
+    // key is the date) needs the day too: a period without it would start
+    // a return on the constructor's day.
+    let identity = identity_trigger_fields(kind);
+    let identity_day = parts.iter().any(|(key, part)| {
+        matches!(part, PeriodPart::Day | PeriodPart::Date)
+            && trigger_fields_of_box(kind, key)
+                .iter()
+                .any(|field| identity.contains(field))
+    });
+    if identity_day && typed.day.is_none() {
+        return None;
+    }
     page_period(code, i64::from(period))
         .ok()
         .map(|period| (year, period))
@@ -5363,9 +5519,321 @@ mod tests {
     /// A fresh database starts a fresh session: no typed dates, typed
     /// parts or offered day keys carry over from an earlier setup.
     fn clear_trigger_records() {
-        TYPED_TRIGGERS.with(|typed| typed.borrow_mut().clear());
+        SEEDED_PARTS.with(|seeded| seeded.borrow_mut().clear());
         TYPED_PARTS.with(|parts| parts.borrow_mut().clear());
         ISSUED_DATE_KEYS.with(|issued| issued.borrow_mut().clear());
+    }
+
+    /// What an app restart does to the host's in-memory trigger records.
+    fn restart() {
+        clear_trigger_records();
+    }
+
+    fn type_parts(code: &str, draft: &Value, parts: &[(&str, &str)]) -> Value {
+        let mut draft = draft.clone();
+        for (path, value) in parts {
+            let key = key_bound_to(code, path);
+            draft = fill(code, &draft, json!({ key: value }))["draft"].clone();
+        }
+        draft
+    }
+
+    fn ymd(y: i32, m: u32, day: u32) -> Option<chrono::NaiveDate> {
+        chrono::NaiveDate::from_ymd_opt(y, m, day)
+    }
+
+    const SALE: [(&str, &str); 3] = [
+        ("/transaction_month", "09"),
+        ("/transaction_day", "18"),
+        ("/transaction_year", "2026"),
+    ];
+
+    /// Round 5, finding 1: a dated 1606 or 1706, after a restart, keeps its
+    /// date when one part is edited: the stored row's typed parts are
+    /// durable (`trigger_parts_typed`, and the flag), so the new day joins
+    /// them and the return stays dated, by the new date. The excise
+    /// control (2200A) behaves the same.
+    #[test]
+    fn a_part_edited_after_a_restart_keeps_the_return_dated() {
+        for code in ["1606", "1706"] {
+            setup_taxpayer_filing(&[code]);
+            let draft = type_parts(code, &open(code, 1)["draft"], &SALE);
+            let id = stored_id(&save(code, &draft));
+            assert_eq!(stored_trigger(id), ymd(2026, 9, 18), "{code}");
+            restart();
+            let opened = open(code, 1);
+            let edited = type_parts(code, &opened["draft"], &[("/transaction_day", "20")]);
+            assert_eq!(
+                edited["trigger_date_entered"], true,
+                "{code}: dated on the page too"
+            );
+            save(code, &edited);
+            assert_eq!(stored_trigger(id), ymd(2026, 9, 20), "{code}: the new date");
+        }
+        setup_taxpayer_filing(&["2200A"]);
+        let draft = type_parts("2200A", &open("2200A", 9)["draft"], &[("/day", "18")]);
+        let id = stored_id(&save("2200A", &draft));
+        restart();
+        let edited = type_parts("2200A", &open("2200A", 9)["draft"], &[("/day", "20")]);
+        save("2200A", &edited);
+        assert_eq!(stored_trigger(id), ymd(2026, 9, 20));
+    }
+
+    /// Round 5, finding 2: typing over two sessions completes the date.
+    #[test]
+    fn partial_typing_across_a_restart_completes() {
+        setup_taxpayer_filing(&["1606"]);
+        let first = type_parts("1606", &open("1606", 1)["draft"], &SALE[..2]);
+        let saved = save("1606", &first);
+        let id = stored_id(&saved);
+        assert_eq!(stored_trigger(id), None, "two parts: undated");
+        assert_eq!(
+            saved["draft"]["trigger_parts_typed"],
+            json!(["transaction_day", "transaction_month"]),
+            "the typed parts are stored"
+        );
+        restart();
+        let second = type_parts("1606", &open("1606", 1)["draft"], &SALE[2..]);
+        save("1606", &second);
+        assert_eq!(
+            stored_trigger(id),
+            ymd(2026, 9, 18),
+            "all three, one session later"
+        );
+    }
+
+    /// Round 5: a client-sent `trigger_parts_typed` is ignored: the host
+    /// keeps only the stored row's parts and its own typed writes.
+    #[test]
+    fn a_client_forged_parts_field_is_ignored() {
+        setup_taxpayer_filing(&["1606"]);
+        let mut forged = open("1606", 1)["draft"].clone();
+        forged["trigger_parts_typed"] =
+            json!(["transaction_day", "transaction_month", "transaction_year"]);
+        forged["trigger_date_entered"] = json!(true);
+        let saved = save("1606", &forged);
+        assert!(saved["draft"].get("trigger_parts_typed").is_none());
+        assert!(saved["draft"].get("trigger_date_entered").is_none());
+        assert_eq!(stored_trigger(stored_id(&saved)), None);
+    }
+
+    /// Round 5, item 19: clearing a typed part takes it out of the typed
+    /// set, and the flag follows the complete-set rule.
+    #[test]
+    fn clearing_a_part_undates_the_return() {
+        setup_taxpayer_filing(&["1606"]);
+        let dated = type_parts("1606", &open("1606", 1)["draft"], &SALE);
+        assert_eq!(dated["trigger_date_entered"], true);
+        // The day box takes a whole number, so the page clears it to 0 (a
+        // blank text is refused as "must be a whole number").
+        let cleared = type_parts("1606", &dated, &[("/transaction_day", "0")]);
+        assert_eq!(cleared["transaction_day"], 0);
+        assert!(cleared.get("trigger_date_entered").is_none(), "{cleared}");
+        assert_eq!(
+            cleared["trigger_parts_typed"],
+            json!(["transaction_month", "transaction_year"])
+        );
+        let id = stored_id(&save("1606", &cleared));
+        assert_eq!(stored_trigger(id), None);
+        let again = type_parts("1606", &cleared, &[("/transaction_day", "21")]);
+        assert_eq!(again["trigger_date_entered"], true);
+    }
+
+    /// Round 5, item 7: a draft without `created_at` gets no typed state:
+    /// its writes record nothing, it never shares another draft's key, and
+    /// a save stores neither field.
+    #[test]
+    fn a_draft_without_created_at_gets_no_typed_state() {
+        setup_taxpayer_filing(&["1606"]);
+        let mut draft = open("1606", 1)["draft"].clone();
+        draft.as_object_mut().unwrap().remove("created_at");
+        let kind = kind_of("1606").unwrap();
+        assert_eq!(draft_key(kind, &draft), None);
+        let mut written = draft.clone();
+        for (path, value) in SALE {
+            set_draft_path(&mut written, path, json!(value.parse::<u32>().unwrap()));
+            mark_trigger_date(kind, &mut written, &key_bound_to("1606", path));
+        }
+        assert!(written.get("trigger_date_entered").is_none());
+        assert!(written.get("trigger_parts_typed").is_none());
+        assert!(TYPED_PARTS.with(|parts| parts.borrow().is_empty()));
+        with_database(|db| settle_trigger_flag(db, kind, &mut written).map_err(HostError::new))
+            .unwrap();
+        assert!(written.get("trigger_date_entered").is_none());
+        assert!(written.get("trigger_parts_typed").is_none());
+    }
+
+    /// Round 5, item 5: an open that fails keeps the offer it would have
+    /// used; the next open of the same offer dates the return.
+    #[test]
+    fn a_failing_open_keeps_the_offer() {
+        setup_taxpayer_filing(&["2200AN"]);
+        let answer = sample_period(TIN, "2200AN", typed_month("2200AN", Some("14")));
+        let opens = answer["opens"].clone();
+        let from = opens["new_key_from"].as_str().unwrap().to_string();
+        let offer = ((String::from("2200AN"), TIN.to_string(), from), 2026, 914);
+        // The open's last fallible step (reading the amendment history)
+        // fails after the offer was found.
+        raw_exec(
+            "ALTER TABLE amendment_snapshots RENAME TO amendment_snapshots_away",
+            &[],
+        );
+        let failed = call_async(
+            "screen_form_open",
+            vec![
+                TIN.into(),
+                "2200AN".into(),
+                json(opens["year"].clone()),
+                json(opens["period"].clone()),
+                HostValue::Null,
+                json(opens["new_key"].clone()),
+                json(opens["new_key_from"].clone()),
+            ],
+        );
+        assert!(failed.is_err(), "the open fails: {failed:?}");
+        assert!(
+            ISSUED_DATE_KEYS.with(|issued| issued.borrow().contains(&offer)),
+            "the offer is kept"
+        );
+        raw_exec(
+            "ALTER TABLE amendment_snapshots_away RENAME TO amendment_snapshots",
+            &[],
+        );
+        let opened = open_from("2200AN", &opens);
+        assert_eq!(opened["draft"]["trigger_date_entered"], true);
+        assert!(
+            !ISSUED_DATE_KEYS.with(|issued| issued.borrow().contains(&offer)),
+            "spent by the open that succeeded"
+        );
+    }
+
+    /// Round 5, item 13: a form whose answer opens nothing (entry-numbered)
+    /// records no offer.
+    #[test]
+    fn an_answer_that_opens_nothing_records_no_offer() {
+        for code in NUMBERED_FORMS {
+            setup_taxpayer_filing(&[code]);
+            let parts: Map<String, Value> = sample_period_parts(kind_of(code).unwrap())
+                .into_iter()
+                .map(|(key, part)| {
+                    let value = match part {
+                        PeriodPart::Year => json!("2026"),
+                        PeriodPart::Month => json!("09"),
+                        PeriodPart::Day => json!("14"),
+                        PeriodPart::Date => json!("09/14/2026"),
+                        PeriodPart::YearEndMonth => json!("12"),
+                        PeriodPart::Quarter(n) => json!((n == 3).to_string()),
+                    };
+                    (key, value)
+                })
+                .collect();
+            let answer = sample_period(TIN, code, Value::Object(parts));
+            assert!(answer["opens"].is_null(), "{code}: {}", answer["opens"]);
+            assert!(
+                ISSUED_DATE_KEYS.with(|issued| issued.borrow().is_empty()),
+                "{code}: no offer"
+            );
+        }
+    }
+
+    /// Round 5, item 20: a sample period is complete only when it holds
+    /// every trigger part its period parts mark, so a day typed for a
+    /// form's sample is a whole date. Fails if a form gains a Day part its
+    /// completion ignores (a Quarterly form with a Day part, say).
+    #[test]
+    fn a_complete_sample_period_holds_every_trigger_part_it_marks() {
+        let value = |part: &PeriodPart| match part {
+            PeriodPart::Year => json!("2026"),
+            PeriodPart::Month => json!("09"),
+            PeriodPart::Day => json!("14"),
+            PeriodPart::Date => json!("09/14/2026"),
+            PeriodPart::YearEndMonth => json!("12"),
+            PeriodPart::Quarter(n) => json!((*n == 3).to_string()),
+        };
+        let mut checked = 0;
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            let parts = sample_period_parts(kind);
+            let quarterly = matches!(
+                bir_core::forms::find_form(code).map(|form| form.frequency.clone()),
+                Some(FilingFrequency::Quarterly)
+            );
+            let given = identity_trigger_fields(kind);
+            for (key, part) in &parts {
+                let fields = trigger_fields_of_box(kind, key);
+                if fields.is_empty() || matches!(part, PeriodPart::Quarter(_)) {
+                    continue;
+                }
+                let day = matches!(part, PeriodPart::Day | PeriodPart::Date);
+                assert!(
+                    !(quarterly && day),
+                    "{code}: a Quarterly form has a trigger Day part {key}"
+                );
+                // A monthly form's day that is not its identity may be left
+                // out (the period is the month): the return then stays
+                // undated, and only a typed day dates it (tested above).
+                if day && !fields.iter().all(|field| given.contains(field)) {
+                    continue;
+                }
+                let typed: Map<String, Value> = parts
+                    .iter()
+                    .filter(|(other, _)| other != key)
+                    .map(|(other, other_part)| (other.clone(), value(other_part)))
+                    .collect();
+                let read = read_typed_period(code, &parts, &typed);
+                assert!(
+                    complete_period(kind, &parts, &read).is_none(),
+                    "{code}: the period completes without its trigger part {key}"
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 0);
+    }
+
+    /// Round 5, item 11: the screen's worker thread computes on the pinned
+    /// penalty clock.
+    #[test]
+    fn the_worker_thread_sees_the_pinned_clock() {
+        let pinned = chrono::NaiveDate::from_ymd_opt(2001, 2, 3).unwrap();
+        let seen = bir_core::forms::penalty_items::with_clock(pinned, || {
+            on_large_stack(bir_core::forms::penalty_items::today).unwrap()
+        });
+        assert_eq!(seen, pinned);
+    }
+
+    /// Round 5, item 3: an undated 1606 Draft computes no penalties, keeps
+    /// no penalty due date, and its penalty boxes say what they wait for;
+    /// once its sale date is typed it computes them.
+    #[test]
+    fn an_undated_1606_shows_why_it_has_no_penalties() {
+        setup_taxpayer_filing(&["1606"]);
+        let opened = open("1606", 1);
+        let draft = &opened["draft"];
+        assert!(draft["penalty_due_date"].is_null(), "{draft}");
+        assert!(draft["computed_penalties"].is_null(), "{draft}");
+        let note = "Enter the sale date to compute penalties.";
+        let groups = opened["penalties"].as_array().unwrap();
+        assert!(!groups.is_empty());
+        for key in groups[0]["keys"].as_array().unwrap() {
+            assert_eq!(opened["needs"][key.as_str().unwrap()], note, "{key}");
+        }
+        let dated = type_parts("1606", draft, &SALE);
+        assert!(!dated["computed_penalties"].is_null(), "dated: computed");
+    }
+
+    /// Round 5: opening a legacy draft (one stored before these fields) does
+    /// not change its stored bytes.
+    #[test]
+    fn opening_a_legacy_draft_keeps_its_bytes() {
+        setup_taxpayer_filing(&["1706"]);
+        let saved = save("1706", &open("1706", 1)["draft"]);
+        let id = stored_id(&saved);
+        let (_, before) = raw_row(id);
+        assert!(!before.contains("trigger_parts_typed"));
+        restart();
+        open("1706", 1);
+        assert_eq!(raw_row(id).1, before);
     }
 
     fn block_on<F: Future>(future: F) -> F::Output {
@@ -5712,10 +6180,40 @@ mod tests {
             // The sample saved.
             setup_taxpayer_filing(&[code]);
             let answer = sample_period(TIN, code, typed_month(code, None));
-            assert_eq!(
-                answer["complete"], true,
-                "{code}: month and year complete it"
-            );
+            if ["2200AN", "2200S"].contains(&code) {
+                // Round 5, item 20: the date is these returns' identity, so
+                // the period needs the day; month and year alone are not a
+                // complete period (was: complete, with no day key offered).
+                assert_eq!(answer["complete"], false, "{code}: the day is needed");
+            } else {
+                assert_eq!(
+                    answer["complete"], true,
+                    "{code}: month and year complete it"
+                );
+            }
+            if answer["complete"] == false {
+                // A day key the client sends alone, as for the others below.
+                setup_taxpayer_filing(&[code]);
+                let opened = call_async(
+                    "screen_form_open",
+                    vec![
+                        TIN.into(),
+                        code.into(),
+                        YEAR.into(),
+                        9.into(),
+                        HostValue::Null,
+                        930.into(),
+                    ],
+                )
+                .unwrap();
+                assert!(
+                    opened["draft"].get("trigger_date_entered").is_none(),
+                    "{code}"
+                );
+                let crafted = save(code, &opened["draft"]);
+                assert_undated_and_listed(code, stored_id(&crafted));
+                continue;
+            }
             let sample = answer["sample"]["draft"].clone();
             assert!(
                 sample.get("trigger_date_entered").is_none(),
@@ -5963,7 +6461,7 @@ mod tests {
                 _ => {
                     for field in &free {
                         TYPED_PARTS.with(|parts| parts.borrow_mut().clear());
-                        TYPED_TRIGGERS.with(|typed| typed.borrow_mut().clear());
+                        SEEDED_PARTS.with(|seeded| seeded.borrow_mut().clear());
                         let filled = fill_one(&base, field);
                         assert!(
                             filled["draft"].get("trigger_date_entered").is_none(),
@@ -6129,7 +6627,7 @@ mod tests {
         );
         // Opened again (in a fresh session) and saved as it stands: the
         // stored flag stays.
-        TYPED_TRIGGERS.with(|typed| typed.borrow_mut().clear());
+        restart();
         let reopened = open("1600WP", 9);
         let again = save("1600WP", &reopened["draft"]);
         assert_eq!(again["draft"]["trigger_date_entered"], true);
