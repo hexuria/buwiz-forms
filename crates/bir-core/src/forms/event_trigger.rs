@@ -11,10 +11,11 @@
 //!
 //! **Only a date the filer entered counts.** Several constructors pre-fill
 //! a real date (the excise returns and 1600WP: today or the month's last
-//! day; 1606 and 1706: today or January 1; 2552: the date its caller passes), so a
-//! stored date alone does not say the event happened then. For those forms
-//! ([`PREFILLED_TRIGGER_FORMS`]) a Draft counts only once the page recorded
-//! that the filer wrote the date (`trigger_date_entered`, a flag on the
+//! day; 1606 and 1706: today or January 1; 2552: the date its caller
+//! passes), so a stored date alone does not say the event happened then.
+//! For those forms ([`PREFILLED_TRIGGER_FORMS`]) a Draft counts only once
+//! the page recorded that the filer wrote every part of the date it needs
+//! (`trigger_date_entered`, a flag on the
 //! flattened `SubmissionLifecycle`, absent and so byte-identical on every
 //! draft saved before it existed). A return that left Draft files the date
 //! it holds, typed or not, so it is dated by that date; a cancelled queue
@@ -366,46 +367,65 @@ mod tests {
     }
 
     /// 2000OT's Item 1 is dated exactly when the form's own validator takes
-    /// it (no Item 1 error), so the two cannot drift. Both read the real
-    /// clock: the future dates are relative to today.
+    /// it (no Item 1 error), so the two cannot drift. One clock reading:
+    /// the reader runs on it (`with_clock`); the validator reads the real
+    /// clock, so a run that crosses midnight is repeated on the new day.
     #[test]
     fn form_2000ot_dates_only_what_its_validator_accepts() {
         use super::super::FormValidator as _;
-        let today = chrono::Local::now().date_naive();
         let as_text = |date: NaiveDate| date.format("%m/%d/%Y").to_string();
+        let run = |today: NaiveDate| -> Vec<(String, bool, Option<NaiveDate>)> {
+            super::super::penalty_items::with_clock(today, || {
+                [
+                    "09/03/2025".to_string(),
+                    "  09/03/2025 ".to_string(),
+                    as_text(today),
+                    as_text(today + chrono::Duration::days(1)),
+                    "01/01/2018".to_string(),
+                    "12/31/2017".to_string(),
+                    "01/01/0001".to_string(),
+                    "1/2/2026".to_string(),
+                    "6/5/2025".to_string(),
+                    "2025-09-03".to_string(),
+                    "09-03-2025".to_string(),
+                    "09/03/25".to_string(),
+                    "02/30/2025".to_string(),
+                    "09/03/2025 x".to_string(),
+                    String::new(),
+                ]
+                .into_iter()
+                .map(|text| {
+                    let mut draft = super::super::form_2000ot::Form2000OTDraft::new_from_profile(
+                        &profile(),
+                        2025,
+                    );
+                    draft.transaction_date = text.clone();
+                    let validator_takes_it = !draft
+                        .validate()
+                        .iter()
+                        .any(|(field, _)| field == "transaction_date");
+                    let dated = trigger_of("2000OT", &draft).map(|trigger| trigger.date);
+                    (text, validator_takes_it, dated)
+                })
+                .collect()
+            })
+        };
+        let mut today = chrono::Local::now().date_naive();
+        let mut results = run(today);
+        let after = chrono::Local::now().date_naive();
+        if after != today {
+            today = after;
+            results = run(today);
+        }
         let mut accepted = 0;
-        for text in [
-            "09/03/2025".to_string(),
-            "  09/03/2025 ".to_string(),
-            as_text(today),
-            as_text(today + chrono::Duration::days(1)),
-            "01/01/2018".to_string(),
-            "12/31/2017".to_string(),
-            "01/01/0001".to_string(),
-            "1/2/2026".to_string(),
-            "6/5/2025".to_string(),
-            "2025-09-03".to_string(),
-            "09-03-2025".to_string(),
-            "09/03/25".to_string(),
-            "02/30/2025".to_string(),
-            "09/03/2025 x".to_string(),
-            String::new(),
-        ] {
-            let mut draft =
-                super::super::form_2000ot::Form2000OTDraft::new_from_profile(&profile(), 2025);
-            draft.transaction_date = text.clone();
-            let validator_takes_it = !draft
-                .validate()
-                .iter()
-                .any(|(field, _)| field == "transaction_date");
-            let dated = trigger_of("2000OT", &draft);
+        for (text, validator_takes_it, dated) in results {
             assert_eq!(dated.is_some(), validator_takes_it, "{text:?}");
-            if let Some(trigger) = dated {
-                assert_eq!(as_text(trigger.date), text.trim(), "{text:?}");
+            if let Some(date) = dated {
+                assert_eq!(as_text(date), text.trim(), "{text:?}");
                 accepted += 1;
             }
         }
-        assert_eq!(accepted, 4, "the four valid dates");
+        assert_eq!(accepted, 4, "the four valid dates (today {today})");
     }
 
     #[test]

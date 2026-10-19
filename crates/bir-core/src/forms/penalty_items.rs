@@ -264,15 +264,19 @@ pub fn resolve_due_date(
         .or_else(|| month_rule_due_date(form_code, period, overrides))
 }
 
-/// An as-needed form due on a day of the month after its event's month
-/// (1606, decision P4-3: the 10th after the sale) whose penalties name that
-/// month: the same date its former monthly row gave (the day, moved off
-/// weekends, then by `overrides`), so the filed penalties do not change.
+/// 1606 only (decision P4-3 moved it off the monthly rule): its penalties
+/// name the sale's month, and run from the same date its former monthly
+/// row gave (the 10th of the next month, moved off weekends, then by
+/// `overrides`), so the filed penalties do not change. No other form takes
+/// this fallback.
 fn month_rule_due_date(
     form_code: &str,
     period: &DeadlinePeriod,
     overrides: &[DeadlineOverride],
 ) -> Option<NaiveDate> {
+    if form_code != "1606" {
+        return None;
+    }
     let DeadlinePeriod::Monthly {
         taxable_year,
         month,
@@ -280,14 +284,7 @@ fn month_rule_due_date(
     else {
         return None;
     };
-    let rule = crate::calendar_rules::event_due_rule(form_code)
-        .filter(|_| DeadlineResolver::is_as_needed(form_code))?;
-    if !matches!(
-        rule.due,
-        crate::calendar_rules::DueFromTrigger::DayOfFollowingMonth(_)
-    ) {
-        return None;
-    }
+    let rule = crate::calendar_rules::event_due_rule(form_code)?;
     let first_of_month = NaiveDate::from_ymd_opt(*taxable_year, u32::from(*month), 1)?;
     DeadlineResolver::event_deadline(
         &rule,
@@ -601,6 +598,13 @@ mod tests {
                         resolve_due_date("1606", &period, &overrides),
                         former,
                         "{taxable_year}-{month}"
+                    );
+                    // 2000OT is due on a day of the following month too, but
+                    // takes no fallback: its penalties name no month.
+                    assert_eq!(
+                        resolve_due_date("2000OT", &period, &overrides),
+                        None,
+                        "2000OT {taxable_year}-{month}"
                     );
                 }
             }

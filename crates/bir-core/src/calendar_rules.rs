@@ -576,11 +576,13 @@ pub const EVENT_DUE_RULES: &[EventDueRule] = &[
         source: "html-frozen/0605-1999/guide.html When and Where to File and Pay",
     },
     // Decision P4-3 (2026-10-19): 1606 is as needed, dated by the sale, due
-    // the 10th of the month after the sale. The workflow's "large taxpayers
-    // use the 25th" paraphrases a help file the repo does not track, and no
-    // profile field marks a Large Taxpayers Service taxpayer (the EOPT
-    // "Large" tier is a different classification), so the 10th applies to
-    // every taxpayer.
+    // the 10th of the month after the sale, rolled to the next working day.
+    // Not applied: rules/forms/1606-v2018/workflow.json's "large taxpayers
+    // use the 25th" and its "December withholding is due January 25". Why:
+    // no profile field marks a Large Taxpayers Service taxpayer (the EOPT
+    // "Large" tier is a different classification), and both lines
+    // paraphrase a help file the repo does not track. So every taxpayer
+    // uses the 10th, and a December sale is due January 10, rolled.
     EventDueRule {
         form_code: "1606",
         trigger: "Sale",
@@ -1622,13 +1624,17 @@ mod tests {
     #[test]
     fn form_1606_is_due_the_10th_after_the_sale_month() {
         for year in 2025..=2027 {
-            assert!(
-                DeadlineResolver::resolve_taxable_year(year)
-                    .iter()
-                    .filter(|d| d.form_code == "1606")
-                    .all(|d| d.final_deadline_date().is_none()),
-                "no monthly 1606 row in {year}"
-            );
+            let rows: Vec<_> = DeadlineResolver::resolve_taxable_year(year)
+                .into_iter()
+                .filter(|d| d.form_code == "1606")
+                .collect();
+            let monthly = rows
+                .iter()
+                .filter(|d| matches!(d.period, DeadlinePeriod::Monthly { .. }))
+                .count();
+            assert_eq!(monthly, 0, "no monthly 1606 row in {year}");
+            assert_eq!(rows.len(), 1, "one event row in {year}");
+            assert_eq!(rows[0].period, DeadlinePeriod::EventBased);
         }
         let rule = event_due_rule("1606").unwrap();
         assert_eq!(rule.trigger, "Sale");
