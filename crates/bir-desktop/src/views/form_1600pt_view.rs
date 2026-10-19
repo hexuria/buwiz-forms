@@ -1699,4 +1699,112 @@ mod tests {
             );
         }
     }
+
+    /// P2-4 through the view itself (review round 4, F12): a window, the
+    /// view built on a draft stored without one Part I box, an edit in
+    /// another box (its input's text set, then `sync_from_inputs`), and the
+    /// view's own save (`save_draft`, which syncs and calls
+    /// `save_queueable_draft`). For each of name, address, ZIP, contact and
+    /// email the saved row still lacks the key; typed into its own input
+    /// and saved, it holds the value.
+    #[gpui::test]
+    fn the_view_saves_a_missing_part_i_box_out_until_typed(cx: &mut gpui::TestAppContext) {
+        use super::Form1600PtView;
+        use crate::components::form_engine::FormViewTrait;
+        use crate::views::queueable_forms::QueueableFormView;
+        use bir_core::db::Database;
+        use bir_core::forms::form_1600pt::Form1600PtDraft;
+        use gpui::AppContext;
+        use std::sync::{Arc, Mutex};
+        cx.update(gpui_kit::init);
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Agent Corp",
+                "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+                "rdo_code": "039", "line_of_business": "Trading",
+                "registered_address": "123 Sample St Quezon City", "zip_code": "1100",
+                "phone": "0281234567", "email": "agent@example.com",
+                "default_form_type": "1600PT", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        for (field, key, typed) in [
+            ("agent_name", "name", "SAMPLE AGENT CORP"),
+            ("registered_address", "address", "1 SAMPLE ST QUEZON CITY"),
+            ("zip_code", "zip", "1100"),
+            ("contact_number", "phone", "0281234567"),
+            ("email", "email", "agent@example.com"),
+        ] {
+            let db = Arc::new(Mutex::new(Database::open_ephemeral().unwrap()));
+            let mut value =
+                serde_json::to_value(Form1600PtDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+            value.as_object_mut().unwrap().remove(field);
+            let stored: Form1600PtDraft = serde_json::from_value(value).unwrap();
+            let id = db.lock().unwrap().save_queueable_draft(&stored).unwrap();
+            let stored = db
+                .lock()
+                .unwrap()
+                .get_queueable_draft::<Form1600PtDraft>(
+                    &stored.tin,
+                    stored.year,
+                    i64::from(stored.month),
+                )
+                .unwrap()
+                .expect("stored");
+            assert_eq!(stored.id, Some(id));
+            let row = |db: &Arc<Mutex<Database>>| {
+                let draft = db
+                    .lock()
+                    .unwrap()
+                    .get_queueable_draft::<Form1600PtDraft>(
+                        &stored.tin,
+                        stored.year,
+                        i64::from(stored.month),
+                    )
+                    .unwrap()
+                    .expect("stored");
+                serde_json::to_value(draft).unwrap()
+            };
+            // The app's windows are a gpui_component Root over the view
+            // (gui.rs), which the view's notices need.
+            let mut built = None;
+            let window = cx.add_window(|window, cx| {
+                let view =
+                    cx.new(|cx| Form1600PtView::new(stored.clone(), Arc::clone(&db), window, cx));
+                built = Some(view.clone());
+                gpui_component::Root::new(view, window, cx)
+            });
+            let view = built.expect("the view");
+            let other = if key == "email" { "phone" } else { "email" };
+            let other_value = if key == "email" {
+                "0287654321"
+            } else {
+                "edited@example.com"
+            };
+            // The window, not its Root: a notice updates the Root.
+            cx.update_window(window.into(), |_, window, cx| {
+                view.update(cx, |view, cx| {
+                    view.inputs[other]
+                        .update(cx, |input, cx| input.set_value(other_value, window, cx));
+                    view.inputs[key].update(cx, |input, cx| input.set_value("   ", window, cx));
+                    view.sync_from_inputs(cx);
+                    view.save_draft(window, cx);
+                })
+            })
+            .unwrap();
+            let saved = row(&db);
+            assert!(
+                saved.get(field).is_none(),
+                "{field}: untouched, it stays out: {saved}"
+            );
+            // The window, not its Root: a notice updates the Root.
+            cx.update_window(window.into(), |_, window, cx| {
+                view.update(cx, |view, cx| {
+                    view.inputs[key].update(cx, |input, cx| input.set_value(typed, window, cx));
+                    view.save_draft(window, cx);
+                })
+            })
+            .unwrap();
+            assert_eq!(row(&db)[field], typed, "{field}: typed, it is saved");
+        }
+    }
 }
