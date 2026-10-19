@@ -161,36 +161,686 @@ const PLAIN_MAX_PT: f64 = 9.0;
 #[cfg(test)]
 const EM_PER_CHAR: f64 = 0.58;
 
-/// Units per em of html-frozen/fonts/arimo-latin-wght-normal.woff2.
-const ARIMO_UNITS_PER_EM: f64 = 2048.0;
-/// Its advance widths (`hmtx`, default instance wght 400, the weight the
-/// sheets' `.fi` inputs use) for U+0020 to U+007E, in that order.
-const ARIMO_ADVANCES: [u16; 95] = [
-    569, 569, 727, 1139, 1139, 1821, 1366, 391, 682, 682, 797, 1196, 569, 682, 569, 569, 1139,
-    1139, 1139, 1139, 1139, 1139, 1139, 1139, 1139, 1139, 569, 569, 1196, 1196, 1196, 1139, 2079,
-    1366, 1366, 1479, 1479, 1366, 1251, 1593, 1479, 569, 1024, 1366, 1139, 1706, 1479, 1593, 1366,
-    1593, 1479, 1366, 1251, 1479, 1366, 1933, 1366, 1366, 1251, 569, 569, 569, 961, 1139, 682,
-    1139, 1139, 1024, 1139, 1139, 569, 1139, 1139, 455, 455, 1024, 455, 1706, 1139, 1139, 1139,
-    1139, 682, 1024, 569, 1139, 1024, 1479, 1024, 1024, 1024, 684, 532, 684, 1196,
+/// Units per em of both bundled print faces
+/// (html-frozen/fonts/arimo-latin-wght-normal.woff2 and
+/// tinos-latin-400-normal.woff2).
+const UNITS_PER_EM: f64 = 2048.0;
+
+/// arimo-latin-wght-normal.woff2: units per em 2048; every character its
+/// cmap maps from U+0020 up, with its advance width (`hmtx`), by code point.
+const ARIMO_ADVANCES: &[(u32, u16)] = &[
+    (0x0020, 569),
+    (0x0021, 569),
+    (0x0022, 727),
+    (0x0023, 1139),
+    (0x0024, 1139),
+    (0x0025, 1821),
+    (0x0026, 1366),
+    (0x0027, 391),
+    (0x0028, 682),
+    (0x0029, 682),
+    (0x002A, 797),
+    (0x002B, 1196),
+    (0x002C, 569),
+    (0x002D, 682),
+    (0x002E, 569),
+    (0x002F, 569),
+    (0x0030, 1139),
+    (0x0031, 1139),
+    (0x0032, 1139),
+    (0x0033, 1139),
+    (0x0034, 1139),
+    (0x0035, 1139),
+    (0x0036, 1139),
+    (0x0037, 1139),
+    (0x0038, 1139),
+    (0x0039, 1139),
+    (0x003A, 569),
+    (0x003B, 569),
+    (0x003C, 1196),
+    (0x003D, 1196),
+    (0x003E, 1196),
+    (0x003F, 1139),
+    (0x0040, 2079),
+    (0x0041, 1366),
+    (0x0042, 1366),
+    (0x0043, 1479),
+    (0x0044, 1479),
+    (0x0045, 1366),
+    (0x0046, 1251),
+    (0x0047, 1593),
+    (0x0048, 1479),
+    (0x0049, 569),
+    (0x004A, 1024),
+    (0x004B, 1366),
+    (0x004C, 1139),
+    (0x004D, 1706),
+    (0x004E, 1479),
+    (0x004F, 1593),
+    (0x0050, 1366),
+    (0x0051, 1593),
+    (0x0052, 1479),
+    (0x0053, 1366),
+    (0x0054, 1251),
+    (0x0055, 1479),
+    (0x0056, 1366),
+    (0x0057, 1933),
+    (0x0058, 1366),
+    (0x0059, 1366),
+    (0x005A, 1251),
+    (0x005B, 569),
+    (0x005C, 569),
+    (0x005D, 569),
+    (0x005E, 961),
+    (0x005F, 1139),
+    (0x0060, 682),
+    (0x0061, 1139),
+    (0x0062, 1139),
+    (0x0063, 1024),
+    (0x0064, 1139),
+    (0x0065, 1139),
+    (0x0066, 569),
+    (0x0067, 1139),
+    (0x0068, 1139),
+    (0x0069, 455),
+    (0x006A, 455),
+    (0x006B, 1024),
+    (0x006C, 455),
+    (0x006D, 1706),
+    (0x006E, 1139),
+    (0x006F, 1139),
+    (0x0070, 1139),
+    (0x0071, 1139),
+    (0x0072, 682),
+    (0x0073, 1024),
+    (0x0074, 569),
+    (0x0075, 1139),
+    (0x0076, 1024),
+    (0x0077, 1479),
+    (0x0078, 1024),
+    (0x0079, 1024),
+    (0x007A, 1024),
+    (0x007B, 684),
+    (0x007C, 532),
+    (0x007D, 684),
+    (0x007E, 1196),
+    (0x00A0, 569),
+    (0x00A1, 682),
+    (0x00A2, 1139),
+    (0x00A3, 1139),
+    (0x00A4, 1139),
+    (0x00A5, 1139),
+    (0x00A6, 532),
+    (0x00A7, 1139),
+    (0x00A8, 682),
+    (0x00A9, 1509),
+    (0x00AA, 758),
+    (0x00AB, 1139),
+    (0x00AC, 1196),
+    (0x00AD, 682),
+    (0x00AE, 1509),
+    (0x00AF, 1131),
+    (0x00B0, 819),
+    (0x00B1, 1124),
+    (0x00B2, 682),
+    (0x00B3, 682),
+    (0x00B4, 682),
+    (0x00B5, 1180),
+    (0x00B6, 1100),
+    (0x00B7, 682),
+    (0x00B8, 682),
+    (0x00B9, 682),
+    (0x00BA, 748),
+    (0x00BB, 1139),
+    (0x00BC, 1708),
+    (0x00BD, 1708),
+    (0x00BE, 1708),
+    (0x00BF, 1251),
+    (0x00C0, 1366),
+    (0x00C1, 1366),
+    (0x00C2, 1366),
+    (0x00C3, 1366),
+    (0x00C4, 1366),
+    (0x00C5, 1366),
+    (0x00C6, 2048),
+    (0x00C7, 1479),
+    (0x00C8, 1366),
+    (0x00C9, 1366),
+    (0x00CA, 1366),
+    (0x00CB, 1366),
+    (0x00CC, 569),
+    (0x00CD, 569),
+    (0x00CE, 569),
+    (0x00CF, 569),
+    (0x00D0, 1479),
+    (0x00D1, 1479),
+    (0x00D2, 1593),
+    (0x00D3, 1593),
+    (0x00D4, 1593),
+    (0x00D5, 1593),
+    (0x00D6, 1593),
+    (0x00D7, 1196),
+    (0x00D8, 1593),
+    (0x00D9, 1479),
+    (0x00DA, 1479),
+    (0x00DB, 1479),
+    (0x00DC, 1479),
+    (0x00DD, 1366),
+    (0x00DE, 1366),
+    (0x00DF, 1251),
+    (0x00E0, 1139),
+    (0x00E1, 1139),
+    (0x00E2, 1139),
+    (0x00E3, 1139),
+    (0x00E4, 1139),
+    (0x00E5, 1139),
+    (0x00E6, 1821),
+    (0x00E7, 1024),
+    (0x00E8, 1139),
+    (0x00E9, 1139),
+    (0x00EA, 1139),
+    (0x00EB, 1139),
+    (0x00EC, 569),
+    (0x00ED, 569),
+    (0x00EE, 569),
+    (0x00EF, 569),
+    (0x00F0, 1139),
+    (0x00F1, 1139),
+    (0x00F2, 1139),
+    (0x00F3, 1139),
+    (0x00F4, 1139),
+    (0x00F5, 1139),
+    (0x00F6, 1139),
+    (0x00F7, 1124),
+    (0x00F8, 1251),
+    (0x00F9, 1139),
+    (0x00FA, 1139),
+    (0x00FB, 1139),
+    (0x00FC, 1139),
+    (0x00FD, 1024),
+    (0x00FE, 1139),
+    (0x00FF, 1024),
+    (0x0131, 569),
+    (0x0152, 2048),
+    (0x0153, 1933),
+    (0x02BB, 455),
+    (0x02BC, 455),
+    (0x02C6, 683),
+    (0x02DA, 682),
+    (0x02DC, 682),
+    (0x0300, 0),
+    (0x0301, 0),
+    (0x0303, 0),
+    (0x0304, 0),
+    (0x0308, 0),
+    (0x0309, 0),
+    (0x0323, 0),
+    (0x0329, 0),
+    (0x2002, 1024),
+    (0x2009, 410),
+    (0x200B, 0),
+    (0x2013, 1139),
+    (0x2014, 2048),
+    (0x2018, 455),
+    (0x2019, 455),
+    (0x201A, 455),
+    (0x201C, 682),
+    (0x201D, 682),
+    (0x201E, 682),
+    (0x2022, 717),
+    (0x2026, 2048),
+    (0x2032, 384),
+    (0x2033, 725),
+    (0x2039, 682),
+    (0x203A, 682),
+    (0x2044, 342),
+    (0x20AC, 1139),
+    (0x2122, 2048),
+    (0x2191, 1024),
+    (0x2193, 1024),
+    (0x2212, 1196),
+    (0x2215, 342),
+    (0xFEFF, 0),
+    (0xFFFD, 1721),
 ];
-/// A character past U+007E (Latin-1's Ñ, É): the widest advance above, so
-/// the type can only come out smaller.
-const ARIMO_WIDEST: u16 = 2079;
+/// tinos-latin-400-normal.woff2: units per em 2048; every character its
+/// cmap maps from U+0020 up, with its advance width (`hmtx`), by code point.
+const TINOS_ADVANCES: &[(u32, u16)] = &[
+    (0x0020, 512),
+    (0x0021, 682),
+    (0x0022, 836),
+    (0x0023, 1024),
+    (0x0024, 1024),
+    (0x0025, 1706),
+    (0x0026, 1593),
+    (0x0027, 369),
+    (0x0028, 682),
+    (0x0029, 682),
+    (0x002A, 1024),
+    (0x002B, 1155),
+    (0x002C, 512),
+    (0x002D, 682),
+    (0x002E, 512),
+    (0x002F, 569),
+    (0x0030, 1024),
+    (0x0031, 1024),
+    (0x0032, 1024),
+    (0x0033, 1024),
+    (0x0034, 1024),
+    (0x0035, 1024),
+    (0x0036, 1024),
+    (0x0037, 1024),
+    (0x0038, 1024),
+    (0x0039, 1024),
+    (0x003A, 569),
+    (0x003B, 569),
+    (0x003C, 1155),
+    (0x003D, 1155),
+    (0x003E, 1155),
+    (0x003F, 909),
+    (0x0040, 1886),
+    (0x0041, 1479),
+    (0x0042, 1366),
+    (0x0043, 1366),
+    (0x0044, 1479),
+    (0x0045, 1251),
+    (0x0046, 1139),
+    (0x0047, 1479),
+    (0x0048, 1479),
+    (0x0049, 682),
+    (0x004A, 797),
+    (0x004B, 1479),
+    (0x004C, 1251),
+    (0x004D, 1821),
+    (0x004E, 1479),
+    (0x004F, 1479),
+    (0x0050, 1139),
+    (0x0051, 1479),
+    (0x0052, 1366),
+    (0x0053, 1139),
+    (0x0054, 1251),
+    (0x0055, 1479),
+    (0x0056, 1479),
+    (0x0057, 1933),
+    (0x0058, 1479),
+    (0x0059, 1479),
+    (0x005A, 1251),
+    (0x005B, 682),
+    (0x005C, 569),
+    (0x005D, 682),
+    (0x005E, 961),
+    (0x005F, 1024),
+    (0x0060, 682),
+    (0x0061, 909),
+    (0x0062, 1024),
+    (0x0063, 909),
+    (0x0064, 1024),
+    (0x0065, 909),
+    (0x0066, 682),
+    (0x0067, 1024),
+    (0x0068, 1024),
+    (0x0069, 569),
+    (0x006A, 569),
+    (0x006B, 1024),
+    (0x006C, 569),
+    (0x006D, 1593),
+    (0x006E, 1024),
+    (0x006F, 1024),
+    (0x0070, 1024),
+    (0x0071, 1024),
+    (0x0072, 682),
+    (0x0073, 797),
+    (0x0074, 569),
+    (0x0075, 1024),
+    (0x0076, 1024),
+    (0x0077, 1479),
+    (0x0078, 1024),
+    (0x0079, 1024),
+    (0x007A, 909),
+    (0x007B, 983),
+    (0x007C, 410),
+    (0x007D, 983),
+    (0x007E, 1108),
+    (0x00A0, 512),
+    (0x00A1, 682),
+    (0x00A2, 1024),
+    (0x00A3, 1024),
+    (0x00A4, 1024),
+    (0x00A5, 1024),
+    (0x00A6, 410),
+    (0x00A7, 1024),
+    (0x00A8, 682),
+    (0x00A9, 1556),
+    (0x00AA, 565),
+    (0x00AB, 1024),
+    (0x00AC, 1155),
+    (0x00AD, 682),
+    (0x00AE, 1556),
+    (0x00AF, 1024),
+    (0x00B0, 819),
+    (0x00B1, 1124),
+    (0x00B2, 614),
+    (0x00B3, 614),
+    (0x00B4, 682),
+    (0x00B5, 1180),
+    (0x00B6, 928),
+    (0x00B7, 682),
+    (0x00B8, 682),
+    (0x00B9, 614),
+    (0x00BA, 635),
+    (0x00BB, 1024),
+    (0x00BC, 1536),
+    (0x00BD, 1536),
+    (0x00BE, 1536),
+    (0x00BF, 909),
+    (0x00C0, 1479),
+    (0x00C1, 1479),
+    (0x00C2, 1479),
+    (0x00C3, 1479),
+    (0x00C4, 1479),
+    (0x00C5, 1479),
+    (0x00C6, 1821),
+    (0x00C7, 1366),
+    (0x00C8, 1251),
+    (0x00C9, 1251),
+    (0x00CA, 1251),
+    (0x00CB, 1251),
+    (0x00CC, 682),
+    (0x00CD, 682),
+    (0x00CE, 682),
+    (0x00CF, 682),
+    (0x00D0, 1479),
+    (0x00D1, 1479),
+    (0x00D2, 1479),
+    (0x00D3, 1479),
+    (0x00D4, 1479),
+    (0x00D5, 1479),
+    (0x00D6, 1479),
+    (0x00D7, 1155),
+    (0x00D8, 1479),
+    (0x00D9, 1479),
+    (0x00DA, 1479),
+    (0x00DB, 1479),
+    (0x00DC, 1479),
+    (0x00DD, 1479),
+    (0x00DE, 1139),
+    (0x00DF, 1024),
+    (0x00E0, 909),
+    (0x00E1, 909),
+    (0x00E2, 909),
+    (0x00E3, 909),
+    (0x00E4, 909),
+    (0x00E5, 909),
+    (0x00E6, 1366),
+    (0x00E7, 909),
+    (0x00E8, 909),
+    (0x00E9, 909),
+    (0x00EA, 909),
+    (0x00EB, 909),
+    (0x00EC, 569),
+    (0x00ED, 569),
+    (0x00EE, 569),
+    (0x00EF, 569),
+    (0x00F0, 1024),
+    (0x00F1, 1024),
+    (0x00F2, 1024),
+    (0x00F3, 1024),
+    (0x00F4, 1024),
+    (0x00F5, 1024),
+    (0x00F6, 1024),
+    (0x00F7, 1124),
+    (0x00F8, 1024),
+    (0x00F9, 1024),
+    (0x00FA, 1024),
+    (0x00FB, 1024),
+    (0x00FC, 1024),
+    (0x00FD, 1024),
+    (0x00FE, 1024),
+    (0x00FF, 1024),
+    (0x0131, 569),
+    (0x0152, 1821),
+    (0x0153, 1479),
+    (0x02BB, 682),
+    (0x02BC, 682),
+    (0x02C6, 682),
+    (0x02DA, 682),
+    (0x02DC, 682),
+    (0x0300, 0),
+    (0x0301, 0),
+    (0x0303, 0),
+    (0x0304, 0),
+    (0x0308, 0),
+    (0x0309, 0),
+    (0x0323, 0),
+    (0x0329, 0),
+    (0x2002, 1024),
+    (0x2009, 410),
+    (0x200B, 0),
+    (0x2013, 1024),
+    (0x2014, 2048),
+    (0x2018, 682),
+    (0x2019, 682),
+    (0x201A, 682),
+    (0x201C, 909),
+    (0x201D, 909),
+    (0x201E, 909),
+    (0x2022, 717),
+    (0x2026, 2048),
+    (0x2032, 448),
+    (0x2033, 853),
+    (0x2039, 682),
+    (0x203A, 682),
+    (0x2044, 342),
+    (0x20AC, 1024),
+    (0x2122, 2007),
+    (0x2191, 1024),
+    (0x2193, 1024),
+    (0x2212, 1155),
+    (0x2215, 342),
+    (0xFEFF, 1638),
+    (0xFFFD, 1721),
+];
+
+/// What a character a face's cmap does not map counts for, in ems: the
+/// browser draws it from another font (Cyrillic, CJK, emoji, Latin
+/// Extended), whose advance the print cannot know. 1.3 em is above the
+/// about 1.2 em CJK ideographs and emoji take, so the type can only come
+/// out smaller.
+const FALLBACK_EMS: f64 = 1.3;
+
+/// The face a sheet sets its `.fi` inputs in (form.css `font-family`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Face {
+    Arimo,
+    Tinos,
+}
+
+impl Face {
+    fn advances(self) -> &'static [(u32, u16)] {
+        match self {
+            Self::Arimo => ARIMO_ADVANCES,
+            Self::Tinos => TINOS_ADVANCES,
+        }
+    }
+
+    /// `text`'s advance width in ems of this face; a character it does not
+    /// map counts [`FALLBACK_EMS`].
+    fn ems(self, text: &str) -> f64 {
+        let table = self.advances();
+        text.chars()
+            .map(|c| {
+                table
+                    .binary_search_by_key(&u32::from(c), |(cp, _)| *cp)
+                    .map_or(FALLBACK_EMS, |at| f64::from(table[at].1) / UNITS_PER_EM)
+            })
+            .sum()
+    }
+}
+
+/// A CSS length the print adds per character or per space: its `pt` part,
+/// fixed, and its `em` part, which scales with the type size.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Spacing {
+    pt: f64,
+    em: f64,
+}
+
+impl Spacing {
+    /// `word-spacing:0.3238pt`, `letter-spacing:-0.01em` in a CSS rule;
+    /// none (normal, 0, absent) is zero.
+    fn of(rule: &str, property: &str) -> Self {
+        let Some(at) = rule.find(&format!("{property}:")) else {
+            return Self::default();
+        };
+        let value = rule[at + property.len() + 1..]
+            .split([';', '}'])
+            .next()
+            .unwrap_or("")
+            .trim();
+        let number = |unit: &str| value.strip_suffix(unit).and_then(|n| n.trim().parse().ok());
+        if let Some(pt) = number("pt") {
+            Self { pt, em: 0.0 }
+        } else if let Some(px) = number("px") {
+            Self {
+                pt: px * 0.75,
+                em: 0.0,
+            }
+        } else if let Some(em) = number("em") {
+            Self { pt: 0.0, em }
+        } else {
+            Self::default()
+        }
+    }
+
+    fn at(self, size: f64) -> f64 {
+        self.pt + self.em * size
+    }
+}
+
+/// The `{ ... }` body of CSS rule `selector` in `css` (`.fi`, `.fh4`).
+fn css_rule<'a>(css: &'a str, selector: &str) -> Option<&'a str> {
+    let open = format!("{selector} {{");
+    let mut from = 0;
+    while let Some(at) = css[from..].find(&open) {
+        let at = from + at;
+        // A whole selector: at a line start, not `.fi:hover` or `.fh40`.
+        if at == 0 || css[..at].ends_with('\n') {
+            let body = &css[at + open.len()..];
+            return Some(&body[..body.find('}').unwrap_or(body.len())]);
+        }
+        from = at + open.len();
+    }
+    None
+}
+
+/// How a sheet sets the type of its inputs, from its form.css: the `.fi`
+/// rule's face, word-spacing and letter-spacing (P4-7; the sheets set them
+/// per sheet: word-spacing is 0.3238pt on 1604F, 0.4092pt on 2200T), and
+/// the stylesheet, for each input class's size and letter-spacing.
+#[derive(Debug, Clone, Copy)]
+struct SheetType {
+    face: Face,
+    word: Spacing,
+    letter: Spacing,
+    css: &'static str,
+}
+
+impl SheetType {
+    /// A sheet's type from its stylesheet.
+    fn of(css: &'static str) -> Self {
+        let rule = css_rule(css, ".fi").unwrap_or("");
+        let family = rule
+            .find("font-family:")
+            .map(|at| &rule[at..])
+            .and_then(|tail| tail.split([';', ',']).next())
+            .unwrap_or("");
+        Self {
+            face: if family.contains("Tinos") {
+                Face::Tinos
+            } else {
+                Face::Arimo
+            },
+            word: Spacing::of(rule, "word-spacing"),
+            letter: Spacing::of(rule, "letter-spacing"),
+            css,
+        }
+    }
+
+    /// No stylesheet: Arimo with no spacing (a fill outside any bundle).
+    fn plain() -> Self {
+        Self {
+            face: Face::Arimo,
+            word: Spacing::default(),
+            letter: Spacing::default(),
+            css: "",
+        }
+    }
+
+    /// The letter-spacing an input of class list `classes` gets: its own
+    /// size class's (`.fh4`, which follows `.fi` in the stylesheet), else
+    /// `.fi`'s.
+    fn letter_for(&self, classes: &str) -> Spacing {
+        classes
+            .split_whitespace()
+            .filter(|class| class.starts_with("fh"))
+            .filter_map(|class| css_rule(self.css, &format!(".{class}")))
+            .find(|rule| rule.contains("letter-spacing:"))
+            .map_or(self.letter, |rule| Spacing::of(rule, "letter-spacing"))
+    }
+
+    /// The type size (pt) class list `classes` sets (`.fh4 { font-size:9pt }`).
+    fn size_for(&self, classes: &str) -> Option<f64> {
+        classes
+            .split_whitespace()
+            .filter(|class| class.starts_with("fh"))
+            .filter_map(|class| css_rule(self.css, &format!(".{class}")))
+            .find_map(|rule| {
+                let at = rule.find("font-size:")?;
+                rule[at + "font-size:".len()..]
+                    .split(';')
+                    .next()?
+                    .trim()
+                    .strip_suffix("pt")?
+                    .parse()
+                    .ok()
+            })
+    }
+
+    /// The width (pt) `text` sets at `size` pt with `letter` spacing: its
+    /// advances in this face, the word-spacing on every space and the
+    /// letter-spacing on every character.
+    fn width(&self, letter: Spacing, text: &str, size: f64) -> f64 {
+        let spaces = text.chars().filter(|c| *c == ' ').count() as f64;
+        let chars = text.chars().count() as f64;
+        self.face.ems(text) * size + spaces * self.word.at(size) + chars * letter.at(size)
+    }
+
+    /// The largest type size (pt), at most `max` and rounded down to 0.01
+    /// pt, at which `text` sets within `room` pt: the width is linear in the
+    /// size, `ems × size + spaces × word + characters × letter`.
+    fn fit(&self, letter: Spacing, room: f64, text: &str, max: f64) -> f64 {
+        let spaces = text.chars().filter(|c| *c == ' ').count() as f64;
+        let chars = text.chars().count() as f64;
+        let per_pt = self.face.ems(text) + spaces * self.word.em + chars * letter.em;
+        let fixed = spaces * self.word.pt + chars * letter.pt;
+        let size = if per_pt <= 0.0 {
+            max
+        } else {
+            ((room - fixed) / per_pt).min(max)
+        };
+        floor_size(size)
+    }
+}
+
+/// A type size rounded down to 0.01 pt (what the print writes), never
+/// below 0.01 pt: rounding never adds width.
+fn floor_size(size: f64) -> f64 {
+    ((size * 100.0).floor() / 100.0).max(0.01)
+}
 
 /// `text`'s width in ems of Arimo.
 fn arimo_ems(text: &str) -> f64 {
-    let units: u64 = text
-        .chars()
-        .map(|c| {
-            let advance = u32::from(c)
-                .checked_sub(0x20)
-                .and_then(|i| usize::try_from(i).ok())
-                .and_then(|i| ARIMO_ADVANCES.get(i).copied())
-                .unwrap_or(ARIMO_WIDEST);
-            u64::from(advance)
-        })
-        .sum();
-    units as f64 / ARIMO_UNITS_PER_EM
+    Face::Arimo.ems(text)
 }
 
 /// The type size (pt) `text` fits `width` pt at, measured in the bundled
@@ -5343,6 +5993,7 @@ mod tests {
             "905ce0375498434a605f3bc82f4fa658db618a0bca4be641b89afc2795a33544"
         );
     }
+
     /// Every sheet filled with values that fit their boxes: each text join's
     /// key holding as many characters as its smallest comb has boxes (at most
     /// 12; 12 in a cell that is not a comb), hashed. Nothing overflows, so
@@ -5384,26 +6035,117 @@ mod tests {
             .collect()
     }
 
-    /// Short and fitting values print byte for byte as before the overflow
-    /// type was measured on every sheet (P4-7): `fixtures/fitting-goldens.json`
-    /// was written by the fill at the estimate (`BIR_PRINT_BLESS_FITTING=1`,
-    /// once, before the change) and is never rewritten.
+    /// A plain (`data-field-kind="text"`) box of a sheet: the room (pt) its
+    /// input leaves for text (the cell's width less the input's left and
+    /// right inset, less 1 pt) and the input's class list.
+    fn plain_box(html: &str, cell: &str) -> Option<(f64, String)> {
+        let open = html.find(&format!("<div id=\"{cell}\""))?;
+        let tag = &html[open..open + html[open..].find('>')?];
+        if attr(tag, "data-field-kind") != Some("text") {
+            return None;
+        }
+        let width_at = tag.find(";width:")? + ";width:".len();
+        let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
+        let input_at = open + html[open..].find("<input")?;
+        let input = &html[input_at..input_at + html[input_at..].find('>')?];
+        let (left, right) = inset(attr(input, "style").unwrap_or(""));
+        Some((
+            width - left - right - 1.0,
+            attr(input, "class")?.to_string(),
+        ))
+    }
+
+    /// The left and right of an input's `inset:` (1 to 4 lengths, pt).
+    fn inset(style: &str) -> (f64, f64) {
+        let Some(at) = style.find("inset:") else {
+            return (0.0, 0.0);
+        };
+        let values: Vec<f64> = style[at + "inset:".len()..]
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .split_whitespace()
+            .filter_map(|v| v.strip_suffix("pt").and_then(|n| n.parse().ok()))
+            .collect();
+        match values.as_slice() {
+            [all] => (*all, *all),
+            [_, sides] | [_, sides, _] => (*sides, *sides),
+            [_, right, _, left] => (*left, *right),
+            _ => (0.0, 0.0),
+        }
+    }
+
+    /// Every sheet filled with values that fit its plain boxes: each text
+    /// join whose cells are all plain boxes holding the longest address
+    /// text that sets within each of them at its own class's size, in the
+    /// sheet's face with its word- and letter-spacing, hashed, with the
+    /// number of keys filled.
+    fn fitting_plain_print_hash(slug: &str) -> (String, usize) {
+        use sha2::{Digest, Sha256};
+        let loaded = bundle(slug).unwrap();
+        let cells = writer_cells(slug).unwrap();
+        let sheet = SheetType::of(loaded.css);
+        let mut fields = BTreeMap::new();
+        for (key, ids) in &cells.joins {
+            let boxes: Option<Vec<(f64, String)>> = ids
+                .iter()
+                .map(|cell| plain_box(loaded.html, cell))
+                .collect();
+            let Some(boxes) = boxes.filter(|boxes| !boxes.is_empty()) else {
+                continue;
+            };
+            let fits = |text: &str| {
+                boxes.iter().all(|(room, classes)| {
+                    sheet.size_for(classes).is_some_and(|size| {
+                        sheet.width(sheet.letter_for(classes), text, size) <= *room
+                    })
+                })
+            };
+            if let Some(len) = (1..=120).rev().find(|len| fits(&words_of(*len))) {
+                fields.insert(key.clone(), words_of(len));
+            }
+        }
+        let document = filled_document(slug, &fields).unwrap();
+        let hash = Sha256::digest(document.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        (hash, fields.len())
+    }
+
+    /// A value that fits its boxes prints byte for byte as before; a value
+    /// longer than its boxes is measured (P4-7). The goldens were written
+    /// once by the fill before every sheet's type was measured
+    /// (`fixtures/fitting-goldens.json` for the combs,
+    /// `fixtures/fitting-plain-goldens.json` for the plain boxes) and are
+    /// never rewritten: the test has no way to bless them.
     #[test]
     fn fitting_text_prints_as_before_on_every_sheet() {
-        let now: BTreeMap<String, String> = sheet_slugs()
+        let combs: BTreeMap<String, String> = sheet_slugs()
             .iter()
             .map(|slug| (slug.clone(), fitting_print_hash(slug)))
             .collect();
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/fixtures/fitting-goldens.json"
-        );
-        if std::env::var_os("BIR_PRINT_BLESS_FITTING").is_some() {
-            std::fs::write(path, serde_json::to_string_pretty(&now).unwrap() + "\n").unwrap();
-            return;
-        }
         let golden: BTreeMap<String, String> =
             serde_json::from_str(include_str!("fixtures/fitting-goldens.json")).unwrap();
-        assert_eq!(golden, now, "every sheet prints fitting values as before");
+        assert_eq!(
+            golden, combs,
+            "every sheet prints fitting comb values as before"
+        );
+        let mut keys = 0;
+        let plain: BTreeMap<String, String> = sheet_slugs()
+            .iter()
+            .map(|slug| {
+                let (hash, filled) = fitting_plain_print_hash(slug);
+                keys += filled;
+                (slug.clone(), hash)
+            })
+            .collect();
+        assert!(keys > 100, "{keys} plain-box keys filled to fit");
+        let golden: BTreeMap<String, String> =
+            serde_json::from_str(include_str!("fixtures/fitting-plain-goldens.json")).unwrap();
+        assert_eq!(
+            golden, plain,
+            "every sheet prints fitting plain-box values as before"
+        );
     }
 }
