@@ -5,28 +5,198 @@
 //! (`fixtures/radio-untick-golden.json`). The assertions on the rule are in
 //! `radio_untick_rule.rs`.
 //!
-//! Every form's every one-answer group of three or more: each member is
-//! ticked on a draft whose prerequisites are answered first ([`seed`]),
-//! then unticked with "false", and its group box is sent "". A member that
-//! still does not read back ticked is listed in [`NEVER_TICKED`] with its
-//! reason; the rule's tests fail on any other.
+//! The groups swept are not the host's own: they are each form's official
+//! radio name groups, read from its runtime-control inventory (rules/forms/
+//! <package>/fixtures/runtime-control-inventory-v796.json), restricted to
+//! the boxes this app can fill, with every deliberate difference in a table
+//! with its reason ([`JOINED`], [`HOST_ONLY`], [`NO_INVENTORY`]).
+//! `radio_untick_rule.rs` asserts the host groups exactly these.
+//!
+//! Every member of every such group of three or more is ticked on a draft
+//! whose prerequisites are answered first ([`seed`]), then unticked with
+//! "false", and its group box, where it has one, is sent "". A member that still does not read
+//! back ticked is listed in [`NEVER_TICKED`] with its reason; the rule's
+//! tests fail on any other.
 
 use super::*;
 
-/// `(group id, members)` of every one-answer group of three or more, as
-/// `plan_choice_edits` groups them: a radio group box's members, or radio
-/// boxes without a group box, and not written by the host itself, that
-/// write one draft field (id `path:<pointer>`).
-pub(super) fn groups_of_three_or_more(kind: AgentFormKind) -> Vec<(String, Vec<String>)> {
+/// The official radio name groups of a form (`name` -> distinct control
+/// ids, two or more), from its runtime-control inventory; `None` when the
+/// rules corpus has no inventory for its package.
+pub(super) fn official_name_groups(kind: AgentFormKind) -> Option<BTreeMap<String, Vec<String>>> {
+    let path = format!(
+        "{}/../../rules/forms/{}/fixtures/runtime-control-inventory-v796.json",
+        env!("CARGO_MANIFEST_DIR"),
+        kind.package()
+    );
+    let text = std::fs::read_to_string(&path).ok()?;
+    let inventory: Value = serde_json::from_str(&text).expect("inventory json");
+    let controls = inventory["controls"]
+        .as_array()
+        .or(inventory["static_controls"].as_array())
+        .expect("inventory controls");
+    let mut names: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for control in controls {
+        let (Some(id), Some(name)) = (control["id"].as_str(), control["name"].as_str()) else {
+            continue;
+        };
+        if control["control_kind"] != "radio" {
+            continue;
+        }
+        let ids = names.entry(name.to_string()).or_default();
+        if !ids.iter().any(|known| known == id) {
+            ids.push(id.to_string());
+        }
+    }
+    names.retain(|_, ids| ids.len() >= 2);
+    Some(names)
+}
+
+/// Forms without an official inventory: their groups are the agent
+/// definition's ([`definition_groups`]).
+pub(super) const NO_INVENTORY: &[(&str, &str)] = &[
+    (
+        "1701MS",
+        "the rules corpus has no runtime-control inventory for 1701ms-v2024",
+    ),
+    (
+        "1701Q",
+        "the rules corpus has no runtime-control inventory for 1701q-v2018",
+    ),
+];
+
+/// Boxes that answer an official name group they are not drawn in:
+/// `(form, key, group name, reason)`.
+pub(super) const JOINED: &[(&str, &str, &str, &str)] = &[(
+    "2200S",
+    "frm2200S:chkPymntManner_3",
+    "frm2200S:chkPymntManner",
+    "item 17 is the manner's third answer (PR 11, decision P4-16); the official page draws it as its own tick box",
+)];
+
+/// The agent definition's groups that no official name group gives:
+/// `(form, definition group id, reason)`. Their members are the
+/// definition's, less any box an official group already claims.
+pub(super) const HOST_ONLY: &[(&str, &str, &str)] = &[
+    (
+        "1601EQ",
+        "frm1601EQ:if",
+        "the official page draws refund, TCC and carry-over as three tick boxes of their own names and its script keeps them to one over-remittance answer",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I12ForeignTaxCredits",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I15CivilStatus",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I16SpouseHasIncome",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I20SpouseTaxpayerType",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I24SpouseForeignTaxCredits",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I2Amended",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg1I6TaxpayerType",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "frm1700:rdoPg2I1PartVIEmployee",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names",
+    ),
+    (
+        "1700",
+        "path:/filing_status",
+        "the 1700 page is the 2018 screen (app/forms/screen-1700-v2018.json); the rules inventory is 1700-v2013's, whose controls have other names; item 17's Joint and Separate answer one field (the Schedule 1 row 2 Spouse box, host-written, is not in it)",
+    ),
+    (
+        "1701",
+        "frm1701:rdoPg1I6TaxpayerType",
+        "the official page draws these as tick boxes of one name (control_kind checkbox) and its script keeps them to one answer",
+    ),
+    (
+        "1701",
+        "frm1701:rdoPg2I3SpouseType",
+        "the official page draws these as tick boxes of one name (control_kind checkbox) and its script keeps them to one answer",
+    ),
+    (
+        "1702Q",
+        "frm1702q:rbATC",
+        "the app's 1702Q keys are not in the 1702q-v2018c inventory, which names this revision's controls otherwise",
+    ),
+    (
+        "1702Q",
+        "frm1702q:rbAmendedRtn",
+        "the app's 1702Q keys are not in the 1702q-v2018c inventory, which names this revision's controls otherwise",
+    ),
+    (
+        "1702Q",
+        "frm1702q:rbForClndrFscl",
+        "the app's 1702Q keys are not in the 1702q-v2018c inventory, which names this revision's controls otherwise",
+    ),
+    (
+        "1702Q",
+        "frm1702q:rbMthdOfDdctns",
+        "the app's 1702Q keys are not in the 1702q-v2018c inventory, which names this revision's controls otherwise",
+    ),
+    (
+        "1702Q",
+        "frm1702q:rbTxRlf",
+        "the app's 1702Q keys are not in the 1702q-v2018c inventory, which names this revision's controls otherwise",
+    ),
+    (
+        "1702RT",
+        "path:/deduction_method",
+        "the official page names item 13's two radios apart, but they answer one field, the method of deduction",
+    ),
+];
+
+/// Whether this app can fill `key`: a user box with a binding, or one the
+/// host writes itself.
+pub(super) fn fillable(kind: AgentFormKind, key: &str) -> bool {
     let def = kind.definition();
-    let mut groups: Vec<(String, Vec<String>)> = def
-        .boxes
-        .iter()
-        .filter(|entry| entry.radio_group && entry.members.len() >= 3)
-        .map(|entry| (entry.key.clone(), entry.members.clone()))
-        .collect();
-    let mut implicit: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    def.box_def(key).is_some_and(|entry| entry.is_user_box())
+        && (def.bindings.contains_key(key) || catalogs::host_writes(kind, key))
+}
+
+/// The agent definition's own groups: a radio group box's members, and
+/// radio boxes without a group box, not written by the host itself, that
+/// write one draft field (`path:<pointer>`), two or more each.
+pub(super) fn definition_groups(kind: AgentFormKind) -> BTreeMap<String, Vec<String>> {
+    let def = kind.definition();
+    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for entry in &def.boxes {
+        if let Some(group) = entry
+            .group
+            .as_deref()
+            .and_then(|group| def.box_def(group))
+            .filter(|group| group.radio_group)
+        {
+            groups
+                .entry(group.key.clone())
+                .or_default()
+                .push(entry.key.clone());
+            continue;
+        }
         if entry.group.is_some()
             || !entry.kind.contains("radio")
             || catalogs::host_writes(kind, &entry.key)
@@ -35,19 +205,65 @@ pub(super) fn groups_of_three_or_more(kind: AgentFormKind) -> Vec<(String, Vec<S
         }
         let paths = true_option_paths(def, &entry.key);
         if paths.len() == 1 {
-            implicit
-                .entry(paths[0].clone())
+            groups
+                .entry(format!("path:{}", paths[0]))
                 .or_default()
                 .push(entry.key.clone());
         }
     }
-    groups.extend(
-        implicit
-            .into_iter()
-            .filter(|(_, members)| members.len() >= 3)
-            .map(|(path, members)| (format!("path:{path}"), members)),
-    );
+    groups.retain(|_, members| members.len() >= 2);
     groups
+}
+
+/// The one-answer groups this PR expects of a form: its official name
+/// groups over the boxes this app can fill, with [`JOINED`], then the
+/// [`HOST_ONLY`] groups over what is left; the definition's for a form in
+/// [`NO_INVENTORY`].
+pub(super) fn expected_groups(kind: AgentFormKind) -> BTreeMap<String, Vec<String>> {
+    let code = kind.form_code();
+    let Some(official) = official_name_groups(kind) else {
+        return definition_groups(kind);
+    };
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (name, ids) in official {
+        let mut members: Vec<String> = ids.into_iter().filter(|key| fillable(kind, key)).collect();
+        members.extend(
+            JOINED
+                .iter()
+                .filter(|(form, key, group, _)| {
+                    *form == code && *group == name && fillable(kind, key)
+                })
+                .map(|(_, key, ..)| key.to_string()),
+        );
+        if members.len() >= 2 {
+            out.insert(name, members);
+        }
+    }
+    let claimed: BTreeSet<String> = out.values().flatten().cloned().collect();
+    for (group, members) in definition_groups(kind) {
+        if !HOST_ONLY
+            .iter()
+            .any(|(form, id, _)| *form == code && *id == group)
+        {
+            continue;
+        }
+        let rest: Vec<String> = members
+            .into_iter()
+            .filter(|key| !claimed.contains(key))
+            .collect();
+        if rest.len() >= 2 {
+            out.insert(group, rest);
+        }
+    }
+    out
+}
+
+/// `(group id, members)` of every expected group of three or more.
+pub(super) fn groups_of_three_or_more(kind: AgentFormKind) -> Vec<(String, Vec<String>)> {
+    expected_groups(kind)
+        .into_iter()
+        .filter(|(_, members)| members.len() >= 3)
+        .collect()
 }
 
 /// What a member needs answered before its tick holds: the period to open
@@ -253,7 +469,7 @@ pub(super) fn sweep() -> BTreeMap<String, (Value, Case)> {
                 let member_paths = true_option_paths(def, member);
                 let (period, prerequisites) = seed(code, member);
                 let mut unlocked: Vec<String> = members.clone();
-                if !group.starts_with("path:") {
+                if def.box_def(&group).is_some() {
                     unlocked.push(group.clone());
                 }
                 for edits in &prerequisites {
@@ -281,7 +497,7 @@ pub(super) fn sweep() -> BTreeMap<String, (Value, Case)> {
                     continue;
                 };
                 let mut edits = vec![(member.clone(), "false", "false")];
-                if !group.starts_with("path:") {
+                if def.box_def(&group).is_some() {
                     edits.push((group.clone(), "", "blank (group)"));
                 }
                 for (key, sent, label) in edits {
@@ -309,11 +525,15 @@ pub(super) fn sweep() -> BTreeMap<String, (Value, Case)> {
 #[test]
 #[ignore = "writes a file: run only as `cargo test --manifest-path crates/bir-shell/Cargo.toml -- --ignored --exact screen_form_module::tests::radio_untick::pr14_record_radio_untick_outcomes` with RADIO_UNTICK_DUMP=<file>"]
 fn pr14_record_radio_untick_outcomes() {
+    // Without a file to write, return before the sweep runs (a bare
+    // `-- --ignored` must not spend it).
+    let Ok(path) = std::env::var("RADIO_UNTICK_DUMP") else {
+        return;
+    };
     setup();
     let out: Map<String, Value> = sweep()
         .into_iter()
         .map(|(key, (record, _))| (key, record))
         .collect();
-    let path = std::env::var("RADIO_UNTICK_DUMP").expect("RADIO_UNTICK_DUMP");
     std::fs::write(path, serde_json::to_string_pretty(&out).unwrap()).unwrap();
 }

@@ -519,384 +519,100 @@
    "shown": "true"
   }
  },
- "1600PT AtcCode1 false": {
-  "after": null,
+ "0605 itemQuarter_1 false": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "false"
+  },
   "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
+   "fields": {},
    "rejected": {},
    "shown": "false"
   }
  },
- "1600PT AtcCode1 tick": {
-  "after": null,
+ "0605 itemQuarter_1 tick": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "true"
+  },
   "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
+   "fields": {},
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 itemQuarter_2 false": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {},
    "rejected": {},
    "shown": "false"
   }
  },
- "1600PT AtcCode10 false": {
-  "after": null,
+ "0605 itemQuarter_2 tick": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "true"
+  },
   "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
+   "fields": {},
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 itemQuarter_3 false": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {},
    "rejected": {},
    "shown": "false"
   }
  },
- "1600PT AtcCode10 tick": {
-  "after": null,
+ "0605 itemQuarter_3 tick": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "true"
+  },
   "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
+   "fields": {},
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "0605 itemQuarter_4 false": {
+  "after": {
+   "fields": {},
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {},
    "rejected": {},
    "shown": "false"
   }
  },
- "1600PT AtcCode11 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
+ "0605 itemQuarter_4 tick": {
+  "after": {
+   "fields": {},
    "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode11 tick": {
-  "after": null,
+   "shown": "true"
+  },
   "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
+   "fields": {},
    "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode15 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode15 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode2 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode2 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode20 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode20 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode3 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode3 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode4 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode4 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode6 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode6 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode7 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600PT AtcCode7 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode1 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode1 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode10 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode10 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode12 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode12 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode2 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode2 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode3 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode3 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode4 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode4 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode7 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode7 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode8 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode8 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "government"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode9 false": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1600VT AtcCode9 tick": {
-  "after": null,
-  "before": {
-   "fields": {
-    "/agent_category": "private"
-   },
-   "rejected": {},
-   "shown": "false"
+   "shown": "true"
   }
  },
  "1601EQ frm1601EQ:ifCarriedOver blank (group)": {
@@ -2471,70 +2187,6 @@
    "shown": "true"
   }
  },
- "1701 frm1701:rdoPg1I21TaxRateG false": {
-  "after": {
-   "fields": {
-    "/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "fields": {
-    "/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1701 frm1701:rdoPg1I21TaxRateG tick": {
-  "after": {
-   "fields": {
-    "/atc": "Ii013"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/atc": "Ii013"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701 frm1701:rdoPg1I21TaxRateP false": {
-  "after": {
-   "fields": {
-    "/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "fields": {
-    "/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1701 frm1701:rdoPg1I21TaxRateP tick": {
-  "after": {
-   "fields": {
-    "/atc": "Ii017"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/atc": "Ii017"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
  "1701 frm1701:rdoPg1I6TaxpayerTypeE blank (group)": {
   "after": {
    "fields": {
@@ -3106,70 +2758,6 @@
   "before": {
    "fields": {
     "/overpayment_disposition": "TaxCreditCertificate"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701 frm1701:rdoPg2I12TaxRateG false": {
-  "after": {
-   "fields": {
-    "/spouse/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "fields": {
-    "/spouse/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1701 frm1701:rdoPg2I12TaxRateG tick": {
-  "after": {
-   "fields": {
-    "/spouse/atc": "Ii013"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/spouse/atc": "Ii013"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701 frm1701:rdoPg2I12TaxRateP false": {
-  "after": {
-   "fields": {
-    "/spouse/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "fields": {
-    "/spouse/atc": null
-   },
-   "rejected": {},
-   "shown": "false"
-  }
- },
- "1701 frm1701:rdoPg2I12TaxRateP tick": {
-  "after": {
-   "fields": {
-    "/spouse/atc": "Ii015"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/spouse/atc": "Ii015"
    },
    "rejected": {},
    "shown": "true"
@@ -3954,118 +3542,6 @@
   "before": {
    "fields": {
     "/spouse/atc": "i_i017"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701A frm1701A:optSpouseTaxRate_1 false": {
-  "after": {
-   "fields": {
-    "/spouse/atc": "unanswered"
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "error": "not a 1701A draft: invalid type: null, expected string or map"
-  }
- },
- "1701A frm1701A:optSpouseTaxRate_1 tick": {
-  "after": {
-   "fields": {
-    "/spouse/atc": "i_i014"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/spouse/atc": "i_i014"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701A frm1701A:optSpouseTaxRate_2 false": {
-  "after": {
-   "fields": {
-    "/spouse/atc": "unanswered"
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "error": "not a 1701A draft: invalid type: null, expected string or map"
-  }
- },
- "1701A frm1701A:optSpouseTaxRate_2 tick": {
-  "after": {
-   "fields": {
-    "/spouse/atc": "i_i017"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/spouse/atc": "i_i017"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701A frm1701A:optTaxRate_1 false": {
-  "after": {
-   "fields": {
-    "/atc": "unanswered"
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "error": "not a 1701A draft: invalid type: null, expected string or map"
-  }
- },
- "1701A frm1701A:optTaxRate_1 tick": {
-  "after": {
-   "fields": {
-    "/atc": "i_i012"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/atc": "i_i012"
-   },
-   "rejected": {},
-   "shown": "true"
-  }
- },
- "1701A frm1701A:optTaxRate_2 false": {
-  "after": {
-   "fields": {
-    "/atc": "unanswered"
-   },
-   "rejected": {},
-   "shown": "false"
-  },
-  "before": {
-   "error": "not a 1701A draft: invalid type: null, expected string or map"
-  }
- },
- "1701A frm1701A:optTaxRate_2 tick": {
-  "after": {
-   "fields": {
-    "/atc": "i_i015"
-   },
-   "rejected": {},
-   "shown": "true"
-  },
-  "before": {
-   "fields": {
-    "/atc": "i_i015"
    },
    "rejected": {},
    "shown": "true"
@@ -6058,26 +5534,6 @@
    "shown": "true"
   }
  },
- "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentCarried blank (group)": {
-  "after": {
-   "fields": {
-    "/part_ii/overpayment_disposition": "CarryOver"
-   },
-   "rejected": {
-    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
-   },
-   "shown": null
-  },
-  "before": {
-   "fields": {
-    "/part_ii/overpayment_disposition": "CarryOver"
-   },
-   "rejected": {
-    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
-   },
-   "shown": null
-  }
- },
  "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentCarried false": {
   "after": {
    "fields": {
@@ -6110,26 +5566,6 @@
    "shown": "true"
   }
  },
- "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentIssued blank (group)": {
-  "after": {
-   "fields": {
-    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
-   },
-   "rejected": {
-    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
-   },
-   "shown": null
-  },
-  "before": {
-   "fields": {
-    "/part_ii/overpayment_disposition": "TaxCreditCertificate"
-   },
-   "rejected": {
-    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
-   },
-   "shown": null
-  }
- },
  "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentIssued false": {
   "after": {
    "fields": {
@@ -6160,26 +5596,6 @@
    },
    "rejected": {},
    "shown": "true"
-  }
- },
- "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentRefunded blank (group)": {
-  "after": {
-   "fields": {
-    "/part_ii/overpayment_disposition": "Refund"
-   },
-   "rejected": {
-    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
-   },
-   "shown": null
-  },
-  "before": {
-   "fields": {
-    "/part_ii/overpayment_disposition": "Refund"
-   },
-   "rejected": {
-    "frm1702RT:rdoPg1Pt2I21Overpayment": "`frm1702RT:rdoPg1Pt2I21Overpayment` must be one of Refunded, Issued, Carried (got ``)"
-   },
-   "shown": null
   }
  },
  "1702RT frm1702RT:rdoPg1Pt2I21OverpaymentRefunded false": {
@@ -8313,6 +7729,162 @@
   "before": {
    "fields": {
     "/manner": "other"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPOther blank (group)": {
+  "after": {
+   "fields": {
+    "/manner": "other"
+   },
+   "rejected": {
+    "frm2200C:rdoPg1Pt2MOP": "`frm2200C:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner": "other"
+   },
+   "rejected": {
+    "frm2200C:rdoPg1Pt2MOP": "`frm2200C:rdoPg1Pt2MOP` must be one of Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPOther false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPOther tick": {
+  "after": {
+   "fields": {
+    "/manner": "other"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "other"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPPaymentActual blank (group)": {
+  "after": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {
+    "frm2200C:rdoPg1Pt2MOP": "`frm2200C:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {
+    "frm2200C:rdoPg1Pt2MOP": "`frm2200C:rdoPg1Pt2MOP` must be one of Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPPaymentActual false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPPaymentActual tick": {
+  "after": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPPrepayment blank (group)": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment"
+   },
+   "rejected": {
+    "frm2200C:rdoPg1Pt2MOP": "`frm2200C:rdoPg1Pt2MOP` must be one of PaymentActual, Prepayment, Other (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment"
+   },
+   "rejected": {
+    "frm2200C:rdoPg1Pt2MOP": "`frm2200C:rdoPg1Pt2MOP` must be one of Prepayment, Other (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPPrepayment false": {
+  "after": {
+   "fields": {
+    "/manner": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/manner": "actual_removal"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2200C frm2200C:rdoPg1Pt2MOPPrepayment tick": {
+  "after": {
+   "fields": {
+    "/manner": "prepayment"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/manner": "prepayment"
    },
    "rejected": {},
    "shown": "true"
