@@ -17,6 +17,12 @@
 //! branch: Item 40 (rate), Item 42 (MCIT) and Part V Item 57 are entered by
 //! the filer, and Item 41 is Item 39 times the rate.
 //!
+//! Item 42 on a return for a taxable year before 2020 is computed instead
+//! (maintainer decision P4-17, 2026-10-19): 2% of Item 33 while MCIT applies,
+//! the page's branch below 20 (rules/forms/1702rt-v2018c/calculations.json
+//! 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
+//! of gross"), read from the return's own Item 2 year.
+//!
 //! The "(Add more...)" modals of Items 54, 17i, Schedule II Item 4 and
 //! Schedule V Items 3, 6 and 8 are modelled ([`Form1702RTModal`]): their
 //! rows are written into the modal tables the upload loop reads, with the
@@ -41,6 +47,21 @@ pub const FORM_1702RT_FORM_TYPE: &str = "1702RTv2018C";
 
 const P: &str = "frm1702RT:";
 const ZERO: WholePeso = WholePeso(0);
+
+/// The first taxable year whose Item 42 the filer enters
+/// (calculations.json 1702rt-item42-mcit: "2020+ leaves the enabled value
+/// user-controlled").
+pub const MCIT_ENTERED_FROM: u16 = 2020;
+
+/// Item 42 before [`MCIT_ENTERED_FROM`]: 2% of Item 33 (calculations.json
+/// 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
+/// of gross"), rounded as `getProduct2` does (`Math.round`, half up), in
+/// whole pesos without a float.
+fn two_percent(gross: WholePeso) -> WholePeso {
+    let hundredths = i128::from(gross.0) * 2;
+    let rounded = (hundredths + 50).div_euclid(100);
+    WholePeso(i64::try_from(rounded).expect("2% of a whole-peso amount is one"))
+}
 
 fn sum(values: impl IntoIterator<Item = WholePeso>) -> WholePeso {
     WholePeso(values.into_iter().map(|v| v.0).sum())
@@ -262,6 +283,11 @@ impl Form1702RTDraft {
             p4.item_31_gross_income_from_operations.0 + p4.item_32_other_taxable_income.0,
         );
         let gross = p4.item_33_total_taxable_income;
+        if mcit && self.taxable_year < MCIT_ENTERED_FROM {
+            // Decision P4-17: computeP2Pt4I42's branch for a year before 2020
+            // with IC 055 ticked, 2% of gross (getProduct2's Math.round).
+            p4.item_42_mcit_due = two_percent(gross);
+        }
         let ordinary = self.schedule_1.item_18_total;
         p4.item_34_ordinary_itemized_deductions = ordinary;
 
@@ -1286,6 +1312,87 @@ mod tests {
             .into_iter()
             .map(|(_, message)| message)
             .collect()
+    }
+
+    /// Decision P4-17: a 2019 return subject to MCIT (incorporated 2015, IC
+    /// 055 ticked) computes item 42 as 2% of item 33, rounded half up, over
+    /// whatever it held; item 43 takes it as the larger of items 41 and 42,
+    /// and items 56, 14, 16 and 21 follow.
+    #[test]
+    fn before_2020_item_42_is_two_percent_of_gross_income() {
+        let mut draft = sample();
+        draft.taxable_year = 2019;
+        draft.part_iv.item_32_other_taxable_income = WholePeso(50_026);
+        draft.schedule_1.salaries_wages_allowances = WholePeso(2_900_000);
+        draft.part_iv.item_42_mcit_due = WholePeso(1);
+        draft.recompute();
+        assert!(draft.subject_to_mcit());
+        let p4 = &draft.part_iv;
+        assert_eq!(p4.item_33_total_taxable_income, WholePeso(2_950_026));
+        // 59,000.52 rounds to 59,001.
+        assert_eq!(p4.item_42_mcit_due, WholePeso(59_001));
+        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(0));
+        assert_eq!(p4.item_43_tax_due, WholePeso(59_001));
+        assert_eq!(
+            p4.item_56_net_tax_payable_or_overpayment,
+            WholePeso(-60_999)
+        );
+        let p2 = &draft.part_ii;
+        assert_eq!(p2.item_14_tax_due, WholePeso(59_001));
+        assert_eq!(
+            p2.item_16_net_tax_payable_or_overpayment,
+            WholePeso(-60_999)
+        );
+        assert_eq!(
+            p2.item_21_total_amount_payable_or_overpayment,
+            WholePeso(-60_999)
+        );
+        let fields = draft.field_map();
+        assert_eq!(fields["frm1702RT:txtPg2Pt4I42MinimumCorporate"], "59,001");
+        assert_eq!(fields["frm1702RT:txtPg2Pt4I43TotalIncomeTax"], "59,001");
+        // Where the regular tax is larger, item 43 stays item 41.
+        let mut earning = sample();
+        earning.taxable_year = 2019;
+        earning.recompute();
+        assert_eq!(earning.part_iv.item_42_mcit_due, WholePeso(59_000));
+        assert_eq!(earning.part_iv.item_43_tax_due, WholePeso(377_500));
+        // Not yet subject to MCIT (incorporated 2017): item 42 is cleared.
+        let mut young = sample();
+        young.taxable_year = 2019;
+        young.incorporation_date = Some(Form1702RTDate {
+            year: 2017,
+            month: 1,
+            day: 2,
+        });
+        young.recompute();
+        assert!(!young.subject_to_mcit());
+        assert_eq!(young.part_iv.item_42_mcit_due, ZERO);
+        // Rounding is half up on the hundredths, negatives included.
+        assert_eq!(two_percent(WholePeso(25)), WholePeso(1));
+        assert_eq!(two_percent(WholePeso(24)), WholePeso(0));
+        assert_eq!(two_percent(WholePeso(-25)), WholePeso(0));
+        assert_eq!(two_percent(WholePeso(-26)), WholePeso(-1));
+    }
+
+    /// Decision P4-17 leaves 2020 and later as they were: item 42 is the
+    /// filer's entry while MCIT applies, and the totals are the same as
+    /// before (the sample's pinned values, and the 1702RT sample payload
+    /// hashes in tests/sample_payloads, are unchanged).
+    #[test]
+    fn from_2020_item_42_stays_as_entered() {
+        for year in [2020, 2025] {
+            let mut draft = sample();
+            draft.taxable_year = year;
+            draft.recompute();
+            let p4 = &draft.part_iv;
+            assert_eq!(p4.item_42_mcit_due, WholePeso(59_000), "{year}");
+            assert_eq!(p4.item_43_tax_due, WholePeso(377_500), "{year}");
+            assert_eq!(
+                draft.part_ii.item_21_total_amount_payable_or_overpayment,
+                WholePeso(257_500),
+                "{year}"
+            );
+        }
     }
 
     #[test]
