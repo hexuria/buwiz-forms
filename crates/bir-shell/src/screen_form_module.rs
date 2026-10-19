@@ -1460,11 +1460,11 @@ fn finish<F: QueueableForm>(
     profile: &TaxpayerProfile,
     mut draft: F,
 ) -> Result<Value, String> {
-    // A stored 1702RT's item 42, which this compute may change (P4-17).
-    let held = (F::FORM_CODE == "1702RT")
+    // A stored 1702RT's items 40, 41, 42 and 57, which this compute may
+    // change (P4-17, P5-2).
+    let stored = (F::FORM_CODE == "1702RT")
         .then(|| serde_json::to_value(&draft).ok())
-        .flatten()
-        .map(|stored| stored["part_iv"]["item_42_mcit_due"].clone());
+        .flatten();
     if !F::penalty_items().is_empty() {
         draft.apply_penalty_profile(profile, &db.get_deadline_overrides());
         if draft.lifecycle().is_editable() {
@@ -1472,7 +1472,7 @@ fn finish<F: QueueableForm>(
         }
     }
     let mut opened = serde_json::to_value(draft).map_err(|error| error.to_string())?;
-    rows_annual_corporate::mark_item_42_held(&mut opened, held);
+    rows_annual_corporate::mark_pre_2020_held(&mut opened, stored.as_ref());
     Ok(opened)
 }
 
@@ -2840,7 +2840,8 @@ const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
 /// A box the official page keeps shut from load (PR 7: 1701 Part VIII
 /// column B, probe.rs `SHUT_ON_OFFICIAL_PAGE`).
 const NOTE_SHUT: &str = "The official form keeps this box shut; it files as 0.00.";
-/// 1701Q's (PR 5) and 1701's (PR 7) penalties kept as the filer entered them.
+/// 1701Q's (PR 5), 1701's (PR 7), the excise returns' (PR 11) and 1800's and
+/// 1801's (P4-4) penalties kept as the filer entered them.
 const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
 const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
@@ -2897,6 +2898,7 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_REPEAT
     } else if reason == rows_income_q::KEPT_AS_ENTERED
         || reason == rows_annual_individual::KEPT_AS_ENTERED
+        || reason == rows_excise::KEPT_AS_ENTERED
     {
         NOTE_KEPT
     } else if reason.ends_with(bir_core::forms::agent::probe::SHUT_REASON) {
@@ -2937,13 +2939,14 @@ fn opened_json(
     sample: Option<SampleBuild>,
 ) -> Result<Value, String> {
     let code = kind.form_code();
-    // What a stored 1702RT draft held in item 42 before opening recomputed
-    // it (decision P4-17; `finish` marks it), for the notice below.
-    let stored_item_42 = rows_annual_corporate::take_item_42_held(&mut draft);
+    // What a stored 1702RT draft held in items 40, 41, 42 and 57 before
+    // opening recomputed them (decisions P4-17 and P5-2; `finish` marks
+    // it), for the notices below.
+    let stored_pre_2020 = rows_annual_corporate::take_pre_2020_held(&mut draft);
     let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
     if let Value::Array(list) = &mut errors {
-        list.extend(rows_annual_corporate::rt_item_42_notice(
-            stored_item_42,
+        list.extend(rows_annual_corporate::rt_pre_2020_notices(
+            stored_pre_2020,
             &draft,
         ));
     }

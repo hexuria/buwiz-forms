@@ -107,6 +107,21 @@ pub(super) const RT_MCIT_REFUSAL: &str = "Item 42 applies once MCIT does: from t
 pub(super) const RT_MCIT_BEFORE_2020: &str =
     "For years before 2020, MCIT is 2% of gross income (item 33), which the form computes.";
 
+/// 1702RT item 40 (the income tax rate) and Part V item 57.
+const RT_RATE: &str = "frm1702RT:Pg2Pt4I40IncomeTaxRate";
+const RT_ITEM_57: &str = "frm1702RT:txtPg2Pt5I57SpecialAllowable";
+
+/// Item 40's lock on a return for a year before 2020 (decision P5-2,
+/// calculations.json 1702rt-item41-rate-tax: "before 2020 it uses 30%").
+pub(super) const RT_RATE_BEFORE_2020: &str =
+    "For years before 2020, the income tax rate is 30%, which the form uses.";
+
+/// Item 57's lock on a return for a year before 2020 (decision P5-2,
+/// calculations.json 1702rt-item57-special-tax: "Only before 2020, Item 57
+/// = Item 35 times income-tax rate / 100").
+pub(super) const RT_57_BEFORE_2020: &str =
+    "For years before 2020, item 57 is item 35 times the 30% rate, which the form computes.";
+
 /// Item 42's lock from 2020 while net taxable income is zero or less
 /// (calculations.json 1702rt-item42-mcit: "2020+ leaves the enabled value
 /// user-controlled except nonpositive net forces zero").
@@ -293,11 +308,27 @@ pub(super) fn rt_item_42_lock(draft: &Value) -> Option<&'static str> {
     }
 }
 
+/// Item 40's or item 57's lock, if `key` is one and the return is for a
+/// year before 2020 (decision P5-2): the form computes both then.
+pub(super) fn rt_before_2020_lock(draft: &Value, key: &str) -> Option<&'static str> {
+    let reason = match key {
+        RT_RATE => RT_RATE_BEFORE_2020,
+        RT_ITEM_57 => RT_57_BEFORE_2020,
+        _ => return None,
+    };
+    let year = draft["taxable_year"].as_u64()?;
+    (year < u64::from(bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM)).then_some(reason)
+}
+
 /// A 1702RT box the form keeps right now: item 42 while it is shut (see
-/// [`rt_item_42_lock`]), and an (Add more...) item while its table is
+/// [`rt_item_42_lock`]), items 40 and 57 before 2020 (see
+/// [`rt_before_2020_lock`]), and an (Add more...) item while its table is
 /// folded. A blank item 42 is taken: it only clears the box.
 #[inline(never)]
 fn refuse_1702rt(draft: &Value, key: &str, value: &Value) -> Option<String> {
+    if let Some(reason) = rt_before_2020_lock(draft, key) {
+        return Some(reason.to_string());
+    }
     if key == RT_MCIT_DUE {
         let text = text_of(value);
         if text.is_empty() || agent::parse_amount(&text) == Some(0.0) {
@@ -614,6 +645,12 @@ pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Valu
         RT_MCIT_DUE.to_string(),
         rt_item_42_lock(draft).map_or(Value::Null, |reason| json!(reason)),
     );
+    for key in [RT_RATE, RT_ITEM_57] {
+        locks.insert(
+            key.to_string(),
+            rt_before_2020_lock(draft, key).map_or(Value::Null, |reason| json!(reason)),
+        );
+    }
     locks
 }
 
@@ -626,7 +663,17 @@ pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Valu
 /// (decision P4-8).
 pub(super) fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
     match kind.form_code() {
-        "1702RT" if rt_item_42_lock(draft).is_some() => vec![RT_MCIT_DUE.to_string()],
+        "1702RT" => [RT_MCIT_DUE, RT_RATE, RT_ITEM_57]
+            .into_iter()
+            .filter(|key| {
+                if *key == RT_MCIT_DUE {
+                    rt_item_42_lock(draft).is_some()
+                } else {
+                    rt_before_2020_lock(draft, key).is_some()
+                }
+            })
+            .map(str::to_string)
+            .collect(),
         "1702EX" => ex_attached_keys()
             .filter(|key| ex_attached_amount(key))
             .collect(),
@@ -642,6 +689,8 @@ pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
         (RT_MCIT_REFUSAL, RT_MCIT_NOT_YET_NOTE),
         (RT_MCIT_NO_NET, RT_MCIT_NO_NET_NOTE),
         (EX_ATTACHED_LOCK, EX_ATTACHED_NOTE),
+        (RT_RATE_BEFORE_2020, RT_RATE_BEFORE_2020_NOTE),
+        (RT_57_BEFORE_2020, RT_57_BEFORE_2020_NOTE),
     ]
     .into_iter()
     .find(|(known, _)| *known == reason)
@@ -651,6 +700,10 @@ pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
 /// Item 42's notes (see [`live_lock_note`]).
 pub(super) const RT_MCIT_BEFORE_2020_NOTE: &str =
     "Computed for this year: MCIT before 2020 is 2% of gross income (item 33).";
+pub(super) const RT_RATE_BEFORE_2020_NOTE: &str =
+    "Computed for this year: the income tax rate before 2020 is 30%.";
+pub(super) const RT_57_BEFORE_2020_NOTE: &str =
+    "Computed for this year: item 57 before 2020 is item 35 times 30%.";
 pub(super) const RT_MCIT_NOT_YET_NOTE: &str =
     "Shut until MCIT applies, from the fourth year after incorporation.";
 pub(super) const RT_MCIT_NO_NET_NOTE: &str =
@@ -1173,63 +1226,151 @@ pub(super) fn printed_item_numbers(kind: AgentFormKind, errors: &mut [(String, S
     }
 }
 
-/// What a 1702RT Schedule IV row says while it holds an MCIT that an older
-/// version may have saved from column C.
-/// Where `finish` keeps, for one open, the item 42 a stored 1702RT held
-/// before opening recomputed it to another amount; `screen_form_open`
-/// takes it off before anything else reads the draft.
-const ITEM_42_HELD: &str = "screen_form_item_42_held";
+/// Where `finish` keeps, for one open, what a stored 1702RT held in items
+/// 40, 41, 42 and 57 before opening recomputed them (decisions P4-17 and
+/// P5-2), each item that changed by its number; `opened_json` takes it off
+/// before anything else reads the draft.
+const PRE_2020_HELD: &str = "screen_form_pre_2020_held";
 
-/// Mark `opened` with the item 42 it `held` when stored, if its compute
-/// changed it (decision P4-17).
-pub(super) fn mark_item_42_held(opened: &mut Value, held: Option<Value>) {
-    let Some(held) = held.and_then(|held| held.as_i64()) else {
+/// Items 40, 41, 42 and 57 of a 1702RT draft (its JSON), as `(item, value)`.
+fn pre_2020_items(draft: &Value) -> [(&'static str, Option<i64>); 4] {
+    let p4 = &draft["part_iv"];
+    [
+        ("40", p4["item_40_income_tax_rate_percent"].as_i64()),
+        ("41", p4["item_41_normal_income_tax_due"].as_i64()),
+        ("42", p4["item_42_mcit_due"].as_i64()),
+        (
+            "57",
+            draft["part_v"]["item_57_special_allowable_deductions_tax_effect"].as_i64(),
+        ),
+    ]
+}
+
+/// Mark `opened` with what items 40, 41, 42 and 57 held when stored
+/// (`stored`, the draft before its compute), for each one the compute
+/// changed.
+pub(super) fn mark_pre_2020_held(opened: &mut Value, stored: Option<&Value>) {
+    let Some(stored) = stored else {
         return;
     };
-    if opened["part_iv"]["item_42_mcit_due"].as_i64() != Some(held)
+    let now = pre_2020_items(opened);
+    let held: Map<String, Value> = pre_2020_items(stored)
+        .into_iter()
+        .zip(now)
+        .filter_map(|((item, was), (_, now))| {
+            let was = was?;
+            (Some(was) != now).then(|| (item.to_string(), json!(was)))
+        })
+        .collect();
+    if !held.is_empty()
         && let Value::Object(fields) = opened
     {
-        fields.insert(ITEM_42_HELD.into(), json!(held));
+        fields.insert(PRE_2020_HELD.into(), Value::Object(held));
     }
 }
 
-/// Take the mark [`mark_item_42_held`] put on a draft, if any.
-pub(super) fn take_item_42_held(draft: &mut Value) -> Option<i64> {
+/// Take the mark [`mark_pre_2020_held`] put on a draft, if any.
+pub(super) fn take_pre_2020_held(draft: &mut Value) -> Option<Map<String, Value>> {
     let Value::Object(fields) = draft else {
         return None;
     };
-    fields.remove(ITEM_42_HELD)?.as_i64()
+    match fields.remove(PRE_2020_HELD)? {
+        Value::Object(held) => Some(held),
+        _ => None,
+    }
 }
 
-/// Decision P4-17 on a draft stored before it: a return for a year before
-/// 2020 whose item 42 the form now computes (2% of item 33) to another
-/// amount than it held says so on open, beside the form's own messages, so
-/// the change is never silent. Nothing else changes; once saved, the draft
-/// holds the computed amount.
-pub(super) fn rt_item_42_notice(held: Option<i64>, draft: &Value) -> Vec<Value> {
+/// Decisions P4-17 and P5-2 on a draft stored before them: a return for a
+/// year before 2020 whose items 40, 41, 42 or 57 the form now computes to
+/// another amount than they held says so on open, item by item with the
+/// old and new amounts, beside the form's own messages, so the change is
+/// never silent. Nothing else changes; once saved, the draft holds the
+/// computed amounts.
+pub(super) fn rt_pre_2020_notices(held: Option<Map<String, Value>>, draft: &Value) -> Vec<Value> {
     let Some(held) = held else {
         return Vec::new();
     };
     let Ok(typed) = serde_json::from_value::<Form1702RTDraft>(draft.clone()) else {
         return Vec::new();
     };
-    let computed = typed.part_iv.item_42_mcit_due.0;
-    if typed.taxable_year >= bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM
-        || computed == held
-    {
+    if typed.taxable_year >= bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM {
         return Vec::new();
     }
-    vec![json!({
-        "field": "part_iv.item_42_mcit_due",
-        "message": rt_item_42_notice_text(computed, held),
-        "keys": [RT_MCIT_DUE],
-    })]
+    let now = pre_2020_items(draft);
+    let mut out = Vec::new();
+    for (item, now) in now {
+        let (Some(was), Some(now)) = (held.get(item).and_then(Value::as_i64), now) else {
+            continue;
+        };
+        let (field, key, message) = match item {
+            "40" => (
+                "part_iv.item_40_income_tax_rate_percent",
+                RT_RATE,
+                rt_rate_notice_text(now, was),
+            ),
+            "41" => (
+                "part_iv.item_41_normal_income_tax_due",
+                "frm1702RT:txtPg2Pt4I41IncomeTaxDue",
+                rt_item_41_notice_text(now, was),
+            ),
+            "42" => (
+                "part_iv.item_42_mcit_due",
+                RT_MCIT_DUE,
+                if typed.subject_to_mcit() {
+                    rt_item_42_notice_text(now, was)
+                } else {
+                    rt_item_42_not_yet_notice_text(was)
+                },
+            ),
+            _ => (
+                "part_v.item_57_special_allowable_deductions_tax_effect",
+                RT_ITEM_57,
+                rt_item_57_notice_text(now, was),
+            ),
+        };
+        out.push(json!({ "field": field, "message": message, "keys": [key] }));
+    }
+    out
 }
 
-/// The P4-17 notice's words.
+/// The P4-17 notice's words: item 42 is now 2% of item 33.
 pub(super) fn rt_item_42_notice_text(computed: i64, held: i64) -> String {
     format!(
         "Item 42 is now computed for years before 2020: 2% of gross income (item 33) is {}; this return held {}. Check the tax due before you file.",
+        whole_pesos(computed),
+        whole_pesos(held)
+    )
+}
+
+/// The P4-17 notice's words for a return not yet subject to MCIT, whose
+/// item 42 the form clears (review item 6: never "2% is 0").
+pub(super) fn rt_item_42_not_yet_notice_text(held: i64) -> String {
+    format!(
+        "Item 42 is cleared: not yet subject to MCIT (fewer than four years after incorporation); this return held {}. Check the tax due before you file.",
+        whole_pesos(held)
+    )
+}
+
+/// The P5-2 notice's words for item 40.
+pub(super) fn rt_rate_notice_text(rate: i64, held: i64) -> String {
+    format!(
+        "Item 40 is now {rate}% for years before 2020; this return held {held}%. Check the tax due before you file."
+    )
+}
+
+/// The P5-2 notice's words for item 41.
+pub(super) fn rt_item_41_notice_text(computed: i64, held: i64) -> String {
+    format!(
+        "Item 41 is now computed at 30% for years before 2020: {}; this return held {}. Check the tax due before you file.",
+        whole_pesos(computed),
+        whole_pesos(held)
+    )
+}
+
+/// The P5-2 notice's words for item 57.
+pub(super) fn rt_item_57_notice_text(computed: i64, held: i64) -> String {
+    format!(
+        "Item 57 is now item 35 times 30% for years before 2020: {}; this return held {}. Check it before you file.",
         whole_pesos(computed),
         whole_pesos(held)
     )
@@ -1290,6 +1431,8 @@ pub(super) fn ex_attached_notice(item: &str) -> String {
     )
 }
 
+/// What a 1702RT Schedule IV row says while it holds an MCIT that an older
+/// version may have saved from column C (see [`notices`]).
 pub(super) fn rt_column_c_notice(row: usize) -> String {
     format!(
         "Row {row} holds an MCIT amount that may have been typed in column C; check it before you file."
