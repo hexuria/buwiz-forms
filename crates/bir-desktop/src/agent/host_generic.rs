@@ -325,10 +325,14 @@ impl BirAgentHost {
                 && let Ok(Some(profile)) = guard.get_profile_by_tin(&tin)
             {
                 let overrides = guard.get_deadline_overrides();
-                if agent::apply_penalty_profile(form.kind, &mut form.draft, &profile, &overrides)
-                    .is_ok()
+                match agent::apply_penalty_profile(form.kind, &mut form.draft, &profile, &overrides)
                 {
-                    let _ = agent::compute(form.kind, &mut form.draft);
+                    Ok(()) => {
+                        let _ = agent::compute(form.kind, &mut form.draft);
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "penalty inputs not re-resolved; the draft keeps its state");
+                    }
                 }
             }
             for key in &filled {

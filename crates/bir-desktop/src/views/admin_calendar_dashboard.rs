@@ -20,7 +20,8 @@ pub(crate) const DAMAGED_OVERRIDE_NOTE: &str = "Couldn't read this entry; kept a
 /// The stored `deadline_overrides` value is not a JSON array at all
 /// (decision P5-10): the tab says so and every write is refused until it
 /// is fixed or cleared.
-pub(crate) const UNREADABLE_OVERRIDES_BANNER: &str = "The stored deadline overrides could not be read, so nothing here can be changed. Fix or clear the stored value first.";
+pub(crate) const UNREADABLE_OVERRIDES_BANNER: &str =
+    "The stored overrides can't be read. Nothing can be saved until they're repaired.";
 
 pub enum AdminCalendarEvent {
     OverridesChanged,
@@ -699,7 +700,12 @@ impl AdminCalendarDashboard {
             });
         }
 
-        if self.overrides.is_empty() && self.damaged_overrides.is_empty() {
+        // When the stored value could not be read the banner above says
+        // so; the empty state would lie beside it.
+        if self.overrides.is_empty()
+            && self.damaged_overrides.is_empty()
+            && !self.overrides_unreadable
+        {
             container = container.child(rsx! {
                 <div w_full py_8 flex justify_center>
                     <div text_sm text_color={cx.theme().muted_foreground}>
