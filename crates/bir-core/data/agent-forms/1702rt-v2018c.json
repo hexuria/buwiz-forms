@@ -868,7 +868,7 @@
 "frm1702RT:txtPg2Pt4I54.{N>=1}C1": "a row family pattern, not a box: each row is its own numbered key",
 "frm1702RT:txtPg2Pt4I54.{N>=1}C2": "a row family pattern, not a box: each row is its own numbered key",
 "frm1702RT:txtPg2Pt4I54CtrModal": "written by the app without a draft field (a constant or the period)",
-"frm1702RT:txtPg2Pt5I59TotalTax": "derived by the app: changes with /deduction_method, /part_iv/tax_credits/item_52_special_tax_credits, /part_v/item_57_special_allowable_deductions_tax_effect but never shows one field's value",
+"frm1702RT:txtPg2Pt5I59TotalTax": "derived by the app: changes with /deduction_method, /part_iv/tax_credits/item_52_special_tax_credits, /part_v/item_57_special_allowable_deductions_tax_effect, ... but never shows one field's value",
 "frm1702RT:txtPg2TIN1": "derived by the app: changes with /tin but never shows one field's value",
 "frm1702RT:txtPg2TIN2": "derived by the app: changes with /tin but never shows one field's value",
 "frm1702RT:txtPg2TIN3": "derived by the app: changes with /tin but never shows one field's value",

@@ -1263,23 +1263,64 @@ fn pr8_form_1702ex_name_and_address_are_one_box_each() {
     assert!(!map["derived:address_line2"].trim().is_empty());
 }
 
-/// 1702EX preview.1: items 48 and 49 are the draft's two other credits
-/// (bound since PR 8's seed in sample_payloads/form_1702ex.rs) and the
-/// schedule rows' amounts are entries (probe.rs USER_CHOSEN): each takes a
-/// typed amount and the totals recompute through the form's own compute.
+/// 1702EX preview.1, as maintainer decision (1702EX shut rows locked like
+/// 1702MX) changes it: item 48 is the draft's
+/// first other credit, and Schedule 1 item 17d and Schedule 2 row 1 are
+/// entries, as the official page enables them at load; each takes a typed
+/// amount and the totals recompute through the form's own compute. Item 49,
+/// Schedule 1 items 17e-17h and Schedule 2 rows 2-3, which the official page
+/// keeps shut at load (runtime-control-inventory-v796.json), are locked the
+/// way 1702MX's others rows are: refused with the reason, and their note
+/// says what fills them, over their 0.00 too.
 #[test]
 fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
     setup();
+    let inventory = disabled_at_load("1702ex-v2018c");
     let opened = open("1702EX", 0);
     for key in [
         "txtPg2Pt4I48OtherTaxCrPmtDesc",
         "txtPg2Pt4I48OtherTaxCrPmtAmt",
-        "txtPg2Pt4I49OtherTaxCrPmtDesc",
-        "txtPg2Pt4I49OtherTaxCrPmtAmt",
-        "txtPg3Pt6I17OthersEAmt",
-        "txtPg3Pt6S2I2Amount",
+        "txtPg3Pt6I17OthersDDesc",
+        "txtPg3Pt6I17OthersDAmt",
+        "txtPg3Pt6S2I1Description",
+        "txtPg3Pt6S2I1Amount",
     ] {
+        assert_eq!(
+            inventory.get(&ex(key)),
+            Some(&false),
+            "{key} is open at load"
+        );
         assert!(opened["locks"].get(ex(key)).is_none(), "{key} is open");
+    }
+    let attached: Vec<String> = rows_annual_corporate::ex_attached_keys().collect();
+    assert_eq!(attached.len(), 16);
+    let noted = strings(&opened["notes_always"]);
+    for key in &attached {
+        assert_eq!(inventory.get(key), Some(&true), "{key} is shut at load");
+        assert_eq!(
+            opened["locks"][key],
+            rows_annual_corporate::EX_ATTACHED_LOCK,
+            "{key}"
+        );
+        assert_eq!(
+            opened["lock_notes"][key], "Filled from the attached schedule.",
+            "{key}"
+        );
+        if key.ends_with("Amt") || key.ends_with("Amount") {
+            assert!(noted.contains(key), "{key} says so over its 0.00");
+        } else {
+            assert_eq!(
+                opened["waits"][key], "Filled from the attached schedule.",
+                "{key} says so in place while blank"
+            );
+        }
+        let refused = fill("1702EX", &opened["draft"], json!({ key: "100" }));
+        assert_eq!(
+            refused["rejected"][key],
+            format!("`{key}` is {}", rows_annual_corporate::EX_ATTACHED_LOCK),
+            "{key}"
+        );
+        assert_eq!(refused["draft"], opened["draft"], "{key}");
     }
     let filled = fill(
         "1702EX",
@@ -1287,18 +1328,16 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
         json!({
             ex("txtPg2Pt4I48OtherTaxCrPmtDesc"): "Credit A",
             ex("txtPg2Pt4I48OtherTaxCrPmtAmt"): "1500",
-            ex("txtPg2Pt4I49OtherTaxCrPmtDesc"): "Credit B",
-            ex("txtPg2Pt4I49OtherTaxCrPmtAmt"): "700",
-            ex("txtPg3Pt6I17OthersEDesc"): "Supplies",
-            ex("txtPg3Pt6I17OthersEAmt"): "300",
-            ex("txtPg3Pt6S2I2Description"): "Training",
-            ex("txtPg3Pt6S2I2LegalBasis"): "RA 1",
-            ex("txtPg3Pt6S2I2Amount"): "400",
+            ex("txtPg3Pt6I17OthersDDesc"): "Supplies",
+            ex("txtPg3Pt6I17OthersDAmt"): "300",
+            ex("txtPg3Pt6S2I1Description"): "Training",
+            ex("txtPg3Pt6S2I1LegalBasis"): "RA 1",
+            ex("txtPg3Pt6S2I1Amount"): "400",
         }),
     );
     assert_eq!(filled["rejected"], json!({}));
     let v = &filled["values"];
-    assert_eq!(amount(v, &ex("txtPg2Pt4I50TotalTaxCrPmt")), 2200.0);
+    assert_eq!(amount(v, &ex("txtPg2Pt4I50TotalTaxCrPmt")), 1500.0);
     assert_eq!(
         amount(v, &ex("txtPg3Pt6S1I18TotOrdinaryAllowableItemDeduc")),
         300.0
@@ -1309,15 +1348,95 @@ fn pr8_form_1702ex_other_credits_and_schedule_rows_take_entries() {
     );
     // The form keeps descriptions in capitals (form_1702ex.rs recompute).
     assert_eq!(
-        filled["draft"]["other_credits"][1]["description"],
-        "CREDIT B"
+        filled["draft"]["other_credits"][0]["description"],
+        "CREDIT A"
     );
     let html = document("1702EX", &filled["draft"]);
-    let cell = html_cell("1702ex-2018", &ex("txtPg2Pt4I49OtherTaxCrPmtDesc"));
+    let cell = html_cell("1702ex-2018", &ex("txtPg2Pt4I48OtherTaxCrPmtDesc"));
     assert_eq!(
         bir_print::frozen_html::printed_text(&html, &cell),
-        "CREDIT B"
+        "CREDIT A"
     );
+}
+
+/// Maintainer decision (1702EX shut rows locked like 1702MX) on a draft stored
+/// before it: a 1702EX draft holding
+/// values in item 49, Schedule 1 items 17e-17h and Schedule 2 rows 2-3
+/// (serialized by the code at e86b1424 from PR 8's stored fixture) keeps
+/// filing them unchanged: its field map is the stored draft's, the page
+/// shows them, each row says to check it, and the draft saves back byte for
+/// byte.
+#[test]
+fn p4_8_a_stored_1702ex_keeps_filing_its_shut_rows() {
+    let stored_on = chrono::NaiveDate::from_ymd_opt(2026, 10, 18).unwrap();
+    bir_core::forms::penalty_items::with_clock(stored_on, || {
+        let fixture = include_str!("fixtures/1702ex-attached-pre-p4-8.json").trim_end();
+        let id = store_fixture("1702EX", fixture);
+        let opened = open("1702EX", 0);
+        assert_eq!(opened["draft"]["id"], json!(id));
+        let kind = kind_of("1702EX").unwrap();
+        let stored: Value = serde_json::from_str(fixture).unwrap();
+        let map = agent::field_map(kind, &stored).unwrap();
+        assert_eq!(agent::field_map(kind, &opened["draft"]).unwrap(), map);
+        for (key, shown) in [
+            ("txtPg2Pt4I49OtherTaxCrPmtDesc", "CREDIT B"),
+            ("txtPg2Pt4I49OtherTaxCrPmtAmt", "700.00"),
+            ("txtPg3Pt6I17OthersHAmt", "50.00"),
+            ("txtPg3Pt6S2I3Description", "RESEARCH"),
+            ("txtPg3Pt6S2I3Amount", "125.00"),
+        ] {
+            assert_eq!(map[&ex(key)], shown, "{key} files as stored");
+            assert_eq!(opened["values"][ex(key)], shown, "{key} shows as stored");
+        }
+        // And prints as stored.
+        let html = document("1702EX", &opened["draft"]);
+        for (key, text) in [
+            ("txtPg2Pt4I49OtherTaxCrPmtDesc", "CREDIT B"),
+            ("txtPg3Pt6S2I3Description", "RESEARCH"),
+        ] {
+            let cell = html_cell("1702ex-2018", &ex(key));
+            assert_eq!(
+                bir_print::frozen_html::printed_text(&html, &cell),
+                text,
+                "{key} prints as stored"
+            );
+        }
+        let notices: Vec<String> = opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|error| error["message"].as_str())
+            .filter(|message| message.contains("BIR's program keeps shut"))
+            .map(str::to_string)
+            .collect();
+        let expected: Vec<String> = [
+            "Item 49",
+            "Schedule 1 item 17e",
+            "Schedule 1 item 17f",
+            "Schedule 1 item 17g",
+            "Schedule 1 item 17h",
+            "Schedule 2 row 2",
+            "Schedule 2 row 3",
+        ]
+        .iter()
+        .map(|item| rows_annual_corporate::ex_attached_notice(item))
+        .collect();
+        assert_eq!(notices, expected);
+        save("1702EX", &opened["draft"]);
+        let again = raw_row(id).1;
+        let strip = |text: &str| {
+            let mut value: Value = serde_json::from_str(text).unwrap();
+            value.as_object_mut().unwrap().remove("profile_baseline");
+            value
+        };
+        if again.contains("\"profile_baseline\"") {
+            assert_eq!(strip(&again), strip(fixture), "the stored row");
+            let at = again.find(",\"profile_baseline\":").unwrap();
+            assert_eq!(format!("{}}}", &again[..at]), fixture, "byte for byte");
+        } else {
+            assert_eq!(again, fixture, "byte for byte");
+        }
+    });
 }
 
 /// 1702EX preview.1 (the pop-ups' last fixed lines) and the
@@ -2429,9 +2548,11 @@ fn pr8_form_1702mx_rates_are_typed_percents() {
 /// of gross; 2020+ leaves the enabled value user-controlled except
 /// nonpositive net forces zero"). From 2020 it is the filer's entry while
 /// MCIT applies and item 39 is above zero; otherwise, and on every return
-/// before 2020, it is locked with its reason and a note, shows its value
-/// (0 on a new return), and a typed amount is refused. The lock follows the answers as they are typed
-/// (the fill's `relocks`).
+/// before 2020 (where the form computes it while MCIT applies, decision
+/// maintainer decision (pre-2020 MCIT is 2% of gross)), it is locked with its
+/// reason and a note, shows its value (0 on a
+/// new return), and a typed amount is refused. The lock follows the answers
+/// as they are typed (the fill's `relocks`).
 #[test]
 fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
     setup();
@@ -2510,7 +2631,9 @@ fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
         rows_annual_corporate::RT_MCIT_REFUSAL
     );
 
-    // A 2019 return: locked with the 2% rule, whatever the net.
+    // A 2019 return subject to MCIT (the profile's 2015 start, item 10):
+    // locked with the 2% rule, whatever the net (maintainer decision (pre-2020
+    // MCIT is 2% of gross): computed).
     let old = open_for(TIN, "1702RT", 2019, 0);
     assert_eq!(old["year"], json!(2019));
     assert_eq!(
@@ -2521,6 +2644,17 @@ fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
         old["lock_notes"][&item_42],
         rows_annual_corporate::RT_MCIT_BEFORE_2020_NOTE
     );
+    // Not yet subject to MCIT (incorporated 2017): shut until MCIT applies,
+    // as from 2020.
+    let old_young = typed(
+        "1702RT",
+        &old["draft"],
+        json!({ rt("txtPg1Pt1I10"): "06/30/2017" }),
+    );
+    assert_eq!(
+        old_young["relocks"][&item_42],
+        rows_annual_corporate::RT_MCIT_REFUSAL
+    );
     let old_earning = typed(
         "1702RT",
         &old["draft"],
@@ -2529,6 +2663,10 @@ fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
     assert_eq!(
         old_earning["relocks"][&item_42],
         rows_annual_corporate::RT_MCIT_BEFORE_2020
+    );
+    assert_eq!(
+        old_earning["relock_notes"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020_NOTE
     );
     let refused = fill(
         "1702RT",
@@ -2539,10 +2677,13 @@ fn pr8_form_1702rt_item_42_follows_the_official_mcit_rule() {
         refused["rejected"][&item_42],
         rows_annual_corporate::RT_MCIT_BEFORE_2020
     );
-    // What a 2019 return files today: item 42 as stored (0; the port does
-    // not compute the 2%), and item 43 is item 41.
+    // What a 2019 return files (maintainer decision (pre-2020 MCIT is 2% of
+    // gross)): item 42 is 2% of item 33,
+    // and item 43 the larger of items 41 and 42 (here item 41).
     let map = agent::field_map(kind_of("1702RT").unwrap(), &old_earning["draft"]).unwrap();
-    assert_eq!(agent::parse_amount(&map[&item_42]), Some(0.0));
+    let gross = agent::parse_amount(&map[&rt("txtPg2Pt4I33TotalGross")]).unwrap();
+    assert_eq!(gross, 1_000_000.0);
+    assert_eq!(agent::parse_amount(&map[&item_42]), Some(20_000.0));
     assert_eq!(
         map[&rt("txtPg2Pt4I43TotalIncomeTax")],
         map[&rt("txtPg2Pt4I41IncomeTaxDue")]
@@ -3157,4 +3298,308 @@ fn pr8_form_1702rt_popup_alerts_name_the_printed_item() {
             .any(|m| m.contains("Item 54.") || m.contains("Item i.")),
         "{found:?}"
     );
+}
+
+/// Maintainer decision (pre-2020 MCIT is 2% of gross): a 2019 return subject to
+/// MCIT computes item 42 as 2% of
+/// item 33 (calculations.json 1702rt-item42-mcit), keeps it locked with its
+/// reason, and says why under it whatever it shows (`notes_always`); item 43
+/// takes it as the larger of items 41 and 42, and items 56, 14, 16 and 21
+/// follow. The same return for 2020 keeps item 42 as the filer types it.
+#[test]
+fn p4_17_a_2019_return_computes_mcit_from_gross_income() {
+    setup();
+    let item_42 = rt("txtPg2Pt4I42MinimumCorporate");
+    let old = open_for(TIN, "1702RT", 2019, 0);
+    assert_eq!(
+        strings(&old["notes_always"]),
+        BTreeSet::from([
+            item_42.clone(),
+            rt("Pg2Pt4I40IncomeTaxRate"),
+            rt("txtPg2Pt5I57SpecialAllowable")
+        ]),
+        "a 0 item 42 says why too, as items 40 and 57 do (P5-2)"
+    );
+    // Gross income 2,950,026 (item 33); itemized deductions above it, so
+    // item 41 is 0 and MCIT is the tax due.
+    let mut draft = old["draft"].clone();
+    draft["deduction_method"] = json!("Itemized");
+    draft["schedule_1"]["salaries_wages_allowances"] = json!(3_000_000);
+    let filled = typed(
+        "1702RT",
+        &draft,
+        json!({
+            rt("txtPg2Pt4I27Sales"): "5000000",
+            rt("txtPg2Pt4I28LessSales"): "100000",
+            rt("txtPg2Pt4I30LessCost"): "2000000",
+            rt("txtPg2Pt4I32AddOtherTaxable"): "50026",
+        }),
+    );
+    let values = &filled["values"];
+    assert_eq!(amount(values, &rt("txtPg2Pt4I33TotalGross")), 2_950_026.0);
+    // 59,000.52 rounds to 59,001.
+    assert_eq!(amount(values, &item_42), 59_001.0);
+    // Item 39 is 2,950,026 - 3,000,000 = -49,974; the pre-2020 floor
+    // (maintainer decision (pre-2020 1702RT items 41 and 42 floored at
+    // zero)) keeps item 41 at zero rather than -14,992.
+    assert_eq!(amount(values, &rt("txtPg2Pt4I39NetTaxable")), -49_974.0);
+    assert_eq!(amount(values, &rt("txtPg2Pt4I41IncomeTaxDue")), 0.0);
+    assert_eq!(amount(values, &rt("txtPg2Pt4I43TotalIncomeTax")), 59_001.0);
+    assert_eq!(amount(values, &rt("txtPg1Pt2I14IncomeTax")), 59_001.0);
+    let net = amount(values, &rt("txtPg2Pt4I56NetTax"));
+    assert_eq!(amount(values, &rt("txtPg1Pt2I16NetTax")), net);
+    assert_eq!(
+        filled["relocks"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020
+    );
+    assert_eq!(
+        filled["relock_notes"][&item_42],
+        rows_annual_corporate::RT_MCIT_BEFORE_2020_NOTE
+    );
+    assert_eq!(
+        strings(&filled["notes_always"]),
+        BTreeSet::from([
+            item_42.clone(),
+            rt("Pg2Pt4I40IncomeTaxRate"),
+            rt("txtPg2Pt5I57SpecialAllowable")
+        ])
+    );
+    // 2020, with a net taxable income: the same return's item 42 is the
+    // filer's entry, as before.
+    let mut later = filled["draft"].clone();
+    later["taxable_year"] = json!(2020);
+    later["schedule_1"]["salaries_wages_allowances"] = json!(0);
+    let earning = typed(
+        "1702RT",
+        &later,
+        json!({ rt("txtPg2Pt4I27Sales"): "5000000" }),
+    );
+    assert!(amount(&earning["values"], &rt("txtPg2Pt4I39NetTaxable")) > 0.0);
+    let open_2020 = typed("1702RT", &earning["draft"], json!({ &item_42: "70000" }));
+    assert_eq!(open_2020["rejected"], json!({}));
+    assert_eq!(amount(&open_2020["values"], &item_42), 70_000.0);
+    assert_eq!(open_2020["relocks"][&item_42], Value::Null);
+    assert_eq!(open_2020["notes_always"], json!([]));
+}
+
+/// Maintainer decision (pre-2020 MCIT is 2% of gross) on a draft stored before
+/// it: a 2019 return holding
+/// another item 42 than the 2% the form now computes is never changed
+/// silently; opening it says what item 42 is now and what it held, and once
+/// saved (holding the computed amount) it opens without the notice.
+#[test]
+fn p4_17_a_stored_2019_return_says_item_42_changed() {
+    setup();
+    let item_42 = rt("txtPg2Pt4I42MinimumCorporate");
+    let old = open_for(TIN, "1702RT", 2019, 0);
+    let filled = typed(
+        "1702RT",
+        &old["draft"],
+        json!({ rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    let id = save("1702RT", &filled["draft"])["id"].as_i64().unwrap();
+    let mut stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    assert_eq!(stored["part_iv"]["item_42_mcit_due"], json!(20_000));
+    // As a draft saved before maintainer decision (pre-2020 MCIT is 2% of
+    // gross) would hold it: the item 42 it was given.
+    stored["part_iv"]["item_42_mcit_due"] = json!(0);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&stored.to_string(), &id.to_string()],
+    );
+    let notice = rows_annual_corporate::rt_item_42_notice_text(20_000, 0);
+    assert_eq!(
+        notice,
+        "Item 42 is now computed for years before 2020: 2% of gross income (item 33) is 20,000; this return held 0. Check the tax due before you file."
+    );
+    let reopened = open_for(TIN, "1702RT", 2019, 0);
+    assert_eq!(amount(&reopened["values"], &item_42), 20_000.0);
+    let said: Vec<&Value> = reopened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|error| error["message"] == notice.as_str())
+        .collect();
+    assert_eq!(said.len(), 1, "{}", reopened["errors"]);
+    assert_eq!(said[0]["keys"], json!([&item_42]));
+    save("1702RT", &reopened["draft"]);
+    let again = open_for(TIN, "1702RT", 2019, 0);
+    assert!(
+        again["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|error| error["field"] != "part_iv.item_42_mcit_due"),
+        "{}",
+        again["errors"]
+    );
+}
+
+/// The messages of `opened`'s errors.
+fn messages_of(opened: &Value) -> Vec<String> {
+    opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|error| error["message"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// Maintainer decision (pre-2020 1702RT computed like BIR): a 2019 return
+/// computes at 30%: item 40 is locked at 30
+/// with its reason and says so whatever it shows, a typed rate is refused,
+/// item 41 is 30% of item 39, and item 57 (item 35 times 30%) is locked
+/// and computed the same way. A 2020 return keeps both the filer's.
+#[test]
+fn p5_2_a_2019_return_computes_at_30_percent() {
+    setup();
+    let rate = rt("Pg2Pt4I40IncomeTaxRate");
+    let item_57 = rt("txtPg2Pt5I57SpecialAllowable");
+    let old = open_for(TIN, "1702RT", 2019, 0);
+    for (key, reason, note) in [
+        (
+            &rate,
+            rows_annual_corporate::RT_RATE_BEFORE_2020,
+            rows_annual_corporate::RT_RATE_BEFORE_2020_NOTE,
+        ),
+        (
+            &item_57,
+            rows_annual_corporate::RT_57_BEFORE_2020,
+            rows_annual_corporate::RT_57_BEFORE_2020_NOTE,
+        ),
+    ] {
+        assert_eq!(old["locks"][key], reason, "{key}");
+        assert_eq!(old["lock_notes"][key], note, "{key}");
+        assert!(strings(&old["notes_always"]).contains(key), "{key}");
+        let refused = fill("1702RT", &old["draft"], json!({ key: "25" }));
+        assert_eq!(refused["rejected"][key], reason, "{key}");
+    }
+    assert_eq!(old["values"][&rate], "30");
+    let mut draft = old["draft"].clone();
+    draft["deduction_method"] = json!("Itemized");
+    draft["schedule_2"]["rows"][0] =
+        json!({"description": "Seminar", "legal_basis": "RA 1", "amount": 100_001});
+    let filled = typed(
+        "1702RT",
+        &draft,
+        json!({ rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    let v = &filled["values"];
+    let net = amount(v, &rt("txtPg2Pt4I39NetTaxable"));
+    assert_eq!(net, 899_999.0, "1,000,000 less item 35's 100,001");
+    // 30% of 899,999 is 269,999.70.
+    assert_eq!(amount(v, &rt("txtPg2Pt4I41IncomeTaxDue")), 270_000.0);
+    assert_eq!(amount(v, &rt("txtPg2Pt4I43TotalIncomeTax")), 270_000.0);
+    assert_eq!(amount(v, &rt("txtPg1Pt2I14IncomeTax")), 270_000.0);
+    // 30% of 100,001 is 30,000.30.
+    assert_eq!(amount(v, &item_57), 30_000.0);
+    // 2020: the filer's rate and item 57 again.
+    let mut later = filled["draft"].clone();
+    later["taxable_year"] = json!(2020);
+    let reopened = typed(
+        "1702RT",
+        &later,
+        json!({ rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    assert_eq!(reopened["relocks"][&rate], Value::Null);
+    assert_eq!(reopened["relocks"][&item_57], Value::Null);
+    let typed_rate = typed("1702RT", &reopened["draft"], json!({ &rate: "25" }));
+    assert_eq!(typed_rate["values"][&rate], "25");
+    assert_eq!(
+        amount(&typed_rate["values"], &rt("txtPg2Pt4I41IncomeTaxDue")),
+        225_000.0,
+        "25% of 899,999 is 224,999.75"
+    );
+}
+
+/// Maintainer decisions (pre-2020 MCIT is 2% of gross; pre-2020 1702RT computed
+/// like BIR) on a draft stored before them: a 2019 return
+/// stored with item 40 at 25%, item 41 at 25% of item 39, item 42 at 0 and
+/// item 57 at 0 opens computed (30%, 30% of item 39, 2% of item 33 and
+/// item 35 times 30%) and says so item by item with the old and new
+/// amounts; its stored bytes are unchanged until it is saved, after which
+/// it opens without a notice. A return not yet subject to MCIT whose item
+/// 42 is cleared says so, never "2% is 0".
+#[test]
+fn p5_2_a_stored_2019_return_says_what_changed() {
+    setup();
+    let old = open_for(TIN, "1702RT", 2019, 0);
+    let mut draft = old["draft"].clone();
+    draft["deduction_method"] = json!("Itemized");
+    draft["schedule_2"]["rows"][0] =
+        json!({"description": "Seminar", "legal_basis": "RA 1", "amount": 100_001});
+    let filled = typed(
+        "1702RT",
+        &draft,
+        json!({ rt("txtPg2Pt4I27Sales"): "1000000" }),
+    );
+    let id = save("1702RT", &filled["draft"])["id"].as_i64().unwrap();
+    let mut stored: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    // As the code before maintainer decision (pre-2020 1702RT computed like
+    // BIR) and maintainer decision (pre-2020 MCIT is 2% of gross) stored it.
+    stored["part_iv"]["item_40_income_tax_rate_percent"] = json!(25);
+    stored["part_iv"]["item_41_normal_income_tax_due"] = json!(225_000);
+    stored["part_iv"]["item_42_mcit_due"] = json!(0);
+    stored["part_v"]["item_57_special_allowable_deductions_tax_effect"] = json!(0);
+    let bytes = stored.to_string();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&bytes, &id.to_string()],
+    );
+    let reopened = open_for(TIN, "1702RT", 2019, 0);
+    assert_eq!(raw_row(id).1, bytes, "opening changes no stored byte");
+    let said = messages_of(&reopened);
+    for expected in [
+        rows_annual_corporate::rt_rate_notice_text(30, 25),
+        rows_annual_corporate::rt_item_41_notice_text(270_000, 225_000),
+        rows_annual_corporate::rt_item_42_notice_text(20_000, 0),
+        rows_annual_corporate::rt_item_57_notice_text(30_000, 0),
+    ] {
+        assert!(said.contains(&expected), "{expected}\n{said:#?}");
+    }
+    assert_eq!(
+        rows_annual_corporate::rt_rate_notice_text(30, 25),
+        "Item 40 is now 30% for years before 2020; this return held 25%. Check the tax due before you file."
+    );
+    save("1702RT", &reopened["draft"]);
+    let again = messages_of(&open_for(TIN, "1702RT", 2019, 0));
+    assert!(
+        again.iter().all(|m| !m.contains("for years before 2020")),
+        "{again:#?}"
+    );
+    // Not yet subject to MCIT (incorporated 2017): item 42 cleared.
+    let mut young: Value = serde_json::from_str(&raw_row(id).1).unwrap();
+    young["incorporation_date"] = json!({"year": 2017, "month": 6, "day": 30});
+    young["part_iv"]["item_42_mcit_due"] = json!(5_000);
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&young.to_string(), &id.to_string()],
+    );
+    let said = messages_of(&open_for(TIN, "1702RT", 2019, 0));
+    let not_yet = rows_annual_corporate::rt_item_42_not_yet_notice_text(5_000);
+    assert_eq!(
+        not_yet,
+        "Not yet subject to MCIT (fewer than four years after incorporation); this return held 5,000."
+    );
+    assert!(said.contains(&not_yet), "{said:#?}");
+    assert!(
+        said.iter()
+            .all(|m| !m.contains("2% of gross income (item 33) is 0"))
+    );
+    // No incorporation date recorded: MCIT cannot be applied,
+    // and the notice gives no four-year reason.
+    let mut undated = young.clone();
+    undated["incorporation_date"] = Value::Null;
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&undated.to_string(), &id.to_string()],
+    );
+    let said = messages_of(&open_for(TIN, "1702RT", 2019, 0));
+    let no_date = rows_annual_corporate::rt_item_42_no_date_notice_text(5_000);
+    assert_eq!(
+        no_date,
+        "Item 42 is cleared: no incorporation date is recorded, so MCIT can't be applied; this return held 5,000."
+    );
+    assert!(said.contains(&no_date), "{said:#?}");
+    assert!(said.iter().all(|m| !m.contains("four years")), "{said:#?}");
 }

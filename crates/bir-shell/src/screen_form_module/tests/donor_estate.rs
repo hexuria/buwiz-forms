@@ -1581,3 +1581,305 @@ fn pr10_an_untick_of_an_unshown_frequency_writes_nothing() {
         ));
     }
 }
+
+/// Maintainer decision (two-decimal amounts of any size pass): 1800's item 17A
+/// takes 8816764.47 and shows it as held,
+/// on the fill, on Check (which no longer refuses it) and after the return
+/// is saved and opened again; Check names no amount box for it.
+#[test]
+fn p4_1_1800_item_17a_shows_and_checks_large_amounts() {
+    setup();
+    let key = "frm1800v2018:TaxCredit17A";
+    const REFUSED: &str =
+        "Enter a non-negative amount in pesos and centavos below 1,000,000,000,000.";
+    for (typed, shown, held) in [
+        ("8816764.47", "8,816,764.47", 8_816_764.47),
+        ("1234567890.12", "1,234,567,890.12", 1_234_567_890.12),
+    ] {
+        let opened = open("1800", 1);
+        let filled = fill("1800", &opened["draft"], json!({ key: typed }));
+        assert_eq!(filled["rejected"], json!({}), "{typed}");
+        assert_eq!(filled["draft"]["prior_gift_payments"], held, "{typed}");
+        assert_eq!(filled["values"][key], shown, "{typed}: the fill");
+        let checked = call_async(
+            "screen_form_validate",
+            vec!["1800".into(), json(filled["draft"].clone())],
+        )
+        .unwrap();
+        assert_eq!(checked["values"][key], shown, "{typed}: Check");
+        let refused: Vec<&Value> = checked["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|error| error["message"] == REFUSED)
+            .collect();
+        assert!(refused.is_empty(), "{typed}: {refused:?}");
+        let saved = save("1800", &filled["draft"]);
+        let reopened = open("1800", saved["stored_period"].as_i64().unwrap());
+        assert_eq!(reopened["values"][key], shown, "{typed}: reopened");
+    }
+}
+
+// ------------------------------------------------------------ maintainer
+// decision (1800/1801 penalties run from the due date)
+
+/// Each form's penalty boxes (Surcharge, Interest, Compromise) and the
+/// draft fields of its item 1 date.
+fn penalty_boxes(code: &str) -> [String; 3] {
+    match code {
+        "1800" => ["Surcharge", "Interest", "Compromise"].map(|k| format!("frm1800v2018:{k}")),
+        _ => ["txtPen_Surcharge", "txtPen_Interest", "txtPen_Compromise"]
+            .map(|k| format!("frm1801v2018:{k}")),
+    }
+}
+
+/// A new return of `code` dated `on` (item 1) with tax due: 1800 a
+/// 1,000,000.00 donation, 1801 an estate of 1,500,000.00 with no standard
+/// deduction. The date is typed in item 1's three boxes, as the page sends
+/// its one date box.
+fn dated(code: &str, on: chrono::NaiveDate) -> Value {
+    use chrono::Datelike;
+    let opened = open(code, 1);
+    assert_eq!(
+        opened["draft"]["penalty_model_version"], 2,
+        "{code}: a new return is on P4-4"
+    );
+    let mut draft = opened["draft"].clone();
+    let keys = if code == "1800" {
+        draft["personal_properties"] =
+            json!([{"particulars": "Sedan", "fair_market_value": 1_000_000.0}]);
+        ["txtMonth", "txtDate", "txtYear"].map(|k| format!("frm1800v2018:{k}"))
+    } else {
+        draft["other_personal"] = json!([{
+            "particulars": "Car",
+            "value": {"exclusive": 1_000_000.0, "conjugal": 500_000.0},
+        }]);
+        draft["standard_deduction"] = json!(0.0);
+        ["txtDateMonth", "txtDateDay", "txtDateYear"].map(|k| format!("frm1801v2018:{k}"))
+    };
+    let filled = fill(
+        code,
+        &draft,
+        json!({
+            &keys[0]: format!("{:02}", on.month()),
+            &keys[1]: format!("{:02}", on.day()),
+            &keys[2]: on.year().to_string(),
+        }),
+    );
+    assert_eq!(filled["rejected"], json!({}), "{code}");
+    filled
+}
+
+/// Maintainer decision (1800/1801 penalties run from the due date): a new 1800
+/// return is due 30 days after the donation and a
+/// new 1801 return one year after the death (the forms' guides), each moved
+/// to the next business day. Filed later, the return computes the 25%
+/// surcharge, 12% a year interest and the RMO 7-2015 compromise on its tax
+/// due (the oracles are those rates and the core's compromise table),
+/// locked as computed with one Edit; dated so that today is before its due
+/// date, it computes none.
+#[test]
+fn p4_4_new_returns_compute_penalties_from_their_due_date() {
+    use bir_core::penalties::PenaltyProfile;
+    use bir_core::penalties::compromise::lookup_compromise;
+    setup();
+    let today = bir_core::forms::penalty_items::today();
+    let cents = |value: f64| (value * 100.0).round() / 100.0;
+    for (code, late_on, due_of) in [
+        (
+            "1800",
+            today - chrono::Duration::days(200),
+            (|on: chrono::NaiveDate| on + chrono::Duration::days(30))
+                as fn(chrono::NaiveDate) -> chrono::NaiveDate,
+        ),
+        (
+            "1801",
+            today - chrono::Duration::days(800),
+            (|on: chrono::NaiveDate| on.checked_add_months(chrono::Months::new(12)).unwrap())
+                as fn(chrono::NaiveDate) -> chrono::NaiveDate,
+        ),
+    ] {
+        let boxes = penalty_boxes(code);
+        let late = dated(code, late_on);
+        let due = bir_core::forms::penalty_items::next_business_day(due_of(late_on));
+        assert_eq!(
+            late["draft"]["computed_penalties"]["inputs"]["due_date"],
+            json!(due.format("%Y-%m-%d").to_string()),
+            "{code}: measured from its due date"
+        );
+        let tax = late["draft"]["computed_penalties"]["inputs"]["basic_tax_due"]
+            .as_f64()
+            .unwrap();
+        assert!(tax > 0.0, "{code}");
+        let days = (today - due).num_days() as f64;
+        assert_eq!(
+            amount(&late["values"], &boxes[0]),
+            cents(tax * 0.25),
+            "{code}"
+        );
+        assert_eq!(
+            amount(&late["values"], &boxes[1]),
+            cents(tax * 0.12 * days / 365.0),
+            "{code}"
+        );
+        assert_eq!(
+            amount(&late["values"], &boxes[2]),
+            cents(lookup_compromise(tax, 0.0, PenaltyProfile::StandardFiling)),
+            "{code}"
+        );
+        let group = &late["penalties"][0];
+        assert_eq!(
+            (group["edited"].clone(), group["kept"].clone()),
+            (json!(false), json!(false)),
+            "{code}"
+        );
+        for key in &boxes {
+            assert_eq!(late["relocks"][key], penalties::LOCK, "{code} {key}");
+            assert_eq!(late["relock_notes"][key], NOTE_COMPUTED, "{code} {key}");
+        }
+        // Dated today, the return is not yet due.
+        let on_time = dated(code, today);
+        for key in &boxes {
+            assert_eq!(amount(&on_time["values"], key), 0.0, "{code} {key}");
+        }
+    }
+}
+
+/// `(code, fixture)`: 1800 and 1801 drafts as the code before maintainer
+/// decision (1800/1801 penalties run from the due date)
+/// serialized them (crates/bir-core at e86b1424, the profile of
+/// `install_profile`), on penalty model 1: one per form holding typed
+/// penalties as overrides (125.25, 0.00, 1,000.00), one holding none.
+const STORED_P4_4: &[(&str, &str)] = &[
+    ("1800", include_str!("fixtures/1800-kept-pre-p4-4.json")),
+    ("1800", include_str!("fixtures/1800-untyped-pre-p4-4.json")),
+    ("1801", include_str!("fixtures/1801-kept-pre-p4-4.json")),
+    ("1801", include_str!("fixtures/1801-untyped-pre-p4-4.json")),
+];
+
+/// Store a literal fixture as the app would have, by its own typed draft.
+fn store_p4_4(code: &str, fixture: &str) {
+    let AgentFormKind::Queueable(kind) = kind_of(code).unwrap() else {
+        unreachable!()
+    };
+    bir_core::with_queueable_kind!(kind, F => {
+        let typed: F = serde_json::from_str(fixture).unwrap();
+        assert_eq!(serde_json::to_string(&typed).unwrap(), fixture, "{code}: reads and writes back as stored");
+        let id = with_database(|db| db.save_queueable_draft(&typed).map_err(|e| HostError::new(e.to_string()))).unwrap();
+        assert_eq!(Some(id), typed.draft_id(), "{code}: the fixture's own row id");
+    });
+}
+
+/// The raw stored bytes of the row `draft` was opened from, looked up by
+/// the draft's own row id, its profile
+/// baseline (PR 0c, the row's last key, which a save records) set aside.
+fn stored_p4_4(draft: &Value) -> String {
+    let id = draft["id"].as_i64().expect("a stored return's row id");
+    let saved = raw_row(id).1;
+    match saved.find(",\"profile_baseline\":") {
+        Some(at) => format!("{}}}", &saved[..at]),
+        None => saved,
+    }
+}
+
+/// Maintainer decision (1800/1801 penalties run from the due date) on drafts
+/// stored before it: each opens and saves back byte
+/// for byte (nothing is computed on open); typed penalties show as held and
+/// stay through other edits; a draft holding none keeps its 0.00 locked as
+/// "Kept as entered before penalties were computed."; and "Use the computed
+/// amounts" (the three boxes blanked) puts the return on its due date, so
+/// the computed amounts file. Where that replaces typed amounts the host
+/// says so first (`removes`, which the page asks before it keeps), naming
+/// each typed item and amount; replacing the kept 0.00 asks nothing.
+#[test]
+fn p4_4_stored_returns_keep_their_penalties_until_edited() {
+    for (code, fixture) in STORED_P4_4 {
+        setup();
+        let fixture = fixture.trim_end();
+        store_p4_4(code, fixture);
+        let opened = open(code, 1);
+        assert_eq!(opened["draft"]["id"], 1, "{code}: the stored return opened");
+        assert_eq!(opened["draft"]["penalty_model_version"], 1, "{code}");
+        let boxes = penalty_boxes(code);
+        let typed = fixture.contains("\"penalty_overrides\":{\"surcharge\"");
+        let group = &opened["penalties"][0];
+        assert_eq!(group["kept"], true, "{code}: kept as entered");
+        assert_eq!(group["edited"], typed, "{code}");
+        let shown: Vec<f64> = boxes.iter().map(|k| amount(&opened["values"], k)).collect();
+        if typed {
+            assert_eq!(shown, [125.25, 0.0, 1_000.0], "{code}");
+        } else {
+            assert_eq!(shown, [0.0; 3], "{code}");
+            for key in &boxes {
+                assert_eq!(opened["locks"][key], rows_excise::KEPT_AS_ENTERED, "{code}");
+                assert_eq!(
+                    opened["lock_notes"][key], "Kept as entered before penalties were computed.",
+                    "{code}"
+                );
+            }
+            let refused = fill(code, &opened["draft"], json!({ &boxes[0]: "5" }));
+            assert_eq!(
+                refused["rejected"][&boxes[0]],
+                format!("`{}` is {}", boxes[0], rows_excise::KEPT_AS_ENTERED),
+                "{code}"
+            );
+        }
+        assert_eq!(
+            stored_p4_4(&opened["draft"]),
+            fixture,
+            "{code}: stored as given"
+        );
+        save(code, &opened["draft"]);
+        assert_eq!(
+            stored_p4_4(&opened["draft"]),
+            fixture,
+            "{code}: saved back byte for byte"
+        );
+        // An unrelated edit keeps what it holds, on its model.
+        let other_key = if *code == "1800" {
+            "frm1800v2018:TaxCredit17B"
+        } else {
+            "frm1801v2018:txtCredits_ForeignEst"
+        };
+        let other = fill(code, &opened["draft"], json!({ other_key: "1" }));
+        assert_eq!(other["draft"]["penalty_model_version"], 1, "{code}");
+        let kept: Vec<f64> = boxes.iter().map(|k| amount(&other["values"], k)).collect();
+        assert_eq!(kept, shown, "{code}: kept until edited");
+        // "Use the computed amounts" joins maintainer decision (1800/1801
+        // penalties run from the due date): the item 1 date is long past
+        // due, so the computed amounts are not zero.
+        let refs: Vec<&str> = boxes.iter().map(String::as_str).collect();
+        let blanks: Map<String, Value> = boxes.iter().map(|k| (k.clone(), json!(""))).collect();
+        let joined = fill_unlocked(code, &opened["draft"], Value::Object(blanks), &refs);
+        assert_eq!(joined["rejected"], json!({}), "{code}");
+        if typed {
+            let (a, c) = if *code == "1800" {
+                ("19A", "19C")
+            } else {
+                ("23A", "23C")
+            };
+            assert_eq!(
+                joined["removes"]["message"],
+                format!(
+                    "Using the computed amounts replaces the penalties you typed in item {a} (\u{20b1}125.25), item {c} (\u{20b1}1,000.00). Continue?"
+                ),
+                "{code}: asks first"
+            );
+            assert_eq!(joined["removes"]["done"], "Replaced the typed penalties");
+        } else {
+            assert!(
+                joined["removes"].is_null(),
+                "{code}: nothing typed to replace"
+            );
+        }
+        assert_eq!(
+            joined["draft"]["penalty_model_version"], 2,
+            "{code}: joined"
+        );
+        assert!(amount(&joined["values"], &boxes[0]) > 0.0, "{code}");
+        assert_eq!(joined["penalties"][0]["kept"], false, "{code}");
+        for key in &boxes {
+            assert_eq!(joined["relocks"][key], penalties::LOCK, "{code} {key}");
+        }
+    }
+}

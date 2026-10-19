@@ -53,15 +53,6 @@ const USER_CHOSEN: &[(&str, &str)] = &[
          `over_remittance`",
     ),
     (
-        "frm1702EX:txtPg2Pt4I49OtherTaxCrPmtAmt",
-        "Item 49 Other Tax Credits/Payments amount: the second of the two \
-         other-credit lines (items 48 and 49) the filer types; \
-         form_1702ex.rs keeps it as other_credits[1].amount, which the \
-         field map writes and total_credits sums into item 50, and \
-         html-frozen/1702ex-2018/writer-cells.json joins it at \"49 Other \
-         Tax Credits/Payments amount\", as it joins item 48's",
-    ),
-    (
         "frm1702RT:txtPg2Pt4I42MinimumCorporate",
         "Item 42 MCIT Due: rules/forms/1702rt-v2018c/calculations.json \
          1702rt-item42-mcit records the official computeP2Pt4I42 as \"Before \
@@ -69,16 +60,18 @@ const USER_CHOSEN: &[(&str, &str)] = &[
          the enabled value user-controlled except nonpositive net forces \
          zero\"; the page enables it once MCIT applies (enableMCITFields), and \
          form_1702rt.rs keeps it as part_iv.item_42_mcit_due, an entry \
-         form_1702rt_official.rs recompute only clears while the return is not \
-         subject to MCIT",
+         form_1702rt_official.rs recompute clears while the return is not \
+         subject to MCIT and, for a year before 2020, computes as 2% of item \
+         33 (decision P4-17)",
     ),
-    ("frm1702EX:txtPg3Pt6I17OthersEAmt", SCHEDULE_ROW_1702EX),
-    ("frm1702EX:txtPg3Pt6I17OthersFAmt", SCHEDULE_ROW_1702EX),
-    ("frm1702EX:txtPg3Pt6I17OthersGAmt", SCHEDULE_ROW_1702EX),
-    ("frm1702EX:txtPg3Pt6I17OthersHAmt", SCHEDULE_ROW_1702EX),
-    ("frm1702EX:txtPg3Pt6S2I2Amount", SCHEDULE_ROW_1702EX),
-    ("frm1702EX:txtPg3Pt6S2I3Amount", SCHEDULE_ROW_1702EX),
 ];
+// Maintainer decision (1702EX shut rows locked like 1702MX) (2026-10-19):
+// 1702EX item 49, Schedule 1 items 17e-17h and
+// Schedule 2 rows 2-3 are no longer listed here. The official page keeps
+// them shut at load (rules/forms/1702ex-v2018c/fixtures/
+// runtime-control-inventory-v796.json: disabled), as it keeps 1702MX's
+// others rows, so their amounts stay computed as fields.json marks them and
+// the page locks the rows (screen_form_module rows_annual_corporate.rs).
 
 /// Amount boxes the rules corpus marks computed although the official page
 /// leaves them open for the filer to type (the corpus is read only, see
@@ -277,15 +270,6 @@ const FILER_TYPED: &[(&str, &str)] = &[
         "Part IV item 2B Less: Non-Taxable/Exempt Compensation: an input of rules/forms/1701ms-v2024/calculations.json 1701ms-part4a-item3 ('Item 3 = gross compensation - non-taxable compensation.'), a tracked rule record of the untracked official HTA runtime; form_1701ms.rs keeps non_taxable_compensation as entered while Schedule A (Part IV.A) is open and clears it when Schedule A closes",
     ),
 ];
-
-const SCHEDULE_ROW_1702EX: &str = "1702EX Schedule 1 items 17e-17h and Schedule 2 rows 2-3: \
-     the amount of a row whose description (and legal basis) the filer types \
-     and the probe binds; form_1702ex.rs keeps it as that row's amount \
-     (other_deductions / special_rows), which the field map writes and the \
-     schedule total sums. rules/forms/1702ex-v2018c/fields.json marks it \
-     computed with no calculation in calculations.json; the official page \
-     keeps the row shut at load (runtime-control-inventory-v796.json) with \
-     its description";
 
 const EXCESS_MCIT_1702RT: &str = "1702RT Schedule IV column C (Excess MCIT over \
      Normal Income Tax), rows 2 and 3: form_1702rt_official.rs recompute sets \
@@ -948,6 +932,21 @@ const GATED_ENTRY: &[(&str, &str)] = &[
         "Item 42 MCIT Due: an entry (see USER_CHOSEN) that \
          form_1702rt_official.rs recompute clears while the return is not \
          subject to MCIT, which the taxable year decides",
+    ),
+    (
+        "frm1702RT:Pg2Pt4I40IncomeTaxRate",
+        "Item 40 Income Tax Rate: the filer's entry from 2020; for a taxable \
+         year before 2020 form_1702rt_official.rs recompute sets it to 30% \
+         (decision P5-2, calculations.json 1702rt-item41-rate-tax), which \
+         the taxable year decides and the page locks",
+    ),
+    (
+        "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+        "Part V Item 57: the filer's entry from 2020; for a taxable year \
+         before 2020 form_1702rt_official.rs recompute sets it to item 35 \
+         times 30% (decision P5-2, calculations.json \
+         1702rt-item57-special-tax), which the taxable year decides and the \
+         page locks",
     ),
     ("frm1702RT:txtPg2Pt4I54C2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg3Sc1I17iC2", RT_ADD_MORE_LINE),

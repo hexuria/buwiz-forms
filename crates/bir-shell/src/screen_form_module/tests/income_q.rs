@@ -1814,3 +1814,182 @@ fn form_1702q_a_batch_that_opens_item_15_takes_it() {
     assert_eq!(batch["rejected"], json!({}), "{}", batch["rejected"]);
     assert_eq!(amount(&batch["values"], "frm1702q:txtTax15"), 1_000.0);
 }
+
+/// Maintainer decisions (kept note over held amounts; kept note on every kept
+/// group) on 1701Q: the stored base-era draft keeps its
+/// penalty column as entered (items 64A and 66A typed 125.00 and 1,000.00,
+/// 65A 0.00),
+/// locked with Edit penalties, and the host lists all three boxes in
+/// `notes_always`, so the page says "Kept as entered before penalties were
+/// computed." under them over the typed amount and over 0.00 alike
+/// (tools/test_form_decisions_round_3.mjs draws it).
+#[test]
+fn form_1701q_kept_column_says_so_over_its_amounts() {
+    use bir_core::forms::form_1701q::Form1701QDraft;
+    setup();
+    let typed: Form1701QDraft = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    with_database(|db| {
+        db.save_queueable_draft(&typed)
+            .map(|_| ())
+            .map_err(|e| HostError::new(e.to_string()))
+    })
+    .unwrap();
+    let opened = open(Q, 1);
+    let keys = ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"];
+    let shown: Vec<&str> = keys
+        .iter()
+        .map(|key| opened["values"][*key].as_str().unwrap())
+        .collect();
+    assert_eq!(shown, ["125.00", "0.00", "1,000.00"]);
+    let group = opened["penalties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["keys"][0] == keys[0])
+        .unwrap();
+    assert_eq!(
+        (group["kept"].clone(), group["edited"].clone()),
+        (json!(true), json!(false))
+    );
+    let noted = strings(&opened["notes_always"]);
+    for key in keys {
+        assert!(noted.contains(key), "{key} is listed");
+        assert_eq!(
+            opened["lock_notes"][key],
+            "Kept as entered before penalties were computed."
+        );
+    }
+}
+
+/// 1701Q drafts stored before the penalty model carry no
+/// `penalty` / `spouse_penalty` key. The filer's column (64A 125.00, 65A
+/// 0.00, 66A 1,000.00) and, on a joint return, the spouse's (64B 125.00,
+/// 65B and 66B 0.00) are kept and on the return: each box is locked as
+/// kept with Edit penalties (the group `applies`), is listed in
+/// `notes_always` with the kept note over its amount and over 0.00, the row
+/// keeps its bytes on open, and the filed values are the stored ones.
+#[test]
+fn form_1701q_keyless_kept_columns_say_so_and_offer_edit() {
+    use bir_core::forms::form_1701q::{Form1701QDraft, Form1701QParty};
+    setup();
+    let mut keyless: Value = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    let fields = keyless.as_object_mut().unwrap();
+    fields.remove("penalty");
+    fields.remove("spouse_penalty");
+    // A joint return with the spouse's 64B typed, as the code before the
+    // model computed and stored it: still no penalty keys.
+    let mut legacy: Form1701QDraft = serde_json::from_value(keyless).unwrap();
+    legacy.has_spouse = true;
+    legacy.set_amount(64, Form1701QParty::Spouse, Some(125.0));
+    legacy.recompute();
+    let keyless = serde_json::to_value(&legacy).unwrap();
+    assert!(keyless.get("penalty").is_none() && keyless.get("spouse_penalty").is_none());
+    let bytes = serde_json::to_string(&legacy).unwrap();
+    let filed = field_map(Q, &keyless);
+    assert_eq!(filed["frm1701q:txt64A"], "125.00");
+    assert_eq!(filed["frm1701q:txt64B"], "125.00");
+    let opened = open(Q, 1);
+    let id = save(Q, &opened["draft"])["id"].as_i64().unwrap();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&bytes, &id.to_string()],
+    );
+    let opened = open(Q, 1);
+    assert_eq!(raw_row(id).1, bytes, "opening changes no stored byte");
+    assert_eq!(field_map(Q, &opened["draft"]), filed, "files what it holds");
+    let noted = strings(&opened["notes_always"]);
+    for (keys, shown) in [
+        (
+            ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"],
+            ["125.00", "0.00", "1,000.00"],
+        ),
+        (
+            ["frm1701q:txt64B", "frm1701q:txt65B", "frm1701q:txt66B"],
+            ["125.00", "0.00", "0.00"],
+        ),
+    ] {
+        let group = opened["penalties"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["keys"][0] == keys[0])
+            .unwrap();
+        assert_eq!(
+            (
+                group["kept"].clone(),
+                group["applies"].clone(),
+                group["edited"].clone()
+            ),
+            (json!(true), json!(true), json!(false)),
+            "{}: kept, on the return, Edit offered",
+            keys[0]
+        );
+        for (key, value) in keys.iter().zip(shown) {
+            assert_eq!(opened["values"][*key], value, "{key}");
+            assert_eq!(
+                opened["locks"][*key],
+                rows_income_q::KEPT_AS_ENTERED,
+                "{key}"
+            );
+            assert_eq!(
+                opened["lock_notes"][*key], "Kept as entered before penalties were computed.",
+                "{key}"
+            );
+            assert!(noted.contains(*key), "{key} is listed");
+        }
+    }
+}
+
+/// after Edit penalties, a keyless 1701Q takes typed
+/// penalties in the filer's column (64A-66A) and the spouse's (64B-66B):
+/// make_room gives the column its state, the amounts become its overrides
+/// and file; opening the stored row first changes none of its bytes.
+#[test]
+fn form_1701q_keyless_columns_take_typed_penalties() {
+    use bir_core::forms::form_1701q::{Form1701QDraft, Form1701QParty};
+    setup();
+    let mut keyless: Value = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    let fields = keyless.as_object_mut().unwrap();
+    fields.remove("penalty");
+    fields.remove("spouse_penalty");
+    let mut legacy: Form1701QDraft = serde_json::from_value(keyless).unwrap();
+    legacy.has_spouse = true;
+    legacy.set_amount(64, Form1701QParty::Spouse, Some(125.0));
+    legacy.recompute();
+    let bytes = serde_json::to_string(&legacy).unwrap();
+    assert!(!bytes.contains("\"penalty\""), "keyless");
+    let opened = open(Q, 1);
+    let id = save(Q, &opened["draft"])["id"].as_i64().unwrap();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&bytes, &id.to_string()],
+    );
+    let opened = open(Q, 1);
+    assert_eq!(raw_row(id).1, bytes, "opening changes no stored byte");
+    for (keys, typed) in [
+        (
+            ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"],
+            ["300", "20", "1500"],
+        ),
+        (
+            ["frm1701q:txt64B", "frm1701q:txt65B", "frm1701q:txt66B"],
+            ["200", "10", "500"],
+        ),
+    ] {
+        let edits: Map<String, Value> = keys
+            .iter()
+            .zip(typed)
+            .map(|(key, value)| (key.to_string(), json!(value)))
+            .collect();
+        let filled = fill_unlocked(Q, &opened["draft"], Value::Object(edits), &keys);
+        assert_eq!(filled["rejected"], json!({}), "{}", keys[0]);
+        let files = field_map(Q, &filled["draft"]);
+        for (key, value) in keys.iter().zip(typed) {
+            assert_eq!(
+                agent::parse_amount(&files[*key]),
+                agent::parse_amount(value),
+                "{key} files what was typed"
+            );
+        }
+    }
+}

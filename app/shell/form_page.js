@@ -472,6 +472,9 @@ export class FormPageActions {
     s.options = r.options || {};
     s.locks = r.locks;
     s.lockNotes = r.lock_notes || {};
+    // Boxes whose lock note shows whatever they hold (the host's
+    // `notes_always`: a kept penalty group's 0.00 too).
+    s.notesAlways = new Set(r.notes_always || []);
     s.profile = new Set(r.profile || []);
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
@@ -679,7 +682,8 @@ export class FormPageActions {
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
-      keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
+      it.from ? s.values[it.from.k] ?? "" : null,
+      keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
     ]);
   }
 
@@ -896,6 +900,7 @@ export class FormPageActions {
     if (r.pools) s.poolTexts = r.pools;
     // Locks this fill opened or shut (a folded item, a box an answer shuts)
     // take effect at once, not on the next opening.
+    if (Array.isArray(r.notes_always)) s.notesAlways = new Set(r.notes_always);
     for (const [k, lock] of Object.entries(r.relocks || {})) {
       s.lockNotes ||= {};
       if (lock == null) {
@@ -1180,6 +1185,7 @@ export class FormPageActions {
         s.draft = f.draft;
         s.values = this.shown(f.values);
         s.options = f.options || {};
+        if (Array.isArray(f.notes_always)) s.notesAlways = new Set(f.notes_always);
       } catch (e) {
         this.app.toast(message(e), cx, "triangle-alert");
       }
@@ -1305,6 +1311,7 @@ export class FormPageActions {
         options: s.options,
         locks: s.locks,
         lockNotes: s.lockNotes,
+        notesAlways: s.notesAlways,
         blank: s.blank,
         needs: s.needs,
         whys: s.whys,
@@ -1494,6 +1501,9 @@ export class FormPageActions {
    * another answer turns off) says it there instead; a computed amount shows
    * 0.00, never blank. A box another answer turns off that the form also
    * computes keeps its "Needs" tag and says "Computed by the form." too.
+   * A box the host lists in `notes_always` says its note whatever it shows
+   * (a kept penalty group's 0.00: "Kept as entered before penalties were
+   * computed.").
    */
   lockNotesFor(it) {
     const s = this.state;
@@ -1508,6 +1518,7 @@ export class FormPageActions {
       if (this.isOff(k) && this.isComputedBox(k)) add("Computed by the form.");
       return Boolean(this.reasonFor(k) || this.isOff(k));
     };
+    const always = (k) => Boolean(s.notesAlways?.has(k));
     const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
     const blankText = (k, t) => {
       const v = String(s.values[k] ?? "").trim();
@@ -1520,7 +1531,7 @@ export class FormPageActions {
         row.forEach((k, c) => {
           const col = it.cols[c];
           if (col.t === "hidden" || !shut(k, col.c) || waits(k)) return;
-          if (col.t === "radio" || col.t === "chk" ? !ticked(k) : blankText(k, col.t)) note(k);
+          if (always(k) || (col.t === "radio" || col.t === "chk" ? !ticked(k) : blankText(k, col.t))) note(k);
         }),
       );
       return notes;
@@ -1532,7 +1543,7 @@ export class FormPageActions {
     }
     for (const f of fs) {
       if (f.t === "radio" || f.t === "hidden" || !shut(f.k, f.c) || waits(f.k)) continue;
-      if (f.t === "chk" ? !ticked(f.k) : blankText(f.k, f.t)) note(f.k);
+      if (always(f.k) || (f.t === "chk" ? !ticked(f.k) : blankText(f.k, f.t))) note(f.k);
     }
     return notes;
   }
@@ -1603,14 +1614,38 @@ export class FormPageActions {
     cx.notify();
   }
 
+  /**
+   * "Use it" on an item's `from` hint (1701 Part VIII item 6, decisions
+   * maintainer decision (1701 item 6 offers Part VII item 8; Use it rounds to
+   * whole pesos): the whole-peso amount the hint shows goes into the box
+   * it fills through the ordinary fill, as if typed there; the host keeps
+   * or refuses it as it would a typed amount.
+   */
+  useFrom(from, cx) {
+    const s = this.state;
+    const pesos = wholePesosOf(s?.values[from.k]);
+    if (!s?.editable || this.isLocked(from.to) || !pesos) return;
+    const shown = formatMoney(String(pesos.amount), true);
+    s.inputs.get(from.to)?.set_value(shown);
+    s.pending[from.to] = shown;
+    s.dirty = true;
+    this.unquiet([from.to]);
+    this.flush(cx);
+  }
+
   /** Use the computed amounts: the group's overrides are cleared. */
   usePenaltyComputed(group, cx) {
     const s = this.state;
     // A column kept as entered before penalties were computed (1701Q, 1701,
-    // the excise returns stored before decision D8) goes to the computed
-    // amounts the same way. The blanks are sent while the group is still
-    // open, so the host takes them (a kept column is not `edited`);
-    // replacing typed amounts asks first (the host's `removes`).
+    // the excise returns stored before maintainer decision (excise penalties
+    // run from the typed date), 1800 and 1801 stored
+    // before maintainer decision (1800/1801 penalties run from the due date))
+    // goes to the computed amounts the same way. The
+    // blanks are sent while the group is still open, so the host takes them
+    // (a kept column is not `edited`); replacing typed amounts asks first
+    // on every one of these forms (the host's `removes`: `choose` flushes,
+    // and `flush` hands the reply to `holdRemoval`, which holds the fill
+    // until Continue, `confirmRemoval`).
     if (group.edited || group.kept) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     for (const k of group.keys) s.penaltyOpen.delete(k);
     this.refreshRows();
@@ -2189,7 +2224,8 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
   } else if (locked) {
-    // A computed amount (a penalty too, until Edit penalties) shows 0.00 for zero, never an empty box.
+    // A computed amount (a penalty too, until Edit penalties) shows 0.00 for
+    // zero, never an empty box.
     const shown = f.t === "money" ? formatMoney(value || (ui.isComputedBox(f.k) || ui.penaltyGroupOf(f.k) ? "0" : ""), f.w) : f.t === "date" ? shownDate(value) : value;
     // Locked and blank only with a reason: what it waits for.
     const hint = !shown ? ui.reasonFor(f.k) : "";
@@ -2232,6 +2268,47 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const cutWords = Boolean(f.pool && f.pool.write.length > 1);
   if (slots && fitsBoxes(text, slots, cutWords)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots, cutWords).map((line) => line.trimEnd()), slots));
   return wrap;
+}
+
+/**
+ * What an amount box shows, in whole pesos rounded half up (Math.round, as
+ * the official helpers round), and whether that dropped centavos; `null`
+ * for a blank, zero or unreadable box.
+ */
+export function wholePesosOf(text) {
+  const n = Number(String(text ?? "").replace(/[₱,\s]/g, ""));
+  if (String(text ?? "").trim() === "" || !Number.isFinite(n)) return null;
+  const amount = Math.round(n);
+  if (amount === 0) return null;
+  return { amount, rounded: amount !== n };
+}
+
+/**
+ * An item's `from` hint (1701 Part VIII item 6, maintainer decisions (1701 item
+ * 6 offers Part VII item 8;
+ * Use it rounds to whole pesos)): what the item it comes from holds, in whole pesos (item 6 takes
+ * whole pesos; a rounded amount says so), and "Use it", which fills this
+ * item's box with it. Only while the box takes typing and the other item
+ * holds an amount; it never fills by itself.
+ */
+function fromHint(cx, ui, it, id) {
+  const s = ui.state;
+  const from = it.from;
+  if (!from || !s.editable || ui.isLocked(from.to) || !s.inputs.has(from.to)) return [];
+  const pesos = wholePesosOf(s.values[from.k]);
+  if (!pesos) return [];
+  const amount = `${formatMoney(String(pesos.amount), true)}${pesos.rounded ? " (rounded to whole pesos)" : ""}`;
+  return [
+    div()
+      .id(`fp-from-${id}`)
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[2])
+      .mt(SPACE[1])
+      .child(Text(cx, "meta", `${from.l}: ₱${amount}`, "fg3"))
+      .child(AppButton(cx, `fp-from-use-${id}`, "Use it", { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.useFrom(from, cx) })),
+  ];
 }
 
 /** Rows of character boxes, one character each, as the paper prints them. */
@@ -2880,6 +2957,8 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .child(label)
         .children(needs)
         .child(controls)
+        // What another item holds, offered for this one (`from`).
+        .children(fromHint(cx, ui, it, id))
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
         // Reserved 18 px validation line, present with or without a message.

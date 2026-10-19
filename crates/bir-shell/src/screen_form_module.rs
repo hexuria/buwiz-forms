@@ -360,6 +360,8 @@ fn schema() -> &'static [Value] {
             combs::apply_combs(form, &code);
             // 1701A's item 9, printed from `derived:` lines (PR 7).
             rows_annual_individual::mark_pools(form, &code);
+            // 1701 Part VIII item 6's hint from Part VII item 8 (P4-10).
+            rows_annual_individual::mark_from(form, &code);
         }
         forms
     })
@@ -1547,13 +1549,21 @@ fn finish<F: QueueableForm>(
     profile: &TaxpayerProfile,
     mut draft: F,
 ) -> Result<Value, String> {
+    // A stored 1702RT's items 40, 41, 42 and 57, which this compute may
+    // change (maintainer decisions: pre-2020 MCIT is 2% of gross; pre-2020
+    // 1702RT computed like BIR).
+    let stored = (F::FORM_CODE == "1702RT")
+        .then(|| serde_json::to_value(&draft).ok())
+        .flatten();
     if !F::penalty_items().is_empty() {
         draft.apply_penalty_profile(profile, &db.get_deadline_overrides());
         if draft.lifecycle().is_editable() {
             draft.compute();
         }
     }
-    serde_json::to_value(draft).map_err(|error| error.to_string())
+    let mut opened = serde_json::to_value(draft).map_err(|error| error.to_string())?;
+    rows_annual_corporate::mark_pre_2020_held(&mut opened, stored.as_ref());
+    Ok(opened)
 }
 
 fn month_or(period: u8, fallback: u8) -> u8 {
@@ -2956,7 +2966,8 @@ const NOTE_NOT_YET: &str = "Can't be filled on this page yet.";
 /// A box the official page keeps shut from load (PR 7: 1701 Part VIII
 /// column B, probe.rs `SHUT_ON_OFFICIAL_PAGE`).
 const NOTE_SHUT: &str = "The official form keeps this box shut; it files as 0.00.";
-/// 1701Q's (PR 5) and 1701's (PR 7) penalties kept as the filer entered them.
+/// 1701Q's (PR 5), 1701's (PR 7), the excise returns' (PR 11) and 1800's and
+/// 1801's (P4-4) penalties kept as the filer entered them.
 const NOTE_KEPT: &str = "Kept as entered before penalties were computed.";
 /// Only for a box a form group is assigned to open (the pinned list).
 const NOTE_ASSIGNED: &str = "Can't be filled on this page yet. It will be added for this form.";
@@ -2993,9 +3004,27 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
     }
 }
 
+/// Each module's "kept as entered" lock reason and the note it shows, one
+/// entry per module constant: `lock_note` looks a reason up
+/// here by the constant itself, so a module rewording its constant keeps
+/// its note. A test fails when a module declares a `KEPT_AS_ENTERED` the
+/// table lacks.
+const KEPT_NOTES: [(&str, &str, &str); 3] = [
+    ("rows_income_q", rows_income_q::KEPT_AS_ENTERED, NOTE_KEPT),
+    (
+        "rows_annual_individual",
+        rows_annual_individual::KEPT_AS_ENTERED,
+        NOTE_KEPT,
+    ),
+    ("rows_excise", rows_excise::KEPT_AS_ENTERED, NOTE_KEPT),
+];
+
 /// A lock's reason as a filer reads it (see the NOTE_* texts).
 fn lock_note(reason: &str) -> &'static str {
     use bir_core::forms::agent::Lock;
+    if let Some((_, _, note)) = KEPT_NOTES.iter().find(|(_, kept, _)| *kept == reason) {
+        return note;
+    }
     // 2551Q's 8% penalty reasons are already the filer's words.
     if reason == penalties::KEPT_ON_EIGHT_PERCENT {
         return penalties::KEPT_ON_EIGHT_PERCENT;
@@ -3011,10 +3040,6 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
-    } else if reason == rows_income_q::KEPT_AS_ENTERED
-        || reason == rows_annual_individual::KEPT_AS_ENTERED
-    {
-        NOTE_KEPT
     } else if reason.ends_with(bir_core::forms::agent::probe::SHUT_REASON) {
         NOTE_SHUT
     } else {
@@ -3022,6 +3047,26 @@ fn lock_note(reason: &str) -> &'static str {
         // cannot write: shut until the form's own work opens it.
         NOTE_NOT_YET
     }
+}
+
+/// Boxes whose lock note the page draws whatever the box shows; it draws
+/// every other lock note only while its box is blank. A kept penalty
+/// group's boxes say "Kept as entered before penalties were computed." over
+/// 0.00 too (maintainer decision (kept note over held amounts)), and 1702RT
+/// item 42, which always shows an
+/// amount, says why it is shut (maintainer decision (pre-2020 MCIT is 2% of gross)).
+fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
+    // A kept group off the return as it stands is locked as not on the
+    // return, not as kept: its note keeps the blank-only rule.
+    let mut keys: Vec<String> = penalties::computed_groups(kind)
+        .into_iter()
+        .filter(|group| {
+            penalties::kept(kind, group, draft) && penalties::applies(kind, group, draft)
+        })
+        .flat_map(|group| group.keys)
+        .collect();
+    keys.extend(rows_annual_corporate::notes_always(kind, draft));
+    keys
 }
 
 /// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
@@ -3035,7 +3080,18 @@ fn opened_json(
     checked: BTreeSet<String>,
 ) -> Result<Value, String> {
     let code = kind.form_code();
+    // What a stored 1702RT draft held in items 40, 41, 42 and 57 before
+    // opening recomputed them (maintainer decisions (pre-2020 MCIT is 2% of
+    // gross; pre-2020 1702RT computed like BIR); `finish` marks
+    // it), for the notices below.
+    let stored_pre_2020 = rows_annual_corporate::take_pre_2020_held(&mut draft);
     let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &checked)?;
+    if let Value::Array(list) = &mut errors {
+        list.extend(rows_annual_corporate::rt_pre_2020_notices(
+            stored_pre_2020,
+            &draft,
+        ));
+    }
     let mut from_profile_draft = from_profile;
     agent::compute(kind, &mut from_profile_draft)?;
     let from_profile = FromProfile {
@@ -3150,6 +3206,7 @@ fn opened_json(
         Map::new()
     };
     let penalty_groups = penalties::json(kind, &draft);
+    let noted = notes_always(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     let mark = sample.as_ref().map(|build| SampleMark {
         blank: blank.clone(),
@@ -3186,6 +3243,7 @@ fn opened_json(
         "options": options,
         "locks": locks,
         "lock_notes": lock_notes,
+        "notes_always": noted,
         "profile": profile,
         "profile_edit": profile_edit,
         "sample": sample.is_some(),
@@ -4024,9 +4082,11 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         mark
     });
     let penalty_groups = penalties::json(kind, &draft);
+    let noted = notes_always(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
-    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms; the integration merge chains PR 2's and
+    // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms;
+    // the integration merge chains PR 2's and
     // PR 3's below).
     let removes = rows_dst_pt_vat::removes(kind, &before, &draft, &edits)
         .or_else(|| rows_income_q::removes(kind, &before, &draft, &edits))
@@ -4066,6 +4126,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             .or(removes),
         "relocks": relocks,
         "relock_notes": relock_notes,
+        "notes_always": noted,
     })))
 }
 
@@ -4375,7 +4436,10 @@ fn apply_screen_edits_here(
         }
     }
     // "Use the computed amounts" on an excise return stored before decision
-    // D8 puts it on the typed due date (PR 11).
+    // maintainer decision (excise penalties run from the typed date) (PR 11),
+    // or a 1800 or 1801 return stored before maintainer decision (1800/1801
+    // penalties run from the due date),
+    // puts it on the typed due date.
     let groups: Vec<penalties::Group> =
         penalty_groups.into_iter().map(|(group, _)| group).collect();
     rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
@@ -8245,7 +8309,8 @@ mod tests {
     }
 
     /// PR 2 review: 1601FQ item 25 waits for Amended Return Yes (the tracked
-    /// inventory records it disabled at load, and recompute keeps it only on an amended return): off with its tag and
+    /// inventory records it disabled at load, and recompute keeps it only on an
+    /// amended return): off with its tag and
     /// refusing a typed amount on a return that is not amended, open once
     /// it is.
     #[test]
@@ -13869,6 +13934,14 @@ mod tests {
         // Boxes the page does not type, and what prints them.
         let printed_from: BTreeMap<&str, &str> = BTreeMap::from([
             (
+                "frm1702EX:txtPg3Pt6S2I2Description",
+                "a row BIR's program keeps shut (decision P4-8): refused here; a stored draft's text still prints",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I3Description",
+                "a row BIR's program keeps shut (decision P4-8): refused here; a stored draft's text still prints",
+            ),
+            (
                 "frm0619E:txtAddress2",
                 "the pooled address, typed in frm0619E:txtAddress",
             ),
@@ -14029,8 +14102,10 @@ mod tests {
                 whole += 1;
             }
         }
-        // Plus 2 for 1707 (PR 9): Schedules 2 and 3 row D, typed now.
-        assert_eq!(whole, 161, "boxes typed long and printed whole");
+        // Plus 2 for 1707 (PR 9): Schedules 2 and 3 row D, typed now; less
+        // 2 for 1702EX Schedule 2 rows 2 and 3, shut (maintainer decision
+        // (1702EX shut rows locked like 1702MX)).
+        assert_eq!(whole, 159, "boxes typed long and printed whole");
     }
 
     /// Rules page question 4, decided 2026-10-17, end to end on every pooled

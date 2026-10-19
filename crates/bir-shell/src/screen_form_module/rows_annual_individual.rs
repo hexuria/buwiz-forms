@@ -1386,6 +1386,45 @@ pub(super) fn mark_pools(form: &mut Value, code: &str) {
     }
 }
 
+/// 1701 Part VIII item 6 ("Add: Special Tax Credit, if any (From Part VII
+/// Item 8)"): the box the hint fills and the box it reads.
+pub(super) const PART_VIII_ITEM_6: &str = "frm1701:txtPg4IPart8_6A";
+pub(super) const PART_VII_ITEM_8: &str = "frm1701:txtPg4IPart7_8A";
+
+/// Maintainer decision (1701 item 6 offers Part VII item 8) (2026-10-19): 1701
+/// Part VIII item 6 stays typed (the
+/// tracked inventory records no copy from Part VII item 8, ee8aced2), and
+/// the page shows under it what Part VII item 8 holds, rounded half up to
+/// whole pesos and saying so (P5-13), with "Use it", which
+/// writes that amount into item 6 through the ordinary fill. Display and
+/// page only: nothing is copied by itself and no check changes. The item
+/// carries `from`: the box it reads (`k`), the box it fills (`to`) and how
+/// the hint names it (`l`).
+pub(super) fn mark_from(form: &mut Value, code: &str) {
+    if code != "1701" {
+        return;
+    }
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        let fills = item["f"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|field| field["k"] == PART_VIII_ITEM_6);
+        if fills {
+            item["from"] = json!({
+                "k": PART_VII_ITEM_8,
+                "to": PART_VIII_ITEM_6,
+                "l": "From Part VII item 8",
+            });
+        }
+    }
+}
+
 // ------------------------------------------------------------ penalties
 
 /// The lock of a 1701 penalty column that still holds the filer's own
@@ -1443,16 +1482,23 @@ pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
     }
 }
 
-/// A 1701 draft stored, or a save file imported, before the penalty model
-/// has no `penalty` / `spouse_penalty` object, so an amount typed after Edit
-/// penalties has no override to land in. Give the column its (default,
-/// version 0) state first: the typed amount becomes its override and the
-/// column joins the model as form_1701_official.rs `official_recompute`
-/// documents.
+/// A 1701 or 1701Q draft stored, or a save file imported, before the
+/// penalty model has no `penalty` / `spouse_penalty` object, so an amount
+/// typed after Edit penalties has no override to land in (round 4: a keyless
+/// 1701Q's typed 64A was refused). Give the column its (default, version 0)
+/// state first: the typed amount becomes its override and the column joins
+/// the model (form_1701_official.rs `official_recompute`; for 1701Q,
+/// form_1701q_official.rs's legacy-column join in its recompute, and
+/// penalty_items.rs `adopt_legacy_manual_penalties`). `penalties::applies` uses it on its trial copy too, so a
+/// kept keyless column reads as on the return; opening writes nothing.
 pub(super) fn make_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    if kind.form_code() != "1701" {
-        return;
+    if matches!(kind.form_code(), "1701" | "1701Q") {
+        give_state(kind, draft, key);
     }
+}
+
+/// Give `key`'s penalty column a default state when it has none.
+fn give_state(kind: AgentFormKind, draft: &mut Value, key: &str) {
     let Some(path) = super::penalties::path_of(kind, key) else {
         return;
     };

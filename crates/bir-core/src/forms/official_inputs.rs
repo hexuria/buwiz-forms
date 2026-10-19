@@ -110,8 +110,33 @@ pub fn js_ge(a: f64, b: f64) -> bool {
     a >= b
 }
 
+/// Whether `value` is an amount in pesos and centavos: at most two
+/// decimals. Decided from its decimal form (maintainer decision (two-decimal
+/// amounts of any size pass),
+/// 2026-10-19): the value is the stored double of a two-decimal amount when
+/// rounding it to centavos and back gives the same double, so 8816764.47
+/// and 1234567890.12 pass. The earlier float tolerance (`value * 100`
+/// within 1e-7 of a whole number) refused those, since a double's error at
+/// about 2,000,000 and up exceeds it. The tolerance is kept beside the
+/// decimal check on purpose: a double that is not the nearest one to its
+/// two-decimal amount (a sum such as 0.1 + 0.2, 0.30000000000000004, kept
+/// in a stored draft) fails the round trip but passed the tolerance, and
+/// no amount that passed before may be refused now.
 pub fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
+    if !value.is_finite() {
+        return false;
+    }
+    let scaled = value * 100.0;
+    let within_tolerance = (scaled - scaled.round()).abs() < 1e-7;
+    within_tolerance || cents_round_trip(value)
+}
+
+/// `value` read back from its own amount at centavos (`round(value * 100) /
+/// 100`) is `value` itself. Exact for every amount below 2^53 centavos,
+/// which covers the official 12 integer digits.
+fn cents_round_trip(value: f64) -> bool {
+    let centavos = (value * 100.0).round();
+    centavos.abs() < 9_007_199_254_740_992.0 && centavos / 100.0 == value
 }
 
 pub fn digits_only(value: &str) -> bool {
@@ -190,6 +215,121 @@ mod tests {
         assert!(!is_calendar_date(2025, 2, 29));
         assert!(numbers_only("12.5"));
         assert!(!numbers_only("1,2"));
+    }
+
+    /// The check before maintainer decision (two-decimal amounts of any size
+    /// pass), kept here as the oracle of what
+    /// passed then.
+    fn tolerance_only(value: f64) -> bool {
+        value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
+    }
+
+    /// A deterministic spread of centavo counts below 10^14 (amounts below
+    /// 1,000,000,000,000), weighted to every magnitude.
+    fn centavo_counts() -> Vec<u64> {
+        let mut out: Vec<u64> = (0..=100_000).collect();
+        let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+        for _ in 0..200_000 {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let digits = (seed >> 59) as u32 % 15;
+            let bound = 10u64.pow(digits.max(1));
+            out.push((seed >> 7) % bound);
+        }
+        out.push(99_999_999_999_999);
+        out.push(881_676_447);
+        out.push(123_456_789_012);
+        out
+    }
+
+    fn typed(centavos: u64) -> f64 {
+        format!("{}.{:02}", centavos / 100, centavos % 100)
+            .parse()
+            .unwrap()
+    }
+
+    /// maintainer decision (two-decimal amounts of any size pass): every
+    /// two-decimal amount below 1,000,000,000,000 passes,
+    /// decided from its decimal form; the ones the float tolerance refused
+    /// (about 2,000,000 and up) now pass too.
+    #[test]
+    fn every_two_decimal_amount_has_cent_precision() {
+        let mut newly = 0;
+        for centavos in centavo_counts() {
+            let value = typed(centavos);
+            assert!(has_cent_precision(value), "{value}");
+            assert!(has_cent_precision(-value), "-{value}");
+            if !tolerance_only(value) {
+                newly += 1;
+            }
+        }
+        assert!(newly > 1_000, "{newly} amounts the tolerance refused");
+        for (text, value) in [
+            ("8816764.47", 8_816_764.47),
+            ("1234567890.12", 1_234_567_890.12),
+        ] {
+            assert_eq!(text.parse::<f64>().unwrap(), value);
+            assert!(!tolerance_only(value), "{text} was refused before");
+            assert!(has_cent_precision(value), "{text}");
+        }
+        assert!(has_cent_precision(999_999_999_999.99));
+    }
+
+    /// maintainer decision (two-decimal amounts of any size pass): no value
+    /// that passed the earlier check is refused now. The
+    /// sample covers each two-decimal amount, its neighbouring doubles (as a
+    /// sum of amounts may land on), sums of amounts and arbitrary doubles.
+    #[test]
+    fn nothing_that_passed_before_is_refused_now() {
+        let mut values = Vec::new();
+        for centavos in centavo_counts().into_iter().step_by(7) {
+            let value = typed(centavos);
+            let mut up = value;
+            let mut down = value;
+            for _ in 0..4 {
+                up = up.next_up();
+                down = down.next_down();
+                values.extend([up, down]);
+            }
+            values.push(value + typed(centavos / 3));
+            values.push(value * 3.0);
+        }
+        values.extend([0.1 + 0.2, 1.1 + 2.2, 0.0, -0.0, 1e-9, 3.000_000_000_1]);
+        let mut seed: u64 = 42;
+        for _ in 0..100_000 {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            values.push(f64::from_bits(seed >> 2));
+        }
+        let mut passed = 0;
+        for value in values {
+            if tolerance_only(value) {
+                passed += 1;
+                assert!(has_cent_precision(value), "{value:?} passed before");
+            }
+        }
+        assert!(passed > 10_000, "{passed}");
+    }
+
+    /// More than two decimals, and what is not a number, stay refused.
+    #[test]
+    fn more_decimals_stay_refused() {
+        for text in [
+            "10.005",
+            "1.999",
+            "0.125",
+            "8816764.475",
+            "1234567890.125",
+            "0.001",
+        ] {
+            let value: f64 = text.parse().unwrap();
+            assert!(!has_cent_precision(value), "{text}");
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(!has_cent_precision(value));
+        }
     }
 }
 

@@ -2513,3 +2513,132 @@ fn form_1701_stored_draft_files_as_before() {
     assert!(changed.is_empty(), "{changed:?}");
     assert_eq!(now["frm1701:txtPg4IPart8_1A"], "0.00");
 }
+
+/// Maintainer decision (1701 item 6 offers Part VII item 8): 1701 Part VIII
+/// item 6 stays the filer's entry; its item
+/// carries the page's hint (`from`) naming Part VII item 8, whose amount the
+/// page shows under it in whole pesos with "Use it" (tools/test_form_decisions_round_3.mjs
+/// drives the page). Nothing is copied by itself: Part VII item 8's amount
+/// leaves item 6 as it was, and "Use it" sends that amount as shown through
+/// the ordinary fill, which takes it into item 6 and its totals. No other
+/// item of any form carries a hint.
+#[test]
+fn form_1701_part_viii_item_6_offers_part_vii_item_8() {
+    setup();
+    let (from, to) = (
+        rows_annual_individual::PART_VII_ITEM_8,
+        rows_annual_individual::PART_VIII_ITEM_6,
+    );
+    let hinted: Vec<(String, Value)> = AgentFormKind::all()
+        .into_iter()
+        .flat_map(|kind| {
+            let code = kind.form_code().to_string();
+            items(&code)
+                .into_iter()
+                .filter(|(_, item)| !item["from"].is_null())
+                .map(move |(_, item)| (code.clone(), item["from"].clone()))
+        })
+        .collect();
+    assert_eq!(
+        hinted,
+        vec![(
+            "1701".to_string(),
+            json!({ "k": from, "to": to, "l": "From Part VII item 8" })
+        )]
+    );
+    let (_, item) = items("1701")
+        .into_iter()
+        .find(|(_, item)| !item["from"].is_null())
+        .unwrap();
+    assert_eq!(item["no"], "6");
+    assert_eq!(item["f"][0]["k"], to);
+    let on = preview_1_return();
+    let typed = take("1701", &on, json!({ from: "1500" }));
+    assert_eq!(typed["values"][from], "1,500.00", "the hint's amount");
+    assert_eq!(
+        typed["values"][to], "0.00",
+        "item 6 is not filled by itself"
+    );
+    // "Use it": the page sends the hint's amount in whole pesos ("1,500").
+    let used = take("1701", &typed["draft"], json!({ to: "1,500" }));
+    assert_eq!(used["values"][to], "1,500.00");
+    assert_eq!(
+        amount(&used["values"], "frm1701:txtPg4IPart8_7A"),
+        amount(&used["values"], "frm1701:txtPg4IPart8_5A") + 1_500.0,
+        "item 7 is the sum of items 5 and 6"
+    );
+    // A Part VII item 8 with centavos (P5-13): the page rounds it half up to
+    // whole pesos before it sends it, which item 6 takes; the centavo amount
+    // itself is refused there, as any typed one is (column A takes whole
+    // pesos), so the page never sends it.
+    let cents = take("1701", &on, json!({ from: "1234.50" }));
+    let rounded = take("1701", &cents["draft"], json!({ to: "1,235" }));
+    assert_eq!(rounded["values"][to], "1,235.00");
+    let refused = fill("1701", &cents["draft"], json!({ to: "1,234.50" }));
+    assert_eq!(
+        refused["rejected"][to],
+        rows_annual_individual::whole_peso_refusal("6")
+    );
+}
+
+/// Maintainer decisions (kept note over held amounts; kept note on every kept
+/// group) on 1701: the draft stored before PR 7
+/// (`fixtures/1701-pre-pr7.json`: no penalty state, items 27-29 typed
+/// 125.00, 0.00 and 1,000.00) keeps its column as entered, locked as kept
+/// with Edit penalties, and the host lists its boxes in `notes_always`, so
+/// the page says "Kept as entered before penalties were computed." under
+/// them over the typed amounts and over 0.00 alike. Round 2 found the
+/// column read as not on the return (`penalties::applies` had no penalty
+/// state to try its overrides in); it is on the return now.
+#[test]
+fn form_1701_kept_column_says_so_over_its_amounts() {
+    use bir_core::forms::form_1701::Form1701Draft;
+    use bir_core::forms::queueable::QueueableForm;
+    setup();
+    let keys = [
+        "frm1701:txtPg1I27A",
+        "frm1701:txtPg1I28A",
+        "frm1701:txtPg1I29A",
+    ];
+    let stored: Form1701Draft =
+        serde_json::from_str(include_str!("fixtures/1701-pre-pr7.json")).unwrap();
+    let (tin, year, period) = (
+        stored.tin.clone(),
+        stored.taxable_year,
+        stored.period_column(),
+    );
+    with_database(|db| {
+        db.save_queueable_draft(&stored)
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .unwrap();
+    let opened = open_for(&tin, "1701", i64::from(year), period);
+    let shown: Vec<&str> = keys
+        .iter()
+        .map(|key| opened["values"][*key].as_str().unwrap())
+        .collect();
+    assert_eq!(shown, ["125.00", "0.00", "1,000.00"]);
+    let group = &opened["penalties"][0];
+    assert_eq!(
+        (
+            group["kept"].clone(),
+            group["edited"].clone(),
+            group["applies"].clone()
+        ),
+        (json!(true), json!(false), json!(true))
+    );
+    let noted = strings(&opened["notes_always"]);
+    for key in keys {
+        assert!(noted.contains(key), "{key} is listed");
+        assert_eq!(
+            opened["locks"][key],
+            rows_annual_individual::KEPT_AS_ENTERED,
+            "{key}"
+        );
+        assert_eq!(
+            opened["lock_notes"][key],
+            "Kept as entered before penalties were computed."
+        );
+    }
+}

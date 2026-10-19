@@ -199,7 +199,10 @@ impl Form1800Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            // Maintainer decision (1800/1801 penalties run from the due date):
+            // a new return's penalties run from its due date,
+            // 30 days after the donation date it carries (Item 1).
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             filing_year: year,
             open_ended_key,
@@ -712,9 +715,31 @@ impl Form1800Draft {
             ],
             state: penalty,
             basic_tax_due: "Item 18", |d| d.tax_payable,
+            // Maintainer decision (1800/1801 penalties run from the due date)
+            // (2026-10-19): the return is due within thirty
+            // (30) days after the donation (html-frozen/1800-2018/guide.html,
+            // "When and Where to File and Pay"), so the penalties run from
+            // that day, moved to the next business day on the app's
+            // deadline calendar.
+            typed_due_date: Some(|d: &Self| d.due_date()),
         )
     }
+
+    /// The day this return is due: 30 days after the donation date (Item 1),
+    /// or the next business day on the app's deadline calendar when that is
+    /// not one. `None` until Item 1 is a date.
+    pub fn due_date(&self) -> Option<NaiveDate> {
+        let due = self
+            .donation_date()?
+            .checked_add_days(chrono::Days::new(FORM_1800_DAYS_TO_FILE))?;
+        Some(super::penalty_items::next_business_day(due))
+    }
 }
+
+/// Days after the donation within which the return is filed
+/// (html-frozen/1800-2018/guide.html: "within thirty (30) days after the date
+/// the gift (donation) is made").
+pub const FORM_1800_DAYS_TO_FILE: u64 = 30;
 
 impl QueueableForm for Form1800Draft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
@@ -870,6 +895,124 @@ mod tests {
         d.validate_on(today()).into_iter().map(|(_, m)| m).collect()
     }
 
+    fn date(year: i32, month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(year, month, day).unwrap()
+    }
+
+    /// A return on the maintainer decision's (1800/1801 penalties run from the
+    /// due date) model (a new return), donated on `on`.
+    fn new_return(on: NaiveDate) -> Form1800Draft {
+        let mut d = sample();
+        d.penalty.penalty_model_version = crate::forms::penalty_items::TYPED_DUE_DATE_MODEL_VERSION;
+        d.donation_year = u16::try_from(chrono::Datelike::year(&on)).unwrap();
+        d.donation_month = u8::try_from(chrono::Datelike::month(&on)).unwrap();
+        d.donation_day = u8::try_from(chrono::Datelike::day(&on)).unwrap();
+        d
+    }
+
+    /// maintainer decision (1800/1801 penalties run from the due date): due 30
+    /// days after the donation, moved past a weekend to the
+    /// next business day; no due date until Item 1 is a date.
+    #[test]
+    fn due_thirty_days_after_the_donation() {
+        let due = |on| new_return(on).due_date();
+        assert_eq!(due(date(2025, 3, 10)), Some(date(2025, 4, 9)));
+        // Sunday 2025-03-30 and Saturday 2024-03-30 move to Monday.
+        assert_eq!(due(date(2025, 2, 28)), Some(date(2025, 3, 31)));
+        assert_eq!(due(date(2024, 2, 29)), Some(date(2024, 4, 1)));
+        // An official holiday (maintainer decision: roll past official
+        // holidays): 2026-04-09 is Araw
+        // ng Kagitingan, one of the app's seeded holidays, so a donation on
+        // 2026-03-10 is due Friday, April 10.
+        assert_eq!(due(date(2026, 3, 10)), Some(date(2026, 4, 10)));
+        // Maundy Thursday and Good Friday 2026 both move to Monday, April 6.
+        assert_eq!(due(date(2026, 3, 3)), Some(date(2026, 4, 6)));
+        assert_eq!(due(date(2026, 3, 4)), Some(date(2026, 4, 6)));
+        // Official holidays are known only for the years whose proclamation
+        // ships (2026 today); other years roll off weekends only until
+        // theirs is added (maintainer decision: ship 2026, add later years):
+        // Friday 2027-04-09 does not roll
+        // yet.
+        assert_eq!(due(date(2027, 3, 10)), Some(date(2027, 4, 9)));
+        let mut blank = sample();
+        (
+            blank.donation_month,
+            blank.donation_day,
+            blank.donation_year,
+        ) = (0, 0, 0);
+        assert_eq!(blank.due_date(), None);
+        let items = Form1800Draft::penalty_declaration();
+        assert_eq!(
+            items.due_date(&new_return(date(2025, 3, 10))),
+            Some(date(2025, 4, 9))
+        );
+    }
+
+    /// maintainer decision (1800/1801 penalties run from the due date) over a
+    /// holiday: the 2026-03-10 donation, filed on 2026-04-10
+    /// (the working day after Araw ng Kagitingan), is on time; a day later
+    /// it is late.
+    #[test]
+    fn a_return_filed_the_day_after_a_holiday_due_date_is_on_time() {
+        use crate::forms::penalty_items::with_clock;
+        let mut on_time = new_return(date(2026, 3, 10));
+        with_clock(date(2026, 4, 10), || on_time.recompute());
+        assert_eq!(
+            (on_time.surcharge, on_time.interest, on_time.compromise),
+            (0.0, 0.0, 0.0)
+        );
+        let mut late = new_return(date(2026, 3, 10));
+        with_clock(date(2026, 4, 13), || late.recompute());
+        assert!(late.surcharge > 0.0);
+    }
+
+    /// maintainer decision (1800/1801 penalties run from the due date): a late
+    /// return computes the 25% surcharge, 12% a year interest
+    /// and the compromise on Item 18; one filed on its due date computes
+    /// none; a return stored before maintainer decision (1800/1801 penalties
+    /// run from the due date) computes none until it joins.
+    #[test]
+    fn penalties_run_from_the_due_date() {
+        use crate::forms::penalty_items::{PENALTY_MODEL_VERSION, with_clock};
+        use crate::penalties::PenaltyProfile;
+        use crate::penalties::compromise::lookup_compromise;
+        let on = date(2026, 1, 5);
+        let due = date(2026, 2, 4);
+        let filed = date(2026, 3, 6);
+        let mut late = new_return(on);
+        with_clock(filed, || late.recompute());
+        let tax = late.tax_payable;
+        assert_eq!(tax, 15_000.0);
+        let days = (filed - due).num_days() as f64;
+        let cents = |value: f64| (value * 100.0).round() / 100.0;
+        assert_eq!(late.surcharge, cents(tax * 0.25));
+        assert_eq!(late.interest, cents(tax * 0.12 * days / 365.0));
+        assert_eq!(
+            late.compromise,
+            cents(lookup_compromise(tax, 0.0, PenaltyProfile::StandardFiling))
+        );
+        assert!(late.compromise > 0.0);
+        assert_eq!(
+            late.total_amount_payable,
+            cents(tax + late.surcharge + late.interest + late.compromise)
+        );
+        let mut on_time = new_return(on);
+        with_clock(due, || on_time.recompute());
+        assert_eq!(
+            (on_time.surcharge, on_time.interest, on_time.compromise),
+            (0.0, 0.0, 0.0)
+        );
+        assert_eq!(on_time.total_amount_payable, tax);
+        let mut stored = new_return(on);
+        stored.penalty.penalty_model_version = PENALTY_MODEL_VERSION;
+        with_clock(filed, || stored.recompute());
+        assert_eq!(
+            (stored.surcharge, stored.interest, stored.compromise),
+            (0.0, 0.0, 0.0)
+        );
+        assert_eq!(stored.penalty.computed_penalties, None);
+    }
+
     #[test]
     fn compute_chain_matches_the_official_page() {
         let d = sample();
@@ -878,6 +1021,41 @@ mod tests {
         assert_eq!(d.tax_due, 15_000.0);
         assert_eq!(d.total_amount_payable, 15_000.0);
         assert!(messages(&d).is_empty(), "{:?}", messages(&d));
+    }
+
+    /// Maintainer decision (two-decimal amounts of any size pass): Check takes
+    /// every two-decimal amount below
+    /// 1,000,000,000,000 in the money boxes, decided from the amount's
+    /// decimal form; 8816764.47 and 1234567890.12 were refused before.
+    #[test]
+    fn check_takes_large_two_decimal_amounts() {
+        const REFUSED: &str =
+            "Enter a non-negative amount in pesos and centavos below 1,000,000,000,000.";
+        for amount in [8_816_764.47, 1_234_567_890.12, 999_999_999_999.99] {
+            let mut d = sample();
+            d.prior_gift_payments = amount;
+            d.foreign_tax_paid = amount;
+            d.prior_net_gifts = amount;
+            d.personal_properties[0].fair_market_value = amount;
+            d.recompute();
+            assert_eq!(d.prior_gift_payments, amount);
+            let refused: Vec<_> = d
+                .validate_on(today())
+                .into_iter()
+                .filter(|(_, message)| message == REFUSED)
+                .collect();
+            assert!(refused.is_empty(), "{amount}: {refused:?}");
+        }
+        for amount in [10.005, 1_000_000_000_000.0] {
+            let mut d = sample();
+            d.prior_gift_payments = amount;
+            assert!(
+                d.validate_on(today())
+                    .iter()
+                    .any(|(field, message)| field == "prior_gift_payments" && message == REFUSED),
+                "{amount}"
+            );
+        }
     }
 
     #[test]

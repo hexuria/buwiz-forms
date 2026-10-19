@@ -789,6 +789,70 @@ fn pesos(amount: f64) -> String {
     )
 }
 
+/// The `(sentence, done)` of a batch that blanks a whole penalty group whose
+/// typed amounts (non-zero overrides) the computed ones then replace; `None`
+/// when it replaces nothing typed.
+fn replaced_penalties(
+    kind: AgentFormKind,
+    before: &Value,
+    after: &Value,
+    edits: &serde_json::Map<String, Value>,
+) -> Option<(String, String)> {
+    let mut replaced: Vec<String> = Vec::new();
+    for group in super::penalties::groups(kind) {
+        let blanked = group
+            .keys
+            .iter()
+            .all(|key| edits.get(key).is_some_and(|value| text(value).is_empty()));
+        if !blanked {
+            continue;
+        }
+        for key in &group.keys {
+            let Some(path) = super::penalties::path_of(kind, key) else {
+                continue;
+            };
+            let Some(typed) = before
+                .pointer(&path)
+                .and_then(Value::as_f64)
+                .filter(|amount| *amount != 0.0)
+            else {
+                continue;
+            };
+            if after.pointer(&path).is_none_or(Value::is_null) {
+                replaced.push(format!(
+                    "item {} (\u{20b1}{})",
+                    penalty_item(kind, key),
+                    pesos(typed)
+                ));
+            }
+        }
+    }
+    if replaced.is_empty() {
+        return None;
+    }
+    replaced.sort();
+    Some((
+        format!(
+            "Using the computed amounts replaces the penalties you typed in {}.",
+            replaced.join(", ")
+        ),
+        "Replaced the typed penalties".to_string(),
+    ))
+}
+
+/// The printed item of a penalty box: 1800's 19A-19C, 1801's 23A-23C.
+fn penalty_item(kind: AgentFormKind, key: &str) -> String {
+    let first = if kind.form_code() == "1800" { 19 } else { 23 };
+    let letter = if key.contains("Surcharge") {
+        'A'
+    } else if key.contains("Interest") {
+        'B'
+    } else {
+        'C'
+    };
+    format!("{first}{letter}")
+}
+
 /// The Amended Return boxes of each form (its group box too).
 fn amended_key(kind: AgentFormKind, key: &str) -> bool {
     match kind.form_code() {
@@ -900,6 +964,14 @@ pub(super) fn removes(
             ),
         };
         removed.push((sentence, "Cleared item 15D's frequency".to_string()));
+    }
+    // "Use the computed amounts" (maintainer decision (1800/1801 penalties run
+    // from the due date)): blanking a penalty group
+    // replaces the amounts the filer typed there, so it asks first, as the
+    // excise returns, 1701 and 1701Q do; a legacy draft's typed amounts are
+    // never replaced silently.
+    if let Some(sentence) = replaced_penalties(kind, before, after, edits) {
+        removed.push(sentence);
     }
     if removed.is_empty() {
         return None;

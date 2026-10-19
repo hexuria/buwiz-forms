@@ -88,6 +88,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_form_as_needed.mjs
     node tools/test_font_advances.mjs
     node --experimental-vm-modules tools/test_form_radio_untick.mjs
+    node --experimental-vm-modules tools/test_form_decisions_round_3.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check

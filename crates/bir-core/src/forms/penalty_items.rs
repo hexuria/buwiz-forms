@@ -26,7 +26,10 @@
 //! - **Typed trigger date (maintainer decision D8, 2026-10-18).** A form
 //!   whose penalties run from a date the filer types, not from the calendar
 //!   (the excise returns 2200A, 2200AN, 2200M, 2200P, 2200S and 2200T: the
-//!   removal date; 2200C: the 10th of the month after its Item 1 month),
+//!   removal date; 2200C: the 10th of the month after its Item 1 month;
+//!   maintainer decision (1800/1801 penalties run from the due date), 2026-10-19:
+//!   1800, 30 days after the donation, and 1801,
+//!   one year after the death, each moved to the next business day),
 //!   declares [`PenaltyItems::typed_due_date`]. It is measured from that
 //!   date once the draft is on [`TYPED_DUE_DATE_MODEL_VERSION`] (a new
 //!   return, or one that joins); a draft stored before computes nothing
@@ -276,6 +279,52 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
         },
         run,
     )
+}
+
+/// The calendar a typed due date moves on (maintainer decisions: a typed due
+/// date moves to the next working day, past weekends and official
+/// holidays): the weekends plus the official holidays the app ships, the
+/// `original_deadline` of each entry of
+/// `DeadlineResolver::seed_2026_holiday_overrides` (built once). 1800, 1801
+/// and 2200C read it through [`next_business_day`].
+///
+/// - Official holidays are known only for the years whose proclamation
+///   ships (2026 today); other years roll off weekends only until theirs is
+///   added in an app update (maintainer decision: ship the 2026 list now,
+///   add each year's proclamation later). The 2026 seed lacks Eid'l Fitr
+///   and Eid'l Adha, which are added when their proclamations are sourced.
+/// - It is not the stored deadline overrides (`Database::
+///   get_deadline_overrides`): those move only the calendar deadlines of the
+///   forms in their `affected_form_codes`, and a typed due date has no
+///   calendar deadline to move.
+/// - Known app issue, not changed here: the seed's own `adjusted_deadline`
+///   skips weekends only, so Maundy Thursday (2026-04-02) adjusts to Good
+///   Friday (2026-04-03), itself a holiday. This calendar uses the holiday
+///   dates, not those adjusted ones, so a typed due date on either day
+///   moves to Monday, 2026-04-06.
+pub fn deadline_calendar() -> &'static crate::calendar_rules::BusinessDayCalendar {
+    use crate::calendar_rules::{BusinessDayCalendar, DeadlineResolver, NonWorkingDay};
+    static CALENDAR: std::sync::OnceLock<BusinessDayCalendar> = std::sync::OnceLock::new();
+    CALENDAR.get_or_init(|| {
+        BusinessDayCalendar::with_non_working_days(
+            DeadlineResolver::seed_2026_holiday_overrides()
+                .into_iter()
+                .map(|holiday| {
+                    NonWorkingDay::regular_holiday(holiday.original_deadline, holiday.title)
+                })
+                .collect(),
+        )
+    })
+}
+
+/// `date`, or the next working day after it when it is not one, on
+/// [`deadline_calendar`] (weekends and the shipped official holidays): 1800
+/// and 1801 (maintainer decision (1800/1801 penalties run from the due date))
+/// and 2200C (maintainer decision: excise penalties run from the typed date)
+/// move their typed due dates with
+/// it.
+pub fn next_business_day(date: NaiveDate) -> NaiveDate {
+    deadline_calendar().adjust_to_next_business_day(date).0
 }
 
 /// The deadline `form_code`'s calendar resolves for `period`, with `overrides`.
