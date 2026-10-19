@@ -1562,6 +1562,23 @@ export class FormPageActions {
     cx.notify();
   }
 
+  /**
+   * "Use it" on an item's `from` hint (1701 Part VIII item 6, decision
+   * P4-10): the amount the hint shows goes into the box it fills through the
+   * ordinary fill, as if typed there; the host keeps or refuses it as it
+   * would a typed amount.
+   */
+  useFrom(from, cx) {
+    const s = this.state;
+    if (!s?.editable || this.isLocked(from.to)) return;
+    const shown = formatMoney(s.values[from.k] || "0", this.isWhole(from.to));
+    s.inputs.get(from.to)?.set_value(shown);
+    s.pending[from.to] = shown;
+    s.dirty = true;
+    this.unquiet([from.to]);
+    this.flush(cx);
+  }
+
   /** Use the computed amounts: the group's overrides are cleared. */
   usePenaltyComputed(group, cx) {
     const s = this.state;
@@ -2176,6 +2193,29 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const cutWords = Boolean(f.pool && f.pool.write.length > 1);
   if (slots && fitsBoxes(text, slots, cutWords)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots, cutWords).map((line) => line.trimEnd()), slots));
   return wrap;
+}
+
+/**
+ * An item's `from` hint (1701 Part VIII item 6, decision P4-10): what the
+ * item it comes from holds, and "Use it", which fills this item's box with
+ * that amount. Only while the box takes typing; it never fills by itself.
+ */
+function fromHint(cx, ui, it, id) {
+  const s = ui.state;
+  const from = it.from;
+  if (!from || !s.editable || ui.isLocked(from.to) || !s.inputs.has(from.to)) return [];
+  const amount = formatMoney(s.values[from.k] || "0", ui.isWhole(from.to));
+  return [
+    div()
+      .id(`fp-from-${id}`)
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[2])
+      .mt(SPACE[1])
+      .child(Text(cx, "meta", `${from.l}: ₱${amount}`, "fg3"))
+      .child(AppButton(cx, `fp-from-use-${id}`, "Use it", { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.useFrom(from, cx) })),
+  ];
 }
 
 /** Rows of character boxes, one character each, as the paper prints them. */
@@ -2810,6 +2850,8 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .child(label)
         .children(needs)
         .child(controls)
+        // What another item holds, offered for this one (`from`).
+        .children(fromHint(cx, ui, it, id))
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
         // Reserved 18 px validation line, present with or without a message.

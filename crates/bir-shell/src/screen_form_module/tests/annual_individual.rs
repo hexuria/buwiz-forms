@@ -2513,3 +2513,65 @@ fn form_1701_stored_draft_files_as_before() {
     assert!(changed.is_empty(), "{changed:?}");
     assert_eq!(now["frm1701:txtPg4IPart8_1A"], "0.00");
 }
+
+/// Decision P4-10: 1701 Part VIII item 6 stays the filer's entry; its item
+/// carries the page's hint (`from`) naming Part VII item 8, whose amount the
+/// page shows under it with "Use it" (tools/test_form_decisions_round_3.mjs
+/// drives the page). Nothing is copied by itself: Part VII item 8's amount
+/// leaves item 6 as it was, and "Use it" sends that amount as shown through
+/// the ordinary fill, which takes it into item 6 and its totals. No other
+/// item of any form carries a hint.
+#[test]
+fn form_1701_part_viii_item_6_offers_part_vii_item_8() {
+    setup();
+    let (from, to) = (
+        rows_annual_individual::PART_VII_ITEM_8,
+        rows_annual_individual::PART_VIII_ITEM_6,
+    );
+    let hinted: Vec<(String, Value)> = AgentFormKind::all()
+        .into_iter()
+        .flat_map(|kind| {
+            let code = kind.form_code().to_string();
+            items(&code)
+                .into_iter()
+                .filter(|(_, item)| !item["from"].is_null())
+                .map(move |(_, item)| (code.clone(), item["from"].clone()))
+        })
+        .collect();
+    assert_eq!(
+        hinted,
+        vec![(
+            "1701".to_string(),
+            json!({ "k": from, "to": to, "l": "From Part VII item 8" })
+        )]
+    );
+    let (_, item) = items("1701")
+        .into_iter()
+        .find(|(_, item)| !item["from"].is_null())
+        .unwrap();
+    assert_eq!(item["no"], "6");
+    assert_eq!(item["f"][0]["k"], to);
+    let on = preview_1_return();
+    let typed = take("1701", &on, json!({ from: "1500" }));
+    assert_eq!(typed["values"][from], "1,500.00", "the hint's amount");
+    assert_eq!(
+        typed["values"][to], "0.00",
+        "item 6 is not filled by itself"
+    );
+    // "Use it": the page sends the hint's amount as shown.
+    let used = take("1701", &typed["draft"], json!({ to: "1,500.00" }));
+    assert_eq!(used["values"][to], "1,500.00");
+    assert_eq!(
+        amount(&used["values"], "frm1701:txtPg4IPart8_7A"),
+        amount(&used["values"], "frm1701:txtPg4IPart8_5A") + 1_500.0,
+        "item 7 is the sum of items 5 and 6"
+    );
+    // A Part VII item 8 with centavos is refused in item 6 as any typed
+    // amount there is: column A takes whole pesos.
+    let cents = take("1701", &on, json!({ from: "1234.56" }));
+    let refused = fill("1701", &cents["draft"], json!({ to: "1,234.56" }));
+    assert_eq!(
+        refused["rejected"][to],
+        rows_annual_individual::whole_peso_refusal("6")
+    );
+}

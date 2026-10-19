@@ -303,6 +303,8 @@ fn schema() -> &'static [Value] {
             combs::apply_combs(form, &code);
             // 1701A's item 9, printed from `derived:` lines (PR 7).
             rows_annual_individual::mark_pools(form, &code);
+            // 1701 Part VIII item 6's hint from Part VII item 8 (P4-10).
+            rows_annual_individual::mark_from(form, &code);
         }
         forms
     })
