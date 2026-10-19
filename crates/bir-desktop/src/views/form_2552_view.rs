@@ -35,7 +35,7 @@ use crate::views::form_header::{
     FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
     separate_validate_button,
 };
-use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use crate::views::queueable_forms::{self, QueueableFormEvent, QueueableFormView};
 use bir_core::penalties::PenaltyComponent;
 use bir_core::profile::TaxpayerProfile;
 
@@ -182,10 +182,34 @@ pub struct Form2552View {
     validated: bool,
     /// The shared penalty section (computed values, overrides, note).
     penalty: Entity<PenaltySection>,
+    /// The record the draft's penalty inputs were last resolved from (the
+    /// open's); a sync resolves them again when it moves (decision P5-9).
+    resolved_trigger: Option<queueable_forms::TriggerSignature>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Form2552View {
+    /// The filer typed in a transaction-date box (decision P5-7): record
+    /// the part, or take it out when the box was cleared, before the edit
+    /// is read.
+    fn note_transaction_date_typed(&mut self, field: &'static str, cx: &App) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let key = match field {
+            "transaction_month" => "month",
+            "transaction_day" => "day",
+            _ => "year",
+        };
+        let value = self.input_text(key, cx).trim().parse::<u32>().unwrap_or(0);
+        bir_core::forms::event_trigger::note_trigger_typed(
+            "2552",
+            &mut self.draft.lifecycle,
+            field,
+            value,
+        );
+    }
+
     /// Editor text for one input from the draft.
     fn initial(draft: &Form2552Draft, key: &str) -> String {
         match key {
@@ -292,11 +316,20 @@ impl Form2552View {
             let value = Self::initial(draft, &key);
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
+            let trigger_field = match key.as_str() {
+                "month" => Some("transaction_month"),
+                "day" => Some("transaction_day"),
+                "year" => Some("transaction_year"),
+                _ => None,
+            };
             subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                move |this: &mut Self, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        if let Some(field) = trigger_field {
+                            this.note_transaction_date_typed(field, cx);
+                        }
                         this.sync_from_inputs(cx);
                     }
                 },
@@ -434,6 +467,7 @@ impl Form2552View {
             &mut draft,
             cx,
         ));
+        queueable_forms::resolve_moved_trigger(&mut draft, &mut self.resolved_trigger, &self.db);
         draft.recompute();
         draft.lifecycle.updated_at = self.draft.lifecycle.updated_at.clone();
         let changed = draft != self.draft;
@@ -1345,6 +1379,7 @@ impl QueueableFormView for Form2552View {
                 this.sync_from_inputs(cx);
             },
         ));
+        let resolved_trigger = Some(queueable_forms::trigger_signature(&draft));
         Self {
             draft,
             db,
@@ -1358,6 +1393,7 @@ impl QueueableFormView for Form2552View {
             header: FormHeaderState::new(),
             validated: false,
             penalty,
+            resolved_trigger,
             _subscriptions: subscriptions,
         }
     }
@@ -1365,7 +1401,11 @@ impl QueueableFormView for Form2552View {
     /// The tile's year with a blank month and day: the official page opens
     /// Item 1 as `00` / empty and alerts until the taxpayer enters the date.
     fn new_draft(profile: &TaxpayerProfile, year: u16, _period: u8) -> Form2552Draft {
-        Form2552Draft::new_from_profile(profile, year, 0, 0)
+        let mut draft = Form2552Draft::new_from_profile(profile, year, 0, 0);
+        // This view records the typed transaction date (sync_from_inputs),
+        // so its new drafts follow the typed-trigger model (decision P5-7).
+        draft.lifecycle.trigger_date_model = true;
+        draft
     }
 
     /// 2552 is keyed by its Item 1 date, not the dashboard's event counter.

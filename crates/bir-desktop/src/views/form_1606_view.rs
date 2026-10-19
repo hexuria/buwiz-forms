@@ -35,7 +35,7 @@ use crate::views::form_header::{
     FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
     separate_validate_button,
 };
-use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use crate::views::queueable_forms::{self, QueueableFormEvent, QueueableFormView};
 use bir_core::penalties::PenaltyComponent;
 
 impl EventEmitter<QueueableFormEvent> for Form1606View {}
@@ -180,6 +180,9 @@ pub struct Form1606View {
     validated: bool,
     /// The shared penalty section (computed values, overrides, note).
     penalty: Entity<PenaltySection>,
+    /// The record the draft's penalty inputs were last resolved from (the
+    /// open's); a sync resolves them again when it moves (decision P5-9).
+    resolved_trigger: Option<queueable_forms::TriggerSignature>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -386,6 +389,7 @@ impl Form1606View {
             &mut draft,
             cx,
         ));
+        queueable_forms::resolve_moved_trigger(&mut draft, &mut self.resolved_trigger, &self.db);
         draft.recompute();
         draft.lifecycle.updated_at = self.draft.lifecycle.updated_at.clone();
         let changed = draft != self.draft;
@@ -1297,6 +1301,7 @@ impl QueueableFormView for Form1606View {
                 this.sync_from_inputs(cx);
             },
         ));
+        let resolved_trigger = Some(queueable_forms::trigger_signature(&draft));
         Self {
             draft,
             db,
@@ -1310,6 +1315,7 @@ impl QueueableFormView for Form1606View {
             header: FormHeaderState::new(),
             validated: false,
             penalty,
+            resolved_trigger,
             _subscriptions: subscriptions,
         }
     }

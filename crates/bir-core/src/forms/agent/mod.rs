@@ -329,6 +329,31 @@ pub fn compute(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
     with_agent_kind!(kind, F => compute_as::<F>(kind, draft))
 }
 
+/// Resolve `draft`'s penalty inputs from the profile as its page's open
+/// does (`QueueableForm::apply_penalty_profile`): each item's due date as
+/// the Calendar resolves it (global plus profile deadline overrides,
+/// decision P5-9) and the profile's EOPT class. Only a Draft is touched.
+/// A form without penalty items — and 1601C and 2551Q, which keep their
+/// own penalty state — is unchanged.
+pub fn apply_penalty_profile(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    profile: &crate::profile::TaxpayerProfile,
+    global_overrides: &[crate::calendar_rules::DeadlineOverride],
+) -> Result<(), String> {
+    let AgentFormKind::Queueable(queueable) = kind else {
+        return Ok(());
+    };
+    crate::with_queueable_kind!(queueable, F => {
+        let mut typed: F = parse(kind, draft)?;
+        if typed.lifecycle().is_editable() {
+            typed.apply_penalty_profile(profile, global_overrides);
+            *draft = to_json(&typed)?;
+        }
+        Ok(())
+    })
+}
+
 /// Bring a stored draft to the current model before any box is written, so
 /// a write is never undone by a migration that runs later in the compute:
 /// a 2551Q draft saved before Items 20-22 took overrides adopts its manual
@@ -1777,6 +1802,83 @@ mod tests {
 
         // Never for a return that did not reach BIR.
         assert!(amended_copy(kind, &serde_json::to_value(&draft).unwrap()).is_err());
+    }
+
+    /// `apply_penalty_profile` resolves the penalty inputs the Calendar
+    /// resolves now — an override moves the stored due date — and touches
+    /// only a Draft: a return that reached BIR stays byte-for-byte.
+    #[test]
+    fn apply_penalty_profile_resolves_now_and_touches_only_a_draft() {
+        use crate::forms::form_0619e::Form0619EDraft;
+        use chrono::Datelike;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "store@example.test",
+            "default_form_type": "0619E"
+        }))
+        .unwrap();
+        let kind = AgentFormKind::from_code("0619E").unwrap();
+        let draft = Form0619EDraft::new_from_profile(&profile, 2025, 6);
+        let mut json = serde_json::to_value(&draft).unwrap();
+
+        // The compiled deadline first, then an advisory moving it.
+        apply_penalty_profile(kind, &mut json, &profile, &[]).unwrap();
+        let base: Form0619EDraft = serde_json::from_value(json.clone()).unwrap();
+        let base_due = base.penalty.penalty_due_date.expect("0619E has a deadline");
+        // Seven days ahead lands on a non-holiday workday, so the override
+        // date is the resolved one as stored.
+        let moved = base_due + chrono::Duration::days(7);
+        assert_eq!(moved.weekday(), chrono::Weekday::Thu, "test math");
+        let override_ = crate::calendar_rules::DeadlineOverride {
+            id: "test-move".into(),
+            title: "Move".into(),
+            source_reference: "TEST".into(),
+            affected_form_codes: vec!["0619E".into()],
+            original_deadline: base_due,
+            adjusted_deadline: moved,
+            affected_regions: vec![],
+            affected_taxpayer_types: vec![],
+            effective_from: None,
+            effective_until: None,
+            expires_at: None,
+        };
+        apply_penalty_profile(kind, &mut json, &profile, std::slice::from_ref(&override_)).unwrap();
+        let reparsed: Form0619EDraft = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(
+            reparsed.penalty.penalty_due_date,
+            Some(moved),
+            "the due date the Calendar resolves now, not the compiled one"
+        );
+
+        // A return that reached BIR: byte-for-byte.
+        let mut filed = reparsed;
+        filed.lifecycle.status = FilingStatus::Submitted;
+        let filed_json = serde_json::to_value(&filed).unwrap();
+        let mut as_json = filed_json.clone();
+        apply_penalty_profile(
+            kind,
+            &mut as_json,
+            &profile,
+            std::slice::from_ref(&override_),
+        )
+        .unwrap();
+        assert_eq!(as_json, filed_json, "a filed return is never rewritten");
+
+        // A form with its own penalty state (1601C) and a non-queueable
+        // kind are left alone.
+        for code in ["1601C", "2551Q"] {
+            let other = AgentFormKind::from_code(code).unwrap();
+            let mut json = serde_json::json!({"anything": true});
+            apply_penalty_profile(other, &mut json, &profile, &[]).unwrap();
+            assert_eq!(json, serde_json::json!({"anything": true}), "{code}");
+        }
     }
 
     #[test]

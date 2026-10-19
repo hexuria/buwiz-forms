@@ -123,6 +123,9 @@ pub struct EditorState {
     /// Bumped on every edit; Validate records the revision it passed at.
     pub revision: u64,
     pub validated_at: Option<u64>,
+    /// The record the draft's penalty inputs were last resolved from (the
+    /// open's; `sync` resolves them again when it moves, decision P5-9).
+    pub resolved_trigger: Option<crate::views::queueable_forms::TriggerSignature>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -144,6 +147,7 @@ impl EditorState {
             header: FormHeaderState::new(),
             revision: 0,
             validated_at: None,
+            resolved_trigger: None,
             _subscriptions: Vec::new(),
         };
         state.ensure_inputs(specs, window, cx);
@@ -323,12 +327,26 @@ fn element_id(slug: &str, suffix: &str) -> ElementId {
     ElementId::Name(format!("{slug}_{suffix}").into())
 }
 
+/// A trigger record that moved since the draft's penalty inputs were
+/// resolved resolves them again, as the open did (decision P5-9).
+fn resolve_moved_trigger<V: KitView>(this: &mut V) {
+    let signature = crate::views::queueable_forms::trigger_signature(this.draft());
+    if this.kit().resolved_trigger.as_ref() == Some(&signature) {
+        return;
+    }
+    let mut resolved = this.kit_mut().resolved_trigger.take();
+    let db = this.db();
+    crate::views::queueable_forms::resolve_moved_trigger(this.draft_mut(), &mut resolved, &db);
+    this.kit_mut().resolved_trigger = resolved;
+}
+
 /// Read every editor into the draft, then recompute and validate.
 pub fn sync<V: KitView>(this: &mut V, cx: &mut Context<V>) {
     if !this.draft().lifecycle().is_editable() {
         return;
     }
     let parse_errors = this.read_inputs(cx);
+    resolve_moved_trigger(this);
     let draft = this.draft_mut();
     draft.compute();
     draft.lifecycle_mut().updated_at = chrono::Utc::now().to_rfc3339();

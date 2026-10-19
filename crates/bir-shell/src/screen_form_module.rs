@@ -2271,6 +2271,11 @@ fn seed_amendment_parts(kind: AgentFormKind, filed: &Value, amended: &mut Value)
         .filter_map(|part| filed.get(&part).cloned().map(|value| (part, value)))
         .collect();
     if seeded.is_empty() {
+        // As `seed_typed_parts` does for a stored row: the filed return
+        // typed nothing, so no seed from an earlier open of this key may
+        // survive, and the amendment carries no typed state of its own.
+        SEEDED_PARTS.with(|map| map.borrow_mut().remove(&id));
+        write_typed_state(kind, amended, &BTreeSet::new());
         return;
     }
     let session = TYPED_PARTS.with(|map| map.borrow().get(&id).cloned().unwrap_or_default());
@@ -2312,12 +2317,16 @@ fn mark_trigger_date(kind: AgentFormKind, draft: &mut Value, key: &str) {
 }
 
 /// Before any write of a client's draft (save, queue, cancel, a followed
-/// save): `trigger_parts_typed` and `trigger_date_entered` are what the
-/// host knows, never what the client sent.
+/// save): `trigger_date_model`, `trigger_parts_typed` and
+/// `trigger_date_entered` are what the host knows, never what the client
+/// sent.
+/// - `trigger_date_model` is the stored row's marker; only a creator (a
+///   new row of a pre-filled form) sets it. A client can neither add it to
+///   a row that has none nor clear it from a row that has it.
 /// - No trigger write this session (an unrelated save): the stored row's
-///   two fields are written back exactly as stored (a legacy row gains no
-///   `trigger_parts_typed`), while the draft is that row and its trigger
-///   fields hold their stored values.
+///   two typed fields are written back exactly as stored (a legacy row
+///   gains no `trigger_parts_typed`), while the draft is that row and its
+///   trigger fields hold their stored values.
 /// - Otherwise the parts that count are the stored row's typed parts (read
 ///   from the database, kept while they hold their stored value) and this
 ///   session's typed writes; the flag follows from them.
@@ -2332,10 +2341,20 @@ fn settle_trigger_flag(
     let fields = bir_core::forms::event_trigger::trigger_paths(kind.form_code());
     let Some(id) = draft_key(kind, draft).filter(|_| !fields.is_empty()) else {
         write_typed_state(kind, draft, &BTreeSet::new());
+        set_lifecycle_field(draft, "trigger_date_model", None);
         return Ok(());
     };
     let stored = stored_return(db, kind, draft)?
         .filter(|stored| draft_key(kind, stored).as_ref() == Some(&id));
+    // The marker is host state like the typed record beside it: the stored
+    // row's when there is one, a creator's `true` on a new pre-filled row.
+    let marker = match &stored {
+        Some(stored) => stored.get("trigger_date_model").cloned(),
+        None => bir_core::forms::event_trigger::PREFILLED_TRIGGER_FORMS
+            .contains(&kind.form_code())
+            .then(|| json!(true)),
+    };
+    set_lifecycle_field(draft, "trigger_date_model", marker);
     let session = TYPED_PARTS.with(|parts| parts.borrow().get(&id).cloned());
     if session.is_none()
         && let Some(stored) = &stored
@@ -2362,6 +2381,52 @@ fn settle_trigger_flag(
     let counted = counted_parts(kind, draft, &session.unwrap_or_default(), &earlier);
     write_typed_state(kind, draft, &counted);
     Ok(())
+}
+
+/// The record `draft`'s penalty resolution stands on: its typed-state
+/// fields and the Calendar period each penalty item resolves from (a typed
+/// transaction date moves it). `None` for a form without penalty items.
+fn penalty_signature(kind: AgentFormKind, draft: &Value) -> Option<Value> {
+    let AgentFormKind::Queueable(queueable) = kind else {
+        return None;
+    };
+    bir_core::with_queueable_kind!(queueable, F => {
+        if F::penalty_items().is_empty() {
+            return None;
+        }
+        let typed: F = serde_json::from_value(draft.clone()).ok()?;
+        Some(json!({
+            "entered": typed.lifecycle().trigger_date_entered,
+            "parts": typed.lifecycle().trigger_parts_typed,
+            "periods": F::penalty_items()
+                .iter()
+                .map(|items| (items.deadline_period)(&typed))
+                .collect::<Vec<_>>(),
+        }))
+    })
+}
+
+/// Resolve `draft`'s penalty inputs from the profile and the Calendar the
+/// way its page's open does (`finish` → `apply_penalty_profile`), so a
+/// fill that moved its trigger record — or a draft a save or queue cannot
+/// trust — never keeps the due date an older state resolved (decision
+/// P5-9). A failed resolution leaves the draft as it is.
+fn reapply_penalty_context(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<(), String> {
+    let Some(tin) = draft["tin"].as_str().map(str::to_string) else {
+        return Ok(());
+    };
+    let Some(profile) = db
+        .get_profile_by_tin(&tin)
+        .map_err(|error| error.to_string())?
+    else {
+        return Ok(());
+    };
+    let overrides = db.get_deadline_overrides();
+    bir_core::forms::agent::apply_penalty_profile(kind, draft, &profile, &overrides)
 }
 
 /// How a profile note names a box's two values.
@@ -3167,15 +3232,10 @@ fn open_screen_form(
         ))
     })?;
     Ok(async move {
-        let mut opened = on_large_stack(move || {
-            #[cfg(test)]
-            if tests::render_fails(&draft) {
-                return Err("the page JSON could not be built".to_string());
-            }
-            opened_json(kind, year, period, draft, from_profile, build)
-        })
-        .and_then(|result| result)
-        .map_err(host_error)?;
+        let mut opened =
+            on_large_stack(move || opened_json(kind, year, period, draft, from_profile, build))
+                .and_then(|result| result)
+                .map_err(host_error)?;
         // The whole open has succeeded: the offer it used is spent.
         if let Some(offer) = consumed {
             issued_offers().remove(&offer);
@@ -3277,6 +3337,12 @@ fn opened_json(
 ) -> Result<Value, String> {
     let code = kind.form_code();
     let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
+    // Test failure injection: the page build fails after the draft is
+    // evaluated — the open keeps the offer it was issued.
+    #[cfg(test)]
+    if tests::render_fails(&draft) {
+        return Err("the page JSON could not be built".to_string());
+    }
     let mut from_profile_draft = from_profile;
     agent::compute(kind, &mut from_profile_draft)?;
     let from_profile = FromProfile {
@@ -4283,6 +4349,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
     // A sample's period is set with `screen_form_sample_period`, never by a
     // fill: every writer here keeps the period locked.
     let before = draft.clone();
+    let signature = penalty_signature(kind, &draft);
     let rejected = apply_screen_edits(kind, &mut draft, &edits, editable, &unlocked)?;
     if editable {
         // An added 2550Q row needs a stable row ID before it is saved; the
@@ -4294,6 +4361,14 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
                 |e| host_error(format!("the 2550Q draft's row identities are unsafe: {e}")),
             )?;
             draft = serde_json::to_value(typed).map_err(|e| host_error(e.to_string()))?;
+        }
+        // A write that moved the record its penalties resolve from (a typed
+        // transaction date) resolves them again as the open did — never the
+        // due date the earlier state gave (decision P5-9).
+        if penalty_signature(kind, &draft) != signature {
+            with_database(|db| {
+                reapply_penalty_context(db, kind, &mut draft).map_err(HostError::new)
+            })?;
         }
         agent::compute(kind, &mut draft).map_err(host_error)?;
     }
@@ -4843,10 +4918,12 @@ fn screen_form_save(arguments: &HostArguments) -> HostResult {
     let id = with_database(|db| match &amendment {
         Some(mark) => {
             settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+            reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
             save_amendment(db, kind, &mut draft, mark).map_err(host_error)
         }
         None => {
             settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+            reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
             refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
             agent::save_draft(kind, db, &mut draft).map_err(host_error)
         }
@@ -4894,6 +4971,7 @@ fn save_sample(kind: AgentFormKind, mut draft: Value, mark: &SampleMark) -> Host
         }
         refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+        reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         let id = agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
         let status = agent::identity(kind, &draft).map_err(host_error)?.status;
         Ok(json(json!({
@@ -5474,6 +5552,7 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
     };
     with_database(|db| {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+        reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let mut typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;
@@ -5512,6 +5591,7 @@ fn screen_form_cancel_queue(arguments: &HostArguments) -> HostResult {
     };
     with_database(|db| {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+        reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;

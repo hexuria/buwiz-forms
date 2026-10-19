@@ -17,6 +17,10 @@ use crate::components::multi_select::{MultiSelect, MultiSelectEvent, MultiSelect
 
 /// What the override list says of an entry it cannot read (decision P5-10).
 pub(crate) const DAMAGED_OVERRIDE_NOTE: &str = "Couldn't read this entry; kept as stored";
+/// The stored `deadline_overrides` value is not a JSON array at all
+/// (decision P5-10): the tab says so and every write is refused until it
+/// is fixed or cleared.
+pub(crate) const UNREADABLE_OVERRIDES_BANNER: &str = "The stored deadline overrides could not be read, so nothing here can be changed. Fix or clear the stored value first.";
 
 pub enum AdminCalendarEvent {
     OverridesChanged,
@@ -50,6 +54,9 @@ pub struct AdminCalendarDashboard {
     /// Stored entries that cannot be read (decision P5-10): listed, kept
     /// as stored by every save.
     damaged_overrides: Vec<String>,
+    /// The stored value is not a JSON array at all: no entry can be listed
+    /// and every write is refused until it is fixed or cleared.
+    overrides_unreadable: bool,
     // Override editor modal
     override_editor_open: bool,
     editing_override_id: Option<String>,
@@ -73,13 +80,17 @@ impl AdminCalendarDashboard {
         let rules = DeadlineResolver::official_rules();
         // The shipped official holidays (D8a): adds only what was never
         // offered and keeps every override the user saved.
-        let (overrides, damaged_overrides) = db
+        let (overrides, damaged_overrides, overrides_unreadable) = db
             .lock()
             .map(|d| {
                 if let Err(error) = d.seed_official_holidays() {
                     tracing::warn!(%error, "official holidays not seeded");
                 }
-                (d.get_deadline_overrides(), d.damaged_deadline_overrides())
+                (
+                    d.get_deadline_overrides(),
+                    d.damaged_deadline_overrides(),
+                    d.deadline_overrides_unreadable(),
+                )
             })
             .unwrap_or_default();
 
@@ -114,6 +125,7 @@ impl AdminCalendarDashboard {
             deadlines,
             overrides,
             damaged_overrides,
+            overrides_unreadable,
             override_editor_open: false,
             editing_override_id: None,
             override_editor_error: None,
@@ -138,6 +150,11 @@ impl AdminCalendarDashboard {
             .lock()
             .map(|d| d.damaged_deadline_overrides())
             .unwrap_or_default();
+        self.overrides_unreadable = self
+            .db
+            .lock()
+            .map(|d| d.deadline_overrides_unreadable())
+            .unwrap_or(false);
         self.deadlines = DeadlineResolver::resolve_deadline_calendar_year_with_overrides(
             self.selected_year,
             &self.overrides,
@@ -224,6 +241,12 @@ impl AdminCalendarDashboard {
     }
 
     fn save_override(&mut self, _window: &mut Window, cx: &mut Context<'_, Self>) {
+        // The stored value itself could not be read: no write (P5-10).
+        if self.overrides_unreadable {
+            self.override_editor_error = Some(UNREADABLE_OVERRIDES_BANNER.into());
+            cx.notify();
+            return;
+        }
         let title = self.new_override_title.read(cx).value().trim().to_string();
         let source = self.new_override_source.read(cx).value().trim().to_string();
         let mut form_codes = self.new_override_form_codes.clone();
@@ -289,8 +312,20 @@ impl AdminCalendarDashboard {
             });
         }
 
-        if let Ok(db) = self.db.lock() {
-            let _ = db.set_deadline_overrides(&self.overrides);
+        let write = self
+            .db
+            .lock()
+            .map_err(|error| error.to_string())
+            .and_then(|db| {
+                db.set_deadline_overrides(&self.overrides)
+                    .map_err(|error| error.to_string())
+            });
+        if let Err(error) = write {
+            // The stored value won: the page reads it back, nothing saved.
+            self.override_editor_error = Some(format!("The stored overrides were kept: {error}"));
+            self.reload();
+            cx.notify();
+            return;
         }
 
         self.reload();
@@ -307,10 +342,26 @@ impl AdminCalendarDashboard {
     }
 
     fn delete_override(&mut self, idx: usize, cx: &mut Context<'_, Self>) {
+        if self.overrides_unreadable {
+            self.status_message = Some(UNREADABLE_OVERRIDES_BANNER.into());
+            cx.notify();
+            return;
+        }
         if idx < self.overrides.len() {
             self.overrides.remove(idx);
-            if let Ok(db) = self.db.lock() {
-                let _ = db.set_deadline_overrides(&self.overrides);
+            let write = self
+                .db
+                .lock()
+                .map_err(|error| error.to_string())
+                .and_then(|db| {
+                    db.set_deadline_overrides(&self.overrides)
+                        .map_err(|error| error.to_string())
+                });
+            if let Err(error) = write {
+                self.status_message = Some(format!("The stored overrides were kept: {error}"));
+                self.reload();
+                cx.notify();
+                return;
             }
             self.reload();
             self.status_message = Some("Override removed.".into());
@@ -503,6 +554,7 @@ impl AdminCalendarDashboard {
                 {gpui_component::button::Button::new("new-override")
                     .label("New Override")
                     .primary()
+                    .disabled(self.overrides_unreadable)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.open_new_override_editor(window, cx);
                     }))}
@@ -528,6 +580,25 @@ impl AdminCalendarDashboard {
                     text_color={cx.theme().primary}
                 >
                     {msg.clone()}
+                </div>
+            });
+        }
+
+        // The stored value itself cannot be read: every write is refused
+        // until it is fixed or cleared (decision P5-10).
+        if self.overrides_unreadable {
+            container = container.child(rsx! {
+                <div
+                    id="overrides-unreadable-banner"
+                    p_4
+                    bg={cx.theme().danger.opacity(0.1)}
+                    border_1
+                    border_color={cx.theme().danger.opacity(0.4)}
+                    rounded_xl
+                    text_sm
+                    text_color={cx.theme().danger}
+                >
+                    {UNREADABLE_OVERRIDES_BANNER}
                 </div>
             });
         }
@@ -579,6 +650,7 @@ impl AdminCalendarDashboard {
                         ))
                         .label("Edit")
                         .small()
+                        .disabled(self.overrides_unreadable)
                         .on_click(cx.listener(
                             move |this, _, window, cx| {
                                 this.open_edit_override_editor(&edit_id, window, cx);
@@ -590,6 +662,7 @@ impl AdminCalendarDashboard {
                         .icon(IconName::Close)
                         .ghost()
                         .small()
+                        .disabled(self.overrides_unreadable)
                         .on_click(cx.listener(
                             move |this, _, _, cx| {
                                 this.delete_override(delete_idx, cx);

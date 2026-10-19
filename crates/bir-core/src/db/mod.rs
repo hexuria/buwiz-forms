@@ -965,6 +965,13 @@ impl Database {
             .collect()
     }
 
+    /// The stored `deadline_overrides` value exists but is not a JSON array
+    /// at all: no entry can be listed, and [`Self::set_deadline_overrides`]
+    /// refuses to write over it (decision P5-10).
+    pub fn deadline_overrides_unreadable(&self) -> bool {
+        matches!(self.stored_override_entries(), Err(_))
+    }
+
     /// The stored override entries that cannot be read, each as its stored
     /// text (decision P5-10: shown, and kept as stored by every save).
     pub fn damaged_deadline_overrides(&self) -> Vec<String> {
@@ -1961,14 +1968,22 @@ mod tests {
     #[test]
     fn a_stored_value_that_is_not_an_array_is_not_overwritten() {
         let db = Database::open_in_memory_for_tests().unwrap();
+        assert!(!db.deadline_overrides_unreadable());
         db.set_setting("deadline_overrides", "{not an array")
             .unwrap();
         assert!(db.get_deadline_overrides().is_empty());
+        assert!(db.deadline_overrides_unreadable());
+        assert!(db.damaged_deadline_overrides().is_empty());
         assert!(db.set_deadline_overrides(&[]).is_err());
         assert_eq!(
             db.get_setting("deadline_overrides").unwrap().as_deref(),
             Some("{not an array")
         );
+        // An array again — even a damaged entry inside it — reads fine.
+        db.set_setting("deadline_overrides", r#"[{"note":"x"}]"#)
+            .unwrap();
+        assert!(!db.deadline_overrides_unreadable());
+        assert_eq!(db.damaged_deadline_overrides(), [r#"{"note":"x"}"#]);
     }
 
     #[test]

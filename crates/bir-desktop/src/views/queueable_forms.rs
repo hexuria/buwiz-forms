@@ -245,6 +245,61 @@ fn prepare_penalties<V: QueueableFormView>(
     }
 }
 
+/// The record a draft's penalty resolution stands on: its typed-state
+/// fields and the Calendar period each penalty item resolves from — a
+/// typed transaction date moves it (decision P5-9). Kept by the view so a
+/// sync resolves the due date again when the record moved since the open
+/// did, never leaving the earlier state's date.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TriggerSignature {
+    entered: bool,
+    parts: Vec<String>,
+    periods: Vec<Option<bir_core::calendar_rules::DeadlinePeriod>>,
+}
+
+/// `draft`'s [`TriggerSignature`] right now.
+pub(crate) fn trigger_signature<D: QueueableForm>(draft: &D) -> TriggerSignature {
+    let lifecycle = draft.lifecycle();
+    TriggerSignature {
+        entered: lifecycle.trigger_date_entered,
+        parts: lifecycle.trigger_parts_typed.clone(),
+        periods: D::penalty_items()
+            .iter()
+            .map(|items| (items.deadline_period)(draft))
+            .collect(),
+    }
+}
+
+/// When the record `draft`'s penalties resolve from moved since `resolved`
+/// names it, resolve them again from the profile and the Calendar as the
+/// open's [`prepare_penalties`] did (decision P5-9), and remember the new
+/// signature. A form without penalty items, or a database that cannot be
+/// read, leaves the draft as it is.
+pub(crate) fn resolve_moved_trigger<D: QueueableForm>(
+    draft: &mut D,
+    resolved: &mut Option<TriggerSignature>,
+    db: &Arc<Mutex<Database>>,
+) {
+    if D::penalty_items().is_empty() || !draft.lifecycle().is_editable() {
+        return;
+    }
+    let signature = trigger_signature(draft);
+    if resolved.as_ref() == Some(&signature) {
+        return;
+    }
+    let Some((profile, overrides)) = db.lock().ok().and_then(|guard| {
+        guard
+            .get_profile_by_tin(draft.tin())
+            .ok()
+            .flatten()
+            .map(|profile| (profile, guard.get_deadline_overrides()))
+    }) else {
+        return;
+    };
+    draft.apply_penalty_profile(&profile, &overrides);
+    *resolved = Some(signature);
+}
+
 pub fn load_draft_json<V: QueueableFormView>(
     db: &Database,
     profile: &TaxpayerProfile,

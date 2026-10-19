@@ -24,8 +24,9 @@
 //! writes (an unrelated save writes the stored row's two fields back as
 //! they were); a client's value is never kept. A profile import restores
 //! a user-chosen backup, so it brings the stored records back unchanged.
-//! The desktop 1606 and 1706 views record their own date edits
-//! ([`note_trigger_typed`]). So a date typed over
+//! The desktop views record their own date edits ([`note_trigger_typed`])
+//! and the agent's own accepted writes ([`note_trigger_field_written`]). So
+//! a date typed over
 //! two sessions, or one part edited after a restart, still counts; a
 //! cleared part no longer does. A return that left Draft files the date
 //! it holds, typed or not, so it is dated by that date; a cancelled queue
@@ -34,12 +35,14 @@
 //! any date they hold was typed.
 //!
 //! Penalties (decision P5-7) wait for the typed date only on a Draft that
-//! carries `trigger_date_model`, written when the draft is created by a
-//! path that records typing (the shell page, the desktop 1606 and 1706
-//! views). A row without it (stored before the marker, or created by a
-//! desktop view or the agent that does not record typing) computes its
-//! penalties from the date it holds, exactly as before; on Home and the
-//! Calendar it stays undated until its date is typed, as it was before.
+//! carries `trigger_date_model`, written once when the draft is created by
+//! a path that records typing (the shell page, every desktop view of a
+//! pre-filled form). A save settles it the same way: a stored row keeps the
+//! marker it had, a new row gets one only from a creator — a client's own
+//! value is never stored. A row without it (stored before the marker
+//! existed) computes its penalties from the date it holds, exactly as
+//! before; on Home and the Calendar it stays undated until its date is
+//! typed, as it was before.
 
 use chrono::NaiveDate;
 use serde_json::Value;
@@ -219,6 +222,63 @@ pub fn note_trigger_typed(
     lifecycle.trigger_parts_typed = parts.into_iter().collect();
 }
 
+/// A trigger field holds no value (0, empty, null, every part of an object
+/// empty): a write that cleared it.
+fn blank_trigger_value(value: Option<&Value>) -> bool {
+    match value {
+        None | Some(Value::Null) => true,
+        Some(Value::Number(number)) => number.as_f64() == Some(0.0),
+        Some(Value::String(text)) => text.trim().is_empty(),
+        Some(Value::Object(object)) => object.values().all(|part| blank_trigger_value(Some(part))),
+        Some(_) => false,
+    }
+}
+
+/// [`note_trigger_typed`] on a draft's JSON, for a host that writes box
+/// values rather than a lifecycle (the desktop agent's `agent::fill`, an
+/// accepted write being the filer's instruction): `field` as `draft` now
+/// holds it is typed, or taken out when the write left it blank, and
+/// `trigger_date_entered` follows [`parts_complete`]. Both fields are
+/// removed rather than stored empty, as the lifecycle's own serde does.
+/// A field that is not one of the form's trigger fields changes nothing.
+pub fn note_trigger_field_written(form_code: &str, draft: &mut Value, field: &str) {
+    if !trigger_paths(form_code).contains(&field) {
+        return;
+    }
+    let Some(object) = draft.as_object_mut() else {
+        return;
+    };
+    let mut parts: std::collections::BTreeSet<String> = object
+        .get("trigger_parts_typed")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect();
+    if blank_trigger_value(object.get(field)) {
+        parts.remove(field);
+    } else {
+        parts.insert(field.to_string());
+    }
+    match parts.is_empty() {
+        true => {
+            object.remove("trigger_parts_typed");
+        }
+        false => {
+            object.insert(
+                "trigger_parts_typed".to_string(),
+                Value::Array(parts.iter().cloned().map(Value::String).collect()),
+            );
+        }
+    }
+    if parts_complete(form_code, &parts) {
+        object.insert("trigger_date_entered".to_string(), Value::Bool(true));
+    } else {
+        object.remove("trigger_date_entered");
+    }
+}
+
 /// The trigger date a draft of `form_code` holds in its fields, entered or
 /// pre-filled (what [`event_trigger_from_json`] reads once it counts).
 pub fn held_trigger_date(form_code: &str, draft: &Value) -> Option<NaiveDate> {
@@ -339,6 +399,7 @@ mod tests {
     use super::*;
     use crate::calendar_rules::DueFromTrigger;
     use crate::profile::TaxpayerProfile;
+    use serde_json::json;
 
     fn profile() -> TaxpayerProfile {
         serde_json::from_value(serde_json::json!({
@@ -542,6 +603,72 @@ mod tests {
             }
         }
         assert_eq!(accepted, 4, "the four valid dates (today {today})");
+    }
+
+    /// An accepted write to a trigger box (the desktop agent's `fill`) is
+    /// the filer's instruction on a typed-date-model draft: the part joins
+    /// `trigger_parts_typed`, a cleared box takes it out, and
+    /// `trigger_date_entered` follows the whole set — both keys dropped
+    /// rather than stored empty, as the lifecycle's own serde does.
+    #[test]
+    fn an_agent_write_to_a_trigger_box_records_and_unrecords_the_part() {
+        // 2552: sale date is month/day/year; day is the box an agent fills.
+        let mut draft = json!({
+            "trigger_date_model": true,
+            "transaction_month": 3,
+            "transaction_day": 0,
+            "transaction_year": 2026
+        });
+        note_trigger_field_written("2552", &mut draft, "transaction_day");
+        assert!(
+            draft.get("trigger_parts_typed").is_none(),
+            "a blank write records nothing"
+        );
+        assert!(draft.get("trigger_date_entered").is_none());
+        draft["transaction_day"] = json!(14);
+        note_trigger_field_written("2552", &mut draft, "transaction_day");
+        assert_eq!(draft["trigger_parts_typed"], json!(["transaction_day"]));
+        assert_eq!(draft["trigger_date_entered"], json!(true));
+        // Clearing the box takes the part out again.
+        draft["transaction_day"] = json!("");
+        note_trigger_field_written("2552", &mut draft, "transaction_day");
+        assert!(
+            draft.get("trigger_parts_typed").is_none(),
+            "no parts left: the key is dropped, not stored empty"
+        );
+        assert!(draft.get("trigger_date_entered").is_none());
+        // A field that is no trigger field of the form changes nothing.
+        draft["transaction_month"] = json!(4);
+        note_trigger_field_written("2552", &mut draft, "taxpayer_name");
+        assert!(draft.get("trigger_parts_typed").is_none());
+    }
+
+    /// The lifecycle twin of the JSON write: every edit event on a trigger
+    /// box records its part (retyping the pre-filled value counts too), a
+    /// box cleared to 0 takes its part out, and the flag follows the whole
+    /// set. The desktop views' `note_*_date_typed` hooks call this.
+    #[test]
+    fn a_typed_trigger_part_is_recorded_and_a_cleared_one_removed() {
+        let mut lifecycle = super::super::queueable::SubmissionLifecycle::default();
+        // 1606's sale date is three boxes, none fixed by the identity.
+        note_trigger_typed("1606", &mut lifecycle, "transaction_day", 14);
+        assert_eq!(lifecycle.trigger_parts_typed, ["transaction_day"]);
+        assert!(!lifecycle.trigger_date_entered);
+        note_trigger_typed("1606", &mut lifecycle, "transaction_month", 3);
+        note_trigger_typed("1606", &mut lifecycle, "transaction_year", 2026);
+        assert!(lifecycle.trigger_date_entered);
+        // Clearing it back to 0 takes it out and undates the return.
+        note_trigger_typed("1606", &mut lifecycle, "transaction_day", 0);
+        assert!(!lifecycle.trigger_date_entered);
+        assert!(
+            !lifecycle
+                .trigger_parts_typed
+                .iter()
+                .any(|part| part == "transaction_day")
+        );
+        // A field that is not a trigger field changes nothing.
+        note_trigger_typed("1606", &mut lifecycle, "taxpayer_name", 5);
+        assert_eq!(lifecycle.trigger_parts_typed.len(), 2);
     }
 
     #[test]
