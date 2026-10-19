@@ -663,6 +663,18 @@ const TINOS_ADVANCES: &[(u32, u16)] = &[
 /// out smaller.
 const FALLBACK_EMS: f64 = 1.3;
 
+/// What a tab counts, in ems. The print keeps a typed tab (an input's value
+/// and the static page's `white-space:pre` span both draw it), and Chromium
+/// draws one 2.22 em wide in Arimo and 2.0 em in Tinos; 2.3 em is above
+/// both.
+const TAB_EMS: f64 = 2.3;
+
+/// Whether word-spacing applies after `c`: a space or a no-break space
+/// (U+00A0), as Chromium spaces both.
+fn is_word_space(c: char) -> bool {
+    c == ' ' || c == '\u{a0}'
+}
+
 /// The face a sheet sets its `.fi` inputs in (form.css `font-family`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Face {
@@ -678,12 +690,15 @@ impl Face {
         }
     }
 
-    /// `text`'s advance width in ems of this face; a character it does not
-    /// map counts [`FALLBACK_EMS`].
+    /// `text`'s advance width in ems of this face; a tab counts
+    /// [`TAB_EMS`], another character it does not map [`FALLBACK_EMS`].
     fn ems(self, text: &str) -> f64 {
         let table = self.advances();
         text.chars()
             .map(|c| {
+                if c == '\t' {
+                    return TAB_EMS;
+                }
                 table
                     .binary_search_by_key(&u32::from(c), |(cp, _)| *cp)
                     .map_or(FALLBACK_EMS, |at| f64::from(table[at].1) / UNITS_PER_EM)
@@ -758,6 +773,8 @@ struct SheetType {
     word: Spacing,
     letter: Spacing,
     css: &'static str,
+    /// The sheet's [`SINGLE_CHARACTER_CELLS`].
+    split: &'static [(&'static str, bool)],
 }
 
 impl SheetType {
@@ -778,6 +795,18 @@ impl SheetType {
             word: Spacing::of(rule, "word-spacing"),
             letter: Spacing::of(rule, "letter-spacing"),
             css,
+            split: &[],
+        }
+    }
+
+    /// The type of sheet `slug`, with its split one-character cells.
+    fn of_sheet(slug: &str, css: &'static str) -> Self {
+        Self {
+            split: SINGLE_CHARACTER_CELLS
+                .iter()
+                .find(|(sheet, _)| *sheet == slug)
+                .map_or(&[], |(_, cells)| *cells),
+            ..Self::of(css)
         }
     }
 
@@ -788,6 +817,7 @@ impl SheetType {
             word: Spacing::default(),
             letter: Spacing::default(),
             css: "",
+            split: &[],
         }
     }
 
@@ -825,7 +855,7 @@ impl SheetType {
     /// advances in this face, the word-spacing on every space and the
     /// letter-spacing on every character.
     fn width(&self, letter: Spacing, text: &str, size: f64) -> f64 {
-        let spaces = text.chars().filter(|c| *c == ' ').count() as f64;
+        let spaces = text.chars().filter(|c| is_word_space(*c)).count() as f64;
         let chars = text.chars().count() as f64;
         self.face.ems(text) * size + spaces * self.word.at(size) + chars * letter.at(size)
     }
@@ -834,7 +864,7 @@ impl SheetType {
     /// pt, at which `text` sets within `room` pt: the width is linear in the
     /// size, `ems × size + spaces × word + characters × letter`.
     fn fit(&self, letter: Spacing, room: f64, text: &str, max: f64) -> f64 {
-        let spaces = text.chars().filter(|c| *c == ' ').count() as f64;
+        let spaces = text.chars().filter(|c| is_word_space(*c)).count() as f64;
         let chars = text.chars().count() as f64;
         let per_pt = self.face.ems(text) + spaces * self.word.em + chars * letter.em;
         let fixed = spaces * self.word.pt + chars * letter.pt;
@@ -870,21 +900,27 @@ fn fit_line(sheet: &SheetType, width: f64, text: &str) -> f64 {
     sheet.fit(sheet.letter, (width - 2.0).max(1.0), text, PLAIN_MAX_PT)
 }
 
-/// A plain (`data-field-kind="text"`) box `cell` of `html`: the room (pt)
-/// its input leaves for text (the cell's width less the input's left and
-/// right inset, less 1 pt to spare) and the input's class list.
-fn plain_box<'a>(html: &'a str, cell: &str) -> Option<(f64, &'a str)> {
+/// How much wider than its room a value may measure and still fit: Chromium
+/// lays text out in 1/64 px, so a value the model puts a hair over the room
+/// fits on the page.
+const FIT_EPSILON_PT: f64 = 0.02;
+
+/// The width (pt) of plain (`data-field-kind="text"`) box `cell` of `html`.
+fn plain_cell_width(html: &str, cell: &str) -> Option<f64> {
     let open = html.find(&format!("<div id=\"{cell}\""))?;
     let tag = &html[open..open + html[open..].find('>')?];
     if attr(tag, "data-field-kind") != Some("text") {
         return None;
     }
     let width_at = tag.find(";width:")? + ";width:".len();
-    let width: f64 = tag[width_at..].split("pt").next()?.parse().ok()?;
-    let input_at = open + html[open..].find("<input")?;
-    let input = &html[input_at..input_at + html[input_at..].find('>')?];
-    let (left, right) = inset(attr(input, "style").unwrap_or(""));
-    Some((width - left - right - 1.0, attr(input, "class")?))
+    tag[width_at..].split("pt").next()?.parse().ok()
+}
+
+/// The room (pt) input `tag` leaves for text in a cell `width` pt wide:
+/// the width less the input's left and right inset.
+fn input_room(width: f64, tag: &str) -> f64 {
+    let (left, right) = inset(attr(tag, "style").unwrap_or(""));
+    width - left - right
 }
 
 /// The left and right of an input's `inset:` (1 to 4 lengths, pt).
@@ -907,16 +943,19 @@ fn inset(style: &str) -> (f64, f64) {
     }
 }
 
-/// The type size (pt) value `text` prints at in plain box `cell` when it
-/// is longer than the box at its class's size: measured in the sheet's
-/// type ([`SheetType::fit`]) within the box, rounded down to 0.01 pt.
-/// `None` while it fits (it prints byte for byte as before) or `cell` is
-/// not a plain box.
-fn plain_box_size(html: &str, cell: &str, text: &str, sheet: &SheetType) -> Option<f64> {
-    let (room, classes) = plain_box(html, cell)?;
+/// The type size (pt) `text` prints at in plain input `tag` of a cell
+/// `width` pt wide when it is longer than the input: wider, at its class's
+/// size, than the input's whole room (and [`FIT_EPSILON_PT`]). It is then
+/// measured in the sheet's type ([`SheetType::fit`]) to set within the room
+/// less 1 pt to spare, rounded down to 0.01 pt. `None` while it fits: it
+/// prints byte for byte as before.
+fn plain_input_size(sheet: &SheetType, width: f64, tag: &str, text: &str) -> Option<f64> {
+    let classes = attr(tag, "class")?;
     let size = sheet.size_for(classes)?;
     let letter = sheet.letter_for(classes);
-    (sheet.width(letter, text, size) > room).then(|| sheet.fit(letter, room, text, size))
+    let room = input_room(width, tag);
+    (sheet.width(letter, text, size) > room + FIT_EPSILON_PT)
+        .then(|| sheet.fit(letter, (room - 1.0).max(1.0), text, size))
 }
 
 /// `tag` with `font-size:{size}pt` last in its inline style.
@@ -1293,18 +1332,43 @@ fn fill_text_input(
             ));
         }
     } else {
-        // A value longer than its plain box prints smaller, measured, so it
-        // stays inside the box; one that fits keeps its bytes.
-        let shrink = via_cell
-            .then(|| plain_box_size(html, input_name, print, sheet))
+        // A value longer than its plain input prints smaller, measured, so
+        // it stays inside the input; one that fits keeps its bytes. Each
+        // input of the cell is measured by its own room: a split cell
+        // ([`SINGLE_CHARACTER_CELLS`]) holding one character per box keeps
+        // the class size, and one it cannot split keeps the whole value in
+        // its first box only (`split_single_character_cells`).
+        let width = via_cell
+            .then(|| plain_cell_width(html, input_name))
             .flatten();
-        for &index in indices {
+        let split =
+            sheet.split.iter().any(|(cell, _)| *cell == input_name) && splits(tags, indices);
+        let split_fits = split && fits_one_per_box(print, indices.len());
+        for (offset, &index) in indices.iter().enumerate() {
             let writer = via_cell.then_some(print);
             let tag = set_value(tags[index].tag, print, writer);
-            let tag = shrink.map_or_else(|| tag.clone(), |size| with_font_size(&tag, size));
+            let size = width
+                .filter(|_| !split_fits && (!split || offset == 0))
+                .and_then(|width| plain_input_size(sheet, width, tags[index].tag, print));
+            let tag = size.map_or_else(|| tag.clone(), |size| with_font_size(&tag, size));
             replacements.push((tags[index].start, tags[index].end, tag));
         }
     }
+}
+
+/// Whether a cell's inputs `indices` are split one character per box: two
+/// or more one-character inputs that are not a comb.
+fn splits(tags: &[InputTag<'_>], indices: &[usize]) -> bool {
+    indices.len() >= 2
+        && indices.iter().all(|&index| {
+            tags[index].slot.is_none() && attr(tags[index].tag, "maxlength") == Some("1")
+        })
+}
+
+/// Whether `value` goes one character per box into a split cell of
+/// `boxes` boxes: no more characters than boxes, letters and digits only.
+fn fits_one_per_box(value: &str, boxes: usize) -> bool {
+    value.chars().count() <= boxes && value.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
 /// Attachment-count writer keys used by the reviewed frozen-sheet joins.
@@ -2572,7 +2636,9 @@ fn fill_bundle(
 ) -> Result<String, String> {
     let cells = writer_cells(slug)?;
     validate_writer_cells(html, slug, &cells)?;
-    let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| SheetType::of(loaded.css));
+    let sheet = bundle(slug).map_or_else(SheetType::plain, |loaded| {
+        SheetType::of_sheet(slug, loaded.css)
+    });
     let plan = line_group_plan(html, fields, &cells, &sheet);
     let filled = fill_by_name_set(html, fields, &cells.joins, &plan, &sheet);
     let filled = fill_money_joins(&filled, fields, &cells.money_joins);
@@ -2637,11 +2703,7 @@ fn split_single_character_cells(slug: &str, html: &str) -> String {
         let Some(indices) = grouped.get(cell) else {
             continue;
         };
-        if indices.len() < 2
-            || indices.iter().any(|&index| {
-                tags[index].slot.is_some() || attr(tags[index].tag, "maxlength") != Some("1")
-            })
-        {
+        if !splits(&tags, indices) {
             continue;
         }
         let first = tags[indices[0]].tag;
@@ -2650,7 +2712,7 @@ fn split_single_character_cells(slug: &str, html: &str) -> String {
             .unwrap_or("");
         let chars: Vec<char> = value.chars().collect();
         let boxes = indices.len();
-        let fits = chars.len() <= boxes && chars.iter().all(char::is_ascii_alphanumeric);
+        let fits = fits_one_per_box(value, boxes);
         let pad = if fits && *right {
             boxes - chars.len()
         } else {
@@ -5525,6 +5587,28 @@ mod tests {
         }
     }
 
+    /// Every input of plain (`data-field-kind="text"`) cell `cell` of
+    /// `html`, in order: its whole room (pt), its class list and its tag.
+    fn plain_inputs<'a>(html: &'a str, cell: &str) -> Vec<(f64, &'a str, &'a str)> {
+        let Some(width) = plain_cell_width(html, cell) else {
+            return Vec::new();
+        };
+        let open = html.find(&format!("<div id=\"{cell}\"")).unwrap();
+        let inner = &html[open..open + html[open..].find("</div>").unwrap()];
+        let mut out = Vec::new();
+        let mut from = 0;
+        while let Some(at) = inner[from..].find("<input") {
+            let at = from + at;
+            let end = at + inner[at..].find('>').unwrap();
+            let tag = &inner[at..end];
+            from = end;
+            if let Some(classes) = attr(tag, "class") {
+                out.push((input_room(width, tag), classes, tag));
+            }
+        }
+        out
+    }
+
     /// Whether a plain overflow line `text` at `size` pt sets within a
     /// comb `width` pt wide on sheet `slug`: measured in the sheet's face
     /// with its word- and letter-spacing, after the line's 1 pt padding.
@@ -5985,30 +6069,26 @@ mod tests {
                 }
                 for ids in cells.joins.values() {
                     for cell in ids {
-                        let Some((room, classes)) = plain_box(&document, cell) else {
-                            continue;
-                        };
-                        let input_at = document.find(&format!("<div id=\"{cell}\"")).unwrap();
-                        let input_at = input_at + document[input_at..].find("<input").unwrap();
-                        let input =
-                            &document[input_at..input_at + document[input_at..].find('>').unwrap()];
-                        let text = attr(input, "value").unwrap_or("").replace("&amp;", "&");
-                        if text.is_empty() {
-                            continue;
-                        }
-                        let style = attr(input, "style").unwrap_or("");
-                        let size = style
-                            .find("font-size:")
-                            .and_then(|at| style[at + "font-size:".len()..].split("pt").next())
-                            .and_then(|size| size.parse().ok())
-                            .or_else(|| sheet.size_for(classes))
-                            .unwrap_or_else(|| panic!("{slug} {cell}: a type size"));
-                        let measured = sheet.width(sheet.letter_for(classes), &text, size);
-                        assert!(
-                            measured <= room,
+                        // Every input of the cell, each by its own room.
+                        for (room, classes, input) in plain_inputs(&document, cell) {
+                            let text = attr(input, "value").unwrap_or("").replace("&amp;", "&");
+                            if text.is_empty() {
+                                continue;
+                            }
+                            let style = attr(input, "style").unwrap_or("");
+                            let size = style
+                                .find("font-size:")
+                                .and_then(|at| style[at + "font-size:".len()..].split("pt").next())
+                                .and_then(|size| size.parse().ok())
+                                .or_else(|| sheet.size_for(classes))
+                                .unwrap_or_else(|| panic!("{slug} {cell}: a type size"));
+                            let measured = sheet.width(sheet.letter_for(classes), &text, size);
+                            assert!(
+                            measured <= room + FIT_EPSILON_PT,
                             "{slug} {case} {cell}: {text:?} at {size}pt measures {measured}pt in a {room}pt box"
                         );
-                        boxes += 1;
+                            boxes += 1;
+                        }
                     }
                 }
             }
@@ -6239,6 +6319,19 @@ mod tests {
             let n = face.ems("\u{00D1}");
             assert!(n > 0.5 && n < 1.0, "{face:?} Ñ: {n}");
         }
+        // A tab counts 2.3 em in both faces (Chromium: 2.22 em in Arimo, 2.0
+        // em in Tinos); the print keeps it as typed.
+        assert_eq!(TAB_EMS, 2.3);
+        for face in [Face::Arimo, Face::Tinos] {
+            assert_eq!(face.ems("\t"), TAB_EMS, "{face:?}");
+        }
+        // A no-break space takes the word-spacing as a space does.
+        let sheet = SheetType::of(bundle("1604f-2018").unwrap().css);
+        let spacing =
+            |text: &str| sheet.width(sheet.letter, text, 9.0) - Face::Tinos.ems(text) * 9.0;
+        assert!((spacing("A\u{a0}B") - 0.3238).abs() < 1e-9);
+        assert!((spacing("A B") - 0.3238).abs() < 1e-9);
+        assert!(spacing("AB").abs() < 1e-9);
         assert_eq!(Face::Arimo.ems("A"), 1366.0 / 2048.0);
         assert_eq!(
             Face::Tinos.ems("A"),
@@ -6274,7 +6367,7 @@ mod tests {
             .iter()
             .find(|(_, ids)| ids.iter().any(|id| id == "p1c38"))
             .expect("a join prints in p1c38");
-        let (room, classes) = plain_box(loaded.html, "p1c38").unwrap();
+        let (room, classes, _) = plain_inputs(loaded.html, "p1c38")[0];
         let class_size = sheet.size_for(classes).unwrap();
         let read = |document: &str| -> (String, Option<f64>) {
             let at = document.find("<div id=\"p1c38\"").unwrap();
@@ -6294,7 +6387,7 @@ mod tests {
         assert_eq!(value, long, "the whole value prints");
         let size = size.expect("a smaller size");
         assert!(size < class_size);
-        assert!(sheet.width(sheet.letter_for(classes), &value, size) <= room);
+        assert!(sheet.width(sheet.letter_for(classes), &value, size) <= room - 1.0);
         let fitting = words_of(20);
         let document =
             filled_document(slug, &BTreeMap::from([(key.clone(), fitting.clone())])).unwrap();
@@ -6375,9 +6468,14 @@ mod tests {
         let sheet = SheetType::of(loaded.css);
         let mut fields = BTreeMap::new();
         for (key, ids) in &cells.joins {
+            // As recorded: each cell's first input, its room less 1 pt.
             let boxes: Option<Vec<(f64, &str)>> = ids
                 .iter()
-                .map(|cell| plain_box(loaded.html, cell))
+                .map(|cell| {
+                    plain_inputs(loaded.html, cell)
+                        .first()
+                        .map(|(room, classes, _)| (room - 1.0, *classes))
+                })
                 .collect();
             let Some(boxes) = boxes.filter(|boxes| !boxes.is_empty()) else {
                 continue;
@@ -6435,5 +6533,196 @@ mod tests {
             golden, plain,
             "every sheet prints fitting plain-box values as before"
         );
+    }
+
+    /// The values of every text join of sheet `slug` that fit their boxes
+    /// to the edge: the longest start of an address (letters and digits for
+    /// a split one-character cell) that, in every cell the join prints in,
+    /// takes no more characters than a comb has boxes, one character per
+    /// box in a split cell, and in each input of a plain cell sets within
+    /// that input's whole room at its class's size, measured in the sheet's
+    /// type. Plain-box values reach the band where the round-4 fill shrank a
+    /// value that fit (the 1 pt spare), the split cells and the cells with
+    /// several inputs.
+    fn band_fields(slug: &str) -> BTreeMap<String, String> {
+        const ADDRESS: &str =
+            "UNIT 1203 TWELFTH FLOOR CURVE BUILDING BONIFACIO GLOBAL CITY TAGUIG METRO MANILA";
+        const CODE: &str = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let loaded = bundle(slug).unwrap();
+        let sheet = SheetType::of_sheet(slug, loaded.css);
+        let cells = writer_cells(slug).unwrap();
+        let tags = input_tags(loaded.html);
+        let grouped = grouped_input_indices(&tags);
+        let mut fields = BTreeMap::new();
+        for (key, ids) in &cells.joins {
+            let split = ids.iter().any(|cell| {
+                sheet.split.iter().any(|(split, _)| split == cell)
+                    && grouped
+                        .get(cell.as_str())
+                        .is_some_and(|indices| splits(&tags, indices))
+            });
+            let pool = if split { CODE } else { ADDRESS };
+            // Each cell's limit, read once: a comb's or a split cell's
+            // boxes, a plain cell's inputs (room, size, letter-spacing).
+            enum Limit {
+                Boxes(usize),
+                Split(usize),
+                Plain(Vec<Option<(f64, f64, Spacing)>>),
+            }
+            let limits: Vec<Limit> = ids
+                .iter()
+                .filter_map(|cell| {
+                    let indices = grouped.get(cell.as_str())?;
+                    if indices.iter().all(|&i| tags[i].slot.is_some()) {
+                        return Some(Limit::Boxes(indices.len()));
+                    }
+                    if sheet.split.iter().any(|(split, _)| split == cell) && splits(&tags, indices)
+                    {
+                        return Some(Limit::Split(indices.len()));
+                    }
+                    Some(Limit::Plain(
+                        plain_inputs(loaded.html, cell)
+                            .into_iter()
+                            .map(|(room, classes, _)| {
+                                sheet
+                                    .size_for(classes)
+                                    .map(|size| (room, size, sheet.letter_for(classes)))
+                            })
+                            .collect(),
+                    ))
+                })
+                .collect();
+            let fits = |text: &str| {
+                limits.iter().all(|limit| match limit {
+                    Limit::Boxes(boxes) => text.chars().count() <= *boxes,
+                    Limit::Split(boxes) => fits_one_per_box(text, *boxes),
+                    Limit::Plain(inputs) => {
+                        !inputs.is_empty()
+                            && inputs.iter().all(|input| {
+                                input.is_some_and(|(room, size, letter)| {
+                                    sheet.width(letter, text, size) <= room
+                                })
+                            })
+                    }
+                })
+            };
+            let best = (1..=pool.len())
+                .rev()
+                .map(|n| pool[..n].trim_end())
+                .find(|text| !text.is_empty() && fits(text));
+            if let Some(text) = best {
+                fields.insert(key.clone(), text.to_string());
+            }
+        }
+        fields
+    }
+
+    /// A value that fits its boxes to the edge prints byte for byte as at
+    /// dcc6386a, the last commit before every sheet's type was measured
+    /// (round 5: the 1 pt spare, split cells and cells with several inputs
+    /// shrank such values). `fixtures/fitting-band-goldens.json` holds, per
+    /// sheet, the SHA-256 of the document dcc6386a's fill printed for
+    /// [`band_fields`]: the fields were written out by this commit's code,
+    /// dcc6386a was exported with `git archive dcc6386a` into a scratch
+    /// directory, and a scratch binary depending on its bir-print filled
+    /// and hashed each sheet. The test cannot bless it.
+    #[test]
+    fn fitting_band_prints_as_at_dcc6386a_on_every_sheet() {
+        let golden: BTreeMap<String, String> =
+            serde_json::from_str(include_str!("fixtures/fitting-band-goldens.json")).unwrap();
+        let mut filled = 0;
+        let now: BTreeMap<String, String> = sheet_slugs()
+            .iter()
+            .map(|slug| {
+                use sha2::{Digest, Sha256};
+                let fields = band_fields(slug);
+                filled += fields.len();
+                let document = filled_document(slug, &fields).unwrap();
+                let hash = Sha256::digest(document.as_bytes())
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect();
+                (slug.clone(), hash)
+            })
+            .collect();
+        assert!(filled > 500, "{filled} joins filled to the edge");
+        assert!(
+            band_fields("1706-2018").contains_key("frm1706:txtBuyerName"),
+            "1706's buyer name is filled"
+        );
+        assert_eq!(
+            golden, now,
+            "every sheet prints values that fit to the edge as before"
+        );
+    }
+
+    /// Round 5, finding 1: a split one-character cell (2550M's ZIP, RDO and
+    /// sheets count) holding exactly as many characters as it has boxes
+    /// prints one per box at its class's size, with no inline size; finding
+    /// 3: a cell with several inputs each holding the whole value (1600WP's
+    /// attachment dates) keeps the class size while the value fits each
+    /// input, and sizes each input by its own room when it does not.
+    #[test]
+    fn split_and_several_input_cells_shrink_only_what_overflows() {
+        let mut split_cells = 0;
+        for slug in sheet_slugs() {
+            let loaded = bundle(&slug).unwrap();
+            let sheet = SheetType::of_sheet(&slug, loaded.css);
+            let cells = writer_cells(&slug).unwrap();
+            let tags = input_tags(loaded.html);
+            let grouped = grouped_input_indices(&tags);
+            for (cell, _) in sheet.split {
+                let indices = &grouped[*cell];
+                assert!(splits(&tags, indices), "{slug} {cell}");
+                let (key, _) = cells
+                    .joins
+                    .iter()
+                    .find(|(_, ids)| ids.iter().any(|id| id == cell))
+                    .unwrap();
+                let value = &"1234567890"[..indices.len()];
+                let document =
+                    filled_document(&slug, &BTreeMap::from([(key.clone(), value.to_string())]))
+                        .unwrap();
+                let inputs = plain_inputs(&document, cell);
+                assert_eq!(inputs.len(), indices.len(), "{slug} {cell}");
+                for (offset, (_, _, tag)) in inputs.iter().enumerate() {
+                    assert!(!tag.contains("font-size"), "{slug} {cell}: {tag}");
+                    assert_eq!(attr(tag, "value"), Some(&value[offset..=offset]));
+                }
+                split_cells += 1;
+            }
+        }
+        assert_eq!(split_cells, 3, "2550M's three split cells");
+        // 1600WP's attachment dates: two inputs each holding the whole value.
+        let slug = "1600wp-2010";
+        let loaded = bundle(slug).unwrap();
+        let sheet = SheetType::of_sheet(slug, loaded.css);
+        let cells = writer_cells(slug).unwrap();
+        let (key, _) = cells
+            .joins
+            .iter()
+            .find(|(_, ids)| ids.iter().any(|id| id == "p1c62"))
+            .expect("a join prints in p1c62");
+        for (value, shrinks) in [("1", false), ("2024", true)] {
+            let document =
+                filled_document(slug, &BTreeMap::from([(key.clone(), value.to_string())])).unwrap();
+            let inputs = plain_inputs(&document, "p1c62");
+            assert_eq!(inputs.len(), 2);
+            for (room, classes, tag) in inputs {
+                assert_eq!(attr(tag, "value"), Some(value));
+                let size = sheet.size_for(classes).unwrap();
+                let letter = sheet.letter_for(classes);
+                if shrinks {
+                    let style = attr(tag, "style").unwrap();
+                    let at = style.find("font-size:").expect("an inline size") + "font-size:".len();
+                    let printed: f64 = style[at..].split("pt").next().unwrap().parse().unwrap();
+                    assert!(printed < size);
+                    assert!(sheet.width(letter, value, printed) <= room - 1.0, "{tag}");
+                } else {
+                    assert!(sheet.width(letter, value, size) <= room);
+                    assert!(!tag.contains("font-size"), "{tag}");
+                }
+            }
+        }
     }
 }
