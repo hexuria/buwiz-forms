@@ -19,9 +19,13 @@
 //! (the date fields typed so far) and `trigger_date_entered` (set once
 //! every part needed is typed; parts the return's identity fixes count as
 //! given). Both are skipped when empty, so a draft saved before them keeps
-//! its bytes until edited. The host writes both on every save, from the
-//! stored row's typed parts that still hold their stored value and its
-//! own typed writes; a client's value is never kept. So a date typed over
+//! its bytes until edited. Every save settles both, from the stored row's
+//! typed parts that still hold their stored value and the host's own typed
+//! writes (an unrelated save writes the stored row's two fields back as
+//! they were); a client's value is never kept. A profile import restores
+//! a user-chosen backup, so it brings the stored records back unchanged.
+//! The desktop 1606 and 1706 views record their own date edits
+//! ([`note_trigger_edits`]). So a date typed over
 //! two sessions, or one part edited after a restart, still counts; a
 //! cleared part no longer does. A return that left Draft files the date
 //! it holds, typed or not, so it is dated by that date; a cancelled queue
@@ -120,22 +124,101 @@ pub fn event_trigger_from_json(form_code: &str, data_json: &str) -> Option<Event
     if !DeadlineResolver::is_as_needed(form_code) {
         return None;
     }
-    let mut rule = event_due_rule(form_code)?;
     let draft: Value = serde_json::from_str(data_json).ok()?;
     if !date_was_entered(form_code, &draft) {
         return None;
     }
-    if form_code == "2552" {
-        // Item 11 picks the rule: a primary offering is due from the
-        // listing date, the LSE and a secondary offering from collection.
-        match draft.get("transaction").and_then(Value::as_str) {
-            Some("primary_offering") => rule = FORM_2552_PRIMARY_OFFERING_RULE,
-            Some("local_stock_exchange" | "secondary_offering") => {}
-            _ => return None,
-        }
-    }
+    let rule = due_rule_for(form_code, &draft)?;
     let date = held_trigger_date(form_code, &draft)?;
     Some(EventTrigger { date, rule })
+}
+
+/// The due-date rule a draft of `form_code` follows: the form's own, except
+/// 2552, where Item 11 picks it (a primary offering is due from the listing
+/// date; the LSE and a secondary offering from collection) and an unpicked
+/// Item 11 has none yet. The one choice every reader uses.
+pub fn due_rule_for(form_code: &str, draft: &Value) -> Option<EventDueRule> {
+    let rule = event_due_rule(form_code)?;
+    if form_code != "2552" {
+        return Some(rule);
+    }
+    match draft.get("transaction").and_then(Value::as_str) {
+        Some("primary_offering") => Some(FORM_2552_PRIMARY_OFFERING_RULE),
+        Some("local_stock_exchange" | "secondary_offering") => Some(rule),
+        _ => None,
+    }
+}
+
+/// The trigger field a draft path writes (its top-level segment, when that
+/// is one of the form's trigger fields): the one matcher every trigger
+/// check uses, here and in the shell.
+pub fn trigger_field_of(form_code: &str, path: &str) -> Option<&'static str> {
+    let top = path.trim_start_matches('/').split('/').next()?;
+    trigger_paths(form_code)
+        .iter()
+        .copied()
+        .find(|field| *field == top)
+}
+
+/// The trigger fields a box of the return's identity holds (the period the
+/// return was opened for, locked on the page: the excise returns' and
+/// 1600WP's month and year; 2200AN's, 2200S's and 2552's whole date). The
+/// filer set them by choosing the return; they are not a constructor's
+/// guess, so they need no typing.
+pub fn identity_trigger_fields(form_code: &str) -> std::collections::BTreeSet<&'static str> {
+    let Some(kind) = super::agent::AgentFormKind::from_code(form_code) else {
+        return Default::default();
+    };
+    kind.definition()
+        .bindings
+        .values()
+        .filter(|bound| bound.lock == Some(super::agent::Lock::Identity))
+        .flat_map(|bound| super::agent::binding_paths(&bound.binding))
+        .filter_map(|path| trigger_field_of(form_code, path))
+        .collect()
+}
+
+/// Whether `parts` (the typed trigger fields) date the return: at least one
+/// typed, and every field the date needs typed or fixed by the return's
+/// identity.
+pub fn parts_complete(form_code: &str, parts: &std::collections::BTreeSet<String>) -> bool {
+    let fields = trigger_paths(form_code);
+    let given = identity_trigger_fields(form_code);
+    !fields.is_empty()
+        && !parts.is_empty()
+        && fields
+            .iter()
+            .all(|field| given.contains(field) || parts.contains(*field))
+}
+
+/// Record trigger-date edits made outside the shell page (the desktop views):
+/// each `(field, before, after)` whose value changed is typed, or taken out
+/// when cleared to 0, and the flag follows [`parts_complete`].
+pub fn note_trigger_edits(
+    form_code: &str,
+    lifecycle: &mut super::queueable::SubmissionLifecycle,
+    edits: &[(&str, u32, u32)],
+) {
+    let fields = trigger_paths(form_code);
+    let mut parts: std::collections::BTreeSet<String> =
+        lifecycle.trigger_parts_typed.iter().cloned().collect();
+    let mut changed = false;
+    for (field, before, after) in edits {
+        if before == after || !fields.contains(field) {
+            continue;
+        }
+        changed = true;
+        if *after == 0 {
+            parts.remove(*field);
+        } else {
+            parts.insert(field.to_string());
+        }
+    }
+    if !changed {
+        return;
+    }
+    lifecycle.trigger_date_entered = parts_complete(form_code, &parts);
+    lifecycle.trigger_parts_typed = parts.into_iter().collect();
 }
 
 /// The trigger date a draft of `form_code` holds in its fields, entered or
@@ -164,22 +247,51 @@ pub fn held_trigger_date(form_code: &str, draft: &Value) -> Option<NaiveDate> {
     }
 }
 
-/// The overrides a branch's as-needed deadlines are resolved with: the
-/// stored global ones, then the profile's own for every year of its Forms
-/// Set. The Home and Calendar feed and the Google Calendar sync both use it,
-/// so they agree on a moved date.
-pub fn event_overrides(
-    db: &crate::db::Database,
-    profile: &crate::profile::TaxpayerProfile,
+/// The deadline overrides a return's Calendar row is resolved with
+/// (decision P5-9: one definition for the Home and Calendar feed, the
+/// Google Calendar sync and the penalty clock): the stored global ones,
+/// then the profile's own, for every year of its Forms Set when the form is
+/// as needed (its event can fall in any of them), else for the return's
+/// taxable year.
+pub fn calendar_overrides(
     global: &[crate::calendar_rules::DeadlineOverride],
-) -> Result<Vec<crate::calendar_rules::DeadlineOverride>, crate::db::DbError> {
+    profile: &crate::profile::TaxpayerProfile,
+    form_code: &str,
+    taxable_year: Option<u16>,
+) -> Vec<crate::calendar_rules::DeadlineOverride> {
+    if DeadlineResolver::is_as_needed(form_code) {
+        return as_needed_overrides(global, profile);
+    }
+    periodic_overrides(global, profile, taxable_year)
+}
+
+/// [`calendar_overrides`] for a periodic return of `taxable_year`.
+pub fn periodic_overrides(
+    global: &[crate::calendar_rules::DeadlineOverride],
+    profile: &crate::profile::TaxpayerProfile,
+    taxable_year: Option<u16>,
+) -> Vec<crate::calendar_rules::DeadlineOverride> {
     let mut overrides = global.to_vec();
-    for year in db.list_forms_set_years(&profile.tin.full())? {
+    if let Some(year) = taxable_year {
         overrides.extend(crate::integration::profile_deadline_overrides_for_year(
             profile, year,
         ));
     }
-    Ok(overrides)
+    overrides
+}
+
+/// [`calendar_overrides`] for every as-needed form of a profile.
+pub fn as_needed_overrides(
+    global: &[crate::calendar_rules::DeadlineOverride],
+    profile: &crate::profile::TaxpayerProfile,
+) -> Vec<crate::calendar_rules::DeadlineOverride> {
+    let mut overrides = global.to_vec();
+    for year in profile.per_year_forms.keys() {
+        overrides.extend(crate::integration::profile_deadline_overrides_for_year(
+            profile, *year,
+        ));
+    }
+    overrides
 }
 
 /// A saved as-needed return that holds its entered trigger date, with the

@@ -838,6 +838,7 @@ fn skipped(top: &str) -> bool {
             next_retry_at: Some(String::new()),
             trigger_date_entered: true,
             trigger_parts_typed: vec![String::new()],
+            trigger_date_model: true,
             ..Default::default()
         })
         .expect("lifecycle serializes");

@@ -529,10 +529,8 @@ pub fn build_desired_events(
             .into_iter()
             .filter(|code| selection.allows(code))
             .collect::<Vec<_>>();
-        let mut overrides = global_overrides.clone();
-        overrides.extend(crate::integration::profile_deadline_overrides_for_year(
-            profile, year,
-        ));
+        let overrides =
+            crate::forms::event_trigger::periodic_overrides(&global_overrides, profile, Some(year));
         let summaries = db.list_draft_summaries(&tin, year).unwrap_or_default();
         let deadlines = DeadlineResolver::deadlines_for_forms(&form_codes, year as i32, &overrides);
         let dated_codes = deadlines
@@ -579,7 +577,7 @@ pub fn build_desired_events(
     // trigger date is a dated event too, keyed by the return, so the user
     // keeps one event per return (`event_trigger::dated_event_returns`, the
     // rows Home and the Calendar list).
-    let overrides = crate::forms::event_trigger::event_overrides(db, profile, &global_overrides)?;
+    let overrides = crate::forms::event_trigger::as_needed_overrides(&global_overrides, profile);
     let working = crate::official_holidays::business_day_calendar();
     for dated in crate::forms::event_trigger::dated_event_returns(db, &tin, &overrides, &working)? {
         if !selection.allows(&dated.summary.form_code) {
@@ -1413,6 +1411,24 @@ mod tests {
             "30 days after the gift"
         );
         assert_eq!(event.body["summary"], "[BIR] 1800 - Donation 2026-09-15");
+    }
+
+    /// Decision P5-10: a damaged stored override is skipped, the good ones
+    /// still move the synced events.
+    #[test]
+    fn the_sync_sees_the_good_overrides_beside_a_damaged_one() {
+        let (_file, db) = test_database();
+        db.set_setting(
+            "deadline_overrides",
+            r#"[{"id":"broken"},{"id":"a","title":"Good","source_reference":"RMC","affected_form_codes":["0619E"],"original_deadline":"2026-10-12","adjusted_deadline":"2026-10-20","affected_regions":[],"affected_taxpayer_types":[],"effective_from":null,"effective_until":null,"expires_at":null}]"#,
+        )
+        .unwrap();
+        let (events, _) = build_desired_events(&db, &test_profile()).unwrap();
+        let september = events
+            .iter()
+            .find(|event| event.obligation_key == "2026:0619E:m09")
+            .unwrap();
+        assert_eq!(september.body["start"]["date"], "2026-10-20");
     }
 
     #[test]

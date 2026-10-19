@@ -176,10 +176,10 @@ pub struct PenaltyItems<F> {
     pub state: fn(&F) -> &PenaltyState,
     pub state_mut: fn(&mut F) -> &mut PenaltyState,
     pub status: fn(&F) -> FilingStatus,
-    /// Whether the filer entered the return's trigger date
-    /// (`SubmissionLifecycle::trigger_date_entered`; see
-    /// [`Self::awaits_trigger_date`]).
-    pub trigger_date_entered: fn(&F) -> bool,
+    /// The draft was created under the typed-trigger model and its trigger
+    /// date is not entered yet (`SubmissionLifecycle::trigger_date_model`
+    /// and `trigger_date_entered`; see [`Self::awaits_trigger_date`]).
+    pub trigger_date_pending: fn(&F) -> bool,
     /// The calendar period this return is filed for; `None` when the app's
     /// calendar has no period for it (event-based returns).
     pub deadline_period: fn(&F) -> Option<DeadlinePeriod>,
@@ -351,11 +351,14 @@ impl<F> PenaltyItems<F> {
     /// ([`crate::forms::event_trigger::PREFILLED_TRIGGER_FORMS`]) that does
     /// not hold an entered one yet: its date is the constructor's guess, so
     /// no penalty is computed from it and no penalty due date is kept
-    /// (decision P4-3). Once dated, or once it leaves Draft, as before.
+    /// (decisions P4-3, P5-7). Only a draft created under the typed-trigger
+    /// model is gated: a row without the marker (every row stored before)
+    /// computes from the date it holds, as before. Once dated, or once it
+    /// leaves Draft, as before.
     pub fn awaits_trigger_date(&self, form: &F) -> bool {
         crate::forms::event_trigger::PREFILLED_TRIGGER_FORMS.contains(&self.form_code)
             && matches!((self.status)(form), FilingStatus::Draft)
-            && !(self.trigger_date_entered)(form)
+            && (self.trigger_date_pending)(form)
     }
 
     /// What the engine computes if the return is filed (and paid) on
@@ -438,12 +441,15 @@ impl<F> PenaltyItems<F> {
         let due_date = (self.deadline_period)(form)
             .filter(|_| !awaits)
             .and_then(|period| {
-                let mut overrides = global_overrides.to_vec();
-                if let Some(year) = period.taxable_year().and_then(|y| u16::try_from(y).ok()) {
-                    overrides.extend(crate::integration::profile_deadline_overrides_for_year(
-                        profile, year,
-                    ));
-                }
+                // The override set the Calendar row for this return uses
+                // (decision P5-9): one definition for both.
+                let year = period.taxable_year().and_then(|y| u16::try_from(y).ok());
+                let overrides = crate::forms::event_trigger::calendar_overrides(
+                    global_overrides,
+                    profile,
+                    self.form_code,
+                    year,
+                );
                 resolve_due_date(self.form_code, &period, &overrides)
             });
         self.set_context(
@@ -502,16 +508,11 @@ impl<F> PenaltyItems<F> {
             .unwrap_or(matches!(status, FilingStatus::Draft));
         if refresh {
             if self.awaits_trigger_date(form) {
-                // Undated: keep any non-zero amount the stored draft holds
-                // as entered (an override), so it files the same value;
-                // compute nothing from the pre-filled date.
-                let held = self.used(form);
+                // Undated and on the typed-trigger model: compute nothing
+                // from the pre-filled date. A computed value is never turned
+                // into an override; the filer's own overrides stay as they
+                // are.
                 let state = (self.state_mut)(form);
-                for (component, value) in PenaltyComponent::ALL.into_iter().zip(held) {
-                    if value != 0.0 && state.penalty_overrides.get(component).is_none() {
-                        state.penalty_overrides.set(component, Some(value));
-                    }
-                }
                 state.computed_penalties = None;
                 state.penalty_due_date = None;
             } else {
@@ -626,7 +627,9 @@ macro_rules! queueable_penalty_items {
                 state: |d: &$ty| &d.$($state).+,
                 state_mut: |d: &mut $ty| &mut d.$($state).+,
                 status: |d: &$ty| d.lifecycle().status.clone(),
-                trigger_date_entered: |d: &$ty| d.lifecycle().trigger_date_entered,
+                trigger_date_pending: |d: &$ty| {
+                    d.lifecycle().trigger_date_model && !d.lifecycle().trigger_date_entered
+                },
                 deadline_period: $crate::forms::penalty_items::calendar_period::<$ty>,
                 period_code: |d: &$ty| d.period_code(),
                 is_amended: |d: &$ty| d.amended_return_answer().unwrap_or(false),
@@ -685,14 +688,7 @@ mod tests {
         .unwrap()
     }
 
-    /// Round 5, item 3: an undated 1606 Draft (its sale date the
-    /// constructor's) computes no penalties and keeps no penalty due date;
-    /// once dated, or once it leaves Draft, it computes them from the sale.
-    /// A held non-zero amount is kept as entered.
-    #[test]
-    fn an_undated_1606_draft_computes_no_penalties() {
-        use crate::forms::queueable::QueueableForm as _;
-        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+    fn sale_on_august_3(marked: bool) -> crate::forms::form_1606::Form1606Draft {
         let mut draft =
             crate::forms::form_1606::Form1606Draft::new_from_profile(&profile(), 2026, 1);
         (
@@ -700,6 +696,19 @@ mod tests {
             draft.transaction_day,
             draft.transaction_year,
         ) = (8, 3, 2026);
+        draft.lifecycle.trigger_date_model = marked;
+        draft
+    }
+
+    /// Decisions P4-3 and P5-7: a 1606 Draft created under the typed-trigger
+    /// model computes no penalties and keeps no penalty due date while its
+    /// sale date is not entered; once entered, or once it leaves Draft, it
+    /// computes from the sale.
+    #[test]
+    fn a_marked_undated_1606_draft_computes_no_penalties() {
+        use crate::forms::queueable::QueueableForm as _;
+        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+        let mut draft = sale_on_august_3(true);
         items.apply_profile(&mut draft, &profile(), &[]);
         with_clock(day(2026, 10, 19), || draft.compute());
         assert!(items.awaits_trigger_date(&draft));
@@ -715,18 +724,66 @@ mod tests {
         let computed = draft.penalty.computed_penalties.clone().unwrap();
         assert_eq!(computed.inputs.due_date, day(2026, 9, 10));
         assert!(computed.inputs.days_late > 0, "{computed:?}");
-        // A stored undated Draft holding an amount: kept as entered.
-        let mut held = computed.clone();
+        // Left Draft: computed as before.
+        draft.lifecycle.trigger_date_entered = false;
+        draft.lifecycle.status = FilingStatus::Queued;
+        assert!(!items.awaits_trigger_date(&draft));
+        assert_eq!(items.due_date(&draft), Some(day(2026, 9, 10)));
+    }
+
+    /// Decision P5-7: a row without the marker (every row stored before)
+    /// is never gated: it computes from the date it holds, as before.
+    #[test]
+    fn an_unmarked_1606_draft_computes_from_the_date_it_holds() {
+        use crate::forms::queueable::QueueableForm as _;
+        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+        let mut draft = sale_on_august_3(false);
+        items.apply_profile(&mut draft, &profile(), &[]);
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert!(!items.awaits_trigger_date(&draft));
+        assert_eq!(draft.penalty.penalty_due_date, Some(day(2026, 9, 10)));
+        assert!(draft.penalty.computed_penalties.is_some());
+    }
+
+    /// Round 6, F2: no path turns computed values into overrides. A marked
+    /// undated draft that somehow holds computed values drops them; the
+    /// filer's own override stays as it was.
+    #[test]
+    fn computed_values_never_become_overrides() {
+        use crate::forms::queueable::QueueableForm as _;
+        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+        // Computed while dated, then undated again.
+        let mut draft = sale_on_august_3(true);
+        draft.lifecycle.trigger_date_entered = true;
+        items.apply_profile(&mut draft, &profile(), &[]);
+        let mut held = with_clock(day(2026, 10, 19), || {
+            draft.compute();
+            draft.penalty.computed_penalties.clone().unwrap()
+        });
         held.surcharge = 125.0;
         draft.penalty.computed_penalties = Some(held);
         draft.lifecycle.trigger_date_entered = false;
         with_clock(day(2026, 10, 19), || draft.compute());
         assert_eq!(draft.penalty.computed_penalties, None);
-        assert_eq!(draft.surcharge, 125.0, "the held amount files as entered");
-        // Left Draft: computed as before.
-        draft.lifecycle.status = FilingStatus::Queued;
-        assert!(!items.awaits_trigger_date(&draft));
-        assert_eq!(items.due_date(&draft), Some(day(2026, 9, 10)));
+        for component in PenaltyComponent::ALL {
+            assert_eq!(
+                draft.penalty.penalty_overrides.get(component),
+                None,
+                "{component:?}"
+            );
+        }
+        assert_eq!(draft.surcharge, 0.0);
+        // A real override stays one.
+        items.set_override(&mut draft, PenaltyComponent::Interest, Some(40.0));
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert_eq!(
+            draft
+                .penalty
+                .penalty_overrides
+                .get(PenaltyComponent::Interest),
+            Some(40.0)
+        );
+        assert_eq!(draft.interest, 40.0);
     }
 
     /// Decision P4-3 moved 1606 off the monthly rule; its penalties still

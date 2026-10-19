@@ -92,6 +92,15 @@ pub struct SubmissionLifecycle {
     /// or printed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trigger_parts_typed: Vec<String>,
+    /// This draft was created under the typed-trigger model (decision
+    /// P5-7): while it is an undated Draft of a pre-filled form it computes
+    /// no penalties. Written once, when the draft is created, by a builder
+    /// that records the filer's typed trigger date (the shell page; the
+    /// desktop 1606 and 1706 views). Absent (false) on every row stored
+    /// before, which keep the behaviour they had: penalties from the date
+    /// they hold. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trigger_date_model: bool,
 }
 
 impl Default for SubmissionLifecycle {
@@ -119,6 +128,7 @@ impl Default for SubmissionLifecycle {
             profile_baseline: std::collections::BTreeMap::new(),
             trigger_date_entered: false,
             trigger_parts_typed: Vec::new(),
+            trigger_date_model: false,
         }
     }
 }

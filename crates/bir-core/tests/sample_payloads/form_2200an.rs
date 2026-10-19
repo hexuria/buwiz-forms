@@ -9,10 +9,6 @@ use bir_core::forms::queueable::QueueableForm as _;
 fn sample_2200an() -> Form2200ANDraft {
     let mut draft =
         Form2200ANDraft::new_from_profile(&dummy_profile("2200ANv2018", "Corporation"), 2025, 6);
-    // Its trigger date is the filer's (decision P4-3: an undated
-    // pre-filled Draft computes no penalties); never filed or printed.
-    bir_core::forms::queueable::QueueableForm::lifecycle_mut(&mut draft).trigger_date_entered =
-        true;
     draft.month = 6;
     draft.day = 30;
     draft.is_amended = true;

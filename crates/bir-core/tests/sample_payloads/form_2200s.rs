@@ -6,10 +6,6 @@ use bir_core::forms::form_2200s::{Form2200SDraft, Form2200SManner, Form2200SOthe
 fn sample_2200s() -> Form2200SDraft {
     let mut draft =
         Form2200SDraft::new_from_profile(&dummy_profile("2200S", "Corporation"), 2025, 6);
-    // Its trigger date is the filer's (decision P4-3: an undated
-    // pre-filled Draft computes no penalties); never filed or printed.
-    bir_core::forms::queueable::QueueableForm::lifecycle_mut(&mut draft).trigger_date_entered =
-        true;
     draft.month = 6;
     draft.day = 30;
     draft.psic = "1104".into();

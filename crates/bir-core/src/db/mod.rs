@@ -929,23 +929,76 @@ impl Database {
         Ok(())
     }
 
-    /// Retrieve deadline overrides stored in the settings table.
+    /// The stored override entries, each as its own stored text (`None` when
+    /// none are stored; `Err` when the setting is not a JSON array).
+    fn stored_override_entries(&self) -> Result<Option<Vec<String>>, DbError> {
+        let Some(stored) = self.get_setting("deadline_overrides")? else {
+            return Ok(None);
+        };
+        split_json_array(&stored)
+            .map(|entries| Some(entries.into_iter().map(str::to_string).collect()))
+            .ok_or_else(|| DbError::Other("stored deadline overrides are not a JSON array".into()))
+    }
+
+    /// Retrieve deadline overrides stored in the settings table. An entry
+    /// that cannot be read is skipped (and logged), never the whole list
+    /// (decision P5-10); [`Self::damaged_deadline_overrides`] lists it.
     pub fn get_deadline_overrides(&self) -> Vec<crate::calendar_rules::DeadlineOverride> {
-        self.get_setting("deadline_overrides")
-            .ok()
-            .flatten()
-            .and_then(|json| serde_json::from_str(&json).ok())
+        let entries = match self.stored_override_entries() {
+            Ok(Some(entries)) => entries,
+            Ok(None) => return Vec::new(),
+            Err(error) => {
+                tracing::warn!(%error, "deadline overrides unreadable");
+                return Vec::new();
+            }
+        };
+        entries
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| match serde_json::from_str(entry) {
+                Ok(read) => Some(read),
+                Err(error) => {
+                    tracing::warn!(index, %error, "deadline override entry unreadable; skipped, kept as stored");
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// The stored override entries that cannot be read, each as its stored
+    /// text (decision P5-10: shown, and kept as stored by every save).
+    pub fn damaged_deadline_overrides(&self) -> Vec<String> {
+        self.damaged_deadline_overrides_checked()
             .unwrap_or_default()
     }
 
-    /// Persist deadline overrides to the settings table.
+    /// Persist deadline overrides to the settings table. An entry stored
+    /// before that cannot be read is kept, byte for byte, ahead of the
+    /// written ones: a save never drops or rewrites it (decision P5-10). A
+    /// stored value that is not a JSON array at all is not overwritten.
     pub fn set_deadline_overrides(
         &self,
         overrides: &[crate::calendar_rules::DeadlineOverride],
     ) -> Result<(), DbError> {
-        let json = serde_json::to_string(overrides).map_err(|e| DbError::Other(e.to_string()))?;
-        self.set_setting("deadline_overrides", &json)?;
+        let mut entries = self.damaged_deadline_overrides_checked()?;
+        for entry in overrides {
+            entries.push(serde_json::to_string(entry).map_err(|e| DbError::Other(e.to_string()))?);
+        }
+        self.set_setting("deadline_overrides", &format!("[{}]", entries.join(",")))?;
         self.request_google_calendar_sync()
+    }
+
+    /// [`Self::damaged_deadline_overrides`], failing when the stored value is
+    /// not an array (so a save refuses rather than overwrite it).
+    fn damaged_deadline_overrides_checked(&self) -> Result<Vec<String>, DbError> {
+        Ok(self
+            .stored_override_entries()?
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|entry| {
+                serde_json::from_str::<crate::calendar_rules::DeadlineOverride>(entry).is_err()
+            })
+            .collect())
     }
 
     /// Seed the official non-working holidays the app ships
@@ -1074,6 +1127,48 @@ impl Database {
 /// [`Database::seed_holidays_from`] has offered: a JSON array of
 /// `YYYY-MM-DD|CODE`.
 pub const HOLIDAY_SEED_LEDGER_KEY: &str = "official_holidays_seeded";
+
+/// The top-level elements of a JSON array, each as its exact text (trimmed
+/// of the whitespace around it). `None` unless `text` is one well-formed
+/// JSON array.
+fn split_json_array(text: &str) -> Option<Vec<&str>> {
+    if !matches!(
+        serde_json::from_str::<serde_json::Value>(text),
+        Ok(serde_json::Value::Array(_))
+    ) {
+        return None;
+    }
+    let body = text.trim();
+    let inner = &body[1..body.len() - 1];
+    let (mut depth, mut in_string, mut escaped, mut start) = (0i32, false, false, 0usize);
+    let mut out = Vec::new();
+    for (index, c) in inner.char_indices() {
+        if in_string {
+            match (escaped, c) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => in_string = true,
+            '[' | '{' => depth += 1,
+            ']' | '}' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(inner[start..index].trim());
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    let last = inner[start..].trim();
+    if !last.is_empty() {
+        out.push(last);
+    }
+    Some(out)
+}
 
 /// `stored` (a JSON array, or nothing) with `entries` appended, every
 /// stored byte before the closing bracket kept as it is.
@@ -1803,6 +1898,76 @@ mod tests {
         assert_eq!(
             db.get_setting("deadline_overrides").unwrap().as_deref(),
             Some("not json")
+        );
+    }
+
+    /// Decision P5-10: three stored entries, the middle one damaged (no
+    /// `title`). Two apply and the damaged one is listed; a save adding a
+    /// fourth keeps the damaged one's exact bytes; the Calendar and the
+    /// penalty clock see the two good ones.
+    #[test]
+    fn a_damaged_override_is_skipped_listed_and_kept() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let good = |id: &str, code: &str, from: &str, to: &str| {
+            format!(
+                r#"{{"id":"{id}","title":"Good {id}","source_reference":"RMC","affected_form_codes":["{code}"],"original_deadline":"{from}","adjusted_deadline":"{to}","affected_regions":[],"affected_taxpayer_types":[],"effective_from":null,"effective_until":null,"expires_at":null}}"#
+            )
+        };
+        let damaged = r#"{"id":"broken", "original_deadline":"2026-10-12",  "note":"no title"}"#;
+        let stored = format!(
+            "[{}, {damaged}, {}]",
+            good("a", "1601C", "2026-10-12", "2026-10-20"),
+            good("b", "0619E", "2026-11-10", "2026-11-12")
+        );
+        db.set_setting("deadline_overrides", &stored).unwrap();
+        let read = db.get_deadline_overrides();
+        assert_eq!(
+            read.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(),
+            ["a", "b"]
+        );
+        assert_eq!(db.damaged_deadline_overrides(), [damaged]);
+        // The Calendar sees the good entry: 1601C September moves to Oct 20.
+        let rows = crate::calendar_rules::DeadlineResolver::deadlines_for_forms(
+            &["1601C".to_string()],
+            2026,
+            &read,
+        );
+        let september = rows.iter().find(|d| d.period.month() == Some(9)).unwrap();
+        assert_eq!(september.final_deadline_date(), Some(ymd(2026, 10, 20)));
+        // And so does the penalty clock, which resolves from the same list.
+        assert_eq!(
+            crate::forms::penalty_items::resolve_due_date(
+                "1601C",
+                &crate::calendar_rules::DeadlinePeriod::Monthly {
+                    taxable_year: 2026,
+                    month: 9
+                },
+                &read
+            ),
+            Some(ymd(2026, 10, 20))
+        );
+        // A save adding a fourth keeps the damaged entry's bytes.
+        let mut more = read.clone();
+        let mut fourth = more[0].clone();
+        fourth.id = "d".into();
+        more.push(fourth);
+        db.set_deadline_overrides(&more).unwrap();
+        let after = db.get_setting("deadline_overrides").unwrap().unwrap();
+        assert!(after.contains(damaged), "{after}");
+        assert_eq!(db.get_deadline_overrides().len(), 3);
+        assert_eq!(db.damaged_deadline_overrides(), [damaged]);
+    }
+
+    #[test]
+    fn a_stored_value_that_is_not_an_array_is_not_overwritten() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        db.set_setting("deadline_overrides", "{not an array")
+            .unwrap();
+        assert!(db.get_deadline_overrides().is_empty());
+        assert!(db.set_deadline_overrides(&[]).is_err());
+        assert_eq!(
+            db.get_setting("deadline_overrides").unwrap().as_deref(),
+            Some("{not an array")
         );
     }
 
