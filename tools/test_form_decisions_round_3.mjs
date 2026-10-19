@@ -145,6 +145,9 @@ const KEPT_LOCK = "kept as entered before penalties were computed; choose Edit p
 const COMPUTED_LOCK = "computed from the due date; choose Edit penalties to enter the amounts BIR agreed to";
 let kept = true;
 let listNotes = true;
+// A kept group holding typed amounts (1800/1801 stored before P4-4): the
+// host's fill that blanks it says what it replaces (`removes`).
+let typedKept = false;
 let hostValues = {
   [K("TaxCredit17A")]: "0.00",
   [PENALTIES[0]]: "0.00", [PENALTIES[1]]: "0.00", [PENALTIES[2]]: "0.00",
@@ -163,7 +166,7 @@ const lockNotes = () => ({
   [K("Mcit42")]: NOTE_42,
   [K("Name")]: NOTE_PROFILE,
 });
-const group = () => ({ keys: PENALTIES, edited: false, applies: true, kept });
+const group = () => ({ keys: PENALTIES, edited: typedKept, applies: true, kept });
 const noted = () => [...(kept ? PENALTIES : []), K("Mcit42")];
 const opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {}, locks: locks(),
@@ -183,6 +186,9 @@ const app = {
       if (name === "screen_form_fill") {
         const edits = args[2];
         const relocks = {}, relockNotes = {};
+        const removes = typedKept && PENALTIES.every((k) => edits[k] === "")
+          ? { message: "Using the computed amounts replaces the penalties you typed in item 19A (\u20b1125.25), item 19C (\u20b11,000.00). Continue?", done: "Replaced the typed penalties", rows: 1 }
+          : null;
         if (PENALTIES.every((k) => edits[k] === "")) {
           // "Use the computed amounts" on a kept group: the host joins the
           // due date and computes (rows_excise.rs join_if_group_blanked).
@@ -191,7 +197,7 @@ const app = {
           for (const k of PENALTIES) { relocks[k] = COMPUTED_LOCK; relockNotes[k] = "Computed by the form."; }
         }
         for (const [k, v] of Object.entries(edits)) if (!PENALTIES.includes(k)) hostValues[k] = money(v);
-        return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {}, penalties: [group()], pools: {}, relocks, relock_notes: relockNotes, notes_always: noted() };
+        return { draft: args[1], values: { ...hostValues }, options: {}, rejected: {}, penalties: [group()], pools: {}, relocks, relock_notes: relockNotes, notes_always: noted(), removes };
       }
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: [], off: {}, penalties: [group()], pools: {} });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
@@ -262,6 +268,24 @@ assert.equal(ui.penaltyGroupOf(PENALTIES[0]).kept, false, "no longer kept");
 assert.equal(JSON.stringify(ui.lockNotesFor(item("19"))), "[]", "computed amounts need no note");
 assert.equal(JSON.stringify(ui.lockNotesFor(item("42"))), JSON.stringify([NOTE_42]), "item 42 stays listed");
 console.log("PASS P4-14/P4-17: kept penalties and item 42 say why over their amounts; Use the computed amounts still works.");
+
+// ---- P4-4 (round 2): on a kept group holding typed amounts, Use the
+// computed amounts asks first; Continue applies it.
+kept = true;
+typedKept = true;
+Object.assign(hostValues, { [PENALTIES[0]]: "125.25", [PENALTIES[1]]: "0.00", [PENALTIES[2]]: "1,000.00" });
+await openTest();
+click("fp-penalty-computed-0:1");
+await settle();
+assert.equal(app.overlay, "removal", "the page asks first");
+assert.match(ui.state.removal.r.removes.message, /replaces the penalties you typed in item 19A/);
+assert.equal(ui.state.values[PENALTIES[0]], "125.25", "nothing is replaced while it asks");
+act((c) => ui.confirmRemoval(c));
+await settle();
+assert.equal(app.overlay, null);
+assert.equal(ui.state.values[PENALTIES[0]], "11,250.00", "Continue applies the computed amounts");
+typedKept = false;
+console.log("PASS P4-4: Use the computed amounts over typed penalties asks first.");
 
 // ---- P4-10: item 6 offers Part VII item 8's amount; Use it fills it.
 kept = true;

@@ -1766,22 +1766,10 @@ fn store_p4_4(code: &str, fixture: &str) {
     });
 }
 
-/// The stored JSON of `code`'s entry 1 for 2026, its profile baseline (PR
-/// 0c, the row's last key, which a save records) set aside.
-fn stored_p4_4(code: &str, draft: &Value) -> String {
-    let kind = kind_of(code).unwrap();
-    let AgentFormKind::Queueable(queueable) = kind else {
-        unreachable!()
-    };
-    let period = stored_period(kind, draft).unwrap();
-    let saved = bir_core::with_queueable_kind!(queueable, F => {
-        let stored = with_database(|db| {
-            db.get_queueable_draft::<F>(TIN, 2026, period).map_err(|e| HostError::new(e.to_string()))
-        })
-        .unwrap()
-        .unwrap();
-        serde_json::to_string(&stored).unwrap()
-    });
+/// The raw stored bytes of row 1 (the fixture's own row), its profile
+/// baseline (PR 0c, the row's last key, which a save records) set aside.
+fn stored_p4_4() -> String {
+    let saved = raw_row(1).1;
     match saved.find(",\"profile_baseline\":") {
         Some(at) => format!("{}}}", &saved[..at]),
         None => saved,
@@ -1793,7 +1781,9 @@ fn stored_p4_4(code: &str, draft: &Value) -> String {
 /// stay through other edits; a draft holding none keeps its 0.00 locked as
 /// "Kept as entered before penalties were computed."; and "Use the computed
 /// amounts" (the three boxes blanked) puts the return on its due date, so
-/// the computed amounts file.
+/// the computed amounts file. Where that replaces typed amounts the host
+/// says so first (`removes`, which the page asks before it keeps), naming
+/// each typed item and amount; replacing the kept 0.00 asks nothing.
 #[test]
 fn p4_4_stored_returns_keep_their_penalties_until_edited() {
     for (code, fixture) in STORED_P4_4 {
@@ -1827,12 +1817,9 @@ fn p4_4_stored_returns_keep_their_penalties_until_edited() {
                 "{code}"
             );
         }
+        assert_eq!(stored_p4_4(), fixture, "{code}: stored as given");
         save(code, &opened["draft"]);
-        assert_eq!(
-            stored_p4_4(code, &opened["draft"]),
-            fixture,
-            "{code}: saved back byte for byte"
-        );
+        assert_eq!(stored_p4_4(), fixture, "{code}: saved back byte for byte");
         // An unrelated edit keeps what it holds, on its model.
         let other_key = if *code == "1800" {
             "frm1800v2018:TaxCredit17B"
@@ -1849,6 +1836,26 @@ fn p4_4_stored_returns_keep_their_penalties_until_edited() {
         let blanks: Map<String, Value> = boxes.iter().map(|k| (k.clone(), json!(""))).collect();
         let joined = fill_unlocked(code, &opened["draft"], Value::Object(blanks), &refs);
         assert_eq!(joined["rejected"], json!({}), "{code}");
+        if typed {
+            let (a, c) = if *code == "1800" {
+                ("19A", "19C")
+            } else {
+                ("23A", "23C")
+            };
+            assert_eq!(
+                joined["removes"]["message"],
+                format!(
+                    "Using the computed amounts replaces the penalties you typed in item {a} (\u{20b1}125.25), item {c} (\u{20b1}1,000.00). Continue?"
+                ),
+                "{code}: asks first"
+            );
+            assert_eq!(joined["removes"]["done"], "Replaced the typed penalties");
+        } else {
+            assert!(
+                joined["removes"].is_null(),
+                "{code}: nothing typed to replace"
+            );
+        }
         assert_eq!(
             joined["draft"]["penalty_model_version"], 2,
             "{code}: joined"
