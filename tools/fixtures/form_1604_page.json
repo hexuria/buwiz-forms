@@ -38,12 +38,14 @@
                 {
                   "l": "Yes",
                   "t": "radio",
-                  "k": "frm1604c:amendedRtn_1"
+                  "k": "frm1604c:amendedRtn_1",
+                  "rg": 2
                 },
                 {
                   "l": "No",
                   "t": "radio",
-                  "k": "frm1604c:amendedRtn_2"
+                  "k": "frm1604c:amendedRtn_2",
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -184,13 +186,15 @@
                   "l": "Private",
                   "t": "radio",
                   "k": "frm1604c:categoryAgent_1",
-                  "r": 1
+                  "r": 1,
+                  "rg": 2
                 },
                 {
                   "l": "Government",
                   "t": "radio",
                   "k": "frm1604c:categoryAgent_2",
-                  "r": 1
+                  "r": 1,
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -203,12 +207,14 @@
                 {
                   "l": "Yes",
                   "t": "radio",
-                  "k": "frm1604c:topAgent_1"
+                  "k": "frm1604c:topAgent_1",
+                  "rg": 2
                 },
                 {
                   "l": "No",
                   "t": "radio",
-                  "k": "frm1604c:topAgent_2"
+                  "k": "frm1604c:topAgent_2",
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -252,12 +258,14 @@
                 {
                   "l": "Yes",
                   "t": "radio",
-                  "k": "frm1604c:releasedOfFunds_1"
+                  "k": "frm1604c:releasedOfFunds_1",
+                  "rg": 2
                 },
                 {
                   "l": "No",
                   "t": "radio",
-                  "k": "frm1604c:releasedOfFunds_2"
+                  "k": "frm1604c:releasedOfFunds_2",
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -1225,12 +1233,14 @@
                 {
                   "l": "Yes",
                   "t": "radio",
-                  "k": "frm1604f:amendedRtn_1"
+                  "k": "frm1604f:amendedRtn_1",
+                  "rg": 2
                 },
                 {
                   "l": "No",
                   "t": "radio",
-                  "k": "frm1604f:amendedRtn_2"
+                  "k": "frm1604f:amendedRtn_2",
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -1372,13 +1382,15 @@
                   "l": "Private",
                   "t": "radio",
                   "k": "frm1604f:categoryAgent_1",
-                  "r": 1
+                  "r": 1,
+                  "rg": 2
                 },
                 {
                   "l": "Government",
                   "t": "radio",
                   "k": "frm1604f:categoryAgent_2",
-                  "r": 1
+                  "r": 1,
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -1391,12 +1403,14 @@
                 {
                   "l": "Yes",
                   "t": "radio",
-                  "k": "frm1604f:privateAgent_1"
+                  "k": "frm1604f:privateAgent_1",
+                  "rg": 2
                 },
                 {
                   "l": "No",
                   "t": "radio",
-                  "k": "frm1604f:privateAgent_2"
+                  "k": "frm1604f:privateAgent_2",
+                  "rg": 2
                 }
               ],
               "cols": null
@@ -1441,12 +1455,14 @@
                 {
                   "l": "Yes",
                   "t": "radio",
-                  "k": "frm1604f:taxRelief_1"
+                  "k": "frm1604f:taxRelief_1",
+                  "rg": 2
                 },
                 {
                   "l": "No",
                   "t": "radio",
-                  "k": "frm1604f:taxRelief_2"
+                  "k": "frm1604f:taxRelief_2",
+                  "rg": 2
                 }
               ],
               "cols": null
