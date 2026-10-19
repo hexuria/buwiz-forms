@@ -1588,8 +1588,9 @@ export class FormPageActions {
     // before decision P4-4) goes to the computed amounts the same way. The
     // blanks are sent while the group is still open, so the host takes them
     // (a kept column is not `edited`); replacing typed amounts asks first
-    // on every one of these forms (the host's `removes`, held by `choose`
-    // until Continue).
+    // on every one of these forms (the host's `removes`: `choose` flushes,
+    // and `flush` hands the reply to `holdRemoval`, which holds the fill
+    // until Continue, `confirmRemoval`).
     if (group.edited || group.kept) this.choose(Object.fromEntries(group.keys.map((k) => [k, ""])), cx);
     for (const k of group.keys) s.penaltyOpen.delete(k);
     this.refreshRows();

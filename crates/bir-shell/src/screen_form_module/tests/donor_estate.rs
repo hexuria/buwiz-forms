@@ -1766,10 +1766,12 @@ fn store_p4_4(code: &str, fixture: &str) {
     });
 }
 
-/// The raw stored bytes of row 1 (the fixture's own row), its profile
+/// The raw stored bytes of the row `draft` was opened from, looked up by
+/// the draft's own row id (round 3, F10: not a hard-coded id), its profile
 /// baseline (PR 0c, the row's last key, which a save records) set aside.
-fn stored_p4_4() -> String {
-    let saved = raw_row(1).1;
+fn stored_p4_4(draft: &Value) -> String {
+    let id = draft["id"].as_i64().expect("a stored return's row id");
+    let saved = raw_row(id).1;
     match saved.find(",\"profile_baseline\":") {
         Some(at) => format!("{}}}", &saved[..at]),
         None => saved,
@@ -1817,9 +1819,17 @@ fn p4_4_stored_returns_keep_their_penalties_until_edited() {
                 "{code}"
             );
         }
-        assert_eq!(stored_p4_4(), fixture, "{code}: stored as given");
+        assert_eq!(
+            stored_p4_4(&opened["draft"]),
+            fixture,
+            "{code}: stored as given"
+        );
         save(code, &opened["draft"]);
-        assert_eq!(stored_p4_4(), fixture, "{code}: saved back byte for byte");
+        assert_eq!(
+            stored_p4_4(&opened["draft"]),
+            fixture,
+            "{code}: saved back byte for byte"
+        );
         // An unrelated edit keeps what it holds, on its model.
         let other_key = if *code == "1800" {
             "frm1800v2018:TaxCredit17B"

@@ -1318,6 +1318,8 @@ pub(super) fn rt_pre_2020_notices(held: Option<Map<String, Value>>, draft: &Valu
                 RT_MCIT_DUE,
                 if typed.subject_to_mcit() {
                     rt_item_42_notice_text(now, was)
+                } else if typed.incorporation_date.is_none() {
+                    rt_item_42_no_date_notice_text(was)
                 } else {
                     rt_item_42_not_yet_notice_text(was)
                 },
@@ -1342,11 +1344,22 @@ pub(super) fn rt_item_42_notice_text(computed: i64, held: i64) -> String {
     )
 }
 
-/// The P4-17 notice's words for a return not yet subject to MCIT, whose
-/// item 42 the form clears (review item 6: never "2% is 0").
+/// The P4-17 notice's words for a return whose incorporation date (item
+/// 10) is fewer than four years before its taxable year, whose item 42 the
+/// form clears (round 3, F6: exactly these words; never "2% is 0").
 pub(super) fn rt_item_42_not_yet_notice_text(held: i64) -> String {
     format!(
-        "Item 42 is cleared: not yet subject to MCIT (fewer than four years after incorporation); this return held {}. Check the tax due before you file.",
+        "Not yet subject to MCIT (fewer than four years after incorporation); this return held {}.",
+        whole_pesos(held)
+    )
+}
+
+/// The P4-17 notice's words for a return with no incorporation date
+/// recorded, so MCIT cannot be applied and the form clears item 42 (round
+/// 3, F6: no four-year reason).
+pub(super) fn rt_item_42_no_date_notice_text(held: i64) -> String {
+    format!(
+        "Item 42 is cleared: no incorporation date is recorded, so MCIT can't be applied; this return held {}.",
         whole_pesos(held)
     )
 }

@@ -2879,8 +2879,21 @@ fn lock_note_for(code: &str, key: &str, reason: &str) -> &'static str {
 }
 
 /// A lock's reason as a filer reads it (see the NOTE_* texts).
+/// Each module's "kept as entered" lock reason and the note it shows, one
+/// entry per module constant (round 3, F7): `lock_note` looks a reason up
+/// here by the constant itself, so a module rewording its constant keeps
+/// its note.
+const KEPT_NOTES: [(&str, &str); 3] = [
+    (rows_income_q::KEPT_AS_ENTERED, NOTE_KEPT),
+    (rows_annual_individual::KEPT_AS_ENTERED, NOTE_KEPT),
+    (rows_excise::KEPT_AS_ENTERED, NOTE_KEPT),
+];
+
 fn lock_note(reason: &str) -> &'static str {
     use bir_core::forms::agent::Lock;
+    if let Some((_, note)) = KEPT_NOTES.iter().find(|(kept, _)| *kept == reason) {
+        return note;
+    }
     // 2551Q's 8% penalty reasons are already the filer's words.
     if reason == penalties::KEPT_ON_EIGHT_PERCENT {
         return penalties::KEPT_ON_EIGHT_PERCENT;
@@ -2896,11 +2909,6 @@ fn lock_note(reason: &str) -> &'static str {
         NOTE_IDENTITY
     } else if reason.starts_with("repeats `") && reason.ends_with("; fill it there") {
         NOTE_REPEAT
-    } else if reason == rows_income_q::KEPT_AS_ENTERED
-        || reason == rows_annual_individual::KEPT_AS_ENTERED
-        || reason == rows_excise::KEPT_AS_ENTERED
-    {
-        NOTE_KEPT
     } else if reason.ends_with(bir_core::forms::agent::probe::SHUT_REASON) {
         NOTE_SHUT
     } else {

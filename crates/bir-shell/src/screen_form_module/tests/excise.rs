@@ -2536,3 +2536,34 @@ fn p4_14_no_new_return_lists_a_note_shown_always() {
         assert_eq!(opened["notes_always"], json!(expected), "{code}");
     }
 }
+
+/// Round 3 (F7): every module's "kept as entered" reason maps to the kept
+/// note through `KEPT_NOTES`, by the constant itself, before any prefix rule
+/// (a reworded constant starting "computed" would otherwise read as
+/// "Computed by the form."), and every module's own penalty lock is one of
+/// the table's constants, so changing one constant's text cannot drop its
+/// note.
+#[test]
+fn every_kept_reason_maps_to_the_kept_note() {
+    for (reason, note) in KEPT_NOTES {
+        assert_eq!(note, NOTE_KEPT);
+        assert_eq!(lock_note(reason), NOTE_KEPT, "{reason}");
+        assert_eq!(lock_note_for("2200A", "any", reason), NOTE_KEPT, "{reason}");
+    }
+    let table: Vec<&str> = KEPT_NOTES.iter().map(|(reason, _)| *reason).collect();
+    for module_constant in [
+        rows_income_q::KEPT_AS_ENTERED,
+        rows_annual_individual::KEPT_AS_ENTERED,
+        rows_excise::KEPT_AS_ENTERED,
+    ] {
+        assert!(table.contains(&module_constant), "{module_constant}");
+    }
+    // A stored excise return's kept lock, as the host gives it.
+    setup();
+    store_fixture("2200A", STORED[1].1.trim_end());
+    let opened = open("2200A", 1);
+    let key = "frm2200Av2020:txtPen_Surcharge";
+    let lock = opened["locks"][key].as_str().unwrap();
+    assert!(table.contains(&lock), "{lock}");
+    assert_eq!(opened["lock_notes"][key], NOTE_KEPT);
+}

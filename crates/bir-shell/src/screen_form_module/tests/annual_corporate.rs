@@ -3308,7 +3308,10 @@ fn p4_17_a_2019_return_computes_mcit_from_gross_income() {
     assert_eq!(amount(values, &rt("txtPg2Pt4I33TotalGross")), 2_950_026.0);
     // 59,000.52 rounds to 59,001.
     assert_eq!(amount(values, &item_42), 59_001.0);
-    assert_eq!(amount(values, &rt("txtPg2Pt4I41IncomeTaxDue")), 0.0);
+    // Item 39 is 2,950,026 - 3,000,000 = -49,974; before 2020 item 41 has
+    // no floor (round 3, F3): 30% is -14,992.20.
+    assert_eq!(amount(values, &rt("txtPg2Pt4I39NetTaxable")), -49_974.0);
+    assert_eq!(amount(values, &rt("txtPg2Pt4I41IncomeTaxDue")), -14_992.0);
     assert_eq!(amount(values, &rt("txtPg2Pt4I43TotalIncomeTax")), 59_001.0);
     assert_eq!(amount(values, &rt("txtPg1Pt2I14IncomeTax")), 59_001.0);
     let net = amount(values, &rt("txtPg2Pt4I56NetTax"));
@@ -3539,11 +3542,27 @@ fn p5_2_a_stored_2019_return_says_what_changed() {
     let not_yet = rows_annual_corporate::rt_item_42_not_yet_notice_text(5_000);
     assert_eq!(
         not_yet,
-        "Item 42 is cleared: not yet subject to MCIT (fewer than four years after incorporation); this return held 5,000. Check the tax due before you file."
+        "Not yet subject to MCIT (fewer than four years after incorporation); this return held 5,000."
     );
     assert!(said.contains(&not_yet), "{said:#?}");
     assert!(
         said.iter()
             .all(|m| !m.contains("2% of gross income (item 33) is 0"))
     );
+    // No incorporation date recorded (round 3, F6): MCIT cannot be applied,
+    // and the notice gives no four-year reason.
+    let mut undated = young.clone();
+    undated["incorporation_date"] = Value::Null;
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&undated.to_string(), &id.to_string()],
+    );
+    let said = messages_of(&open_for(TIN, "1702RT", 2019, 0));
+    let no_date = rows_annual_corporate::rt_item_42_no_date_notice_text(5_000);
+    assert_eq!(
+        no_date,
+        "Item 42 is cleared: no incorporation date is recorded, so MCIT can't be applied; this return held 5,000."
+    );
+    assert!(said.contains(&no_date), "{said:#?}");
+    assert!(said.iter().all(|m| !m.contains("four years")), "{said:#?}");
 }
