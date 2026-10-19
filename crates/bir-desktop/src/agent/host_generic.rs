@@ -299,7 +299,8 @@ impl BirAgentHost {
         })())
     }
 
-    /// `form.fill` on a generic form: official box keys, all-or-nothing.
+    /// `form.fill` on a generic form: official box keys, all-or-nothing,
+    /// except a box with no field in this app's draft, refused on its own.
     pub(super) fn fill_generic(
         &mut self,
         fields: &serde_json::Map<String, Value>,
@@ -310,7 +311,7 @@ impl BirAgentHost {
             if !form.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            let (draft, filled, kept, not_shown) =
+            let (draft, filled, kept, not_shown, refused) =
                 fill_official(form.kind, &form.draft, &form.assist, fields)?;
             form.draft = draft;
             for key in &filled {
@@ -319,9 +320,12 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            Ok(with_not_shown(
-                fill_result(form.kind.form_code(), source, filled, kept),
-                not_shown,
+            Ok(with_refused(
+                with_not_shown(
+                    fill_result(form.kind.form_code(), source, filled, kept),
+                    not_shown,
+                ),
+                refused,
             ))
         })())
     }
@@ -553,12 +557,23 @@ impl BirAgentHost {
     }
 }
 
-/// `(draft, filled, kept_user_boxes, not_shown)` of [`fill_official`].
-pub(super) type OfficialFill = (Value, Vec<String>, Vec<String>, Vec<String>);
+/// `(draft, filled, kept_user_boxes, not_shown, refused)` of
+/// [`fill_official`].
+pub(super) type OfficialFill = (
+    Value,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    serde_json::Map<String, Value>,
+);
 
 /// Apply official keys to a copy of `draft` and recompute it. Boxes the user
 /// typed are kept (`kept`); boxes that did not show the value after the
-/// recompute (an item that must be answered first) are reported back.
+/// recompute (an item that must be answered first) are reported back. A box
+/// of the form that has no field in this app's draft (unmapped, such as an
+/// official ATC popup slot) is refused on its own with the reason
+/// (`refused`) and the rest of the batch still applies; every other refusal
+/// (computed, locked, not a box) still refuses the whole batch.
 pub(super) fn fill_official(
     kind: AgentFormKind,
     draft: &Value,
@@ -567,9 +582,18 @@ pub(super) fn fill_official(
 ) -> Result<OfficialFill, String> {
     let mut next = draft.clone();
     let (mut filled, mut kept) = (Vec::new(), Vec::new());
+    let mut refused = serde_json::Map::new();
+    let def = kind.definition();
     for (key, value) in fields {
         if assist.is_user_box(key) {
             kept.push(key.clone());
+            continue;
+        }
+        if def.box_def(key).is_some_and(|entry| entry.is_user_box())
+            && !def.bindings.contains_key(key)
+            && let Some(reason) = def.refusal(key)
+        {
+            refused.insert(key.clone(), Value::String(reason));
             continue;
         }
         agent::fill(kind, &mut next, key, value)?;
@@ -577,7 +601,6 @@ pub(super) fn fill_official(
     }
     agent::compute(kind, &mut next)?;
     let map = agent::field_map(kind, &next)?;
-    let def = kind.definition();
     let text = |value: &Value| match value {
         Value::String(text) => text.trim().to_string(),
         other => other.to_string(),
@@ -618,7 +641,7 @@ pub(super) fn fill_official(
         })
         .cloned()
         .collect();
-    Ok((next, filled, kept, not_shown))
+    Ok((next, filled, kept, not_shown, refused))
 }
 
 /// Validation errors with the label of the box they name, when the form
@@ -641,6 +664,22 @@ fn labelled_errors(kind: AgentFormKind, errors: &[(String, String)]) -> Vec<Valu
             json!({ "field": field, "label": label, "message": message })
         })
         .collect()
+}
+
+/// Boxes refused on their own (`refused`, key -> reason), beside what was
+/// applied.
+pub(super) fn with_refused(
+    result: DispatchResult,
+    refused: serde_json::Map<String, Value>,
+) -> DispatchResult {
+    if refused.is_empty() {
+        return result;
+    }
+    let mut value = result.value.unwrap_or(Value::Null);
+    if let Value::Object(object) = &mut value {
+        object.insert("refused".into(), Value::Object(refused));
+    }
+    DispatchResult::json(value)
 }
 
 pub(super) fn with_not_shown(result: DispatchResult, not_shown: Vec<String>) -> DispatchResult {
@@ -817,6 +856,61 @@ mod tests {
             drop(db);
             let _ = queueable;
         }
+    }
+
+    /// PR 14 review F5: a box with no field in this app's draft (here
+    /// 1600PT's ATC popup slot, unbound in core) is refused on its own with
+    /// the reason; the rest of the batch applies and item 10 stays as
+    /// answered. Computed and unknown keys still refuse the whole batch.
+    #[test]
+    fn an_unmapped_box_is_refused_alone_and_the_batch_applies() {
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "1600PT", "year": year(), "period": 1, "tin": TIN}),
+            ),
+            "open",
+        );
+        let before = host.generic_form().expect("open").draft["agent_category"].clone();
+        let filled = ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {
+                    "AtcCode1": "true",
+                    "AtcCode5": "true",
+                    "frm1600PT:Pg2Sc1Name1": "PAYEE ONE",
+                }}),
+            ),
+            "fill",
+        );
+        assert_eq!(filled["filled"], json!(["frm1600PT:Pg2Sc1Name1"]));
+        let refused = filled["refused"].as_object().expect("refused");
+        assert_eq!(refused.len(), 2, "{filled}");
+        for key in ["AtcCode1", "AtcCode5"] {
+            let why = refused[key].as_str().unwrap();
+            assert!(
+                why.starts_with(&format!(
+                    "`{key}` cannot be filled from here: the ATC popup's tick box"
+                )),
+                "{why}"
+            );
+        }
+        // Each slot keeps the probe's own evidence (review F6).
+        assert!(
+            refused["AtcCode1"]
+                .as_str()
+                .unwrap()
+                .ends_with("; the probe tied it to /agent_category")
+        );
+        assert!(refused["AtcCode5"].as_str().unwrap().ends_with(
+            "; probe: written by the app without a draft field (a constant or the period)"
+        ));
+        let draft = &host.generic_form().expect("open").draft;
+        assert_eq!(draft["agent_category"], before, "item 10 is untouched");
+        assert_eq!(draft["schedule"][0]["payee_name"], "PAYEE ONE");
     }
 
     #[test]
