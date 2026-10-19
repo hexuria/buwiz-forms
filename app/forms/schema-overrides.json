@@ -27586,7 +27586,7 @@
       "kind": "money",
       "label": "BIR's internal total (always 0.00)",
       "computed": true,
-      "evidence": "maintainer decision D9 (2026-10-18), replacing PR 5's hidden box: shown read-only after Schedule 4's item 7, labelled as BIR's internal value. It is not a box of the sheet or of the official page (rules/forms/1702q-v2018c/fields.json: page null, 'Schedule 4 various-details total'); this app never writes it and the upload carries its default 0.00, as BIR's own save does (tests/sample-payloads/1702Q-2025Q2.official.xml 'resultOtherSpecify=0.00' with an other credit of 1,234.00); the page shows what the upload carries (rows_income_q::internal_total). Schedule 4's own total is item 7."
+      "evidence": "maintainer decision D9 (2026-10-18), replacing PR 5's hidden box: shown read-only after Schedule 4's item 7, the item and its one box labelled \"BIR's internal total (always 0.00)\" (P4-13, 2026-10-19). It is not a box of the sheet or of the official page (rules/forms/1702q-v2018c/fields.json: page null, 'Schedule 4 various-details total'); this app never writes it and the upload carries its default 0.00, as BIR's own save does (tests/sample-payloads/1702Q-2025Q2.official.xml 'resultOtherSpecify=0.00' with an other credit of 1,234.00); the page shows what the upload carries (rows_income_q::internal_total). Schedule 4's own total is item 7."
     },
     "frm1702q:Sched1:txtTax1A": {
       "label": "A. Exempt",

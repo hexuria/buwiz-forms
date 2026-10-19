@@ -485,10 +485,12 @@ export class FormPageActions {
 
   /**
    * Record the opening's one-time notes seen once the page has drawn them
-   * (`s.notesRendered`, set by the render that shows them), waiting a
-   * frame at a time. The host records each only if not yet recorded; a
-   * note another opening recorded first is taken off this page. Nothing is
-   * recorded for a page that never drew its notes or was left.
+   * (`s.notesRendered`, set by the layout that draws them), checking every
+   * 100 ms. After 50 checks (about 5 s) with the notes still not drawn it
+   * gives up and records nothing, so the next opening offers them again.
+   * The host records each only if not yet recorded; a note another opening
+   * recorded first is taken off this page. Nothing is recorded for a page
+   * that was left.
    */
   recordNotesWhenShown(cx, token, tries = 0) {
     const s = this.state;

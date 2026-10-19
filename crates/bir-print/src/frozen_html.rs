@@ -6017,6 +6017,7 @@ mod tests {
         assert!(boxes > 500, "{boxes} plain boxes checked");
         assert!(swept > 100, "{swept} joins swept");
     }
+
     /// Every sheet filled three ways: each text join's key holding a
     /// 200-character text, a 90-character one and a 12-character one (past
     /// the boxes of most combs, past a line, and fitting), hashed together.
