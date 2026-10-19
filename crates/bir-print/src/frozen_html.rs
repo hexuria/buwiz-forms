@@ -7138,7 +7138,10 @@ mod tests {
     /// split cells (2550M's and 1600WP's) out of the plain boxes, since
     /// they take one character per box, and recorded those two sheets'
     /// entries again with dcc6386a's fill, the way
-    /// `fitting-band-goldens.json` was.
+    /// `fitting-band-goldens.json` was. The 12b merge into integration
+    /// recorded the two 1800/1801 comb entries and 1801's plain-box entry
+    /// again the same way: PR 10's donor-estate joins, which the branch's
+    /// pins predate, are the only values that moved them.
     #[test]
     fn fitting_text_prints_as_before_on_every_sheet() {
         let combs: BTreeMap<String, String> = sheet_slugs()
@@ -7265,7 +7268,9 @@ mod tests {
     /// depending on its bir-print filled and hashed each sheet. Round 6
     /// recorded the 1600wp-2010 entry again that way, without its
     /// attachment dates ([`layout_fixed_in_round_6`]). The test cannot
-    /// bless it.
+    /// bless it. The 12b merge into integration recorded the 1800/1801
+    /// entries again too: PR 10's donor-estate joins are the only values
+    /// that moved them, and the branch's pins predate those joins.
     #[test]
     fn fitting_band_prints_as_at_dcc6386a_on_every_sheet() {
         let golden: BTreeMap<String, String> =
@@ -7368,13 +7373,17 @@ mod tests {
         boxes
     }
 
-    /// Every band box of every sheet ([`band_boxes`], 1,456 of them) holds
+    /// Every band box of every sheet ([`band_boxes`], 1,458 of them) holds
     /// a value in its 1 pt band and prints byte for byte as at dcc6386a:
     /// `fixtures/fitting-band-box-goldens.json` holds, per sheet, the
     /// SHA-256 of the document dcc6386a's fill printed for that sheet's
     /// band-box values (recorded as `fitting-band-goldens.json` was). A
     /// fill that kept the 1 pt spare shrinks every one of these values
     /// (round 6 checked it fails this test). The test cannot bless it.
+    /// The 12b merge into integration added two band boxes on 1801 —
+    /// PR 10's `freqOtherInput` and `txtInstallmentYear` joins, which the
+    /// branch's pin predates — and re-recorded that sheet's golden; every
+    /// other sheet stays byte-pinned at dcc6386a.
     #[test]
     fn every_band_box_prints_as_at_dcc6386a() {
         let golden: BTreeMap<String, String> =
@@ -7415,7 +7424,7 @@ mod tests {
             }
             now.insert(slug.clone(), document_hash(&slug, &fields));
         }
-        assert_eq!(total, 1456, "band boxes");
+        assert_eq!(total, 1458, "band boxes");
         assert_eq!(golden, now, "every band box prints as at dcc6386a");
     }
 
@@ -7810,36 +7819,30 @@ mod donor_estate_print_tests {
 
     /// A deterministic value in every key writer-cells.json joins (and, on
     /// 1800 and 1801, every source PR 10's joins read, with each date part
-    /// as the form writes it), filled and hashed. 1706 and 2000-OT are the
-    /// digests the integration branch's frozen_html.rs gave before PR 10's
-    /// merge (1c30ef2a; PR 0c's overflow and the joins merged since moved
-    /// them off pr0b-push's): PR 10 changes no other form's print. 1800 and
-    /// 1801 pin PR 10's output with its joins filled (the first digests
-    /// filled none of their sources), as merged into integration: there PR
-    /// 0c's overflow prints the test's six-character stand-in whole past the
-    /// shorter combs of joins that are not PR 10's (1800 p1c10, 13, 15, 16,
-    /// 20, 31, 134, 143, 161; 1801 p1c7, 19, 131, 140, 158), and every PR 10
-    /// cell prints as on its branch. The 1800 digest
-    /// also takes the second fix check's year fix: item 1 prints the year's
-    /// last two digits ("25", not "20") in the YY comb p1c7.
+    /// as the form writes it), filled and hashed. All four digests were
+    /// re-pinned on the 12b merge into integration: 12b's per-sheet fitting
+    /// (P4-7) moved 1706's and 2000-OT's long-text print, and PR 10's joins
+    /// moved 1800's and 1801's. With the donor joins disabled, the merged
+    /// fill reproduces every pre-merge golden byte for byte — the merge
+    /// changed nothing else.
     #[test]
     fn pr10_joins_leave_every_other_print_byte_for_byte() {
         for (slug, golden) in [
             (
                 "1706-2018",
-                "a5bd3e13bf64c5ba3606ee7e748f7997618c0d60cee2e0c5791e00567b0fd61a",
+                "99f6a45573ad85d627f9632165d5c78f70af88c63e651cd79756dad2cf7d46a3",
             ),
             (
                 "2000-ot-2018",
-                "67e330768e5e245c24fb5fe5d236f1b3ff36ecf7acbff7118591158126e6b689",
+                "86f497510e136ed8fc5d40825db719298fba02a4c0d9b62f3546c14423eea198",
             ),
             (
                 "1801-2018",
-                "deca5ad3295f2b0b39cd593bf07e0ea38f5c3effc8b2b7f4a99f9674ebdbbfa9",
+                "d752c2d04bfce02853f926e45862a30a6ae8371b7cf52c82e1064acc85d44d44",
             ),
             (
                 "1800-2018",
-                "1a48c9c09c8d7f5cf8e45e23cd853ace3a8156f641509472417254200ca30952",
+                "51fd641f9791344fd5ae0c836061fbe06acd42b97bd0a7d827d4295ded37d76f",
             ),
         ] {
             let html = filled_document(slug, &every_join_filled(slug)).unwrap();
