@@ -1491,6 +1491,22 @@ pub(super) fn make_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
     if kind.form_code() != "1701" {
         return;
     }
+    give_state(kind, draft, key);
+}
+
+/// [`make_room`] for `penalties::applies`'s trial copy only (never a draft
+/// that is stored or filed): a 1701 or 1701Q column stored before the
+/// penalty model (no `penalty` / `spouse_penalty` key) gets a default
+/// state, so the trial's overrides land and a kept column reads as on the
+/// return. 1701Q's typed writes keep their own path (round 3, F1).
+pub(super) fn trial_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
+    if matches!(kind.form_code(), "1701" | "1701Q") {
+        give_state(kind, draft, key);
+    }
+}
+
+/// Give `key`'s penalty column a default state when it has none.
+fn give_state(kind: AgentFormKind, draft: &mut Value, key: &str) {
     let Some(path) = super::penalties::path_of(kind, key) else {
         return;
     };

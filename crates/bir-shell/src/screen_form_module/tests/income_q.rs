@@ -1658,3 +1658,82 @@ fn form_1701q_kept_column_says_so_over_its_amounts() {
         );
     }
 }
+
+/// Round 3 (F1): 1701Q drafts stored before the penalty model carry no
+/// `penalty` / `spouse_penalty` key. The filer's column (64A 125.00, 65A
+/// 0.00, 66A 1,000.00) and, on a joint return, the spouse's (64B 125.00,
+/// 65B and 66B 0.00) are kept and on the return: each box is locked as
+/// kept with Edit penalties (the group `applies`), is listed in
+/// `notes_always` with the kept note over its amount and over 0.00, the row
+/// keeps its bytes on open, and the filed values are the stored ones.
+#[test]
+fn form_1701q_keyless_kept_columns_say_so_and_offer_edit() {
+    use bir_core::forms::form_1701q::{Form1701QDraft, Form1701QParty};
+    setup();
+    let mut keyless: Value = serde_json::from_str(BASE_ERA.trim_end()).unwrap();
+    let fields = keyless.as_object_mut().unwrap();
+    fields.remove("penalty");
+    fields.remove("spouse_penalty");
+    // A joint return with the spouse's 64B typed, as the code before the
+    // model computed and stored it: still no penalty keys.
+    let mut legacy: Form1701QDraft = serde_json::from_value(keyless).unwrap();
+    legacy.has_spouse = true;
+    legacy.set_amount(64, Form1701QParty::Spouse, Some(125.0));
+    legacy.recompute();
+    let keyless = serde_json::to_value(&legacy).unwrap();
+    assert!(keyless.get("penalty").is_none() && keyless.get("spouse_penalty").is_none());
+    let bytes = serde_json::to_string(&legacy).unwrap();
+    let filed = field_map(Q, &keyless);
+    assert_eq!(filed["frm1701q:txt64A"], "125.00");
+    assert_eq!(filed["frm1701q:txt64B"], "125.00");
+    let opened = open(Q, 1);
+    let id = save(Q, &opened["draft"])["id"].as_i64().unwrap();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[&bytes, &id.to_string()],
+    );
+    let opened = open(Q, 1);
+    assert_eq!(raw_row(id).1, bytes, "opening changes no stored byte");
+    assert_eq!(field_map(Q, &opened["draft"]), filed, "files what it holds");
+    let noted = strings(&opened["notes_always"]);
+    for (keys, shown) in [
+        (
+            ["frm1701q:txt64A", "frm1701q:txt65A", "frm1701q:txt66A"],
+            ["125.00", "0.00", "1,000.00"],
+        ),
+        (
+            ["frm1701q:txt64B", "frm1701q:txt65B", "frm1701q:txt66B"],
+            ["125.00", "0.00", "0.00"],
+        ),
+    ] {
+        let group = opened["penalties"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["keys"][0] == keys[0])
+            .unwrap();
+        assert_eq!(
+            (
+                group["kept"].clone(),
+                group["applies"].clone(),
+                group["edited"].clone()
+            ),
+            (json!(true), json!(true), json!(false)),
+            "{}: kept, on the return, Edit offered",
+            keys[0]
+        );
+        for (key, value) in keys.iter().zip(shown) {
+            assert_eq!(opened["values"][*key], value, "{key}");
+            assert_eq!(
+                opened["locks"][*key],
+                rows_income_q::KEPT_AS_ENTERED,
+                "{key}"
+            );
+            assert_eq!(
+                opened["lock_notes"][*key], "Kept as entered before penalties were computed.",
+                "{key}"
+            );
+            assert!(noted.contains(*key), "{key} is listed");
+        }
+    }
+}
