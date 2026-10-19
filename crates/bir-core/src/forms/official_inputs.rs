@@ -116,8 +116,11 @@ pub fn js_ge(a: f64, b: f64) -> bool {
 /// rounding it to centavos and back gives the same double, so 8816764.47
 /// and 1234567890.12 pass. The earlier float tolerance (`value * 100`
 /// within 1e-7 of a whole number) refused those, since a double's error at
-/// about 2,000,000 and up exceeds it; it is still accepted, so no amount
-/// that passed before is refused now.
+/// about 2,000,000 and up exceeds it. The tolerance is kept beside the
+/// decimal check on purpose: a double that is not the nearest one to its
+/// two-decimal amount (a sum such as 0.1 + 0.2, 0.30000000000000004, kept
+/// in a stored draft) fails the round trip but passed the tolerance, and
+/// no amount that passed before may be refused now.
 pub fn has_cent_precision(value: f64) -> bool {
     if !value.is_finite() {
         return false;

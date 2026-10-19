@@ -812,6 +812,21 @@ const GATED_ENTRY: &[(&str, &str)] = &[
          form_1702rt_official.rs recompute clears while the return is not \
          subject to MCIT, which the taxable year decides",
     ),
+    (
+        "frm1702RT:Pg2Pt4I40IncomeTaxRate",
+        "Item 40 Income Tax Rate: the filer's entry from 2020; for a taxable \
+         year before 2020 form_1702rt_official.rs recompute sets it to 30% \
+         (decision P5-2, calculations.json 1702rt-item41-rate-tax), which \
+         the taxable year decides and the page locks",
+    ),
+    (
+        "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+        "Part V Item 57: the filer's entry from 2020; for a taxable year \
+         before 2020 form_1702rt_official.rs recompute sets it to item 35 \
+         times 30% (decision P5-2, calculations.json \
+         1702rt-item57-special-tax), which the taxable year decides and the \
+         page locks",
+    ),
     ("frm1702RT:txtPg2Pt4I54C2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg3Sc1I17iC2", RT_ADD_MORE_LINE),
     ("frm1702RT:txtPg3Sc2I4C3", RT_ADD_MORE_LINE),

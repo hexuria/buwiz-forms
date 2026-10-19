@@ -53,14 +53,29 @@ const ZERO: WholePeso = WholePeso(0);
 /// user-controlled").
 pub const MCIT_ENTERED_FROM: u16 = 2020;
 
+/// The income tax rate of a return for a year before [`MCIT_ENTERED_FROM`]
+/// (maintainer decision P5-2, 2026-10-19): calculations.json
+/// 1702rt-item41-rate-tax, "For 2020+, tax due uses user-visible rate / 100
+/// times Item 39, with nonpositive net forced to zero; before 2020 it uses
+/// 30%." Item 40 shows it.
+pub const RATE_BEFORE_2020_PERCENT: u8 = 30;
+
+/// `percent`% of `amount`, rounded as `getProduct2` does (`Math.round`,
+/// half up, toward positive infinity on a half), in whole pesos with
+/// integer arithmetic. A negative amount gives a negative result: the
+/// official helper has no floor (P4-17 review: none is added).
+fn percent_of(amount: WholePeso, percent: u8) -> WholePeso {
+    let hundredths = i128::from(amount.0) * i128::from(percent);
+    let rounded = (hundredths + 50).div_euclid(100);
+    WholePeso(i64::try_from(rounded).expect("a percent of 100 or less of an i64 is one"))
+}
+
 /// Item 42 before [`MCIT_ENTERED_FROM`]: 2% of Item 33 (calculations.json
 /// 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
-/// of gross"), rounded as `getProduct2` does (`Math.round`, half up), in
-/// whole pesos without a float.
+/// of gross"), rounded as `getProduct2` does; a negative Item 33 gives a
+/// negative MCIT, as the official helper does (no floor).
 fn two_percent(gross: WholePeso) -> WholePeso {
-    let hundredths = i128::from(gross.0) * 2;
-    let rounded = (hundredths + 50).div_euclid(100);
-    WholePeso(i64::try_from(rounded).expect("2% of a whole-peso amount is one"))
+    percent_of(gross, 2)
 }
 
 fn sum(values: impl IntoIterator<Item = WholePeso>) -> WholePeso {
@@ -283,7 +298,8 @@ impl Form1702RTDraft {
             p4.item_31_gross_income_from_operations.0 + p4.item_32_other_taxable_income.0,
         );
         let gross = p4.item_33_total_taxable_income;
-        if mcit && self.taxable_year < MCIT_ENTERED_FROM {
+        let before_2020 = self.taxable_year < MCIT_ENTERED_FROM;
+        if mcit && before_2020 {
             // Decision P4-17: computeP2Pt4I42's branch for a year before 2020
             // with IC 055 ticked, 2% of gross (getProduct2's Math.round).
             p4.item_42_mcit_due = two_percent(gross);
@@ -357,11 +373,32 @@ impl Form1702RTDraft {
         }
         // computeP2Pt4I40 / computeP2Pt4I41 / computeP2Pt4I43
         let net = p4.item_39_net_taxable_income_or_loss;
-        p4.item_41_normal_income_tax_due = if net.0 <= 0 {
-            ZERO
+        if before_2020 {
+            // Decision P5-2: before 2020 the page's branch below 20 taxes
+            // Item 39 at 30% (1702rt-item41-rate-tax), which Item 40 shows,
+            // and Part V Item 57 is Item 35 times that rate / 100
+            // (1702rt-item57-special-tax: "Only before 2020, Item 57 = Item
+            // 35 times income-tax rate / 100; for 2020+ this function leaves
+            // Item 57 untouched."); OSD has already cleared Item 57.
+            p4.item_40_income_tax_rate_percent = RATE_BEFORE_2020_PERCENT;
+            p4.item_41_normal_income_tax_due = if net.0 <= 0 {
+                ZERO
+            } else {
+                percent_of(net, RATE_BEFORE_2020_PERCENT)
+            };
+            if itemized {
+                self.part_v.item_57_special_allowable_deductions_tax_effect = percent_of(
+                    p4.item_35_special_itemized_deductions,
+                    RATE_BEFORE_2020_PERCENT,
+                );
+            }
         } else {
-            product(net, f64::from(p4.item_40_income_tax_rate_percent) / 100.0)
-        };
+            p4.item_41_normal_income_tax_due = if net.0 <= 0 {
+                ZERO
+            } else {
+                product(net, f64::from(p4.item_40_income_tax_rate_percent) / 100.0)
+            };
+        }
         p4.item_43_tax_due = if p4.item_41_normal_income_tax_due.0 >= p4.item_42_mcit_due.0 {
             p4.item_41_normal_income_tax_due
         } else {
@@ -1350,12 +1387,13 @@ mod tests {
         let fields = draft.field_map();
         assert_eq!(fields["frm1702RT:txtPg2Pt4I42MinimumCorporate"], "59,001");
         assert_eq!(fields["frm1702RT:txtPg2Pt4I43TotalIncomeTax"], "59,001");
-        // Where the regular tax is larger, item 43 stays item 41.
+        // Where the regular tax is larger, item 43 stays item 41 (at the
+        // pre-2020 30%, decision P5-2: 30% of 1,510,001 is 453,000.30).
         let mut earning = sample();
         earning.taxable_year = 2019;
         earning.recompute();
         assert_eq!(earning.part_iv.item_42_mcit_due, WholePeso(59_000));
-        assert_eq!(earning.part_iv.item_43_tax_due, WholePeso(377_500));
+        assert_eq!(earning.part_iv.item_43_tax_due, WholePeso(453_000));
         // Not yet subject to MCIT (incorporated 2017): item 42 is cleared.
         let mut young = sample();
         young.taxable_year = 2019;
@@ -1374,10 +1412,83 @@ mod tests {
         assert_eq!(two_percent(WholePeso(-26)), WholePeso(-1));
     }
 
-    /// Decision P4-17 leaves 2020 and later as they were: item 42 is the
-    /// filer's entry while MCIT applies, and the totals are the same as
-    /// before (the sample's pinned values, and the 1702RT sample payload
-    /// hashes in tests/sample_payloads, are unchanged).
+    /// P4-17 review item 17: a negative gross income gives a negative item
+    /// 42, as the official helper computes it (no floor); item 43 still
+    /// takes the larger of items 41 and 42.
+    #[test]
+    fn before_2020_a_negative_gross_gives_a_negative_mcit() {
+        let mut draft = sample();
+        draft.taxable_year = 2019;
+        draft.part_iv.item_30_cost_of_sales_or_services = WholePeso(5_000_000);
+        draft.recompute();
+        let p4 = &draft.part_iv;
+        // 4,900,000 - 5,000,000 + 50,001 = -49,999; 2% is -999.98.
+        assert_eq!(p4.item_33_total_taxable_income, WholePeso(-49_999));
+        assert_eq!(p4.item_42_mcit_due, WholePeso(-1_000));
+        assert_eq!(p4.item_41_normal_income_tax_due, ZERO);
+        assert_eq!(p4.item_43_tax_due, ZERO);
+    }
+
+    /// Decision P5-2: a 2019 return typed at 25% computes at 30% (item 40
+    /// shows 30), so item 41 is 30% of item 39 and items 43, 56, 14, 16 and
+    /// 21 follow; item 57 is item 35 times 30 / 100 (calculations.json
+    /// 1702rt-item57-special-tax), and an OSD return keeps it cleared.
+    #[test]
+    fn before_2020_the_rate_is_30_percent_and_item_57_follows() {
+        let mut draft = sample();
+        draft.taxable_year = 2019;
+        draft.schedule_2.rows[0].description = "Seminar".into();
+        draft.schedule_2.rows[0].legal_basis = "RA 1".into();
+        draft.schedule_2.rows[0].amount = WholePeso(100_001);
+        assert_eq!(draft.part_iv.item_40_income_tax_rate_percent, 25);
+        draft.recompute();
+        let p4 = &draft.part_iv;
+        assert_eq!(p4.item_40_income_tax_rate_percent, 30);
+        assert_eq!(p4.item_35_special_itemized_deductions, WholePeso(100_001));
+        // 2,950,001 - (1,440,000 + 100,001) = 1,410,000; 30% is 423,000.
+        assert_eq!(p4.item_39_net_taxable_income_or_loss, WholePeso(1_410_000));
+        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(423_000));
+        assert_eq!(p4.item_43_tax_due, WholePeso(423_000));
+        // 30% of 100,001 is 30,000.30.
+        assert_eq!(
+            draft.part_v.item_57_special_allowable_deductions_tax_effect,
+            WholePeso(30_000)
+        );
+        let credits = p4.tax_credits.item_55_total;
+        assert_eq!(
+            p4.item_56_net_tax_payable_or_overpayment,
+            WholePeso(423_000 - credits.0)
+        );
+        let p2 = &draft.part_ii;
+        assert_eq!(p2.item_14_tax_due, WholePeso(423_000));
+        assert_eq!(
+            p2.item_16_net_tax_payable_or_overpayment,
+            p4.item_56_net_tax_payable_or_overpayment
+        );
+        let fields = draft.field_map();
+        assert_eq!(fields["frm1702RT:Pg2Pt4I40IncomeTaxRate"], "30");
+        assert_eq!(fields["frm1702RT:txtPg2Pt4I41IncomeTaxDue"], "423,000");
+        assert_eq!(fields["frm1702RT:txtPg2Pt5I57SpecialAllowable"], "30,000");
+        // OSD: Schedule II and item 57 are cleared; item 41 is 30% of 60%.
+        let mut osd = sample();
+        osd.taxable_year = 2019;
+        osd.deduction_method = Form1702RTDeductionMethod::OptionalStandard;
+        osd.recompute();
+        assert_eq!(
+            osd.part_v.item_57_special_allowable_deductions_tax_effect,
+            ZERO
+        );
+        assert_eq!(
+            osd.part_iv.item_41_normal_income_tax_due,
+            percent_of(osd.part_iv.item_39_net_taxable_income_or_loss, 30)
+        );
+    }
+
+    /// Decisions P4-17 and P5-2 leave 2020 and later as they were: item 42
+    /// is the filer's entry while MCIT applies, item 40 the typed rate and
+    /// item 57 as typed, and the totals are the same as before (the sample's
+    /// pinned values, and the 1702RT sample payload hashes in
+    /// tests/sample_payloads, are unchanged).
     #[test]
     fn from_2020_item_42_stays_as_entered() {
         for year in [2020, 2025] {
@@ -1386,7 +1497,17 @@ mod tests {
             draft.recompute();
             let p4 = &draft.part_iv;
             assert_eq!(p4.item_42_mcit_due, WholePeso(59_000), "{year}");
+            assert_eq!(p4.item_40_income_tax_rate_percent, 25, "{year}");
+            assert_eq!(
+                p4.item_41_normal_income_tax_due,
+                WholePeso(377_500),
+                "{year}"
+            );
             assert_eq!(p4.item_43_tax_due, WholePeso(377_500), "{year}");
+            assert_eq!(
+                draft.part_v.item_57_special_allowable_deductions_tax_effect, ZERO,
+                "{year}"
+            );
             assert_eq!(
                 draft.part_ii.item_21_total_amount_payable_or_overpayment,
                 WholePeso(257_500),
