@@ -1725,7 +1725,10 @@ mod tests {
                 "default_form_type": "1600VT", "taxpayer_type": "Corporation"
             }))
             .unwrap();
+        // RDO has no input on the desktop (it shows read-only): untouched,
+        // it stays out; the other five are typed too.
         for (field, key, typed) in [
+            ("rdo_code", "", ""),
             ("agent_name", "name", "SAMPLE AGENT CORP"),
             ("registered_address", "address", "1 SAMPLE ST QUEZON CITY"),
             ("zip_code", "zip", "1100"),
@@ -1772,18 +1775,19 @@ mod tests {
                 gpui_component::Root::new(view, window, cx)
             });
             let view = built.expect("the view");
-            let other = if key == "email" { "phone" } else { "email" };
-            let other_value = if key == "email" {
-                "0287654321"
+            let (other, other_field, other_value) = if key == "email" {
+                ("phone", "contact_number", "0287654321")
             } else {
-                "edited@example.com"
+                ("email", "email", "edited@example.com")
             };
             // The window, not its Root: a notice updates the Root.
             cx.update_window(window.into(), |_, window, cx| {
                 view.update(cx, |view, cx| {
                     view.inputs[other]
                         .update(cx, |input, cx| input.set_value(other_value, window, cx));
-                    view.inputs[key].update(cx, |input, cx| input.set_value("   ", window, cx));
+                    if let Some(input) = view.inputs.get(key) {
+                        input.update(cx, |input, cx| input.set_value("   ", window, cx));
+                    }
                     view.sync_from_inputs(cx);
                     view.save_draft(window, cx);
                 })
@@ -1794,6 +1798,14 @@ mod tests {
                 saved.get(field).is_none(),
                 "{field}: untouched, it stays out: {saved}"
             );
+            // The same save stored the other box's edit: the save ran.
+            assert_eq!(
+                saved[other_field], other_value,
+                "{field}: the edit is saved"
+            );
+            if key.is_empty() {
+                continue;
+            }
             // The window, not its Root: a notice updates the Root.
             cx.update_window(window.into(), |_, window, cx| {
                 view.update(cx, |view, cx| {
