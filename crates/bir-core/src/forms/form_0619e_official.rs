@@ -14,6 +14,7 @@ use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0619e::{ATC_CODE, Form0619EDraft, TAX_TYPE_CODE, WithholdingAgentCategory};
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{js_escape, js_unescape, official_amount, parse_official_amount};
@@ -36,10 +37,6 @@ pub(crate) const ADDRESS_SPLIT_REFUSAL: &str = "BIR's program splits this addres
 
 fn cents(value: f64) -> f64 {
     parse_official_amount(&official_amount(value)).unwrap_or(0.0)
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 fn digits_only(value: &str) -> bool {
@@ -666,5 +663,28 @@ mod tests {
         draft.item_17c_compromise = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.item_17a_surcharge = 8_816_764.47;
+        assert!(
+            <Form0619EDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "item_17a_surcharge"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.item_17a_surcharge = 1.005;
+        assert!(
+            <Form0619EDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "item_17a_surcharge"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

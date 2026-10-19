@@ -3,6 +3,7 @@
 //! Data model, carry-forward logic, and auto-computation.
 
 use super::FilingStatus;
+use super::official_inputs::has_cent_precision;
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 use crate::penalties::{
@@ -56,10 +57,6 @@ fn matches_cent_rounded(actual: f64, expected: f64) -> bool {
     actual.is_finite()
         && expected.is_finite()
         && (actual - round_to_cents(expected)).abs() < TWO_DECIMAL_TOLERANCE
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 /// Taxable-period basis selected in Item 1 of Form 2551Q.
@@ -4704,6 +4701,59 @@ mod tests {
                 draft.total_penalties
             ),
             (0.0, 0.0, 0.0, 0.0)
+        );
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn validation_accepts_large_two_decimal_monetary_inputs() {
+        for field in ["schedule", "creditable", "previous", "other", "surcharge"] {
+            let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+            match field {
+                "schedule" => draft.schedule_1[0].taxable_amount = 8_816_764.47,
+                "creditable" => draft.creditable_tax_withheld = 8_816_764.47,
+                "previous" => {
+                    draft.is_amended = true;
+                    draft.tax_paid_previous = 8_816_764.47;
+                }
+                "other" => {
+                    draft.other_tax_credit = 8_816_764.47;
+                    draft.other_tax_credit_description = "Adjustment".into();
+                }
+                "surcharge" => {
+                    draft.auto_compute_penalties = false;
+                    draft.surcharge = 8_816_764.47;
+                }
+                _ => unreachable!(),
+            }
+            draft.recompute(None);
+            if field == "surcharge" {
+                draft.surcharge = 8_816_764.47;
+            }
+
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(_, message)| !message.contains("at most two decimal places")),
+                "{field} large two-decimal input was refused"
+            );
+        }
+
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 1.005;
+        draft.recompute(None);
+        draft.surcharge = 1.005;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "surcharge"),
+            "a three-decimal amount must still be refused"
         );
     }
 }

@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -315,10 +316,6 @@ fn whole_with_commas(value: f64) -> String {
 
 fn has_whole_pesos(value: f64) -> bool {
     value.is_finite() && value.fract() == 0.0
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 fn digits(value: &str) -> String {
@@ -2695,5 +2692,28 @@ mod tests {
         d.taxpayer.cwt_2316 = 0.0;
         d.recompute();
         assert_eq!(d.refund_amount, 0.0);
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.refund_amount = 8_816_764.47;
+        assert!(
+            <Form1701MsDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "refund_amount"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.refund_amount = 1.005;
+        assert!(
+            <Form1701MsDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "refund_amount"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

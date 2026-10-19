@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use super::excise_places::{ExcisePlace, is_official_place};
 use super::form_2000::{digits_only, split_tin, tin_error};
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::profile::TaxpayerProfile;
@@ -208,10 +209,6 @@ fn typed(value: f64) -> f64 {
 /// A computed amount as `roundDownComputation` leaves it.
 fn computed(value: f64) -> f64 {
     parse_amount(&round_down_computation_text(value))
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 // ── Model ──
@@ -1762,5 +1759,28 @@ mod tests {
         assert_eq!(draft.to_bir_field_map()["frm2200S:txtSheets"], "0");
         draft.number_of_attached_sheets = 3;
         assert_eq!(draft.to_bir_field_map()["frm2200S:txtSheets"], "3");
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.surcharge = 8_816_764.47;
+        assert!(
+            <Form2200SDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "amounts"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.surcharge = 1.005;
+        assert!(
+            <Form2200SDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "amounts"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

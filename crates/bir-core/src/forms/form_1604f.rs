@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -157,10 +158,6 @@ fn entered_amount(value: f64) -> f64 {
     } else {
         0.0
     }
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 fn digits_only(value: &str) -> bool {
@@ -910,5 +907,28 @@ mod tests {
         assert!(draft.revalidate_queued_before_submission().is_ok());
         draft.schedules[0][0].penalties = 99.0;
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.schedules[0][0].taxes_withheld = 8_816_764.47;
+        assert!(
+            <Form1604fDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "schedules[0][0].taxes_withheld"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.schedules[0][0].taxes_withheld = 1.005;
+        assert!(
+            <Form1604fDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "schedules[0][0].taxes_withheld"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

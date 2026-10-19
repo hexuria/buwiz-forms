@@ -25,9 +25,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::excise_places::{ExcisePlace, is_official_place, place_name};
-use super::form_2000::{
-    amount_in_official_range, cents, digits_only, has_cent_precision, split_tin, tin_error,
-};
+use super::form_2000::{amount_in_official_range, cents, digits_only, split_tin, tin_error};
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::official_amount;
@@ -1123,5 +1122,28 @@ mod tests {
         .unwrap();
         let draft = Form2200ANDraft::new_from_profile(&profile, 2020, 2);
         assert_eq!((draft.month, draft.day), (2, 29));
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.surcharge = 8_816_764.47;
+        assert!(
+            <Form2200ANDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "surcharge"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.surcharge = 1.005;
+        assert!(
+            <Form2200ANDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "surcharge"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }
