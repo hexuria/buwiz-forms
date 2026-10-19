@@ -1393,7 +1393,8 @@ pub(super) const PART_VII_ITEM_8: &str = "frm1701:txtPg4IPart7_8A";
 
 /// Decision P4-10 (2026-10-19): 1701 Part VIII item 6 stays typed (the
 /// tracked inventory records no copy from Part VII item 8, ee8aced2), and
-/// the page shows under it what Part VII item 8 holds with "Use it", which
+/// the page shows under it what Part VII item 8 holds, rounded half up to
+/// whole pesos and saying so (P5-13), with "Use it", which
 /// writes that amount into item 6 through the ordinary fill. Display and
 /// page only: nothing is copied by itself and no check changes. The item
 /// carries `from`: the box it reads (`k`), the box it fills (`to`) and how

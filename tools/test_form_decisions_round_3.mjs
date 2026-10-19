@@ -293,14 +293,29 @@ await openTest();
 const before = fills().length;
 frame();
 assert.ok(ids.has("fp-from-0:5"), "the hint is drawn under item 6");
-assert.ok(texts.includes("From Part VII item 8: ₱1,500.00"), "it shows Part VII item 8's amount");
+assert.ok(texts.includes("From Part VII item 8: ₱1,500"), "it shows Part VII item 8's amount in whole pesos");
 assert.ok(!ids.has("fp-from-0:4"), "no other item has one");
 assert.equal(fills().length, before, "nothing is filled by itself");
 click("fp-from-use-0:5");
 await settle();
-assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("Part8_6A")]: "1,500.00" }), "Use it writes the amount through the ordinary fill");
-assert.equal(ui.state.inputs.get(K("Part8_6A")).value(), "1,500.00", "the box shows it");
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("Part8_6A")]: "1,500" }), "Use it writes the amount through the ordinary fill");
+assert.equal(ui.state.inputs.get(K("Part8_6A")).value(), "1,500", "the box shows it");
 assert.equal(ui.state.values[K("Part8_6A")], "1,500.00");
+// Centavos round half up to whole pesos (P5-13), and the hint says so.
+hostValues[K("Part7_8A")] = "1,234.50";
+await openTest();
+assert.ok(texts.includes("From Part VII item 8: ₱1,235 (rounded to whole pesos)"), "rounded, and says so");
+click("fp-from-use-0:5");
+await settle();
+assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("Part8_6A")]: "1,235" }), "the whole-peso amount is written");
+// A blank or zero item 8 offers nothing.
+for (const nothing of ["", "0.00"]) {
+  hostValues[K("Part7_8A")] = nothing;
+  await openTest();
+  assert.ok(!ids.has("fp-from-0:5"), `no hint for ${JSON.stringify(nothing)}`);
+}
+hostValues[K("Part7_8A")] = "1,500.00";
+await openTest();
 // A return that is no longer a draft offers nothing.
 ui.state.editable = false;
 frame();

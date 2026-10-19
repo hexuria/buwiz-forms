@@ -1563,15 +1563,16 @@ export class FormPageActions {
   }
 
   /**
-   * "Use it" on an item's `from` hint (1701 Part VIII item 6, decision
-   * P4-10): the amount the hint shows goes into the box it fills through the
-   * ordinary fill, as if typed there; the host keeps or refuses it as it
-   * would a typed amount.
+   * "Use it" on an item's `from` hint (1701 Part VIII item 6, decisions
+   * P4-10 and P5-13): the whole-peso amount the hint shows goes into the box
+   * it fills through the ordinary fill, as if typed there; the host keeps
+   * or refuses it as it would a typed amount.
    */
   useFrom(from, cx) {
     const s = this.state;
-    if (!s?.editable || this.isLocked(from.to)) return;
-    const shown = formatMoney(s.values[from.k] || "0", this.isWhole(from.to));
+    const pesos = wholePesosOf(s?.values[from.k]);
+    if (!s?.editable || this.isLocked(from.to) || !pesos) return;
+    const shown = formatMoney(String(pesos.amount), true);
     s.inputs.get(from.to)?.set_value(shown);
     s.pending[from.to] = shown;
     s.dirty = true;
@@ -2198,15 +2199,32 @@ function control(cx, ui, f, itemLabel, multi, available) {
 }
 
 /**
- * An item's `from` hint (1701 Part VIII item 6, decision P4-10): what the
- * item it comes from holds, and "Use it", which fills this item's box with
- * that amount. Only while the box takes typing; it never fills by itself.
+ * What an amount box shows, in whole pesos rounded half up (Math.round, as
+ * the official helpers round), and whether that dropped centavos; `null`
+ * for a blank, zero or unreadable box.
+ */
+export function wholePesosOf(text) {
+  const n = Number(String(text ?? "").replace(/[₱,\s]/g, ""));
+  if (String(text ?? "").trim() === "" || !Number.isFinite(n)) return null;
+  const amount = Math.round(n);
+  if (amount === 0) return null;
+  return { amount, rounded: amount !== n };
+}
+
+/**
+ * An item's `from` hint (1701 Part VIII item 6, decisions P4-10 and
+ * P5-13): what the item it comes from holds, in whole pesos (item 6 takes
+ * whole pesos; a rounded amount says so), and "Use it", which fills this
+ * item's box with it. Only while the box takes typing and the other item
+ * holds an amount; it never fills by itself.
  */
 function fromHint(cx, ui, it, id) {
   const s = ui.state;
   const from = it.from;
   if (!from || !s.editable || ui.isLocked(from.to) || !s.inputs.has(from.to)) return [];
-  const amount = formatMoney(s.values[from.k] || "0", ui.isWhole(from.to));
+  const pesos = wholePesosOf(s.values[from.k]);
+  if (!pesos) return [];
+  const amount = `${formatMoney(String(pesos.amount), true)}${pesos.rounded ? " (rounded to whole pesos)" : ""}`;
   return [
     div()
       .id(`fp-from-${id}`)

@@ -2516,7 +2516,7 @@ fn form_1701_stored_draft_files_as_before() {
 
 /// Decision P4-10: 1701 Part VIII item 6 stays the filer's entry; its item
 /// carries the page's hint (`from`) naming Part VII item 8, whose amount the
-/// page shows under it with "Use it" (tools/test_form_decisions_round_3.mjs
+/// page shows under it in whole pesos with "Use it" (tools/test_form_decisions_round_3.mjs
 /// drives the page). Nothing is copied by itself: Part VII item 8's amount
 /// leaves item 6 as it was, and "Use it" sends that amount as shown through
 /// the ordinary fill, which takes it into item 6 and its totals. No other
@@ -2558,18 +2558,22 @@ fn form_1701_part_viii_item_6_offers_part_vii_item_8() {
         typed["values"][to], "0.00",
         "item 6 is not filled by itself"
     );
-    // "Use it": the page sends the hint's amount as shown.
-    let used = take("1701", &typed["draft"], json!({ to: "1,500.00" }));
+    // "Use it": the page sends the hint's amount in whole pesos ("1,500").
+    let used = take("1701", &typed["draft"], json!({ to: "1,500" }));
     assert_eq!(used["values"][to], "1,500.00");
     assert_eq!(
         amount(&used["values"], "frm1701:txtPg4IPart8_7A"),
         amount(&used["values"], "frm1701:txtPg4IPart8_5A") + 1_500.0,
         "item 7 is the sum of items 5 and 6"
     );
-    // A Part VII item 8 with centavos is refused in item 6 as any typed
-    // amount there is: column A takes whole pesos.
-    let cents = take("1701", &on, json!({ from: "1234.56" }));
-    let refused = fill("1701", &cents["draft"], json!({ to: "1,234.56" }));
+    // A Part VII item 8 with centavos (P5-13): the page rounds it half up to
+    // whole pesos before it sends it, which item 6 takes; the centavo amount
+    // itself is refused there, as any typed one is (column A takes whole
+    // pesos), so the page never sends it.
+    let cents = take("1701", &on, json!({ from: "1234.50" }));
+    let rounded = take("1701", &cents["draft"], json!({ to: "1,235" }));
+    assert_eq!(rounded["values"][to], "1,235.00");
+    let refused = fill("1701", &cents["draft"], json!({ to: "1,234.50" }));
     assert_eq!(
         refused["rejected"][to],
         rows_annual_individual::whole_peso_refusal("6")
