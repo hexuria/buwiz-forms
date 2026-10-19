@@ -1024,6 +1024,17 @@ fn form_1701q_a_q3_return_filed_under_october_15_says_so_once() {
     let mut first_quarter = october.clone();
     first_quarter["quarter"] = json!(1);
     assert!(rows_income_q::q3_charged_under_october(kind, &october));
+    // Every status past Draft counts, Paid included (P4-12).
+    for status in ["Queued", "Submitted", "Confirmed", "Paid"] {
+        assert!(
+            rows_income_q::q3_charged_under_october(kind, &with_status(&october, status)),
+            "{status}"
+        );
+    }
+    assert!(!rows_income_q::q3_charged_under_october(
+        kind,
+        &with_status(&october, "Draft")
+    ));
     assert!(!rows_income_q::q3_charged_under_october(
         kind,
         &first_quarter
@@ -1201,15 +1212,16 @@ fn form_1702q_items_follow_the_printed_sheet() {
     assert_eq!(numbers, ["1", "2", "3", "4", "5", "6", "6a", "6b", "7", ""]);
     let (internal_part, internal) = item_of(C, "resultOtherSpecify");
     assert_eq!(internal_part, part);
-    assert_eq!(
-        internal["l"],
-        "BIR's internal value (not on the printed form)"
-    );
+    // P4-13: the short label, on the item and its one box alike, so the
+    // page draws no second line under the box (a box's own label shows
+    // only in an item with several boxes, form_page.js `showSub`).
+    assert_eq!(internal["l"], "BIR's internal total (always 0.00)");
+    assert_eq!(internal["f"].as_array().unwrap().len(), 1);
     assert_eq!(
         field_of(C, "resultOtherSpecify"),
         &json!({
             "k": "resultOtherSpecify",
-            "l": "Other tax credits total, as BIR's own save writes it (always 0.00)",
+            "l": "BIR's internal total (always 0.00)",
             "t": "money",
             "c": 1,
         })
