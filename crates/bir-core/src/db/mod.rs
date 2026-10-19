@@ -981,7 +981,7 @@ impl Database {
     /// at all: no entry can be listed, and [`Self::set_deadline_overrides`]
     /// refuses to write over it (decision P5-10).
     pub fn deadline_overrides_unreadable(&self) -> bool {
-        matches!(self.stored_override_entries(), Err(_))
+        self.stored_override_entries().is_err()
     }
 
     /// The stored override entries that cannot be read, each as its stored
