@@ -2213,8 +2213,10 @@ function choiceLabel(f) {
 /**
  * A one-answer group, drawn as the paper form's tick boxes. Ticking one
  * clears the others; the ticked box of a group of three or more unticks
- * (clears the answer), a yes/no pair keeps one answer (picking it again
- * sends it again).
+ * (leaves it unanswered, or keeps it where the form can't be unanswered),
+ * a yes/no pair keeps one answer (picking it again sends it again). The
+ * group's size is the host's (`rg`, every box of the one-answer group),
+ * not the radios drawn in this item.
  */
 function radioGroup(cx, ui, it, radios) {
   const s = ui.state;
@@ -2231,7 +2233,7 @@ function radioGroup(cx, ui, it, radios) {
       if (locked) return;
       // In a group of three or more the ticked box unticks; a pair's ticked
       // answer given again runs again, so a removal it causes asks again.
-      if (on && radios.length >= 3) {
+      if (on && (f.rg || radios.length) >= 3) {
         ui.choose({ [f.k]: "false" }, cx);
         return;
       }
