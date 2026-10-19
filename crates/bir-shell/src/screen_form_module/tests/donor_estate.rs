@@ -1581,3 +1581,40 @@ fn pr10_an_untick_of_an_unshown_frequency_writes_nothing() {
         ));
     }
 }
+
+/// Decision P4-1: 1800's item 17A takes 8816764.47 and shows it as held,
+/// on the fill, on Check (which no longer refuses it) and after the return
+/// is saved and opened again; Check names no amount box for it.
+#[test]
+fn p4_1_1800_item_17a_shows_and_checks_large_amounts() {
+    setup();
+    let key = "frm1800v2018:TaxCredit17A";
+    const REFUSED: &str =
+        "Enter a non-negative amount in pesos and centavos below 1,000,000,000,000.";
+    for (typed, shown, held) in [
+        ("8816764.47", "8,816,764.47", 8_816_764.47),
+        ("1234567890.12", "1,234,567,890.12", 1_234_567_890.12),
+    ] {
+        let opened = open("1800", 1);
+        let filled = fill("1800", &opened["draft"], json!({ key: typed }));
+        assert_eq!(filled["rejected"], json!({}), "{typed}");
+        assert_eq!(filled["draft"]["prior_gift_payments"], held, "{typed}");
+        assert_eq!(filled["values"][key], shown, "{typed}: the fill");
+        let checked = call_async(
+            "screen_form_validate",
+            vec!["1800".into(), json(filled["draft"].clone())],
+        )
+        .unwrap();
+        assert_eq!(checked["values"][key], shown, "{typed}: Check");
+        let refused: Vec<&Value> = checked["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|error| error["message"] == REFUSED)
+            .collect();
+        assert!(refused.is_empty(), "{typed}: {refused:?}");
+        let saved = save("1800", &filled["draft"]);
+        let reopened = open("1800", saved["stored_period"].as_i64().unwrap());
+        assert_eq!(reopened["values"][key], shown, "{typed}: reopened");
+    }
+}

@@ -880,6 +880,40 @@ mod tests {
         assert!(messages(&d).is_empty(), "{:?}", messages(&d));
     }
 
+    /// Decision P4-1: Check takes every two-decimal amount below
+    /// 1,000,000,000,000 in the money boxes, decided from the amount's
+    /// decimal form; 8816764.47 and 1234567890.12 were refused before.
+    #[test]
+    fn check_takes_large_two_decimal_amounts() {
+        const REFUSED: &str =
+            "Enter a non-negative amount in pesos and centavos below 1,000,000,000,000.";
+        for amount in [8_816_764.47, 1_234_567_890.12, 999_999_999_999.99] {
+            let mut d = sample();
+            d.prior_gift_payments = amount;
+            d.foreign_tax_paid = amount;
+            d.prior_net_gifts = amount;
+            d.personal_properties[0].fair_market_value = amount;
+            d.recompute();
+            assert_eq!(d.prior_gift_payments, amount);
+            let refused: Vec<_> = d
+                .validate_on(today())
+                .into_iter()
+                .filter(|(_, message)| message == REFUSED)
+                .collect();
+            assert!(refused.is_empty(), "{amount}: {refused:?}");
+        }
+        for amount in [10.005, 1_000_000_000_000.0] {
+            let mut d = sample();
+            d.prior_gift_payments = amount;
+            assert!(
+                d.validate_on(today())
+                    .iter()
+                    .any(|(field, message)| field == "prior_gift_payments" && message == REFUSED),
+                "{amount}"
+            );
+        }
+    }
+
     #[test]
     fn deductions_and_exemption_are_filed_like_the_official_page() {
         let mut d = sample();
