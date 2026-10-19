@@ -86,6 +86,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_form_annual_1604.mjs
     node --experimental-vm-modules tools/test_form_donor_estate.mjs
     node --experimental-vm-modules tools/test_form_as_needed.mjs
+    node --experimental-vm-modules tools/test_form_decisions_round_3.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check
