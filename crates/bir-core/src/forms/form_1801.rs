@@ -371,7 +371,9 @@ impl Form1801Draft {
 
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, open_ended_key: u32) -> Self {
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            // Decision P4-4: a new return's penalties run from its due date,
+            // one year after the date of death it carries (Item 1).
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             filing_year: year,
             open_ended_key,
@@ -1264,7 +1266,26 @@ impl Form1801Draft {
             ],
             state: penalty,
             basic_tax_due: "Item 22", |d| d.payables().1,
+            // Decision P4-4 (2026-10-19): the return is filed within one (1)
+            // year from the decedent's death (html-frozen/1801-2018/guide.html,
+            // "When and Where to File and Pay"), so the penalties run from
+            // that day, moved to the next business day on the app's deadline
+            // calendar. The guide's extension of up to thirty (30) days is
+            // one the Commissioner may grant in meritorious cases, not a
+            // later due date for every return, so it is not added.
+            typed_due_date: Some(|d: &Self| d.due_date()),
         )
+    }
+
+    /// The day this return is due: one year after the date of death (Item 1;
+    /// a death on February 29 is due on February 28), or the next business
+    /// day on the app's deadline calendar when that is not one. `None` until
+    /// Item 1 is a date.
+    pub fn due_date(&self) -> Option<NaiveDate> {
+        let due = self
+            .death_date()?
+            .checked_add_months(chrono::Months::new(12))?;
+        Some(super::penalty_items::next_business_day(due))
     }
 }
 
@@ -1404,6 +1425,88 @@ mod tests {
 
     fn messages(d: &Form1801Draft) -> Vec<String> {
         d.validate_on(today()).into_iter().map(|(_, m)| m).collect()
+    }
+
+    fn date(year: i32, month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(year, month, day).unwrap()
+    }
+
+    /// A new return (decision P4-4's model) whose decedent died on `on`,
+    /// with estate tax due.
+    fn new_return(on: NaiveDate) -> Form1801Draft {
+        let mut d = sample();
+        assert_eq!(
+            d.penalty.penalty_model_version,
+            crate::forms::penalty_items::TYPED_DUE_DATE_MODEL_VERSION,
+            "a new return is on P4-4"
+        );
+        d.standard_deduction = 0.0;
+        d.death_year = u16::try_from(chrono::Datelike::year(&on)).unwrap();
+        d.death_month = u8::try_from(chrono::Datelike::month(&on)).unwrap();
+        d.death_day = u8::try_from(chrono::Datelike::day(&on)).unwrap();
+        d
+    }
+
+    /// P4-4: due one year after the death, moved past a weekend to the next
+    /// business day; a death on February 29 is due on February 28; no due
+    /// date until Item 1 is a date.
+    #[test]
+    fn due_one_year_after_the_death() {
+        let due = |on| new_return(on).due_date();
+        assert_eq!(due(date(2025, 6, 5)), Some(date(2026, 6, 5)));
+        // Saturday 2025-10-04 moves to Monday.
+        assert_eq!(due(date(2024, 10, 4)), Some(date(2025, 10, 6)));
+        assert_eq!(due(date(2024, 2, 29)), Some(date(2025, 2, 28)));
+        let mut blank = sample();
+        (blank.death_month, blank.death_day, blank.death_year) = (0, 0, 0);
+        assert_eq!(blank.due_date(), None);
+        assert_eq!(
+            Form1801Draft::penalty_declaration().due_date(&new_return(date(2025, 6, 5))),
+            Some(date(2026, 6, 5))
+        );
+    }
+
+    /// P4-4: filed after its due date the return computes the 25%
+    /// surcharge, 12% a year interest and the compromise on Item 22; filed
+    /// on the due date it computes none; a return stored before P4-4
+    /// computes none until it joins.
+    #[test]
+    fn penalties_run_from_the_due_date() {
+        use crate::forms::penalty_items::{PENALTY_MODEL_VERSION, with_clock};
+        use crate::penalties::PenaltyProfile;
+        use crate::penalties::compromise::lookup_compromise;
+        let on = date(2025, 6, 5);
+        let due = date(2026, 6, 5);
+        let filed = date(2026, 10, 13);
+        let mut late = new_return(on);
+        with_clock(filed, || late.recompute());
+        let tax = late.payables().1;
+        assert_eq!(tax, 69_000.0);
+        let days = (filed - due).num_days() as f64;
+        let cents = |value: f64| (value * 100.0).round() / 100.0;
+        assert_eq!(late.surcharge, cents(tax * 0.25));
+        assert_eq!(late.interest, cents(tax * 0.12 * days / 365.0));
+        assert_eq!(
+            late.compromise,
+            cents(lookup_compromise(tax, 0.0, PenaltyProfile::StandardFiling))
+        );
+        assert!(late.compromise > 0.0);
+        let mut on_time = new_return(on);
+        with_clock(due, || on_time.recompute());
+        assert_eq!(
+            (on_time.surcharge, on_time.interest, on_time.compromise),
+            (0.0, 0.0, 0.0)
+        );
+        assert_eq!(on_time.payables().2, tax);
+        let mut stored = new_return(on);
+        stored.penalty.penalty_model_version = PENALTY_MODEL_VERSION;
+        stored.penalty.computed_penalties = None;
+        with_clock(filed, || stored.recompute());
+        assert_eq!(
+            (stored.surcharge, stored.interest, stored.compromise),
+            (0.0, 0.0, 0.0)
+        );
+        assert_eq!(stored.penalty.computed_penalties, None);
     }
 
     #[test]

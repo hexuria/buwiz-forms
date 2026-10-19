@@ -251,13 +251,15 @@ fn form_1801_sample_with_many_rows_is_current() {
     );
 }
 
-/// Event-based: the calendar has no 1801 deadline.
+/// Due one year after the death (decision P4-4): the penalties run from
+/// that day; the calendar has no 1801 deadline.
 #[test]
 fn form_1801_with_tax_and_added_rows_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_1801_with_tax_and_added_rows,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Item 1 is 09/15/2025: due Tuesday, September 15, 2026.
+        Deadline::Typed {
+            due: day(2026, 9, 15),
         },
     );
 }

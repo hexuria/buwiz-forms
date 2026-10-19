@@ -113,13 +113,15 @@ fn form_1800_sample_with_many_rows_is_current() {
     );
 }
 
-/// Event-based: the calendar has no 1800 deadline.
+/// Due 30 days after the donation (decision P4-4): the penalties run from
+/// that day; the calendar has no 1800 deadline.
 #[test]
 fn form_1800_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_1800,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Item 1 is 03/10/2025: due Wednesday, April 9, 2025.
+        Deadline::Typed {
+            due: day(2025, 4, 9),
         },
     );
 }

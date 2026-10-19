@@ -26,7 +26,9 @@
 //! - **Typed trigger date (maintainer decision D8, 2026-10-18).** A form
 //!   whose penalties run from a date the filer types, not from the calendar
 //!   (the excise returns 2200A, 2200AN, 2200M, 2200P, 2200S and 2200T: the
-//!   removal date; 2200C: the 10th of the month after its Item 1 month),
+//!   removal date; 2200C: the 10th of the month after its Item 1 month;
+//!   decision P4-4, 2026-10-19: 1800, 30 days after the donation, and 1801,
+//!   one year after the death, each moved to the next business day),
 //!   declares [`PenaltyItems::typed_due_date`]. It is measured from that
 //!   date once the draft is on [`TYPED_DUE_DATE_MODEL_VERSION`] (a new
 //!   return, or one that joins); a draft stored before computes nothing
@@ -276,6 +278,17 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
         },
         run,
     )
+}
+
+/// `date`, or the next business day after it when it is not one, on the
+/// calendar the app's deadlines use: `DeadlineResolver` (what
+/// [`resolve_due_date`] and the dashboard read) builds
+/// `BusinessDayCalendar::default()`, weekends only, as 2200C's typed due
+/// date does. Decision P4-4's 1800 and 1801 due dates move with it.
+pub fn next_business_day(date: NaiveDate) -> NaiveDate {
+    crate::calendar_rules::BusinessDayCalendar::default()
+        .adjust_to_next_business_day(date)
+        .0
 }
 
 /// The deadline `form_code`'s calendar resolves for `period`, with `overrides`.
