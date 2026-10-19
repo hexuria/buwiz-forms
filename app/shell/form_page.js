@@ -2216,7 +2216,9 @@ function choiceLabel(f) {
  * (leaves it unanswered, or keeps it where the form can't be unanswered),
  * a yes/no pair keeps one answer (picking it again sends it again). The
  * group's size is the host's (`rg`, every box of the one-answer group),
- * not the radios drawn in this item.
+ * not the radios drawn in this item. A radio the host put in no group (no
+ * `rg`) is never unticked: its "false" is a different answer on some forms
+ * (1701MS), so re-clicking it does nothing.
  */
 function radioGroup(cx, ui, it, radios) {
   const s = ui.state;
@@ -2232,11 +2234,13 @@ function radioGroup(cx, ui, it, radios) {
     const pick = (cx) => {
       if (locked) return;
       // In a group of three or more the ticked box unticks; a pair's ticked
-      // answer given again runs again, so a removal it causes asks again.
-      if (on && (f.rg || radios.length) >= 3) {
+      // answer given again runs again, so a removal it causes asks again; a
+      // ticked radio of no group stays as it is.
+      if (on && (f.rg || 0) >= 3) {
         ui.choose({ [f.k]: "false" }, cx);
         return;
       }
+      if (on && !f.rg) return;
       const edits = {};
       for (const r of radios) edits[r.k] = r.k === f.k ? "true" : "false";
       ui.choose(edits, cx);

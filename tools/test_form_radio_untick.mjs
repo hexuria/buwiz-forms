@@ -1,40 +1,26 @@
-// PR 14 review F9 (decision P4-16, "Untick: leave it unanswered"): the page
-// unticks the ticked box of a one-answer group of three or more by the
-// group's size the host gives each box (`rg`, screen_form_module.rs
-// mark_radio_groups), not by the radios drawn in one item. 2200S's manner of
-// payment is items 15 and 16 (radios) and item 17 (a tick box); before,
-// each item counted one radio, so re-clicking Payment on Actual Removal or
-// Prepayment sent the answer again and the manner could not be unticked.
-// Driven through the real app/shell/form_page.js with a mocked host (the
-// harness of tools/test_form_as_needed.mjs). What the host then writes is
-// its own (crates/bir-shell screen_form_module tests::radio_untick_rule).
+// PR 14 (decisions P4-16 and P4-18, review F1, F2, F9): the page unticks
+// the ticked box of a one-answer group of three or more by the group's size
+// the host serves on each box (`rg`, screen_form_module.rs
+// mark_radio_groups), not by the radios drawn in one item; a pair keeps its
+// re-pick; a radio the host put in no group is never unticked. The items
+// are the host's own served schema, exported by the bir-shell test
+// radio_untick_rule::pr14_radio_page_fixture_is_the_hosts into
+// tools/fixtures/form_radio_untick_page.json: 2200S's manner (items 15 and
+// 16 radios, item 17 a tick box), 2200C's manner (one official group of
+// three), 1701's tax-rate pair, and 1701MS's 11 and 12, whose "false" is a
+// different answer. Driven through the real app/shell/form_page.js with a
+// mocked host (the harness of tools/test_form_as_needed.mjs). What the host
+// then writes is its own (crates/bir-shell screen_form_module
+// tests::radio_untick_rule).
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 const root = new URL("../", import.meta.url);
 
-const K = (tail) => `frm2200S:${tail}`;
-const [ACTUAL, PREPAY, OTHER] = ["chkPymntManner_1", "chkPymntManner_2", "chkPymntManner_3"].map(K);
-const [YES, NO] = ["optAmended_1", "optAmended_2"].map(K);
-const schema = {
-  c: "2200S", t: "Excise Tax Return for Sweetened Beverages", rev: "2018", freq: "As needed", pages: 1, n: 2,
-  parts: [
-    {
-      n: "Part I · Background Information",
-      items: [
-        { no: "2", l: "Amended Return?", f: [{ k: YES, t: "radio", l: "Yes", rg: 2 }, { k: NO, t: "radio", l: "No", rg: 2 }] },
-      ],
-    },
-    {
-      n: "Part II · Manner Of Payment",
-      items: [
-        { no: "15", l: "", f: [{ k: ACTUAL, t: "radio", l: "Payment on Actual Removal", rg: 3 }] },
-        { no: "16", l: "", f: [{ k: PREPAY, t: "radio", l: "Prepayment/Advance Deposit", rg: 3 }] },
-        { no: "17", l: "", f: [{ k: OTHER, t: "chk", l: "Other Similar Schemes", rg: 3 }, { k: K("txtOthMannerofPymnt"), t: "text", l: "Specify" }] },
-      ],
-    },
-  ],
-};
+const served = JSON.parse(fs.readFileSync(new URL("tools/fixtures/form_radio_untick_page.json", root), "utf8"));
+let code = "2200S";
+const schemaOf = (form) => ({ c: form, t: form, rev: "2018", freq: "As needed", pages: 1, n: 1, parts: [{ n: "Part", items: served[form].items }] });
+const field = (form, key) => served[form].items.flatMap((it) => it.f || []).find((f) => f.k === key);
 
 const entities = [], tasks = [], texts = [], timers = [];
 const clicks = new Map(), downOut = new Map(), opacity = new Map(), ids = new Set();
@@ -118,7 +104,7 @@ const app = {
     write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },
     call(name, ...args) {
       calls.push([name, ...args]);
-      if (name === "screen_form_schema") return schema;
+      if (name === "screen_form_schema") return schemaOf(code);
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
         const values = { ...(args[1].values || hostValues), ...args[2] };
@@ -137,39 +123,60 @@ async function settle() { while (tasks.length) await Promise.all(tasks.splice(0)
 function frame() { owner = null; texts.length = 0; ids.clear(); opacity.clear(); clicks.clear(); checkboxes.clear(); for (const e of entities) e.dirty = true; renderFormPage(cx, app, 1056); }
 const fills = () => calls.filter((c) => c[0] === "screen_form_fill");
 const lastEdits = () => JSON.stringify(fills().at(-1)[3]);
-async function openWith(values) {
+async function openWith(form, values) {
+  code = form;
   hostValues = values;
-  ui.open({ code: "2200S", tin: "12345678800000", year: 2026, period: 1 }, cx);
+  ui.open({ code: form, tin: "12345678800000", year: 2026, period: 0 }, cx);
   await settle();
-  ui.state.openParts = new Set([0, 1]);
+  ui.state.openParts = new Set([0]);
   frame();
 }
-
-// ---- Re-clicking each ticked radio of the manner sends its untick.
-for (const key of [ACTUAL, PREPAY]) {
-  await openWith({ [key]: "true" });
+const reclick = (key) => {
   assert.ok(clicks.has(`fp-${key}`), `${key} is drawn as a radio`);
   const before = fills().length;
   act(clicks.get(`fp-${key}`).fn, {});
-  assert.equal(fills().length, before + 1, `${key}: one fill`);
-  assert.equal(lastEdits(), JSON.stringify({ [key]: "false" }), `${key}: re-clicked, it is unticked (the manner is left unanswered)`);
-}
-// An unticked radio of the group still picks its answer.
-await openWith({ [ACTUAL]: "true" });
-act(clicks.get(`fp-${PREPAY}`).fn, {});
-assert.equal(lastEdits(), JSON.stringify({ [PREPAY]: "true" }), "picking another manner ticks it");
-console.log("PASS 2200S manner of payment: re-clicking a ticked radio of items 15-16 unticks it.");
+  return fills().length === before ? null : JSON.parse(lastEdits());
+};
 
-// ---- Item 17's tick box unticks as a tick box.
-await openWith({ [PREPAY]: "true", [OTHER]: "true" });
-const other = checkboxes.get(`fp-${OTHER}`);
+// ---- The host's sizes: every manner box carries 3, 1701's tax rate 2,
+// 1701MS's 11c and 12b none.
+for (const key of ["frm2200S:chkPymntManner_1", "frm2200S:chkPymntManner_2", "frm2200S:chkPymntManner_3"]) assert.equal(field("2200S", key).rg, 3, key);
+for (const key of ["frm2200C:rdoPg1Pt2MOPPaymentActual", "frm2200C:rdoPg1Pt2MOPPrepayment", "frm2200C:rdoPg1Pt2MOPOther"]) assert.equal(field("2200C", key).rg, 3, key);
+for (const key of ["frm1701:rdoPg1I21TaxRateG", "frm1701:rdoPg1I21TaxRateP"]) assert.equal(field("1701", key).rg, 2, key);
+for (const key of ["frm1701MS:txtTaxpayerNo11c", "frm1701MS:txtTaxpayerNo12b"]) assert.equal(field("1701MS", key).rg, undefined, key);
+
+// ---- 2200S and 2200C: re-clicking each ticked manner radio unticks it.
+for (const [form, keys] of [
+  ["2200S", ["frm2200S:chkPymntManner_1", "frm2200S:chkPymntManner_2"]],
+  ["2200C", ["frm2200C:rdoPg1Pt2MOPPaymentActual", "frm2200C:rdoPg1Pt2MOPPrepayment", "frm2200C:rdoPg1Pt2MOPOther"]],
+]) {
+  for (const key of keys) {
+    await openWith(form, { [key]: "true" });
+    assert.deepEqual(reclick(key), { [key]: "false" }, `${form} ${key}: re-clicked, the manner is left unanswered`);
+  }
+}
+await openWith("2200S", { "frm2200S:chkPymntManner_1": "true" });
+assert.deepEqual(reclick("frm2200S:chkPymntManner_2"), { "frm2200S:chkPymntManner_2": "true" }, "picking another manner ticks it");
+console.log("PASS 2200S and 2200C manner of payment: re-clicking a ticked manner unticks it.");
+
+// ---- 2200S item 17's tick box unticks as a tick box.
+await openWith("2200S", { "frm2200S:chkPymntManner_2": "true", "frm2200S:chkPymntManner_3": "true" });
+const other = checkboxes.get("fp-frm2200S:chkPymntManner_3");
 assert.ok(other && other.checked, "item 17 shows ticked");
 act(other.onChange, false);
-assert.equal(lastEdits(), JSON.stringify({ [OTHER]: "false" }), "item 17 unticked sends its untick");
+assert.equal(lastEdits(), JSON.stringify({ "frm2200S:chkPymntManner_3": "false" }), "item 17 unticked sends its untick");
 console.log("PASS 2200S manner of payment: item 17's tick box unticks.");
 
-// ---- A yes/no pair keeps one answer: re-picking it sends it again.
-await openWith({ [YES]: "true" });
-act(clicks.get(`fp-${YES}`).fn, {});
-assert.equal(lastEdits(), JSON.stringify({ [YES]: "true", [NO]: "false" }), "a pair's answer given again runs again");
-console.log("PASS a yes/no pair keeps its official re-pick.");
+// ---- 1701's tax rate is a pair: re-picking the ticked one sends it
+// again with the other "false", never an untick (the ATC stays: the host's
+// own test, pr14_tax_rate_pairs_keep_the_atc).
+await openWith("1701", { "frm1701:rdoPg1I21TaxRateG": "true" });
+assert.deepEqual(reclick("frm1701:rdoPg1I21TaxRateG"), { "frm1701:rdoPg1I21TaxRateG": "true", "frm1701:rdoPg1I21TaxRateP": "false" }, "a pair's answer given again runs again");
+console.log("PASS 1701 tax rate: a two-member pair keeps its re-pick.");
+
+// ---- 1701MS's 11c and 12b are in no group: re-clicking them sends nothing.
+for (const key of ["frm1701MS:txtTaxpayerNo11c", "frm1701MS:txtTaxpayerNo12b"]) {
+  await openWith("1701MS", { [key]: "true" });
+  assert.equal(reclick(key), null, `${key}: re-clicked, nothing is sent and the answer stays`);
+}
+console.log("PASS 1701MS 11c and 12b: a ticked radio of no group stays as it is.");

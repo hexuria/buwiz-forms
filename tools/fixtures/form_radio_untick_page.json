@@ -1,0 +1,243 @@
+{
+  "2200S": {
+    "items": [
+      {
+        "no": "15",
+        "l": "",
+        "p": 1,
+        "f": [
+          {
+            "l": "Payment on Actual Removal",
+            "t": "radio",
+            "k": "frm2200S:chkPymntManner_1",
+            "rg": 3
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "16",
+        "l": "",
+        "p": 1,
+        "f": [
+          {
+            "l": "Prepayment/Advance Deposit",
+            "t": "radio",
+            "k": "frm2200S:chkPymntManner_2",
+            "rg": 3
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "17",
+        "l": "",
+        "p": 1,
+        "f": [
+          {
+            "l": "Other Similar Schemes",
+            "t": "chk",
+            "k": "frm2200S:chkPymntManner_3",
+            "rg": 3
+          },
+          {
+            "l": "Specify",
+            "t": "text",
+            "k": "frm2200S:txtOthMannerofPymnt",
+            "m": 50,
+            "slots": 25
+          }
+        ],
+        "cols": null
+      }
+    ]
+  },
+  "2200C": {
+    "items": [
+      {
+        "no": "13",
+        "l": "",
+        "p": 1,
+        "f": [
+          {
+            "l": "Payment on Actual Performance of Services",
+            "t": "radio",
+            "k": "frm2200C:rdoPg1Pt2MOPPaymentActual",
+            "r": 1,
+            "rg": 3
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "14",
+        "l": "",
+        "p": 1,
+        "f": [
+          {
+            "l": "Prepayment / Advance Deposit",
+            "t": "radio",
+            "k": "frm2200C:rdoPg1Pt2MOPPrepayment",
+            "r": 1,
+            "rg": 3
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "15",
+        "l": "",
+        "p": 1,
+        "f": [
+          {
+            "l": "Other Similar Schemes (specify)",
+            "t": "radio",
+            "k": "frm2200C:rdoPg1Pt2MOPOther",
+            "r": 1,
+            "rg": 3
+          },
+          {
+            "l": "Specify",
+            "t": "text",
+            "k": "frm2200C:txtPg1Pt2MOPOtherDesc",
+            "m": 80,
+            "slots": 27
+          }
+        ],
+        "cols": null
+      }
+    ]
+  },
+  "1701": {
+    "items": [
+      {
+        "no": "21",
+        "l": "Tax Rate (choose one)",
+        "p": 1,
+        "f": [
+          {
+            "l": "Graduated Rates (Choose Method of Deduction in Item 21A)",
+            "t": "radio",
+            "k": "frm1701:rdoPg1I21TaxRateG",
+            "rg": 2
+          },
+          {
+            "l": "8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC",
+            "t": "radio",
+            "k": "frm1701:rdoPg1I21TaxRateP",
+            "rg": 2
+          }
+        ],
+        "cols": null
+      }
+    ]
+  },
+  "1701MS": {
+    "items": [
+      {
+        "no": "11",
+        "l": "Source of Income",
+        "p": 1,
+        "f": [
+          {
+            "l": "A. Income from Business",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11a",
+            "rg": 2
+          },
+          {
+            "l": "A. Mixed Income",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11b",
+            "rg": 2
+          },
+          {
+            "l": "A. Income from Profession",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11c"
+          },
+          {
+            "l": "B. Income from Business",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11a1",
+            "rg": 4
+          },
+          {
+            "l": "B. Mixed Income",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11b1",
+            "rg": 4
+          },
+          {
+            "l": "B. Income from Profession",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11c1",
+            "rg": 4
+          },
+          {
+            "l": "B. Compensation Income",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo11d1",
+            "rg": 4
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "12",
+        "l": "Income is subject to (If with two (2) or more activities OR multiple tax regimes or tax rates, please use BIR Form No. 1701)",
+        "p": 1,
+        "f": [
+          {
+            "l": "A. Graduated Income Tax Rates",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12b"
+          },
+          {
+            "l": "A. 8% Income Tax Rate",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12c",
+            "rg": 7
+          },
+          {
+            "l": "A. Exempt from Income Tax (IT)",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12d",
+            "rg": 7
+          },
+          {
+            "l": "A. Special/Preferential Rate",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12e",
+            "rg": 7
+          },
+          {
+            "l": "B. Graduated Income Tax Rates",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12b1",
+            "rg": 7
+          },
+          {
+            "l": "B. 8% Income Tax Rate",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12c1",
+            "rg": 7
+          },
+          {
+            "l": "B. Exempt from Income Tax (IT)",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12d1",
+            "rg": 7
+          },
+          {
+            "l": "B. Special/Preferential Rate",
+            "t": "radio",
+            "k": "frm1701MS:txtTaxpayerNo12e1",
+            "rg": 7
+          }
+        ],
+        "cols": null
+      }
+    ]
+  }
+}
