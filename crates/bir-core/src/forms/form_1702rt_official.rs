@@ -57,7 +57,7 @@ pub const MCIT_ENTERED_FROM: u16 = 2020;
 /// (maintainer decision P5-2, 2026-10-19): calculations.json
 /// 1702rt-item41-rate-tax, "For 2020+, tax due uses user-visible rate / 100
 /// times Item 39, with nonpositive net forced to zero; before 2020 it uses
-/// 30%." Item 40 shows it.
+/// 30%." Item 40 shows it; before 2020 Item 41 has no zero floor.
 pub const RATE_BEFORE_2020_PERCENT: u8 = 30;
 
 /// `percent`% of `amount`, rounded as `getProduct2` does (`Math.round`,
@@ -375,17 +375,18 @@ impl Form1702RTDraft {
         let net = p4.item_39_net_taxable_income_or_loss;
         if before_2020 {
             // Decision P5-2: before 2020 the page's branch below 20 taxes
-            // Item 39 at 30% (1702rt-item41-rate-tax), which Item 40 shows,
+            // Item 39 at 30% (1702rt-item41-rate-tax), which Item 40 shows.
+            // The rule puts the zero floor on 2020+ only ("For 2020+, ...
+            // nonpositive net forced to zero; before 2020 it uses 30%") and
+            // the official body is not in the tree, so it is followed
+            // literally (round 3, F3): a negative Item 39 gives a negative
+            // Item 41, as the no-floor MCIT does.
             // and Part V Item 57 is Item 35 times that rate / 100
             // (1702rt-item57-special-tax: "Only before 2020, Item 57 = Item
             // 35 times income-tax rate / 100; for 2020+ this function leaves
             // Item 57 untouched."); OSD has already cleared Item 57.
             p4.item_40_income_tax_rate_percent = RATE_BEFORE_2020_PERCENT;
-            p4.item_41_normal_income_tax_due = if net.0 <= 0 {
-                ZERO
-            } else {
-                percent_of(net, RATE_BEFORE_2020_PERCENT)
-            };
+            p4.item_41_normal_income_tax_due = percent_of(net, RATE_BEFORE_2020_PERCENT);
             if itemized {
                 self.part_v.item_57_special_allowable_deductions_tax_effect = percent_of(
                     p4.item_35_special_itemized_deductions,
@@ -1368,7 +1369,9 @@ mod tests {
         assert_eq!(p4.item_33_total_taxable_income, WholePeso(2_950_026));
         // 59,000.52 rounds to 59,001.
         assert_eq!(p4.item_42_mcit_due, WholePeso(59_001));
-        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(0));
+        // Item 39 is 2,950,026 - 3,140,000 = -189,974; before 2020 item 41
+        // has no floor (round 3, F3): 30% is -56,992.20.
+        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(-56_992));
         assert_eq!(p4.item_43_tax_due, WholePeso(59_001));
         assert_eq!(
             p4.item_56_net_tax_payable_or_overpayment,
@@ -1425,8 +1428,12 @@ mod tests {
         // 4,900,000 - 5,000,000 + 50,001 = -49,999; 2% is -999.98.
         assert_eq!(p4.item_33_total_taxable_income, WholePeso(-49_999));
         assert_eq!(p4.item_42_mcit_due, WholePeso(-1_000));
-        assert_eq!(p4.item_41_normal_income_tax_due, ZERO);
-        assert_eq!(p4.item_43_tax_due, ZERO);
+        // Round 3 (F3): before 2020 item 41 has no floor either: item 39 is
+        // -49,999 - 1,440,000 = -1,489,999, and 30% is -446,999.70.
+        assert_eq!(p4.item_39_net_taxable_income_or_loss, WholePeso(-1_489_999));
+        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(-447_000));
+        // Item 43 is the larger of the two.
+        assert_eq!(p4.item_43_tax_due, WholePeso(-1_000));
     }
 
     /// Decision P5-2: a 2019 return typed at 25% computes at 30% (item 40

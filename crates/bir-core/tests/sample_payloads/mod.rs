@@ -47,6 +47,8 @@ mod form_2551q;
 mod form_2552;
 mod form_2553;
 pub mod penalty_items;
+// Round 3 (F9): every other form keeps its penalty due dates and amounts.
+mod penalty_golden;
 
 /// Sample drafts per form module, for the agent-form probe.
 pub(crate) fn agent_seeds() -> Vec<(&'static str, Vec<serde_json::Value>)> {

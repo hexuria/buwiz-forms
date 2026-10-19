@@ -280,12 +280,24 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
     )
 }
 
-/// The calendar a typed due date moves on (decision P4-2 and P4-4: the next
-/// working day, the way the app's calendar moves a deadline): weekends,
-/// and the official holidays the app seeds as its deadline overrides
-/// (`DeadlineResolver::seed_2026_holiday_overrides`, each override's
-/// `original_deadline` the holiday, as the Calendar's admin seeding stores
-/// them). Built once.
+/// The calendar a typed due date moves on (decisions P4-2, P4-4 and P5-4:
+/// the next working day): exactly the weekends plus the official holidays
+/// the app ships, the `original_deadline` of each entry of
+/// `DeadlineResolver::seed_2026_holiday_overrides` (built once). 1800, 1801
+/// and 2200C read it through [`next_business_day`].
+///
+/// - Official holidays are known only for the years whose proclamation
+///   ships (2026 today); other years roll off weekends only until theirs is
+///   added in an app update (maintainer decision P4-6).
+/// - It is not the stored deadline overrides (`Database::
+///   get_deadline_overrides`): those move only the calendar deadlines of the
+///   forms in their `affected_form_codes`, and a typed due date has no
+///   calendar deadline to move.
+/// - Known app issue, not changed here: the seed's own `adjusted_deadline`
+///   skips weekends only, so Maundy Thursday (2026-04-02) adjusts to Good
+///   Friday (2026-04-03), itself a holiday. This calendar uses the holiday
+///   dates, not those adjusted ones, so a typed due date on either day
+///   moves to Monday, 2026-04-06.
 pub fn deadline_calendar() -> &'static crate::calendar_rules::BusinessDayCalendar {
     use crate::calendar_rules::{BusinessDayCalendar, DeadlineResolver, NonWorkingDay};
     static CALENDAR: std::sync::OnceLock<BusinessDayCalendar> = std::sync::OnceLock::new();
@@ -302,8 +314,9 @@ pub fn deadline_calendar() -> &'static crate::calendar_rules::BusinessDayCalenda
 }
 
 /// `date`, or the next working day after it when it is not one, on
-/// [`deadline_calendar`]: 1800 and 1801 (decision P4-4) and 2200C (D8) move
-/// their typed due dates with it.
+/// [`deadline_calendar`] (weekends and the shipped official holidays): 1800
+/// and 1801 (decision P4-4) and 2200C (D8) move their typed due dates with
+/// it.
 pub fn next_business_day(date: NaiveDate) -> NaiveDate {
     deadline_calendar().adjust_to_next_business_day(date).0
 }

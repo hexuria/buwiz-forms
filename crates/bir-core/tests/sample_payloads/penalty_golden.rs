@@ -1,0 +1,140 @@
+//! Round 3 (F9) golden: every queueable form but 1800, 1801 and 2200C keeps
+//! the penalty due dates and amounts it had before PR 13 (e86b1424), for a
+//! fixed set of trigger dates and filing dates around the 2026 official
+//! holidays. `penalty_due_dates_golden.txt` was written by this same module
+//! run on the e86b1424 tree; this test recomputes it on the current code.
+//!
+//! For each form's sample drafts (`super::agent_seeds`), each penalty
+//! declaration: the due date and the computed surcharge, interest and
+//! compromise if filed on each filing date. A form whose penalties run from
+//! a date the filer types (the excise returns, D8) is joined to that model
+//! and tried with each trigger date written into its `year` / `month` /
+//! `day`; a calendar form's trigger is its period, so its filing dates are
+//! what vary.
+
+use bir_core::forms::queueable::{QueueableForm, QueueableKind};
+use chrono::{Datelike, NaiveDate};
+use serde_json::Value;
+
+/// The forms P4-4 and round 2 change on purpose.
+const CHANGED: [&str; 3] = ["1800", "1801", "2200C"];
+
+fn day(year: i32, month: u32, day: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(year, month, day).unwrap()
+}
+
+/// Trigger dates on and around the 2026 seeded holidays (Maundy Thursday,
+/// Good Friday, Araw ng Kagitingan, Labor Day, Independence Day, National
+/// Heroes Day, Bonifacio Day, Christmas and Rizal Day) and one in 2027.
+fn triggers() -> Vec<NaiveDate> {
+    vec![
+        day(2026, 1, 1),
+        day(2026, 4, 2),
+        day(2026, 4, 3),
+        day(2026, 4, 9),
+        day(2026, 5, 1),
+        day(2026, 6, 12),
+        day(2026, 8, 31),
+        day(2026, 11, 30),
+        day(2026, 12, 25),
+        day(2026, 12, 30),
+        day(2027, 4, 9),
+    ]
+}
+
+/// Filing dates: each trigger, the working days after it, and a late one.
+fn filings(trigger: NaiveDate) -> Vec<NaiveDate> {
+    [0, 1, 2, 3, 4, 40]
+        .into_iter()
+        .map(|days| trigger + chrono::Duration::days(days))
+        .collect()
+}
+
+fn lines_for<F: QueueableForm>(package: &str, index: usize, seed: &Value, out: &mut Vec<String>) {
+    let Ok(form) = serde_json::from_value::<F>(seed.clone()) else {
+        out.push(format!("{package}#{index} unreadable"));
+        return;
+    };
+    for (n, items) in F::penalty_items().iter().enumerate() {
+        let typed = items.typed_due_date.is_some();
+        let cases: Vec<(String, F)> = if typed {
+            triggers()
+                .into_iter()
+                .filter_map(|trigger| {
+                    let mut json = serde_json::to_value(&form).ok()?;
+                    for (field, value) in [
+                        ("year", i64::from(trigger.year())),
+                        ("month", i64::from(trigger.month())),
+                        ("day", i64::from(trigger.day())),
+                    ] {
+                        json.get(field)?;
+                        json[field] = Value::from(value);
+                    }
+                    let mut tried: F = serde_json::from_value(json).ok()?;
+                    items.join_typed_due_date(&mut tried);
+                    Some((trigger.to_string(), tried))
+                })
+                .collect()
+        } else {
+            vec![("period".to_string(), form.clone())]
+        };
+        for (trigger, case) in cases {
+            let due = items.due_date(&case);
+            let dates = match due {
+                Some(due) => filings(due),
+                None => triggers(),
+            };
+            for filed in dates {
+                let amounts = items
+                    .if_filed_on(&case, filed)
+                    .map(|c| format!("{:.2}/{:.2}/{:.2}", c.surcharge, c.interest, c.compromise))
+                    .unwrap_or_else(|| "none".to_string());
+                out.push(format!(
+                    "{package}#{index} items{n} trigger={trigger} due={} filed={filed} {amounts}",
+                    due.map_or("none".to_string(), |d| d.to_string()),
+                ));
+            }
+        }
+    }
+}
+
+/// Every line of the golden, in a fixed order.
+pub(crate) fn golden_lines() -> Vec<String> {
+    let mut out = Vec::new();
+    for (package, seeds) in super::agent_seeds() {
+        let Some(kind) = QueueableKind::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.form_code().eq_ignore_ascii_case(package))
+        else {
+            continue;
+        };
+        if CHANGED.contains(&kind.form_code()) {
+            continue;
+        }
+        for (index, seed) in seeds.iter().enumerate() {
+            bir_core::with_queueable_kind!(kind, F => lines_for::<F>(package, index, seed, &mut out));
+        }
+    }
+    out
+}
+
+fn golden_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/sample_payloads/penalty_due_dates_golden.txt")
+}
+
+#[test]
+fn every_other_form_keeps_its_penalty_due_dates_and_amounts() {
+    let lines = golden_lines().join("\n") + "\n";
+    if std::env::var_os("PR13_WRITE_PENALTY_GOLDEN").is_some() {
+        std::fs::write(golden_path(), &lines).unwrap();
+        return;
+    }
+    let golden = std::fs::read_to_string(golden_path()).unwrap();
+    assert!(
+        golden.lines().count() > 1_000,
+        "the golden covers every form"
+    );
+    assert_eq!(lines, golden);
+}
