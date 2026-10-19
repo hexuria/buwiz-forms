@@ -197,39 +197,6 @@ pub(super) fn untick_writes_its_option(kind: AgentFormKind, key: &str) -> bool {
     kind.form_code() == "2200S" && key == "frm2200S:chkPymntManner_3"
 }
 
-/// What unticking the ticked member of an excise return's three-way manner
-/// of payment item writes at `path`: the item unanswered, which is the
-/// field's own default (`none` / `unanswered`). The shared rule writes
-/// `null` there, which these forms' manner fields cannot hold (the fill
-/// failed as "not a 2200S draft"). `None` for every other form and path.
-pub(super) fn unanswered(kind: AgentFormKind, path: &str) -> Option<Value> {
-    let value = match (excise(kind)?, path) {
-        (QueueableKind::Form2200A, "/manner_of_payment") => {
-            serde_json::to_value(form_2200a::Form2200APayment::default())
-        }
-        (QueueableKind::Form2200AN, "/manner") => {
-            serde_json::to_value(form_2200an::Form2200ANManner::default())
-        }
-        (QueueableKind::Form2200C, "/manner") => {
-            serde_json::to_value(form_2200c::Form2200CManner::default())
-        }
-        (QueueableKind::Form2200M, "/manner_of_payment") => {
-            serde_json::to_value(form_2200m::Form2200MPayment::default())
-        }
-        (QueueableKind::Form2200P, "/manner_of_payment") => {
-            serde_json::to_value(form_2200p::Form2200PPayment::default())
-        }
-        (QueueableKind::Form2200S, "/manner") => {
-            serde_json::to_value(form_2200s::Form2200SManner::default())
-        }
-        (QueueableKind::Form2200T, "/manner_of_payment") => {
-            serde_json::to_value(form_2200t::Form2200TPayment::default())
-        }
-        _ => return None,
-    };
-    value.ok()
-}
-
 /// The penalty locks of an excise return as this fill leaves them, for the
 /// page to apply at once (`relocks`): a group still computed is locked as
 /// computed, one kept as entered says so, an edited one is open (`null`).

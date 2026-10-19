@@ -1611,13 +1611,6 @@ fn removes_relief(
     })
 }
 
-/// 2552 item 11: unticking its answer keeps it (the draft has no
-/// unanswered value to go back to once answered; the official radios never
-/// untick).
-pub(super) fn untick_keeps_the_answer(kind: AgentFormKind, key: &str) -> bool {
-    matches!(cell(kind, key), Some(Cell::Transaction2552(_)))
-}
-
 /// 1707 item 8 No clears what 8A held.
 fn removes_1707(before: &Value, after: &Value, edits: &Map<String, Value>) -> Option<Value> {
     if !edits.contains_key("frm1707:rdoPg1I8TaxReliefNo") {

@@ -675,6 +675,77 @@ const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
         "yes_unspecified",
         "1706 item 11 No unticked is Yes: Form1706TaxRelief::YesUnspecified",
     ),
+    // PR 14 (review F9): 2200S item 17 Other Similar Schemes is a kind of
+    // prepayment — its text is kept only "with item 17 ticked on a
+    // prepayment" and `compute` clears `other_scheme` unless the manner is
+    // a prepayment, so the pick sets both (the boolean half is in
+    // CHOICE_OPTION_BOOL_SETS).
+    (
+        "2200S",
+        "frm2200S:chkPymntManner",
+        "3",
+        "/manner",
+        "prepayment",
+        "2200S item 17 Other Similar Schemes: a kind of prepayment (its text needs item 16 = Prepayment and item 17)",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_3",
+        "true",
+        "/manner",
+        "prepayment",
+        "2200S item 17 Other Similar Schemes: a kind of prepayment (its text needs item 16 = Prepayment and item 17)",
+    ),
+];
+
+/// Choices whose option also sets a boolean draft field, with evidence:
+/// `(form code, key, option value, path, set, evidence)`. Scoped by form
+/// and key like [`CHOICE_OPTION_SETS`], which carries strings; these sets
+/// are booleans.
+///
+/// PR 14 (review F9): 2200S's items 15, 16 and 17 are one three-member
+/// official payment-manner group — item 17 Other Similar Schemes is a
+/// kind of prepayment (its text is kept only "with item 17 ticked on a
+/// prepayment", and `compute` clears `other_scheme` unless the manner is
+/// a prepayment). The probe ties each member to the one path its field
+/// map write moves, so picking item 17 beside item 15 could file Actual
+/// Removal with `other_scheme` — a pair the form cannot hold — and
+/// picking item 15 or 16 left a stale `other_scheme` tick. Each manner
+/// pick now states both paths: 15/16 clear `other_scheme`, 17 picks a
+/// prepayment with `other_scheme`.
+const CHOICE_OPTION_BOOL_SETS: &[(&str, &str, &str, &str, bool, &str)] = &[
+    (
+        "2200S",
+        "frm2200S:chkPymntManner",
+        "1",
+        "/other_scheme",
+        false,
+        "2200S item 15 Actual Removal: form_2200s.rs `compute` clears other_scheme unless manner is a prepayment",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner",
+        "2",
+        "/other_scheme",
+        false,
+        "2200S item 16 Prepayment: prepayment alone is not Other Similar Schemes (item 17)",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_1",
+        "true",
+        "/other_scheme",
+        false,
+        "2200S item 15 Actual Removal: form_2200s.rs `compute` clears other_scheme unless manner is a prepayment",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_2",
+        "true",
+        "/other_scheme",
+        false,
+        "2200S item 16 Prepayment: prepayment alone is not Other Similar Schemes (item 17)",
+    ),
 ];
 
 /// Choices whose options may set only draft fields under a prefix, with
@@ -695,22 +766,28 @@ const CHOICE_PATHS_WITHIN: &[(&str, &str, &str, &str)] = &[(
 
 #[cfg(test)]
 mod choice_list_tests {
-    use super::{CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
+    use super::{CHOICE_OPTION_BOOL_SETS, CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
 
     /// Every scoped entry names a reviewed form (1701MS, PR 7; 1606 and
-    /// 1706, PR 9) and a key that form's pin binds, so no other form's
-    /// same-named box is touched.
+    /// 1706, PR 9; 2200S, PR 14) and a key that form's pin binds, so no
+    /// other form's same-named box is touched.
     #[test]
     fn choice_overrides_are_scoped_to_their_form() {
         let pin = |form: &str| match form {
             "1701MS" => include_str!("../../../data/agent-forms/1701ms-v2024.json"),
             "1606" => include_str!("../../../data/agent-forms/1606-v2018.json"),
             "1706" => include_str!("../../../data/agent-forms/1706-v2018.json"),
+            "2200S" => include_str!("../../../data/agent-forms/2200s-v2018.json"),
             other => panic!("{other} is not a reviewed form"),
         };
         let keys = CHOICE_OPTION_SETS
             .iter()
             .map(|(form, key, ..)| (*form, *key))
+            .chain(
+                CHOICE_OPTION_BOOL_SETS
+                    .iter()
+                    .map(|(form, key, ..)| (*form, *key)),
+            )
             .chain(
                 CHOICE_PATHS_WITHIN
                     .iter()
@@ -732,6 +809,49 @@ mod choice_list_tests {
 /// records all ten `disabled: true` (source lines 3363, 3373, 3379, 3389,
 /// 3395, 3405, 3411, 3431, 3441 and 3447), unlike Part VII and Part IX
 /// column B; form_1701_official.rs files them 0.00 (PR 7 review).
+/// The official ATC popup's tick boxes, with evidence: `(form code, key
+/// prefix, reason)`. Each slot ticks one ATC of the list the category of
+/// withholding agent offers, and the field map writes the box from the
+/// Part II rows. The number of slots follows the category, so the probe tied
+/// slots to the category field: a direct fill of a slot wrote the
+/// category, never the ATC, and the box still showed unticked (PR 14 review
+/// F10, F12). They are left unbound; the reason keeps the probe's own
+/// evidence for each slot.
+///
+/// The desktop assistant fills through `agent::fill`, so it gets the reason
+/// as a refusal and chooses a row's ATC in the row instead. The bir-shell
+/// page host writes 1600PT's and 1600VT's slots itself (rows_monthly.rs
+/// `Cell::Slot`); 1601FQ's stay refused there too.
+const POPUP_SLOTS: &[(&str, &str, &str)] = &[
+    (
+        "1600PT",
+        "AtcCode",
+        "the ATC popup's tick box (item 10's list): a Part II row's ATC is chosen in the row (txtAtcCd<n>)",
+    ),
+    (
+        "1600VT",
+        "AtcCode",
+        "the ATC popup's tick box (item 10's list): a Part II row's ATC is chosen in the row (txtAtcCd<n>)",
+    ),
+    (
+        "1601FQ",
+        "AtcCd",
+        "the ATC popup's tick box (the category's list): a Part II row's ATC is chosen in the row (txtAtcCode<n>)",
+    ),
+];
+
+/// Radios whose fields.json item is not the one their official name group
+/// answers, with evidence: `(form code, key, item, evidence)`. They are
+/// grouped as that item's radios.
+const RADIO_ITEM: &[(&str, &str, &str, &str)] = &[(
+    "2200C",
+    "frm2200C:rdoPg1Pt2MOPPaymentActual",
+    "",
+    "rules/forms/2200c-v2018/fixtures/runtime-control-inventory-v796.json: \
+     rdoPg1Pt2MOPPaymentActual, rdoPg1Pt2MOPPrepayment and rdoPg1Pt2MOPOther are \
+     one radio name group (frm2200C:rdoPg1Pt2MOP); fields.json lists the first under Part V",
+)];
+
 const SHUT_ON_OFFICIAL_PAGE: &[(&str, &str)] = &[
     ("1701", "frm1701:txtPg4IPart8_1B"),
     ("1701", "frm1701:txtPg4IPart8_2B"),
@@ -1748,8 +1868,12 @@ pub fn group_radios(def: &mut AgentFormDef) {
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect();
+        let item = RADIO_ITEM
+            .iter()
+            .find(|(form, key, ..)| *form == def.form_code && *key == entry.key)
+            .map_or_else(|| entry.item.clone(), |(_, _, item, _)| (*item).to_string());
         items
-            .entry((entry.item.clone(), fields))
+            .entry((item, fields))
             .or_default()
             .push((entry.key.clone(), checked.set.clone()));
     }
@@ -2256,6 +2380,37 @@ fn decide(
     profile: &BTreeSet<String>,
     key: &str,
 ) -> Result<BoundBox, String> {
+    let probed = decide_probed(def, evidence, profile, key);
+    let slot = POPUP_SLOTS.iter().find(|(form, prefix, _)| {
+        *form == def.form_code
+            && key
+                .strip_prefix(prefix)
+                .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    });
+    let Some((_, _, reason)) = slot else {
+        return probed;
+    };
+    let seen = match &probed {
+        Ok(bound) => format!(
+            "the probe tied it to {}",
+            super::binding_paths(&bound.binding)
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Err(why) => format!("probe: {why}"),
+    };
+    Err(format!("{reason}; {seen}"))
+}
+
+fn decide_probed(
+    def: &AgentFormDef,
+    evidence: &Evidence,
+    profile: &BTreeSet<String>,
+    key: &str,
+) -> Result<BoundBox, String> {
     let lock_for = |paths: &[&str]| -> Option<Lock> {
         if paths
             .iter()
@@ -2351,6 +2506,14 @@ fn decide(
                 option
                     .set
                     .insert((*path).to_string(), Value::String((*set).to_string()));
+            }
+        }
+        for (_, _, value, path, set, _) in CHOICE_OPTION_BOOL_SETS
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
+            if let Some(option) = options.iter_mut().find(|option| option.value == *value) {
+                option.set.insert((*path).to_string(), Value::Bool(*set));
             }
         }
         for (_, _, prefix, _) in CHOICE_PATHS_WITHIN

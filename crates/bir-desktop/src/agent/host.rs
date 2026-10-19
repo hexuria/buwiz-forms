@@ -2523,9 +2523,10 @@ impl BirAgentHost {
                 filled.push(key);
             }
             let mut not_shown = Vec::new();
+            let mut refused = serde_json::Map::new();
             if !official.is_empty() {
                 let json = serde_json::to_value(&draft).map_err(|err| err.to_string())?;
-                let (next, more, also_kept, hidden) = generic::fill_official(
+                let (next, more, also_kept, hidden, also_refused) = generic::fill_official(
                     bir_core::forms::agent::AgentFormKind::Form1601C,
                     &json,
                     &form.assist,
@@ -2535,6 +2536,7 @@ impl BirAgentHost {
                 filled.extend(more);
                 kept.extend(also_kept);
                 not_shown = hidden;
+                refused = also_refused;
             }
             draft.compute();
             form.draft = draft;
@@ -2544,9 +2546,9 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            return Ok(generic::with_not_shown(
-                fill_result("1601C", source, filled, kept),
-                not_shown,
+            return Ok(generic::with_refused(
+                generic::with_not_shown(fill_result("1601C", source, filled, kept), not_shown),
+                refused,
             ));
         }
         if self.active_view == ActiveView::Form2551Q {
@@ -2570,9 +2572,10 @@ impl BirAgentHost {
                 filled.push(key);
             }
             let mut not_shown = Vec::new();
+            let mut refused = serde_json::Map::new();
             if !official.is_empty() {
                 let json = serde_json::to_value(&draft).map_err(|err| err.to_string())?;
-                let (next, more, also_kept, hidden) = generic::fill_official(
+                let (next, more, also_kept, hidden, also_refused) = generic::fill_official(
                     bir_core::forms::agent::AgentFormKind::Form2551Q,
                     &json,
                     &form.assist,
@@ -2582,6 +2585,7 @@ impl BirAgentHost {
                 filled.extend(more);
                 kept.extend(also_kept);
                 not_shown = hidden;
+                refused = also_refused;
             }
             draft.recompute(None);
             form.draft = draft;
@@ -2591,9 +2595,9 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            return Ok(generic::with_not_shown(
-                fill_result("2551Q", source, filled, kept),
-                not_shown,
+            return Ok(generic::with_refused(
+                generic::with_not_shown(fill_result("2551Q", source, filled, kept), not_shown),
+                refused,
             ));
         }
         if let Some(result) = self.fill_generic(&fields, source) {

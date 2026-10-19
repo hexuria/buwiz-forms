@@ -19,6 +19,11 @@
 //!   sets the row's tax withheld and items 18-27. Item 3
 //!   (`set_taxes_withheld`) and item 10 (`set_agent_category`) go through
 //!   the form's setters, which clear the rows as the official handlers do.
+//! - 1600PT and 1600VT `AtcCode1..n`, the official ATC popup's tick boxes
+//!   (not drawn: the page picks a row's ATC in the row): a direct fill
+//!   ticks the category's `n`th popup ATC into Part II with `toggle_atc`,
+//!   and an untick removes its row, so the box shows what the draft holds
+//!   (the probe had tied the slots to item 10, PR 14 review F10).
 //! - 1600WP item 4 (`set_taxes_withheld`, `cancelAllCompute`) and item 7
 //!   (`set_agent_category`). Schedule 1.1 is closed while item 4 is not Yes
 //!   (fields.json `enabled_when` "Item 4 Yes."): a write there is refused
@@ -92,6 +97,8 @@ pub(super) enum Cell {
     Atc(Popup, usize),
     Base(Popup, usize),
     Rate(Popup, usize),
+    /// 1600PT/1600VT `AtcCode<n>`: popup slot `n - 1` of item 10's list.
+    Slot(Popup, usize),
     /// 1600PT/1600VT item 3 and item 10 (`true` is Government).
     Withheld(Popup, bool),
     Category(Popup, bool),
@@ -130,8 +137,12 @@ pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
         },
         "1600PT" | "1600VT" => {
             let popup = Popup::of(kind)?;
-            let rest = key.strip_prefix(popup.prefix())?;
             let rows = popup_rows(popup);
+            // The popup's boxes carry no form prefix (`AtcCode1`).
+            if let Some(slot) = row_of(key, "AtcCode", rows) {
+                return Some(Cell::Slot(popup, slot));
+            }
+            let rest = key.strip_prefix(popup.prefix())?;
             if let Some(row) = row_of(rest, "txtAtcCd", rows) {
                 return Some(Cell::Atc(popup, row));
             }
@@ -182,7 +193,7 @@ pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
 /// An answer before what it opens, and an ATC before its row's tax base.
 pub(super) fn edit_order(kind: AgentFormKind, key: &str) -> Option<usize> {
     match cell(kind, key)? {
-        Cell::Atc(..) | Cell::WpSchedule(..) => Some(1),
+        Cell::Atc(..) | Cell::Slot(..) | Cell::WpSchedule(..) => Some(1),
         Cell::Base(..) => Some(2),
         _ => None,
     }
@@ -243,7 +254,7 @@ fn amount(value: &Value) -> Result<f64, String> {
 /// The 1600PT and 1600VT drafts share one shape (`atc_rows` of code, rate
 /// text and tax base; `toggle_atc` by position in the official list).
 macro_rules! popup_form {
-    ($name:ident, $draft:ty, $category:ty, $options:path, $index:path) => {
+    ($name:ident, $draft:ty, $category:ty, $options:path, $index:path, $popup:path) => {
         mod $name {
             use super::*;
 
@@ -317,6 +328,44 @@ macro_rules! popup_form {
                 store(draft, &form)
             }
 
+            /// Tick or untick the ATC in popup slot `slot` of item 10's
+            /// list, as the official popup's box does: a tick adds its Part
+            /// II row (`toggle_atc`), an untick removes it.
+            pub(super) fn fill_slot(draft: &mut Value, slot: usize, value: &Value) -> Result<(), String> {
+                let mut form: $draft = typed(draft)?;
+                let wanted = ticked(value);
+                let Some(category) = form.agent_category else {
+                    return if wanted {
+                        Err("Please select an option for Item 10.".to_string())
+                    } else {
+                        Ok(())
+                    };
+                };
+                let Some((at, _)) = $popup(category).nth(slot) else {
+                    return if wanted {
+                        Err(format!(
+                            "Item 10's category lists {} ATCs; this slot is not one of them.",
+                            $popup(category).count()
+                        ))
+                    } else {
+                        Ok(())
+                    };
+                };
+                let row = form
+                    .atc_rows
+                    .iter()
+                    .position(|r| $index(&r.atc_code, &r.rate_text) == Some(at));
+                match (wanted, row) {
+                    (true, None) => form.toggle_atc(at)?,
+                    (false, Some(row)) => {
+                        form.atc_rows.remove(row);
+                        form.recompute();
+                    }
+                    _ => return Ok(()),
+                }
+                store(draft, &form)
+            }
+
             pub(super) fn fill_base(draft: &mut Value, row: usize, value: &Value) -> Result<(), String> {
                 let base = amount(value)?;
                 let mut form: $draft = typed(draft)?;
@@ -363,14 +412,16 @@ popup_form!(
     bir_core::forms::form_1600pt::Form1600PtDraft,
     bir_core::forms::form_1600pt::Form1600PtAgentCategory,
     bir_core::forms::form_1600pt::FORM_1600PT_ATC_OPTIONS,
-    bir_core::forms::form_1600pt::form_1600pt_atc_index
+    bir_core::forms::form_1600pt::form_1600pt_atc_index,
+    bir_core::forms::form_1600pt::form_1600pt_popup
 );
 popup_form!(
     vt,
     bir_core::forms::form_1600vt::Form1600VtDraft,
     bir_core::forms::form_1600vt::Form1600VtAgentCategory,
     bir_core::forms::form_1600vt::FORM_1600VT_ATC_OPTIONS,
-    bir_core::forms::form_1600vt::form_1600vt_atc_index
+    bir_core::forms::form_1600vt::form_1600vt_atc_index,
+    bir_core::forms::form_1600vt::form_1600vt_popup
 );
 
 /// Write `key` when this module owns it: `None` leaves it to the ordinary
@@ -432,6 +483,8 @@ fn write(
         Cell::Category(Popup::Vt, government) => vt::set_category(draft, government),
         Cell::Atc(Popup::Pt, row) => pt::fill_atc(draft, row, value),
         Cell::Atc(Popup::Vt, row) => vt::fill_atc(draft, row, value),
+        Cell::Slot(Popup::Pt, slot) => pt::fill_slot(draft, slot, value),
+        Cell::Slot(Popup::Vt, slot) => vt::fill_slot(draft, slot, value),
         Cell::Base(Popup::Pt, row) => pt::fill_base(draft, row, value),
         Cell::Base(Popup::Vt, row) => vt::fill_base(draft, row, value),
         Cell::Rate(..) => {
@@ -630,9 +683,10 @@ pub(super) fn removes(
     }
     // A cleared Part II ATC goes with its tax base: ask only when it had one.
     let clears_atc = edits.iter().any(|(key, value)| {
-        text(value).is_empty()
-            && (matches!(cell(kind, key), Some(Cell::Atc(..)))
-                || (kind.form_code() == "1600WP" && key.starts_with("frm1600WP:txtAtcCode")))
+        (!ticked(value) && matches!(cell(kind, key), Some(Cell::Slot(..))))
+            || text(value).is_empty()
+                && (matches!(cell(kind, key), Some(Cell::Atc(..)))
+                    || (kind.form_code() == "1600WP" && key.starts_with("frm1600WP:txtAtcCode")))
     });
     if !clears_atc || part_ii == 0 {
         return None;

@@ -2262,8 +2262,10 @@ fn pr11_every_gate_key_is_cleared_exactly_while_its_gate_is_shut() {
 }
 
 /// Round 2, item 2: 2200S item 17's text is kept only with item 17 ticked
-/// on a prepayment (item 16), so its refusal names both: ticking item 17
-/// with the manner unanswered does not open it.
+/// on a prepayment, so its refusal names both items. Item 17's own pick
+/// is that answer — Other Similar Schemes is a prepayment (review F9):
+/// ticking it opens the text and the text applies, the manner a
+/// prepayment, never Actual Removal beside Other.
 #[test]
 fn pr11_2200s_item_17_text_names_items_16_and_17() {
     setup();
@@ -2271,14 +2273,15 @@ fn pr11_2200s_item_17_text_names_items_16_and_17() {
     let key = "frm2200S:txtOthMannerofPymnt";
     let tag = "Needs item 16 = Prepayment and item 17 = Other Similar Schemes";
     assert_eq!(opened["off"][key], tag);
-    let refused = fill(
+    let filled = fill(
         "2200S",
         &opened["draft"],
         json!({ "frm2200S:chkPymntManner_3": "true", key: "Sample scheme" }),
     );
-    assert_eq!(refused["rejected"][key], tag);
-    assert_eq!(refused["draft"]["other_scheme_text"], "");
-    assert_eq!(refused["draft"]["manner"], "unanswered");
+    assert_eq!(filled["rejected"], json!({}));
+    assert_eq!(filled["draft"]["other_scheme_text"], "Sample scheme");
+    assert_eq!(filled["draft"]["manner"], "prepayment");
+    assert_eq!(filled["draft"]["other_scheme"], true);
 }
 
 /// Round 2, item 4: unticking the ticked member of an excise return's

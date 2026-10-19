@@ -9,6 +9,9 @@
 
 use bir_core::forms::FilingStatus;
 use bir_core::forms::agent::{self, AgentFormKind, Binding, CardBox};
+use bir_core::forms::form_1600pt::{Form1600PtAgentCategory, form_1600pt_popup};
+use bir_core::forms::form_1600vt::{Form1600VtAgentCategory, form_1600vt_popup};
+use bir_core::forms::form_1601fq::Form1601FqCategory;
 use bir_core::forms::queueable::{QueueableKind, period_column};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::profile::TaxpayerProfile;
@@ -252,7 +255,11 @@ impl BirAgentHost {
         let questions = def.boxes.iter().filter(|entry| entry.is_question()).count();
         Ok(json!({
             "boxes": boxes,
-            "read_only": questions - boxes.len(),
+            // A popup's tick boxes the page does not draw for the draft's
+            // category are not read-only boxes the filer sees.
+            "read_only": questions
+                .saturating_sub(boxes.len())
+                .saturating_sub(undrawn_popup_slots(def, draft)),
             "computed": def.boxes.iter().filter(|entry| entry.computed).count(),
         }))
     }
@@ -299,7 +306,10 @@ impl BirAgentHost {
         })())
     }
 
-    /// `form.fill` on a generic form: official box keys, all-or-nothing.
+    /// `form.fill` on a generic form: official box keys. Every rejected
+    /// key — a box with no field in this app's draft, a computed, locked
+    /// or hidden box, a key that is not a box — is refused on its own in
+    /// `refused` and the rest of the batch still applies.
     pub(super) fn fill_generic(
         &mut self,
         fields: &serde_json::Map<String, Value>,
@@ -310,7 +320,7 @@ impl BirAgentHost {
             if !form.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            let (draft, filled, kept, not_shown) =
+            let (draft, filled, kept, not_shown, refused) =
                 fill_official(form.kind, &form.draft, &form.assist, fields)?;
             form.draft = draft;
             for key in &filled {
@@ -319,9 +329,12 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            Ok(with_not_shown(
-                fill_result(form.kind.form_code(), source, filled, kept),
-                not_shown,
+            Ok(with_refused(
+                with_not_shown(
+                    fill_result(form.kind.form_code(), source, filled, kept),
+                    not_shown,
+                ),
+                refused,
             ))
         })())
     }
@@ -553,12 +566,70 @@ impl BirAgentHost {
     }
 }
 
-/// `(draft, filled, kept_user_boxes, not_shown)` of [`fill_official`].
-pub(super) type OfficialFill = (Value, Vec<String>, Vec<String>, Vec<String>);
+/// `(draft, filled, kept_user_boxes, not_shown, refused)` of
+/// [`fill_official`].
+pub(super) type OfficialFill = (
+    Value,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    serde_json::Map<String, Value>,
+);
+
+/// The official page draws an ATC popup's tick boxes only for the ATCs the
+/// draft's category of withholding agent offers (1600PT/1600VT
+/// `AtcCode<n>`, 1601FQ `AtcCd<n>`): a slot beyond that list is a box
+/// nobody sees, so it is not a read-only question (review F5).
+fn undrawn_popup_slots(def: &agent::AgentFormDef, draft: &Value) -> usize {
+    let stored = |field: &str| draft.get(field).cloned().unwrap_or_default();
+    let (prefix, drawn) = match def.form_code.as_str() {
+        "1600PT" => (
+            "AtcCode",
+            serde_json::from_value::<Option<Form1600PtAgentCategory>>(stored("agent_category"))
+                .ok()
+                .flatten()
+                .map_or(0, |category| form_1600pt_popup(category).count()),
+        ),
+        "1600VT" => (
+            "AtcCode",
+            serde_json::from_value::<Option<Form1600VtAgentCategory>>(stored("agent_category"))
+                .ok()
+                .flatten()
+                .map_or(0, |category| form_1600vt_popup(category).count()),
+        ),
+        // 1601FQ draws the private list before item 11 is answered, like
+        // `init()` (`atc_options`).
+        "1601FQ" => (
+            "AtcCd",
+            serde_json::from_value::<Option<Form1601FqCategory>>(stored("category"))
+                .ok()
+                .flatten()
+                .unwrap_or(Form1601FqCategory::Private)
+                .atc_options()
+                .len(),
+        ),
+        _ => return 0,
+    };
+    def.boxes
+        .iter()
+        .filter(|entry| entry.is_question())
+        .filter(|entry| {
+            entry
+                .key
+                .strip_prefix(prefix)
+                .and_then(|n| n.parse::<usize>().ok())
+                .is_some_and(|n| n > drawn)
+        })
+        .count()
+}
 
 /// Apply official keys to a copy of `draft` and recompute it. Boxes the user
 /// typed are kept (`kept`); boxes that did not show the value after the
-/// recompute (an item that must be answered first) are reported back.
+/// recompute (an item that must be answered first) are reported back. Every
+/// refusal is the box's own: a box with no field in this app's draft
+/// (unmapped, such as an official ATC popup slot), a computed, locked or
+/// hidden box, or a key that is not a box is refused on its own with the
+/// reason (`refused`) and the rest of the batch still applies.
 pub(super) fn fill_official(
     kind: AgentFormKind,
     draft: &Value,
@@ -567,18 +638,22 @@ pub(super) fn fill_official(
 ) -> Result<OfficialFill, String> {
     let mut next = draft.clone();
     let (mut filled, mut kept) = (Vec::new(), Vec::new());
+    let mut refused = serde_json::Map::new();
+    let def = kind.definition();
     for (key, value) in fields {
         if assist.is_user_box(key) {
             kept.push(key.clone());
             continue;
         }
-        agent::fill(kind, &mut next, key, value)?;
+        if let Err(why) = agent::fill(kind, &mut next, key, value) {
+            refused.insert(key.clone(), Value::String(why));
+            continue;
+        }
         filled.push(key.clone());
     }
     tax_treaty_2553(kind, draft, &mut next, fields, &filled)?;
     agent::compute(kind, &mut next)?;
     let map = agent::field_map(kind, &next)?;
-    let def = kind.definition();
     let text = |value: &Value| match value {
         Value::String(text) => text.trim().to_string(),
         other => other.to_string(),
@@ -619,7 +694,7 @@ pub(super) fn fill_official(
         })
         .cloned()
         .collect();
-    Ok((next, filled, kept, not_shown))
+    Ok((next, filled, kept, not_shown, refused))
 }
 
 /// 2553 item 13's list (`lstTaxTreaty`).
@@ -720,6 +795,33 @@ fn labelled_errors(kind: AgentFormKind, errors: &[(String, String)]) -> Vec<Valu
             json!({ "field": field, "label": label, "message": message })
         })
         .collect()
+}
+
+/// The `note` every refused fill result carries: the tool result itself
+/// tells the model to pass the refusals on, since the caller only ever
+/// hears of `refused` if the model says it (review F6).
+const REFUSED_NOTE: &str =
+    "some boxes were refused and not written; report each `refused` key and its reason to the user";
+
+/// Boxes refused on their own (`refused`, key -> reason), beside what was
+/// applied. A result value that is not an object is wrapped, so the
+/// refusals are never dropped (review F7).
+pub(super) fn with_refused(
+    result: DispatchResult,
+    refused: serde_json::Map<String, Value>,
+) -> DispatchResult {
+    if refused.is_empty() {
+        return result;
+    }
+    let value = match result.value.unwrap_or(Value::Null) {
+        Value::Object(mut object) => {
+            object.insert("refused".into(), Value::Object(refused));
+            object.insert("note".into(), json!(REFUSED_NOTE));
+            Value::Object(object)
+        }
+        other => json!({ "result": other, "refused": refused, "note": REFUSED_NOTE }),
+    };
+    DispatchResult::json(value)
 }
 
 pub(super) fn with_not_shown(result: DispatchResult, not_shown: Vec<String>) -> DispatchResult {
@@ -898,6 +1000,62 @@ mod tests {
         }
     }
 
+    /// PR 14 review F5: a box with no field in this app's draft (here
+    /// 1600PT's ATC popup slot, unbound in core) is refused on its own with
+    /// the reason; the rest of the batch applies and item 10 stays as
+    /// answered. Computed, locked, hidden and unknown keys are refused the
+    /// same per-key way (fill_official).
+    #[test]
+    fn an_unmapped_box_is_refused_alone_and_the_batch_applies() {
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "1600PT", "year": year(), "period": 1, "tin": TIN}),
+            ),
+            "open",
+        );
+        let before = host.generic_form().expect("open").draft["agent_category"].clone();
+        let filled = ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {
+                    "AtcCode1": "true",
+                    "AtcCode5": "true",
+                    "frm1600PT:Pg2Sc1Name1": "PAYEE ONE",
+                }}),
+            ),
+            "fill",
+        );
+        assert_eq!(filled["filled"], json!(["frm1600PT:Pg2Sc1Name1"]));
+        let refused = filled["refused"].as_object().expect("refused");
+        assert_eq!(refused.len(), 2, "{filled}");
+        for key in ["AtcCode1", "AtcCode5"] {
+            let why = refused[key].as_str().unwrap();
+            assert!(
+                why.starts_with(&format!(
+                    "`{key}` cannot be filled from here: the ATC popup's tick box"
+                )),
+                "{why}"
+            );
+        }
+        // Each slot keeps the probe's own evidence (review F6).
+        assert!(
+            refused["AtcCode1"]
+                .as_str()
+                .unwrap()
+                .ends_with("; the probe tied it to /agent_category")
+        );
+        assert!(refused["AtcCode5"].as_str().unwrap().ends_with(
+            "; probe: written by the app without a draft field (a constant or the period)"
+        ));
+        let draft = &host.generic_form().expect("open").draft;
+        assert_eq!(draft["agent_category"], before, "item 10 is untouched");
+        assert_eq!(draft["schedule"][0]["payee_name"], "PAYEE ONE");
+    }
+
     #[test]
     fn official_keys_fill_with_sources_and_keep_user_boxes() {
         let (mut host, _db) = host(PlatformKind::Headless);
@@ -959,20 +1117,54 @@ mod tests {
         );
         assert_eq!(kept["kept_user_boxes"], json!([amounts[1]]));
 
-        // Computed and unknown boxes are refused with the reason.
+        // Computed, locked, hidden and unknown keys are each refused with
+        // the reason beside what applied — none aborts the batch.
         let computed = def
             .boxes
             .iter()
             .find(|entry| entry.computed)
             .expect("a computed box");
-        let refused = call(
-            &mut host,
-            "form.fill",
-            json!({"fields": {computed.key.clone(): "1"}}),
+        let locked = def
+            .bindings
+            .iter()
+            .find(|(_, bound)| bound.lock.is_some())
+            .map(|(key, _)| key.clone())
+            .expect("a locked box");
+        let mut fields = serde_json::Map::new();
+        fields.insert(computed.key.clone(), json!("1"));
+        fields.insert(locked.clone(), json!("1"));
+        fields.insert("nope".into(), json!("1"));
+        fields.insert(amounts[0].clone(), json!("2"));
+        // A hidden box too, where the form has one.
+        let hidden = def
+            .boxes
+            .iter()
+            .find(|entry| entry.kind.contains("hidden") || entry.required == "hidden")
+            .map(|entry| entry.key.clone());
+        let mut count = 3;
+        if let Some(hidden) = &hidden {
+            fields.insert(hidden.clone(), json!("1"));
+            count = 4;
+        }
+        let filled = ok(
+            call(&mut host, "form.fill", json!({ "fields": fields })),
+            "fill",
         );
-        assert!(!refused.ok);
-        assert!(refused.error.unwrap().contains("computed"));
-        assert!(!call(&mut host, "form.fill", json!({"fields": {"nope": "1"}})).ok);
+        assert_eq!(filled["filled"], json!([amounts[0]]));
+        let refused = filled["refused"].as_object().expect("refused");
+        assert_eq!(refused.len(), count, "{filled}");
+        assert!(
+            refused[&computed.key]
+                .as_str()
+                .unwrap()
+                .contains("computed")
+        );
+        assert!(refused[&locked].as_str().unwrap().contains("`"));
+        if let Some(hidden) = &hidden {
+            assert!(refused[hidden].as_str().unwrap().contains("hidden"));
+        }
+        assert!(refused["nope"].as_str().unwrap().contains("not a box"));
+        assert!(filled["note"].as_str().unwrap().contains("refused"));
 
         // `user` only for the card's own boxes.
         let refused = call(
@@ -1075,10 +1267,17 @@ mod tests {
         let draft = host.form_1601c_draft().unwrap();
         assert_eq!(draft.tax_14_total_compensation, 1000.0);
         assert_eq!(draft.tax_25_total_taxes_withheld, 100.0);
-        // The profile owns the name; the period picks the month.
+        // The profile owns the name; the period picks the month. A locked
+        // box is refused on its own — the call itself still succeeds.
         for locked in ["frm1601c:txtTaxpayerName", "frm1601c:txtMonth"] {
-            let refused = call(&mut host, "form.fill", json!({"fields": {locked: "X"}}));
-            assert!(!refused.ok, "{locked}");
+            let filled = ok(
+                call(&mut host, "form.fill", json!({"fields": {locked: "X"}})),
+                "locked box refused alone",
+            );
+            assert!(
+                filled["refused"][locked].as_str().unwrap().contains("`"),
+                "{locked}: {filled}"
+            );
         }
     }
 
