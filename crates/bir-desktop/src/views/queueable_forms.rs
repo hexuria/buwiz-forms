@@ -79,6 +79,11 @@ pub type OpenFormView = fn(
 /// [`QueueableFormView::load_draft`] opens it.
 pub type LoadFormDraft = fn(&Database, &TaxpayerProfile, u16, u8) -> Value;
 
+/// A fresh draft for `(profile, year, period)` as JSON, exactly as
+/// [`QueueableFormView::new_draft`] builds it (stored drafts are `load`'s):
+/// what the profile alone makes, which `fill`'s profile-blank check reads.
+pub type NewFormDraft = fn(&TaxpayerProfile, u16, u8) -> Value;
+
 /// The page's print sheet slug and its filled field map for a JSON draft.
 pub type PrintFormDraft = fn(&Value) -> Result<(&'static str, BTreeMap<String, String>), String>;
 
@@ -104,6 +109,7 @@ pub struct FormViewSpec {
     pub chrome: FormChrome,
     pub open: OpenFormView,
     pub load: LoadFormDraft,
+    pub new: NewFormDraft,
     pub print: PrintFormDraft,
     pub open_with: OpenFormWithDraft,
     pub read: ReadFormView,
@@ -131,6 +137,7 @@ macro_rules! form_view_spec {
             },
             open: $crate::views::queueable_forms::open_form_view::<$view>,
             load: $crate::views::queueable_forms::load_draft_json::<$view>,
+            new: $crate::views::queueable_forms::new_draft_json::<$view>,
             print: $crate::views::queueable_forms::print_draft_json::<$view>,
             open_with: $crate::views::queueable_forms::open_form_view_with::<$view>,
             read: $crate::views::queueable_forms::read_view_draft::<$view>,
@@ -309,6 +316,18 @@ pub fn load_draft_json<V: QueueableFormView>(
     let mut draft = V::load_draft(db, profile, year, period);
     prepare_penalties::<V>(&mut draft, profile, &db.get_deadline_overrides());
     serde_json::to_value(draft).expect("a form draft serializes to JSON")
+}
+
+/// A fresh draft for `(profile, year, period)` as JSON: what the profile
+/// alone makes for this period, the way the page's own `from_profile`
+/// draft decides which boxes the profile filled.
+pub fn new_draft_json<V: QueueableFormView>(
+    profile: &TaxpayerProfile,
+    year: u16,
+    period: u8,
+) -> Value {
+    serde_json::to_value(V::new_draft(profile, year, period))
+        .expect("a form draft serializes to JSON")
 }
 
 pub fn print_draft_json<V: QueueableFormView>(

@@ -2503,6 +2503,13 @@ impl BirAgentHost {
         let fields = collect_fill_fields(args)?;
         let source = self.fill_source(args, &fields)?;
         if self.active_view == ActiveView::Form1601C {
+            let from_profile = self
+                .form_1601c
+                .as_ref()
+                .and_then(|form| serde_json::to_value(&form.draft).ok())
+                .and_then(|json| {
+                    self.profile_context(bir_core::forms::agent::AgentFormKind::Form1601C, &json)
+                });
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
@@ -2531,6 +2538,7 @@ impl BirAgentHost {
                     &json,
                     &form.assist,
                     &official,
+                    from_profile.as_ref(),
                 )?;
                 draft = serde_json::from_value(next).map_err(|err| err.to_string())?;
                 filled.extend(more);
@@ -2552,6 +2560,13 @@ impl BirAgentHost {
             ));
         }
         if self.active_view == ActiveView::Form2551Q {
+            let from_profile = self
+                .form_2551q
+                .as_ref()
+                .and_then(|form| serde_json::to_value(&form.draft).ok())
+                .and_then(|json| {
+                    self.profile_context(bir_core::forms::agent::AgentFormKind::Form2551Q, &json)
+                });
             let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
@@ -2580,6 +2595,7 @@ impl BirAgentHost {
                     &json,
                     &form.assist,
                     &official,
+                    from_profile.as_ref(),
                 )?;
                 draft = serde_json::from_value(next).map_err(|err| err.to_string())?;
                 filled.extend(more);
