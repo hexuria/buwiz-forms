@@ -916,6 +916,10 @@ mod tests {
         // Sunday 2025-03-30 and Saturday 2024-03-30 move to Monday.
         assert_eq!(due(date(2025, 2, 28)), Some(date(2025, 3, 31)));
         assert_eq!(due(date(2024, 2, 29)), Some(date(2024, 4, 1)));
+        // An official holiday (decision P4-2 and P5-4): 2026-04-09 is Araw
+        // ng Kagitingan, one of the app's seeded holidays, so a donation on
+        // 2026-03-10 is due Friday, April 10.
+        assert_eq!(due(date(2026, 3, 10)), Some(date(2026, 4, 10)));
         let mut blank = sample();
         (
             blank.donation_month,
@@ -928,6 +932,23 @@ mod tests {
             items.due_date(&new_return(date(2025, 3, 10))),
             Some(date(2025, 4, 9))
         );
+    }
+
+    /// P4-4 over a holiday: the 2026-03-10 donation, filed on 2026-04-10
+    /// (the working day after Araw ng Kagitingan), is on time; a day later
+    /// it is late.
+    #[test]
+    fn a_return_filed_the_day_after_a_holiday_due_date_is_on_time() {
+        use crate::forms::penalty_items::with_clock;
+        let mut on_time = new_return(date(2026, 3, 10));
+        with_clock(date(2026, 4, 10), || on_time.recompute());
+        assert_eq!(
+            (on_time.surcharge, on_time.interest, on_time.compromise),
+            (0.0, 0.0, 0.0)
+        );
+        let mut late = new_return(date(2026, 3, 10));
+        with_clock(date(2026, 4, 13), || late.recompute());
+        assert!(late.surcharge > 0.0);
     }
 
     /// P4-4: a late return computes the 25% surcharge, 12% a year interest

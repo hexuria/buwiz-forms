@@ -280,15 +280,32 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
     )
 }
 
-/// `date`, or the next business day after it when it is not one, on the
-/// calendar the app's deadlines use: `DeadlineResolver` (what
-/// [`resolve_due_date`] and the dashboard read) builds
-/// `BusinessDayCalendar::default()`, weekends only, as 2200C's typed due
-/// date does. Decision P4-4's 1800 and 1801 due dates move with it.
+/// The calendar a typed due date moves on (decision P4-2 and P4-4: the next
+/// working day, the way the app's calendar moves a deadline): weekends,
+/// and the official holidays the app seeds as its deadline overrides
+/// (`DeadlineResolver::seed_2026_holiday_overrides`, each override's
+/// `original_deadline` the holiday, as the Calendar's admin seeding stores
+/// them). Built once.
+pub fn deadline_calendar() -> &'static crate::calendar_rules::BusinessDayCalendar {
+    use crate::calendar_rules::{BusinessDayCalendar, DeadlineResolver, NonWorkingDay};
+    static CALENDAR: std::sync::OnceLock<BusinessDayCalendar> = std::sync::OnceLock::new();
+    CALENDAR.get_or_init(|| {
+        BusinessDayCalendar::with_non_working_days(
+            DeadlineResolver::seed_2026_holiday_overrides()
+                .into_iter()
+                .map(|holiday| {
+                    NonWorkingDay::regular_holiday(holiday.original_deadline, holiday.title)
+                })
+                .collect(),
+        )
+    })
+}
+
+/// `date`, or the next working day after it when it is not one, on
+/// [`deadline_calendar`]: 1800 and 1801 (decision P4-4) and 2200C (D8) move
+/// their typed due dates with it.
 pub fn next_business_day(date: NaiveDate) -> NaiveDate {
-    crate::calendar_rules::BusinessDayCalendar::default()
-        .adjust_to_next_business_day(date)
-        .0
+    deadline_calendar().adjust_to_next_business_day(date).0
 }
 
 /// The deadline `form_code`'s calendar resolves for `period`, with `overrides`.
