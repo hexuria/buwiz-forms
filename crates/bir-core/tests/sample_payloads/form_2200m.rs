@@ -6,6 +6,10 @@ use bir_core::forms::queueable::QueueableForm as _;
 fn sample_2200m() -> Form2200MDraft {
     let mut draft =
         Form2200MDraft::new_from_profile(&dummy_profile("2200M", "Corporation"), 2025, 3);
+    // Its trigger date is the filer's (decision P4-3: an undated
+    // pre-filled Draft computes no penalties); never filed or printed.
+    bir_core::forms::queueable::QueueableForm::lifecycle_mut(&mut draft).trigger_date_entered =
+        true;
     draft.day = 14;
     draft.number_of_attached_sheets = 2;
     draft.place_of_production = Form2200MPlace {

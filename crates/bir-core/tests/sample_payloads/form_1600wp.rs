@@ -8,6 +8,10 @@ use bir_core::forms::queueable::QueueableForm as _;
 fn draft(month: u8, day: u8) -> Form1600WpDraft {
     let mut draft =
         Form1600WpDraft::new_from_profile(&dummy_profile("1600WP", "Corporation"), 2025, month);
+    // Its trigger date is the filer's (decision P4-3: an undated
+    // pre-filled Draft computes no penalties); never filed or printed.
+    bir_core::forms::queueable::QueueableForm::lifecycle_mut(&mut draft).trigger_date_entered =
+        true;
     draft.day = day;
     draft
 }
@@ -123,8 +127,9 @@ fn form_1600wp_one_atc_penalty_items_follow_the_shared_model() {
 #[test]
 fn form_1600wp_a_cancelled_queue_is_undated_again() {
     let db = bir_core::db::Database::open_ephemeral().unwrap();
-    let draft = sample_no_atc();
-    assert!(!draft.lifecycle().trigger_date_entered);
+    // The sample with its date not entered (the samples mark theirs).
+    let mut draft = sample_no_atc();
+    draft.lifecycle_mut().trigger_date_entered = false;
     let id = db.save_queueable_draft(&draft).unwrap();
     assert_eq!(
         db.draft_event_trigger(id).unwrap(),

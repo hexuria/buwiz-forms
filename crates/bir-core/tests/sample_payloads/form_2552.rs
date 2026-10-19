@@ -23,6 +23,10 @@ fn share(date: &str, seller: &str, buyer: &str, shares: f64, base: f64) -> Form2
 fn sample_2552() -> Form2552Draft {
     let mut draft =
         Form2552Draft::new_from_profile(&dummy_profile("2552", "Corporation"), 2025, 3, 14);
+    // Its trigger date is the filer's (decision P4-3: an undated
+    // pre-filled Draft computes no penalties); never filed or printed.
+    bir_core::forms::queueable::QueueableForm::lifecycle_mut(&mut draft).trigger_date_entered =
+        true;
     draft.is_amended = true;
     draft.number_of_attached_sheets = 1;
     draft.tax_relief = true;
@@ -96,6 +100,10 @@ fn form_2552_sample_payload_is_current() {
 fn sample_2552_add_more() -> Form2552Draft {
     let mut draft =
         Form2552Draft::new_from_profile(&dummy_profile("2552", "Corporation"), 2025, 3, 12);
+    // Its trigger date is the filer's (decision P4-3: an undated
+    // pre-filled Draft computes no penalties); never filed or printed.
+    bir_core::forms::queueable::QueueableForm::lifecycle_mut(&mut draft).trigger_date_entered =
+        true;
     draft.set_transaction(Form2552Transaction::PrimaryOffering);
     draft.shares_sold = "1000000".to_string();
     draft.outstanding_shares = "5000000".to_string();
