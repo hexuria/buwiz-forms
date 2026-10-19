@@ -411,7 +411,7 @@ export class FormPageActions {
             ? await app.store.call("screen_form_filed_original", opts.code, opts.filedOriginal)
             : opts.amend
               ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period, key)
-              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key, opts.newKey ?? null, opts.newKeyFrom ?? null);
+              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key, opts.newKey ?? null, ...(opts.newKeyFrom != null ? [opts.newKeyFrom] : []));
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
