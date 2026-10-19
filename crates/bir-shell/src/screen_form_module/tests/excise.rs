@@ -1491,10 +1491,20 @@ fn pr11_a_new_2200a_return_computes_its_penalties_from_the_removal_date() {
         ),
         (Some(1), Some(31))
     );
+    // The constructor's removal date is a placeholder until the filer types
+    // it (D8c): typing the three parts counts the record and the penalties
+    // resolve on it.
+    assert_ne!(opened["draft"]["trigger_date_entered"], true);
+    let dated = type_parts(
+        "2200A",
+        &opened["draft"],
+        &[("/month", "1"), ("/day", "31"), ("/year", "2026")],
+    );
+    assert_eq!(dated["trigger_date_entered"], true);
     // Specific tax of 66.00 per proof liter on 100 proof liters.
     let filled = fill(
         "2200A",
-        &opened["draft"],
+        &dated,
         json!({ format!("{p}txtSched1_1B_2024_Taxable"): "100" }),
     );
     assert_eq!(filled["rejected"], json!({}));

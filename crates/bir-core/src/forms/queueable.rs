@@ -76,6 +76,31 @@ pub struct SubmissionLifecycle {
     /// holds this value. Never filed or printed.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
+    /// The filer entered this as-needed return's trigger date (its removal,
+    /// withholding or transaction date) on the page, so it is no longer the
+    /// date the form pre-fills (decision D8c; see
+    /// [`crate::forms::event_trigger`]). Absent (false) on every draft saved
+    /// before it existed, so their stored bytes are unchanged. Never filed
+    /// or printed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trigger_date_entered: bool,
+    /// The trigger-date fields the filer has typed on this return so far
+    /// (top-level draft fields, sorted), kept so a date typed over two
+    /// sessions, or one part edited after a restart, still counts. Written
+    /// by the host only, from the stored row and its own typed writes;
+    /// absent (empty) on every draft saved before it existed. Never filed
+    /// or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trigger_parts_typed: Vec<String>,
+    /// This draft was created under the typed-trigger model (decision
+    /// P5-7): while it is an undated Draft of a pre-filled form it computes
+    /// no penalties. Written once, when the draft is created, by a builder
+    /// that records the filer's typed trigger date (the shell page; the
+    /// desktop 1606 and 1706 views). Absent (false) on every row stored
+    /// before, which keep the behaviour they had: penalties from the date
+    /// they hold. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trigger_date_model: bool,
 }
 
 impl Default for SubmissionLifecycle {
@@ -101,6 +126,9 @@ impl Default for SubmissionLifecycle {
             next_retry_at: None,
             profile_edits: Vec::new(),
             profile_baseline: std::collections::BTreeMap::new(),
+            trigger_date_entered: false,
+            trigger_parts_typed: Vec::new(),
+            trigger_date_model: false,
         }
     }
 }

@@ -35,7 +35,7 @@ use crate::views::form_header::{
     FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
     separate_validate_button,
 };
-use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use crate::views::queueable_forms::{self, QueueableFormEvent, QueueableFormView};
 use bir_core::penalties::PenaltyComponent;
 
 impl EventEmitter<QueueableFormEvent> for Form2200SView {}
@@ -163,10 +163,33 @@ pub struct Form2200SView {
     validated: bool,
     /// The shared penalty section (computed values, overrides, note).
     penalty: Entity<PenaltySection>,
+    /// The record the draft's penalty inputs were last resolved from (the
+    /// open's); a sync resolves them again when it moves (decision P5-9).
+    resolved_trigger: Option<queueable_forms::TriggerSignature>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Form2200SView {
+    /// The filer typed in a removal-date box (decision P5-7): record the
+    /// part, or take it out when the box was cleared, before the edit is
+    /// read.
+    fn note_removal_date_typed(&mut self, field: &str, cx: &App) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let value = self
+            .input_text(field, cx)
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(0);
+        bir_core::forms::event_trigger::note_trigger_typed(
+            "2200S",
+            &mut self.draft.lifecycle,
+            field,
+            value,
+        );
+    }
+
     fn initial(draft: &Form2200SDraft, key: &str) -> String {
         if let Some((column, row)) = OTHER_COLUMNS.iter().find_map(|(prefix, _, _)| {
             key.strip_prefix(prefix)
@@ -329,6 +352,7 @@ impl Form2200SView {
             &mut draft,
             cx,
         ));
+        queueable_forms::resolve_moved_trigger(&mut draft, &mut self.resolved_trigger, &self.db);
         let reset = draft.recompute_reporting();
         if reset {
             self.status_message = Some(FORM_2200S_BASIC_TAX_LIMIT_ALERT.into());
@@ -424,12 +448,21 @@ impl Form2200SView {
         let placeholder = placeholder.to_string();
         let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
         input.update(cx, |state, cx| state.set_value(value, window, cx));
+        let trigger_field = match key {
+            "month" | "day" | "year" => Some(key.to_string()),
+            _ => None,
+        };
         let subscription = cx.subscribe_in(
             &input,
             window,
-            |this: &mut Self, _, event: &InputEvent, window, cx| {
-                if matches!(event, InputEvent::Change) && this.sync_from_inputs(cx) {
-                    this.reload_schedule_inputs(window, cx);
+            move |this: &mut Self, _, event: &InputEvent, window, cx| {
+                if matches!(event, InputEvent::Change) {
+                    if let Some(field) = &trigger_field {
+                        this.note_removal_date_typed(field, cx);
+                    }
+                    if this.sync_from_inputs(cx) {
+                        this.reload_schedule_inputs(window, cx);
+                    }
                 }
             },
         );
@@ -1330,6 +1363,7 @@ impl QueueableFormView for Form2200SView {
                 this.sync_from_inputs(cx);
             },
         ));
+        let resolved_trigger = Some(queueable_forms::trigger_signature(&draft));
         Self {
             draft,
             db,
@@ -1343,12 +1377,17 @@ impl QueueableFormView for Form2200SView {
             header: FormHeaderState::new(),
             validated: false,
             penalty,
+            resolved_trigger,
             _subscriptions: subscriptions,
         }
     }
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form2200SDraft {
-        Form2200SDraft::new_from_profile(profile, year, period)
+        let mut draft = Form2200SDraft::new_from_profile(profile, year, period);
+        // This view records the typed removal date (sync_from_inputs), so
+        // its new drafts follow the typed-trigger model (decision P5-7).
+        draft.lifecycle.trigger_date_model = true;
+        draft
     }
 
     /// One return per Item 1 date (`MMDD`). Reopen the latest saved return

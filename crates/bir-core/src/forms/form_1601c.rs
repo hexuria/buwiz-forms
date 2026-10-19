@@ -748,6 +748,7 @@ impl Form1601CDraft {
             state: |d| &d.penalty,
             state_mut: |d| &mut d.penalty,
             status: |d| d.status.clone(),
+            trigger_date_pending: |_| false,
             deadline_period: |d| {
                 Some(DeadlinePeriod::Monthly {
                     taxable_year: i32::from(d.taxable_year),

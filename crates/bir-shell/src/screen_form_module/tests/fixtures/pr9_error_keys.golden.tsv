@@ -21,6 +21,7 @@
 1606	open	tct_number	Please enter the TCT/OCT/CCT No.	frm1606:txtTCT
 1606	open	transaction	Please select an option for Part IV Schedule 2 Item 1.	frm1606:j_id395:_1 frm1606:j_id395:_4 frm1606:j_id395:_2 frm1606:j_id395:_5 frm1606:j_id395:_3
 1606	open	tax_rate	Please select the tax rate on Item 13.	frm1606:txtTaxRate
+1606	open	transaction_date	Enter the sale date to put this return on the calendar.	frm1606:txtDateDay frm1606:txtDateMonth frm1606:txtDateYear
 1606	sample	seller_tin	Please enter the Seller's TIN.	frm1606:txtTINS1 frm1606:txtTINS2 frm1606:txtTINS3
 1606	sample	seller_rdo_code	Please enter the Seller's RDO Code.	frm1606:txtRDOCodeS
 1606	sample	seller_name	Please enter the Seller's Name.	frm1606:txtSellerName

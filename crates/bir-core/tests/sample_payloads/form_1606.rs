@@ -72,6 +72,122 @@ fn form_1606_penalty_items_follow_the_shared_model() {
     penalty_items::check(sample_1606, Deadline::Calendar(day(2025, 7, 10)));
 }
 
+/// Decision P5-7 on the desktop path: a draft the 1606 view creates carries
+/// the typed-trigger marker, and its sale date counts once the user types
+/// it. From then on its penalties compute, it queues, and the same day's
+/// pre-submission revalidation finds nothing changed.
+#[test]
+fn a_desktop_1606_with_a_typed_sale_date_computes_and_queues_without_drift() {
+    use bir_core::filing_queue::QueueAuthSource;
+    use bir_core::forms::FilingStatus;
+    use bir_core::forms::event_trigger::note_trigger_typed;
+
+    bir_core::forms::penalty_items::with_clock(day(2026, 10, 19), || {
+        let mut draft = sample_1606();
+        draft.penalty.penalty_overrides = Default::default();
+        draft.surcharge = 0.0;
+        draft.interest = 0.0;
+        draft.compromise = 0.0;
+        // As the view's `new_draft` leaves it: marked, nothing typed yet.
+        draft.lifecycle.trigger_date_model = true;
+        draft.lifecycle.trigger_date_entered = false;
+        draft.lifecycle.trigger_parts_typed.clear();
+        draft.recompute();
+        assert_eq!(draft.penalty.computed_penalties, None, "undated: none");
+        assert_eq!(draft.total_penalties, 0.0);
+
+        // The view's edit events: month and day typed over the pre-filled
+        // values, the year retyped as it was.
+        note_trigger_typed("1606", &mut draft.lifecycle, "transaction_month", 6);
+        note_trigger_typed("1606", &mut draft.lifecycle, "transaction_day", 15);
+        assert!(!draft.lifecycle.trigger_date_entered, "year not typed yet");
+        note_trigger_typed("1606", &mut draft.lifecycle, "transaction_year", 2025);
+        assert!(draft.lifecycle.trigger_date_entered);
+        draft.recompute();
+        assert_eq!(
+            (
+                draft.surcharge,
+                draft.interest,
+                draft.compromise,
+                draft.total_penalties
+            ),
+            (140.63, 86.18, 1000.0, 1226.81)
+        );
+        let computed = draft.penalty.computed_penalties.clone().expect("computed");
+        assert_eq!(computed.inputs.due_date, day(2025, 7, 10));
+
+        draft
+            .queue(QueueAuthSource::Gui)
+            .unwrap_or_else(|errors| panic!("queues: {errors:?}"));
+        draft
+            .revalidate_queued_before_submission()
+            .unwrap_or_else(|errors| panic!("no drift at submission: {errors:?}"));
+        assert_eq!(draft.lifecycle.status, FilingStatus::Queued);
+        assert_eq!(draft.penalty.computed_penalties, Some(computed));
+    });
+}
+
+/// A 1606 Draft stored before the marker existed (built and computed at
+/// commit b45c5386 as of 19 October 2026, kept here as it serialized) has no
+/// marker, so it computes exactly what it did then.
+#[test]
+fn an_unmarked_stored_1606_draft_computes_what_it_did_before() {
+    let text = include_str!("fixtures/legacy_1606_draft_b45c5386.json");
+    let stored: serde_json::Value = serde_json::from_str(text).unwrap();
+    for key in [
+        "trigger_date_model",
+        "trigger_date_entered",
+        "trigger_parts_typed",
+    ] {
+        assert!(
+            stored.get(key).is_none(),
+            "{key} is absent from the old row"
+        );
+    }
+    let mut draft: Form1606Draft = serde_json::from_str(text).unwrap();
+    assert!(!draft.lifecycle.trigger_date_model);
+    let before = draft.penalty.computed_penalties.clone();
+    assert!(before.is_some());
+    bir_core::forms::penalty_items::with_clock(day(2026, 10, 19), || draft.recompute());
+    assert_eq!(
+        (
+            draft.surcharge,
+            draft.interest,
+            draft.compromise,
+            draft.total_penalties
+        ),
+        (140.63, 86.18, 1000.0, 1226.81)
+    );
+    assert_eq!(draft.penalty.computed_penalties, before);
+    assert_eq!(
+        draft.penalty.penalty_overrides,
+        Default::default(),
+        "nothing computed becomes an override"
+    );
+}
+
+/// The same row marked as created under the typed-trigger model, with no
+/// sale date typed (the shell's pre-filled Draft): no penalties at all.
+#[test]
+fn a_marked_undated_stored_1606_draft_computes_no_penalties() {
+    let text = include_str!("fixtures/legacy_1606_draft_b45c5386.json");
+    let mut draft: Form1606Draft = serde_json::from_str(text).unwrap();
+    draft.lifecycle.trigger_date_model = true;
+    bir_core::forms::penalty_items::with_clock(day(2026, 10, 19), || draft.recompute());
+    assert_eq!(draft.penalty.computed_penalties, None);
+    assert_eq!(draft.penalty.penalty_due_date, None);
+    assert_eq!(
+        (
+            draft.surcharge,
+            draft.interest,
+            draft.compromise,
+            draft.total_penalties
+        ),
+        (0.0, 0.0, 0.0, 0.0)
+    );
+    assert_eq!(draft.penalty.penalty_overrides, Default::default());
+}
+
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
     vec![serde_json::to_value(sample_1606()).expect("sample serializes")]

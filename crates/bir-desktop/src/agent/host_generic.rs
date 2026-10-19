@@ -315,14 +315,36 @@ impl BirAgentHost {
         fields: &serde_json::Map<String, Value>,
         source: BoxSource,
     ) -> Option<Result<DispatchResult, String>> {
+        let db = self.db.clone();
         let form = self.active_generic_mut()?;
         Some((|| {
             if !form.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
+            let record = trigger_record(form.kind, &form.draft);
             let (draft, filled, kept, not_shown, refused) =
                 fill_official(form.kind, &form.draft, &form.assist, fields)?;
             form.draft = draft;
+            // A write that moved the record the penalties resolve from (a
+            // typed trigger date) resolves them again, as the page's own
+            // sync does (decision P5-9).
+            if trigger_record(form.kind, &form.draft) != record
+                && let Some(db) = &db
+                && let Ok(guard) = db.lock()
+                && let Some(tin) = form.draft["tin"].as_str().map(str::to_string)
+                && let Ok(Some(profile)) = guard.get_profile_by_tin(&tin)
+            {
+                let overrides = guard.get_deadline_overrides();
+                match agent::apply_penalty_profile(form.kind, &mut form.draft, &profile, &overrides)
+                {
+                    Ok(()) => {
+                        let _ = agent::compute(form.kind, &mut form.draft);
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "penalty inputs not re-resolved; the draft keeps its state");
+                    }
+                }
+            }
             for key in &filled {
                 form.assist.note_agent_fill(key, source);
             }
@@ -357,6 +379,15 @@ impl BirAgentHost {
             let db = db.ok_or("agent host has no database")?;
             {
                 let guard = db.lock().map_err(|err| err.to_string())?;
+                // The save keeps the due dates the Calendar resolves now,
+                // as the page's own save does (decision P5-9); never a due
+                // date an older state of this draft resolved.
+                if let Some(tin) = form.draft["tin"].as_str().map(str::to_string)
+                    && let Ok(Some(profile)) = guard.get_profile_by_tin(&tin)
+                {
+                    let overrides = guard.get_deadline_overrides();
+                    agent::apply_penalty_profile(form.kind, &mut form.draft, &profile, &overrides)?;
+                }
                 agent::save_draft(form.kind, &guard, &mut form.draft)?;
             }
             form.saved = true;
@@ -623,6 +654,36 @@ fn undrawn_popup_slots(def: &agent::AgentFormDef, draft: &Value) -> usize {
         .count()
 }
 
+/// The record a draft's penalty resolution stands on: its typed trigger
+/// state, the trigger date its fields hold and the due rule that date is
+/// read by (2552's Item 11 moves it). `None` for a form without a trigger
+/// date.
+fn trigger_record(kind: AgentFormKind, draft: &Value) -> Option<Value> {
+    let code = kind.form_code();
+    if bir_core::forms::event_trigger::trigger_paths(code).is_empty() {
+        return None;
+    }
+    Some(json!({
+        "entered": draft.get("trigger_date_entered").cloned().unwrap_or(Value::Null),
+        "parts": draft.get("trigger_parts_typed").cloned().unwrap_or(Value::Null),
+        "date": bir_core::forms::event_trigger::held_trigger_date(code, draft),
+        "rule": format!("{:?}", bir_core::forms::event_trigger::due_rule_for(code, draft)),
+    }))
+}
+
+/// The trigger fields box `key` of `kind` writes (its binding's paths whose
+/// top-level field is one of the form's trigger fields).
+fn trigger_fields_of(kind: AgentFormKind, key: &str) -> Vec<&'static str> {
+    let code = kind.form_code();
+    kind.definition()
+        .bindings
+        .get(key)
+        .into_iter()
+        .flat_map(|bound| agent::binding_paths(&bound.binding))
+        .filter_map(|path| bir_core::forms::event_trigger::trigger_field_of(code, path))
+        .collect()
+}
+
 /// Apply official keys to a copy of `draft` and recompute it. Boxes the user
 /// typed are kept (`kept`); boxes that did not show the value after the
 /// recompute (an item that must be answered first) are reported back. Every
@@ -648,6 +709,18 @@ pub(super) fn fill_official(
         if let Err(why) = agent::fill(kind, &mut next, key, value) {
             refused.insert(key.clone(), Value::String(why));
             continue;
+        }
+        // An accepted write to a trigger box is the filer's instruction on
+        // a draft that follows the typed-date model: record the part (a
+        // cleared box takes it out). An unmarked row is left as stored.
+        if next["trigger_date_model"] == true {
+            for field in trigger_fields_of(kind, key) {
+                bir_core::forms::event_trigger::note_trigger_field_written(
+                    kind.form_code(),
+                    &mut next,
+                    field,
+                );
+            }
         }
         filled.push(key.clone());
     }
@@ -1054,6 +1127,95 @@ mod tests {
         let draft = &host.generic_form().expect("open").draft;
         assert_eq!(draft["agent_category"], before, "item 10 is untouched");
         assert_eq!(draft["schedule"][0]["payee_name"], "PAYEE ONE");
+    }
+
+    /// An accepted write to a trigger box is the filer's instruction on a
+    /// typed-date-model draft (decision P5-7): the part joins the parts the
+    /// return is dated by, a cleared box takes its part out, and once the
+    /// date counts the penalty inputs resolve on it (decision P5-9).
+    #[test]
+    fn an_agent_fill_records_the_typed_trigger_parts() {
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "1606", "year": year(), "period": 1, "tin": TIN}),
+            ),
+            "open",
+        );
+        // The page's own loader marked this new draft for the model.
+        assert_eq!(
+            host.generic_form().unwrap().draft["trigger_date_model"],
+            true
+        );
+        assert_eq!(
+            host.generic_form().unwrap().draft["penalty_due_date"],
+            Value::Null,
+            "no sale date yet: no due date"
+        );
+
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {"frm1606:txtDateDay": "14"},
+                    "source": "document"
+                }),
+            ),
+            "fill day",
+        );
+        let draft = &host.generic_form().unwrap().draft;
+        assert_eq!(draft["trigger_parts_typed"], json!(["transaction_day"]));
+        assert_ne!(
+            draft["trigger_date_entered"], true,
+            "the month and year are not typed yet"
+        );
+
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {
+                        "frm1606:txtDateMonth": "3",
+                        "frm1606:txtDateYear": "2026"
+                    },
+                    "source": "document"
+                }),
+            ),
+            "fill month and year",
+        );
+        let draft = &host.generic_form().unwrap().draft;
+        assert_eq!(draft["trigger_date_entered"], true);
+        assert!(
+            draft["penalty_due_date"].is_string(),
+            "the record moved: the due date resolved on the typed sale date"
+        );
+
+        // A cleared box takes its part out; the date no longer counts and
+        // the due date awaits the trigger again.
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {"frm1606:txtDateDay": "0"},
+                    "source": "document"
+                }),
+            ),
+            "clear day",
+        );
+        let draft = &host.generic_form().unwrap().draft;
+        assert_ne!(draft["trigger_date_entered"], true);
+        assert!(
+            !draft["trigger_parts_typed"]
+                .as_array()
+                .is_some_and(|parts| parts.iter().any(|part| part == "transaction_day")),
+            "the cleared box's part is out"
+        );
+        assert_eq!(draft["penalty_due_date"], Value::Null);
     }
 
     #[test]

@@ -413,7 +413,7 @@ export class FormPageActions {
             ? await app.store.call("screen_form_filed_original", opts.code, opts.filedOriginal)
             : opts.amend
               ? await app.store.call("screen_form_amend", opts.tin, opts.code, opts.year, opts.period, key)
-              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key, opts.newKey ?? null);
+              : await app.store.call("screen_form_open", opts.tin, opts.code, opts.year, opts.period, key, opts.newKey ?? null, ...(opts.newKeyFrom != null ? [opts.newKeyFrom] : []));
         if (token !== this.token) return;
         const s = this.state;
         s.loading = false;
@@ -1401,9 +1401,10 @@ export class FormPageActions {
     }
     if (!s.opens) return this.app.startNewReturn(cx, s.code);
     if (s.existing) return this.offerExisting(s.existing, cx);
-    const { year, period, key, new_key: newKey } = s.opens;
+    // `new_key_from` names the sample the host offered `new_key` for.
+    const { year, period, key, new_key: newKey, new_key_from: newKeyFrom } = s.opens;
     this.app.openForm(
-      { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : newKey != null ? { newKey } : {}) },
+      { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : newKey != null ? { newKey, ...(newKeyFrom != null ? { newKeyFrom } : {}) } : {}) },
       cx,
     );
   }

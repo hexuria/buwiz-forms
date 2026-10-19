@@ -202,6 +202,10 @@ pub struct PenaltyItems<F> {
     pub state: fn(&F) -> &PenaltyState,
     pub state_mut: fn(&mut F) -> &mut PenaltyState,
     pub status: fn(&F) -> FilingStatus,
+    /// The draft was created under the typed-trigger model and its trigger
+    /// date is not entered yet (`SubmissionLifecycle::trigger_date_model`
+    /// and `trigger_date_entered`; see [`Self::awaits_trigger_date`]).
+    pub trigger_date_pending: fn(&F) -> bool,
     /// The calendar period this return is filed for; `None` when the app's
     /// calendar has no period for it (event-based returns).
     pub deadline_period: fn(&F) -> Option<DeadlinePeriod>,
@@ -254,11 +258,41 @@ thread_local! {
     static CLOCK: Cell<Option<Clock>> = const { Cell::new(None) };
 }
 
+/// Puts the previous clock back when dropped, so a pinned clock ends with
+/// its scope even if the work panics.
+struct ClockRestore(Option<Clock>);
+
+impl Drop for ClockRestore {
+    fn drop(&mut self) {
+        let previous = self.0;
+        CLOCK.with(|cell| cell.set(previous));
+    }
+}
+
+fn with_clock_option<R>(clock: Option<Clock>, run: impl FnOnce() -> R) -> R {
+    let _restore = ClockRestore(CLOCK.with(|cell| cell.replace(clock)));
+    run()
+}
+
 fn with_clock_value<R>(clock: Clock, run: impl FnOnce() -> R) -> R {
-    let previous = CLOCK.with(|cell| cell.replace(Some(clock)));
-    let result = run();
-    CLOCK.with(|cell| cell.set(previous));
-    result
+    with_clock_option(Some(clock), run)
+}
+
+/// This thread's penalty clock, to carry into a worker thread
+/// ([`CapturedClock::run`]): the clock is per thread.
+#[derive(Clone, Copy)]
+pub struct CapturedClock(Option<Clock>);
+
+/// Capture this thread's penalty clock (none when not pinned).
+pub fn capture_clock() -> CapturedClock {
+    CapturedClock(CLOCK.with(Cell::get))
+}
+
+impl CapturedClock {
+    /// Run `run` on the captured clock (on any thread).
+    pub fn run<R>(self, run: impl FnOnce() -> R) -> R {
+        with_clock_option(self.0, run)
+    }
 }
 
 /// Today as the penalty model sees it (pinned by [`with_clock`] in tests).
@@ -285,7 +319,8 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
 /// date moves to the next working day, past weekends and official
 /// holidays): the weekends plus the official holidays the app ships, the
 /// `original_deadline` of each entry of
-/// `DeadlineResolver::seed_2026_holiday_overrides` (built once). 1800, 1801
+/// `official_holidays::OFFICIAL_HOLIDAY_YEARS` (built once, through
+/// `official_holidays::business_day_calendar`). 1800, 1801
 /// and 2200C read it through [`next_business_day`].
 ///
 /// - Official holidays are known only for the years whose proclamation
@@ -297,24 +332,14 @@ pub fn with_clock<R>(today: NaiveDate, run: impl FnOnce() -> R) -> R {
 ///   get_deadline_overrides`): those move only the calendar deadlines of the
 ///   forms in their `affected_form_codes`, and a typed due date has no
 ///   calendar deadline to move.
-/// - Known app issue, not changed here: the seed's own `adjusted_deadline`
-///   skips weekends only, so Maundy Thursday (2026-04-02) adjusts to Good
-///   Friday (2026-04-03), itself a holiday. This calendar uses the holiday
-///   dates, not those adjusted ones, so a typed due date on either day
-///   moves to Monday, 2026-04-06.
+/// - This calendar uses the holiday dates themselves, not the seeded
+///   overrides' `adjusted_deadline`s, so a typed due date on Maundy
+///   Thursday (2026-04-02) or Good Friday (2026-04-03) moves to Monday,
+///   2026-04-06.
 pub fn deadline_calendar() -> &'static crate::calendar_rules::BusinessDayCalendar {
-    use crate::calendar_rules::{BusinessDayCalendar, DeadlineResolver, NonWorkingDay};
+    use crate::calendar_rules::BusinessDayCalendar;
     static CALENDAR: std::sync::OnceLock<BusinessDayCalendar> = std::sync::OnceLock::new();
-    CALENDAR.get_or_init(|| {
-        BusinessDayCalendar::with_non_working_days(
-            DeadlineResolver::seed_2026_holiday_overrides()
-                .into_iter()
-                .map(|holiday| {
-                    NonWorkingDay::regular_holiday(holiday.original_deadline, holiday.title)
-                })
-                .collect(),
-        )
-    })
+    CALENDAR.get_or_init(crate::official_holidays::business_day_calendar)
 }
 
 /// `date`, or the next working day after it when it is not one, on
@@ -338,6 +363,38 @@ pub fn resolve_due_date(
         .into_iter()
         .find(|deadline| deadline.form_code == form_code && &deadline.period == period)
         .and_then(|deadline| deadline.final_deadline_date())
+        .or_else(|| month_rule_due_date(form_code, period, overrides))
+}
+
+/// 1606 only (decision P4-3 moved it off the monthly rule): its penalties
+/// name the sale's month, and run from the same date its former monthly
+/// row gave (the 10th of the next month, moved off weekends, then by
+/// `overrides`), so the filed penalties do not change. No other form takes
+/// this fallback.
+fn month_rule_due_date(
+    form_code: &str,
+    period: &DeadlinePeriod,
+    overrides: &[DeadlineOverride],
+) -> Option<NaiveDate> {
+    if form_code != "1606" {
+        return None;
+    }
+    let DeadlinePeriod::Monthly {
+        taxable_year,
+        month,
+    } = period
+    else {
+        return None;
+    };
+    let rule = crate::calendar_rules::event_due_rule(form_code)?;
+    let first_of_month = NaiveDate::from_ymd_opt(*taxable_year, u32::from(*month), 1)?;
+    DeadlineResolver::event_deadline(
+        &rule,
+        first_of_month,
+        overrides,
+        &crate::calendar_rules::BusinessDayCalendar::default(),
+    )?
+    .final_deadline_date()
 }
 
 impl<F> PenaltyItems<F> {
@@ -351,6 +408,9 @@ impl<F> PenaltyItems<F> {
     /// [`Self::typed_due_date`] uses that alone, and only on a draft on its
     /// model ([`Self::on_typed_due_date`]).
     pub fn due_date(&self, form: &F) -> Option<NaiveDate> {
+        if self.awaits_trigger_date(form) {
+            return None;
+        }
         if let Some(typed) = self.typed_due_date {
             return self.on_typed_due_date(form).then(|| typed(form)).flatten();
         }
@@ -358,6 +418,20 @@ impl<F> PenaltyItems<F> {
             (self.deadline_period)(form)
                 .and_then(|period| resolve_due_date(self.form_code, &period, &[]))
         })
+    }
+
+    /// A Draft of a form whose constructor pre-fills its trigger date
+    /// ([`crate::forms::event_trigger::PREFILLED_TRIGGER_FORMS`]) that does
+    /// not hold an entered one yet: its date is the constructor's guess, so
+    /// no penalty is computed from it and no penalty due date is kept
+    /// (decisions P4-3, P5-7). Only a draft created under the typed-trigger
+    /// model is gated: a row without the marker (every row stored before)
+    /// computes from the date it holds, as before. Once dated, or once it
+    /// leaves Draft, as before.
+    pub fn awaits_trigger_date(&self, form: &F) -> bool {
+        crate::forms::event_trigger::PREFILLED_TRIGGER_FORMS.contains(&self.form_code)
+            && matches!((self.status)(form), FilingStatus::Draft)
+            && (self.trigger_date_pending)(form)
     }
 
     /// Whether a form with a [`Self::typed_due_date`] has this draft on that
@@ -456,15 +530,21 @@ impl<F> PenaltyItems<F> {
         profile: &TaxpayerProfile,
         global_overrides: &[DeadlineOverride],
     ) {
-        let due_date = (self.deadline_period)(form).and_then(|period| {
-            let mut overrides = global_overrides.to_vec();
-            if let Some(year) = period.taxable_year().and_then(|y| u16::try_from(y).ok()) {
-                overrides.extend(crate::integration::profile_deadline_overrides_for_year(
-                    profile, year,
-                ));
-            }
-            resolve_due_date(self.form_code, &period, &overrides)
-        });
+        let awaits = self.awaits_trigger_date(form);
+        let due_date = (self.deadline_period)(form)
+            .filter(|_| !awaits)
+            .and_then(|period| {
+                // The override set the Calendar row for this return uses
+                // (decision P5-9): one definition for both.
+                let year = period.taxable_year().and_then(|y| u16::try_from(y).ok());
+                let overrides = crate::forms::event_trigger::calendar_overrides(
+                    global_overrides,
+                    profile,
+                    self.form_code,
+                    year,
+                );
+                resolve_due_date(self.form_code, &period, &overrides)
+            });
         self.set_context(
             form,
             due_date,
@@ -520,8 +600,18 @@ impl<F> PenaltyItems<F> {
             .and_then(|clock| clock.refresh)
             .unwrap_or(matches!(status, FilingStatus::Draft));
         if refresh {
-            let computed = self.if_filed_on(form, today());
-            (self.state_mut)(form).computed_penalties = computed;
+            if self.awaits_trigger_date(form) {
+                // Undated and on the typed-trigger model: compute nothing
+                // from the pre-filled date. A computed value is never turned
+                // into an override; the filer's own overrides stay as they
+                // are.
+                let state = (self.state_mut)(form);
+                state.computed_penalties = None;
+                state.penalty_due_date = None;
+            } else {
+                let computed = self.if_filed_on(form, today());
+                (self.state_mut)(form).computed_penalties = computed;
+            }
         }
         for (component, value) in PenaltyComponent::ALL.into_iter().zip(self.used(form)) {
             (self.set)(form, component, value);
@@ -630,6 +720,9 @@ macro_rules! queueable_penalty_items {
                 state: |d: &$ty| &d.$($state).+,
                 state_mut: |d: &mut $ty| &mut d.$($state).+,
                 status: |d: &$ty| d.lifecycle().status.clone(),
+                trigger_date_pending: |d: &$ty| {
+                    d.lifecycle().trigger_date_model && !d.lifecycle().trigger_date_entered
+                },
                 deadline_period: $crate::forms::penalty_items::calendar_period::<$ty>,
                 typed_due_date: None,
                 period_code: |d: &$ty| d.period_code(),
@@ -641,3 +734,185 @@ macro_rules! queueable_penalty_items {
     }};
 }
 pub(crate) use queueable_penalty_items;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn day(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    /// Round 5, item 11: a pinned clock ends with its scope even when the
+    /// work panics, and a captured clock carries into another thread.
+    #[test]
+    fn the_pinned_clock_is_restored_and_can_cross_threads() {
+        let real = today();
+        let pinned = day(2001, 2, 3);
+        let caught = std::panic::catch_unwind(|| {
+            with_clock(pinned, || {
+                assert_eq!(today(), pinned);
+                panic!("the work fails");
+            })
+        });
+        assert!(caught.is_err());
+        assert_ne!(today(), pinned, "restored after the panic");
+        assert_eq!(today(), real);
+        let seen = with_clock(pinned, || {
+            let clock = capture_clock();
+            std::thread::spawn(move || clock.run(today)).join().unwrap()
+        });
+        assert_eq!(seen, pinned, "the worker thread saw the pinned clock");
+    }
+
+    fn profile() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Trading Corp",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Trading",
+            "registered_address": "1 Example Street, Pasig",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "office@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Corporation"
+        }))
+        .unwrap()
+    }
+
+    fn sale_on_august_3(marked: bool) -> crate::forms::form_1606::Form1606Draft {
+        let mut draft =
+            crate::forms::form_1606::Form1606Draft::new_from_profile(&profile(), 2026, 1);
+        (
+            draft.transaction_month,
+            draft.transaction_day,
+            draft.transaction_year,
+        ) = (8, 3, 2026);
+        draft.lifecycle.trigger_date_model = marked;
+        draft
+    }
+
+    /// Decisions P4-3 and P5-7: a 1606 Draft created under the typed-trigger
+    /// model computes no penalties and keeps no penalty due date while its
+    /// sale date is not entered; once entered, or once it leaves Draft, it
+    /// computes from the sale.
+    #[test]
+    fn a_marked_undated_1606_draft_computes_no_penalties() {
+        use crate::forms::queueable::QueueableForm as _;
+        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+        let mut draft = sale_on_august_3(true);
+        items.apply_profile(&mut draft, &profile(), &[]);
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert!(items.awaits_trigger_date(&draft));
+        assert_eq!(draft.penalty.penalty_due_date, None);
+        assert_eq!(draft.penalty.computed_penalties, None);
+        assert_eq!(items.due_date(&draft), None);
+        assert_eq!(items.filed(&draft), [0.0; 3]);
+        // Entered: due September 10, so October 19 is late.
+        draft.lifecycle.trigger_date_entered = true;
+        items.apply_profile(&mut draft, &profile(), &[]);
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert_eq!(draft.penalty.penalty_due_date, Some(day(2026, 9, 10)));
+        let computed = draft.penalty.computed_penalties.clone().unwrap();
+        assert_eq!(computed.inputs.due_date, day(2026, 9, 10));
+        assert!(computed.inputs.days_late > 0, "{computed:?}");
+        // Left Draft: computed as before.
+        draft.lifecycle.trigger_date_entered = false;
+        draft.lifecycle.status = FilingStatus::Queued;
+        assert!(!items.awaits_trigger_date(&draft));
+        assert_eq!(items.due_date(&draft), Some(day(2026, 9, 10)));
+    }
+
+    /// Decision P5-7: a row without the marker (every row stored before)
+    /// is never gated: it computes from the date it holds, as before.
+    #[test]
+    fn an_unmarked_1606_draft_computes_from_the_date_it_holds() {
+        use crate::forms::queueable::QueueableForm as _;
+        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+        let mut draft = sale_on_august_3(false);
+        items.apply_profile(&mut draft, &profile(), &[]);
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert!(!items.awaits_trigger_date(&draft));
+        assert_eq!(draft.penalty.penalty_due_date, Some(day(2026, 9, 10)));
+        assert!(draft.penalty.computed_penalties.is_some());
+    }
+
+    /// Round 6, F2: no path turns computed values into overrides. A marked
+    /// undated draft that somehow holds computed values drops them; the
+    /// filer's own override stays as it was.
+    #[test]
+    fn computed_values_never_become_overrides() {
+        use crate::forms::queueable::QueueableForm as _;
+        let items = crate::forms::form_1606::Form1606Draft::penalty_declaration();
+        // Computed while dated, then undated again.
+        let mut draft = sale_on_august_3(true);
+        draft.lifecycle.trigger_date_entered = true;
+        items.apply_profile(&mut draft, &profile(), &[]);
+        let mut held = with_clock(day(2026, 10, 19), || {
+            draft.compute();
+            draft.penalty.computed_penalties.clone().unwrap()
+        });
+        held.surcharge = 125.0;
+        draft.penalty.computed_penalties = Some(held);
+        draft.lifecycle.trigger_date_entered = false;
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert_eq!(draft.penalty.computed_penalties, None);
+        for component in PenaltyComponent::ALL {
+            assert_eq!(
+                draft.penalty.penalty_overrides.get(component),
+                None,
+                "{component:?}"
+            );
+        }
+        assert_eq!(draft.surcharge, 0.0);
+        // A real override stays one.
+        items.set_override(&mut draft, PenaltyComponent::Interest, Some(40.0));
+        with_clock(day(2026, 10, 19), || draft.compute());
+        assert_eq!(
+            draft
+                .penalty
+                .penalty_overrides
+                .get(PenaltyComponent::Interest),
+            Some(40.0)
+        );
+        assert_eq!(draft.interest, 40.0);
+    }
+
+    /// Decision P4-3 moved 1606 off the monthly rule; its penalties still
+    /// run from the date that rule gave. The rule it shared with 0620 (the
+    /// 10th of the next month) still resolves 0620, so every 1606 month in
+    /// 2025-2027, with no overrides and with the shipped holidays, must
+    /// give 0620's date.
+    #[test]
+    fn form_1606_penalties_keep_the_former_monthly_due_date() {
+        let holidays = crate::official_holidays::holiday_overrides(
+            crate::official_holidays::OFFICIAL_HOLIDAY_YEARS,
+        );
+        for overrides in [Vec::new(), holidays] {
+            for taxable_year in 2025..=2027 {
+                for month in 1..=12 {
+                    let period = DeadlinePeriod::Monthly {
+                        taxable_year,
+                        month,
+                    };
+                    let former = resolve_due_date("0620", &period, &overrides);
+                    assert!(former.is_some());
+                    assert_eq!(
+                        resolve_due_date("1606", &period, &overrides),
+                        former,
+                        "{taxable_year}-{month}"
+                    );
+                    // 2000OT is due on a day of the following month too, but
+                    // takes no fallback: its penalties name no month.
+                    assert_eq!(
+                        resolve_due_date("2000OT", &period, &overrides),
+                        None,
+                        "2000OT {taxable_year}-{month}"
+                    );
+                }
+            }
+        }
+    }
+}

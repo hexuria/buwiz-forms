@@ -1,4 +1,5 @@
-// Home: the greeting, returns due in the next 30 days, recently filed — or,
+// Home: the greeting, returns due in the next 30 days, the as-needed forms
+// the taxpayers file (each with Start a return), recently filed — or,
 // on a fresh install, the welcome with three numbered steps
 // (DESIGN_SYSTEM.md "Empty state"). Shared row renderers for Calendar and
 // Filings live here too.
@@ -59,7 +60,13 @@ export function dueRow(cx, app, d, width) {
         ? StatusChip(cx, "due_soon", n)
         : Text(cx, "meta", n === 0 ? "Today" : n < 0 ? `${-n} days ago` : `In ${n} days`, "fg2");
   const compact = width < 560;
-  const row = ListRow(cx, `due-${d.tin}-${d.form_code}-${d.taxable_year}-${d.period}`, {
+  // An as-needed row is keyed by its saved return as well. For the 2200
+  // family a month holds one return (a stored return is matched by month
+  // and year, an earlier maintainer decision), so two removals in one month
+  // are one return; other as-needed forms can hold several returns that
+  // share a year and period column, and the return keeps their rows apart.
+  const key = `due-${d.tin}-${d.form_code}-${d.taxable_year}-${d.period}${d.frequency === "As needed" ? `-${d.draft_id}` : ""}`;
+  const row = ListRow(cx, key, {
     onClick: (_e, cx) => {
       app.selRoot = d.tin_root;
       app.selCode = d.branch_code;
@@ -133,6 +140,54 @@ export function returnRow(cx, app, r, width) {
   return row;
 }
 
+/**
+ * An as-needed form a branch files: code, "<code> · <name>" over the
+ * taxpayer and when it is due, and "Start a return". A return that holds its
+ * trigger date is listed with the deadlines instead; one that does not yet
+ * follows on its own row, with "Open".
+ */
+function asNeededRows(cx, app, f, width) {
+  const compact = width < 560;
+  const id = `as-needed-${f.tin}-${f.form_code}`;
+  const select = () => {
+    app.selRoot = f.tin_root;
+    app.selCode = f.branch_code;
+    app.selYear = f.taxable_year;
+  };
+  const head = ListRow(cx, id)
+    .child(Code(cx, f.form_code).w(68).flex_none())
+    .child(NameCell(cx, `${f.form_code} · ${f.form_name}`, compact ? whoLine(f) : `${whoLine(f)} · ${f.due_rule}`))
+    .child(
+      AppButton(cx, `${id}-start`, "Start a return", {
+        size: "sm",
+        icon: "plus",
+        onClick: (_e, cx) => {
+          select();
+          app.startNewReturn(cx, f.form_code);
+        },
+      }),
+    );
+  const rows = [head];
+  for (const r of f.undated) {
+    const row = ListRow(cx, `${id}-${r.draft_id}`)
+      .child(div().w(68).flex_none())
+      .child(NameCell(cx, f.trigger ? `No ${f.trigger.toLowerCase()} date yet` : "Saved return", `Saved ${shortDate(r.updated_at)}`));
+    row.child(div().w(88).flex_none().flex().justify_end().child(StatusChip(cx, statusKind(r.status))));
+    row.child(
+      AppButton(cx, `${id}-${r.draft_id}-open`, "Open", {
+        variant: "ghost",
+        size: "sm",
+        onClick: (_e, cx) => {
+          select();
+          app.openForm({ tin: f.tin, code: f.form_code, year: f.taxable_year, period: r.period, ...(r.return_key != null ? { returnKey: r.return_key } : {}) }, cx);
+        },
+      }),
+    );
+    rows.push(row);
+  }
+  return rows;
+}
+
 function welcome(cx, app) {
   const steps = [
     ["user", "Add a taxpayer", "TIN, registered name and head-office address"],
@@ -173,11 +228,12 @@ export function renderHome(cx, app, width) {
     .deadlines(isoDate(addDays(today, -30)), isoDate(addDays(today, 30)))
     .filter((d) => daysUntil(d.due_date) >= 0 || d.status === "Not started" || d.status === "Draft");
   const filed = app.store.returns("filed").slice(0, 3);
+  const asNeeded = app.store.asNeeded(today.getFullYear());
   const taxpayerCount = new Set(soon.map((d) => d.tin_root)).size;
   const lede = soon.length
     ? `${soon.length} return${soon.length === 1 ? " is" : "s are"} due in the next 30 days across ${taxpayerCount} taxpayer${taxpayerCount === 1 ? "" : "s"}. ${longToday()}.`
     : `Nothing is due in the next 30 days. ${longToday()}.`;
-  return div()
+  const page = div()
     .flex()
     .flex_col()
     .child(PageHeader(cx, { title: greeting(), lede }))
@@ -190,7 +246,15 @@ export function renderHome(cx, app, width) {
           ? soon.map((d) => dueRow(cx, app, d, width))
           : [EmptyRow(cx, "home-due-empty", "Deadlines show here once a taxpayer has forms for a tax year.")],
       ),
-    )
+    );
+  // Filed when something happens (a removal, a withholding, a sale): no
+  // deadline until a return holds that date.
+  if (asNeeded.length) {
+    page
+      .child(SectionTitle(cx, "As needed"))
+      .child(ListGroup(cx, "home-as-needed", asNeeded.flatMap((f) => asNeededRows(cx, app, f, width))));
+  }
+  return page
     .child(SectionTitle(cx, "Recently filed"))
     .child(
       ListGroup(

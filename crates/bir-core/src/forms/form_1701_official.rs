@@ -278,6 +278,9 @@ impl Form1701Draft {
             state: |d| &d.penalty.state,
             state_mut: |d| &mut d.penalty.state,
             status: |d| d.lifecycle.status.clone(),
+            trigger_date_pending: |d| {
+                d.lifecycle.trigger_date_model && !d.lifecycle.trigger_date_entered
+            },
             deadline_period: super::penalty_items::calendar_period::<Self>,
             period_code: |d| QueueableForm::period_code(d),
             is_amended: |d| d.is_amended,

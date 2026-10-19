@@ -123,6 +123,9 @@ pub struct EditorState {
     /// Bumped on every edit; Validate records the revision it passed at.
     pub revision: u64,
     pub validated_at: Option<u64>,
+    /// The record the draft's penalty inputs were last resolved from (the
+    /// open's; `sync` resolves them again when it moves, decision P5-9).
+    pub resolved_trigger: Option<crate::views::queueable_forms::TriggerSignature>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -144,6 +147,7 @@ impl EditorState {
             header: FormHeaderState::new(),
             revision: 0,
             validated_at: None,
+            resolved_trigger: None,
             _subscriptions: Vec::new(),
         };
         state.ensure_inputs(specs, window, cx);
@@ -164,11 +168,15 @@ impl EditorState {
             }
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
+            let typed_key = key.clone();
             self._subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
-                |this: &mut V, _, event: &InputEvent, _, cx| {
+                move |this: &mut V, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        if this.draft().lifecycle().is_editable() {
+                            this.input_typed(&typed_key, cx);
+                        }
                         this.kit_mut().revision += 1;
                         sync(this, cx);
                     }
@@ -310,10 +318,26 @@ pub trait KitView:
     fn print_field_map(&self) -> BTreeMap<String, String> {
         self.draft().field_map()
     }
+    /// The filer typed in the editor `key` (an edit event, before it is
+    /// read). The 1706 view records its typed transaction date here.
+    fn input_typed(&mut self, _key: &str, _cx: &App) {}
 }
 
 fn element_id(slug: &str, suffix: &str) -> ElementId {
     ElementId::Name(format!("{slug}_{suffix}").into())
+}
+
+/// A trigger record that moved since the draft's penalty inputs were
+/// resolved resolves them again, as the open did (decision P5-9).
+fn resolve_moved_trigger<V: KitView>(this: &mut V) {
+    let signature = crate::views::queueable_forms::trigger_signature(this.draft());
+    if this.kit().resolved_trigger.as_ref() == Some(&signature) {
+        return;
+    }
+    let mut resolved = this.kit_mut().resolved_trigger.take();
+    let db = this.db();
+    crate::views::queueable_forms::resolve_moved_trigger(this.draft_mut(), &mut resolved, &db);
+    this.kit_mut().resolved_trigger = resolved;
 }
 
 /// Read every editor into the draft, then recompute and validate.
@@ -322,6 +346,7 @@ pub fn sync<V: KitView>(this: &mut V, cx: &mut Context<V>) {
         return;
     }
     let parse_errors = this.read_inputs(cx);
+    resolve_moved_trigger(this);
     let draft = this.draft_mut();
     draft.compute();
     draft.lifecycle_mut().updated_at = chrono::Utc::now().to_rfc3339();

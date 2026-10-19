@@ -1902,11 +1902,11 @@ impl ProfileManagerView {
                 selected_year,
                 &global_deadline_overrides,
             );
-        let mut deadline_overrides = global_deadline_overrides;
-        deadline_overrides.extend(bir_core::integration::profile_deadline_overrides_for_year(
+        let deadline_overrides = bir_core::forms::event_trigger::periodic_overrides(
+            &global_deadline_overrides,
             &preview_profile,
-            selected_year,
-        ));
+            Some(selected_year),
+        );
         let preview_deadlines =
             bir_core::calendar_rules::DeadlineResolver::resolve_taxable_year_with_overrides(
                 selected_year as i32,
@@ -2194,12 +2194,10 @@ impl ProfileManagerView {
                 selected_year,
                 &global_deadline_overrides,
             );
-        let mut preview_deadline_overrides = global_deadline_overrides;
-        preview_deadline_overrides.extend(
-            bir_core::integration::profile_deadline_overrides_for_year(
-                &preview_profile,
-                selected_year,
-            ),
+        let preview_deadline_overrides = bir_core::forms::event_trigger::periodic_overrides(
+            &global_deadline_overrides,
+            &preview_profile,
+            Some(selected_year),
         );
         let preview_deadlines =
             bir_core::calendar_rules::DeadlineResolver::resolve_taxable_year_with_overrides(

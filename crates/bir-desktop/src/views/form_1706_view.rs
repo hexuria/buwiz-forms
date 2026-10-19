@@ -834,6 +834,24 @@ impl KitView for Form1706View {
         Self::text_value(&self.draft, key)
     }
 
+    /// The filer typed in a transaction-date box (decision P5-7): record
+    /// the part, or take it out when the box was cleared.
+    fn input_typed(&mut self, key: &str, cx: &App) {
+        let field = match key {
+            "month" => "transaction_month",
+            "day" => "transaction_day",
+            "year" => "transaction_year",
+            _ => return,
+        };
+        let value = self.kit.text(key, cx).trim().parse::<u32>().unwrap_or(0);
+        bir_core::forms::event_trigger::note_trigger_typed(
+            "1706",
+            &mut self.draft.lifecycle,
+            field,
+            value,
+        );
+    }
+
     fn read_inputs(&mut self, cx: &mut Context<Self>) -> Vec<(String, String)> {
         let mut reader = InputReader::new(&self.kit, cx);
         let d = &mut self.draft;
@@ -1013,7 +1031,11 @@ impl QueueableFormView for Form1706View {
     }
 
     fn new_draft(profile: &TaxpayerProfile, year: u16, period: u8) -> Form1706Draft {
-        Form1706Draft::new_from_profile(profile, year, u32::from(period.max(1)))
+        let mut draft = Form1706Draft::new_from_profile(profile, year, u32::from(period.max(1)));
+        // This view records the typed transaction date (read_inputs), so its
+        // new drafts follow the typed-trigger model (decision P5-7).
+        draft.lifecycle.trigger_date_model = true;
+        draft
     }
 }
 

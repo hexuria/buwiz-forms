@@ -28045,8 +28045,8 @@ declare module "bir" {
       existing?: ScreenFormExisting;
       /** No stored return: a fresh sample built for exactly this period. */
       sample?: ScreenFormOpened;
-      /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`); null: start it with New return. */
-      opens?: { year: number; period: number; key: number | null; new_key?: number | null } | null;
+      /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`, with `new_key_from`: the sample it was offered for, its `created_at`, which the open passes back); null: start it with New return. */
+      opens?: { year: number; period: number; key: number | null; new_key?: number | null; new_key_from?: string | null } | null;
   }
   export interface ScreenFormPenalties {
       keys: string[];
@@ -28098,8 +28098,8 @@ declare module "bir" {
   }
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
-  /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date). */
-  export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null): Promise<ScreenFormOpened>;
+  /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date); `new_key_from`: the sample the host offered `new_key` for (its `created_at`). */
+  export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null, new_key_from?: string | null): Promise<ScreenFormOpened>;
   /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
   export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
   /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
@@ -28130,9 +28130,9 @@ declare module "bir" {
       branch_count: number;
       form_code: string;
       form_name: string;
-      frequency: "Monthly" | "Quarterly" | "Annual";
+      frequency: "Monthly" | "Quarterly" | "Annual" | "As needed";
       taxable_year: number;
-      /** Month 1-12, quarter 1-4, or 0 for an annual return. */
+      /** Month 1-12, quarter 1-4, 0 for an annual return, or an as-needed return's stored period. */
       period: number;
       period_label: string;
       due_date: string;
@@ -28143,6 +28143,31 @@ declare module "bir" {
       return_key: number | null;
   }
   export function deadlines_between(from: string, to: string): DeadlineRow[];
+  export interface AsNeededReturn {
+      draft_id: number;
+      period: number;
+      return_key: number | null;
+      status: string;
+      updated_at: string;
+  }
+  export interface AsNeededForm {
+      tin: string;
+      tin_root: string;
+      branch_code: string;
+      branch_name: string;
+      taxpayer_name: string;
+      branch_count: number;
+      form_code: string;
+      form_name: string;
+      taxable_year: number;
+      /** What dates a return ("Removal"), null when the form has no trigger-date rule. */
+      trigger: string | null;
+      /** When it is due, as the form's guide says. */
+      due_rule: string;
+      /** Saved returns of the form that hold no trigger date yet. */
+      undated: AsNeededReturn[];
+  }
+  export function as_needed_forms(year: number): AsNeededForm[];
   export interface ReturnRow {
       id: number;
       tin: string;

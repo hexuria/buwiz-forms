@@ -41,6 +41,7 @@ pub mod log_files;
 pub mod naming;
 pub mod news_fetcher;
 pub mod notification;
+pub mod official_holidays;
 pub mod official_import;
 pub mod official_xml;
 pub mod penalties;

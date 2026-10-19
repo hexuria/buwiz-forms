@@ -557,18 +557,22 @@ fn pr9_2000ot_item_1_date_says_what_sets_it() {
     let blank = open("2000OT", 1);
     assert_eq!(blank["values"][key], "");
     assert_eq!(blank["waits"][key], rows_as_needed::DATE_FROM_NEW_RETURN);
-    let started = call_async(
-        "screen_form_open",
-        vec![
-            TIN.into(),
-            "2000OT".into(),
-            YEAR.into(),
-            1.into(),
-            json(Value::Null),
-            1015.into(),
-        ],
-    )
-    .unwrap();
+    // A day key the client sends alone writes no date on a trigger form
+    // (D8c): the date it names starts the return only when the host offered
+    // it for the sample — the page's `new_key_from`.
+    let mut parts = Map::new();
+    for (part_key, part) in sample_period_parts(kind_of("2000OT").unwrap()) {
+        match part {
+            PeriodPart::Date => parts.insert(part_key, json!("10/15/2026")),
+            PeriodPart::Year => parts.insert(part_key, json!("2026")),
+            PeriodPart::Month => parts.insert(part_key, json!("10")),
+            PeriodPart::Day => parts.insert(part_key, json!("15")),
+            other => panic!("2000OT: unexpected period part {other:?}"),
+        };
+    }
+    let opens = sample_period(TIN, "2000OT", Value::Object(parts))["opens"].clone();
+    assert_eq!(opens["new_key"], 1015, "the typed date offers its key");
+    let started = open_from("2000OT", &opens);
     assert_eq!(started["values"][key], "10/15/2026");
     assert_eq!(started["draft"]["transaction_date"], "10/15/2026");
     assert!(started["locks"][key].is_string());
