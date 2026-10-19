@@ -306,8 +306,10 @@ impl BirAgentHost {
         })())
     }
 
-    /// `form.fill` on a generic form: official box keys, all-or-nothing,
-    /// except a box with no field in this app's draft, refused on its own.
+    /// `form.fill` on a generic form: official box keys. Every rejected
+    /// key — a box with no field in this app's draft, a computed, locked
+    /// or hidden box, a key that is not a box — is refused on its own in
+    /// `refused` and the rest of the batch still applies.
     pub(super) fn fill_generic(
         &mut self,
         fields: &serde_json::Map<String, Value>,
@@ -922,7 +924,8 @@ mod tests {
     /// PR 14 review F5: a box with no field in this app's draft (here
     /// 1600PT's ATC popup slot, unbound in core) is refused on its own with
     /// the reason; the rest of the batch applies and item 10 stays as
-    /// answered. Computed and unknown keys still refuse the whole batch.
+    /// answered. Computed, locked, hidden and unknown keys are refused the
+    /// same per-key way (fill_official).
     #[test]
     fn an_unmapped_box_is_refused_alone_and_the_batch_applies() {
         let (mut host, _db) = host(PlatformKind::Headless);

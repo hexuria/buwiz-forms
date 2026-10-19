@@ -7,8 +7,9 @@
 // radio_untick_rule::pr14_radio_page_fixture_is_the_hosts into
 // tools/fixtures/form_radio_untick_page.json: 2200S's manner (items 15 and
 // 16 radios, item 17 a tick box), 2200C's manner (one official group of
-// three), 1701's tax-rate pair, and 1701MS's 11 and 12, whose "false" is a
-// different answer. Driven through the real app/shell/form_page.js with a
+// three), 1701's tax-rate pair, 1701MS's 11 and 12, whose "false" is a
+// different answer, and 2552's item 11 — the kept group (P5-11). Driven
+// through the real app/shell/form_page.js with a
 // mocked host (the harness of tools/test_form_as_needed.mjs). What the host
 // then writes is its own (crates/bir-shell screen_form_module
 // tests::radio_untick_rule).
@@ -223,6 +224,22 @@ for (const key of ["frm1701MS:txtTaxpayerNo11c", "frm1701MS:txtTaxpayerNo12b"]) 
   assert.equal(reclick(key), null, `${key}: re-clicked, nothing is sent and the answer stays`);
 }
 console.log("PASS 1701MS 11c and 12b: a ticked radio of no group stays as it is.");
+
+// ---- 2552 item 11, the kept group (P5-11): re-clicking the ticked
+// member emits its "false" — the same-group member's untick — and nothing
+// else; the host then keeps the answer (the shell suite's 2552 case,
+// pr14_an_untick_never_fails_the_rest_of_the_batch). A pick unticks only
+// its own group's members (review F1). With the group unticked a click is
+// a pick again — the page cannot emit an untick for a member that is not
+// ticked; that no-op is the host's ("unticking a member that is not
+// ticked does nothing").
+await openWith("2552", { "frm2552:rdoPg1I11TransactionLSE": "true" });
+assert.deepEqual(reclick("frm2552:rdoPg1I11TransactionLSE"), { "frm2552:rdoPg1I11TransactionLSE": "false" }, "the ticked member's re-click emits only its untick");
+await openWith("2552", { "frm2552:rdoPg1I11TransactionLSE": "true" });
+assert.deepEqual(reclick("frm2552:rdoPg1I11TransactionPrimary"), { "frm2552:rdoPg1I11TransactionPrimary": "true", "frm2552:rdoPg1I11TransactionLSE": "false", "frm2552:rdoPg1I11TransactionSecondary": "false" }, "a pick unticks only its own group's members");
+await openWith("2552", {});
+assert.deepEqual(reclick("frm2552:rdoPg1I11TransactionLSE"), { "frm2552:rdoPg1I11TransactionLSE": "true", "frm2552:rdoPg1I11TransactionPrimary": "false", "frm2552:rdoPg1I11TransactionSecondary": "false" }, "the group unticked: a click picks, never unticks");
+console.log("PASS 2552 item 11: the kept group's untick and grp-scoped pick emit as the group's.");
 
 // ---- 0605's quarters are period parts of a sample whose period is set:
 // re-clicking the ticked one asks nothing and sends nothing (review F2).

@@ -454,15 +454,17 @@ export class FormPageActions {
     s.filedOriginalView = r.filed_original_view || null;
     s.values = this.shown(r.values);
     // The period the sample was built for is what its parts show, so a
-    // re-pick of the ticked period radio re-asks nothing (review F2); a
-    // placeholder's parts start unasked. A set period is complete and
-    // answered — the host built this sample for it.
-    s.periodValues = s.periodSet
-      ? Object.fromEntries([...s.periodParts].map(([k, p]) => [k, p.part === "quarter" ? String(s.values[k] === "true") : String(s.values[k] ?? "")]))
-      : {};
-    s.periodAsked = JSON.stringify(s.periodValues);
-    s.periodAnswered = s.periodSet ? s.periodAsked : null;
-    s.periodComplete = s.periodSet;
+    // re-pick of the ticked period radio re-asks nothing (review F2): a
+    // set period is complete and answered — the host built this sample
+    // for it. A placeholder keeps what the filer last typed into the
+    // parts instead — an incomplete period stays in its boxes while the
+    // sample behind them goes back to the placeholder.
+    if (s.periodSet) {
+      s.periodValues = Object.fromEntries([...s.periodParts].map(([k, p]) => [k, p.part === "quarter" ? String(s.values[k] === "true") : String(s.values[k] ?? "")]));
+      s.periodAsked = JSON.stringify(s.periodValues);
+      s.periodAnswered = s.periodAsked;
+      s.periodComplete = true;
+    }
     s.options = r.options || {};
     s.locks = r.locks;
     s.lockNotes = r.lock_notes || {};

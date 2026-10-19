@@ -687,7 +687,10 @@ fn pr14_a_shown_wider_repick_is_judged_when_the_step_runs() {
         .clone();
     assert_eq!(draft["atc"], "Ii014");
     let reasked = fill("1701", &draft, json!({"frm1701:rdoPg1I21TaxRateG": "true"}));
-    assert_eq!(reasked["draft"]["atc"], "Ii014", "the re-ask writes nothing");
+    assert_eq!(
+        reasked["draft"]["atc"], "Ii014",
+        "the re-ask writes nothing"
+    );
     // An earlier step of the batch moves the answer off: the stale
     // re-ask writes nothing either — judged on the draft as the batch
     // left it, it would once have written II013's answer over the pick.
@@ -710,6 +713,35 @@ fn pr14_a_shown_wider_repick_is_judged_when_the_step_runs() {
         }),
     );
     assert_eq!(held["draft"]["atc"], "Ii013");
+    // The discriminating case (1701's own keys all sort the tax rate
+    // first, so the three above cannot tell when the tick was judged):
+    // on 1701A `optATC_*` sorts before `optTaxRate_*`, so the batch's own
+    // pick lands before the re-ask is judged. The filer is a single
+    // proprietor — the filer type whose ATCs optTaxRate_1's write (i_i012)
+    // and optATC_3's (i_i015) both survive compute — and the draft already
+    // holds i_i012, the page showing the pair's Graduated member ticked.
+    let draft = fill(
+        "1701A",
+        &open("1701A", 0)["draft"],
+        json!({"frm1701A:optTaxType_1": "true"}),
+    )["draft"]
+        .clone();
+    let draft = fill("1701A", &draft, json!({"frm1701A:optTaxRate_1": "true"}))["draft"].clone();
+    assert_eq!(draft["atc"], "i_i012");
+    let batch = fill(
+        "1701A",
+        &draft,
+        json!({
+            "frm1701A:optATC_3": "true",
+            "frm1701A:optTaxRate_1": "true",
+        }),
+    );
+    // Evolving draft: optATC_3's i_i015 lands first; the re-ask of the
+    // shown Graduated tick is then judged on a draft that no longer holds
+    // it and writes nothing. Judged on the pre-batch draft instead, the
+    // tick would hold (atc was i_i012) and write it back over the batch's
+    // own pick.
+    assert_eq!(batch["draft"]["atc"], "i_i015", "{batch}");
 }
 
 /// Review F9: 2200S's manner of payment is one answer — items 15 and 16
@@ -742,8 +774,7 @@ fn pr14_2200s_item_17_clears_the_manner_and_the_manner_clears_it() {
     );
     assert_eq!(other["draft"]["other_scheme"], true, "{other}");
     assert_eq!(
-        other["draft"]["manner"],
-        "prepayment",
+        other["draft"]["manner"], "prepayment",
         "item 17 is a prepayment; Actual Removal is gone"
     );
     let prepayment = manner(
@@ -752,8 +783,7 @@ fn pr14_2200s_item_17_clears_the_manner_and_the_manner_clears_it() {
     );
     assert_eq!(prepayment["draft"]["manner"], "prepayment", "{prepayment}");
     assert_eq!(
-        prepayment["draft"]["other_scheme"],
-        false,
+        prepayment["draft"]["other_scheme"], false,
         "item 16 clears item 17"
     );
     // The group box's options are the same one answer.
@@ -789,6 +819,14 @@ fn pr14_the_schema_gives_each_radio_its_groups_size() {
                 groups.get(key).map(|(_, members)| *members as u64),
                 "{code} {key}"
             );
+            // `grp` too: the page scopes a pick's sibling "false" writes
+            // by it (review F1), so every grouped member must carry its
+            // own group's id and no other box may carry one.
+            assert_eq!(
+                field["grp"].as_str(),
+                groups.get(key).map(|(group, _)| group.as_str()),
+                "{code} {key}"
+            );
         }
     }
     let form = schema_entry("2200S").unwrap();
@@ -800,12 +838,27 @@ fn pr14_the_schema_gives_each_radio_its_groups_size() {
             .flat_map(|part| part["items"].as_array().unwrap())
             .flat_map(|item| item["f"].as_array().cloned().unwrap_or_default())
             .find(|field| field["k"] == key)
-            .map(|field| (field["t"].clone(), field["rg"].clone()))
+            .map(|field| {
+                (
+                    field["t"].clone(),
+                    field["rg"].clone(),
+                    field["grp"].clone(),
+                )
+            })
             .unwrap()
     };
-    assert_eq!(rg("frm2200S:chkPymntManner_1"), (json!("radio"), json!(3)));
-    assert_eq!(rg("frm2200S:chkPymntManner_2"), (json!("radio"), json!(3)));
-    assert_eq!(rg("frm2200S:chkPymntManner_3"), (json!("chk"), json!(3)));
+    assert_eq!(
+        rg("frm2200S:chkPymntManner_1"),
+        (json!("radio"), json!(3), json!("frm2200S:chkPymntManner"))
+    );
+    assert_eq!(
+        rg("frm2200S:chkPymntManner_2"),
+        (json!("radio"), json!(3), json!("frm2200S:chkPymntManner"))
+    );
+    assert_eq!(
+        rg("frm2200S:chkPymntManner_3"),
+        (json!("chk"), json!(3), json!("frm2200S:chkPymntManner"))
+    );
 }
 
 /// Review F9: the groups of three or more the page drew short, counting
