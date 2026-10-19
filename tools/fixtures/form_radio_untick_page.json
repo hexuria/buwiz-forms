@@ -10,7 +10,8 @@
             "l": "Payment on Actual Removal",
             "t": "radio",
             "k": "frm2200S:chkPymntManner_1",
-            "rg": 3
+            "rg": 3,
+            "grp": "frm2200S:chkPymntManner"
           }
         ],
         "cols": null
@@ -24,7 +25,8 @@
             "l": "Prepayment/Advance Deposit",
             "t": "radio",
             "k": "frm2200S:chkPymntManner_2",
-            "rg": 3
+            "rg": 3,
+            "grp": "frm2200S:chkPymntManner"
           }
         ],
         "cols": null
@@ -38,7 +40,8 @@
             "l": "Other Similar Schemes",
             "t": "chk",
             "k": "frm2200S:chkPymntManner_3",
-            "rg": 3
+            "rg": 3,
+            "grp": "frm2200S:chkPymntManner"
           },
           {
             "l": "Specify",
@@ -64,7 +67,8 @@
             "t": "radio",
             "k": "frm2200C:rdoPg1Pt2MOPPaymentActual",
             "r": 1,
-            "rg": 3
+            "rg": 3,
+            "grp": "frm2200C:rdoPg1Pt2MOP"
           }
         ],
         "cols": null
@@ -79,7 +83,8 @@
             "t": "radio",
             "k": "frm2200C:rdoPg1Pt2MOPPrepayment",
             "r": 1,
-            "rg": 3
+            "rg": 3,
+            "grp": "frm2200C:rdoPg1Pt2MOP"
           }
         ],
         "cols": null
@@ -94,7 +99,8 @@
             "t": "radio",
             "k": "frm2200C:rdoPg1Pt2MOPOther",
             "r": 1,
-            "rg": 3
+            "rg": 3,
+            "grp": "frm2200C:rdoPg1Pt2MOP"
           },
           {
             "l": "Specify",
@@ -119,13 +125,85 @@
             "l": "Graduated Rates (Choose Method of Deduction in Item 21A)",
             "t": "radio",
             "k": "frm1701:rdoPg1I21TaxRateG",
-            "rg": 2
+            "rg": 2,
+            "grp": "frm1701:rdoPg1I21TaxRate"
           },
           {
             "l": "8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC",
             "t": "radio",
             "k": "frm1701:rdoPg1I21TaxRateP",
-            "rg": 2
+            "rg": 2,
+            "grp": "frm1701:rdoPg1I21TaxRate"
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "12",
+        "l": "Tax Rate (choose one)",
+        "p": 2,
+        "f": [
+          {
+            "l": "Graduated Rates (Choose Method of Deduction in Item 12A)",
+            "t": "radio",
+            "k": "frm1701:rdoPg2I12TaxRateG",
+            "rg": 2,
+            "grp": "frm1701:rdoPg2I12TaxRate"
+          },
+          {
+            "l": "8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC",
+            "t": "radio",
+            "k": "frm1701:rdoPg2I12TaxRateP",
+            "rg": 2,
+            "grp": "frm1701:rdoPg2I12TaxRate"
+          }
+        ],
+        "cols": null
+      }
+    ]
+  },
+  "1701A": {
+    "items": [
+      {
+        "no": "19",
+        "l": "Tax Rate",
+        "p": 1,
+        "f": [
+          {
+            "l": "Graduated rates with OSD as method of deduction",
+            "t": "radio",
+            "k": "frm1701A:optTaxRate_1",
+            "rg": 2,
+            "grp": "frm1701A:optTaxRate"
+          },
+          {
+            "l": "8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC",
+            "t": "radio",
+            "k": "frm1701A:optTaxRate_2",
+            "rg": 2,
+            "grp": "frm1701A:optTaxRate"
+          }
+        ],
+        "cols": null
+      },
+      {
+        "no": "75",
+        "l": "Tax Rate",
+        "p": 2,
+        "f": [
+          {
+            "l": "Graduated rates with OSD as method of deduction",
+            "t": "radio",
+            "k": "frm1701A:optSpouseTaxRate_1",
+            "rg": 2,
+            "grp": "frm1701A:optSpouseTaxRate"
+          },
+          {
+            "l": "8% in lieu of Graduated Rates under Sec. 24(A) & Percentage Tax under Sec. 116 of NIRC",
+            "t": "radio",
+            "k": "frm1701A:optSpouseTaxRate_2",
+            "rg": 2,
+            "grp": "frm1701A:optSpouseTaxRate"
           }
         ],
         "cols": null
@@ -143,13 +221,15 @@
             "l": "A. Income from Business",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo11a",
-            "rg": 2
+            "rg": 2,
+            "grp": "frm1701MS:txtTaxpayerNo11group"
           },
           {
             "l": "A. Mixed Income",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo11b",
-            "rg": 2
+            "rg": 2,
+            "grp": "frm1701MS:txtTaxpayerNo11group"
           },
           {
             "l": "A. Income from Profession",
@@ -160,25 +240,29 @@
             "l": "B. Income from Business",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo11a1",
-            "rg": 4
+            "rg": 4,
+            "grp": "frm1701MS:txtTaxpayerNo11"
           },
           {
             "l": "B. Mixed Income",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo11b1",
-            "rg": 4
+            "rg": 4,
+            "grp": "frm1701MS:txtTaxpayerNo11"
           },
           {
             "l": "B. Income from Profession",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo11c1",
-            "rg": 4
+            "rg": 4,
+            "grp": "frm1701MS:txtTaxpayerNo11"
           },
           {
             "l": "B. Compensation Income",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo11d1",
-            "rg": 4
+            "rg": 4,
+            "grp": "frm1701MS:txtTaxpayerNo11"
           }
         ],
         "cols": null
@@ -197,43 +281,123 @@
             "l": "A. 8% Income Tax Rate",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12c",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
           },
           {
             "l": "A. Exempt from Income Tax (IT)",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12d",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
           },
           {
             "l": "A. Special/Preferential Rate",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12e",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
           },
           {
             "l": "B. Graduated Income Tax Rates",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12b1",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
           },
           {
             "l": "B. 8% Income Tax Rate",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12c1",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
           },
           {
             "l": "B. Exempt from Income Tax (IT)",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12d1",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
           },
           {
             "l": "B. Special/Preferential Rate",
             "t": "radio",
             "k": "frm1701MS:txtTaxpayerNo12e1",
-            "rg": 7
+            "rg": 7,
+            "grp": "frm1701MS:txtTaxpayerNo12"
+          }
+        ],
+        "cols": null
+      }
+    ]
+  },
+  "0605": {
+    "items": [
+      {
+        "no": "3",
+        "l": "Quarter",
+        "p": 1,
+        "f": [
+          {
+            "l": "1st",
+            "t": "radio",
+            "k": "itemQuarter_1",
+            "rg": 4,
+            "grp": "itemQuarter"
+          },
+          {
+            "l": "2nd",
+            "t": "radio",
+            "k": "itemQuarter_2",
+            "rg": 4,
+            "grp": "itemQuarter"
+          },
+          {
+            "l": "3rd",
+            "t": "radio",
+            "k": "itemQuarter_3",
+            "rg": 4,
+            "grp": "itemQuarter"
+          },
+          {
+            "l": "4th",
+            "t": "radio",
+            "k": "itemQuarter_4",
+            "rg": 4,
+            "grp": "itemQuarter"
+          }
+        ],
+        "cols": null
+      }
+    ]
+  },
+  "2552": {
+    "items": [
+      {
+        "no": "11",
+        "l": "Kinds of Transaction",
+        "p": 1,
+        "f": [
+          {
+            "l": "11A Shares of Stocks Listed and Traded through the LSE",
+            "t": "radio",
+            "k": "frm2552:rdoPg1I11TransactionLSE",
+            "rg": 3,
+            "grp": "frm2552:rdoPg1I11Transaction"
+          },
+          {
+            "l": "11B Initial Public Offering: Primary",
+            "t": "radio",
+            "k": "frm2552:rdoPg1I11TransactionPrimary",
+            "rg": 3,
+            "grp": "frm2552:rdoPg1I11Transaction"
+          },
+          {
+            "l": "11B Initial Public Offering: Secondary",
+            "t": "radio",
+            "k": "frm2552:rdoPg1I11TransactionSecondary",
+            "rg": 3,
+            "grp": "frm2552:rdoPg1I11Transaction"
           }
         ],
         "cols": null

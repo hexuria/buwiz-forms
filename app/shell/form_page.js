@@ -453,6 +453,16 @@ export class FormPageActions {
     s.filedOriginal = r.filed_original || null;
     s.filedOriginalView = r.filed_original_view || null;
     s.values = this.shown(r.values);
+    // The period the sample was built for is what its parts show, so a
+    // re-pick of the ticked period radio re-asks nothing (review F2); a
+    // placeholder's parts start unasked. A set period is complete and
+    // answered — the host built this sample for it.
+    s.periodValues = s.periodSet
+      ? Object.fromEntries([...s.periodParts].map(([k, p]) => [k, p.part === "quarter" ? String(s.values[k] === "true") : String(s.values[k] ?? "")]))
+      : {};
+    s.periodAsked = JSON.stringify(s.periodValues);
+    s.periodAnswered = s.periodSet ? s.periodAsked : null;
+    s.periodComplete = s.periodSet;
     s.options = r.options || {};
     s.locks = r.locks;
     s.lockNotes = r.lock_notes || {};
@@ -1308,6 +1318,8 @@ export class FormPageActions {
     const s = this.state;
     s.periodValues = {};
     s.periodAsked = JSON.stringify({});
+    s.periodAnswered = null;
+    s.periodComplete = false;
     s.periodSeq = (s.periodSeq || 0) + 1;
     s.opens = null;
     s.existing = null;
@@ -2233,16 +2245,24 @@ function radioGroup(cx, ui, it, radios) {
     const locked = !s.editable || f.c || ui.isLocked(f.k);
     const pick = (cx) => {
       if (locked) return;
+      // A period part picks the return's period, never the box's untick:
+      // re-clicking the ticked one is the same pick again (a no-op once the
+      // asked period is the one the boxes already show).
+      const period = s.periodParts?.has(f.k);
       // In a group of three or more the ticked box unticks; a pair's ticked
       // answer given again runs again, so a removal it causes asks again; a
       // ticked radio of no group stays as it is.
-      if (on && (f.rg || 0) >= 3) {
+      if (on && !period && (f.rg || 0) >= 3) {
         ui.choose({ [f.k]: "false" }, cx);
         return;
       }
-      if (on && !f.rg) return;
-      const edits = {};
-      for (const r of radios) edits[r.k] = r.k === f.k ? "true" : "false";
+      if (on && !period && !f.rg) return;
+      // A pick ticks its box and unticks only members of the same host
+      // group (`grp`): an item can draw boxes of other groups beside it —
+      // and a "false" is another answer on some forms (1701MS's), never a
+      // pick's undo (review F1).
+      const edits = { [f.k]: "true" };
+      if (f.grp) for (const r of radios) if (r.k !== f.k && r.grp === f.grp) edits[r.k] = "false";
       ui.choose(edits, cx);
     };
     const label = choiceLabel(f);

@@ -170,6 +170,196 @@ pub(super) const HOST_ONLY: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// The groups the host keeps that no official inventory names, pinned
+/// member for member against the printed sheet (review F4: the oracle is
+/// this literal table, not a re-derivation): `(form, group id, members)`.
+/// The [`NO_INVENTORY`] forms' whole set, and each [`HOST_ONLY`] id's
+/// members — which no official name group ever claims.
+pub(super) const PINNED_GROUPS: &[(&str, &str, &[&str])] = &[
+    // 1601EQ item 32: refund / TCC / carried over.
+    ("1601EQ", "frm1601EQ:if", &[
+        "frm1601EQ:ifRefund",
+        "frm1601EQ:ifIssueCert",
+        "frm1601EQ:ifCarriedOver",
+    ]),
+    // 1700 (the page is the 2018 screen; the rules inventory is 1700-v2013's).
+    ("1700", "frm1700:rdoPg1I12ForeignTaxCredits", &[
+        "frm1700:rdoPg1I12ForeignTaxCreditsNo",
+        "frm1700:rdoPg1I12ForeignTaxCreditsYes",
+    ]),
+    ("1700", "frm1700:rdoPg1I15CivilStatus", &[
+        "frm1700:rdoPg1I15CivilStatusLS",
+        "frm1700:rdoPg1I15CivilStatusM",
+        "frm1700:rdoPg1I15CivilStatusS",
+        "frm1700:rdoPg1I15CivilStatusW",
+    ]),
+    ("1700", "frm1700:rdoPg1I16SpouseHasIncome", &[
+        "frm1700:rdoPg1I16SpouseHasIncomeN",
+        "frm1700:rdoPg1I16SpouseHasIncomeY",
+    ]),
+    ("1700", "frm1700:rdoPg1I20SpouseTaxpayerType", &[
+        "frm1700:rdoPg1I20SpouseTaxpayerTypeE",
+        "frm1700:rdoPg1I20SpouseTaxpayerTypeN",
+    ]),
+    ("1700", "frm1700:rdoPg1I24SpouseForeignTaxCredits", &[
+        "frm1700:rdoPg1I24SpouseForeignTaxCreditsNo",
+        "frm1700:rdoPg1I24SpouseForeignTaxCreditsYes",
+    ]),
+    ("1700", "frm1700:rdoPg1I2Amended", &[
+        "frm1700:rdoPg1I2AmendedNo",
+        "frm1700:rdoPg1I2AmendedYes",
+    ]),
+    ("1700", "frm1700:rdoPg1I6TaxpayerType", &[
+        "frm1700:rdoPg1I6TaxpayerTypeE",
+        "frm1700:rdoPg1I6TaxpayerTypeN",
+    ]),
+    ("1700", "frm1700:rdoPg2I1PartVIEmployee", &[
+        "frm1700:rdoPg2I1PartVIEmployeeS",
+        "frm1700:rdoPg2I1PartVIEmployeeT",
+    ]),
+    // Item 17's Joint/Separate answer one field; the Schedule 1 row 2
+    // Spouse box is the host's own and not in it.
+    ("1700", "path:/filing_status", &[
+        "frm1700:rdoPg1I17FilingStatusJ",
+        "frm1700:rdoPg1I17FilingStatusS",
+    ]),
+    // 1701 items 6 and Part IV item 3, drawn as tick boxes of one name.
+    ("1701", "frm1701:rdoPg1I6TaxpayerType", &[
+        "frm1701:rdoPg1I6TaxpayerTypeS",
+        "frm1701:rdoPg1I6TaxpayerTypeP",
+        "frm1701:rdoPg1I6TaxpayerTypeE",
+        "frm1701:rdoPg1I6TaxpayerTypeT",
+    ]),
+    ("1701", "frm1701:rdoPg2I3SpouseType", &[
+        "frm1701:rdoPg2I3SpouseTypeS",
+        "frm1701:rdoPg2I3SpouseTypeP",
+    ]),
+    // 1701MS (no inventory): the definition's radio groups as the sheet
+    // shows them — item 5, the taxpayer's and spouse's 11 and 12, the two
+    // item 17 pairs.
+    ("1701MS", "frm1701MS:txtAmended", &[
+        "frm1701MS:txtAmendedYesNo2",
+        "frm1701MS:txtAmendedNoNo2",
+    ]),
+    ("1701MS", "frm1701MS:txtReturnPeriod", &[
+        "frm1701MS:txtReturnPeriodYesNo3",
+        "frm1701MS:txtReturnPeriodNoNo3",
+    ]),
+    ("1701MS", "frm1701MS:txtIfMarried", &[
+        "frm1701MS:txtIfMarriedJointlyNo5",
+        "frm1701MS:txtIfMarriedSeparatelyNo5",
+        "frm1701MS:txtIfMarriedNotApplicableNo5",
+    ]),
+    ("1701MS", "frm1701MS:txtTaxpayerNo11group", &[
+        "frm1701MS:txtTaxpayerNo11a",
+        "frm1701MS:txtTaxpayerNo11b",
+    ]),
+    ("1701MS", "frm1701MS:txtTaxpayerNo11", &[
+        "frm1701MS:txtTaxpayerNo11a1",
+        "frm1701MS:txtTaxpayerNo11b1",
+        "frm1701MS:txtTaxpayerNo11c1",
+        "frm1701MS:txtTaxpayerNo11d1",
+    ]),
+    ("1701MS", "frm1701MS:txtTaxpayerNo12", &[
+        "frm1701MS:txtTaxpayerNo12b1",
+        "frm1701MS:txtTaxpayerNo12c1",
+        "frm1701MS:txtTaxpayerNo12d1",
+        "frm1701MS:txtTaxpayerNo12e1",
+        "frm1701MS:txtTaxpayerNo12c",
+        "frm1701MS:txtTaxpayerNo12d",
+        "frm1701MS:txtTaxpayerNo12e",
+    ]),
+    ("1701MS", "frm1701MS:txtTaxpayerNo17", &[
+        "frm1701MS:txtTaxpayerNo17a",
+        "frm1701MS:txtTaxpayerNo17b",
+    ]),
+    ("1701MS", "frm1701MS:txtSpouseNo17", &[
+        "frm1701MS:txtSpouseNo17a",
+        "frm1701MS:txtSpouseNo17b",
+    ]),
+    // 1701Q (no inventory): the definition's radio groups as the sheet
+    // shows them.
+    ("1701Q", "frm1701q:AmendedRtn", &[
+        "frm1701q:AmendedRtn_1",
+        "frm1701q:AmendedRtn_2",
+    ]),
+    ("1701Q", "frm1701q:optType", &[
+        "frm1701q:optType_1",
+        "frm1701q:optType_2",
+        "frm1701q:optType_3",
+        "frm1701q:optType_4",
+    ]),
+    ("1701Q", "frm1701q:optATC", &[
+        "frm1701q:optATC_1",
+        "frm1701q:optATC_2",
+        "frm1701q:optATC_3",
+        "frm1701q:optATC_4",
+        "frm1701q:optATC_5",
+        "frm1701q:optATC_6",
+    ]),
+    ("1701Q", "frm1701q:optForeignTaxCredits", &[
+        "frm1701q:optForeignTaxCredits_1",
+        "frm1701q:optForeignTaxCredits_2",
+    ]),
+    ("1701Q", "frm1701q:optTaxRate", &[
+        "frm1701q:optTaxRate_1",
+        "frm1701q:optTaxRate_2",
+    ]),
+    ("1701Q", "frm1701q:optMethodOfDeduction", &[
+        "frm1701q:optMethodOfDeduction:_1",
+        "frm1701q:optMethodOfDeduction:_2",
+    ]),
+    ("1701Q", "frm1701q:optSpouseType", &[
+        "frm1701q:optSpouseType_1",
+        "frm1701q:optSpouseType_2",
+        "frm1701q:optSpouseType_3",
+    ]),
+    ("1701Q", "frm1701q:optSpouseATC", &[
+        "frm1701q:optSpouseATC_1",
+        "frm1701q:optSpouseATC_2",
+        "frm1701q:optSpouseATC_3",
+        "frm1701q:optSpouseATC_4",
+        "frm1701q:optSpouseATC_5",
+        "frm1701q:optSpouseATC_6",
+        "frm1701q:optSpouseATC_7",
+    ]),
+    ("1701Q", "frm1701q:optSpouseForeignTaxCred", &[
+        "frm1701q:optSpouseForeignTaxCred_1",
+        "frm1701q:optSpouseForeignTaxCred_2",
+    ]),
+    ("1701Q", "frm1701q:optSpouseTaxRate", &[
+        "frm1701q:optSpouseTaxRate_1",
+        "frm1701q:optSpouseTaxRate_2",
+    ]),
+    ("1701Q", "frm1701q:optSpouseMethod", &[
+        "frm1701q:optSpouseMethod:_1",
+        "frm1701q:optSpouseMethod:_2",
+    ]),
+    // 1702Q (the app's keys are not the inventory revision's).
+    ("1702Q", "frm1702q:rbATC", &["frm1702q:rbATC_2", "frm1702q:rbATC_1"]),
+    ("1702Q", "frm1702q:rbAmendedRtn", &[
+        "frm1702q:rbAmendedRtn_1",
+        "frm1702q:rbAmendedRtn_2",
+    ]),
+    ("1702Q", "frm1702q:rbForClndrFscl", &[
+        "frm1702q:rbForClndrFscl_1",
+        "frm1702q:rbForClndrFscl_2",
+    ]),
+    ("1702Q", "frm1702q:rbMthdOfDdctns", &[
+        "frm1702q:rbMthdOfDdctns_1",
+        "frm1702q:rbMthdOfDdctns_2",
+    ]),
+    ("1702Q", "frm1702q:rbTxRlf", &[
+        "frm1702q:rbTxRlf_1",
+        "frm1702q:rbTxRlf_2",
+    ]),
+    // 1702RT item 13's two radios answer one field.
+    ("1702RT", "path:/deduction_method", &[
+        "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+        "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+    ]),
+];
+
 /// Whether this app can fill `key`: a user box with a binding, or one the
 /// host writes itself.
 pub(super) fn fillable(kind: AgentFormKind, key: &str) -> bool {
@@ -215,14 +405,29 @@ pub(super) fn definition_groups(kind: AgentFormKind) -> BTreeMap<String, Vec<Str
     groups
 }
 
+/// The [`PINNED_GROUPS`] rows of one form, group -> members.
+fn pinned_groups(code: &str) -> BTreeMap<String, Vec<String>> {
+    PINNED_GROUPS
+        .iter()
+        .filter(|(form, ..)| *form == code)
+        .map(|(_, id, members)| {
+            (
+                id.to_string(),
+                members.iter().map(|m| m.to_string()).collect(),
+            )
+        })
+        .collect()
+}
+
 /// The one-answer groups this PR expects of a form: its official name
 /// groups over the boxes this app can fill, with [`JOINED`], then the
-/// [`HOST_ONLY`] groups over what is left; the definition's for a form in
-/// [`NO_INVENTORY`].
+/// pinned host-kept rest — [`PINNED_GROUPS`], written out against the
+/// printed sheet (review F4) rather than re-derived: the whole set for a
+/// form in [`NO_INVENTORY`], each [`HOST_ONLY`] id's members otherwise.
 pub(super) fn expected_groups(kind: AgentFormKind) -> BTreeMap<String, Vec<String>> {
     let code = kind.form_code();
     let Some(official) = official_name_groups(kind) else {
-        return definition_groups(kind);
+        return pinned_groups(code);
     };
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (name, ids) in official {
@@ -240,7 +445,7 @@ pub(super) fn expected_groups(kind: AgentFormKind) -> BTreeMap<String, Vec<Strin
         }
     }
     let claimed: BTreeSet<String> = out.values().flatten().cloned().collect();
-    for (group, members) in definition_groups(kind) {
+    for (group, members) in pinned_groups(code) {
         if !HOST_ONLY
             .iter()
             .any(|(form, id, _)| *form == code && *id == group)

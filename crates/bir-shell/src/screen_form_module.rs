@@ -455,8 +455,13 @@ fn mark_radio_groups(form: &mut Value, code: &str) {
         .flat_map(|part| part["items"].as_array_mut().into_iter().flatten())
         .flat_map(|item| item["f"].as_array_mut().into_iter().flatten());
     for field in fields {
-        if let Some((_, members)) = field["k"].as_str().and_then(|key| groups.get(key)) {
+        if let Some((group, members)) = field["k"].as_str().and_then(|key| groups.get(key)) {
             field["rg"] = Value::from(*members);
+            // The group's own id too, so the page sends a pick's "false"
+            // only to members of the same host group (review F1): an item
+            // can draw boxes of other groups beside it (1701MS's item 11
+            // draws the taxpayer's and the spouse's).
+            field["grp"] = Value::String(group.clone());
         }
     }
 }
@@ -4033,7 +4038,28 @@ fn apply_screen_edits(
     // A one-date box's parts are judged whole, as the page reads a date
     // (PR 9's forms, rows_as_needed.rs).
     let date_refusals = rows_as_needed::refuse_dates(kind, &shown, &edits);
-    for (key, step) in plan_choice_edits(kind, draft, &shown, edits) {
+    let planned = plan_choice_edits(kind, draft, &shown, edits);
+    // The draft paths this batch's picks write — a member's pick, a group
+    // box's option, a filer-type step. The value a choice box was sent, as
+    // its binding spells it ("true"/"false"/an option value).
+    let sent_option = |value: &Value| -> String {
+        value
+            .as_str()
+            .map(str::to_string)
+            .or_else(|| value.as_bool().map(|b| b.to_string()))
+            .unwrap_or_default()
+    };
+    let picked_paths: BTreeSet<String> = planned
+        .iter()
+        .flat_map(|(key, step)| match step {
+            ChoiceStep::Fill(value) if !is_unticked(value) => {
+                option_paths(def, key, &sent_option(value))
+            }
+            ChoiceStep::Set(sets) => sets.iter().map(|(path, _)| path.clone()).collect(),
+            _ => Vec::new(),
+        })
+        .collect();
+    for (key, step) in planned {
         if let Some(why) = date_refusals.get(&key) {
             rejected.insert(key.clone(), why.clone());
             continue;
@@ -4078,6 +4104,34 @@ fn apply_screen_edits(
             .and_then(|value| rows_annual_individual::closed_refusal(kind, draft, &key, value))
         {
             rejected.insert(key.clone(), json!(why));
+            continue;
+        }
+        // A "false" that writes a path this batch's picks write is a pick's
+        // sibling noise — on some forms a member's "false" is another
+        // answer (1701MS's Profession false is Mixed) — never the pick's
+        // undo. Dropped as silently as the group siblings
+        // plan_choice_edits drops (review F1). Only the sibling's own
+        // "false" is noise: "" is a blank the refused-arm judges, and "0"
+        // is a real option (1606's treaty list), neither a pick's undo.
+        if let ChoiceStep::Fill(value) = &step
+            && (value.as_str() == Some("false") || value.as_bool() == Some(false))
+            && option_paths(def, &key, &sent_option(value))
+                .iter()
+                .any(|path| picked_paths.contains(path))
+        {
+            continue;
+        }
+        // A SHOWN_WIDER box the page showed ticked while the draft holds a
+        // wider answer than its tick writes: the tick is a re-ask of the
+        // shown answer, so it writes nothing unless the draft — as this
+        // batch has left it — already holds the tick (review F3, judged
+        // when the step runs as decision P4-18's unticks are).
+        if let ChoiceStep::Fill(value) = &step
+            && !is_unticked(value)
+            && shown_wider(kind, &key)
+            && shown.get(&key).and_then(Value::as_str) == Some("true")
+            && !holds_tick(def, draft, &key)
+        {
             continue;
         }
         let mut next = draft.clone();
@@ -4293,16 +4347,22 @@ fn is_unticked(value: &Value) -> bool {
     }
 }
 
-/// Paths a choice box's `"true"` option writes.
-fn true_option_paths(def: &AgentFormDef, key: &str) -> Vec<String> {
+/// Paths a choice box's `value` option writes (`"false"` for a sibling
+/// untick, `"true"` for its pick, the option values of a group box).
+fn option_paths(def: &AgentFormDef, key: &str, value: &str) -> Vec<String> {
     match def.bindings.get(key).map(|bound| &bound.binding) {
         Some(Binding::Choice { options }) => options
             .iter()
-            .filter(|option| option.value == "true")
+            .filter(|option| option.value == value)
             .flat_map(|option| option.set.keys().cloned())
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// Paths a choice box's `"true"` option writes.
+fn true_option_paths(def: &AgentFormDef, key: &str) -> Vec<String> {
+    option_paths(def, key, "true")
 }
 
 /// The unanswered variants an answer-list field may have, tried in this
@@ -4412,6 +4472,31 @@ pub(crate) const JOINED_RADIO_GROUPS: &[(&str, &str, &str, &str)] = &[(
      and 16 (PR 11; decision P4-16: unticking the manner leaves it unanswered); the official \
      page draws it as a tick box of its own name (chkPymntMannerOther)",
 )];
+
+/// Boxes the page shows ticked for a wider answer than their binding's
+/// tick writes: `(form, key)`. Only these — 1701's and 1701A's tax-rate
+/// pairs — may have a tick dropped: Graduated shows for every graduated
+/// ATC but its tick writes II013's (1701) and i_i012's (1701A), so a
+/// re-pick of the shown answer is a re-ask, not a move. Everywhere else a
+/// shown tick is exactly the binding's answer and its re-pick writes it
+/// again (review F3: the rule used to swallow the tick of any grouped box
+/// judged on the pre-batch draft).
+const SHOWN_WIDER: &[(&str, &str)] = &[
+    ("1701", "frm1701:rdoPg1I21TaxRateG"),
+    ("1701", "frm1701:rdoPg1I21TaxRateP"),
+    ("1701", "frm1701:rdoPg2I12TaxRateG"),
+    ("1701", "frm1701:rdoPg2I12TaxRateP"),
+    ("1701A", "frm1701A:optTaxRate_1"),
+    ("1701A", "frm1701A:optTaxRate_2"),
+    ("1701A", "frm1701A:optSpouseTaxRate_1"),
+    ("1701A", "frm1701A:optSpouseTaxRate_2"),
+];
+
+fn shown_wider(kind: AgentFormKind, key: &str) -> bool {
+    SHOWN_WIDER
+        .iter()
+        .any(|(form, pinned)| *form == kind.form_code() && *pinned == key)
+}
 
 /// Each one-answer box's (group id, member count).
 ///
@@ -4524,11 +4609,14 @@ fn derived_groups(kind: AgentFormKind) -> BTreeMap<String, (String, usize)> {
 /// "other" answer. So:
 /// - a group with a ticked member in the batch ignores its unticked members;
 /// - unticking a member that is not ticked does nothing;
-/// - ticking a member the page already shows ticked writes nothing when its
-///   tick would write another answer than the draft holds: the box shows a
-///   wider answer than its binding writes (1701's Graduated shows for every
-///   graduated ATC but its tick writes II013), so a pair's re-pick must not
-///   move the answer;
+/// - a sibling "false" beside a batch's pick never overwrites the pick
+///   (judged when the step runs, `apply_screen_edits`);
+/// - ticking a [`SHOWN_WIDER`] box the page already shows ticked writes
+///   nothing when its tick would write another answer than the draft, as the
+///   batch has left it, holds: the box shows a wider answer than its binding
+///   writes (1701's Graduated shows for every graduated ATC but its tick
+///   writes II013), so a pair's re-pick must not move the answer — judged
+///   when the step runs, in `apply_screen_edits`;
 /// - unticking the ticked member of a group of three or more leaves the
 ///   item unanswered where its field can say so, and otherwise keeps the
 ///   answer (`untick_blanks`); a yes/no pair keeps its official flip.
@@ -4665,10 +4753,6 @@ fn plan_choice_edits(
                     plain.push((key, ChoiceStep::Fill(value)));
                 }
             }
-            Some(_)
-                if shown.get(&key).and_then(Value::as_str) == Some("true")
-                    && !true_option_paths(def, &key).is_empty()
-                    && !holds_tick(def, draft, &key) => {}
             Some(_) => plain.push((key, ChoiceStep::Fill(value))),
             None => plain.push((key, ChoiceStep::Fill(value))),
         }

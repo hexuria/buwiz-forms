@@ -91,9 +91,11 @@ await mod.evaluate();
 const { FormPageActions, renderFormPage } = mod.namespace;
 
 let hostValues = {};
+let hostOpen = {};
 const opened = () => ({
   draft: { id: 7 }, status: "Draft", editable: true, values: { ...hostValues }, options: {}, locks: {},
   waits: {}, profile: [], profile_edit: [], sample: false, blank: [], needs: {}, off: {}, penalties: [], pools: {}, errors: [],
+  ...hostOpen,
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
@@ -108,8 +110,10 @@ const app = {
       if (name === "screen_form_open") return Promise.resolve(opened());
       if (name === "screen_form_fill") {
         const values = { ...(args[1].values || hostValues), ...args[2] };
+        hostValues = values;
         return { draft: { id: 7, values }, values: { ...values }, options: {}, rejected: {}, penalties: [], pools: {}, removes: null };
       }
+      if (name === "screen_form_sample_period") return Promise.resolve({ complete: false, existing: null });
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...(args[1].values || hostValues) }, options: {}, errors: [], off: {}, penalties: [], pools: {} });
       if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
       throw Error(name);
@@ -123,9 +127,10 @@ async function settle() { while (tasks.length) await Promise.all(tasks.splice(0)
 function frame() { owner = null; texts.length = 0; ids.clear(); opacity.clear(); clicks.clear(); checkboxes.clear(); for (const e of entities) e.dirty = true; renderFormPage(cx, app, 1056); }
 const fills = () => calls.filter((c) => c[0] === "screen_form_fill");
 const lastEdits = () => JSON.stringify(fills().at(-1)[3]);
-async function openWith(form, values) {
+async function openWith(form, values, extra = {}) {
   code = form;
   hostValues = values;
+  hostOpen = extra;
   ui.open({ code: form, tin: "12345678800000", year: 2026, period: 0 }, cx);
   await settle();
   ui.state.openParts = new Set([0]);
@@ -169,10 +174,48 @@ console.log("PASS 2200S manner of payment: item 17's tick box unticks.");
 
 // ---- 1701's tax rate is a pair: re-picking the ticked one sends it
 // again with the other "false", never an untick (the ATC stays: the host's
-// own test, pr14_tax_rate_pairs_keep_the_atc).
+// own test, pr14_tax_rate_pairs_keep_the_atc). Both members, and picking
+// the unticked one unticks only the pair's other member.
 await openWith("1701", { "frm1701:rdoPg1I21TaxRateG": "true" });
 assert.deepEqual(reclick("frm1701:rdoPg1I21TaxRateG"), { "frm1701:rdoPg1I21TaxRateG": "true", "frm1701:rdoPg1I21TaxRateP": "false" }, "a pair's answer given again runs again");
+await openWith("1701", { "frm1701:rdoPg1I21TaxRateP": "true" });
+assert.deepEqual(reclick("frm1701:rdoPg1I21TaxRateP"), { "frm1701:rdoPg1I21TaxRateP": "true", "frm1701:rdoPg1I21TaxRateG": "false" }, "the P member given again runs again");
+await openWith("1701", { "frm1701:rdoPg1I21TaxRateG": "true" });
+assert.deepEqual(reclick("frm1701:rdoPg1I21TaxRateP"), { "frm1701:rdoPg1I21TaxRateP": "true", "frm1701:rdoPg1I21TaxRateG": "false" }, "picking P unticks only G");
 console.log("PASS 1701 tax rate: a two-member pair keeps its re-pick.");
+
+// ---- 1701's spouse tax-rate pair (item 12) behaves the same.
+await openWith("1701", { "frm1701:rdoPg2I12TaxRateG": "true" });
+assert.deepEqual(reclick("frm1701:rdoPg2I12TaxRateG"), { "frm1701:rdoPg2I12TaxRateG": "true", "frm1701:rdoPg2I12TaxRateP": "false" }, "the spouse's answer given again runs again");
+await openWith("1701", { "frm1701:rdoPg2I12TaxRateP": "true" });
+assert.deepEqual(reclick("frm1701:rdoPg2I12TaxRateP"), { "frm1701:rdoPg2I12TaxRateP": "true", "frm1701:rdoPg2I12TaxRateG": "false" }, "the spouse's P given again runs again");
+console.log("PASS 1701 spouse tax rate: the pair keeps its re-pick.");
+
+// ---- 1701A's tax-rate pairs, taxpayer and spouse.
+for (const [key, other] of [
+  ["frm1701A:optTaxRate_1", "frm1701A:optTaxRate_2"],
+  ["frm1701A:optTaxRate_2", "frm1701A:optTaxRate_1"],
+  ["frm1701A:optSpouseTaxRate_1", "frm1701A:optSpouseTaxRate_2"],
+  ["frm1701A:optSpouseTaxRate_2", "frm1701A:optSpouseTaxRate_1"],
+]) {
+  await openWith("1701A", { [key]: "true" });
+  assert.deepEqual(reclick(key), { [key]: "true", [other]: "false" }, `${key}: the pair's answer given again runs again`);
+}
+console.log("PASS 1701A tax rates: the taxpayer and spouse pairs keep their re-picks.");
+
+// ---- 1701MS item 11 draws three affiliations in one item — the
+// taxpayer's a/b pair (one group), the ungrouped c, and the spouse's
+// a1..d1 (another group). A pick unticks only its own group's members
+// (review F1): a sends "false" for b only, never c or a1..d1; a1 sends
+// "false" for b1..d1 only.
+await openWith("1701MS", { "frm1701MS:txtTaxpayerNo11b": "true", "frm1701MS:txtTaxpayerNo11c": "true", "frm1701MS:txtTaxpayerNo11a1": "true" });
+assert.deepEqual(reclick("frm1701MS:txtTaxpayerNo11a"), { "frm1701MS:txtTaxpayerNo11a": "true", "frm1701MS:txtTaxpayerNo11b": "false" }, "a unticks only b, its own group");
+await openWith("1701MS", { "frm1701MS:txtTaxpayerNo11a": "true", "frm1701MS:txtTaxpayerNo11c": "true", "frm1701MS:txtTaxpayerNo11b1": "true" });
+assert.deepEqual(reclick("frm1701MS:txtTaxpayerNo11a1"), { "frm1701MS:txtTaxpayerNo11a1": "true", "frm1701MS:txtTaxpayerNo11b1": "false", "frm1701MS:txtTaxpayerNo11c1": "false", "frm1701MS:txtTaxpayerNo11d1": "false" }, "a1 unticks only b1..d1, its own group");
+// Item 12: the ungrouped b is not a sibling of the group of seven.
+await openWith("1701MS", { "frm1701MS:txtTaxpayerNo12b": "true" });
+assert.deepEqual(reclick("frm1701MS:txtTaxpayerNo12c"), { "frm1701MS:txtTaxpayerNo12c": "true", "frm1701MS:txtTaxpayerNo12d": "false", "frm1701MS:txtTaxpayerNo12e": "false", "frm1701MS:txtTaxpayerNo12b1": "false", "frm1701MS:txtTaxpayerNo12c1": "false", "frm1701MS:txtTaxpayerNo12d1": "false", "frm1701MS:txtTaxpayerNo12e1": "false" }, "c unticks its group, never the ungrouped b");
+console.log("PASS 1701MS 11 and 12: a pick unticks only its own group's members.");
 
 // ---- 1701MS's 11c and 12b are in no group: re-clicking them sends nothing.
 for (const key of ["frm1701MS:txtTaxpayerNo11c", "frm1701MS:txtTaxpayerNo12b"]) {
@@ -180,3 +223,15 @@ for (const key of ["frm1701MS:txtTaxpayerNo11c", "frm1701MS:txtTaxpayerNo12b"]) 
   assert.equal(reclick(key), null, `${key}: re-clicked, nothing is sent and the answer stays`);
 }
 console.log("PASS 1701MS 11c and 12b: a ticked radio of no group stays as it is.");
+
+// ---- 0605's quarters are period parts of a sample whose period is set:
+// re-clicking the ticked one asks nothing and sends nothing (review F2).
+{
+  const parts = ["itemQuarter_1", "itemQuarter_2", "itemQuarter_3", "itemQuarter_4"].map((key) => ({ key, part: "quarter" }));
+  await openWith("0605", { itemQuarter_1: "true" }, { sample: true, period_set: true, period_parts: parts });
+  const before = calls.length;
+  assert.equal(reclick("itemQuarter_1"), null, "re-clicking the quarter sends no fill");
+  assert.equal(calls.length, before, "re-clicking the quarter asks the host nothing");
+  assert.equal(ui.state.periodComplete, true, "the sample's set period stays set");
+  console.log("PASS 0605 quarters: re-clicking the ticked quarter is a no-op.");
+}

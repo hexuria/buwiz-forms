@@ -675,6 +675,77 @@ const CHOICE_OPTION_SETS: &[(&str, &str, &str, &str, &str, &str)] = &[
         "yes_unspecified",
         "1706 item 11 No unticked is Yes: Form1706TaxRelief::YesUnspecified",
     ),
+    // PR 14 (review F9): 2200S item 17 Other Similar Schemes is a kind of
+    // prepayment — its text is kept only "with item 17 ticked on a
+    // prepayment" and `compute` clears `other_scheme` unless the manner is
+    // a prepayment, so the pick sets both (the boolean half is in
+    // CHOICE_OPTION_BOOL_SETS).
+    (
+        "2200S",
+        "frm2200S:chkPymntManner",
+        "3",
+        "/manner",
+        "prepayment",
+        "2200S item 17 Other Similar Schemes: a kind of prepayment (its text needs item 16 = Prepayment and item 17)",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_3",
+        "true",
+        "/manner",
+        "prepayment",
+        "2200S item 17 Other Similar Schemes: a kind of prepayment (its text needs item 16 = Prepayment and item 17)",
+    ),
+];
+
+/// Choices whose option also sets a boolean draft field, with evidence:
+/// `(form code, key, option value, path, set, evidence)`. Scoped by form
+/// and key like [`CHOICE_OPTION_SETS`], which carries strings; these sets
+/// are booleans.
+///
+/// PR 14 (review F9): 2200S's items 15, 16 and 17 are one three-member
+/// official payment-manner group — item 17 Other Similar Schemes is a
+/// kind of prepayment (its text is kept only "with item 17 ticked on a
+/// prepayment", and `compute` clears `other_scheme` unless the manner is
+/// a prepayment). The probe ties each member to the one path its field
+/// map write moves, so picking item 17 beside item 15 could file Actual
+/// Removal with `other_scheme` — a pair the form cannot hold — and
+/// picking item 15 or 16 left a stale `other_scheme` tick. Each manner
+/// pick now states both paths: 15/16 clear `other_scheme`, 17 picks a
+/// prepayment with `other_scheme`.
+const CHOICE_OPTION_BOOL_SETS: &[(&str, &str, &str, &str, bool, &str)] = &[
+    (
+        "2200S",
+        "frm2200S:chkPymntManner",
+        "1",
+        "/other_scheme",
+        false,
+        "2200S item 15 Actual Removal: form_2200s.rs `compute` clears other_scheme unless manner is a prepayment",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner",
+        "2",
+        "/other_scheme",
+        false,
+        "2200S item 16 Prepayment: prepayment alone is not Other Similar Schemes (item 17)",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_1",
+        "true",
+        "/other_scheme",
+        false,
+        "2200S item 15 Actual Removal: form_2200s.rs `compute` clears other_scheme unless manner is a prepayment",
+    ),
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_2",
+        "true",
+        "/other_scheme",
+        false,
+        "2200S item 16 Prepayment: prepayment alone is not Other Similar Schemes (item 17)",
+    ),
 ];
 
 /// Choices whose options may set only draft fields under a prefix, with
@@ -695,22 +766,28 @@ const CHOICE_PATHS_WITHIN: &[(&str, &str, &str, &str)] = &[(
 
 #[cfg(test)]
 mod choice_list_tests {
-    use super::{CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
+    use super::{CHOICE_OPTION_BOOL_SETS, CHOICE_OPTION_SETS, CHOICE_PATHS_WITHIN};
 
     /// Every scoped entry names a reviewed form (1701MS, PR 7; 1606 and
-    /// 1706, PR 9) and a key that form's pin binds, so no other form's
-    /// same-named box is touched.
+    /// 1706, PR 9; 2200S, PR 14) and a key that form's pin binds, so no
+    /// other form's same-named box is touched.
     #[test]
     fn choice_overrides_are_scoped_to_their_form() {
         let pin = |form: &str| match form {
             "1701MS" => include_str!("../../../data/agent-forms/1701ms-v2024.json"),
             "1606" => include_str!("../../../data/agent-forms/1606-v2018.json"),
             "1706" => include_str!("../../../data/agent-forms/1706-v2018.json"),
+            "2200S" => include_str!("../../../data/agent-forms/2200s-v2018.json"),
             other => panic!("{other} is not a reviewed form"),
         };
         let keys = CHOICE_OPTION_SETS
             .iter()
             .map(|(form, key, ..)| (*form, *key))
+            .chain(
+                CHOICE_OPTION_BOOL_SETS
+                    .iter()
+                    .map(|(form, key, ..)| (*form, *key)),
+            )
             .chain(
                 CHOICE_PATHS_WITHIN
                     .iter()
@@ -2429,6 +2506,14 @@ fn decide_probed(
                 option
                     .set
                     .insert((*path).to_string(), Value::String((*set).to_string()));
+            }
+        }
+        for (_, _, value, path, set, _) in CHOICE_OPTION_BOOL_SETS
+            .iter()
+            .filter(|(form, k, ..)| ours(form, k))
+        {
+            if let Some(option) = options.iter_mut().find(|option| option.value == *value) {
+                option.set.insert((*path).to_string(), Value::Bool(*set));
             }
         }
         for (_, _, prefix, _) in CHOICE_PATHS_WITHIN

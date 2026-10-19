@@ -28,6 +28,12 @@ const KEPT: &[(&str, &str, &str, &str)] = &[
         "KeptNoBlank",
         "the quarter picks the return: the untick is refused as an identity box",
     ),
+    (
+        "2200S",
+        "/other_scheme",
+        "KeptNoBlank",
+        "item 17's own answer: ticking 15 or 16 clears it to null, so the pick's untick has no answer to blank (review F9)",
+    ),
 ];
 
 /// Official name groups with fewer than two boxes this app can fill:
@@ -608,6 +614,157 @@ fn pr14_a_filed_2552_refuses_the_untick_like_any_edit() {
     assert_eq!(untick["draft"]["transaction"], "local_stock_exchange");
 }
 
+/// Review F1: 1701MS's item 11 draws the taxpayer's a/b pair and the
+/// spouse's a1..d1 in one row, and a "false" there is a different answer
+/// (`txtTaxpayerNo11c`'s writes Mixed), never a pick's undo. A batch
+/// shaped like the page's pick — the member "true", a "false" for each
+/// member of its own group only — leaves the other column's answer
+/// untouched, and a "false" that would write a path the pick writes is
+/// dropped as sibling noise.
+#[test]
+fn pr14_a_sibling_false_never_overwrites_a_picks_answer() {
+    setup();
+    let prerequisites = [
+        json!({"frm1701MS:civilStatus": "Married"}),
+        json!({"frm1701MS:txtIfMarriedJointlyNo5": "true"}),
+        // The taxpayer's column already answered: Profession.
+        json!({"frm1701MS:txtTaxpayerNo11c": "true"}),
+    ];
+    let mut draft = open("1701MS", 0)["draft"].clone();
+    for edits in prerequisites {
+        draft = fill("1701MS", &draft, edits)["draft"].clone();
+    }
+    assert_eq!(draft["taxpayer"]["source"], "profession");
+    // The page's pick of the spouse's a1: "false" for b1..d1 only.
+    let batch = fill(
+        "1701MS",
+        &draft,
+        json!({
+            "frm1701MS:txtTaxpayerNo11a1": "true",
+            "frm1701MS:txtTaxpayerNo11b1": "false",
+            "frm1701MS:txtTaxpayerNo11c1": "false",
+            "frm1701MS:txtTaxpayerNo11d1": "false",
+        }),
+    );
+    assert_eq!(batch["rejected"], json!({}));
+    assert_eq!(batch["draft"]["spouse"]["source"], "business");
+    // The other column's answer — and the ungrouped c's — stay.
+    assert_eq!(batch["draft"]["taxpayer"]["source"], "profession");
+    // A "false" that writes the pick's own path is noise, dropped even
+    // sent this way: c's "false" is Mixed, not the pick's undo.
+    let batch = fill(
+        "1701MS",
+        &draft,
+        json!({
+            "frm1701MS:txtTaxpayerNo11a": "true",
+            "frm1701MS:txtTaxpayerNo11c": "false",
+        }),
+    );
+    assert_eq!(batch["draft"]["taxpayer"]["source"], "business");
+    // Sent alone it is still the different answer it means.
+    let alone = fill(
+        "1701MS",
+        &batch["draft"],
+        json!({"frm1701MS:txtTaxpayerNo11c": "false"}),
+    );
+    assert_eq!(alone["draft"]["taxpayer"]["source"], "mixed");
+}
+
+/// Review F3: a shown-wider re-pick writes nothing only where the list
+/// says — 1701's and 1701A's tax-rate pairs — and is judged when the step
+/// runs, on the draft the batch has left, never on the pre-batch draft.
+#[test]
+fn pr14_a_shown_wider_repick_is_judged_when_the_step_runs() {
+    setup();
+    // II014 is a graduated ATC: the page shows G ticked for it (the tax
+    // rate it derives is Graduated), but the tick writes II013's — a
+    // re-pick of the shown answer is a re-ask, not a move.
+    let draft = fill(
+        "1701",
+        &open("1701", 0)["draft"],
+        json!({"frm1701:rdoPg1I7ATC_II014": "true"}),
+    )["draft"]
+        .clone();
+    assert_eq!(draft["atc"], "Ii014");
+    let reasked = fill("1701", &draft, json!({"frm1701:rdoPg1I21TaxRateG": "true"}));
+    assert_eq!(reasked["draft"]["atc"], "Ii014", "the re-ask writes nothing");
+    // An earlier step of the batch moves the answer off: the stale
+    // re-ask writes nothing either — judged on the draft as the batch
+    // left it, it would once have written II013's answer over the pick.
+    let moved = fill(
+        "1701",
+        &draft,
+        json!({
+            "frm1701:rdoPg1I7ATC_II015": "true",
+            "frm1701:rdoPg1I21TaxRateG": "true",
+        }),
+    );
+    assert_eq!(moved["draft"]["atc"], "Ii015", "the batch's pick stands");
+    // An earlier step that makes the tick hold lets the tick run.
+    let held = fill(
+        "1701",
+        &draft,
+        json!({
+            "frm1701:rdoPg1I7ATC_II013": "true",
+            "frm1701:rdoPg1I21TaxRateG": "true",
+        }),
+    );
+    assert_eq!(held["draft"]["atc"], "Ii013");
+}
+
+/// Review F9: 2200S's manner of payment is one answer — items 15 and 16
+/// (`/manner`) and item 17, Other Similar Schemes, a prepayment
+/// (`/manner` + `/other_scheme`). Picking item 17 writes prepayment and
+/// sets its scheme flag; picking 15 or 16 clears the flag, so the draft
+/// never holds Other beside another manner.
+#[test]
+fn pr14_2200s_item_17_clears_the_manner_and_the_manner_clears_it() {
+    setup();
+    let unlocked: Vec<String> = [
+        "frm2200S:chkPymntManner",
+        "frm2200S:chkPymntManner_1",
+        "frm2200S:chkPymntManner_2",
+        "frm2200S:chkPymntManner_3",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    let manner = |draft: &Value, edits: Value| {
+        try_fill("2200S", draft, edits, &unlocked)
+            .unwrap_or_else(|error| panic!("manner fills: {error}"))
+    };
+    let draft = open("2200S", 1)["draft"].clone();
+    let actual = manner(&draft, json!({"frm2200S:chkPymntManner_1": "true"}));
+    assert_eq!(actual["draft"]["manner"], "actual_removal", "{actual}");
+    let other = manner(
+        &actual["draft"],
+        json!({"frm2200S:chkPymntManner_3": "true"}),
+    );
+    assert_eq!(other["draft"]["other_scheme"], true, "{other}");
+    assert_eq!(
+        other["draft"]["manner"],
+        "prepayment",
+        "item 17 is a prepayment; Actual Removal is gone"
+    );
+    let prepayment = manner(
+        &other["draft"],
+        json!({"frm2200S:chkPymntManner_2": "true"}),
+    );
+    assert_eq!(prepayment["draft"]["manner"], "prepayment", "{prepayment}");
+    assert_eq!(
+        prepayment["draft"]["other_scheme"],
+        false,
+        "item 16 clears item 17"
+    );
+    // The group box's options are the same one answer.
+    let other = manner(
+        &prepayment["draft"],
+        json!({"frm2200S:chkPymntManner": "3"}),
+    );
+    assert_eq!(other["draft"]["other_scheme"], true);
+    assert_eq!(other["draft"]["manner"], "prepayment");
+}
+
 /// Review F9: every box of a one-answer group carries its group's size
 /// (`rg`) in the served schema, so the page unticks the ticked box of a
 /// group of three or more however the group is drawn. 2200S's manner of
@@ -983,18 +1140,29 @@ fn pr14_1601fq_popup_slots_never_write_the_category() {
 
 /// Review F9: the served schema's items the page test drives
 /// (tools/test_form_radio_untick.mjs), exported as the host serves them,
-/// `rg` included: 2200S's and 2200C's manner of payment, 1701's tax-rate
-/// pair and 1701MS's 11 and 12. Regenerate with UPDATE_PAGE_FIXTURES=1.
+/// `rg` and `grp` included: 2200S's and 2200C's manner of payment, 1701's
+/// tax-rate pairs (the taxpayer's and the spouse's), 1701A's, 1701MS's 11
+/// and 12 — one item mixing three group affiliations — and 0605's quarter
+/// period parts. Regenerate with UPDATE_PAGE_FIXTURES=1.
 #[test]
 fn pr14_radio_page_fixture_is_the_hosts() {
-    let wanted: [(&str, &[&str]); 4] = [
+    let wanted: [(&str, &[&str]); 7] = [
         ("2200S", &["frm2200S:chkPymntManner_1"]),
         ("2200C", &["frm2200C:rdoPg1Pt2MOPPaymentActual"]),
-        ("1701", &["frm1701:rdoPg1I21TaxRateG"]),
+        (
+            "1701",
+            &["frm1701:rdoPg1I21TaxRateG", "frm1701:rdoPg2I12TaxRateG"],
+        ),
+        (
+            "1701A",
+            &["frm1701A:optTaxRate_1", "frm1701A:optSpouseTaxRate_1"],
+        ),
         (
             "1701MS",
             &["frm1701MS:txtTaxpayerNo11c", "frm1701MS:txtTaxpayerNo12b"],
         ),
+        ("0605", &["itemQuarter_1"]),
+        ("2552", &["frm2552:rdoPg1I11TransactionLSE"]),
     ];
     let mut fixture = Map::new();
     for (code, keys) in wanted {
