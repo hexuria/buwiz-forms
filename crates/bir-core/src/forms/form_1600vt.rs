@@ -27,6 +27,7 @@
 //! 18 adds that total. Those rows sit after `hPartIITableSize` in the form, so
 //! the upload writes them there ([`Form1600VtDraft::official_layout`]).
 
+use super::kept_text::KeptText;
 use super::penalty_items::PenaltyItems;
 use super::penalty_items::PenaltyState;
 use std::collections::BTreeMap;
@@ -269,15 +270,25 @@ pub struct Form1600VtDraft {
     // Part I (profile)
     /// 14 digits: 9-digit TIN then the 5-digit branch code.
     pub tin: String,
-    pub rdo_code: String,
-    pub agent_name: String,
+    // Part I's text boxes may be missing from a draft an older shape
+    // stored (maintainer decision P2-4): it opens with the box blank, Check
+    // asks for it, and a save writes back no key it did not read
+    // ([`KeptText`]).
+    #[serde(default, skip_serializing_if = "KeptText::is_absent")]
+    pub rdo_code: KeptText,
+    #[serde(default, skip_serializing_if = "KeptText::is_absent")]
+    pub agent_name: KeptText,
     /// Item 8; the page splits it into two 80-character lines.
-    pub registered_address: String,
-    pub zip_code: String,
-    pub contact_number: String,
+    #[serde(default, skip_serializing_if = "KeptText::is_absent")]
+    pub registered_address: KeptText,
+    #[serde(default, skip_serializing_if = "KeptText::is_absent")]
+    pub zip_code: KeptText,
+    #[serde(default, skip_serializing_if = "KeptText::is_absent")]
+    pub contact_number: KeptText,
     #[serde(default)]
     pub agent_category: Option<Form1600VtAgentCategory>,
-    pub email: String,
+    #[serde(default, skip_serializing_if = "KeptText::is_absent")]
+    pub email: KeptText,
     #[serde(default)]
     pub tax_relief: bool,
     #[serde(default)]
@@ -391,6 +402,26 @@ fn split_address(address: &str) -> (String, String) {
 impl Form1600VtDraft {
     pub const FORM_CODE: &'static str = "1600VT";
 
+    /// Part I's text boxes as the desktop editor types them (name, address,
+    /// ZIP, contact number, email), written in place so each keeps the
+    /// presence it was read with ([`KeptText`]): a box the stored draft
+    /// lacked stays absent while it is blank, and files once it holds text
+    /// (P2-4: a save writes back no key it did not read).
+    pub fn set_typed_part_i(
+        &mut self,
+        name: String,
+        address: String,
+        zip: String,
+        contact: String,
+        email: String,
+    ) {
+        *self.agent_name = name;
+        *self.registered_address = address;
+        *self.zip_code = zip;
+        *self.contact_number = contact;
+        *self.email = email;
+    }
+
     pub fn new_from_profile(profile: &TaxpayerProfile, year: u16, month: u8) -> Self {
         let mut draft = Self {
             penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
@@ -401,13 +432,13 @@ impl Form1600VtDraft {
             taxes_withheld: false,
             number_of_attached_sheets: 0,
             tin: profile.tin.full(),
-            rdo_code: profile.rdo_code.clone(),
-            agent_name: profile.full_name.clone(),
-            registered_address: profile.registered_address.clone(),
-            zip_code: profile.zip_code.clone(),
-            contact_number: profile.phone.clone(),
+            rdo_code: profile.rdo_code.clone().into(),
+            agent_name: profile.full_name.clone().into(),
+            registered_address: profile.registered_address.clone().into(),
+            zip_code: profile.zip_code.clone().into(),
+            contact_number: profile.phone.clone().into(),
             agent_category: None,
-            email: profile.email.clone(),
+            email: profile.email.clone().into(),
             tax_relief: false,
             tax_relief_specify: String::new(),
             line_of_business: profile.line_of_business.clone(),

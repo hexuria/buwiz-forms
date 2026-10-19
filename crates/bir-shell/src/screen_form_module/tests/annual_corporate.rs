@@ -2999,6 +2999,31 @@ fn pr8_form_1702rt_column_c_mcit_rows_are_flagged() {
     assert!(!messages(&validate("1702RT", &cleared["draft"])).contains(&notice));
 }
 
+/// PR 12b review: the column C notice shows only on a Draft. A filed
+/// return could never clear it ("check it before you file"), and Check
+/// would count it.
+#[test]
+fn pr8_form_1702rt_column_c_notice_is_not_on_a_filed_return() {
+    let fixture = STORED_DRAFTS[0].1;
+    assert_eq!(fixture.matches("\"status\":\"Draft\"").count(), 1);
+    let notice = rows_annual_corporate::rt_column_c_notice(2);
+    for status in ["Queued", "Submitted", "Confirmed"] {
+        let filed = fixture.replace("\"status\":\"Draft\"", &format!("\"status\":\"{status}\""));
+        let id = store_fixture("1702RT", &filed);
+        raw_exec(
+            "UPDATE form_drafts SET status = ?1 WHERE id = ?2",
+            &[status, &id.to_string()],
+        );
+        let opened = open("1702RT", 0);
+        assert!(!messages(&opened).contains(&notice), "{status}");
+        assert!(
+            !messages(&validate("1702RT", &opened["draft"])).contains(&notice),
+            "{status}"
+        );
+        assert_eq!(raw_row(id).1, filed, "{status}");
+    }
+}
+
 /// Round 2 item 12 (D6): 1702EX's "(more...)" alerts number pop-up rows
 /// "17.2", "4.2", which the sheet does not print; they read the printed
 /// item (Schedule 1 item 17i, Schedule 2 item 4: html-frozen/1702ex-2018/

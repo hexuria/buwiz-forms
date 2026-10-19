@@ -485,12 +485,121 @@ fn fill_cell(
     }
 }
 
+/// The one-time note on a filed third-quarter 1701Q charged under the old
+/// deadline (maintainer decision D3, 2026-10-18). The app's deadline moves
+/// off a weekend or holiday (2025's was November 17).
+pub(crate) const Q3_DEADLINE_NOTE: &str = "The third-quarter 1701Q is now due November 15, or the next business day when that falls on a weekend or holiday; it was October 15. This return's penalties were counted from October 15: any charged for the days from October 16 to that due date may need checking.";
+
+/// Whether `draft` is a third-quarter 1701Q that left Draft (queued,
+/// submitted, confirmed or paid) with penalties the app charged under the
+/// October 15 deadline it resolved before PR 5. A column counts when it
+/// files a surcharge, interest or compromise and a stored due date says
+/// October of the taxable year: the engine's own input
+/// (`computed_penalties.inputs.due_date`), else the deadline the return
+/// kept (`penalty_due_date`). With no stored date it does not count: before
+/// PR 5 the 1701Q penalties were typed by the filer, not charged by the app.
+pub(super) fn q3_charged_under_october(kind: AgentFormKind, draft: &Value) -> bool {
+    use chrono::Datelike;
+    if !is_1701q(kind) {
+        return false;
+    }
+    let Ok(form) = typed(draft) else {
+        return false;
+    };
+    if form.quarter != 3 || form.lifecycle.is_editable() {
+        return false;
+    }
+    Form1701QDraft::penalty_declarations().iter().any(|items| {
+        let charged = items.filed(&form).iter().any(|amount| *amount != 0.0);
+        let state = (items.state)(&form);
+        let due = state
+            .computed_penalties
+            .as_ref()
+            .map(|computed| computed.inputs.due_date)
+            .or(state.penalty_due_date);
+        charged
+            && (items.applies)(&form)
+            && due
+                .is_some_and(|due| due.year() == i32::from(form.taxable_year) && due.month() == 10)
+    })
+}
+
+/// The settings key that records [`Q3_DEADLINE_NOTE`] was shown for the
+/// stored return `id`. App state, never the return: a filed return's bytes
+/// do not change.
+pub(super) fn q3_note_seen_key(id: i64) -> String {
+    format!("{NOTE_SEEN_PREFIX}1701q_q3_due_nov15:{id}")
+}
+
+/// The prefix of every one-time note's seen key: the only settings keys
+/// `screen_form_notes_seen` writes.
+pub(super) const NOTE_SEEN_PREFIX: &str = "notice_seen:";
+
+/// The one-time notes `draft` offers on opening, `{key, text}`:
+/// [`Q3_DEADLINE_NOTE`] for a filed third-quarter 1701Q charged under
+/// October 15 (D3), until it is recorded seen. Nothing is written here: the
+/// page records a note seen once it has drawn the opening it came with
+/// (`screen_form_notes_seen`, insert-if-absent), so an opening that fails
+/// before it is drawn offers it again. Two openings offered it before
+/// either recorded it both draw it; the one whose record call does not
+/// record it then takes it off, so it stays on one page. A note
+/// that cannot be read is left out; it never stops the return opening, and
+/// the filed amounts are never changed.
+pub(super) fn once_notes(
+    db: &bir_core::db::Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Vec<Value> {
+    let Some(id) = draft["id"].as_i64() else {
+        return Vec::new();
+    };
+    if !q3_charged_under_october(kind, draft) {
+        return Vec::new();
+    }
+    let key = q3_note_seen_key(id);
+    match db.get_setting(&key) {
+        Ok(None) => vec![json!({"key": key, "text": Q3_DEADLINE_NOTE})],
+        Ok(Some(_)) => Vec::new(),
+        Err(error) => {
+            tracing::warn!("1701Q: reading {key} failed: {error}");
+            Vec::new()
+        }
+    }
+}
+
+/// 1702Q's `resultOtherSpecify`: BIR's internal total of the Schedule 4
+/// other credits, not a box of the printed sheet.
+pub(crate) const INTERNAL_TOTAL: &str = "resultOtherSpecify";
+
+/// What 1702Q's upload carries for [`INTERNAL_TOTAL`] (maintainer decision
+/// D9, 2026-10-18: the page shows it, read-only, as BIR's internal value).
+/// This app never writes it, so the official layout's default 0.00 goes
+/// out, which is what BIR's own save writes
+/// (tests/sample-payloads/1702Q-2025Q2.official.xml: `resultOtherSpecify=
+/// 0.00` beside an other credit of 1,234.00). Read back from the official
+/// plaintext of the draft's field map, so the box shows exactly what files.
+fn internal_total(kind: AgentFormKind, draft: &Value) -> Option<String> {
+    use bir_core::official_xml;
+    let layout = official_xml::layout(bir_core::forms::form_1702q::FORM_1702Q_FORM_ID).ok()?;
+    let fields = agent::field_map(kind, draft).ok()?;
+    let plaintext = official_xml::write(layout, &fields).ok()?;
+    official_xml::read(layout, &plaintext)
+        .ok()?
+        .remove(INTERNAL_TOTAL)
+}
+
 /// What each page box of this module shows: the Civil Status answer, and
 /// item 17's TIN boxes as the draft holds the digits (the field map writes
 /// a box only once it is whole, so a box typed digit by digit would show
 /// nothing until then). Display only: the field map, upload and print are
 /// unchanged.
 pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<String, String>) {
+    if kind.form_code() == "1702Q" {
+        if let Some(value) = internal_total(kind, draft) {
+            map.insert(INTERNAL_TOTAL.to_string(), value);
+        }
+        return;
+    }
     if !is_1701q(kind) {
         return;
     }

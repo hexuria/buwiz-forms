@@ -676,6 +676,53 @@ fn pesos(amount: f64) -> String {
     format!("{}{grouped}.{cents:02}", if negative { "-" } else { "" })
 }
 
+/// 1600PT's and 1600VT's Part I text fields that a stored draft may lack
+/// (P2-4, `KeptText` in bir-core).
+pub(super) const KEPT_PART_I: [&str; 6] = [
+    "rdo_code",
+    "agent_name",
+    "registered_address",
+    "zip_code",
+    "contact_number",
+    "email",
+];
+
+/// Whether `kind` keeps a Part I field a stored draft lacks out while it is
+/// blank: 1600PT and 1600VT.
+pub(super) fn keeps_part_i(kind: AgentFormKind) -> bool {
+    matches!(kind.form_code(), "1600PT" | "1600VT")
+}
+
+/// The [`KEPT_PART_I`] fields `draft` lacks (none on other forms).
+pub(super) fn absent_part_i(kind: AgentFormKind, draft: &Value) -> Vec<&'static str> {
+    if !keeps_part_i(kind) {
+        return Vec::new();
+    }
+    KEPT_PART_I
+        .into_iter()
+        .filter(|field| draft.get(*field).is_none())
+        .collect()
+}
+
+/// After the page's edits: a field the draft lacked (`absent`) that the
+/// filer left blank (blank or spaces) is taken out again, so the page's fill,
+/// which writes the JSON key, keeps a missing box missing as the desktop
+/// editor does; a typed value stays.
+pub(super) fn keep_absent_blank(absent: &[&str], draft: &mut Value) {
+    let Some(object) = draft.as_object_mut() else {
+        return;
+    };
+    for field in absent {
+        if object
+            .get(*field)
+            .and_then(Value::as_str)
+            .is_some_and(|text| text.trim().is_empty())
+        {
+            object.remove(*field);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

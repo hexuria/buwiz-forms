@@ -44,6 +44,8 @@ const VALIDATE_DELAY = 300;
 const PERIOD_ASK_DELAY = 300;
 /** Debounce for live print-preview sync (ms after the last keystroke). */
 const LIVE_PREVIEW_DELAY = 120;
+/** How many times, 100 ms apart, a one-time note waits for its page to be drawn before it is left unrecorded (`recordNotesWhenShown`). */
+export const NOTE_CHECKS = 50;
 
 /**
  * A listed dropdown option as `{ value, label }`. The schema writes many
@@ -422,6 +424,8 @@ export class FormPageActions {
         s.chromeSnapshot = this.chromeSnapshot();
         acx.notify();
         if (then) then(null, acx);
+        // Once the page has drawn the opening, its one-time notes are seen.
+        this.recordNotesWhenShown(acx, token);
       } catch (e) {
         if (token !== this.token) return;
         this.state.loading = false;
@@ -471,6 +475,12 @@ export class FormPageActions {
     // A draft saved before it kept its profile baseline: its boxes that
     // differ from the profile now, never changed by opening it.
     s.profileDiffers = r.profile_differs || [];
+    // A note a stored return shows once (a filed third-quarter 1701Q
+    // charged under October 15). Shown now; recorded seen only once the
+    // page has drawn it (recordNotesWhenShown), so an opening that fails
+    // before then offers it again.
+    s.notes = (r.notes || []).map((n) => ({ key: n.key, text: n.text, recorded: false }));
+    s.notesRendered = false;
     s.saved = Boolean(r.draft && r.draft.id);
     // An untouched date whose message waits (the host's `quiet`: 1800's and
     // 1801's item 1 on a new return) says nothing until the filer edits it
@@ -483,6 +493,34 @@ export class FormPageActions {
   unquiet(keys) {
     const s = this.state;
     if (s?.quiet && (!keys || keys.some((k) => s.quiet.keys.includes(k)))) s.quiet = null;
+  }
+
+  /**
+   * Record the opening's one-time notes seen once the page has drawn them
+   * (`s.notesRendered`, set by the layout that draws them): it checks at
+   * once and then every 100 ms, `NOTE_CHECKS` (50) checks in all, about 5
+   * s; with the notes still not drawn it gives up, recording nothing, so the
+   * next opening offers them again.
+   * The host records each only if not yet recorded; a note another opening
+   * recorded first is taken off this page. Nothing is recorded for a page
+   * that was left.
+   */
+  recordNotesWhenShown(cx, token, tries = 0) {
+    const s = this.state;
+    if (token !== this.token || !s?.notes?.some((n) => !n.recorded)) return;
+    if (!s.notesRendered) {
+      if (tries + 1 < NOTE_CHECKS) cx.timer.after(100, (tcx) => this.recordNotesWhenShown(tcx, token, tries + 1));
+      return;
+    }
+    const pending = s.notes.filter((n) => !n.recorded);
+    let recorded;
+    try {
+      recorded = this.app.store.call("screen_form_notes_seen", pending.map((n) => n.key));
+    } catch (_) {
+      return;
+    }
+    s.notes = s.notes.filter((n) => n.recorded || recorded.includes(n.key)).map((n) => ({ ...n, recorded: true }));
+    this.notify(cx);
   }
 
   /** Create InputStates for one part's text-like controls (only once). */
@@ -625,7 +663,7 @@ export class FormPageActions {
     const keys = itemKeys(it);
     const picker = s.picker?.row === id ? s.picker.cal : null;
     return JSON.stringify([
-      width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id),
+      width, s.editable, s.messages[id] || "", s.dateErrors?.[id] || "", s.moreOpen.has(id), s.checkable?.[id] || [],
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
@@ -1745,6 +1783,7 @@ export class FormPageActions {
     // the page a quiet date's message until it speaks.
     s.errors = (errors || []).filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
+    s.checkable = {};
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
     const words = (t) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
@@ -1778,7 +1817,21 @@ export class FormPageActions {
       }
       id = id || (items[0] && items[0].id);
       if (id) s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
+      // A notice the filer may mark checked without changing anything.
+      if (id && e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
     }
+  }
+
+  /** Mark a notice checked (the host records it; the return is not changed), then check again. */
+  markChecked(token, cx) {
+    const s = this.state;
+    if (!s || !s.draft) return;
+    try {
+      this.app.store.call("screen_form_check_notice", s.code, s.draft, token);
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    this.validate(cx);
   }
 
   check(cx) {
@@ -2802,7 +2855,13 @@ function itemRow(cx, ui, it, pi, ii, width) {
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
         // Reserved 18 px validation line, present with or without a message.
-        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " "))),
+        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " ")))
+        // A notice the filer may mark checked: one button each, nothing on the return changes.
+        .children(
+          (s.editable ? s.checkable?.[id] || [] : []).map((c) =>
+            div().mt(SPACE[1]).child(AppButton(cx, `fp-checked-${c.token}`, c.label, { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.markChecked(c.token, cx) })),
+          ),
+        ),
     );
 }
 
@@ -3158,6 +3217,9 @@ function formContent(cx, app, width) {
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
   // A draft whose untouched profile boxes followed a later profile change.
   if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
+  // A one-time note from the host (shown on the opening it was given for).
+  for (const note of s.notes || []) page.child(Text(cx, "meta", note.text, "fg2").mb(SPACE[4]).whitespace_normal());
+
   if (s.editable && s.profileDiffers?.length) {
     page.child(
       div()
@@ -3342,7 +3404,22 @@ function formContent(cx, app, width) {
   return { page, nav, navHead, attn, navRows, parts, sideNav };
 }
 
+/**
+ * After a layout drew the page whole (renderFormPage or renderFormSplit):
+ * its one-time notes are on screen, so recordNotesWhenShown may record them.
+ */
+function notesDrawn(app) {
+  const s = app.formUi?.state;
+  if (s?.notes?.length && !s.loading && !s.error) s.notesRendered = true;
+}
+
 export function renderFormPage(cx, app, width) {
+  const page = drawFormPage(cx, app, width);
+  notesDrawn(app);
+  return page;
+}
+
+function drawFormPage(cx, app, width) {
   const c = formContent(cx, app, width);
   if (c.early) return c.early;
   if (!c.parts) return c.page;
@@ -3363,6 +3440,13 @@ export function renderFormPage(cx, app, width) {
  * keeps one scroll area and a chip row. `L` is the shell's layout().
  */
 export function renderFormSplit(cx, app, L) {
+  const split = drawFormSplit(cx, app, L);
+  // Drawn by this layout (null: the narrow layout draws the page instead).
+  if (split) notesDrawn(app);
+  return split;
+}
+
+function drawFormSplit(cx, app, L) {
   if (L.column < BREAK.formNav) return null;
   const c = formContent(cx, app, L.column);
   if (c.early) return null;

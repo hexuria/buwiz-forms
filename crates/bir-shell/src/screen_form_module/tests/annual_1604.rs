@@ -1456,3 +1456,532 @@ fn pr6_page_fixture_is_the_hosts() {
         "tools/fixtures/form_1604_page.json is stale; regenerate with UPDATE_PAGE_FIXTURES=1"
     );
 }
+
+fn validate(code: &str, draft: &Value) -> Value {
+    call_async(
+        "screen_form_validate",
+        vec![code.into(), json(draft.clone())],
+    )
+    .unwrap()
+}
+
+fn messages(validated: &Value) -> Vec<String> {
+    validated["errors"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|error| error["message"].as_str().map(str::to_string))
+        .collect()
+}
+
+/// The item number a message cites ("on Item 7A.", "item 11A", "Item
+/// no.1"), as printed numbers are written: digits and at most one letter.
+fn cited_item(message: &str) -> Option<String> {
+    let lower = message.to_ascii_lowercase();
+    let at = lower.find("item ")? + "item ".len();
+    let rest = message[at..].trim_start();
+    let rest = rest
+        .strip_prefix("no.")
+        .or_else(|| rest.strip_prefix("No."))
+        .unwrap_or(rest)
+        .trim_start();
+    let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    let after = &rest[digits.len()..];
+    let mut chars = after.chars();
+    let letter = match (chars.next(), chars.next()) {
+        (Some(c), next)
+            if c.is_ascii_alphabetic() && next.is_none_or(|n| !n.is_ascii_alphanumeric()) =>
+        {
+            c.to_ascii_uppercase().to_string()
+        }
+        _ => String::new(),
+    };
+    Some(format!("{digits}{letter}"))
+}
+
+/// Boxes a sheet prints through a derived writer key: `(form, box, writer
+/// key, the caption's words after the item number)`. 1604F's ZIP prints in
+/// the second address comb ("7 Registered Address (second line, 31
+/// fillable slots) and 7A ZIP Code (last 4 slots)").
+const PRINTED_VIA: [(&str, &str, &str, &str); 3] = [
+    (
+        "1604F",
+        "frm1604f:RegisteredAddress",
+        "derived:address1",
+        "Registered Address",
+    ),
+    (
+        "1604F",
+        "frm1604f:zipCode",
+        "derived:address2_zip",
+        "ZIP Code",
+    ),
+    (
+        "1604C",
+        "frm1604c:registeredAddress",
+        "derived:line:address1",
+        "Registered Address",
+    ),
+];
+
+/// The printed item numbers of the boxes `keys` (writer-cells.json
+/// captions): a joined box's caption's own number, a derived one's the
+/// number before its words.
+fn printed_items_of(code: &str, slug: &str, keys: &Value) -> BTreeSet<String> {
+    let joined = joins(slug);
+    let mut out = BTreeSet::new();
+    for key in keys
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        if let Some((_, _, writer, words)) = PRINTED_VIA
+            .iter()
+            .find(|(form, page, _, _)| *form == code && *page == key)
+        {
+            let caption = printed_at(slug, writer);
+            let before = &caption[..caption.find(words).unwrap()];
+            out.insert(before.split_whitespace().last().unwrap().to_string());
+            continue;
+        }
+        if let Some((_, _, caption)) = joined.iter().find(|(writer, _, _)| writer == key)
+            && let Some(number) = printed_number(caption)
+        {
+            out.insert(number);
+        }
+    }
+    out
+}
+
+/// Maintainer decision D6 (2026-10-18) for 1604F and 1604C: a message
+/// names the item number the printed sheet gives its box. The oracle is
+/// html-frozen/<slug>/writer-cells.json's captions, never the page schema.
+/// With every Part I box the profile fills cleared, each message citing an
+/// item cites one its boxes print under; the rewrites are listed exactly,
+/// and the official wording they replace no longer shows.
+#[test]
+fn d6_1604f_and_1604c_messages_cite_the_printed_item() {
+    setup();
+    let rewrites = [
+        (
+            "1604F",
+            "Please enter a valid Taxpayer's Name on Item 7.",
+            "Please enter a valid Taxpayer's Name on Item 6.",
+        ),
+        (
+            "1604F",
+            "Please enter Taxpayer's Registered Address on Item 9.",
+            "Please enter Taxpayer's Registered Address on Item 7.",
+        ),
+        (
+            "1604F",
+            "Please enter Taxpayer's Zip Code on Item 10.",
+            "Please enter Taxpayer's Zip Code on Item 7A.",
+        ),
+        (
+            "1604F",
+            "Please enter a valid Telephone Number on Item 8.",
+            "Please enter a valid Telephone Number on Item 9.",
+        ),
+        (
+            "1604C",
+            "Please enter Taxpayer's Zip Code on Item 10.",
+            "Please enter Taxpayer's Zip Code on Item 7A.",
+        ),
+    ];
+    for (code, slug) in [("1604F", "1604f-2018"), ("1604C", "1604c-2018")] {
+        let opened = open(code, 0);
+        let mut draft = opened["draft"].clone();
+        for field in [
+            "taxpayer_name",
+            "registered_address",
+            "contact_number",
+            "zip_code",
+        ] {
+            draft[field] = json!("");
+        }
+        let validated = validate(code, &draft);
+        let said = messages(&validated);
+        for (form, official, printed) in rewrites.iter().filter(|(form, _, _)| *form == code) {
+            assert!(said.contains(&printed.to_string()), "{form}: {said:?}");
+            assert!(!said.contains(&official.to_string()), "{form}: {official}");
+        }
+        let mut checked = 0;
+        for error in validated["errors"].as_array().unwrap() {
+            let message = error["message"].as_str().unwrap();
+            let Some(cited) = cited_item(message) else {
+                continue;
+            };
+            let printed = printed_items_of(code, slug, &error["keys"]);
+            assert!(
+                printed.contains(&cited),
+                "{code}: {message:?} cites item {cited}; its boxes {} print at {printed:?}",
+                error["keys"]
+            );
+            checked += 1;
+        }
+        assert!(checked >= 4, "{code}: {checked} messages checked");
+    }
+    // Only the page's messages are reworded: the form's own validation
+    // (bir-core, which the desktop assistant reads) keeps BIR's text.
+    let kind = kind_of("1604F").unwrap();
+    let mut draft = open("1604F", 0)["draft"].clone();
+    draft["zip_code"] = json!("");
+    let core: Vec<String> = agent::validate(kind, &mut draft)
+        .unwrap()
+        .into_iter()
+        .map(|(_, message)| message)
+        .collect();
+    assert!(core.contains(&"Please enter Taxpayer's Zip Code on Item 10.".to_string()));
+    assert_eq!(
+        cited_item("Invalid date entry on Item no.1. Entry"),
+        Some("1".into())
+    );
+    assert_eq!(
+        cited_item("specify date of refund in item 11A."),
+        Some("11A".into())
+    );
+}
+
+/// The Total Amount Remitted bindings of the 1604E pin before PR 6
+/// (crates/bir-core/data/agent-forms/1604e-v2018.json at a7b9e47e^, the
+/// lines that commit removed), literally.
+const PRE_PR6_TOTAL_BINDINGS: &str = r#"
+"frm1604e:txtSched1TotRemAmt3": {"path":"/schedule1/2/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt10": {"path":"/schedule2/9/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt11": {"path":"/schedule2/10/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt2": {"path":"/schedule2/1/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt3": {"path":"/schedule2/2/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt4": {"path":"/schedule2/3/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt5": {"path":"/schedule2/4/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt7": {"path":"/schedule2/6/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt8": {"path":"/schedule2/7/penalties","type":"amount"},
+"frm1604e:txtSched2TotRemAmt9": {"path":"/schedule2/8/penalties","type":"amount"},
+"#;
+
+/// `fixtures/1604e-pre-pr6.json`: a 1604E draft as the save path stored it
+/// before PR 6 (form_1604e.rs and db/ are unchanged since; no
+/// profile_baseline, which PR 0c's save adds). Schedule 1 row 3 holds
+/// 3,500.00 of penalties with no tax withheld and Schedule 2 row 3 10,250.00
+/// beside 10,000.00 withheld: what typing those totals into the row's Total
+/// Amount Remitted box saved (the old binding wrote the typed amount to the
+/// row's penalties, the path the Penalties box still writes). Schedule 1
+/// row 1 (125.00) and Schedule 2 row 6 (300.00) hold penalties on rows
+/// whose Total was never bound.
+const PRE_PR6_1604E: &str = include_str!("fixtures/1604e-pre-pr6.json");
+
+/// Maintainer decision D5 (2026-10-18): each 1604E row that may hold an
+/// amount typed through its Total Amount Remitted box before PR 6 says so;
+/// nothing is changed and the stored bytes stay. The rows are the old pin's
+/// (oracle: its literal bindings), and only those holding penalties.
+#[test]
+fn d5_old_1604e_rows_typed_through_a_total_are_flagged() {
+    // The module's rows are the old pin's bound rows.
+    let mut bound: BTreeMap<u8, Vec<usize>> = BTreeMap::new();
+    for line in PRE_PR6_TOTAL_BINDINGS.lines().filter(|l| !l.is_empty()) {
+        let path = line.split("\"path\":\"/schedule").nth(1).unwrap();
+        let mut parts = path.split('/');
+        let schedule: u8 = parts.next().unwrap().parse().unwrap();
+        let index: usize = parts.next().unwrap().parse().unwrap();
+        assert_eq!(parts.next(), Some("penalties\",\"type\":\"amount\"},"));
+        bound.entry(schedule).or_default().push(index);
+    }
+    let mut ours: BTreeMap<u8, Vec<usize>> = BTreeMap::new();
+    for (schedule, rows) in rows_1604::LEGACY_TOTAL_ROWS {
+        ours.insert(schedule, rows.to_vec());
+    }
+    for rows in bound.values_mut() {
+        rows.sort();
+    }
+    assert_eq!(ours, bound);
+
+    setup();
+    let id = save("1604E", &open("1604E", 0)["draft"])["id"]
+        .as_i64()
+        .unwrap();
+    raw_exec(
+        "UPDATE form_drafts SET data_json = ?1 WHERE id = ?2",
+        &[PRE_PR6_1604E, &id.to_string()],
+    );
+    assert_eq!(raw_row(id).1, PRE_PR6_1604E, "stored as given");
+    let opened = open("1604E", 0);
+    let notice = rows_1604::legacy_total_notice(2, 3);
+    assert_eq!(
+        notice,
+        "Schedule 2, row 3 may hold an amount typed as the total; check it before you file."
+    );
+    let flagged = |errors: &Value| -> Vec<(String, Value)> {
+        errors
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| {
+                e["message"].as_str().is_some_and(|m| {
+                    m.ends_with("may hold an amount typed as the total; check it before you file.")
+                })
+            })
+            .map(|e| (e["field"].as_str().unwrap().to_string(), e["keys"].clone()))
+            .collect()
+    };
+    assert_eq!(
+        flagged(&opened["errors"]),
+        vec![
+            (
+                "schedule1[2].penalties".to_string(),
+                json!([
+                    "frm1604e:txtSched1Penalties3",
+                    "frm1604e:txtSched1TotRemAmt3"
+                ])
+            ),
+            (
+                "schedule2[2].penalties".to_string(),
+                json!([
+                    "frm1604e:txtSched2Penalties3",
+                    "frm1604e:txtSched2TotRemAmt3"
+                ])
+            ),
+        ]
+    );
+    assert!(
+        opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|e| e["message"] == notice.as_str())
+            .count()
+            == 1
+    );
+    // Each notice names its schedule (P4-11).
+    let schedule_1 = rows_1604::legacy_total_notice(1, 3);
+    assert_eq!(
+        schedule_1,
+        "Schedule 1, row 3 may hold an amount typed as the total; check it before you file."
+    );
+    assert!(
+        opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["field"] == "schedule1[2].penalties" && e["message"] == schedule_1.as_str())
+    );
+    // Nothing changes: the amounts show as stored and the row is the old bytes.
+    assert_eq!(
+        amount(&opened["values"], "frm1604e:txtSched1Penalties3"),
+        3500.0
+    );
+    assert_eq!(
+        amount(&opened["values"], "frm1604e:txtSched2Penalties3"),
+        10250.0
+    );
+    assert_eq!(
+        amount(&opened["values"], "frm1604e:txtSched2TotRemAmt3"),
+        20250.0
+    );
+    assert_eq!(raw_row(id).1, PRE_PR6_1604E, "opening changes nothing");
+    let validated = validate("1604E", &opened["draft"]);
+    assert_eq!(flagged(&validated["errors"]).len(), 2);
+    // Opened and saved, the row is the fixture byte for byte (the profile
+    // baseline a save records set aside).
+    save("1604E", &opened["draft"]);
+    let saved = raw_row(id).1;
+    let saved = match saved.find(",\"profile_baseline\":") {
+        Some(at) => format!("{}}}", &saved[..at]),
+        None => saved,
+    };
+    assert_eq!(saved, PRE_PR6_1604E, "opened and saved, byte for byte");
+    // Checked and cleared by the filer, the row's notice goes.
+    let cleared = fill(
+        "1604E",
+        &opened["draft"],
+        json!({"frm1604e:txtSched2Penalties3": "0"}),
+    );
+    assert_eq!(
+        flagged(&validate("1604E", &cleared["draft"])["errors"]),
+        vec![(
+            "schedule1[2].penalties".to_string(),
+            json!([
+                "frm1604e:txtSched1Penalties3",
+                "frm1604e:txtSched1TotRemAmt3"
+            ])
+        )]
+    );
+    // The other 1604 returns have no such rows.
+    let fresh = open("1604C", 0);
+    assert!(flagged(&fresh["errors"]).is_empty());
+    assert!(rows_1604::notices(kind_of("1604C").unwrap(), &json!({}), &BTreeSet::new()).is_empty());
+}
+
+/// The D5 notices' tokens on a stored draft: `(field, dismiss token)`.
+fn d5_notices(errors: &Value) -> Vec<(String, String)> {
+    errors
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| {
+            e["message"].as_str().is_some_and(|m| {
+                m.ends_with("may hold an amount typed as the total; check it before you file.")
+            })
+        })
+        .map(|e| {
+            (
+                e["field"].as_str().unwrap().to_string(),
+                e["dismiss"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect()
+}
+
+/// `PRE_PR6_1604E` stored as row 1 with `edit` applied to it; its id.
+fn store_1604e(edit: impl FnOnce(&mut Value)) -> (i64, String) {
+    setup();
+    let id = save("1604E", &open("1604E", 0)["draft"])["id"]
+        .as_i64()
+        .unwrap();
+    let mut stored: Value = serde_json::from_str(PRE_PR6_1604E).unwrap();
+    edit(&mut stored);
+    let text = serde_json::to_string(&stored).unwrap();
+    let status = stored["status"].as_str().unwrap().to_string();
+    raw_exec(
+        "UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = ?3",
+        &[&status, &text, &id.to_string()],
+    );
+    (id, raw_row(id).1)
+}
+
+/// Review fixes for D5. A row's notice shows only on a Draft created
+/// before PR 6 reached integration (the creation stamp is the only sound
+/// discriminator: the stored draft holds the same penalties whichever box
+/// they were typed in), and the filer can mark it checked without changing
+/// the amount; the mark is app state (a settings key per return and row),
+/// so the return's bytes stay.
+#[test]
+fn d5_notices_show_on_old_drafts_only_and_can_be_marked_checked() {
+    assert_eq!(
+        rows_1604::PR6_REACHED_INTEGRATION,
+        "2026-10-17T22:58:15+00:00"
+    );
+    // A draft created after PR 6 reached integration: never flagged.
+    let (_, _) = store_1604e(|d| {
+        d["created_at"] = json!("2026-10-17T22:58:16+00:00");
+    });
+    assert!(d5_notices(&open("1604E", 0)["errors"]).is_empty());
+    // A filed return: never flagged, so Check counts nothing.
+    for status in ["Queued", "Submitted", "Confirmed"] {
+        let (_, _) = store_1604e(|d| d["status"] = json!(status));
+        let opened = open("1604E", 0);
+        assert!(d5_notices(&opened["errors"]).is_empty(), "{status}");
+        assert!(
+            d5_notices(&validate("1604E", &opened["draft"])["errors"]).is_empty(),
+            "{status}"
+        );
+    }
+    // The old Draft: both rows, each with its token; one marked checked.
+    let (id, bytes) = store_1604e(|_| {});
+    let opened = open("1604E", 0);
+    assert_eq!(
+        d5_notices(&opened["errors"]),
+        vec![
+            ("schedule1[2].penalties".to_string(), "1:2".to_string()),
+            ("schedule2[2].penalties".to_string(), "2:2".to_string()),
+        ]
+    );
+    let label = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["dismiss"] == "2:2")
+        .unwrap()["dismiss_label"]
+        .clone();
+    assert_eq!(label, "Checked: Schedule 2 row 3");
+    let check = |token: &str| {
+        call(
+            "screen_form_check_notice",
+            vec!["1604E".into(), json(opened["draft"].clone()), token.into()],
+        )
+    };
+    check("2:2").unwrap();
+    // A row with no notice, or another form's, cannot be marked.
+    assert!(check("2:5").is_err());
+    let key = rows_1604::checked_key(id, "2:2");
+    assert_eq!(key, format!("notice_checked:1604e_total_row:{id}:2:2"));
+    assert_eq!(
+        with_database(|db| db
+            .get_setting(&key)
+            .map_err(|e| HostError::new(e.to_string())))
+        .unwrap()
+        .as_deref(),
+        Some("1")
+    );
+    assert_eq!(raw_row(id).1, bytes, "marking checked changes nothing");
+    let again = open("1604E", 0);
+    assert_eq!(
+        d5_notices(&again["errors"]),
+        vec![("schedule1[2].penalties".to_string(), "1:2".to_string())]
+    );
+    assert_eq!(
+        d5_notices(&validate("1604E", &again["draft"])["errors"]),
+        vec![("schedule1[2].penalties".to_string(), "1:2".to_string())]
+    );
+    assert_eq!(
+        amount(&again["values"], "frm1604e:txtSched2Penalties3"),
+        10250.0,
+        "the amount stays"
+    );
+    assert_eq!(raw_row(id).1, bytes);
+}
+
+/// Review round 2: a D5 notice on a draft not saved yet (an amended copy in
+/// memory, no id) has no return to record a Checked mark on. It says to
+/// save first and carries no token; once the draft is saved, the same
+/// notice reads as before and offers Checked.
+#[test]
+fn d5_an_unsaved_draft_says_to_save_before_marking_checked() {
+    setup();
+    let mut unsaved: Value = serde_json::from_str(PRE_PR6_1604E).unwrap();
+    unsaved["id"] = Value::Null;
+    let errors = validate("1604E", &unsaved)["errors"].clone();
+    let notices: Vec<&Value> = errors
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["field"] == "schedule2[2].penalties")
+        .collect();
+    assert_eq!(notices.len(), 1, "{errors}");
+    assert_eq!(
+        notices[0]["message"],
+        format!(
+            "{} {}",
+            rows_1604::legacy_total_notice(2, 3),
+            rows_1604::SAVE_TO_CHECK
+        )
+    );
+    assert_eq!(
+        rows_1604::SAVE_TO_CHECK,
+        "Save the return to mark it checked."
+    );
+    assert!(notices[0].get("dismiss").is_none());
+    // A token for an unsaved draft is refused.
+    assert!(
+        call(
+            "screen_form_check_notice",
+            vec!["1604E".into(), json(unsaved.clone()), "2:2".into()],
+        )
+        .is_err()
+    );
+    // Saved, it offers Checked.
+    let (_, _) = store_1604e(|_| {});
+    let opened = open("1604E", 0);
+    let saved = opened["errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["field"] == "schedule2[2].penalties")
+        .cloned()
+        .unwrap();
+    assert_eq!(saved["message"], rows_1604::legacy_total_notice(2, 3));
+    assert_eq!(saved["dismiss"], "2:2");
+}

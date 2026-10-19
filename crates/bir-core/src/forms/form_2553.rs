@@ -76,6 +76,10 @@ pub fn form_2553_atc_option(code: &str, description: &str) -> Option<&'static Fo
         .find(|option| option.code == code && option.description == description)
 }
 
+/// What validation says while item 13 is Yes and its list is unanswered
+/// ([`Form2553TaxTreaty::YesUnspecified`]), the official alert.
+pub const TAX_TREATY_UNCHOSEN: &str = "Please select a Tax Treaty from the list.";
+
 /// Item 13 (`optTreaty` + `lstTaxTreaty`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -656,7 +660,7 @@ impl FormValidator for Form2553Draft {
         }
 
         if self.tax_treaty == Form2553TaxTreaty::YesUnspecified {
-            err("tax_treaty", "Please select a Tax Treaty from the list.");
+            err("tax_treaty", TAX_TREATY_UNCHOSEN);
         }
 
         for (field, value) in [

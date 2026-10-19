@@ -27885,8 +27885,10 @@
       "evidence": "manual-1 (PR 5): the official page's page counter (html-frozen/1702q-2018/writer-cells.json not_joined frm1702q:txtCurrentPage: 'page counter of the eBIRForms page, not a box on the paper form'); the field map writes the constant 1."
     },
     "resultOtherSpecify": {
-      "kind": "hidden",
-      "evidence": "manual-1 (PR 5): not a box of the sheet or of the official page (rules/forms/1702q-v2018c/fields.json: page null, 'Schedule 4 various-details total'); this app never writes it and the upload carries its default 0.00 (tests/sample-payloads/1702Q-2025Q2.official.xml 'resultOtherSpecify=0.00' with an other credit of 1,234.00), so a box showing it would read 0.00 beside typed credits. Schedule 4's own total is item 7, which closes Schedule 4."
+      "kind": "money",
+      "label": "BIR's internal total (always 0.00)",
+      "computed": true,
+      "evidence": "maintainer decision D9 (2026-10-18), replacing PR 5's hidden box: shown read-only after Schedule 4's item 7, the item and its one box labelled \"BIR's internal total (always 0.00)\" (P4-13, 2026-10-19). It is not a box of the sheet or of the official page (rules/forms/1702q-v2018c/fields.json: page null, 'Schedule 4 various-details total'); this app never writes it and the upload carries its default 0.00, as BIR's own save does (tests/sample-payloads/1702Q-2025Q2.official.xml 'resultOtherSpecify=0.00' with an other credit of 1,234.00); the page shows what the upload carries (rows_income_q::internal_total). Schedule 4's own total is item 7."
     },
     "frm1702q:Sched1:txtTax1A": {
       "label": "A. Exempt",
@@ -28529,6 +28531,13 @@
               "l": "Total Tax Credits/Payments (Sum of Items 1 to 6b) (To Part II Item 19)",
               "k": [
                 "frm1702q:Sched4:txtTax7"
+              ]
+            },
+            {
+              "no": "",
+              "l": "BIR's internal total (always 0.00)",
+              "k": [
+                "resultOtherSpecify"
               ]
             }
           ]

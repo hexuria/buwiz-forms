@@ -269,11 +269,11 @@ impl Form1600PtView {
         match key {
             "year" => draft.year.to_string(),
             "sheets" => draft.number_of_attached_sheets.to_string(),
-            "name" => draft.agent_name.clone(),
-            "address" => draft.registered_address.clone(),
-            "zip" => draft.zip_code.clone(),
-            "phone" => draft.contact_number.clone(),
-            "email" => draft.email.clone(),
+            "name" => draft.agent_name.to_string(),
+            "address" => draft.registered_address.to_string(),
+            "zip" => draft.zip_code.to_string(),
+            "phone" => draft.contact_number.to_string(),
+            "email" => draft.email.to_string(),
             "relief_spec" => draft.tax_relief_specify.clone(),
             "prev" => money(draft.tax_remitted_previous),
             "other" => money(draft.other_payments),
@@ -381,11 +381,7 @@ impl Form1600PtView {
             schedule.pop();
         }
         draft.schedule = schedule;
-        draft.agent_name = self.input_text("name", cx);
-        draft.registered_address = self.input_text("address", cx);
-        draft.zip_code = self.input_text("zip", cx).trim().to_string();
-        draft.contact_number = self.input_text("phone", cx).trim().to_string();
-        draft.email = self.input_text("email", cx).trim().to_string();
+        apply_part_i(&mut draft, |key| self.input_text(key, cx));
         draft.tax_relief_specify = self.input_text("relief_spec", cx);
         // An empty penalty box means "use computed"; any amount overrides it.
         parse_errors.extend(penalty_section::apply_overrides(
@@ -894,7 +890,7 @@ impl Form1600PtView {
         .collect();
         let mut children = vec![
             self.readonly_value("Item 5 — TIN", format_tin(&d.tin), &["tin"]),
-            self.readonly_value("Item 6 — RDO Code", d.rdo_code.clone(), &["rdo_code"]),
+            self.readonly_value("Item 6 — RDO Code", d.rdo_code.to_string(), &["rdo_code"]),
             self.text_field("name", layout, !editable),
             self.text_field("address", layout, !editable),
             self.text_field("zip", layout, !editable),
@@ -1583,6 +1579,20 @@ const HEADER_ACTIONS: FormHeaderActions<Form1600PtView> = FormHeaderActions {
     on_simulate: None,
 };
 
+/// Part I as `sync_from_inputs` reads it from the editor's boxes (`text`:
+/// a box's current text by its key), written in place: a box the stored
+/// draft lacked stays out while blank (P2-4, `KeptText`), and files once
+/// typed.
+fn apply_part_i(draft: &mut Form1600PtDraft, text: impl Fn(&str) -> String) {
+    draft.set_typed_part_i(
+        text("name"),
+        text("address"),
+        text("zip").trim().to_string(),
+        text("phone").trim().to_string(),
+        text("email").trim().to_string(),
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Layout, format_tin, parse_amount};
@@ -1610,5 +1620,203 @@ mod tests {
         assert_eq!(parse_amount(""), Some(0.0));
         assert_eq!(parse_amount("12a"), None);
         assert_eq!(format_tin("98765432100000"), "987-654-321-00000");
+    }
+
+    /// P2-4 through the editor's own wiring (`apply_part_i`, which
+    /// `sync_from_inputs` runs on every change and before a save) and its
+    /// save (`save_queueable_draft`): for each of name, address, ZIP,
+    /// contact number and email, a draft stored without the box, saved with
+    /// the box untouched (blank, or spaces) and another box edited, still
+    /// lacks the key; typed and saved, it holds the value.
+    #[test]
+    fn a_missing_part_i_box_stays_out_until_typed_on_the_desktop() {
+        use super::{Form1600PtView, apply_part_i};
+        use bir_core::db::Database;
+        use bir_core::forms::form_1600pt::Form1600PtDraft;
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Agent Corp",
+                "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+                "rdo_code": "039", "line_of_business": "Trading",
+                "registered_address": "123 Sample St Quezon City", "zip_code": "1100",
+                "phone": "0281234567", "email": "agent@example.com",
+                "default_form_type": "1600PT", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        for (field, key, typed) in [
+            ("agent_name", "name", "SAMPLE AGENT CORP"),
+            ("registered_address", "address", "1 SAMPLE ST QUEZON CITY"),
+            ("zip_code", "zip", "1100"),
+            ("contact_number", "phone", "0281234567"),
+            ("email", "email", "agent@example.com"),
+        ] {
+            let db = Database::open_ephemeral().unwrap();
+            let mut value =
+                serde_json::to_value(Form1600PtDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+            value.as_object_mut().unwrap().remove(field);
+            let stored: Form1600PtDraft = serde_json::from_value(value).unwrap();
+            db.save_queueable_draft(&stored).unwrap();
+            let load = || {
+                db.get_queueable_draft::<Form1600PtDraft>(
+                    &stored.tin,
+                    stored.year,
+                    i64::from(stored.month),
+                )
+                .unwrap()
+                .expect("stored")
+            };
+            for untouched in ["", "   "] {
+                let mut draft = load();
+                apply_part_i(&mut draft, |box_key| match box_key {
+                    k if k == key => untouched.to_string(),
+                    // Another box edited in the same sync.
+                    "email" => "edited@example.com".to_string(),
+                    k => Form1600PtView::initial(&load(), k),
+                });
+                db.save_queueable_draft(&draft).unwrap();
+                let saved = serde_json::to_value(load()).unwrap();
+                assert!(
+                    saved.get(field).is_none(),
+                    "{field}: {untouched:?} stays out: {saved}"
+                );
+                if field != "email" {
+                    assert_eq!(saved["email"], "edited@example.com", "{field}");
+                }
+            }
+            let mut draft = load();
+            apply_part_i(&mut draft, |box_key| {
+                if box_key == key {
+                    typed.to_string()
+                } else {
+                    Form1600PtView::initial(&load(), box_key)
+                }
+            });
+            db.save_queueable_draft(&draft).unwrap();
+            assert_eq!(
+                serde_json::to_value(load()).unwrap()[field],
+                typed,
+                "{field} typed"
+            );
+        }
+    }
+
+    /// P2-4 through the view itself (review round 4, F12): a window, the
+    /// view built on a draft stored without one Part I box, an edit in
+    /// another box (its input's text set, then `sync_from_inputs`), and the
+    /// view's own save (`save_draft`, which syncs and calls
+    /// `save_queueable_draft`). For each of name, address, ZIP, contact and
+    /// email the saved row still lacks the key; typed into its own input
+    /// and saved, it holds the value.
+    #[gpui::test]
+    fn the_view_saves_a_missing_part_i_box_out_until_typed(cx: &mut gpui::TestAppContext) {
+        use super::Form1600PtView;
+        use crate::components::form_engine::FormViewTrait;
+        use crate::views::queueable_forms::QueueableFormView;
+        use bir_core::db::Database;
+        use bir_core::forms::form_1600pt::Form1600PtDraft;
+        use gpui::AppContext;
+        use std::sync::{Arc, Mutex};
+        cx.update(gpui_kit::init);
+        let profile: bir_core::profile::TaxpayerProfile =
+            serde_json::from_value(serde_json::json!({
+                "id": null, "full_name": "Sample Agent Corp",
+                "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+                "rdo_code": "039", "line_of_business": "Trading",
+                "registered_address": "123 Sample St Quezon City", "zip_code": "1100",
+                "phone": "0281234567", "email": "agent@example.com",
+                "default_form_type": "1600PT", "taxpayer_type": "Corporation"
+            }))
+            .unwrap();
+        // RDO has no input on the desktop (it shows read-only): untouched,
+        // it stays out; the other five are typed too.
+        for (field, key, typed) in [
+            ("rdo_code", "", ""),
+            ("agent_name", "name", "SAMPLE AGENT CORP"),
+            ("registered_address", "address", "1 SAMPLE ST QUEZON CITY"),
+            ("zip_code", "zip", "1100"),
+            ("contact_number", "phone", "0281234567"),
+            ("email", "email", "agent@example.com"),
+        ] {
+            let db = Arc::new(Mutex::new(Database::open_ephemeral().unwrap()));
+            let mut value =
+                serde_json::to_value(Form1600PtDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+            value.as_object_mut().unwrap().remove(field);
+            let stored: Form1600PtDraft = serde_json::from_value(value).unwrap();
+            let id = db.lock().unwrap().save_queueable_draft(&stored).unwrap();
+            let stored = db
+                .lock()
+                .unwrap()
+                .get_queueable_draft::<Form1600PtDraft>(
+                    &stored.tin,
+                    stored.year,
+                    i64::from(stored.month),
+                )
+                .unwrap()
+                .expect("stored");
+            assert_eq!(stored.id, Some(id));
+            let row = |db: &Arc<Mutex<Database>>| {
+                let draft = db
+                    .lock()
+                    .unwrap()
+                    .get_queueable_draft::<Form1600PtDraft>(
+                        &stored.tin,
+                        stored.year,
+                        i64::from(stored.month),
+                    )
+                    .unwrap()
+                    .expect("stored");
+                serde_json::to_value(draft).unwrap()
+            };
+            // The app's windows are a gpui_component Root over the view
+            // (gui.rs), which the view's notices need.
+            let mut built = None;
+            let window = cx.add_window(|window, cx| {
+                let view =
+                    cx.new(|cx| Form1600PtView::new(stored.clone(), Arc::clone(&db), window, cx));
+                built = Some(view.clone());
+                gpui_component::Root::new(view, window, cx)
+            });
+            let view = built.expect("the view");
+            let (other, other_field, other_value) = if key == "email" {
+                ("phone", "contact_number", "0287654321")
+            } else {
+                ("email", "email", "edited@example.com")
+            };
+            // The window, not its Root: a notice updates the Root.
+            cx.update_window(window.into(), |_, window, cx| {
+                view.update(cx, |view, cx| {
+                    view.inputs[other]
+                        .update(cx, |input, cx| input.set_value(other_value, window, cx));
+                    if let Some(input) = view.inputs.get(key) {
+                        input.update(cx, |input, cx| input.set_value("   ", window, cx));
+                    }
+                    view.sync_from_inputs(cx);
+                    view.save_draft(window, cx);
+                })
+            })
+            .unwrap();
+            let saved = row(&db);
+            assert!(
+                saved.get(field).is_none(),
+                "{field}: untouched, it stays out: {saved}"
+            );
+            // The same save stored the other box's edit: the save ran.
+            assert_eq!(
+                saved[other_field], other_value,
+                "{field}: the edit is saved"
+            );
+            if key.is_empty() {
+                continue;
+            }
+            // The window, not its Root: a notice updates the Root.
+            cx.update_window(window.into(), |_, window, cx| {
+                view.update(cx, |view, cx| {
+                    view.inputs[key].update(cx, |input, cx| input.set_value(typed, window, cx));
+                    view.save_draft(window, cx);
+                })
+            })
+            .unwrap();
+            assert_eq!(row(&db)[field], typed, "{field}: typed, it is saved");
+        }
     }
 }

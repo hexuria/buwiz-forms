@@ -575,6 +575,7 @@ pub(super) fn fill_official(
         agent::fill(kind, &mut next, key, value)?;
         filled.push(key.clone());
     }
+    tax_treaty_2553(kind, draft, &mut next, fields, &filled)?;
     agent::compute(kind, &mut next)?;
     let map = agent::field_map(kind, &next)?;
     let def = kind.definition();
@@ -619,6 +620,84 @@ pub(super) fn fill_official(
         .cloned()
         .collect();
     Ok((next, filled, kept, not_shown))
+}
+
+/// 2553 item 13's list (`lstTaxTreaty`).
+const TAX_TREATY_LIST: &str = "frm2553:lstTaxTreaty";
+
+/// What the assistant is told when it answers 2553 item 13 Yes without its
+/// list: the page's own reason, that nothing in the call was applied, and
+/// what to do.
+fn tax_treaty_refusal() -> String {
+    format!(
+        "{} Item 13 is Yes, so its list must be answered. Nothing in this call was applied: the other boxes in it were not filled either. Ask the user which applies and fill `{TAX_TREATY_LIST}` with it (\"1\" Special Rate, \"2\" International Tax Treaty) in the same call as the Yes.",
+        bir_core::forms::form_2553::TAX_TREATY_UNCHOSEN
+    )
+}
+
+/// A fill value as text to compare with the list's answers: a string
+/// trimmed, null as blank, any other scalar as its JSON text (`1`), as
+/// `agent::fill`'s `value_text` reads it (which does not trim).
+fn fill_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.trim().to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// 2553 item 13 (maintainer decision D7, 2026-10-18). The pin binds the
+/// Yes radio to Special Rate, so `form.fill` answering Yes alone filed a
+/// relief nobody chose, where the page opens the list blank and Check asks
+/// for it. Here a Yes with its list answered in the same fill (`1` or `2`,
+/// as a string or a number) takes the list's answer (applied last, so the
+/// radio's binding cannot replace it); a Yes alone keeps the relief already
+/// chosen on the return, and on a return with none is refused with the
+/// page's reason. Only these item 13 keys are read; every other fill is
+/// unchanged.
+fn tax_treaty_2553(
+    kind: AgentFormKind,
+    before: &Value,
+    next: &mut Value,
+    fields: &serde_json::Map<String, Value>,
+    filled: &[String],
+) -> Result<(), String> {
+    if kind.form_code() != "2553" {
+        return Ok(());
+    }
+    let chosen = |draft: &Value| {
+        matches!(
+            draft["tax_treaty"].as_str(),
+            Some("special_rate" | "international_tax_treaty")
+        )
+    };
+    // Whether this fill answers item 13 Yes: one of its item 13 radio keys,
+    // filled alone, makes the return's item 13 a Yes.
+    let says_yes = filled
+        .iter()
+        .filter(|key| key.starts_with("frm2553:optTreaty"))
+        .any(|key| {
+            let mut alone = before.clone();
+            fields
+                .get(key)
+                .is_some_and(|value| agent::fill(kind, &mut alone, key, value).is_ok())
+                && chosen(&alone)
+        });
+    if !says_yes {
+        return Ok(());
+    }
+    if let Some(list) = fields
+        .get(TAX_TREATY_LIST)
+        .filter(|_| filled.iter().any(|key| key == TAX_TREATY_LIST))
+        && matches!(fill_text(list).as_str(), "1" | "2")
+    {
+        return agent::fill(kind, next, TAX_TREATY_LIST, list);
+    }
+    if chosen(before) {
+        next["tax_treaty"] = before["tax_treaty"].clone();
+        return Ok(());
+    }
+    Err(tax_treaty_refusal())
 }
 
 /// Validation errors with the label of the box they name, when the form
@@ -1186,5 +1265,131 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Maintainer decision D7 (2026-10-18): 2553 item 13 Yes needs its list
+    /// answered, as on the page. The pin binds the Yes radio to Special
+    /// Rate, so the assistant answering Yes alone filed a relief nobody
+    /// chose; now it is refused with the page's reason and the return is
+    /// unchanged. A Yes with its list answered takes the list's answer, in
+    /// either order; a Yes alone keeps a relief already chosen; No is
+    /// taken as before.
+    #[test]
+    fn form_2553_item_13_yes_asks_for_its_list() {
+        use bir_core::forms::form_2553::TAX_TREATY_UNCHOSEN;
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "2553", "year": year(), "period": period_for("2553"), "tin": TIN}),
+            ),
+            "open",
+        );
+        let treaty = |host: &BirAgentHost| host.generic_form().unwrap().draft["tax_treaty"].clone();
+        assert_eq!(treaty(&host), "no");
+        let before = host.generic_form().unwrap().draft.clone();
+        for yes in [
+            json!({"frm2553:optTreaty_1": "true"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:optTreaty_2": "false"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "0"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 0}),
+            json!({"frm2553:txtSheets": "2", "frm2553:optTreaty_1": "true"}),
+        ] {
+            let refused = call(&mut host, "form.fill", json!({ "fields": yes }));
+            assert!(!refused.ok, "{yes}");
+            let error = refused.error.unwrap();
+            assert!(error.contains(TAX_TREATY_UNCHOSEN), "{error}");
+            assert!(
+                error.contains("Nothing in this call was applied: the other boxes in it were not filled either."),
+                "{error}"
+            );
+            assert!(error.contains("frm2553:lstTaxTreaty"), "{error}");
+            assert_eq!(host.generic_form().unwrap().draft, before, "unchanged");
+        }
+        // The page's reason is the form's own message for an unanswered list.
+        let kind = AgentFormKind::from_code("2553").unwrap();
+        let mut unanswered = before.clone();
+        unanswered["tax_treaty"] = json!("yes_unspecified");
+        let errors = agent::validate(kind, &mut unanswered).unwrap();
+        assert!(errors.contains(&("tax_treaty".to_string(), TAX_TREATY_UNCHOSEN.to_string())));
+        // Answered in the same call, the list wins, whichever comes first.
+        for (fields, wanted) in [
+            (
+                json!({"frm2553:lstTaxTreaty": "2", "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "1"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "2"}),
+                "international_tax_treaty",
+            ),
+        ] {
+            ok(
+                call(&mut host, "form.fill", json!({ "fields": fields })),
+                "fill",
+            );
+            assert_eq!(treaty(&host), wanted, "{fields}");
+        }
+        let map = agent::field_map(kind, &host.generic_form().unwrap().draft).unwrap();
+        assert_eq!(map["frm2553:optTreaty_1"], "true");
+        assert_eq!(map["frm2553:lstTaxTreaty"], "2");
+        // A list answer the agent sends as a JSON number is the same answer,
+        // in either order, and replaces the relief the return holds.
+        for (fields, wanted) in [
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 1}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": 2, "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": 1, "frm2553:optTreaty_1": "true"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 2}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "1"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": "2", "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+        ] {
+            ok(
+                call(&mut host, "form.fill", json!({ "fields": fields })),
+                "fill",
+            );
+            assert_eq!(treaty(&host), wanted, "{fields}");
+        }
+        // Yes alone on a return with a relief chosen keeps it.
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {"frm2553:optTreaty_1": "true"}}),
+            ),
+            "fill",
+        );
+        assert_eq!(treaty(&host), "international_tax_treaty");
+        // No is taken as before.
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {"frm2553:optTreaty_2": "true"}}),
+            ),
+            "fill",
+        );
+        assert_eq!(treaty(&host), "no");
     }
 }
