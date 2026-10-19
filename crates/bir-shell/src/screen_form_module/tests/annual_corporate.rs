@@ -3314,10 +3314,11 @@ fn p4_17_a_2019_return_computes_mcit_from_gross_income() {
     assert_eq!(amount(values, &rt("txtPg2Pt4I33TotalGross")), 2_950_026.0);
     // 59,000.52 rounds to 59,001.
     assert_eq!(amount(values, &item_42), 59_001.0);
-    // Item 39 is 2,950,026 - 3,000,000 = -49,974; before 2020 item 41 has
-    // no floor: 30% is -14,992.20.
+    // Item 39 is 2,950,026 - 3,000,000 = -49,974; the pre-2020 floor
+    // (maintainer decision (pre-2020 1702RT items 41 and 42 floored at
+    // zero)) keeps item 41 at zero rather than -14,992.
     assert_eq!(amount(values, &rt("txtPg2Pt4I39NetTaxable")), -49_974.0);
-    assert_eq!(amount(values, &rt("txtPg2Pt4I41IncomeTaxDue")), -14_992.0);
+    assert_eq!(amount(values, &rt("txtPg2Pt4I41IncomeTaxDue")), 0.0);
     assert_eq!(amount(values, &rt("txtPg2Pt4I43TotalIncomeTax")), 59_001.0);
     assert_eq!(amount(values, &rt("txtPg1Pt2I14IncomeTax")), 59_001.0);
     let net = amount(values, &rt("txtPg2Pt4I56NetTax"));

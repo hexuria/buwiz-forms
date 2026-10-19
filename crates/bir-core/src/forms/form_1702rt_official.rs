@@ -22,7 +22,11 @@
 //! 33 while MCIT applies,
 //! the page's branch below 20 (rules/forms/1702rt-v2018c/calculations.json
 //! 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
-//! of gross"), read from the return's own Item 2 year.
+//! of gross"), read from the return's own Item 2 year. Before 2020 Items 41
+//! and 42 are floored at zero (maintainer decision (pre-2020 1702RT items 41
+//! and 42 floored at zero), 2026-10-19): a net loss carries forward as NOLCO
+//! so there is no regular tax, and MCIT is 2% of gross income - zero when
+//! gross income is zero or less - so Item 43 is never negative.
 //!
 //! The "(Add more...)" modals of Items 54, 17i, Schedule II Item 4 and
 //! Schedule V Items 3, 6 and 8 are modelled ([`Form1702RTModal`]): their
@@ -58,13 +62,15 @@ pub const MCIT_ENTERED_FROM: u16 = 2020;
 /// (maintainer decision (pre-2020 1702RT computed like BIR), 2026-10-19): calculations.json
 /// 1702rt-item41-rate-tax, "For 2020+, tax due uses user-visible rate / 100
 /// times Item 39, with nonpositive net forced to zero; before 2020 it uses
-/// 30%." Item 40 shows it; before 2020 Item 41 has no zero floor.
+/// 30%." Item 40 shows it; Item 41 is floored at zero (maintainer decision
+/// (pre-2020 1702RT items 41 and 42 floored at zero)).
 pub const RATE_BEFORE_2020_PERCENT: u8 = 30;
 
 /// `percent`% of `amount`, rounded as `getProduct2` does (`Math.round`,
 /// half up, toward positive infinity on a half), in whole pesos with
 /// integer arithmetic. A negative amount gives a negative result: the
-/// official helper has no floor (P4-17 review: none is added).
+/// official helper has no floor; the items floor it where the maintainer
+/// decided (pre-2020 1702RT items 41 and 42 floored at zero).
 fn percent_of(amount: WholePeso, percent: u8) -> WholePeso {
     let hundredths = i128::from(amount.0) * i128::from(percent);
     let rounded = (hundredths + 50).div_euclid(100);
@@ -74,7 +80,9 @@ fn percent_of(amount: WholePeso, percent: u8) -> WholePeso {
 /// Item 42 before [`MCIT_ENTERED_FROM`]: 2% of Item 33 (calculations.json
 /// 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
 /// of gross"), rounded as `getProduct2` does; a negative Item 33 gives a
-/// negative MCIT, as the official helper does (no floor).
+/// negative MCIT as the official helper computes it, which Item 42 floors
+/// at zero (maintainer decision (pre-2020 1702RT items 41 and 42 floored at
+/// zero)).
 fn two_percent(gross: WholePeso) -> WholePeso {
     percent_of(gross, 2)
 }
@@ -303,8 +311,11 @@ impl Form1702RTDraft {
         if mcit && before_2020 {
             // Maintainer decision (pre-2020 MCIT is 2% of gross):
             // computeP2Pt4I42's branch for a year before 2020
-            // with IC 055 ticked, 2% of gross (getProduct2's Math.round).
-            p4.item_42_mcit_due = two_percent(gross);
+            // with IC 055 ticked, 2% of gross (getProduct2's Math.round),
+            // floored at zero (maintainer decision (pre-2020 1702RT items
+            // 41 and 42 floored at zero)): MCIT is 2% of gross income,
+            // zero when gross income is zero or less.
+            p4.item_42_mcit_due = two_percent(gross).max(ZERO);
         }
         let ordinary = self.schedule_1.item_18_total;
         p4.item_34_ordinary_itemized_deductions = ordinary;
@@ -386,11 +397,12 @@ impl Form1702RTDraft {
             //
             // The rule puts the zero floor on 2020+ only ("For 2020+, ...
             // nonpositive net forced to zero; before 2020 it uses 30%") and
-            // the official body is not in the tree, so it is followed
-            // literally: a negative Item 39 gives a negative
-            // Item 41, as the no-floor MCIT does.
+            // the official body is not in the tree; the maintainer decided
+            // (pre-2020 1702RT items 41 and 42 floored at zero) the floor
+            // applies anyway: a net loss carries forward as NOLCO, so
+            // there is no regular tax, and Item 43 is never negative.
             p4.item_40_income_tax_rate_percent = RATE_BEFORE_2020_PERCENT;
-            p4.item_41_normal_income_tax_due = percent_of(net, RATE_BEFORE_2020_PERCENT);
+            p4.item_41_normal_income_tax_due = percent_of(net, RATE_BEFORE_2020_PERCENT).max(ZERO);
             if itemized {
                 self.part_v.item_57_special_allowable_deductions_tax_effect = percent_of(
                     p4.item_35_special_itemized_deductions,
@@ -1374,9 +1386,10 @@ mod tests {
         assert_eq!(p4.item_33_total_taxable_income, WholePeso(2_950_026));
         // 59,000.52 rounds to 59,001.
         assert_eq!(p4.item_42_mcit_due, WholePeso(59_001));
-        // Item 39 is 2,950,026 - 3,140,000 = -189,974; before 2020 item 41
-        // has no floor: 30% is -56,992.20.
-        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(-56_992));
+        // Item 39 is 2,950,026 - 3,140,000 = -189,974; the pre-2020 floor
+        // (maintainer decision (pre-2020 1702RT items 41 and 42 floored at
+        // zero)) keeps item 41 at zero rather than -56,992.
+        assert_eq!(p4.item_41_normal_income_tax_due, ZERO);
         assert_eq!(p4.item_43_tax_due, WholePeso(59_001));
         assert_eq!(
             p4.item_56_net_tax_payable_or_overpayment,
@@ -1421,25 +1434,67 @@ mod tests {
         assert_eq!(two_percent(WholePeso(-26)), WholePeso(-1));
     }
 
-    /// Review: a negative gross income gives a negative item
-    /// 42, as the official helper computes it (no floor); item 43 still
-    /// takes the larger of items 41 and 42.
+    /// Maintainer decision (pre-2020 1702RT items 41 and 42 floored at
+    /// zero): a 2019 loss year floors item 41 (the net loss carries forward
+    /// as NOLCO, so there is no regular tax) and item 42 (MCIT is 2% of
+    /// gross income - zero when gross income is zero or less), so item 43
+    /// is never negative and no overpayment is manufactured. Replaces the
+    /// literal-reading test that pinned a negative item 42.
     #[test]
-    fn before_2020_a_negative_gross_gives_a_negative_mcit() {
+    fn before_2020_a_loss_year_floors_items_41_and_42_at_zero() {
         let mut draft = sample();
         draft.taxable_year = 2019;
         draft.part_iv.item_30_cost_of_sales_or_services = WholePeso(5_000_000);
         draft.recompute();
         let p4 = &draft.part_iv;
-        // 4,900,000 - 5,000,000 + 50,001 = -49,999; 2% is -999.98.
+        // 4,900,000 - 5,000,000 + 50,001 = -49,999; 2% of it floors to zero.
         assert_eq!(p4.item_33_total_taxable_income, WholePeso(-49_999));
-        assert_eq!(p4.item_42_mcit_due, WholePeso(-1_000));
-        // before 2020 item 41 has no floor either: item 39 is
-        // -49,999 - 1,440,000 = -1,489,999, and 30% is -446,999.70.
+        assert_eq!(p4.item_42_mcit_due, ZERO);
+        // Item 39 is -49,999 - 1,440,000 = -1,489,999; 30% floors to zero.
         assert_eq!(p4.item_39_net_taxable_income_or_loss, WholePeso(-1_489_999));
-        assert_eq!(p4.item_41_normal_income_tax_due, WholePeso(-447_000));
-        // Item 43 is the larger of the two.
-        assert_eq!(p4.item_43_tax_due, WholePeso(-1_000));
+        assert_eq!(p4.item_41_normal_income_tax_due, ZERO);
+        // Item 43 is the larger of the two: zero.
+        assert_eq!(p4.item_43_tax_due, ZERO);
+        // The overpayment left is exactly the withholding credit the return
+        // carries - the tax itself contributes nothing negative.
+        assert_eq!(
+            p4.item_56_net_tax_payable_or_overpayment,
+            WholePeso(-120_000)
+        );
+        // The penalty engine reads item 16 as its basic tax due; a negative
+        // base is clamped (compute_penalties: `basic_tax_due.max(0.0)`), and
+        // with no gross-sales basis every component computes zero.
+        let computed = Form1702RTDraft::penalty_declaration()
+            .if_filed_on(
+                &draft,
+                chrono::NaiveDate::from_ymd_opt(2020, 5, 15).unwrap(),
+            )
+            .expect("the 2019 calendar deadline resolves");
+        assert_eq!(computed.surcharge, 0.0);
+        assert_eq!(computed.interest, 0.0);
+        assert_eq!(computed.compromise, 0.0);
+        // With no credits there is no overpayment at all: item 16 is zero,
+        // the return asks no disposition, and item 43 files "0".
+        let mut bare = sample();
+        bare.taxable_year = 2019;
+        bare.part_iv.item_30_cost_of_sales_or_services = WholePeso(5_000_000);
+        bare.part_iv
+            .tax_credits
+            .item_48_previous_quarter_withholding = ZERO;
+        bare.recompute();
+        assert_eq!(bare.part_iv.item_43_tax_due, ZERO);
+        assert_eq!(bare.part_ii.item_16_net_tax_payable_or_overpayment, ZERO);
+        assert_eq!(bare.part_ii.overpayment_disposition, None);
+        assert!(
+            messages(&bare)
+                .iter()
+                .all(|message| !message.contains("Overpayment")),
+            "{:?}",
+            messages(&bare)
+        );
+        let fields = bare.field_map();
+        assert_eq!(fields["frm1702RT:txtPg2Pt4I43TotalIncomeTax"], "0");
+        assert_eq!(fields["frm1702RT:txtPg1Pt2I16NetTax"], "0");
     }
 
     /// Maintainer decision (pre-2020 1702RT computed like BIR): a 2019 return

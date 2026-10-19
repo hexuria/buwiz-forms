@@ -208,8 +208,7 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        canonical_sha256, run, run_for_platform, CertificationPlatform, HEIGHT_POINTS, PAGE_COUNT,
-        WIDTH_POINTS,
+        canonical_sha256, run, CertificationPlatform, HEIGHT_POINTS, PAGE_COUNT, WIDTH_POINTS,
     };
     use bir_print::html_output::{create_pdf_export_temp, finalize_pdf_export, PdfExpectation};
     use lopdf::{dictionary, Document, Object, Stream};

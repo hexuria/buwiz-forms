@@ -27,8 +27,8 @@
 //!   whose penalties run from a date the filer types, not from the calendar
 //!   (the excise returns 2200A, 2200AN, 2200M, 2200P, 2200S and 2200T: the
 //!   removal date; 2200C: the 10th of the month after its Item 1 month;
-//! maintainer decision (1800/1801 penalties run from the due date), 2026-10-19:
-//! 1800, 30 days after the donation, and 1801,
+//!   maintainer decision (1800/1801 penalties run from the due date), 2026-10-19:
+//!   1800, 30 days after the donation, and 1801,
 //!   one year after the death, each moved to the next business day),
 //!   declares [`PenaltyItems::typed_due_date`]. It is measured from that
 //!   date once the draft is on [`TYPED_DUE_DATE_MODEL_VERSION`] (a new
