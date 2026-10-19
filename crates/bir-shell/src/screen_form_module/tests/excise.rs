@@ -2455,3 +2455,84 @@ fn pr11_joining_the_typed_due_date_keeps_every_other_key() {
     rows_excise::join_if_group_blanked(kind, &mut draft, &groups, &blanked, &Map::new());
     assert_eq!(draft, expected);
 }
+
+/// Decision P4-14: an older excise return kept as entered says so under its
+/// penalty boxes even when they hold 0.00 (the host lists them in
+/// `notes_always`; the page draws a lock note under a box showing a value
+/// only for those), and keeps the one-click "Use the computed amounts"
+/// path: blanking the group joins the typed due date, after which nothing
+/// is listed and the boxes are computed. Every stored fixture lists its
+/// group's boxes, and only those.
+#[test]
+fn p4_14_a_kept_return_says_so_over_its_amounts() {
+    for (code, fixture) in STORED {
+        setup();
+        store_fixture(code, fixture.trim_end());
+        let opened = open(code, 1);
+        let group = &opened["penalties"][0];
+        assert_eq!(group["kept"], true, "{code}");
+        let mut keys: Vec<String> = strings(&group["keys"]).into_iter().collect();
+        keys.sort();
+        let mut noted: Vec<String> = strings(&opened["notes_always"]).into_iter().collect();
+        noted.sort();
+        assert_eq!(
+            noted, keys,
+            "{code}: the kept group's boxes, and only those"
+        );
+    }
+    setup();
+    let p = "frm2200Av2020:";
+    store_fixture("2200A", STORED[1].1.trim_end());
+    let opened = open("2200A", 1);
+    let keys =
+        ["txtPen_Surcharge", "txtPen_Interest", "txtPen_Compromise"].map(|k| format!("{p}{k}"));
+    for key in &keys {
+        assert_eq!(opened["values"][key], "0.00", "{key} holds 0.00");
+        assert_eq!(
+            opened["lock_notes"][key],
+            "Kept as entered before penalties were computed."
+        );
+    }
+    // Another edit keeps the note listed.
+    let other = fill(
+        "2200A",
+        &opened["draft"],
+        json!({ format!("{p}txtLess_Balance"): "5" }),
+    );
+    assert_eq!(
+        strings(&other["notes_always"]),
+        keys.iter().cloned().collect::<BTreeSet<_>>()
+    );
+    // "Use the computed amounts": the group joins, nothing is listed.
+    let refs: Vec<&str> = keys.iter().map(String::as_str).collect();
+    let blanks: Map<String, Value> = keys.iter().map(|k| (k.clone(), json!(""))).collect();
+    let joined = fill_unlocked("2200A", &other["draft"], Value::Object(blanks), &refs);
+    assert_eq!(joined["rejected"], json!({}));
+    assert_eq!(joined["draft"]["penalty_model_version"], 2);
+    assert_eq!(joined["notes_always"], json!([]));
+    for key in &keys {
+        assert_eq!(joined["relock_notes"][key], NOTE_COMPUTED, "{key}");
+    }
+}
+
+/// Decision P4-14 pins every other form: a new return of every form lists
+/// no box whose lock note shows whatever it holds, so the page draws every
+/// other lock note only under a blank box, as before; the exceptions are
+/// 1702RT item 42 while shut (decision P4-17) and 1702EX's rows BIR's
+/// program keeps shut (decision P4-8).
+#[test]
+fn p4_14_no_new_return_lists_a_note_shown_always() {
+    setup();
+    for kind in AgentFormKind::all() {
+        let code = kind.form_code();
+        let opened = open(code, page_period_of(code));
+        let expected: Vec<String> = match code {
+            "1702RT" => vec!["frm1702RT:txtPg2Pt4I42MinimumCorporate".to_string()],
+            "1702EX" => rows_annual_corporate::ex_attached_keys()
+                .filter(|key| key.ends_with("Amt") || key.ends_with("Amount"))
+                .collect(),
+            _ => Vec::new(),
+        };
+        assert_eq!(opened["notes_always"], json!(expected), "{code}");
+    }
+}

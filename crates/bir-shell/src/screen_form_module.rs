@@ -1458,13 +1458,20 @@ fn finish<F: QueueableForm>(
     profile: &TaxpayerProfile,
     mut draft: F,
 ) -> Result<Value, String> {
+    // A stored 1702RT's item 42, which this compute may change (P4-17).
+    let held = (F::FORM_CODE == "1702RT")
+        .then(|| serde_json::to_value(&draft).ok())
+        .flatten()
+        .map(|stored| stored["part_iv"]["item_42_mcit_due"].clone());
     if !F::penalty_items().is_empty() {
         draft.apply_penalty_profile(profile, &db.get_deadline_overrides());
         if draft.lifecycle().is_editable() {
             draft.compute();
         }
     }
-    serde_json::to_value(draft).map_err(|error| error.to_string())
+    let mut opened = serde_json::to_value(draft).map_err(|error| error.to_string())?;
+    rows_annual_corporate::mark_item_42_held(&mut opened, held);
+    Ok(opened)
 }
 
 fn month_or(period: u8, fallback: u8) -> u8 {
@@ -2899,6 +2906,21 @@ fn lock_note(reason: &str) -> &'static str {
     }
 }
 
+/// Boxes whose lock note the page draws whatever the box shows; it draws
+/// every other lock note only while its box is blank. A kept penalty
+/// group's boxes say "Kept as entered before penalties were computed." over
+/// 0.00 too (decision P4-14), and 1702RT item 42, which always shows an
+/// amount, says why it is shut (decision P4-17).
+fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
+    let mut keys: Vec<String> = penalties::computed_groups(kind)
+        .into_iter()
+        .filter(|group| penalties::kept(kind, group, draft))
+        .flat_map(|group| group.keys)
+        .collect();
+    keys.extend(rows_annual_corporate::notes_always(kind, draft));
+    keys
+}
+
 /// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
 fn opened_json(
     kind: AgentFormKind,
@@ -2909,7 +2931,17 @@ fn opened_json(
     sample: Option<SampleBuild>,
 ) -> Result<Value, String> {
     let code = kind.form_code();
+    // What a stored 1702RT draft held in item 42 before opening recomputed
+    // it (decision P4-17; `finish` marks it), for the notice below.
+    let stored_item_42 = rows_annual_corporate::take_item_42_held(&mut draft);
     let (mut values, mut errors, status) = evaluate_here(kind, &mut draft)?;
+    if let Value::Array(list) = &mut errors {
+        list.extend(rows_annual_corporate::rt_item_42_notice(
+            kind,
+            stored_item_42,
+            &draft,
+        ));
+    }
     let mut from_profile_draft = from_profile;
     agent::compute(kind, &mut from_profile_draft)?;
     let from_profile = FromProfile {
@@ -3024,6 +3056,7 @@ fn opened_json(
         Map::new()
     };
     let penalty_groups = penalties::json(kind, &draft);
+    let noted = notes_always(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     let mark = sample.as_ref().map(|build| SampleMark {
         blank: blank.clone(),
@@ -3060,6 +3093,7 @@ fn opened_json(
         "options": options,
         "locks": locks,
         "lock_notes": lock_notes,
+        "notes_always": noted,
         "profile": profile,
         "profile_edit": profile_edit,
         "sample": sample.is_some(),
@@ -3890,6 +3924,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         mark
     });
     let penalty_groups = penalties::json(kind, &draft);
+    let noted = notes_always(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
     // What the filer typed that this edit removed: the page asks first (PR
     // 4's, PR 5's, PR 6's, PR 7's, PR 8's, PR 9's, PR 10's and PR 11's forms; the integration merge chains PR 2's and
@@ -3932,6 +3967,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
             .or(removes),
         "relocks": relocks,
         "relock_notes": relock_notes,
+        "notes_always": noted,
     })))
 }
 
@@ -4174,7 +4210,8 @@ fn apply_screen_edits(
         }
     }
     // "Use the computed amounts" on an excise return stored before decision
-    // D8 puts it on the typed due date (PR 11).
+    // D8 (PR 11), or a 1800 or 1801 return stored before decision P4-4,
+    // puts it on the typed due date.
     let groups: Vec<penalties::Group> =
         penalty_groups.into_iter().map(|(group, _)| group).collect();
     rows_excise::join_if_group_blanked(kind, draft, &groups, &blanked, &rejected);
@@ -13387,6 +13424,14 @@ mod tests {
         // Boxes the page does not type, and what prints them.
         let printed_from: BTreeMap<&str, &str> = BTreeMap::from([
             (
+                "frm1702EX:txtPg3Pt6S2I2Description",
+                "a row BIR's program keeps shut (decision P4-8): refused here; a stored draft's text still prints",
+            ),
+            (
+                "frm1702EX:txtPg3Pt6S2I3Description",
+                "a row BIR's program keeps shut (decision P4-8): refused here; a stored draft's text still prints",
+            ),
+            (
                 "frm0619E:txtAddress2",
                 "the pooled address, typed in frm0619E:txtAddress",
             ),
@@ -13547,8 +13592,9 @@ mod tests {
                 whole += 1;
             }
         }
-        // Plus 2 for 1707 (PR 9): Schedules 2 and 3 row D, typed now.
-        assert_eq!(whole, 161, "boxes typed long and printed whole");
+        // Plus 2 for 1707 (PR 9): Schedules 2 and 3 row D, typed now; less
+        // 2 for 1702EX Schedule 2 rows 2 and 3, shut (decision P4-8).
+        assert_eq!(whole, 159, "boxes typed long and printed whole");
     }
 
     /// Rules page question 4, decided 2026-10-17, end to end on every pooled

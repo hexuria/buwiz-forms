@@ -456,6 +456,9 @@ export class FormPageActions {
     s.options = r.options || {};
     s.locks = r.locks;
     s.lockNotes = r.lock_notes || {};
+    // Boxes whose lock note shows whatever they hold (the host's
+    // `notes_always`: a kept penalty group's 0.00 too).
+    s.notesAlways = new Set(r.notes_always || []);
     s.profile = new Set(r.profile || []);
     s.profileEdit = new Set(r.profile_edit || []);
     // A sample's held box that cannot be typed says what it waits for.
@@ -629,7 +632,8 @@ export class FormPageActions {
       keys.includes(s.openSelect) ? s.openSelect : null,
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
-      keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k)]),
+      it.from ? s.values[it.from.k] ?? "" : null,
+      keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
     ]);
   }
 
@@ -846,6 +850,7 @@ export class FormPageActions {
     if (r.pools) s.poolTexts = r.pools;
     // Locks this fill opened or shut (a folded item, a box an answer shuts)
     // take effect at once, not on the next opening.
+    if (Array.isArray(r.notes_always)) s.notesAlways = new Set(r.notes_always);
     for (const [k, lock] of Object.entries(r.relocks || {})) {
       s.lockNotes ||= {};
       if (lock == null) {
@@ -1130,6 +1135,7 @@ export class FormPageActions {
         s.draft = f.draft;
         s.values = this.shown(f.values);
         s.options = f.options || {};
+        if (Array.isArray(f.notes_always)) s.notesAlways = new Set(f.notes_always);
       } catch (e) {
         this.app.toast(message(e), cx, "triangle-alert");
       }
@@ -1255,6 +1261,7 @@ export class FormPageActions {
         options: s.options,
         locks: s.locks,
         lockNotes: s.lockNotes,
+        notesAlways: s.notesAlways,
         blank: s.blank,
         needs: s.needs,
         whys: s.whys,
@@ -1442,6 +1449,9 @@ export class FormPageActions {
    * another answer turns off) says it there instead; a computed amount shows
    * 0.00, never blank. A box another answer turns off that the form also
    * computes keeps its "Needs" tag and says "Computed by the form." too.
+   * A box the host lists in `notes_always` says its note whatever it shows
+   * (a kept penalty group's 0.00: "Kept as entered before penalties were
+   * computed.").
    */
   lockNotesFor(it) {
     const s = this.state;
@@ -1456,6 +1466,7 @@ export class FormPageActions {
       if (this.isOff(k) && this.isComputedBox(k)) add("Computed by the form.");
       return Boolean(this.reasonFor(k) || this.isOff(k));
     };
+    const always = (k) => Boolean(s.notesAlways?.has(k));
     const ticked = (k) => ["true", "1", "Y"].includes(String(s.values[k] ?? ""));
     const blankText = (k, t) => {
       const v = String(s.values[k] ?? "").trim();
@@ -1468,7 +1479,7 @@ export class FormPageActions {
         row.forEach((k, c) => {
           const col = it.cols[c];
           if (col.t === "hidden" || !shut(k, col.c) || waits(k)) return;
-          if (col.t === "radio" || col.t === "chk" ? !ticked(k) : blankText(k, col.t)) note(k);
+          if (always(k) || (col.t === "radio" || col.t === "chk" ? !ticked(k) : blankText(k, col.t))) note(k);
         }),
       );
       return notes;
@@ -1480,7 +1491,7 @@ export class FormPageActions {
     }
     for (const f of fs) {
       if (f.t === "radio" || f.t === "hidden" || !shut(f.k, f.c) || waits(f.k)) continue;
-      if (f.t === "chk" ? !ticked(f.k) : blankText(f.k, f.t)) note(f.k);
+      if (always(f.k) || (f.t === "chk" ? !ticked(f.k) : blankText(f.k, f.t))) note(f.k);
     }
     return notes;
   }

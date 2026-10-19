@@ -19,7 +19,8 @@
 //!   official program would file it.
 //! - 1702RT item 42 MCIT Due takes an amount only while MCIT applies (the
 //!   form's own `subject_to_mcit`); otherwise recompute clears it, so the
-//!   host refuses it with why. Its (Add more...) items read OTHERS and the
+//!   host refuses it with why. Before 2020 the form computes it, 2% of item
+//!   33 (decision P4-17), and it stays locked with that reason. Its (Add more...) items read OTHERS and the
 //!   subtotal once the table holds two or more rows: they are then the
 //!   form's, locked and refused.
 //! - Computed boxes the probe left as "derived" say they are computed
@@ -99,11 +100,12 @@ const RT_MCIT_DUE: &str = "frm1702RT:txtPg2Pt4I42MinimumCorporate";
 /// Item 42's lock while MCIT does not apply.
 pub(super) const RT_MCIT_REFUSAL: &str = "Item 42 applies once MCIT does: from the fourth taxable year after the year of incorporation (item 10).";
 
-/// Item 42's lock on a return for a year before 2020 (calculations.json
-/// 1702rt-item42-mcit: "Before 2020 and when IC 055 is selected, MCIT is 2%
-/// of gross"; the port does not compute it, so the box stays as stored).
+/// Item 42's lock on a return for a year before 2020 while MCIT applies
+/// (calculations.json 1702rt-item42-mcit: "Before 2020 and when IC 055 is
+/// selected, MCIT is 2% of gross"): form_1702rt_official.rs recompute
+/// computes it (decision P4-17).
 pub(super) const RT_MCIT_BEFORE_2020: &str =
-    "For years before 2020, MCIT is 2% of gross income (item 33)";
+    "For years before 2020, MCIT is 2% of gross income (item 33), which the form computes.";
 
 /// Item 42's lock from 2020 while net taxable income is zero or less
 /// (calculations.json 1702rt-item42-mcit: "2020+ leaves the enabled value
@@ -160,6 +162,86 @@ fn rt_date_path(key: &str) -> Option<&'static str> {
         .map(|(_, path)| *path)
 }
 
+/// Decision P4-8 (2026-10-19): the 1702EX "others" rows the official page
+/// keeps shut at load (rules/forms/1702ex-v2018c/fixtures/
+/// runtime-control-inventory-v796.json records each `disabled: true`):
+/// item 49 Other Tax Credits/Payments, Schedule 1 items 17e-17h and
+/// Schedule 2 rows 2-3, each with its description (and legal basis). They
+/// are locked the way 1702MX's others rows are: refused here with
+/// [`EX_ATTACHED_LOCK`], their amounts computed as fields.json marks them
+/// (probe.rs no longer lists them as the filer's), and their note says what
+/// fills them. A draft stored with values there still files them as stored
+/// (form_1702ex.rs is unchanged) and says to check them ([`notices`]).
+const EX_ATTACHED_ROWS: [(&str, &[&str]); 7] = [
+    (
+        "Item 49",
+        &[
+            "txtPg2Pt4I49OtherTaxCrPmtDesc",
+            "txtPg2Pt4I49OtherTaxCrPmtAmt",
+        ],
+    ),
+    (
+        "Schedule 1 item 17e",
+        &["txtPg3Pt6I17OthersEDesc", "txtPg3Pt6I17OthersEAmt"],
+    ),
+    (
+        "Schedule 1 item 17f",
+        &["txtPg3Pt6I17OthersFDesc", "txtPg3Pt6I17OthersFAmt"],
+    ),
+    (
+        "Schedule 1 item 17g",
+        &["txtPg3Pt6I17OthersGDesc", "txtPg3Pt6I17OthersGAmt"],
+    ),
+    (
+        "Schedule 1 item 17h",
+        &["txtPg3Pt6I17OthersHDesc", "txtPg3Pt6I17OthersHAmt"],
+    ),
+    (
+        "Schedule 2 row 2",
+        &[
+            "txtPg3Pt6S2I2Description",
+            "txtPg3Pt6S2I2LegalBasis",
+            "txtPg3Pt6S2I2Amount",
+        ],
+    ),
+    (
+        "Schedule 2 row 3",
+        &[
+            "txtPg3Pt6S2I3Description",
+            "txtPg3Pt6S2I3LegalBasis",
+            "txtPg3Pt6S2I3Amount",
+        ],
+    ),
+];
+
+/// The lock and refusal of an [`EX_ATTACHED_ROWS`] box.
+pub(super) const EX_ATTACHED_LOCK: &str =
+    "filled from the attached schedule; BIR's program keeps this row shut";
+
+/// What an [`EX_ATTACHED_ROWS`] box's note says.
+pub(super) const EX_ATTACHED_NOTE: &str = "Filled from the attached schedule.";
+
+/// Every [`EX_ATTACHED_ROWS`] box, by official key.
+pub(super) fn ex_attached_keys() -> impl Iterator<Item = String> {
+    EX_ATTACHED_ROWS
+        .iter()
+        .flat_map(|(_, stems)| stems.iter())
+        .map(|stem| format!("{EX}{stem}"))
+}
+
+/// An [`EX_ATTACHED_ROWS`] amount box: it always shows an amount (0.00
+/// blank), so its note is drawn whatever it shows (`notes_always`); its
+/// description and legal basis boxes say what fills them in place while
+/// blank ([`waits`]).
+fn ex_attached_amount(key: &str) -> bool {
+    key.ends_with("Amt") || key.ends_with("Amount")
+}
+
+/// Whether `key` is one of 1702EX's [`EX_ATTACHED_ROWS`] boxes.
+fn ex_attached(kind: AgentFormKind, key: &str) -> bool {
+    kind.form_code() == "1702EX" && ex_attached_keys().any(|attached| attached == key)
+}
+
 /// Whether the host writes `key` itself (the page shows it open).
 pub(super) fn host_writes(kind: AgentFormKind, key: &str) -> bool {
     match kind.form_code() {
@@ -188,6 +270,7 @@ pub(super) fn fill(
             mx_rate(key).map(|(path, decimals)| fill_1702mx_rate(draft, path, decimals, value))
         }
         "1707A" if host_writes(kind, key) => Some(fill_1707a_tax_relief(draft, key, value)),
+        "1702EX" if ex_attached(kind, key) => Some(Err(format!("`{key}` is {EX_ATTACHED_LOCK}"))),
         _ => None,
     }
 }
@@ -195,13 +278,14 @@ pub(super) fn fill(
 /// Why 1702RT item 42 is shut, if it is: the official computeP2Pt4I42
 /// (calculations.json 1702rt-item42-mcit) leaves it to the filer only from
 /// 2020, while MCIT applies (item 10's four years) and item 39 is above
-/// zero.
+/// zero. Before 2020 the form computes it while MCIT applies (decision
+/// P4-17), and clears it otherwise, as from 2020.
 pub(super) fn rt_item_42_lock(draft: &Value) -> Option<&'static str> {
     let typed: Form1702RTDraft = serde_json::from_value(draft.clone()).ok()?;
-    if typed.taxable_year < 2020 {
-        Some(RT_MCIT_BEFORE_2020)
-    } else if !typed.subject_to_mcit() {
+    if !typed.subject_to_mcit() {
         Some(RT_MCIT_REFUSAL)
+    } else if typed.taxable_year < bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM {
+        Some(RT_MCIT_BEFORE_2020)
     } else if typed.part_iv.item_39_net_taxable_income_or_loss.0 <= 0 {
         Some(RT_MCIT_NO_NET)
     } else {
@@ -533,6 +617,23 @@ pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Valu
     locks
 }
 
+/// Boxes whose lock note shows whatever they hold (screen_form_module
+/// `notes_always`): 1702RT item 42 while it is shut, which always shows an
+/// amount (0 while MCIT does not apply, 2% of item 33 before 2020), so its
+/// note says why (decision P4-17).
+///
+/// 1702EX's [`EX_ATTACHED_ROWS`] say what fills them over their 0.00 too
+/// (decision P4-8).
+pub(super) fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
+    match kind.form_code() {
+        "1702RT" if rt_item_42_lock(draft).is_some() => vec![RT_MCIT_DUE.to_string()],
+        "1702EX" => ex_attached_keys()
+            .filter(|key| ex_attached_amount(key))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// The note a live lock shows under its item, in the filer's words: item
 /// 42 says why it is shut.
 pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
@@ -540,6 +641,7 @@ pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
         (RT_MCIT_BEFORE_2020, RT_MCIT_BEFORE_2020_NOTE),
         (RT_MCIT_REFUSAL, RT_MCIT_NOT_YET_NOTE),
         (RT_MCIT_NO_NET, RT_MCIT_NO_NET_NOTE),
+        (EX_ATTACHED_LOCK, EX_ATTACHED_NOTE),
     ]
     .into_iter()
     .find(|(known, _)| *known == reason)
@@ -548,7 +650,7 @@ pub(super) fn live_lock_note(reason: &str) -> Option<&'static str> {
 
 /// Item 42's notes (see [`live_lock_note`]).
 pub(super) const RT_MCIT_BEFORE_2020_NOTE: &str =
-    "Shut for this year: MCIT before 2020 is 2% of gross income, which this app does not compute.";
+    "Computed for this year: MCIT before 2020 is 2% of gross income (item 33).";
 pub(super) const RT_MCIT_NOT_YET_NOTE: &str =
     "Shut until MCIT applies, from the fourth year after incorporation.";
 pub(super) const RT_MCIT_NO_NET_NOTE: &str =
@@ -627,6 +729,12 @@ pub(super) fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String,
             locks.insert(key, json!(COMPUTED));
         }
     }
+    // 1702EX's rows BIR's program keeps shut, each box (P4-8).
+    if code == "1702EX" {
+        for key in ex_attached_keys() {
+            locks.insert(key, json!(EX_ATTACHED_LOCK));
+        }
+    }
 }
 
 /// What 1707A's printed row 4 waits for while it is blank.
@@ -654,6 +762,10 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
         "1702EX" => {
             for (description, _) in EX_FOLDED_LINES {
                 out.insert(format!("{EX}{description}"), json!(EX_FOLDED_WAITS));
+            }
+            // P4-8: a shut row's text boxes say what fills them.
+            for key in ex_attached_keys().filter(|key| !ex_attached_amount(key)) {
+                out.insert(key, json!(EX_ATTACHED_NOTE));
             }
         }
         "1702MX" => {
@@ -1063,6 +1175,125 @@ pub(super) fn printed_item_numbers(kind: AgentFormKind, errors: &mut [(String, S
 
 /// What a 1702RT Schedule IV row says while it holds an MCIT that an older
 /// version may have saved from column C.
+/// Where `finish` keeps, for one open, the item 42 a stored 1702RT held
+/// before opening recomputed it to another amount; `screen_form_open`
+/// takes it off before anything else reads the draft.
+const ITEM_42_HELD: &str = "screen_form_item_42_held";
+
+/// Mark `opened` with the item 42 it `held` when stored, if its compute
+/// changed it (decision P4-17).
+pub(super) fn mark_item_42_held(opened: &mut Value, held: Option<Value>) {
+    let Some(held) = held.and_then(|held| held.as_i64()) else {
+        return;
+    };
+    if opened["part_iv"]["item_42_mcit_due"].as_i64() != Some(held)
+        && let Value::Object(fields) = opened
+    {
+        fields.insert(ITEM_42_HELD.into(), json!(held));
+    }
+}
+
+/// Take the mark [`mark_item_42_held`] put on a draft, if any.
+pub(super) fn take_item_42_held(draft: &mut Value) -> Option<i64> {
+    let Value::Object(fields) = draft else {
+        return None;
+    };
+    fields.remove(ITEM_42_HELD)?.as_i64()
+}
+
+/// Decision P4-17 on a draft stored before it: a return for a year before
+/// 2020 whose item 42 the form now computes (2% of item 33) to another
+/// amount than it held says so on open, beside the form's own messages, so
+/// the change is never silent. Nothing else changes; once saved, the draft
+/// holds the computed amount.
+pub(super) fn rt_item_42_notice(
+    kind: AgentFormKind,
+    held: Option<i64>,
+    draft: &Value,
+) -> Vec<Value> {
+    let Some(held) = held else {
+        return Vec::new();
+    };
+    let Ok(typed) = serde_json::from_value::<Form1702RTDraft>(draft.clone()) else {
+        return Vec::new();
+    };
+    let computed = typed.part_iv.item_42_mcit_due.0;
+    if typed.taxable_year >= bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM
+        || computed == held
+    {
+        return Vec::new();
+    }
+    vec![json!({
+        "field": "part_iv.item_42_mcit_due",
+        "message": rt_item_42_notice_text(computed, held),
+        "keys": [RT_MCIT_DUE],
+    })]
+}
+
+/// The P4-17 notice's words.
+pub(super) fn rt_item_42_notice_text(computed: i64, held: i64) -> String {
+    format!(
+        "Item 42 is now computed for years before 2020: 2% of gross income (item 33) is {}; this return held {}. Check the tax due before you file.",
+        whole_pesos(computed),
+        whole_pesos(held)
+    )
+}
+
+/// `-1234567` -> `-1,234,567`.
+fn whole_pesos(amount: i64) -> String {
+    let digits = amount.unsigned_abs().to_string();
+    let mut grouped = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(c);
+    }
+    if amount < 0 {
+        format!("-{grouped}")
+    } else {
+        grouped
+    }
+}
+
+/// Decision P4-8 on a draft stored before it: each [`EX_ATTACHED_ROWS`] row
+/// holding a description or an amount still files it as stored, and says
+/// so beside the form's own messages, so the filer checks it.
+fn ex_attached_notices(draft: &Value) -> Vec<Value> {
+    let rows: [(&str, &str); 7] = [
+        ("Item 49", "/other_credits/1"),
+        ("Schedule 1 item 17e", "/other_deductions/1"),
+        ("Schedule 1 item 17f", "/other_deductions/2"),
+        ("Schedule 1 item 17g", "/other_deductions/3"),
+        ("Schedule 1 item 17h", "/other_deductions/4"),
+        ("Schedule 2 row 2", "/special_rows/1"),
+        ("Schedule 2 row 3", "/special_rows/2"),
+    ];
+    let mut out = Vec::new();
+    for ((item, path), (_, stems)) in rows.iter().zip(EX_ATTACHED_ROWS.iter()) {
+        let row = draft.pointer(path);
+        let holds = row
+            .and_then(Value::as_object)
+            .is_some_and(|fields| fields.values().any(|value| !holds_nothing(Some(value))));
+        if !holds {
+            continue;
+        }
+        out.push(json!({
+            "field": path.trim_start_matches('/').replace('/', "."),
+            "message": ex_attached_notice(item),
+            "keys": stems.iter().map(|stem| format!("{EX}{stem}")).collect::<Vec<_>>(),
+        }));
+    }
+    out
+}
+
+/// The P4-8 notice's words for `item`.
+pub(super) fn ex_attached_notice(item: &str) -> String {
+    format!(
+        "{item} holds an entry BIR's program keeps shut (it is filled from the attached schedule). It still files as stored; check it before you file."
+    )
+}
+
 pub(super) fn rt_column_c_notice(row: usize) -> String {
     format!(
         "Row {row} holds an MCIT amount that may have been typed in column C; check it before you file."
@@ -1077,6 +1308,9 @@ pub(super) fn rt_column_c_notice(row: usize) -> String {
 /// holding an MCIT says so (as the maintainer's D5 does for 1604E's
 /// changed rows); its stored bytes stay as they are.
 pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
+    if kind.form_code() == "1702EX" {
+        return ex_attached_notices(draft);
+    }
     if kind.form_code() != "1702RT" {
         return Vec::new();
     }
