@@ -1218,6 +1218,54 @@ mod tests {
         assert_eq!(draft["schedule"][0]["payee_name"], "PAYEE ONE");
     }
 
+    /// PR 17 (decision P4-19, part 2): the assistant is refused what the
+    /// page's draft-dependent layer locks — here 0619E's computed penalty,
+    /// which no typed amount has opened (the assistant has no Edit
+    /// penalties) — with the page's own reason, and, as every refusal is
+    /// (F-8), that key alone: the rest of the batch applies.
+    #[test]
+    fn a_draft_locked_box_is_refused_alone_and_the_batch_applies() {
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "0619E", "year": year(), "period": 1, "tin": TIN}),
+            ),
+            "open",
+        );
+        let (locked, open) = ("frm0619E:txtTax17A", "frm0619E:txtTax14");
+        let filled = ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {locked: "500", open: "1,234.50"},
+                    "source": "document"
+                }),
+            ),
+            "fill",
+        );
+        assert_eq!(filled["filled"], json!([open]), "{filled}");
+        assert_eq!(
+            filled["refused"],
+            json!({ locked: format!("`{locked}` {}", agent::draft_locks::penalties::LOCK) }),
+            "{filled}"
+        );
+        let form = host.generic_form().expect("open");
+        assert_eq!(
+            form.assist.sources.get(open),
+            Some(&BoxSource::Document),
+            "the rest of the batch applied"
+        );
+        assert_eq!(form.assist.sources.get(locked), None);
+        assert!(
+            form.draft["penalty_overrides"]["surcharge"].is_null(),
+            "the computed penalty stands: {}",
+            form.draft["penalty_overrides"]
+        );
+    }
+
     /// An accepted write to a trigger box is the filer's instruction on a
     /// typed-date-model draft (decision P5-7): the part joins the parts the
     /// return is dated by, a cleared box takes its part out, and once the
@@ -1324,6 +1372,26 @@ mod tests {
             .filter(|entry| matches!(def.bindings[&entry.key].binding, Binding::Amount { .. }))
             .map(|entry| entry.key.clone())
             .collect();
+        // A new return keeps items 14 and 15 behind their answers (Any Taxes
+        // Withheld and Amended Return: form_0619e_official.rs
+        // official_recompute zeroes them), so the only amount boxes it
+        // showed right away were the penalty overrides 17A and 17B. Since
+        // PR 17 (decision P4-19, part 2) an unedited computed penalty is
+        // refused to the assistant (asserted below), so answer both items
+        // first.
+        let answered = ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {"frm0619E:optWithheld": "Y", "frm0619E:optAmend": "Y"}}),
+            ),
+            "answers",
+        );
+        assert_eq!(
+            answered["filled"],
+            json!(["frm0619E:optWithheld", "frm0619E:optAmend"]),
+            "{answered}"
+        );
         // Boxes behind an unanswered item come back as `not_shown`; take
         // two the form shows right away.
         let mut amounts = Vec::new();
@@ -1345,6 +1413,29 @@ mod tests {
             }
         }
         assert_eq!(amounts.len(), 2, "0619E shows amount boxes: {all:?}");
+        assert_eq!(amounts, ["frm0619E:txtTax14", "frm0619E:txtTax15"]);
+        // The computed penalties no amount has opened are refused, each with
+        // the page's own reason.
+        for key in [
+            "frm0619E:txtTax17A",
+            "frm0619E:txtTax17B",
+            "frm0619E:txtTax17C",
+        ] {
+            let refused = ok(
+                call(
+                    &mut host,
+                    "form.fill",
+                    json!({"fields": {key: "1,234.50"}, "source": "document"}),
+                ),
+                "penalty",
+            );
+            assert_eq!(refused["filled"], json!([]), "{refused}");
+            assert_eq!(
+                refused["refused"][key],
+                format!("`{key}` {}", agent::draft_locks::penalties::LOCK),
+                "{refused}"
+            );
+        }
         let form = host.generic_form().unwrap();
         assert_eq!(
             form.assist.sources.get(&amounts[0]),

@@ -12,66 +12,35 @@
 //!   Maintainer decision (1800/1801 penalties run from the due date,
 //!   2026-10-19) puts 1800 and 1801 on the same model (their
 //!   due date: 30 days after the donation, one year after the death), so
-//!   the kept-as-entered helpers below ([`typed_due`]) take them too.
+//!   the kept-as-entered helpers (bir-core's `agent::draft_locks::excise`,
+//!   with [`typed_due`]) take them too.
 //! - **Printed item numbers (decision D6).** Where BIR's message names its
 //!   program's item number and the sheet prints another, the page shows the
 //!   printed one ([`PRINTED_MESSAGES`]); the checks and the filed data are
 //!   unchanged.
 
+use bir_core::forms::agent::draft_locks::excise::{before_d8, excise, typed_due};
 use bir_core::forms::agent::{AgentFormKind, Binding};
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
-use bir_core::forms::{FilingStatus, form_1800, form_1801};
+use bir_core::forms::{form_1800, form_1801};
 use bir_core::forms::{form_2200a, form_2200an, form_2200c, form_2200m};
 use bir_core::forms::{form_2200p, form_2200s, form_2200t};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 
 /// The lock of an excise return's penalty box while the draft predates
-/// decision D8: the amounts are the ones it was stored with.
+/// decision D8: the amounts are the ones it was stored with. bir-core's
+/// (`agent::draft_locks::excise`, which also says which returns run their
+/// penalties from a typed date), so the page and the assistant lock alike.
 pub(super) const KEPT_AS_ENTERED: &str =
-    "kept as entered before penalties were computed; choose Edit penalties to change them.";
+    bir_core::forms::agent::draft_locks::excise::KEPT_AS_ENTERED;
 
-/// The excise return `kind` is, if it is one.
-fn excise(kind: AgentFormKind) -> Option<QueueableKind> {
-    match kind {
-        AgentFormKind::Queueable(
-            queueable @ (QueueableKind::Form2200A
-            | QueueableKind::Form2200AN
-            | QueueableKind::Form2200C
-            | QueueableKind::Form2200M
-            | QueueableKind::Form2200P
-            | QueueableKind::Form2200S
-            | QueueableKind::Form2200T),
-        ) => Some(queueable),
-        _ => None,
-    }
-}
-
-/// The return `kind` is if its penalties run from a date the filer types:
-/// an excise return (maintainer decision (excise penalties run from the typed
-/// date)) or 1800 and 1801 (maintainer decision (1800/1801 penalties run from
-/// the due date)).
-fn typed_due(kind: AgentFormKind) -> Option<QueueableKind> {
-    match kind {
-        AgentFormKind::Queueable(
-            queueable @ (QueueableKind::Form1800 | QueueableKind::Form1801),
-        ) => Some(queueable),
-        _ => excise(kind),
-    }
-}
-
-/// Whether `draft` is a Draft whose penalties are measured from a typed
-/// date it is not yet on (stored before D8).
-#[inline(never)]
-fn stored_before_typed_due_date<F: QueueableForm + DeserializeOwned>(draft: &Value) -> bool {
-    let Ok(form) = serde_json::from_value::<F>(draft.clone()) else {
-        return false;
-    };
-    matches!(form.lifecycle().status, FilingStatus::Draft)
-        && F::penalty_items()
-            .iter()
-            .any(|items| items.typed_due_date.is_some() && !items.on_typed_due_date(&form))
-}
+// [`KEPT_AS_ENTERED`] for a penalty box of an excise return stored before
+// maintainer decision (excise penalties run from the typed date), or of a
+// 1800 or 1801 return stored before maintainer decision (1800/1801
+// penalties run from the due date); `None` for every other box and form
+// (bir-core's).
+pub(super) use bir_core::forms::agent::draft_locks::excise::penalty_lock;
 
 /// Put the draft on its typed due date (`PenaltyItems::join_typed_due_date`).
 /// The typed form only decides the new model version; the draft's JSON is
@@ -93,69 +62,6 @@ fn join_typed_due_date<F: QueueableForm + DeserializeOwned>(draft: &mut Value) {
     {
         fields.insert("penalty_model_version".to_string(), version.clone());
     }
-}
-
-/// The penalty controls of the form (`PenaltyItems::controls`).
-#[inline(never)]
-fn penalty_controls<F: QueueableForm>() -> Vec<&'static str> {
-    F::penalty_items()
-        .iter()
-        .flat_map(|items| items.controls)
-        .collect()
-}
-
-fn before_d8(kind: QueueableKind, draft: &Value) -> bool {
-    match kind {
-        QueueableKind::Form1800 => stored_before_typed_due_date::<form_1800::Form1800Draft>(draft),
-        QueueableKind::Form1801 => stored_before_typed_due_date::<form_1801::Form1801Draft>(draft),
-        QueueableKind::Form2200A => {
-            stored_before_typed_due_date::<form_2200a::Form2200ADraft>(draft)
-        }
-        QueueableKind::Form2200AN => {
-            stored_before_typed_due_date::<form_2200an::Form2200ANDraft>(draft)
-        }
-        QueueableKind::Form2200C => {
-            stored_before_typed_due_date::<form_2200c::Form2200CDraft>(draft)
-        }
-        QueueableKind::Form2200M => {
-            stored_before_typed_due_date::<form_2200m::Form2200MDraft>(draft)
-        }
-        QueueableKind::Form2200P => {
-            stored_before_typed_due_date::<form_2200p::Form2200PDraft>(draft)
-        }
-        QueueableKind::Form2200S => {
-            stored_before_typed_due_date::<form_2200s::Form2200SDraft>(draft)
-        }
-        QueueableKind::Form2200T => {
-            stored_before_typed_due_date::<form_2200t::Form2200TDraft>(draft)
-        }
-        _ => false,
-    }
-}
-
-fn controls(kind: QueueableKind) -> Vec<&'static str> {
-    match kind {
-        QueueableKind::Form1800 => penalty_controls::<form_1800::Form1800Draft>(),
-        QueueableKind::Form1801 => penalty_controls::<form_1801::Form1801Draft>(),
-        QueueableKind::Form2200A => penalty_controls::<form_2200a::Form2200ADraft>(),
-        QueueableKind::Form2200AN => penalty_controls::<form_2200an::Form2200ANDraft>(),
-        QueueableKind::Form2200C => penalty_controls::<form_2200c::Form2200CDraft>(),
-        QueueableKind::Form2200M => penalty_controls::<form_2200m::Form2200MDraft>(),
-        QueueableKind::Form2200P => penalty_controls::<form_2200p::Form2200PDraft>(),
-        QueueableKind::Form2200S => penalty_controls::<form_2200s::Form2200SDraft>(),
-        QueueableKind::Form2200T => penalty_controls::<form_2200t::Form2200TDraft>(),
-        _ => Vec::new(),
-    }
-}
-
-/// [`KEPT_AS_ENTERED`] for a penalty box of an excise return stored before
-/// maintainer decision (excise penalties run from the typed date), or of a 1800
-/// or 1801 return stored before maintainer decision (1800/1801 penalties run
-/// from the due date); `None` for every
-/// other box and form.
-pub(super) fn penalty_lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
-    let kind = typed_due(kind)?;
-    (controls(kind).contains(&key) && before_d8(kind, draft)).then_some(KEPT_AS_ENTERED)
 }
 
 /// Whether a penalty group's boxes are kept as entered: the page offers
@@ -222,31 +128,6 @@ pub(super) fn closed_penalty(
 /// its own false option (other scheme off) rather than blanking the group.
 pub(super) fn untick_writes_its_option(kind: AgentFormKind, key: &str) -> bool {
     kind.form_code() == "2200S" && key == "frm2200S:chkPymntManner_3"
-}
-
-/// The penalty locks of an excise return as this fill leaves them, for the
-/// page to apply at once (`relocks`): a group still computed is locked as
-/// computed, one kept as entered says so, an edited one is open (`null`).
-/// Empty for every other form.
-pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
-    let mut locks = Map::new();
-    if typed_due(kind).is_none() {
-        return locks;
-    }
-    for group in super::penalties::groups(kind) {
-        let edited = super::penalties::edited(&group, draft);
-        for key in &group.keys {
-            let lock = if edited {
-                Value::Null
-            } else if !super::penalties::applies(kind, &group, draft) {
-                json!(super::penalties::NOT_ON_RETURN)
-            } else {
-                json!(penalty_lock(kind, draft, key).unwrap_or(super::penalties::LOCK))
-            };
-            locks.insert(key.clone(), lock);
-        }
-    }
-    locks
 }
 
 /// What a gated box holds in the draft.

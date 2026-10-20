@@ -25,7 +25,8 @@
 //!   subtotal once the table holds two or more rows: they are then the
 //!   form's, locked and refused.
 //! - Computed boxes the probe left as "derived" say they are computed
-//!   ([`relock`]); a blank one says what fills it ([`waits`]).
+//!   (bir-core's `agent::draft_locks::annual_corporate::relock`, like every
+//!   lock above); a blank one says what fills it ([`waits`]).
 //! - An answer whose recompute clears or replaces boxes the filer typed (an
 //!   OSD answer, Amended Return No, MCIT no longer applying, an overpayment
 //!   gone) is reported ([`removes`]): the page asks first and offers Undo.
@@ -40,22 +41,26 @@ use std::collections::BTreeMap;
 
 use std::collections::BTreeSet;
 
+// The locks themselves — item 42, items 40 and 57 before 2020, a folded
+// (Add more...) item, the derived boxes said to be computed and 1702EX's
+// shut rows — are bir-core's (`agent::draft_locks::annual_corporate`,
+// decision P4-19), so the page and the assistant lock alike. This module
+// reads their keys and reasons from there.
+use bir_core::forms::agent::draft_locks::annual_corporate::{
+    A, EX, EX_ATTACHED_ROWS, EX_FOLDED_LINES, MX, RT, RT_ITEM_57, RT_MCIT_DUE, RT_RATE,
+    rt_before_2020_lock, rt_folded_item, rt_item_42_lock, rt_more_rows,
+};
+pub(super) use bir_core::forms::agent::draft_locks::annual_corporate::{
+    EX_ATTACHED_LOCK, RT_57_BEFORE_2020, RT_FOLDED_LOCK, RT_MCIT_BEFORE_2020, RT_MCIT_NO_NET,
+    RT_MCIT_REFUSAL, RT_RATE_BEFORE_2020, ex_attached_keys,
+};
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::form_1702rt::{
-    FORM_1702RT_MODALS, Form1702RTDate, Form1702RTDraft, Form1702RTModal, Form1702RTMoreRows,
+    FORM_1702RT_MODALS, Form1702RTDate, Form1702RTDraft, Form1702RTModal,
 };
 use serde_json::{Map, Value, json};
 
 use super::{schema_entry, schema_keys, set_draft_path};
-
-const RT: &str = "frm1702RT:";
-const MX: &str = "frm1702MX:";
-const EX: &str = "frm1702EX:";
-const A: &str = "frm1707Av2021:";
-
-/// The lock of a box the form computes (the page's note: "Computed by the
-/// form.").
-const COMPUTED: &str = "computed by BIR's own formulas";
 
 /// 1702RT's date boxes and the draft field each keeps: Item 10 and Part III
 /// rows 23 to 26 (`payment_details[0..4]`, form_1702rt_xml.rs
@@ -95,46 +100,6 @@ pub(super) fn mx_rate_refusal(decimals: usize) -> String {
     format!("Enter the rate as a percent below 100, with at most {places}.")
 }
 
-/// 1702RT item 42 MCIT Due.
-const RT_MCIT_DUE: &str = "frm1702RT:txtPg2Pt4I42MinimumCorporate";
-
-/// Item 42's lock while MCIT does not apply.
-pub(super) const RT_MCIT_REFUSAL: &str = "Item 42 applies once MCIT does: from the fourth taxable year after the year of incorporation (item 10).";
-
-/// Item 42's lock on a return for a year before 2020 while MCIT applies
-/// (calculations.json 1702rt-item42-mcit: "Before 2020 and when IC 055 is
-/// selected, MCIT is 2% of gross"): form_1702rt_official.rs recompute
-/// computes it (maintainer decision (pre-2020 MCIT is 2% of gross)).
-pub(super) const RT_MCIT_BEFORE_2020: &str =
-    "For years before 2020, MCIT is 2% of gross income (item 33), which the form computes.";
-
-/// 1702RT item 40 (the income tax rate) and Part V item 57.
-const RT_RATE: &str = "frm1702RT:Pg2Pt4I40IncomeTaxRate";
-const RT_ITEM_57: &str = "frm1702RT:txtPg2Pt5I57SpecialAllowable";
-
-/// Item 40's lock on a return for a year before 2020 (maintainer decision
-/// (pre-2020 1702RT computed like BIR),
-/// calculations.json 1702rt-item41-rate-tax: "before 2020 it uses 30%").
-pub(super) const RT_RATE_BEFORE_2020: &str =
-    "For years before 2020, the income tax rate is 30%, which the form uses.";
-
-/// Item 57's lock on a return for a year before 2020 (maintainer decision
-/// (pre-2020 1702RT computed like BIR),
-/// calculations.json 1702rt-item57-special-tax: "Only before 2020, Item 57
-/// = Item 35 times income-tax rate / 100").
-pub(super) const RT_57_BEFORE_2020: &str =
-    "For years before 2020, item 57 is item 35 times the 30% rate, which the form computes.";
-
-/// Item 42's lock from 2020 while net taxable income is zero or less
-/// (calculations.json 1702rt-item42-mcit: "2020+ leaves the enabled value
-/// user-controlled except nonpositive net forces zero").
-pub(super) const RT_MCIT_NO_NET: &str =
-    "From 2020, MCIT is zero while net taxable income (item 39) is zero or less.";
-
-/// The lock of a 1702RT (Add more...) item once its table folds.
-pub(super) const RT_FOLDED_LOCK: &str =
-    "computed from its (Add more...) rows: OTHERS and their subtotal";
-
 /// 1707A Item 12's radios: Yes and No.
 const TAX_RELIEF_YES: &str = "frm1707Av2021:rdoI11TaxTreatyYes";
 const TAX_RELIEF_NO: &str = "frm1707Av2021:rdoI11TaxTreatyNo";
@@ -147,31 +112,6 @@ fn mx_rate(key: &str) -> Option<(&'static str, usize)> {
         .map(|(_, path, decimals)| (*path, *decimals))
 }
 
-/// The boxes of a 1702RT (Add more...) item: its description, Schedule
-/// II's legal basis, and its amount.
-fn rt_folded_columns(modal: Form1702RTModal) -> Vec<String> {
-    let columns: &[&str] = if modal.has_legal_basis() {
-        &["C1", "C2", "C3"]
-    } else {
-        &["C1", "C2"]
-    };
-    columns
-        .iter()
-        .map(|column| format!("{RT}{}{column}", modal.row_name()))
-        .collect()
-}
-
-/// The (Add more...) item a 1702RT key is a box of.
-fn rt_folded_item(key: &str) -> Option<Form1702RTModal> {
-    FORM_1702RT_MODALS
-        .into_iter()
-        .find(|modal| rt_folded_columns(*modal).iter().any(|k| k == key))
-}
-
-fn rt_more_rows(draft: &Value) -> Form1702RTMoreRows {
-    serde_json::from_value(draft["more_rows"].clone()).unwrap_or_default()
-}
-
 fn rt_date_path(key: &str) -> Option<&'static str> {
     let tail = key.strip_prefix(RT)?;
     RT_DATES
@@ -180,73 +120,11 @@ fn rt_date_path(key: &str) -> Option<&'static str> {
         .map(|(_, path)| *path)
 }
 
-/// Maintainer decision (1702EX shut rows locked like 1702MX) (2026-10-19): the
-/// 1702EX "others" rows the official page
-/// keeps shut at load (rules/forms/1702ex-v2018c/fixtures/
-/// runtime-control-inventory-v796.json records each `disabled: true`):
-/// item 49 Other Tax Credits/Payments, Schedule 1 items 17e-17h and
-/// Schedule 2 rows 2-3, each with its description (and legal basis). They
-/// are locked the way 1702MX's others rows are: refused here with
-/// [`EX_ATTACHED_LOCK`], their amounts computed as fields.json marks them
-/// (probe.rs no longer lists them as the filer's), and their note says what
-/// fills them. A draft stored with values there still files them as stored
-/// (form_1702ex.rs is unchanged) and says to check them ([`notices`]).
-const EX_ATTACHED_ROWS: [(&str, &[&str]); 7] = [
-    (
-        "Item 49",
-        &[
-            "txtPg2Pt4I49OtherTaxCrPmtDesc",
-            "txtPg2Pt4I49OtherTaxCrPmtAmt",
-        ],
-    ),
-    (
-        "Schedule 1 item 17e",
-        &["txtPg3Pt6I17OthersEDesc", "txtPg3Pt6I17OthersEAmt"],
-    ),
-    (
-        "Schedule 1 item 17f",
-        &["txtPg3Pt6I17OthersFDesc", "txtPg3Pt6I17OthersFAmt"],
-    ),
-    (
-        "Schedule 1 item 17g",
-        &["txtPg3Pt6I17OthersGDesc", "txtPg3Pt6I17OthersGAmt"],
-    ),
-    (
-        "Schedule 1 item 17h",
-        &["txtPg3Pt6I17OthersHDesc", "txtPg3Pt6I17OthersHAmt"],
-    ),
-    (
-        "Schedule 2 row 2",
-        &[
-            "txtPg3Pt6S2I2Description",
-            "txtPg3Pt6S2I2LegalBasis",
-            "txtPg3Pt6S2I2Amount",
-        ],
-    ),
-    (
-        "Schedule 2 row 3",
-        &[
-            "txtPg3Pt6S2I3Description",
-            "txtPg3Pt6S2I3LegalBasis",
-            "txtPg3Pt6S2I3Amount",
-        ],
-    ),
-];
-
-/// The lock and refusal of an [`EX_ATTACHED_ROWS`] box.
-pub(super) const EX_ATTACHED_LOCK: &str =
-    "filled from the attached schedule; BIR's program keeps this row shut";
-
-/// What an [`EX_ATTACHED_ROWS`] box's note says.
+/// What an [`EX_ATTACHED_ROWS`] box's note says (maintainer decision
+/// (1702EX shut rows locked like 1702MX): the rows the official page keeps
+/// shut at load are refused here with [`EX_ATTACHED_LOCK`], and a draft
+/// stored with values there says to check them, [`notices`]).
 pub(super) const EX_ATTACHED_NOTE: &str = "Filled from the attached schedule.";
-
-/// Every [`EX_ATTACHED_ROWS`] box, by official key.
-pub(super) fn ex_attached_keys() -> impl Iterator<Item = String> {
-    EX_ATTACHED_ROWS
-        .iter()
-        .flat_map(|(_, stems)| stems.iter())
-        .map(|stem| format!("{EX}{stem}"))
-}
 
 /// An [`EX_ATTACHED_ROWS`] amount box: it always shows an amount (0.00
 /// blank), so its note is drawn whatever it shows (`notes_always`); its
@@ -292,37 +170,6 @@ pub(super) fn fill(
         "1702EX" if ex_attached(kind, key) => Some(Err(format!("`{key}` is {EX_ATTACHED_LOCK}"))),
         _ => None,
     }
-}
-
-/// Why 1702RT item 42 is shut, if it is: the official computeP2Pt4I42
-/// (calculations.json 1702rt-item42-mcit) leaves it to the filer only from
-/// 2020, while MCIT applies (item 10's four years) and item 39 is above
-/// zero. Before 2020 the form computes it while MCIT applies (decision
-/// maintainer decision (pre-2020 MCIT is 2% of gross)), and clears it otherwise, as from 2020.
-pub(super) fn rt_item_42_lock(draft: &Value) -> Option<&'static str> {
-    let typed: Form1702RTDraft = serde_json::from_value(draft.clone()).ok()?;
-    if !typed.subject_to_mcit() {
-        Some(RT_MCIT_REFUSAL)
-    } else if typed.taxable_year < bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM {
-        Some(RT_MCIT_BEFORE_2020)
-    } else if typed.part_iv.item_39_net_taxable_income_or_loss.0 <= 0 {
-        Some(RT_MCIT_NO_NET)
-    } else {
-        None
-    }
-}
-
-/// Item 40's or item 57's lock, if `key` is one and the return is for a
-/// year before 2020 (maintainer decision (pre-2020 1702RT computed like BIR)):
-/// the form computes both then.
-pub(super) fn rt_before_2020_lock(draft: &Value, key: &str) -> Option<&'static str> {
-    let reason = match key {
-        RT_RATE => RT_RATE_BEFORE_2020,
-        RT_ITEM_57 => RT_57_BEFORE_2020,
-        _ => return None,
-    };
-    let year = draft["taxable_year"].as_u64()?;
-    (year < u64::from(bir_core::forms::form_1702rt_official::MCIT_ENTERED_FROM)).then_some(reason)
 }
 
 /// A 1702RT box the form keeps right now: item 42 while it is shut (see
@@ -441,34 +288,6 @@ fn fill_1707a_tax_relief(draft: &mut Value, key: &str, value: &Value) -> Result<
     Ok(())
 }
 
-/// 1707A's printed Schedule 1 and 2 row 4 boxes and the continuation rows'
-/// column E: what fills each (form_1707a.rs main_row and recompute).
-fn a_row4_and_column_e() -> Vec<String> {
-    let mut keys: Vec<String> = [
-        "txtS1C1DateOfTransactionI4",
-        "txtS1C2NameOfCorporateStockI4",
-        "txtS1C3SellingPriceI4",
-        "txtS1C4CostI4",
-        "txtS1C5CapitalGainsI4",
-        "txtS1C6TaxPaidI4",
-        "txtS2C1DateOfTransactionI4",
-        "txtS2C2NameOfCorporateStockI4",
-        "txtS2C3SellingPriceI4",
-        "txtS2C4CostI4",
-        "txtS2C5CapitalLossI4",
-    ]
-    .iter()
-    .map(|stem| format!("{A}{stem}"))
-    .collect();
-    for row in 1..=3 {
-        keys.push(format!("{A}txtS1C5CapitalGainsI{row}"));
-        keys.push(format!("{A}txtS2C5CapitalLossI{row}"));
-    }
-    keys.extend((1..=11).map(|row| format!("{A}txtS1C5CapitalGains_{row}")));
-    keys.extend((1..=9).map(|row| format!("{A}txtS2C5CapitalLoss_{row}")));
-    keys
-}
-
 /// Forms every amount of whose model is whole pesos: each money box shows
 /// whole pesos (`w`), computed ones too (the bound ones already do, from
 /// their `Whole` binding). 1702RT: every amount of Form1702RTDraft is a
@@ -523,27 +342,6 @@ pub(super) fn mark_whole_pesos(form: &mut Value, code: &str) {
         }
     }
 }
-
-/// 1702EX's last fixed line of each "(more...)" pop-up: Schedule 1 item
-/// 17i, Schedule 2 item 4 and Schedule 3 items 3, 6 and 8. Each shows the
-/// pop-up's first row, or OTHERS with the pop-up subtotal once it holds two
-/// or more (form_1702ex.rs to_field_map). `(description, amount)`.
-const EX_FOLDED_LINES: [(&str, &str); 5] = [
-    ("txtPg3Pt6I17OthersIDesc", "txtPg3Pt6I17OthersIAmt"),
-    ("txtPg3Pt6S2I4Description", "txtPg3Pt6S2I4Amount"),
-    (
-        "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeDesc",
-        "txtPg3Pt6S3I3NonDeductExpenseOtherIncomeAmt",
-    ),
-    (
-        "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxDesc",
-        "txtPg3Pt6S3I6NonTaxIncomeAndIncomeSubjectToFinTaxAmt",
-    ),
-    (
-        "txtPg3Pt6S3I8SpecialDeductDesc",
-        "txtPg3Pt6S3I8SpecialDeductAmt",
-    ),
-];
 
 /// What a 1702EX pop-up's last fixed line waits for while it is blank.
 pub(super) const EX_FOLDED_WAITS: &str =
@@ -621,44 +419,6 @@ pub(super) fn shown(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Strin
     }
 }
 
-/// The forms this module serves.
-const FORMS: [&str; 4] = ["1702RT", "1702MX", "1702EX", "1707A"];
-
-/// The locks that follow the draft as it is filled, each key with its
-/// reason or `null` (open): 1702RT's (Add more...) items, shut while their
-/// table holds two or more rows, and item 42 (see [`rt_item_42_lock`]).
-/// `screen_form_open` applies them with the other locks; `screen_form_fill`
-/// returns them, so a box shuts or opens as soon as the answer that decides
-/// it is typed.
-pub(super) fn live_locks(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
-    let mut locks = Map::new();
-    if kind.form_code() != "1702RT" {
-        return locks;
-    }
-    let more = rt_more_rows(draft);
-    for modal in FORM_1702RT_MODALS {
-        let lock = if more.is_folded(modal) {
-            json!(RT_FOLDED_LOCK)
-        } else {
-            Value::Null
-        };
-        for key in rt_folded_columns(modal) {
-            locks.insert(key, lock.clone());
-        }
-    }
-    locks.insert(
-        RT_MCIT_DUE.to_string(),
-        rt_item_42_lock(draft).map_or(Value::Null, |reason| json!(reason)),
-    );
-    for key in [RT_RATE, RT_ITEM_57] {
-        locks.insert(
-            key.to_string(),
-            rt_before_2020_lock(draft, key).map_or(Value::Null, |reason| json!(reason)),
-        );
-    }
-    locks
-}
-
 /// Boxes whose lock note shows whatever they hold (screen_form_module
 /// `notes_always`): 1702RT item 42 while it is shut, which always shows an
 /// amount (0 while MCIT does not apply, 2% of item 33 before 2020), so its
@@ -713,87 +473,6 @@ pub(super) const RT_MCIT_NOT_YET_NOTE: &str =
     "Shut until MCIT applies, from the fourth year after incorporation.";
 pub(super) const RT_MCIT_NO_NET_NOTE: &str =
     "Shut while net taxable income is zero or less: MCIT is then zero.";
-
-/// The lock the probe gives a box whose value follows other draft fields
-/// and never echoes one of them.
-const DERIVED: &str = "cannot be filled here: derived by the app";
-
-/// The forms every derived box of which, the TIN's parts aside, the form
-/// computes (see [`relock`]).
-const DERIVED_IS_COMPUTED: [&str; 2] = ["1702RT", "1707A"];
-
-/// 1702MX's derived boxes the form computes: the MCIT ATC (from the
-/// incorporation date), Schedule 2 item 15's tax due and the Schedule 7.1
-/// and 8.1 item 7 years (this year's loss). Its other derived boxes (the
-/// tax rates, which the draft keeps as a `PercentInput`, and the Schedule
-/// 7.1 and 8.1 rows 4 to 6) are the filer's entries the probe could not
-/// bind; they keep their reason.
-const MX_COMPUTED: [&str; 5] = [
-    "frm1702MX:chkPg1I5ATCR1",
-    "frm1702MX:txtPg2Sc2It15B",
-    "frm1702MX:txtPg2Sc2It15C",
-    "frm1702MX:txtPg3IShed7_7Year",
-    "frm1702MX:txtPg4IShed8_7Year",
-];
-
-/// Locks that say what the form does with a box the probe could only call
-/// derived or constant: the form computes it. On 1702RT and 1707A every
-/// derived box but the TIN's parts (the return's identity, drawn as one
-/// TIN) is a total, a rate or a carried amount the form's own recompute
-/// writes; the boxes the filer types that recompute only clears are bound
-/// (probe.rs GATED_ENTRY).
-pub(super) fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
-    let code = kind.form_code();
-    if !FORMS.contains(&code) {
-        return;
-    }
-    // 1702RT: a folded (Add more...) item and a shut item 42.
-    for (key, lock) in live_locks(kind, draft) {
-        if !lock.is_null() {
-            locks.insert(key, lock);
-        }
-    }
-    let identity = |key: &str| key.contains("TIN") || key.contains("Tin");
-    let derived: Vec<String> = locks
-        .iter()
-        .filter(|(key, reason)| {
-            let derived = reason.as_str().is_some_and(|r| r.starts_with(DERIVED));
-            derived
-                && ((DERIVED_IS_COMPUTED.contains(&code) && !identity(key))
-                    || MX_COMPUTED.contains(&key.as_str()))
-        })
-        .map(|(key, _)| key.clone())
-        .collect();
-    for key in derived {
-        locks.insert(key, json!(COMPUTED));
-    }
-    let computed: Vec<String> = match code {
-        // Schedule IIIA item 4 is this year's loss: its year and amount
-        // follow Schedule III item 3, its columns B to D stay at zero
-        // (form_1702rt_official.rs recompute).
-        "1702RT" => (1..=6)
-            .map(|column| format!("{RT}txtPg4Sc3AI4C{column}"))
-            .collect(),
-        "1702EX" => EX_FOLDED_LINES
-            .iter()
-            .flat_map(|(description, amount)| [description, amount])
-            .map(|stem| format!("{EX}{stem}"))
-            .collect(),
-        "1707A" => a_row4_and_column_e(),
-        _ => Vec::new(),
-    };
-    for key in computed {
-        if locks.contains_key(&key) {
-            locks.insert(key, json!(COMPUTED));
-        }
-    }
-    // 1702EX's rows BIR's program keeps shut, each box (P4-8).
-    if code == "1702EX" {
-        for key in ex_attached_keys() {
-            locks.insert(key, json!(EX_ATTACHED_LOCK));
-        }
-    }
-}
 
 /// What 1707A's printed row 4 waits for while it is blank.
 pub(super) const A_ROW4_WAITS: &str =

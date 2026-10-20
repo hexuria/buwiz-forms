@@ -1088,28 +1088,10 @@ pub(super) fn values(
     }
 }
 
-/// The boxes this module shuts, and why, over the probed locks: 2552's
-/// add-more tax due (h) cells and Schedule 1's fixed rate (g), which
-/// form_2552.rs `recompute` computes (the probe saw them change with the
-/// item 11 answer and called them derived), and the add-more subtotals.
-pub(super) fn relock(kind: AgentFormKind, locks: &mut Map<String, Value>) {
-    if kind.form_code() != "2552" {
-        return;
-    }
-    let computed = Value::from("computed by BIR's own formulas");
-    for n in 1..=9 {
-        for schedule in 1..=3 {
-            locks.insert(
-                format!("frm2552:txtPg2Pt5Sch{schedule}_{n}Col8"),
-                computed.clone(),
-            );
-        }
-        locks.insert(format!("frm2552:txtPg2Pt5Sch1_{n}Col7"), computed.clone());
-    }
-    for schedule in 1..=3 {
-        locks.insert(format!("Pg2Pt5Sch{schedule}SubTotal"), computed.clone());
-    }
-}
+// 2552's computed cells (add-more tax due, Schedule 1's fixed rate, the
+// add-more subtotals) are locked by bir-core
+// (`agent::draft_locks::as_needed`, decision P4-19), for the page and the
+// assistant alike.
 
 /// Rule 4 for a schedule's date boxes: 2552's and 1707's tables with a date
 /// column carry `calendar: true`, so each of their date boxes gets its own

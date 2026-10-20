@@ -29,6 +29,9 @@ use std::sync::OnceLock;
 use bir_core::db::Database;
 #[cfg(test)]
 use bir_core::forms::agent::BoundBox;
+// A page edit writes a draft path the way the penalty layer's trial does:
+// one setter, bir-core's.
+use bir_core::forms::agent::set_draft_path;
 use bir_core::forms::agent::{self, AgentFormDef, AgentFormKind, Binding, BoxDef};
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use bir_core::forms::registry::FilingFrequency;
@@ -1946,8 +1949,12 @@ fn mmdd_keys(
 // `agent::is_profile_box`, `agent::profile_blank`, `agent::profile_keys`
 // and `agent::profile_edit_keys` are the one computation `agent::fill`
 // also reads, so the assistant refuses exactly the keys this page locks.
-// The draft-dependent relocks and penalty group locks below stay here:
-// they interleave with page-only UX state (the penalties Edit).
+// PR 17 moved the draft-dependent layer over it too
+// (`agent::draft_locks`, `agent::live_locks`: the row families' relocks
+// and the penalty group locks, with the page's penalty groups pinned from
+// this page's schema). What stays here is the page's UX around them: the
+// penalties Edit (`unlocked`), the lock notes, notices and waits; the
+// page's own writes never consult the draft layer.
 
 /// Where a draft keeps `field` (`profile_edits`, `profile_baseline`): at
 /// its top level. Every generic draft flattens its lifecycle there, and
@@ -3356,32 +3363,12 @@ fn opened_json(
         tracing::warn!("{code}: comparing with the tax profile failed: {error}");
         Vec::new()
     });
+    // The base map, then the draft-dependent layer over it (PR 4's 2000 and
+    // 2553 boxes, PR 8's annual corporate boxes, PR 9's 2552 cells, each
+    // computed penalty group not edited, and 1701Q's spouse penalties taken
+    // off again): both bir-core's, the one computation `agent::fill` refuses.
     let mut locks = agent::locks(kind, &from_profile);
-    rows_dst_pt_vat::relock(kind, &draft, &mut locks);
-    rows_annual_corporate::relock(kind, &draft, &mut locks);
-    // PR 9's forms' computed boxes the probe called derived.
-    rows_as_needed::relock(kind, &mut locks);
-    // A computed penalty is locked until Edit penalties opens its group; a
-    // return with no due date computes none, and its boxes stay open.
-    for group in penalties::computed_groups(kind) {
-        if !penalties::edited(&group, &draft) {
-            for key in &group.keys {
-                let reason = penalties::lock_reason(kind, &group, &draft, key);
-                // A 1701Q (PR 5) or 1701 (PR 7) column, or an excise return
-                // stored before decision D8 (PR 11), still on the filer's
-                // typed amounts.
-                let reason = rows_income_q::penalty_lock(kind, &draft, key)
-                    .or_else(|| rows_annual_individual::penalty_lock(kind, &draft, key))
-                    .or_else(|| rows_excise::penalty_lock(kind, &draft, key))
-                    .filter(|_| reason == penalties::LOCK)
-                    .unwrap_or(reason);
-                locks.insert(key.clone(), json!(reason));
-            }
-        }
-    }
-    // 1701Q's spouse penalties while column B is not on the return: faded
-    // with what opens them, not locked (PR 5, rows_income_q.rs).
-    rows_income_q::relock(kind, &draft, &mut locks);
+    agent::draft_locks(kind, &draft, &mut locks);
     let profile = agent::profile_keys(kind, &from_profile);
     let profile_edit = agent::profile_edit_keys(kind, &from_profile);
     let parts = if sample.is_some() {
@@ -4420,9 +4407,8 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         .or_else(|| rows_excise::removes(kind, &before, &draft, &edits));
     // Locks this fill opened or shut (PR 8: a folded 1702RT item, item 42;
     // PR 11: an excise return's penalties kept as entered, then computed),
-    // each with its note; `null` opens the box.
-    let mut relocks = rows_annual_corporate::live_locks(kind, &draft);
-    relocks.extend(rows_excise::live_locks(kind, &draft));
+    // each with its note; `null` opens the box. bir-core's, as the open's.
+    let relocks = agent::live_locks(kind, &draft);
     let relock_notes: Map<String, Value> = relocks
         .iter()
         .map(|(key, lock)| {
@@ -4826,17 +4812,6 @@ fn untick(kind: AgentFormKind, draft: &mut Value, key: &str) {
         if let UntickWrite::Blank(value) = write {
             set_draft_path(draft, &path, value);
         }
-    }
-}
-
-fn set_draft_path(draft: &mut Value, path: &str, value: Value) {
-    if let Some(slot) = draft.pointer_mut(path) {
-        *slot = value;
-    } else if let Some((parent, leaf)) = path.rsplit_once('/')
-        && let Some(Value::Object(object)) =
-            draft.pointer_mut(if parent.is_empty() { "" } else { parent })
-    {
-        object.insert(leaf.to_string(), value);
     }
 }
 
@@ -17140,10 +17115,31 @@ mod tests {
                         "{code}: {key} is computed again"
                     );
                 }
-                // The assistant's fill is as it was.
-                agent::fill(
+                // The assistant has no Edit penalties (decision P4-19, PR 17):
+                // on the unedited return it is refused the computed penalty
+                // with the page's own reason, and once the group holds a
+                // typed amount the same write goes through.
+                let Err(refused) = agent::fill(
                     kind,
                     &mut opened["draft"].clone(),
+                    &keys[0],
+                    &json!("1"),
+                    None,
+                ) else {
+                    panic!("{code}: an unedited computed penalty is refused to the assistant");
+                };
+                assert_eq!(
+                    refused,
+                    format!(
+                        "`{}` {}",
+                        keys[0],
+                        opened["locks"][&keys[0]].as_str().unwrap()
+                    ),
+                    "{code}"
+                );
+                agent::fill(
+                    kind,
+                    &mut edited["draft"].clone(),
                     &keys[0],
                     &json!("1"),
                     None,

@@ -7,21 +7,51 @@
       "itemQuarter_3",
       "itemQuarter_4"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm0605:txtTax20A",
+          "frm0605:txtTax20B",
+          "frm0605:txtTax20C"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "0619e-v2018": {
     "host_written": [
       "frm0619E:optCategory:G",
       "frm0619E:optCategory:P"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm0619E:txtTax17A",
+          "frm0619E:txtTax17B",
+          "frm0619E:txtTax17C"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "0619f-v2018": {
     "host_written": [
       "frm0619F:optCategory:G",
       "frm0619F:optCategory:P"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm0619F:txtTax18A",
+          "frm0619F:txtTax18B",
+          "frm0619F:txtTax18C"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1600pt-v2018": {
     "host_written": [
@@ -61,7 +91,17 @@
       "frm1600PT:rdoPg1I3TaxWithheldNo",
       "frm1600PT:rdoPg1I3TaxWithheldYes"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1600PT:txtPg1P2I23Surcharge",
+          "frm1600PT:txtPg1P2I24Interest",
+          "frm1600PT:txtPg1P2I25Compromise"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1600vt-v2018": {
     "host_written": [
@@ -83,7 +123,17 @@
       "frm1600VT:rdoPg1I3TaxWithheldNo",
       "frm1600VT:rdoPg1I3TaxWithheldYes"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1600VT:txtPg1P2I23Surcharge",
+          "frm1600VT:txtPg1P2I24Interest",
+          "frm1600VT:txtPg1P2I25Compromise"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1600wp-v2010": {
     "host_written": [
@@ -94,7 +144,17 @@
       "frm1600WP:txtAtcCode1",
       "frm1600WP:txtAtcCode2"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1600WP:txtTax15A",
+          "frm1600WP:txtTax15B",
+          "frm1600WP:txtTax15C"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1601c-v2018": {
     "host_written": [
@@ -102,7 +162,17 @@
       "frm1601c:sched1:txtMonthYear1",
       "frm1601c:sched1:txtMonthYear2"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1601c:txtTax32",
+          "frm1601c:txtTax33",
+          "frm1601c:txtTax34"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1601eq-v2018": {
     "host_written": [
@@ -333,7 +403,17 @@
       "frm1601EQ:txtTaxBase98",
       "frm1601EQ:txtTaxBase99"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1601EQ:txtTax26",
+          "frm1601EQ:txtTax27",
+          "frm1601EQ:txtTax28"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1601fq-v2018": {
     "host_written": [
@@ -432,21 +512,51 @@
       "frm1601FQ:txtTaxBase8",
       "frm1601FQ:txtTaxBase9"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1601FQ:txtTax28",
+          "frm1601FQ:txtTax29",
+          "frm1601FQ:txtTax30"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1602q-v2018": {
     "host_written": [
       "frm1602Q:OptSpecialTax1",
       "frm1602Q:OptSpecialTax2"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1602Q:txt24",
+          "frm1602Q:txt25",
+          "frm1602Q:txt26"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1603q-v2018": {
     "host_written": [
       "frm1603Q:SpecialTax_1",
       "frm1603Q:SpecialTax_2"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1603Q:txtTax19",
+          "frm1603Q:txtTax20",
+          "frm1603Q:txtTax21"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1606-v2018": {
     "host_written": [
@@ -455,7 +565,17 @@
       "frm1606:txtTINS2",
       "frm1606:txtTINS3"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1606:txtCompromise",
+          "frm1606:txtInterest",
+          "frm1606:txtSurcharge"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1700-v2013": {
     "host_written": [
@@ -508,7 +628,25 @@
       "frm1700:txtPg2ISched1e_3TW",
       "frm1700:txtPg2ISched1e_4TW"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1700:txtPg1I31A",
+          "frm1700:txtPg1I32A",
+          "frm1700:txtPg1I33A"
+        ],
+        "prefix": "/taxpayer"
+      },
+      {
+        "keys": [
+          "frm1700:txtPg1I31B",
+          "frm1700:txtPg1I32B",
+          "frm1700:txtPg1I33B"
+        ],
+        "prefix": "/spouse_column"
+      }
+    ]
   },
   "1701-v2018": {
     "host_written": [
@@ -525,7 +663,25 @@
       "frm1701:txtPg2IShed2a_TIN2",
       "frm1701:txtPg2IShed2a_TIN3"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1701:txtPg1I27A",
+          "frm1701:txtPg1I28A",
+          "frm1701:txtPg1I29A"
+        ],
+        "prefix": "/penalty"
+      },
+      {
+        "keys": [
+          "frm1701:txtPg1I27B",
+          "frm1701:txtPg1I28B",
+          "frm1701:txtPg1I29B"
+        ],
+        "prefix": "/spouse_penalty"
+      }
+    ]
   },
   "1701a-v2018": {
     "host_written": [
@@ -559,7 +715,25 @@
       "frm1701A:txtmodalPartIVB_8C3",
       "frm1701A:txtmodalPartIVB_9C3"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1701A:txt25A",
+          "frm1701A:txt26A",
+          "frm1701A:txt27A"
+        ],
+        "prefix": "/taxpayer"
+      },
+      {
+        "keys": [
+          "frm1701A:txt25B",
+          "frm1701A:txt26B",
+          "frm1701A:txt27B"
+        ],
+        "prefix": "/spouse_column"
+      }
+    ]
   },
   "1701ms-v2024": {
     "host_written": [
@@ -570,7 +744,25 @@
       "frm1701MS:txtTaxRatea",
       "frm1701MS:txtTaxRateb"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1701MS:txtCompromise28a",
+          "frm1701MS:txtInterestNo28a",
+          "frm1701MS:txtSurchangeNo28a"
+        ],
+        "prefix": "/taxpayer"
+      },
+      {
+        "keys": [
+          "frm1701MS:txtCompromise28b",
+          "frm1701MS:txtInterestNo28b",
+          "frm1701MS:txtSurchangeNo28b"
+        ],
+        "prefix": "/spouse"
+      }
+    ]
   },
   "1701q-v2018": {
     "host_written": [
@@ -579,7 +771,25 @@
       "frm1701q:txtSpouseTIN2",
       "frm1701q:txtSpouseTIN3"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1701q:txt64A",
+          "frm1701q:txt65A",
+          "frm1701q:txt66A"
+        ],
+        "prefix": "/penalty"
+      },
+      {
+        "keys": [
+          "frm1701q:txt64B",
+          "frm1701q:txt65B",
+          "frm1701q:txt66B"
+        ],
+        "prefix": "/spouse_penalty"
+      }
+    ]
   },
   "1702mx-v2018c": {
     "host_written": [
@@ -587,7 +797,31 @@
       "frm1702MX:txtPg2Sc2It14B",
       "frm1702MX:txtPg2Sc2It14C"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1702MX:txtPg1Pt2I17",
+          "frm1702MX:txtPg1Pt2I18",
+          "frm1702MX:txtPg1Pt2I19"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "1702q-v2018c": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1702q:txtTax21",
+          "frm1702q:txtTax22",
+          "frm1702q:txtTax23"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1702rt-v2018c": {
     "host_written": [
@@ -597,7 +831,17 @@
       "frm1702RT:txtPg1Pt3I25TaxDebitDate",
       "frm1702RT:txtPg1Pt3I26OthersC3Date"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1702RT:txtPg1Pt2I17Surcharge",
+          "frm1702RT:txtPg1Pt2I18Interest",
+          "frm1702RT:txtPg1Pt2I19Compromise"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1706-v2018": {
     "host_written": [
@@ -608,7 +852,17 @@
       "frm1706:txtTINB2",
       "frm1706:txtTINB3"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1706:txtCompromise",
+          "frm1706:txtInterest",
+          "frm1706:txtSurcharge"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1707-v2021": {
     "host_written": [
@@ -624,7 +878,17 @@
       "frm1707:txtPg2P4Sch3Amount4",
       "frm1707:txtPg2P4Sch3Particulars4"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1707:txtPg1P2I17Compromise",
+          "frm1707:txtPg1P2I17Interest",
+          "frm1707:txtPg1P2I17Surcharge"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1707a-v2021": {
     "host_written": [
@@ -633,7 +897,17 @@
     ],
     "occurrence_aliases": {
       "frm1707Av2021:txtI11Email#occurrence-2": "frm1707Av2021:txtI11Email"
-    }
+    },
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1707Av2021:txtI18ASurcharge",
+          "frm1707Av2021:txtI18BInterest",
+          "frm1707Av2021:txtI18CCompromise"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1800-v2018": {
     "host_written": [
@@ -651,7 +925,17 @@
       "frm1800v2018:txtDeductionTitle31",
       "frm1800v2018:txtDeductionTitle32"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1800v2018:Compromise",
+          "frm1800v2018:Interest",
+          "frm1800v2018:Surcharge"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "1801-v2018": {
     "host_written": [
@@ -674,7 +958,45 @@
       "frm1801v2018:txtTINE2",
       "frm1801v2018:txtTINE3"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm1801v2018:txtPen_Compromise",
+          "frm1801v2018:txtPen_Interest",
+          "frm1801v2018:txtPen_Surcharge"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2000-v2018": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2000:txtTax17A",
+          "frm2000:txtTax17B",
+          "frm2000:txtTax17C"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2000ot-v2018": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2000OT:txtTax20A",
+          "frm2000OT:txtTax20B",
+          "frm2000OT:txtTax20C"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "2200a-v2020": {
     "host_written": [],
@@ -689,7 +1011,73 @@
       "frm2200Av2020:tinB#occurrence-3": "frm2200Av2020:tinB",
       "frm2200Av2020:tinC#occurrence-2": "frm2200Av2020:tinC",
       "frm2200Av2020:tinC#occurrence-3": "frm2200Av2020:tinC"
-    }
+    },
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200Av2020:txtPen_Compromise",
+          "frm2200Av2020:txtPen_Interest",
+          "frm2200Av2020:txtPen_Surcharge"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2200an-v2018": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200ANv2018:txt21A",
+          "frm2200ANv2018:txt21B",
+          "frm2200ANv2018:txt21C"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2200c-v2018": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200C:txtPg1P3I21ASurcharge",
+          "frm2200C:txtPg1P3I21BInterest",
+          "frm2200C:txtPg1P3I21CCompromise"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2200m-v2018": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200M:txtPg1P3I21ASurcharge",
+          "frm2200M:txtPg1P3I21BInterest",
+          "frm2200M:txtPg1P3I21CCompromise"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2200p-v2020": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200P:txtPg1P3I21ASurcharge",
+          "frm2200P:txtPg1P3I21BInterest",
+          "frm2200P:txtPg1P3I21CCompromise"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "2200s-v2018": {
     "host_written": [
@@ -709,7 +1097,31 @@
       "frm2200S:txtsched1AppTaxRate8",
       "frm2200S:txtsched1AppTaxRate9"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200S:txtTax21A",
+          "frm2200S:txtTax21B",
+          "frm2200S:txtTax21C"
+        ],
+        "prefix": ""
+      }
+    ]
+  },
+  "2200t-v2020": {
+    "host_written": [],
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2200Tv2020:txtPen_Compromise",
+          "frm2200Tv2020:txtPen_Interest",
+          "frm2200Tv2020:txtPen_Surcharge"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "2550m-v2007": {
     "host_written": [
@@ -1170,7 +1582,17 @@
       "txtTotalWithheldSch88",
       "txtTotalWithheldSch89"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2550m:txtTax25A",
+          "frm2550m:txtTax25B",
+          "frm2550m:txtTax25C"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "2550q-v2024": {
     "host_written": [
@@ -1409,13 +1831,24 @@
       "txtTotalTaxWithHeld38",
       "txtTotalTaxWithHeld39"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": []
   },
   "2551q-v2018": {
     "host_written": [],
     "occurrence_aliases": {
       "txtEmail#occurrence-2": "txtEmail"
-    }
+    },
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2551Qv2018:txt20",
+          "frm2551Qv2018:txt21",
+          "frm2551Qv2018:txt22"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "2552-v2018": {
     "host_written": [
@@ -1448,7 +1881,17 @@
       "frm2552:txtPg2Pt5Sch3TaxBase5",
       "frm2552:txtPg2Pt5Sch3TaxRate5"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2552:txtPg1P2I21Surcharge",
+          "frm2552:txtPg1P2I22Interest",
+          "frm2552:txtPg1P2I23Compromise"
+        ],
+        "prefix": ""
+      }
+    ]
   },
   "2553-v1999": {
     "host_written": [
@@ -1471,6 +1914,16 @@
       "frm2553:txt18C",
       "frm2553:txt18D"
     ],
-    "occurrence_aliases": {}
+    "occurrence_aliases": {},
+    "penalty_groups": [
+      {
+        "keys": [
+          "frm2553:txt22A",
+          "frm2553:txt22B",
+          "frm2553:txt22C"
+        ],
+        "prefix": ""
+      }
+    ]
   }
 }

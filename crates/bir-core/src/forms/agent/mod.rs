@@ -11,11 +11,16 @@
 //!   (`UPDATE_AGENT_FORMS=1 cargo test -p bir-core --test sample_payloads_test agent_forms`).
 //! - [`fill`] writes one official box, [`needs_you`] lists the required boxes
 //!   that are still empty, [`card_boxes`] shapes both for a chat form.
+//! - [`locks`] and [`draft_locks`] are the form page's lock map, and what
+//!   [`fill`] refuses: one computation for both.
 //!
 //! Drafts travel as JSON (`serde_json::Value`), the way they are stored.
 //! Nothing here queues, submits or changes a return's filing status.
 
+pub mod draft_locks;
 pub mod probe;
+
+pub use draft_locks::{draft_locks, live_locks};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -837,20 +842,21 @@ impl AgentFormDef {
 // The effective lock every writer shares (decision P4-19): what the form
 // page's `locks` map shows and what `fill` refuses are one computation.
 // The page-specific parts — which keys the page's host writes through its
-// own editors and which on-screen keys repeat an official control — are
-// pinned data (`data/agent-locks.json`, generated from the page's own
-// classifiers by bir-shell's `agent_locks` tests; regenerate with
+// own editors, which on-screen keys repeat an official control, and the
+// penalty groups the page draws — are pinned data (`data/agent-locks.json`,
+// generated from the page's own classifiers and schema by bir-shell's
+// `agent_locks` tests; regenerate with
 // `UPDATE_AGENT_LOCKS=1 cargo test --manifest-path crates/bir-shell/Cargo.toml agent_locks_table`).
 //
-// NOT here, deliberately: the page's draft-dependent relocks
-// (`rows_dst_pt_vat`, `rows_annual_corporate`, `rows_as_needed` and
-// `rows_income_q` relock their row families from the draft as the page
-// builds it, and `penalties` locks a computed penalty group until the
-// filer's own Edit opens it). Those interleave with page-only UX state
-// (the penalties Edit, typed trigger parts) and stay in `bir-shell`'s
-// `screen_form_module`: the page applies them on top of this map, and
-// `fill` does not consult them — moving them core-side is a follow-up
-// decision, not part of this change.
+// Two layers, both here: the base map ([`locks`], PR 15) and the
+// draft-dependent locks over it ([`draft_locks`], PR 17: the row families
+// the page relocks from the draft as it stands, and each computed penalty
+// group the filer has not edited). The page's open applies `draft_locks`
+// on top of `locks` and its fill reports `live_locks`; `fill` (the
+// assistant) refuses what either locks, judged on the draft as it stands
+// when the key is written. The page's own writers (`fill_as_user` and the
+// rest) do not consult the draft layer: the page's UX governs those boxes
+// (its Edit penalties opens a group, sent as `unlocked`).
 
 /// The draft the taxpayer profile alone makes for a return's period, and
 /// its box values (official key -> string): what decides whether the
@@ -880,14 +886,18 @@ pub struct FromProfile {
 
 /// A package's page-side lock data (`data/agent-locks.json`): keys the
 /// page's host writes through its own editors (`catalogs::host_writes` and
-/// the row modules', bound or not), and the on-screen keys that repeat an
-/// official control id (`#occurrence-`) without a binding of their own.
+/// the row modules', bound or not), the on-screen keys that repeat an
+/// official control id (`#occurrence-`) without a binding of their own, and
+/// the penalty groups the page's schema draws
+/// ([`draft_locks::penalties::groups`]).
 #[derive(Debug, Default, Deserialize)]
 struct AgentLocks {
     #[serde(default)]
     host_written: BTreeSet<String>,
     #[serde(default)]
     occurrence_aliases: BTreeMap<String, String>,
+    #[serde(default)]
+    penalty_groups: Vec<draft_locks::penalties::Group>,
 }
 
 fn agent_locks(package: &str) -> &'static AgentLocks {
@@ -895,6 +905,7 @@ fn agent_locks(package: &str) -> &'static AgentLocks {
     static EMPTY: AgentLocks = AgentLocks {
         host_written: BTreeSet::new(),
         occurrence_aliases: BTreeMap::new(),
+        penalty_groups: Vec::new(),
     };
     PARSED
         .get_or_init(|| {
@@ -1164,15 +1175,16 @@ impl Gate {
     }
 }
 
-/// Why each box is locked on the page: the lock map `screen_form_open`
-/// shows. A profile box is locked only where the profile gave it a value
-/// ([`FromProfile`]; the page's Edit then opens it for this return); one
-/// the profile left blank loses its profile lock and is an ordinary box,
-/// whatever the filer has typed into it since.
+/// Why each box is locked on the page: the base of the lock map
+/// `screen_form_open` shows. A profile box is locked only where the profile
+/// gave it a value ([`FromProfile`]; the page's Edit then opens it for this
+/// return); one the profile left blank loses its profile lock and is an
+/// ordinary box, whatever the filer has typed into it since.
 ///
-/// The page applies its draft-dependent relocks and penalty group locks
-/// on top of this map (see the `locks` section's note): this is the shared
-/// base every writer — page and assistant alike — reads.
+/// The draft-dependent layer goes on top ([`draft_locks`], also core-side;
+/// see the `locks` section's note): the page's open applies it over this
+/// map, and [`fill`] refuses what it locks too. This is the shared base
+/// every writer — page and assistant alike — reads.
 pub fn locks(kind: AgentFormKind, from_profile: &FromProfile) -> Map<String, Value> {
     let def = kind.definition();
     let agent_locks = agent_locks(&def.package);
@@ -1244,6 +1256,14 @@ pub fn profile_edit_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec
 /// against the assistant: computed, locked, hidden, unmapped, host-written
 /// and occurrence-alias keys, each with the page's reason.
 ///
+/// It also refuses what the page's draft-dependent layer locks
+/// ([`draft_locks`]), judged on `draft` as it stands when this key is
+/// written — so in a batch, on the boxes written before it — with
+/// `` `{key}` {reason} `` and the page's reason: an unedited computed
+/// penalty group (the assistant has no Edit penalties; once the group holds
+/// a typed amount it is open), 2000's 15B and 15C, 2553's classification
+/// and quarter boxes, 1702RT's shut item 42, and the rest of that layer.
+///
 /// `from_profile` is the draft the profile alone makes for this return's
 /// period and its field map ([`FromProfile`], as [`locks`] reads): a
 /// profile box the profile left blank is an ordinary box and takes the
@@ -1263,7 +1283,9 @@ pub fn fill(
 /// election ([`Lock::Election`]) is the user's to answer, and a bound box
 /// the host writes through its own editors writes — the page's edit
 /// pipeline is that host. Identity, profile, computed, hidden and unbound
-/// boxes are refused exactly as in [`fill`].
+/// boxes are refused exactly as in [`fill`]. Like every page writer it does
+/// not consult the draft-dependent layer ([`draft_locks`]): the page's own
+/// UX governs those boxes (its Edit penalties opens a group).
 pub fn fill_as_user(
     kind: AgentFormKind,
     draft: &mut Value,
@@ -1376,6 +1398,13 @@ fn fill_box(
     prepare_for_writes(kind, draft)?;
     let def = kind.definition();
     let verdict = gate(def, key, from_profile);
+    // The assistant (as_host = false) is refused what the page's
+    // draft-dependent layer locks on the draft as it stands. A page writer
+    // (as_host = true) never consults it: the page's own UX governs those
+    // boxes (its Edit penalties opens a group).
+    if !as_host && let Some(lock) = draft_refusal(kind, def, draft, key, verdict.as_ref()) {
+        return Err(format!("`{key}` {lock}"));
+    }
     // Only the lock itself is lifted: a computed or hidden box, an alias
     // and an unbound key stay refused whatever `allowed` holds. A
     // host-written key stays refused to `fill` (as_host = false, the
@@ -1403,13 +1432,53 @@ fn fill_box(
     write_bound_box(kind, def, draft, key, value)
 }
 
+/// The page's draft-dependent lock on `key` ([`draft_locks::draft_lock`]
+/// over the base map's own entry for it), where that layer decides what the
+/// page shows: a box the base map leaves open, or one whose base reason the
+/// layer replaces (2000's 15B, which the probe calls derived, is computed).
+/// A box the page draws no lock for that `fill` still refuses (a hidden
+/// control, a host-written box, an election, not a box) keeps that refusal,
+/// and so does a base lock the layer leaves as it is.
+fn draft_refusal(
+    kind: AgentFormKind,
+    def: &AgentFormDef,
+    draft: &Value,
+    key: &str,
+    verdict: Option<&Gate>,
+) -> Option<String> {
+    let base = match verdict {
+        None => None,
+        Some(gate) => Some(gate.page_reason(def, key)?),
+    };
+    let lock = draft_locks::draft_lock(kind, draft, key, base.as_deref())?;
+    (base.as_deref() != Some(lock.as_str())).then_some(lock)
+}
+
+/// Write `value` at JSON pointer `path` of `draft`: over the value there,
+/// or as a new leaf of the object at its parent; a path whose parent is not
+/// an object is left as it is. The form page's edits write this way
+/// (bir-shell's `set_draft_path` is this function), and so does the
+/// penalty layer's trial ([`draft_locks::penalties::applies`]).
+pub fn set_draft_path(draft: &mut Value, path: &str, value: Value) {
+    if let Some(slot) = draft.pointer_mut(path) {
+        *slot = value;
+    } else if let Some((parent, leaf)) = path.rsplit_once('/')
+        && let Some(Value::Object(object)) =
+            draft.pointer_mut(if parent.is_empty() { "" } else { parent })
+    {
+        object.insert(leaf.to_string(), value);
+    }
+}
+
 /// [`fill`] for a key the host itself edits — the page writes it through
 /// its own editors (a row cell, a catalog control), and the desktop host
 /// does the same for the keys its own gate owns (2553's item 13, where
 /// `tax_treaty_2553` is the editor `rows_dst_pt_vat`'s cells are on the
 /// page). Only the host-written gate is lifted — the caller applies the
 /// host's own rule — so an unbound, computed, hidden, aliased or locked
-/// box is refused exactly as in [`fill`].
+/// box is refused exactly as in [`fill`]. Like every host writer it does
+/// not consult the draft-dependent layer ([`draft_locks`]): the host's own
+/// rule governs these boxes.
 ///
 /// Never for a key the assistant names itself: `fill` keeps refusing it.
 pub fn fill_host_owned(
