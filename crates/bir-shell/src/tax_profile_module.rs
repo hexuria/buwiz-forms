@@ -1019,8 +1019,9 @@ fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>
 /// Fake poll transport installed by tests — returns the same
 /// `(poll_success, still_pending, error)` triple as the real fetch.
 #[cfg(test)]
-type TestInboxPoll =
-    Box<dyn FnOnce(&str, std::sync::Arc<std::sync::Mutex<Database>>) -> (bool, bool, Option<String>)>;
+type TestInboxPoll = Box<
+    dyn FnOnce(&str, std::sync::Arc<std::sync::Mutex<Database>>) -> (bool, bool, Option<String>),
+>;
 
 #[cfg(test)]
 thread_local! {
