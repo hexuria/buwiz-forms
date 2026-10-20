@@ -203,19 +203,108 @@ fn get_profile_by_tin(
         .ok_or_else(|| HostError::new(format!("no taxpayer profile with TIN {tin}")))
 }
 
-fn profile_detail(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?;
-    with_database(|db| serialize(&get_profile_by_tin(db, tin)?))
+/// A profile's four secrets are host state: the page can neither read them
+/// nor set or clear them through the profile verbs. Each keeps its own host
+/// writer instead: the inbox verbs (`set_inbox_app_password`, the Google
+/// grant's persist and disconnect) for the app password and the tokens, and
+/// the authenticator verbs (`set_taxpayer_totp`, `set_profile_totp`,
+/// `set_admin_totp`) for a TOTP secret, which they store on the taxpayer
+/// (the help desk admin's in settings), never on a profile.
+const PROFILE_SECRET_KEYS: [&str; 4] = [
+    "totp_secret",
+    "imap_app_password",
+    "oauth_access_token",
+    "oauth_refresh_token",
+];
+
+/// A profile's four secrets, in `PROFILE_SECRET_KEYS` order.
+type ProfileSecrets = [Option<String>; 4];
+
+/// Move `profile`'s secrets out. They are moved, never copied, so the
+/// profile that ends up holding them still wipes them when it drops.
+fn take_secrets(profile: &mut bir_core::profile::TaxpayerProfile) -> ProfileSecrets {
+    [
+        profile.totp_secret.take(),
+        profile.imap_app_password.take(),
+        profile.oauth_access_token.take(),
+        profile.oauth_refresh_token.take(),
+    ]
 }
 
+fn put_secrets(
+    profile: &mut bir_core::profile::TaxpayerProfile,
+    [totp, password, access, refresh]: ProfileSecrets,
+) {
+    profile.totp_secret = totp;
+    profile.imap_app_password = password;
+    profile.oauth_access_token = access;
+    profile.oauth_refresh_token = refresh;
+}
+
+/// A profile as the page receives it: the record without the secret keys
+/// (removed, not sent as null). The values are out of the profile while the
+/// record is built, so none can leave even under a key this list does not
+/// name, and back in before it drops.
+fn redacted_profile(mut profile: bir_core::profile::TaxpayerProfile) -> HostResult {
+    let secrets = take_secrets(&mut profile);
+    let record = serde_json::to_value(&profile);
+    put_secrets(&mut profile, secrets);
+    let mut record = record.map_err(db_error)?;
+    if let Some(fields) = record.as_object_mut() {
+        for key in PROFILE_SECRET_KEYS {
+            fields.remove(key);
+        }
+    }
+    Ok(json(record))
+}
+
+/// `save_profile` never stores a client's secrets, as
+/// [`keep_stored_trigger_flag`] never stores a client's trigger fields: the
+/// four are taken from the stored row the save writes, or cleared when
+/// there is none, so a page round trip of a redacted profile keeps a stored
+/// password. The row is found the way [`Database::save_profile`] finds it:
+/// the one with the client's `id` (a TIN change re-keys that row), else the
+/// one with the client's TIN.
+fn keep_stored_secrets(
+    db: &Database,
+    profile: &mut bir_core::profile::TaxpayerProfile,
+) -> Result<(), HostError> {
+    let by_tin = db
+        .get_profile_by_tin(&profile.tin.full())
+        .map_err(db_error)?;
+    let mut stored = match profile.id {
+        // bir-core looks rows up by TIN only, so the list is read just when
+        // the id is not the row with this TIN (a TIN change).
+        Some(id) if !by_tin.as_ref().is_some_and(|row| row.id == Some(id)) => db
+            .list_profiles()
+            .map_err(db_error)?
+            .into_iter()
+            .find(|row| row.id == Some(id))
+            .or(by_tin),
+        _ => by_tin,
+    };
+    let secrets = stored.as_mut().map(take_secrets).unwrap_or_default();
+    put_secrets(profile, secrets);
+    Ok(())
+}
+
+/// The stored profile for `tin`, without its secrets.
+fn profile_detail(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| redacted_profile(get_profile_by_tin(db, tin)?))
+}
+
+/// Save the page's profile. Its secrets are settled from the stored row
+/// ([`keep_stored_secrets`]); the answer is the saved profile without them.
 fn save_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let profile: bir_core::profile::TaxpayerProfile =
+    let mut profile: bir_core::profile::TaxpayerProfile =
         serde_json::from_value(to_json(arguments.value(0)?))
             .map_err(|error| HostError::new(format!("profile payload: {error}")))?;
     with_database(|db| {
+        keep_stored_secrets(db, &mut profile)?;
         db.save_profile(profile)
             .map_err(|error| HostError::new(error.to_string()))
-            .and_then(|saved| serialize(&saved))
+            .and_then(redacted_profile)
     })
 }
 
@@ -230,7 +319,7 @@ fn set_profile_archived(arguments: &gpui_shell::HostArguments) -> HostResult {
         profile.is_archived = archived;
         db.save_profile(profile)
             .map_err(|error| HostError::new(error.to_string()))
-            .and_then(|saved| serialize(&saved))
+            .and_then(redacted_profile)
     })
 }
 
@@ -2608,6 +2697,223 @@ mod tests {
 
     fn profile_detail_archived(tin: &str) -> bool {
         with_database(|db| Ok(get_profile_by_tin(db, tin)?.is_archived)).unwrap()
+    }
+
+    // ---------- the profile's secrets stay host-side ----------
+
+    /// Distinctive values the host stores before each secret test, in
+    /// `PROFILE_SECRET_KEYS` order, so a leak or an overwrite cannot pass
+    /// unnoticed.
+    const STORED_SECRETS: [&str; 4] = [
+        "stored-totp-K7Q2",
+        "stored-pass-W9X4",
+        "stored-access-M3R8",
+        "stored-refresh-T5V1",
+    ];
+
+    /// What a page might forge, in the same order.
+    const FORGED_SECRETS: [&str; 4] = [
+        "forged-totp",
+        "forged-pass",
+        "forged-access",
+        "forged-refresh",
+    ];
+
+    fn store_secrets(tin: &str) {
+        with_database(|db| {
+            let mut profile = get_profile_by_tin(db, tin)?;
+            let [totp, password, access, refresh] =
+                STORED_SECRETS.map(|value| Some(value.to_string()));
+            profile.totp_secret = totp;
+            profile.imap_app_password = password;
+            profile.oauth_access_token = access;
+            profile.oauth_refresh_token = refresh;
+            db.save_profile(profile).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// `tin`'s four stored secrets, in `PROFILE_SECRET_KEYS` order.
+    fn stored_secrets(tin: &str) -> [Option<String>; 4] {
+        with_database(|db| {
+            let mut profile = get_profile_by_tin(db, tin)?;
+            Ok([
+                profile.totp_secret.take(),
+                profile.imap_app_password.take(),
+                profile.oauth_access_token.take(),
+                profile.oauth_refresh_token.take(),
+            ])
+        })
+        .unwrap()
+    }
+
+    /// Every secret stored on `tin` is still the one `store_secrets` wrote.
+    /// A failure names the key, never a value.
+    fn assert_secrets_kept(tin: &str, after: &str) {
+        let stored = stored_secrets(tin);
+        for ((key, value), expected) in PROFILE_SECRET_KEYS
+            .into_iter()
+            .zip(stored)
+            .zip(STORED_SECRETS)
+        {
+            assert!(
+                value.as_deref() == Some(expected),
+                "{after} changed the stored {key}"
+            );
+        }
+    }
+
+    /// `verb`'s profile answer carries neither a secret key nor any of
+    /// `values` (in `PROFILE_SECRET_KEYS` order). A failure names the key,
+    /// never a value.
+    fn assert_no_secrets(answer: &HostValue, verb: &str, values: [&str; 4]) {
+        let record = to_json(answer);
+        let fields = record
+            .as_object()
+            .unwrap_or_else(|| panic!("{verb} answers a profile record"));
+        let raw = record.to_string();
+        for (key, value) in PROFILE_SECRET_KEYS.into_iter().zip(values) {
+            assert!(!fields.contains_key(key), "{verb} sent the {key} key");
+            assert!(!raw.contains(value), "{verb} sent the {key} value");
+        }
+    }
+
+    /// The page reads a profile without its secrets: no key, no value, and
+    /// the rest of the record is there.
+    #[test]
+    fn profile_detail_sends_no_secret() {
+        setup();
+        store_secrets(TIN);
+        let detail = profile_detail(&args(vec![s(TIN)])).unwrap();
+        assert_no_secrets(&detail, "profile_detail", STORED_SECRETS);
+        assert_eq!(to_json(&detail)["full_name"], "Example Trading Corp");
+    }
+
+    /// The page's round trip of `profile_detail` (a payload without the
+    /// secret keys) saves its own edit and keeps all four stored values.
+    #[test]
+    fn save_profile_without_the_secret_keys_keeps_the_stored_ones() {
+        setup();
+        store_secrets(TIN);
+        let mut page = to_json(&profile_detail(&args(vec![s(TIN)])).unwrap());
+        for key in PROFILE_SECRET_KEYS {
+            assert!(page.get(key).is_none(), "the payload carries no {key}");
+        }
+        page["phone"] = serde_json::json!("0281112222");
+        let saved = save_profile(&args(vec![json(page)])).unwrap();
+        assert_no_secrets(&saved, "save_profile", STORED_SECRETS);
+        assert_secrets_kept(TIN, "a save without the secret keys");
+        let phone = with_database(|db| Ok(get_profile_by_tin(db, TIN)?.phone.clone())).unwrap();
+        assert_eq!(phone, "0281112222", "the rest of the payload is saved");
+    }
+
+    /// Forged values leave the stored ones as they were, and so do forged
+    /// nulls: the page can neither set nor clear a secret.
+    #[test]
+    fn save_profile_ignores_forged_secrets() {
+        setup();
+        store_secrets(TIN);
+        let page = to_json(&profile_detail(&args(vec![s(TIN)])).unwrap());
+        let (mut forged, mut nulled) = (page.clone(), page);
+        for (key, value) in PROFILE_SECRET_KEYS.into_iter().zip(FORGED_SECRETS) {
+            forged[key] = serde_json::json!(value);
+            nulled[key] = serde_json::Value::Null;
+        }
+        let saved = save_profile(&args(vec![json(forged)])).unwrap();
+        assert_no_secrets(&saved, "save_profile", FORGED_SECRETS);
+        assert_no_secrets(&saved, "save_profile", STORED_SECRETS);
+        assert_secrets_kept(TIN, "a save with forged secrets");
+        save_profile(&args(vec![json(nulled)])).unwrap();
+        assert_secrets_kept(TIN, "a save with null secrets");
+    }
+
+    /// A save for a TIN with no stored row stores no secret, whatever the
+    /// payload carries.
+    #[test]
+    fn save_profile_for_a_new_tin_stores_no_secret() {
+        setup();
+        let mut page = serde_json::json!({
+            "id": null,
+            "full_name": "Sample Holdings Inc",
+            "tin": {"segment1": "987", "segment2": "654", "segment3": "320", "branch": "00000"},
+            "rdo_code": "043",
+            "line_of_business": "Holding company",
+            "registered_address": "2 Sample Road, Makati",
+            "zip_code": "1200",
+            "phone": "0280000001",
+            "email": "books@example.com",
+            "default_form_type": "1702Q",
+            "taxpayer_type": "Corporation",
+        });
+        for (key, value) in PROFILE_SECRET_KEYS.into_iter().zip(FORGED_SECRETS) {
+            page[key] = serde_json::json!(value);
+        }
+        let saved = save_profile(&args(vec![json(page)])).unwrap();
+        assert_no_secrets(&saved, "save_profile", FORGED_SECRETS);
+        let stored = stored_secrets("98765432000000");
+        for (key, value) in PROFILE_SECRET_KEYS.into_iter().zip(stored) {
+            assert!(value.is_none(), "a new profile stored a {key}");
+        }
+    }
+
+    /// A round trip that moves the profile to a new TIN writes the same row
+    /// (re-keyed by its `id`), so that row's secrets are the ones kept; the
+    /// new TIN has no row of its own to take them from.
+    #[test]
+    fn save_profile_that_moves_the_tin_keeps_the_rows_secrets() {
+        setup();
+        add_branch();
+        store_secrets(BRANCH);
+        let mut page = to_json(&profile_detail(&args(vec![s(BRANCH)])).unwrap());
+        page["tin"]["branch"] = serde_json::json!("00002");
+        let saved = save_profile(&args(vec![json(page)])).unwrap();
+        assert_no_secrets(&saved, "save_profile", STORED_SECRETS);
+        assert_secrets_kept("12345678800002", "a save that moves the TIN");
+        let moved =
+            with_database(|db| Ok(db.get_profile_by_tin(BRANCH).map_err(db_error)?.is_none()))
+                .unwrap();
+        assert!(moved, "the row moved off its old TIN");
+    }
+
+    /// The third verb that answers a profile: archiving keeps the secrets
+    /// stored and leaves them out of the answer.
+    #[test]
+    fn set_profile_archived_answers_without_secrets() {
+        setup();
+        store_secrets(TIN);
+        let archived = set_profile_archived(&args(vec![s(TIN), HostValue::Bool(true)])).unwrap();
+        assert_no_secrets(&archived, "set_profile_archived", STORED_SECRETS);
+        assert_eq!(to_json(&archived)["is_archived"], true);
+        assert_secrets_kept(TIN, "archiving");
+    }
+
+    /// The authenticator's own writers still work: `set_taxpayer_totp` keeps
+    /// the secret on the taxpayer, a page round trip of every branch profile
+    /// neither shows it nor removes it, and the legacy per-branch
+    /// `set_profile_totp` still clears and sets it.
+    #[test]
+    fn the_authenticator_writers_survive_a_profile_round_trip() {
+        setup();
+        add_branch();
+        set_taxpayer_totp(&args(vec![s(ROOT), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        for tin in [TIN, BRANCH] {
+            let page = profile_detail(&args(vec![s(tin)])).unwrap();
+            assert!(
+                !to_json(&page).to_string().contains(SECRET),
+                "profile_detail sent the authenticator secret"
+            );
+            save_profile(&args(vec![page])).unwrap();
+        }
+        assert!(has_totp(), "the round trip kept the authenticator");
+        assert!(truthy(verify_taxpayer_totp(&args(vec![
+            s(ROOT),
+            s(&current_code(SECRET))
+        ]))));
+        set_profile_totp(&args(vec![s(BRANCH), HostValue::Null])).unwrap();
+        assert!(!has_totp());
+        set_profile_totp(&args(vec![s(BRANCH), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        assert!(has_totp());
     }
 
     #[test]
