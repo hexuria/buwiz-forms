@@ -7,16 +7,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use bir_core::db::Database;
 use bir_core::forms::registry::canonical_form_code;
-use bir_core::profile::TaxpayerType;
+use bir_core::profile::{EmailAuthMethod, TaxpayerProfile, TaxpayerType};
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
     ResolvedBranch, StarterPack, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
     TemplateField, format_tin_root, tax_year_bounds,
 };
+use chrono::Datelike as _;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
 use serde_json::Value;
 
-use crate::bir_module::{to_json, with_database};
+use crate::bir_module::{database_handle, to_json, with_database};
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -104,6 +105,57 @@ export function delete_form_template(tin: string, form_code: string): boolean;
 export interface RdoOption { code: string; description: string; }
 export function list_rdos(): RdoOption[];
 export function list_zip_codes(): string[];
+
+export type InboxAuthMethod = "AppPassword" | "GoogleOAuth";
+export interface InboxState {
+    tin: string;
+    /** Mailbox the poller keys on: imap_email, else the branch email. */
+    inbox_email: string;
+    auth_method: InboxAuthMethod;
+    tracking_enabled: boolean;
+    /** The stored IMAP login, "" when the mailbox falls back to the branch email. */
+    imap_login: string;
+    imap_host: string;
+    /** An app password is stored — the secret itself never crosses the bridge. */
+    has_app_password: boolean;
+    /** A usable Google refresh token exists on the profile or the inbox row. */
+    oauth_connected: boolean;
+    oauth_inbox_email: string | null;
+    oauth_updated_at: string | null;
+    /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
+    still_pending: boolean;
+    matching_tins: string[];
+    /** Last run of this inbox's `bir_poll_email` job, when one exists. */
+    last_check_at: string | null;
+    last_check_status: string | null;
+    last_check_log: string | null;
+}
+export interface InboxCredentialsInput {
+    imap_email: string;
+    /** Blank means the default imap.gmail.com. */
+    imap_host?: string | null;
+    /** Omitted keeps the stored password; a string replaces it (spaces stripped). */
+    app_password?: string | null;
+}
+export interface InboxVerifyResult { ok: boolean; message: string; state: InboxState; }
+export interface InboxCheckResult {
+    ok: boolean;
+    still_pending: boolean;
+    error: string | null;
+    state: InboxState;
+}
+export function inbox_state(tin: string): InboxState;
+/** Stores App Password credentials on the profile (encrypted DB); tracking stays off until Verify succeeds. */
+export function set_inbox_app_password(tin: string, input: InboxCredentialsInput): InboxState;
+export function set_inbox_tracking(tin: string, enabled: boolean): InboxState;
+/** Clears the Google grant for this inbox across every profile sharing it. */
+export function disconnect_inbox_oauth(tin: string): InboxState;
+/** Runs the browser OAuth flow, then persists the grant to the shared inbox row. */
+export function connect_inbox_oauth(tin: string): Promise<InboxState>;
+/** Real IMAP login probe: success turns tracking on, failure turns it off. */
+export function test_inbox_connection(tin: string): Promise<InboxVerifyResult>;
+/** Runs the cron-side fetch→confirm poll for this inbox once, updating its job row. */
+export function check_inbox_now(tin: string): Promise<InboxCheckResult>;
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -129,6 +181,13 @@ pub fn register(module: HostModule) -> HostModule {
         .function("delete_form_template", delete_form_template)
         .function("list_rdos", |_| list_rdos())
         .function("list_zip_codes", |_| list_zip_codes())
+        .function("inbox_state", inbox_state)
+        .function("set_inbox_app_password", set_inbox_app_password)
+        .function("set_inbox_tracking", set_inbox_tracking)
+        .function("disconnect_inbox_oauth", disconnect_inbox_oauth)
+        .async_function("connect_inbox_oauth", connect_inbox_oauth)
+        .async_function("test_inbox_connection", test_inbox_connection)
+        .async_function("check_inbox_now", check_inbox_now)
 }
 
 // ---------- reference lists ----------
@@ -614,6 +673,418 @@ fn delete_form_template(arguments: &HostArguments) -> HostResult {
     })
 }
 
+// ---------- confirmation inbox ----------
+
+fn lock_db(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+) -> Result<std::sync::MutexGuard<'_, Database>, HostError> {
+    db.lock()
+        .map_err(|_| HostError::new("database lock poisoned"))
+}
+
+fn load_inbox_profile(db: &Database, tin: &str) -> Result<TaxpayerProfile, HostError> {
+    db.get_profile(tin)
+        .map_err(|error| HostError::new(error.to_string()))?
+        .ok_or_else(|| HostError::new(format!("No taxpayer profile with TIN {tin}")))
+}
+
+/// Everything the UI needs to draw the inbox card — no secrets cross here:
+/// passwords and tokens are reported as booleans only.
+fn inbox_state_value(db: &Database, tin: &str) -> Result<HostValue, HostError> {
+    let profile = load_inbox_profile(db, tin)?;
+    let inbox = profile.inbox_email().to_string();
+    let tokens = if inbox.is_empty() {
+        None
+    } else {
+        db.inbox_oauth_tokens(&inbox)
+            .map_err(|error| HostError::new(error.to_string()))?
+    };
+    let oauth_connected = profile.has_usable_oauth_refresh()
+        || tokens.as_ref().is_some_and(|t| t.has_usable_refresh());
+    let (still_pending, matching_tins) = if inbox.is_empty() {
+        (false, Vec::new())
+    } else {
+        let plan = bir_core::email::plan_email_poll_for_address(
+            db,
+            &inbox,
+            chrono::Local::now().year() as u16,
+        );
+        (plan.still_pending, plan.matching_tins)
+    };
+    // "Last check" lives on the cron-side `bir_poll_email <address>` job row.
+    let poll_command = format!("bir_poll_email {inbox}");
+    let poll_job = db
+        .list_jobs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|job| job.command.as_deref() == Some(poll_command.as_str()))
+        .max_by_key(|job| job.last_run_at.clone().unwrap_or_default());
+    Ok(HostObject::new()
+        .field("tin", tin)
+        .field("inbox_email", inbox.clone())
+        .field(
+            "auth_method",
+            match profile.email_auth_method {
+                EmailAuthMethod::AppPassword => "AppPassword",
+                EmailAuthMethod::GoogleOAuth => "GoogleOAuth",
+            },
+        )
+        .field("tracking_enabled", profile.email_tracking_enabled)
+        .field("imap_login", profile.imap_email.clone().unwrap_or_default())
+        .field(
+            "imap_host",
+            profile
+                .imap_host
+                .clone()
+                .unwrap_or_else(|| "imap.gmail.com".to_string()),
+        )
+        .field(
+            "has_app_password",
+            profile
+                .imap_app_password
+                .as_deref()
+                .is_some_and(|pw| !pw.trim().is_empty()),
+        )
+        .field("oauth_connected", oauth_connected)
+        .field(
+            "oauth_inbox_email",
+            tokens
+                .as_ref()
+                .map(|t| t.imap_user.clone())
+                .or(if oauth_connected {
+                    Some(inbox.clone())
+                } else {
+                    None
+                })
+                .map_or(HostValue::Null, HostValue::Str),
+        )
+        .field(
+            "oauth_updated_at",
+            tokens
+                .map(|t| t.updated_at.clone())
+                .map_or(HostValue::Null, HostValue::Str),
+        )
+        .field("still_pending", still_pending)
+        .field("matching_tins", strings(matching_tins))
+        .field(
+            "last_check_at",
+            poll_job
+                .as_ref()
+                .and_then(|job| job.last_run_at.clone())
+                .map_or(HostValue::Null, HostValue::Str),
+        )
+        .field(
+            "last_check_status",
+            poll_job
+                .as_ref()
+                .map(|job| job.status.clone())
+                .map_or(HostValue::Null, HostValue::Str),
+        )
+        .field(
+            "last_check_log",
+            poll_job
+                .and_then(|job| job.output_log)
+                .map_or(HostValue::Null, HostValue::Str),
+        )
+        .into())
+}
+
+fn inbox_state(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| inbox_state_value(db, tin))
+}
+
+fn set_inbox_app_password(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let input = object_argument(arguments, 1)?;
+    let imap_email = optional_string(&input, "imap_email")?
+        .map(|email| email.trim().to_string())
+        .filter(|email| !email.is_empty())
+        .ok_or_else(|| HostError::new("Type the inbox email, like name@example.com."))?;
+    let imap_host = optional_string(&input, "imap_host")?
+        .map(|host| host.trim().to_string())
+        .filter(|host| !host.is_empty());
+    // App passwords arrive as "abcd efgh ijkl mnop"; Google strips the spaces.
+    let app_password = optional_string(&input, "app_password")?
+        .map(|pw| pw.replace(' ', ""))
+        .map(|pw| {
+            if pw.is_empty() {
+                Err(HostError::new(
+                    "The app password is empty. Paste the 16-letter password from your provider.",
+                ))
+            } else {
+                Ok(pw)
+            }
+        })
+        .transpose()?;
+    with_database(|db| {
+        let mut profile = load_inbox_profile(db, tin)?;
+        profile.email_auth_method = EmailAuthMethod::AppPassword;
+        profile.imap_email = Some(imap_email);
+        profile.imap_host = imap_host;
+        if let Some(password) = app_password {
+            profile.imap_app_password = Some(password);
+        }
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        inbox_state_value(db, tin)
+    })
+}
+
+fn set_inbox_tracking(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let enabled = arguments.boolean(1)?;
+    with_database(|db| {
+        let mut profile = load_inbox_profile(db, tin)?;
+        profile.email_tracking_enabled = enabled;
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        inbox_state_value(db, tin)
+    })
+}
+
+fn disconnect_inbox_oauth(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| {
+        let profile = load_inbox_profile(db, tin)?;
+        let inbox = profile.inbox_email().to_string();
+        if inbox.trim().is_empty() {
+            return Err(HostError::new(
+                "No inbox email is set, so there is nothing to disconnect.",
+            ));
+        }
+        db.disconnect_google_oauth_for_inbox(&inbox)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        // The grant fan-out re-saved every sibling; reload before toggling.
+        let mut profile = load_inbox_profile(db, tin)?;
+        profile.email_tracking_enabled = false;
+        db.save_profile(profile)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        inbox_state_value(db, tin)
+    })
+}
+
+/// Persist a grant returned by `start_oauth_flow` — split out so tests drive
+/// it with canned tokens (the browser leg cannot run headlessly).
+fn persist_oauth_grant(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    tin: &str,
+    email: &str,
+    access_token: &str,
+    refresh_token: &str,
+) -> HostResult {
+    let guard = lock_db(db)?;
+    guard
+        .persist_google_oauth_for_inbox(email, access_token, refresh_token, Some(tin))
+        .map_err(|error| HostError::new(error.to_string()))?;
+    inbox_state_value(&guard, tin)
+}
+
+fn connect_inbox_oauth_run(
+    tin: &str,
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+) -> HostResult {
+    // Blocking: browser consent + a loopback listener. Same error surface the
+    // legacy Profile Manager shows ("OAuth failed: ...").
+    let (email, access_token, refresh_token) = bir_core::email::start_oauth_flow()
+        .map_err(|error| HostError::new(format!("OAuth failed: {error}")))?;
+    if refresh_token.trim().is_empty() {
+        return Err(HostError::new(
+            "Google did not return a refresh token. Re-authorize with consent so a new refresh token is issued.",
+        ));
+    }
+    persist_oauth_grant(db, tin, &email, &access_token, &refresh_token)
+}
+
+/// Apply a `test_connection` verdict the way the legacy Email Settings tab
+/// does: success enables tracking (and fans a rotated access token out to the
+/// inbox), failure disables it.
+fn apply_connection_result(
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+    tin: &str,
+    result: Result<Option<String>, anyhow::Error>,
+) -> HostResult {
+    let guard = lock_db(db)?;
+    match result {
+        Ok(new_access_token) => {
+            if let Some(token) = new_access_token {
+                let inbox = load_inbox_profile(&guard, tin)?.inbox_email().to_string();
+                let _ = guard.update_inbox_oauth_access_token(&inbox, &token);
+            }
+            let mut profile = load_inbox_profile(&guard, tin)?;
+            profile.email_tracking_enabled = true;
+            guard
+                .save_profile(profile)
+                .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(HostObject::new()
+                .field("ok", true)
+                .field(
+                    "message",
+                    "Connection successful! Email tracking is now active.",
+                )
+                .field("state", inbox_state_value(&guard, tin)?)
+                .into())
+        }
+        Err(error) => {
+            let mut profile = load_inbox_profile(&guard, tin)?;
+            profile.email_tracking_enabled = false;
+            guard
+                .save_profile(profile)
+                .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(HostObject::new()
+                .field("ok", false)
+                .field("message", format!("Connection failed: {error}"))
+                .field("state", inbox_state_value(&guard, tin)?)
+                .into())
+        }
+    }
+}
+
+fn test_inbox_connection_run(
+    tin: &str,
+    db: &std::sync::Arc<std::sync::Mutex<Database>>,
+) -> HostResult {
+    let profile = {
+        let guard = lock_db(db)?;
+        load_inbox_profile(&guard, tin)?
+    };
+    // The IMAP probe runs with the lock released — it can take many seconds.
+    let result = bir_core::email::test_connection(&profile);
+    apply_connection_result(db, tin, result)
+}
+
+/// The poll itself. Production delegates to bir-core's fetch→confirm path;
+/// tests install a fake transport through [`TEST_INBOX_POLL`].
+fn run_inbox_poll(
+    email: &str,
+    db: std::sync::Arc<std::sync::Mutex<Database>>,
+) -> (bool, bool, Option<String>) {
+    #[cfg(test)]
+    if let Some(stub) = TEST_INBOX_POLL.with(|slot| slot.borrow_mut().take()) {
+        return stub(email, db);
+    }
+    bir_core::email::fetch_and_process_emails_for_address(email, db)
+}
+
+/// One user-triggered "check now" — the same inline run the legacy Cron Tasks
+/// "Run now" performs, including stamping the job row with the outcome.
+fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>>) -> HostResult {
+    let email = {
+        let guard = lock_db(db)?;
+        let email = load_inbox_profile(&guard, tin)?.inbox_email().to_string();
+        if email.trim().is_empty() {
+            return Err(HostError::new(
+                "No inbox email is set on this profile. Save App Password credentials or connect Google first.",
+            ));
+        }
+        email
+    };
+    let (poll_success, still_pending, err_msg) = run_inbox_poll(&email, db.clone());
+
+    let guard = lock_db(db)?;
+    let command = format!("bir_poll_email {email}");
+    let now = chrono::Utc::now().to_rfc3339();
+    for mut job in guard.list_jobs().unwrap_or_default() {
+        if job.command.as_deref() != Some(command.as_str())
+            || matches!(job.status.as_str(), "Archived" | "Done")
+        {
+            continue;
+        }
+        job.last_run_at = Some(now.clone());
+        if poll_success {
+            job.output_log = Some("Email polling completed successfully.".to_string());
+            job.retries = 0;
+            if !still_pending {
+                job.status = "Archived".to_string();
+            }
+        } else {
+            job.output_log = Some(
+                err_msg
+                    .clone()
+                    .unwrap_or_else(|| "Email polling failed (unknown).".to_string()),
+            );
+            job.retries += 1;
+            job.status = "Queued".to_string();
+        }
+        let _ = guard.save_job(job);
+    }
+    Ok(HostObject::new()
+        .field("ok", poll_success)
+        .field("still_pending", still_pending)
+        .field("error", err_msg.map_or(HostValue::Null, HostValue::Str))
+        .field("state", inbox_state_value(&guard, tin)?)
+        .into())
+}
+
+/// Fake poll transport installed by tests — returns the same
+/// `(poll_success, still_pending, error)` triple as the real fetch.
+#[cfg(test)]
+type TestInboxPoll =
+    Box<dyn FnOnce(&str, std::sync::Arc<std::sync::Mutex<Database>>) -> (bool, bool, Option<String>)>;
+
+#[cfg(test)]
+thread_local! {
+    static TEST_INBOX_POLL: std::cell::RefCell<Option<TestInboxPoll>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn connect_inbox_oauth(
+    arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let tin = arguments.string(0)?.to_owned();
+    let db = database_handle()?;
+    let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+    std::thread::Builder::new()
+        .name("inbox-oauth".into())
+        .spawn(move || {
+            let _ = sender.send(connect_inbox_oauth_run(&tin, &db));
+        })
+        .map_err(|error| HostError::new(error.to_string()))?;
+    Ok(async move {
+        receiver
+            .await
+            .unwrap_or_else(|_| Err(HostError::new("OAuth thread failed")))
+    })
+}
+
+fn test_inbox_connection(
+    arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let tin = arguments.string(0)?.to_owned();
+    let db = database_handle()?;
+    let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+    std::thread::Builder::new()
+        .name("inbox-verify".into())
+        .spawn(move || {
+            let _ = sender.send(test_inbox_connection_run(&tin, &db));
+        })
+        .map_err(|error| HostError::new(error.to_string()))?;
+    Ok(async move {
+        receiver
+            .await
+            .unwrap_or_else(|_| Err(HostError::new("verify thread failed")))
+    })
+}
+
+fn check_inbox_now(
+    arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let tin = arguments.string(0)?.to_owned();
+    let db = database_handle()?;
+    let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+    std::thread::Builder::new()
+        .name("inbox-check".into())
+        .spawn(move || {
+            let _ = sender.send(check_inbox_now_run(&tin, &db));
+        })
+        .map_err(|error| HostError::new(error.to_string()))?;
+    Ok(async move {
+        receiver
+            .await
+            .unwrap_or_else(|_| Err(HostError::new("inbox check thread failed")))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1052,6 +1523,323 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|z| z.as_str().unwrap().starts_with("1000 - "))
+        );
+    }
+
+    // ---------- confirmation inbox ----------
+
+    /// A `bir_poll_email <address>` job row like the submission flow creates.
+    fn poll_job(email: &str) -> bir_core::db::Job {
+        bir_core::db::Job {
+            id: None,
+            name: format!("Waiting for confirmation for {email}"),
+            job_type: "System".to_string(),
+            cron_expr: Some("0 * * * * *".to_string()),
+            command: Some(format!("bir_poll_email {email}")),
+            status: "Queued".to_string(),
+            retries: 0,
+            last_run_at: None,
+            next_run_at: None,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            output_log: None,
+        }
+    }
+
+    #[test]
+    fn inbox_state_defaults_for_a_new_taxpayer() {
+        setup();
+        let state = ok(inbox_state, vec![json!(HEAD)]);
+        // The branch email is the default tracking mailbox.
+        assert_eq!(state["tin"], HEAD);
+        assert_eq!(state["inbox_email"], "office@example.com");
+        assert_eq!(state["auth_method"], "AppPassword");
+        assert_eq!(state["tracking_enabled"], false);
+        assert_eq!(state["has_app_password"], false);
+        assert_eq!(state["oauth_connected"], false);
+        assert_eq!(state["still_pending"], false);
+        assert_eq!(state["matching_tins"], json!([HEAD]));
+        assert_eq!(state["last_check_at"], Value::Null);
+    }
+
+    #[test]
+    fn set_inbox_app_password_persists_and_never_echoes_the_secret() {
+        setup();
+        let state = ok(
+            set_inbox_app_password,
+            vec![
+                json!(HEAD),
+                json!({
+                    "imap_email": " receipts@example.com ",
+                    "imap_host": "",
+                    "app_password": "abcd efgh ijkl mnop"
+                }),
+            ],
+        );
+        assert_eq!(state["auth_method"], "AppPassword");
+        assert_eq!(state["inbox_email"], "receipts@example.com");
+        assert_eq!(state["imap_host"], "imap.gmail.com");
+        assert_eq!(state["has_app_password"], true);
+        let raw = serde_json::to_string(&state).unwrap();
+        assert!(
+            !raw.contains("abcdefghijklmnop"),
+            "the stored secret must never leave the bridge: {raw}"
+        );
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            // Spaces stripped exactly like the legacy Email Settings tab.
+            assert_eq!(
+                profile.imap_app_password.as_deref(),
+                Some("abcdefghijklmnop")
+            );
+            assert_eq!(profile.imap_host, None);
+            assert_eq!(
+                profile.email_auth_method,
+                bir_core::profile::EmailAuthMethod::AppPassword
+            );
+            Ok(())
+        })
+        .unwrap();
+
+        // An omitted password keeps the stored one; an empty one is refused.
+        let again = ok(
+            set_inbox_app_password,
+            vec![json!(HEAD), json!({"imap_email": "receipts@example.com"})],
+        );
+        assert_eq!(again["has_app_password"], true);
+        let refused = call(
+            set_inbox_app_password,
+            vec![
+                json!(HEAD),
+                json!({"imap_email": "x@y.z", "app_password": "   "}),
+            ],
+        );
+        assert!(refused.unwrap_err().contains("app password is empty"));
+        let refused = call(
+            set_inbox_app_password,
+            vec![json!(HEAD), json!({"imap_email": "   "})],
+        );
+        assert!(refused.unwrap_err().contains("inbox email"));
+    }
+
+    #[test]
+    fn set_inbox_tracking_toggles_the_profile_flag() {
+        setup();
+        let state = ok(set_inbox_tracking, vec![json!(HEAD), json!(true)]);
+        assert_eq!(state["tracking_enabled"], true);
+        with_database(|db| {
+            assert!(
+                db.get_profile(HEAD)
+                    .unwrap()
+                    .unwrap()
+                    .email_tracking_enabled
+            );
+            Ok(())
+        })
+        .unwrap();
+        let state = ok(set_inbox_tracking, vec![json!(HEAD), json!(false)]);
+        assert_eq!(state["tracking_enabled"], false);
+    }
+
+    #[test]
+    fn disconnect_inbox_oauth_clears_the_shared_grant_and_tracking() {
+        setup();
+        with_database(|db| {
+            db.persist_google_oauth_for_inbox(
+                "receipts@example.com",
+                "access-1",
+                "refresh-1",
+                Some(HEAD),
+            )
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let state = ok(inbox_state, vec![json!(HEAD)]);
+        assert_eq!(state["oauth_connected"], true);
+        assert_eq!(state["tracking_enabled"], true);
+
+        let state = ok(disconnect_inbox_oauth, vec![json!(HEAD)]);
+        assert_eq!(state["oauth_connected"], false);
+        assert_eq!(state["tracking_enabled"], false);
+        with_database(|db| {
+            assert!(
+                db.inbox_oauth_tokens("receipts@example.com")
+                    .unwrap()
+                    .is_none()
+            );
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            assert!(!profile.has_usable_oauth_refresh());
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn disconnect_inbox_oauth_refuses_when_no_inbox_is_set() {
+        setup();
+        ok(
+            create_taxpayer,
+            vec![json!({
+                "tin_root": "987-654-321", "name": "No Mail Corp", "taxpayer_type": "Corporation",
+                "head_office": {"rdo_code": "040", "registered_address": "a", "zip_code": "1600",
+                                "phone": "1", "email": ""}
+            })],
+        );
+        let refused = call(disconnect_inbox_oauth, vec![json!("98765432100000")]);
+        assert_eq!(
+            refused.unwrap_err(),
+            "No inbox email is set, so there is nothing to disconnect."
+        );
+    }
+
+    #[test]
+    fn persist_oauth_grant_marks_connected_and_stays_secret_free() {
+        setup();
+        let db = database_handle().unwrap();
+        let state = to_json(
+            &persist_oauth_grant(&db, HEAD, "receipts@example.com", "access-x", "refresh-x")
+                .unwrap(),
+        );
+        assert_eq!(state["oauth_connected"], true);
+        assert_eq!(state["auth_method"], "GoogleOAuth");
+        assert_eq!(state["tracking_enabled"], true);
+        assert_eq!(state["oauth_inbox_email"], "receipts@example.com");
+        let raw = serde_json::to_string(&state).unwrap();
+        assert!(!raw.contains("access-x") && !raw.contains("refresh-x"));
+
+        // An empty refresh fails closed — the inbox must not look connected.
+        let refused = persist_oauth_grant(&db, HEAD, "receipts@example.com", "access-y", "  ");
+        assert!(refused.unwrap_err().message().contains("refresh token"));
+    }
+
+    #[test]
+    fn apply_connection_result_enables_tracking_on_success_and_clears_on_failure() {
+        setup();
+        let db = database_handle().unwrap();
+        let success = to_json(&apply_connection_result(&db, HEAD, Ok(None)).unwrap());
+        assert_eq!(success["ok"], true);
+        assert_eq!(success["state"]["tracking_enabled"], true);
+
+        let failure = to_json(
+            &apply_connection_result(&db, HEAD, Err(anyhow::anyhow!("IMAP login refused")))
+                .unwrap(),
+        );
+        assert_eq!(failure["ok"], false);
+        assert!(
+            failure["message"]
+                .as_str()
+                .unwrap()
+                .contains("IMAP login refused")
+        );
+        assert_eq!(failure["state"]["tracking_enabled"], false);
+    }
+
+    #[test]
+    fn check_inbox_now_runs_the_poll_and_stamps_the_job() {
+        setup();
+        ok(
+            set_inbox_app_password,
+            vec![
+                json!(HEAD),
+                json!({"imap_email": "receipts@example.com", "app_password": "abcd efgh ijkl mnop"}),
+            ],
+        );
+        with_database(|db| {
+            db.save_job(poll_job("receipts@example.com")).unwrap();
+            Ok(())
+        })
+        .unwrap();
+
+        // Fake transport: the real one is bir_core's IMAP fetch, covered by
+        // bir-core tests; here the poll answers "worked, nothing pending".
+        TEST_INBOX_POLL.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(|email, _db| {
+                assert_eq!(email, "receipts@example.com");
+                (true, false, None)
+            }));
+        });
+        let db = database_handle().unwrap();
+        let result = to_json(&check_inbox_now_run(HEAD, &db).unwrap());
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["still_pending"], false);
+        assert_eq!(result["error"], Value::Null);
+        assert_eq!(result["state"]["inbox_email"], "receipts@example.com");
+        with_database(|db| {
+            let job = db
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.command.as_deref() == Some("bir_poll_email receipts@example.com"))
+                .unwrap();
+            // A clean poll with nothing left pending archives the job.
+            assert_eq!(job.status, "Archived");
+            assert!(job.last_run_at.is_some());
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn check_inbox_now_reports_poll_failure_and_requeues_the_job() {
+        setup();
+        ok(
+            set_inbox_app_password,
+            vec![
+                json!(HEAD),
+                json!({"imap_email": "receipts@example.com", "app_password": "abcdefghijklmnop"}),
+            ],
+        );
+        with_database(|db| {
+            db.save_job(poll_job("receipts@example.com")).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        TEST_INBOX_POLL.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(|_email, _db| {
+                (false, true, Some("IMAP authentication failed".to_string()))
+            }));
+        });
+        let db = database_handle().unwrap();
+        let result = to_json(&check_inbox_now_run(HEAD, &db).unwrap());
+        assert_eq!(result["ok"], false);
+        assert_eq!(result["still_pending"], true);
+        assert_eq!(result["error"], "IMAP authentication failed");
+        with_database(|db| {
+            let job = db
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.command.as_deref() == Some("bir_poll_email receipts@example.com"))
+                .unwrap();
+            assert_eq!(job.status, "Queued");
+            assert_eq!(job.retries, 1);
+            assert_eq!(
+                job.output_log.as_deref(),
+                Some("IMAP authentication failed")
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn check_inbox_now_refuses_without_an_inbox_address() {
+        setup();
+        ok(
+            create_taxpayer,
+            vec![json!({
+                "tin_root": "987-654-321", "name": "No Mail Corp", "taxpayer_type": "Corporation",
+                "head_office": {"rdo_code": "040", "registered_address": "a", "zip_code": "1600",
+                                "phone": "1", "email": ""}
+            })],
+        );
+        let db = database_handle().unwrap();
+        let refused = check_inbox_now_run("98765432100000", &db);
+        assert!(
+            refused
+                .unwrap_err()
+                .message()
+                .contains("No inbox email is set")
         );
     }
 }
