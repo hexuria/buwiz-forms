@@ -9,6 +9,9 @@
 
 use bir_core::forms::FilingStatus;
 use bir_core::forms::agent::{self, AgentFormKind, Binding, CardBox};
+use bir_core::forms::form_1600pt::{Form1600PtAgentCategory, form_1600pt_popup};
+use bir_core::forms::form_1600vt::{Form1600VtAgentCategory, form_1600vt_popup};
+use bir_core::forms::form_1601fq::Form1601FqCategory;
 use bir_core::forms::queueable::{QueueableKind, period_column};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::profile::TaxpayerProfile;
@@ -164,6 +167,66 @@ impl BirAgentHost {
         self.generic_form = Some(state);
     }
 
+    /// The draft the profile alone makes for this return's TIN, year and
+    /// period, and its field map (`agent::FromProfile`): what `fill`'s
+    /// profile-blank check reads, as the page's own `from_profile` draft
+    /// decides it (its `load_draft(..., fresh)` twin). `None` when the
+    /// return's identity or its profile cannot be read — `fill` then keeps
+    /// every profile box locked, the conservative verdict.
+    pub(super) fn profile_context(
+        &self,
+        kind: AgentFormKind,
+        draft: &Value,
+    ) -> Option<agent::FromProfile> {
+        let identity = agent::identity(kind, draft).ok()?;
+        let profile = self.load_profile(&identity.tin).ok()?;
+        let year = identity.taxable_year;
+        let period = u8::try_from(period_column(&identity.period)).unwrap_or(u8::MAX);
+        let mut fresh = match kind {
+            AgentFormKind::Form1601C => serde_json::to_value(
+                bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
+                    &profile,
+                    year,
+                    period.clamp(1, 12),
+                ),
+            ),
+            AgentFormKind::Form2551Q => serde_json::to_value(
+                bir_core::forms::form_2551q::Form2551QDraft::new_from_profile(
+                    &profile,
+                    year,
+                    period.clamp(1, 4),
+                ),
+            ),
+            AgentFormKind::Queueable(QueueableKind::Form2550Q) => serde_json::to_value(
+                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
+                    &profile,
+                    year,
+                    period.clamp(1, 4),
+                ),
+            ),
+            AgentFormKind::Queueable(queueable) => {
+                serde_json::to_value((crate::views::queueable_forms::spec_for_kind(queueable)?
+                    .new)(&profile, year, period))
+            }
+        }
+        .ok()?;
+        // What the page's open finishes a fresh draft with: the penalties
+        // the Calendar resolves now, then a recompute — the field map below
+        // reads the computed draft.
+        let overrides = self
+            .db
+            .as_ref()
+            .and_then(|db| db.lock().ok().map(|guard| guard.get_deadline_overrides()))
+            .unwrap_or_default();
+        let _ = agent::apply_penalty_profile(kind, &mut fresh, &profile, &overrides);
+        agent::compute(kind, &mut fresh).ok()?;
+        let values = serde_json::to_value(agent::field_map(kind, &fresh).ok()?).ok()?;
+        Some(agent::FromProfile {
+            draft: fresh,
+            values,
+        })
+    }
+
     /// `form.open` for a generic-queue form: the page's own draft for this
     /// taxpayer and period (stored, else prefilled from the profile).
     pub(super) fn open_generic(
@@ -252,7 +315,11 @@ impl BirAgentHost {
         let questions = def.boxes.iter().filter(|entry| entry.is_question()).count();
         Ok(json!({
             "boxes": boxes,
-            "read_only": questions - boxes.len(),
+            // A popup's tick boxes the page does not draw for the draft's
+            // category are not read-only boxes the filer sees.
+            "read_only": questions
+                .saturating_sub(boxes.len())
+                .saturating_sub(undrawn_popup_slots(def, draft)),
             "computed": def.boxes.iter().filter(|entry| entry.computed).count(),
         }))
     }
@@ -299,29 +366,65 @@ impl BirAgentHost {
         })())
     }
 
-    /// `form.fill` on a generic form: official box keys, all-or-nothing.
+    /// `form.fill` on a generic form: official box keys. Every rejected
+    /// key — a box with no field in this app's draft, a computed, locked
+    /// or hidden box, a key that is not a box — is refused on its own in
+    /// `refused` and the rest of the batch still applies.
     pub(super) fn fill_generic(
         &mut self,
         fields: &serde_json::Map<String, Value>,
         source: BoxSource,
     ) -> Option<Result<DispatchResult, String>> {
+        let db = self.db.clone();
+        let from_profile = self
+            .active_generic()
+            .and_then(|form| self.profile_context(form.kind, &form.draft));
         let form = self.active_generic_mut()?;
         Some((|| {
             if !form.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
-            let (draft, filled, kept, not_shown) =
-                fill_official(form.kind, &form.draft, &form.assist, fields)?;
+            let record = trigger_record(form.kind, &form.draft);
+            let (draft, filled, kept, not_shown, refused) = fill_official(
+                form.kind,
+                &form.draft,
+                &form.assist,
+                fields,
+                from_profile.as_ref(),
+            )?;
             form.draft = draft;
+            // A write that moved the record the penalties resolve from (a
+            // typed trigger date) resolves them again, as the page's own
+            // sync does (decision P5-9).
+            if trigger_record(form.kind, &form.draft) != record
+                && let Some(db) = &db
+                && let Ok(guard) = db.lock()
+                && let Some(tin) = form.draft["tin"].as_str().map(str::to_string)
+                && let Ok(Some(profile)) = guard.get_profile_by_tin(&tin)
+            {
+                let overrides = guard.get_deadline_overrides();
+                match agent::apply_penalty_profile(form.kind, &mut form.draft, &profile, &overrides)
+                {
+                    Ok(()) => {
+                        let _ = agent::compute(form.kind, &mut form.draft);
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "penalty inputs not re-resolved; the draft keeps its state");
+                    }
+                }
+            }
             for key in &filled {
                 form.assist.note_agent_fill(key, source);
             }
             if !filled.is_empty() {
                 form.validated = false;
             }
-            Ok(with_not_shown(
-                fill_result(form.kind.form_code(), source, filled, kept),
-                not_shown,
+            Ok(with_refused(
+                with_not_shown(
+                    fill_result(form.kind.form_code(), source, filled, kept),
+                    not_shown,
+                ),
+                refused,
             ))
         })())
     }
@@ -344,6 +447,15 @@ impl BirAgentHost {
             let db = db.ok_or("agent host has no database")?;
             {
                 let guard = db.lock().map_err(|err| err.to_string())?;
+                // The save keeps the due dates the Calendar resolves now,
+                // as the page's own save does (decision P5-9); never a due
+                // date an older state of this draft resolved.
+                if let Some(tin) = form.draft["tin"].as_str().map(str::to_string)
+                    && let Ok(Some(profile)) = guard.get_profile_by_tin(&tin)
+                {
+                    let overrides = guard.get_deadline_overrides();
+                    agent::apply_penalty_profile(form.kind, &mut form.draft, &profile, &overrides)?;
+                }
                 agent::save_draft(form.kind, &guard, &mut form.draft)?;
             }
             form.saved = true;
@@ -553,31 +665,147 @@ impl BirAgentHost {
     }
 }
 
-/// `(draft, filled, kept_user_boxes, not_shown)` of [`fill_official`].
-pub(super) type OfficialFill = (Value, Vec<String>, Vec<String>, Vec<String>);
+/// `(draft, filled, kept_user_boxes, not_shown, refused)` of
+/// [`fill_official`].
+pub(super) type OfficialFill = (
+    Value,
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    serde_json::Map<String, Value>,
+);
+
+/// The official page draws an ATC popup's tick boxes only for the ATCs the
+/// draft's category of withholding agent offers (1600PT/1600VT
+/// `AtcCode<n>`, 1601FQ `AtcCd<n>`): a slot beyond that list is a box
+/// nobody sees, so it is not a read-only question (review F5).
+fn undrawn_popup_slots(def: &agent::AgentFormDef, draft: &Value) -> usize {
+    let stored = |field: &str| draft.get(field).cloned().unwrap_or_default();
+    let (prefix, drawn) = match def.form_code.as_str() {
+        "1600PT" => (
+            "AtcCode",
+            serde_json::from_value::<Option<Form1600PtAgentCategory>>(stored("agent_category"))
+                .ok()
+                .flatten()
+                .map_or(0, |category| form_1600pt_popup(category).count()),
+        ),
+        "1600VT" => (
+            "AtcCode",
+            serde_json::from_value::<Option<Form1600VtAgentCategory>>(stored("agent_category"))
+                .ok()
+                .flatten()
+                .map_or(0, |category| form_1600vt_popup(category).count()),
+        ),
+        // 1601FQ draws the private list before item 11 is answered, like
+        // `init()` (`atc_options`).
+        "1601FQ" => (
+            "AtcCd",
+            serde_json::from_value::<Option<Form1601FqCategory>>(stored("category"))
+                .ok()
+                .flatten()
+                .unwrap_or(Form1601FqCategory::Private)
+                .atc_options()
+                .len(),
+        ),
+        _ => return 0,
+    };
+    def.boxes
+        .iter()
+        .filter(|entry| entry.is_question())
+        .filter(|entry| {
+            entry
+                .key
+                .strip_prefix(prefix)
+                .and_then(|n| n.parse::<usize>().ok())
+                .is_some_and(|n| n > drawn)
+        })
+        .count()
+}
+
+/// The record a draft's penalty resolution stands on: its typed trigger
+/// state, the trigger date its fields hold and the due rule that date is
+/// read by (2552's Item 11 moves it). `None` for a form without a trigger
+/// date.
+fn trigger_record(kind: AgentFormKind, draft: &Value) -> Option<Value> {
+    let code = kind.form_code();
+    if bir_core::forms::event_trigger::trigger_paths(code).is_empty() {
+        return None;
+    }
+    Some(json!({
+        "entered": draft.get("trigger_date_entered").cloned().unwrap_or(Value::Null),
+        "parts": draft.get("trigger_parts_typed").cloned().unwrap_or(Value::Null),
+        "date": bir_core::forms::event_trigger::held_trigger_date(code, draft),
+        "rule": format!("{:?}", bir_core::forms::event_trigger::due_rule_for(code, draft)),
+    }))
+}
+
+/// The trigger fields box `key` of `kind` writes (its binding's paths whose
+/// top-level field is one of the form's trigger fields).
+fn trigger_fields_of(kind: AgentFormKind, key: &str) -> Vec<&'static str> {
+    let code = kind.form_code();
+    kind.definition()
+        .bindings
+        .get(key)
+        .into_iter()
+        .flat_map(|bound| agent::binding_paths(&bound.binding))
+        .filter_map(|path| bir_core::forms::event_trigger::trigger_field_of(code, path))
+        .collect()
+}
 
 /// Apply official keys to a copy of `draft` and recompute it. Boxes the user
 /// typed are kept (`kept`); boxes that did not show the value after the
-/// recompute (an item that must be answered first) are reported back.
+/// recompute (an item that must be answered first) are reported back. Every
+/// refusal is the box's own: a box with no field in this app's draft
+/// (unmapped, such as an official ATC popup slot), a computed, locked or
+/// hidden box, or a key that is not a box is refused on its own with the
+/// reason (`refused`) and the rest of the batch still applies.
 pub(super) fn fill_official(
     kind: AgentFormKind,
     draft: &Value,
     assist: &AssistState,
     fields: &serde_json::Map<String, Value>,
+    from_profile: Option<&agent::FromProfile>,
 ) -> Result<OfficialFill, String> {
     let mut next = draft.clone();
     let (mut filled, mut kept) = (Vec::new(), Vec::new());
+    let mut refused = serde_json::Map::new();
+    let def = kind.definition();
     for (key, value) in fields {
         if assist.is_user_box(key) {
             kept.push(key.clone());
             continue;
         }
-        agent::fill(kind, &mut next, key, value)?;
+        // 2553's item-13 keys are the desktop's own to edit (the page
+        // writes them through `rows_dst_pt_vat`'s cells; here
+        // `tax_treaty_2553` applies the same rule below), so they write
+        // through the host-owned path rather than `fill`'s host-written
+        // refusal.
+        let write = if tax_treaty_key(kind, key) {
+            agent::fill_host_owned(kind, &mut next, key, value)
+        } else {
+            agent::fill(kind, &mut next, key, value, from_profile)
+        };
+        if let Err(why) = write {
+            refused.insert(key.clone(), Value::String(why));
+            continue;
+        }
+        // An accepted write to a trigger box is the filer's instruction on
+        // a draft that follows the typed-date model: record the part (a
+        // cleared box takes it out). An unmarked row is left as stored.
+        if next["trigger_date_model"] == true {
+            for field in trigger_fields_of(kind, key) {
+                bir_core::forms::event_trigger::note_trigger_field_written(
+                    kind.form_code(),
+                    &mut next,
+                    field,
+                );
+            }
+        }
         filled.push(key.clone());
     }
+    tax_treaty_2553(kind, draft, &mut next, fields, &filled)?;
     agent::compute(kind, &mut next)?;
     let map = agent::field_map(kind, &next)?;
-    let def = kind.definition();
     let text = |value: &Value| match value {
         Value::String(text) => text.trim().to_string(),
         other => other.to_string(),
@@ -618,7 +846,92 @@ pub(super) fn fill_official(
         })
         .cloned()
         .collect();
-    Ok((next, filled, kept, not_shown))
+    Ok((next, filled, kept, not_shown, refused))
+}
+
+/// 2553 item 13's list (`lstTaxTreaty`).
+const TAX_TREATY_LIST: &str = "frm2553:lstTaxTreaty";
+
+/// The keys the desktop edits for 2553's item 13 (`tax_treaty_2553`), where
+/// the page edits them through `rows_dst_pt_vat`'s cells — the Yes/No
+/// radios and the relief list.
+fn tax_treaty_key(kind: AgentFormKind, key: &str) -> bool {
+    kind.form_code() == "2553" && (key.starts_with("frm2553:optTreaty") || key == TAX_TREATY_LIST)
+}
+
+/// What the assistant is told when it answers 2553 item 13 Yes without its
+/// list: the page's own reason, that nothing in the call was applied, and
+/// what to do.
+fn tax_treaty_refusal() -> String {
+    format!(
+        "{} Item 13 is Yes, so its list must be answered. Nothing in this call was applied: the other boxes in it were not filled either. Ask the user which applies and fill `{TAX_TREATY_LIST}` with it (\"1\" Special Rate, \"2\" International Tax Treaty) in the same call as the Yes.",
+        bir_core::forms::form_2553::TAX_TREATY_UNCHOSEN
+    )
+}
+
+/// A fill value as text to compare with the list's answers: a string
+/// trimmed, null as blank, any other scalar as its JSON text (`1`), as
+/// `agent::fill`'s `value_text` reads it (which does not trim).
+fn fill_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.trim().to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+/// 2553 item 13 (maintainer decision D7, 2026-10-18). The pin binds the
+/// Yes radio to Special Rate, so `form.fill` answering Yes alone filed a
+/// relief nobody chose, where the page opens the list blank and Check asks
+/// for it. Here a Yes with its list answered in the same fill (`1` or `2`,
+/// as a string or a number) takes the list's answer (applied last, so the
+/// radio's binding cannot replace it); a Yes alone keeps the relief already
+/// chosen on the return, and on a return with none is refused with the
+/// page's reason. Only these item 13 keys are read; every other fill is
+/// unchanged.
+fn tax_treaty_2553(
+    kind: AgentFormKind,
+    before: &Value,
+    next: &mut Value,
+    fields: &serde_json::Map<String, Value>,
+    filled: &[String],
+) -> Result<(), String> {
+    if kind.form_code() != "2553" {
+        return Ok(());
+    }
+    let chosen = |draft: &Value| {
+        matches!(
+            draft["tax_treaty"].as_str(),
+            Some("special_rate" | "international_tax_treaty")
+        )
+    };
+    // Whether this fill answers item 13 Yes: one of its item 13 radio keys,
+    // filled alone, makes the return's item 13 a Yes.
+    let says_yes = filled
+        .iter()
+        .filter(|key| key.starts_with("frm2553:optTreaty"))
+        .any(|key| {
+            let mut alone = before.clone();
+            fields
+                .get(key)
+                .is_some_and(|value| agent::fill_host_owned(kind, &mut alone, key, value).is_ok())
+                && chosen(&alone)
+        });
+    if !says_yes {
+        return Ok(());
+    }
+    if let Some(list) = fields
+        .get(TAX_TREATY_LIST)
+        .filter(|_| filled.iter().any(|key| key == TAX_TREATY_LIST))
+        && matches!(fill_text(list).as_str(), "1" | "2")
+    {
+        return agent::fill_host_owned(kind, next, TAX_TREATY_LIST, list);
+    }
+    if chosen(before) {
+        next["tax_treaty"] = before["tax_treaty"].clone();
+        return Ok(());
+    }
+    Err(tax_treaty_refusal())
 }
 
 /// Validation errors with the label of the box they name, when the form
@@ -641,6 +954,33 @@ fn labelled_errors(kind: AgentFormKind, errors: &[(String, String)]) -> Vec<Valu
             json!({ "field": field, "label": label, "message": message })
         })
         .collect()
+}
+
+/// The `note` every refused fill result carries: the tool result itself
+/// tells the model to pass the refusals on, since the caller only ever
+/// hears of `refused` if the model says it (review F6).
+const REFUSED_NOTE: &str =
+    "some boxes were refused and not written; report each `refused` key and its reason to the user";
+
+/// Boxes refused on their own (`refused`, key -> reason), beside what was
+/// applied. A result value that is not an object is wrapped, so the
+/// refusals are never dropped (review F7).
+pub(super) fn with_refused(
+    result: DispatchResult,
+    refused: serde_json::Map<String, Value>,
+) -> DispatchResult {
+    if refused.is_empty() {
+        return result;
+    }
+    let value = match result.value.unwrap_or(Value::Null) {
+        Value::Object(mut object) => {
+            object.insert("refused".into(), Value::Object(refused));
+            object.insert("note".into(), json!(REFUSED_NOTE));
+            Value::Object(object)
+        }
+        other => json!({ "result": other, "refused": refused, "note": REFUSED_NOTE }),
+    };
+    DispatchResult::json(value)
 }
 
 pub(super) fn with_not_shown(result: DispatchResult, not_shown: Vec<String>) -> DispatchResult {
@@ -819,6 +1159,154 @@ mod tests {
         }
     }
 
+    /// PR 14 review F5: a box with no field in this app's draft (here
+    /// 1600PT's ATC popup slot, unbound in core) is refused on its own with
+    /// the reason; the rest of the batch applies and item 10 stays as
+    /// answered. Computed, locked, hidden and unknown keys are refused the
+    /// same per-key way (fill_official).
+    #[test]
+    fn an_unmapped_box_is_refused_alone_and_the_batch_applies() {
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "1600PT", "year": year(), "period": 1, "tin": TIN}),
+            ),
+            "open",
+        );
+        let before = host.generic_form().expect("open").draft["agent_category"].clone();
+        let filled = ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {
+                    "AtcCode1": "true",
+                    "AtcCode5": "true",
+                    "frm1600PT:Pg2Sc1Name1": "PAYEE ONE",
+                }}),
+            ),
+            "fill",
+        );
+        assert_eq!(filled["filled"], json!(["frm1600PT:Pg2Sc1Name1"]));
+        let refused = filled["refused"].as_object().expect("refused");
+        assert_eq!(refused.len(), 2, "{filled}");
+        for key in ["AtcCode1", "AtcCode5"] {
+            let why = refused[key].as_str().unwrap();
+            // The page writes the ATC popup's tick boxes itself: a
+            // host-written refusal that keeps the probe's note on where
+            // the real edit is.
+            assert!(
+                why.starts_with(&format!(
+                    "`{key}` cannot be filled from here: it is written through the form's own editors: the ATC popup's tick box"
+                )),
+                "{why}"
+            );
+        }
+        // Each slot keeps the probe's own evidence (review F6).
+        assert!(
+            refused["AtcCode1"]
+                .as_str()
+                .unwrap()
+                .ends_with("; the probe tied it to /agent_category")
+        );
+        assert!(refused["AtcCode5"].as_str().unwrap().ends_with(
+            "; probe: written by the app without a draft field (a constant or the period)"
+        ));
+        let draft = &host.generic_form().expect("open").draft;
+        assert_eq!(draft["agent_category"], before, "item 10 is untouched");
+        assert_eq!(draft["schedule"][0]["payee_name"], "PAYEE ONE");
+    }
+
+    /// An accepted write to a trigger box is the filer's instruction on a
+    /// typed-date-model draft (decision P5-7): the part joins the parts the
+    /// return is dated by, a cleared box takes its part out, and once the
+    /// date counts the penalty inputs resolve on it (decision P5-9).
+    #[test]
+    fn an_agent_fill_records_the_typed_trigger_parts() {
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "1606", "year": year(), "period": 1, "tin": TIN}),
+            ),
+            "open",
+        );
+        // The page's own loader marked this new draft for the model.
+        assert_eq!(
+            host.generic_form().unwrap().draft["trigger_date_model"],
+            true
+        );
+        assert_eq!(
+            host.generic_form().unwrap().draft["penalty_due_date"],
+            Value::Null,
+            "no sale date yet: no due date"
+        );
+
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {"frm1606:txtDateDay": "14"},
+                    "source": "document"
+                }),
+            ),
+            "fill day",
+        );
+        let draft = &host.generic_form().unwrap().draft;
+        assert_eq!(draft["trigger_parts_typed"], json!(["transaction_day"]));
+        assert_ne!(
+            draft["trigger_date_entered"], true,
+            "the month and year are not typed yet"
+        );
+
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {
+                        "frm1606:txtDateMonth": "3",
+                        "frm1606:txtDateYear": "2026"
+                    },
+                    "source": "document"
+                }),
+            ),
+            "fill month and year",
+        );
+        let draft = &host.generic_form().unwrap().draft;
+        assert_eq!(draft["trigger_date_entered"], true);
+        assert!(
+            draft["penalty_due_date"].is_string(),
+            "the record moved: the due date resolved on the typed sale date"
+        );
+
+        // A cleared box takes its part out; the date no longer counts and
+        // the due date awaits the trigger again.
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({
+                    "fields": {"frm1606:txtDateDay": "0"},
+                    "source": "document"
+                }),
+            ),
+            "clear day",
+        );
+        let draft = &host.generic_form().unwrap().draft;
+        assert_ne!(draft["trigger_date_entered"], true);
+        assert!(
+            !draft["trigger_parts_typed"]
+                .as_array()
+                .is_some_and(|parts| parts.iter().any(|part| part == "transaction_day")),
+            "the cleared box's part is out"
+        );
+        assert_eq!(draft["penalty_due_date"], Value::Null);
+    }
+
     #[test]
     fn official_keys_fill_with_sources_and_keep_user_boxes() {
         let (mut host, _db) = host(PlatformKind::Headless);
@@ -880,20 +1368,54 @@ mod tests {
         );
         assert_eq!(kept["kept_user_boxes"], json!([amounts[1]]));
 
-        // Computed and unknown boxes are refused with the reason.
+        // Computed, locked, hidden and unknown keys are each refused with
+        // the reason beside what applied — none aborts the batch.
         let computed = def
             .boxes
             .iter()
             .find(|entry| entry.computed)
             .expect("a computed box");
-        let refused = call(
-            &mut host,
-            "form.fill",
-            json!({"fields": {computed.key.clone(): "1"}}),
+        let locked = def
+            .bindings
+            .iter()
+            .find(|(_, bound)| bound.lock.is_some())
+            .map(|(key, _)| key.clone())
+            .expect("a locked box");
+        let mut fields = serde_json::Map::new();
+        fields.insert(computed.key.clone(), json!("1"));
+        fields.insert(locked.clone(), json!("1"));
+        fields.insert("nope".into(), json!("1"));
+        fields.insert(amounts[0].clone(), json!("2"));
+        // A hidden box too, where the form has one.
+        let hidden = def
+            .boxes
+            .iter()
+            .find(|entry| entry.kind.contains("hidden") || entry.required == "hidden")
+            .map(|entry| entry.key.clone());
+        let mut count = 3;
+        if let Some(hidden) = &hidden {
+            fields.insert(hidden.clone(), json!("1"));
+            count = 4;
+        }
+        let filled = ok(
+            call(&mut host, "form.fill", json!({ "fields": fields })),
+            "fill",
         );
-        assert!(!refused.ok);
-        assert!(refused.error.unwrap().contains("computed"));
-        assert!(!call(&mut host, "form.fill", json!({"fields": {"nope": "1"}})).ok);
+        assert_eq!(filled["filled"], json!([amounts[0]]));
+        let refused = filled["refused"].as_object().expect("refused");
+        assert_eq!(refused.len(), count, "{filled}");
+        assert!(
+            refused[&computed.key]
+                .as_str()
+                .unwrap()
+                .contains("computed")
+        );
+        assert!(refused[&locked].as_str().unwrap().contains("`"));
+        if let Some(hidden) = &hidden {
+            assert!(refused[hidden].as_str().unwrap().contains("hidden"));
+        }
+        assert!(refused["nope"].as_str().unwrap().contains("not a box"));
+        assert!(filled["note"].as_str().unwrap().contains("refused"));
 
         // `user` only for the card's own boxes.
         let refused = call(
@@ -996,10 +1518,17 @@ mod tests {
         let draft = host.form_1601c_draft().unwrap();
         assert_eq!(draft.tax_14_total_compensation, 1000.0);
         assert_eq!(draft.tax_25_total_taxes_withheld, 100.0);
-        // The profile owns the name; the period picks the month.
+        // The profile owns the name; the period picks the month. A locked
+        // box is refused on its own — the call itself still succeeds.
         for locked in ["frm1601c:txtTaxpayerName", "frm1601c:txtMonth"] {
-            let refused = call(&mut host, "form.fill", json!({"fields": {locked: "X"}}));
-            assert!(!refused.ok, "{locked}");
+            let filled = ok(
+                call(&mut host, "form.fill", json!({"fields": {locked: "X"}})),
+                "locked box refused alone",
+            );
+            assert!(
+                filled["refused"][locked].as_str().unwrap().contains("`"),
+                "{locked}: {filled}"
+            );
         }
     }
 
@@ -1186,5 +1715,131 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Maintainer decision D7 (2026-10-18): 2553 item 13 Yes needs its list
+    /// answered, as on the page. The pin binds the Yes radio to Special
+    /// Rate, so the assistant answering Yes alone filed a relief nobody
+    /// chose; now it is refused with the page's reason and the return is
+    /// unchanged. A Yes with its list answered takes the list's answer, in
+    /// either order; a Yes alone keeps a relief already chosen; No is
+    /// taken as before.
+    #[test]
+    fn form_2553_item_13_yes_asks_for_its_list() {
+        use bir_core::forms::form_2553::TAX_TREATY_UNCHOSEN;
+        let (mut host, _db) = host(PlatformKind::Headless);
+        ok(
+            call(
+                &mut host,
+                "form.open",
+                json!({"code": "2553", "year": year(), "period": period_for("2553"), "tin": TIN}),
+            ),
+            "open",
+        );
+        let treaty = |host: &BirAgentHost| host.generic_form().unwrap().draft["tax_treaty"].clone();
+        assert_eq!(treaty(&host), "no");
+        let before = host.generic_form().unwrap().draft.clone();
+        for yes in [
+            json!({"frm2553:optTreaty_1": "true"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:optTreaty_2": "false"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "0"}),
+            json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 0}),
+            json!({"frm2553:txtSheets": "2", "frm2553:optTreaty_1": "true"}),
+        ] {
+            let refused = call(&mut host, "form.fill", json!({ "fields": yes }));
+            assert!(!refused.ok, "{yes}");
+            let error = refused.error.unwrap();
+            assert!(error.contains(TAX_TREATY_UNCHOSEN), "{error}");
+            assert!(
+                error.contains("Nothing in this call was applied: the other boxes in it were not filled either."),
+                "{error}"
+            );
+            assert!(error.contains("frm2553:lstTaxTreaty"), "{error}");
+            assert_eq!(host.generic_form().unwrap().draft, before, "unchanged");
+        }
+        // The page's reason is the form's own message for an unanswered list.
+        let kind = AgentFormKind::from_code("2553").unwrap();
+        let mut unanswered = before.clone();
+        unanswered["tax_treaty"] = json!("yes_unspecified");
+        let errors = agent::validate(kind, &mut unanswered).unwrap();
+        assert!(errors.contains(&("tax_treaty".to_string(), TAX_TREATY_UNCHOSEN.to_string())));
+        // Answered in the same call, the list wins, whichever comes first.
+        for (fields, wanted) in [
+            (
+                json!({"frm2553:lstTaxTreaty": "2", "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "1"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "2"}),
+                "international_tax_treaty",
+            ),
+        ] {
+            ok(
+                call(&mut host, "form.fill", json!({ "fields": fields })),
+                "fill",
+            );
+            assert_eq!(treaty(&host), wanted, "{fields}");
+        }
+        let map = agent::field_map(kind, &host.generic_form().unwrap().draft).unwrap();
+        assert_eq!(map["frm2553:optTreaty_1"], "true");
+        assert_eq!(map["frm2553:lstTaxTreaty"], "2");
+        // A list answer the agent sends as a JSON number is the same answer,
+        // in either order, and replaces the relief the return holds.
+        for (fields, wanted) in [
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 1}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": 2, "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": 1, "frm2553:optTreaty_1": "true"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": 2}),
+                "international_tax_treaty",
+            ),
+            (
+                json!({"frm2553:optTreaty_1": "true", "frm2553:lstTaxTreaty": "1"}),
+                "special_rate",
+            ),
+            (
+                json!({"frm2553:lstTaxTreaty": "2", "frm2553:optTreaty_1": "true"}),
+                "international_tax_treaty",
+            ),
+        ] {
+            ok(
+                call(&mut host, "form.fill", json!({ "fields": fields })),
+                "fill",
+            );
+            assert_eq!(treaty(&host), wanted, "{fields}");
+        }
+        // Yes alone on a return with a relief chosen keeps it.
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {"frm2553:optTreaty_1": "true"}}),
+            ),
+            "fill",
+        );
+        assert_eq!(treaty(&host), "international_tax_treaty");
+        // No is taken as before.
+        ok(
+            call(
+                &mut host,
+                "form.fill",
+                json!({"fields": {"frm2553:optTreaty_2": "true"}}),
+            ),
+            "fill",
+        );
+        assert_eq!(treaty(&host), "no");
     }
 }

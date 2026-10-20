@@ -5,8 +5,17 @@
 //! Deadlines come from `calendar_rules::DeadlineResolver::deadlines_for_forms`
 //! over each branch's yearly forms (the per-year Forms Set), with the user's
 //! deadline overrides applied, exactly as the painted dashboard resolves them.
+//!
+//! As-needed returns (decision D8c, 2026-10-18) have no period deadline. A
+//! saved one that holds its trigger date (a removal, a withholding, a
+//! transaction) is a dated row too, due per its form's rule
+//! (`calendar_rules::EVENT_DUE_RULES`); the as-needed forms a branch files
+//! in a year, with their saved returns that hold no date yet, are listed by
+//! `as_needed_forms` for Home's "As needed" list.
 
-use bir_core::calendar_rules::{DeadlinePeriod, DeadlineResolver};
+use bir_core::calendar_rules::{
+    BusinessDayCalendar, DeadlineOverride, DeadlinePeriod, DeadlineResolver, event_due_rule,
+};
 use bir_core::db::Database;
 use bir_core::forms::{FilingStatus, FormDraftSummary};
 use chrono::NaiveDate;
@@ -26,17 +35,44 @@ export interface DeadlineRow {
     branch_count: number;
     form_code: string;
     form_name: string;
-    frequency: "Monthly" | "Quarterly" | "Annual";
+    frequency: "Monthly" | "Quarterly" | "Annual" | "As needed";
     taxable_year: number;
-    /** Month 1-12, quarter 1-4, or 0 for an annual return. */
+    /** Month 1-12, quarter 1-4, 0 for an annual return, or an as-needed return's stored period. */
     period: number;
     period_label: string;
     due_date: string;
     /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
     status: string;
     draft_id: number | null;
+    /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
+    return_key: number | null;
 }
 export function deadlines_between(from: string, to: string): DeadlineRow[];
+export interface AsNeededReturn {
+    draft_id: number;
+    period: number;
+    return_key: number | null;
+    status: string;
+    updated_at: string;
+}
+export interface AsNeededForm {
+    tin: string;
+    tin_root: string;
+    branch_code: string;
+    branch_name: string;
+    taxpayer_name: string;
+    branch_count: number;
+    form_code: string;
+    form_name: string;
+    taxable_year: number;
+    /** What dates a return ("Removal"), null when the form has no trigger-date rule. */
+    trigger: string | null;
+    /** When it is due, as the form's guide says. */
+    due_rule: string;
+    /** Saved returns of the form that hold no trigger date yet. */
+    undated: AsNeededReturn[];
+}
+export function as_needed_forms(year: number): AsNeededForm[];
 export interface ReturnRow {
     id: number;
     tin: string;
@@ -51,6 +87,8 @@ export interface ReturnRow {
     period_label: string;
     status: string;
     updated_at: string;
+    /** The return's stored key (`screen_form_open`'s `key`): opens exactly this return. */
+    return_key: number | null;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 "#;
@@ -58,6 +96,7 @@ export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 pub fn register(module: HostModule) -> HostModule {
     module
         .function("deadlines_between", deadlines_between)
+        .function("as_needed_forms", as_needed_forms)
         .function("list_returns", list_returns)
 }
 
@@ -169,13 +208,47 @@ fn branch_fields(branch: &BranchRef) -> serde_json::Map<String, Value> {
 /// the taxable years that can fall in that window, with the return's status.
 fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Value>, HostError> {
     use chrono::Datelike;
-    let overrides = db.get_deadline_overrides();
+    let global = db.get_deadline_overrides();
+    let working = bir_core::official_holidays::business_day_calendar();
     // An annual return for year Y is due in Y+1, so the window's first year
     // minus one is the earliest taxable year that can have a deadline in it.
     let first_year = from.year() - 1;
     let last_year = to.year();
     let mut rows = Vec::new();
     for branch in branches(db)? {
+        // The profile's own deadline overrides apply on top of the stored
+        // global ones, as the Google Calendar sync and the desktop
+        // dashboard apply them. A profile that cannot be read costs that
+        // branch its profile overrides only, never the other branches' rows.
+        let profile = match db.get_profile(&branch.tin) {
+            Ok(profile) => profile,
+            Err(read_error) => {
+                tracing::warn!(
+                    tin = %branch.tin,
+                    error = %read_error,
+                    "deadline feed: profile unreadable; its own deadline overrides are skipped"
+                );
+                None
+            }
+        };
+        // The as-needed rows' overrides: global, then the profile's for
+        // every Forms Set year (one definition with the Google Calendar
+        // sync and the penalty clock, decision P5-9).
+        let event_overrides = match &profile {
+            Some(profile) => bir_core::forms::event_trigger::as_needed_overrides(&global, profile),
+            None => global.clone(),
+        };
+        // As-needed returns of any taxable year whose due date falls in the
+        // window (an estate's year-later deadline, a return filed under
+        // another year).
+        rows.extend(as_needed_rows(
+            db,
+            &branch,
+            &event_overrides,
+            &working,
+            from,
+            to,
+        )?);
         for year in first_year..=last_year {
             let Ok(year16) = u16::try_from(year) else {
                 continue;
@@ -189,6 +262,14 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             let drafts = db
                 .list_draft_summaries(&branch.tin, year16)
                 .map_err(error)?;
+            let overrides = match &profile {
+                Some(profile) => bir_core::forms::event_trigger::periodic_overrides(
+                    &global,
+                    profile,
+                    Some(year16),
+                ),
+                None => global.clone(),
+            };
             for deadline in DeadlineResolver::deadlines_for_forms(&codes, year, &overrides) {
                 let Some(due) = deadline.final_deadline_date() else {
                     continue;
@@ -220,6 +301,11 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                     ),
                 );
                 row.insert("draft_id".into(), json!(draft.map(|d| d.id)));
+                let key = match draft {
+                    Some(draft) => db.draft_period_column(draft.id).map_err(error)?,
+                    None => None,
+                };
+                row.insert("return_key".into(), json!(key));
                 rows.push(Value::Object(row));
             }
         }
@@ -236,6 +322,115 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
             .then(a["form_code"].as_str().cmp(&b["form_code"].as_str()))
     });
     Ok(rows)
+}
+
+/// The dated rows of a branch's saved as-needed returns, any taxable year,
+/// that hold an entered trigger date due in `[from, to]`
+/// (`event_trigger::dated_event_returns`). A saved return is its own
+/// evidence the form is filed, so these do not depend on the year's forms.
+fn as_needed_rows(
+    db: &Database,
+    branch: &BranchRef,
+    overrides: &[DeadlineOverride],
+    working: &BusinessDayCalendar,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<Vec<Value>, HostError> {
+    let mut rows = Vec::new();
+    for dated in
+        bir_core::forms::event_trigger::dated_event_returns(db, &branch.tin, overrides, working)
+            .map_err(error)?
+    {
+        let (summary, trigger, deadline) = (&dated.summary, dated.trigger, &dated.deadline);
+        let Some(due) = deadline.final_deadline_date() else {
+            continue;
+        };
+        if due < from || due > to {
+            continue;
+        }
+        let mut row = branch_fields(branch);
+        row.insert("form_code".into(), json!(summary.form_code));
+        row.insert("form_name".into(), json!(deadline.form_name));
+        row.insert("frequency".into(), json!("As needed"));
+        row.insert("taxable_year".into(), json!(summary.taxable_year));
+        row.insert("period".into(), json!(summary_period(summary)));
+        row.insert(
+            "period_label".into(),
+            json!(format!(
+                "{} {}",
+                trigger.rule.trigger,
+                trigger.date.format("%b %-d, %Y")
+            )),
+        );
+        row.insert("due_date".into(), json!(due.format("%Y-%m-%d").to_string()));
+        row.insert("status".into(), json!(status_name(&summary.status)));
+        row.insert("draft_id".into(), json!(summary.id));
+        row.insert(
+            "return_key".into(),
+            json!(db.draft_period_column(summary.id).map_err(error)?),
+        );
+        rows.push(Value::Object(row));
+    }
+    Ok(rows)
+}
+
+/// The as-needed forms each branch files in `year` (its yearly forms the
+/// calendar files as needed), each with its saved returns that hold no
+/// trigger date yet. Branches in `list_taxpayers` order, forms by code.
+fn as_needed_form_rows(db: &Database, year: u16) -> Result<Vec<Value>, HostError> {
+    let mut rows = Vec::new();
+    for branch in branches(db)? {
+        let mut codes: Vec<String> = db
+            .active_form_codes_for_year(&branch.tin, year)
+            .map_err(error)?
+            .into_iter()
+            .filter(|code| DeadlineResolver::is_as_needed(code))
+            .collect();
+        if codes.is_empty() {
+            continue;
+        }
+        codes.sort();
+        let drafts = db.list_draft_summaries(&branch.tin, year).map_err(error)?;
+        for code in codes {
+            let rule = event_due_rule(&code);
+            let mut undated = Vec::new();
+            for summary in drafts.iter().filter(|summary| summary.form_code == code) {
+                if db.draft_event_trigger(summary.id).map_err(error)?.is_some() {
+                    continue;
+                }
+                undated.push(json!({
+                    "draft_id": summary.id,
+                    "period": summary_period(summary),
+                    "return_key": db.draft_period_column(summary.id).map_err(error)?,
+                    "status": status_name(&summary.status),
+                    "updated_at": summary.updated_at,
+                }));
+            }
+            let form_name = bir_core::forms::FORM_REGISTRY
+                .iter()
+                .find(|form| form.code == code)
+                .map_or(code.as_str(), |form| form.title);
+            let mut row = branch_fields(&branch);
+            row.insert("form_code".into(), json!(code));
+            row.insert("form_name".into(), json!(form_name));
+            row.insert("taxable_year".into(), json!(year));
+            row.insert("trigger".into(), json!(rule.map(|rule| rule.trigger)));
+            row.insert(
+                "due_rule".into(),
+                json!(rule.map_or("Upon the transaction or event", |rule| rule.description)),
+            );
+            row.insert("undated".into(), Value::Array(undated));
+            rows.push(Value::Object(row));
+        }
+    }
+    Ok(rows)
+}
+
+fn as_needed_forms(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let year = arguments.integer(0)?;
+    let year =
+        u16::try_from(year).map_err(|_| HostError::new(format!("a tax year, got {year}")))?;
+    with_database(|db| serialize(&as_needed_form_rows(db, year)?))
 }
 
 fn deadlines_between(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -288,6 +483,10 @@ fn return_rows(db: &Database, which: &str) -> Result<Vec<Value>, HostError> {
         row.insert("period_label".into(), json!(summary_label(&summary)));
         row.insert("status".into(), json!(status_name(&summary.status)));
         row.insert("updated_at".into(), json!(summary.updated_at));
+        row.insert(
+            "return_key".into(),
+            json!(db.draft_period_column(summary.id).map_err(error)?),
+        );
         rows.push(Value::Object(row));
     }
     rows.sort_by(|a, b| b["updated_at"].as_str().cmp(&a["updated_at"].as_str()));
@@ -367,10 +566,12 @@ mod tests {
             .find(|r| r["taxable_year"] == 2026 && r["period"] == 1)
             .expect("January 2026 1601C deadline");
         assert_eq!(january["status"], "Draft");
+        assert_eq!(january["return_key"], 1, "the saved return opens exactly");
         assert_eq!(january["period_label"], "January 2026");
         assert_eq!(january["taxpayer_name"], "Example Trading Corp");
         let february = rows.iter().find(|r| r["period"] == 2).unwrap();
         assert_eq!(february["status"], "Not started");
+        assert!(february["return_key"].is_null());
         let dates: Vec<&str> = rows
             .iter()
             .map(|r| r["due_date"].as_str().unwrap())
@@ -387,6 +588,644 @@ mod tests {
         assert!(error.message().contains("YYYY-MM-DD"));
     }
 
+    /// "Example Trading Corp" files 1601C and the as-needed 1600WP, 2200A
+    /// and 2553 in 2026, with a 2200A return for a removal on Wednesday
+    /// October 7, a 1600WP return for a withholding on Monday October 5
+    /// (20 days later is Sunday October 25), and a 2000OT return with no
+    /// transaction date yet.
+    fn setup_as_needed() {
+        setup();
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1601C", "1600WP", "2200A", "2553"])
+                .unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut removal =
+                bir_core::forms::form_2200a::Form2200ADraft::new_from_profile(&profile, 2026, 10);
+            removal.day = 7;
+            removal.lifecycle.trigger_date_entered = true;
+            db.save_queueable_draft(&removal).unwrap();
+            let mut withholding =
+                bir_core::forms::form_1600wp::Form1600WpDraft::new_from_profile(&profile, 2026, 10);
+            withholding.day = 5;
+            withholding.lifecycle.trigger_date_entered = true;
+            db.save_queueable_draft(&withholding).unwrap();
+            let undated =
+                bir_core::forms::form_2000ot::Form2000OTDraft::new_from_profile(&profile, 2026);
+            db.save_queueable_draft(&undated).unwrap();
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn a_dated_as_needed_return_is_a_deadline_row_due_from_its_trigger() {
+        setup_as_needed();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-10-31"])).unwrap());
+        let rows = rows.as_array().unwrap();
+        let removal = rows
+            .iter()
+            .find(|r| r["form_code"] == "2200A")
+            .expect("the 2200A return");
+        assert_eq!(removal["frequency"], "As needed");
+        assert_eq!(removal["period_label"], "Removal Oct 7, 2026");
+        assert_eq!(removal["due_date"], "2026-10-07", "due on removal");
+        assert_eq!(removal["status"], "Draft");
+        assert_eq!(removal["taxable_year"], 2026);
+        assert!(
+            removal["return_key"].is_number(),
+            "opens exactly that return"
+        );
+        let withholding = rows.iter().find(|r| r["form_code"] == "1600WP").unwrap();
+        assert_eq!(withholding["period_label"], "Withholding Oct 5, 2026");
+        assert_eq!(
+            withholding["due_date"], "2026-10-26",
+            "20 days after withholding, moved off Sunday"
+        );
+        assert!(
+            rows.iter()
+                .all(|r| r["form_code"] != "2000OT" && r["form_code"] != "2553"),
+            "a return with no trigger date and a form with no return have no row"
+        );
+        // The periodic rows are as before: 1601C's September return, due
+        // October 12 (October 10 is a Saturday).
+        let periodic: Vec<_> = rows
+            .iter()
+            .filter(|r| r["frequency"] != "As needed")
+            .map(|r| {
+                (
+                    r["form_code"].as_str().unwrap(),
+                    r["period_label"].as_str().unwrap(),
+                    r["due_date"].as_str().unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(periodic, [("1601C", "September 2026", "2026-10-12")]);
+        let outside = to_json(&deadlines_between(&args(&["2026-11-01", "2026-12-31"])).unwrap());
+        assert!(
+            outside
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["frequency"] != "As needed"),
+            "a due date outside the window is not listed"
+        );
+    }
+
+    #[test]
+    fn as_needed_forms_lists_the_year_s_as_needed_forms_with_undated_returns() {
+        setup_as_needed();
+        let rows = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        let rows = rows.as_array().unwrap();
+        let listed: Vec<_> = rows
+            .iter()
+            .map(|r| {
+                (
+                    r["form_code"].as_str().unwrap(),
+                    r["trigger"].as_str(),
+                    r["undated"].as_array().unwrap().len(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            listed,
+            [
+                ("1600WP", Some("Withholding"), 0),
+                ("2200A", Some("Removal"), 0),
+                ("2553", None, 0),
+            ],
+            "only the year's as-needed forms; 1601C is periodic, 2000OT is not in the forms"
+        );
+        assert!(
+            rows.iter()
+                .all(|r| r["tin"] == HEAD && r["taxable_year"] == 2026)
+        );
+        assert_eq!(
+            rows[0]["due_rule"],
+            "Within 20 days from the date the tax was deducted and withheld"
+        );
+        assert!(!rows[0]["form_name"].as_str().unwrap().is_empty());
+        let none = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2025.0)])).unwrap(),
+        );
+        assert!(none.as_array().unwrap().is_empty(), "no forms in 2025");
+    }
+
+    #[test]
+    fn an_undated_return_stays_in_the_as_needed_list() {
+        setup_as_needed();
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["2000OT"]).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        let rows = rows.as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["form_code"], "2000OT");
+        assert_eq!(rows[0]["trigger"], "Transaction");
+        let undated = rows[0]["undated"].as_array().unwrap();
+        assert_eq!(undated.len(), 1);
+        assert_eq!(undated[0]["status"], "Draft");
+        assert!(undated[0]["draft_id"].is_number());
+        let calendar = to_json(&deadlines_between(&args(&["2026-01-01", "2027-12-31"])).unwrap());
+        assert!(
+            calendar
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["form_code"] != "2000OT")
+        );
+    }
+
+    /// Review F1: a 1600WP for September 2026 started on any day and saved
+    /// untouched holds the date its constructor pre-filled, not one the
+    /// filer entered: no dated row, listed with no withholding date yet.
+    /// The same return with its date typed is a dated row.
+    #[test]
+    fn an_untouched_prefilled_return_is_undated_until_its_date_is_typed() {
+        setup();
+        let id = with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1600WP"]).unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let draft =
+                bir_core::forms::form_1600wp::Form1600WpDraft::new_from_profile(&profile, 2026, 9);
+            Ok(db.save_queueable_draft(&draft).unwrap())
+        })
+        .unwrap();
+        let window = args(&["2026-01-01", "2027-12-31"]);
+        let rows = to_json(&deadlines_between(&window).unwrap());
+        assert!(rows.as_array().unwrap().is_empty(), "no dated row: {rows}");
+        let listed = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        assert_eq!(listed[0]["form_code"], "1600WP");
+        assert_eq!(listed[0]["undated"][0]["draft_id"], id);
+        with_database(|db| {
+            let mut draft = db
+                .list_queueable_drafts::<bir_core::forms::form_1600wp::Form1600WpDraft>(HEAD, 2026)
+                .unwrap()
+                .into_iter()
+                .map(|(_, draft)| draft)
+                .next()
+                .unwrap();
+            draft.day = 14;
+            draft.lifecycle.trigger_date_entered = true;
+            db.save_queueable_draft(&draft).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&window).unwrap());
+        let rows = rows.as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["period_label"], "Withholding Sep 14, 2026");
+        assert_eq!(rows[0]["due_date"], "2026-10-05", "20 days is a Sunday");
+        let listed = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        assert!(listed[0]["undated"].as_array().unwrap().is_empty());
+    }
+
+    /// Review F24: an as-needed return is listed by its due date whatever
+    /// taxable year it is filed under: an estate return kept under 2024
+    /// for a death on January 10, 2026 is due January 11, 2027 (a year
+    /// later is a Sunday), in a window the old year scan never reached.
+    #[test]
+    fn an_as_needed_return_of_any_taxable_year_is_listed_by_its_due_date() {
+        setup();
+        with_database(|db| {
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut estate =
+                bir_core::forms::form_1801::Form1801Draft::new_from_profile(&profile, 2024, 1);
+            (estate.death_month, estate.death_day, estate.death_year) = (1, 10, 2026);
+            db.save_queueable_draft(&estate).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2027-01-01", "2027-01-31"])).unwrap());
+        let rows: Vec<&Value> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["frequency"] == "As needed")
+            .collect();
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert_eq!(rows[0]["form_code"], "1801");
+        assert_eq!(rows[0]["taxable_year"], 2024);
+        assert_eq!(rows[0]["period_label"], "Death Jan 10, 2026");
+        assert_eq!(rows[0]["due_date"], "2027-01-11");
+    }
+
+    /// Round 2, item 5: a deadline override on the taxpayer's own profile
+    /// moves Home's rows exactly as it moves the Google Calendar events:
+    /// the 1600WP withholding of October 5 (due Monday October 26) and
+    /// 1601C September (due Monday October 12), both moved by the profile.
+    #[test]
+    fn home_and_the_calendar_sync_agree_on_a_profile_overridden_date() {
+        setup_as_needed();
+        let profile = with_database(|db| {
+            let mut profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut version = bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
+            version.id = "user-version".into();
+            version.source = bir_core::profile::TaxProfileVersionSource::UserOverride;
+            version.status = bir_core::profile::TaxProfileVersionStatus::NeedsReview;
+            let moved = |id: &str, code: &str, from: (u32, u32), to: (u32, u32)| {
+                bir_core::profile::ProfileDeadlineOverride {
+                    id: id.into(),
+                    title: "Profile extension".into(),
+                    source_reference: "RMC test".into(),
+                    affected_form_codes: vec![code.into()],
+                    original_deadline: NaiveDate::from_ymd_opt(2026, from.0, from.1).unwrap(),
+                    adjusted_deadline: NaiveDate::from_ymd_opt(2026, to.0, to.1).unwrap(),
+                    reason: None,
+                }
+            };
+            version.deadline_overrides = vec![
+                moved("wp", "1600WP", (10, 26), (11, 3)),
+                moved("c", "1601C", (10, 12), (10, 20)),
+            ];
+            profile.profile_versions = vec![version];
+            // Confirmed as the app confirms one: with a reviewed plan.
+            let plan = profile
+                .profile_version_confirmation_plan(
+                    "user-version",
+                    NaiveDate::from_ymd_opt(2020, 1, 1).unwrap(),
+                )
+                .unwrap();
+            assert!(profile.apply_profile_version_confirmation_plan(&plan));
+            Ok(db
+                .save_profile_with_confirmation_plan(profile, &plan)
+                .unwrap())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-11-30"])).unwrap());
+        let home = |code: &str, label_start: &str| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| {
+                    r["form_code"] == code
+                        && r["period_label"].as_str().unwrap().starts_with(label_start)
+                })
+                .unwrap_or_else(|| panic!("{code} {label_start}"))["due_date"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let (events, _) = with_database(|db| {
+            Ok(bir_core::google_calendar::build_desired_events(db, &profile).unwrap())
+        })
+        .unwrap();
+        let synced = |key_part: &str| {
+            events
+                .iter()
+                .find(|event| event.obligation_key.contains(key_part))
+                .unwrap_or_else(|| panic!("{key_part}"))
+                .body["start"]["date"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(home("1600WP", "Withholding"), "2026-11-03");
+        assert_eq!(synced(":1600WP:return-"), "2026-11-03");
+        assert_eq!(home("1601C", "September"), "2026-10-20");
+        assert_eq!(synced("2026:1601C:m09"), "2026-10-20");
+    }
+
+    /// Decision P4-3: 1606 is as needed. Home lists it under "As needed"
+    /// while its sale date is not entered; a return holding its sale date
+    /// (Friday September 18, 2026) is a dated row due October 12 (the 10th
+    /// is a Saturday), and syncs to the Google Calendar the same.
+    #[test]
+    fn form_1606_is_listed_as_needed_and_dated_by_its_sale() {
+        setup();
+        let profile = with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1606"]).unwrap();
+            Ok(db.get_profile(HEAD).unwrap().unwrap())
+        })
+        .unwrap();
+        let listed = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+        assert_eq!(listed[0]["form_code"], "1606");
+        assert_eq!(listed[0]["trigger"], "Sale");
+        assert!(listed[0]["undated"].as_array().unwrap().is_empty());
+        let window = args(&["2026-01-01", "2027-12-31"]);
+        assert!(
+            to_json(&deadlines_between(&window).unwrap())
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["form_code"] != "1606"),
+            "no monthly 1606 rows"
+        );
+        with_database(|db| {
+            let mut sale =
+                bir_core::forms::form_1606::Form1606Draft::new_from_profile(&profile, 2026, 1);
+            (
+                sale.transaction_month,
+                sale.transaction_day,
+                sale.transaction_year,
+            ) = (9, 18, 2026);
+            sale.lifecycle.trigger_date_entered = true;
+            db.save_queueable_draft(&sale).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&window).unwrap());
+        let dated: Vec<&Value> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["form_code"] == "1606")
+            .collect();
+        assert_eq!(dated.len(), 1);
+        assert_eq!(dated[0]["frequency"], "As needed");
+        assert_eq!(dated[0]["period_label"], "Sale Sep 18, 2026");
+        assert_eq!(dated[0]["due_date"], "2026-10-12");
+        let (events, _) = with_database(|db| {
+            Ok(bir_core::google_calendar::build_desired_events(db, &profile).unwrap())
+        })
+        .unwrap();
+        let event = events
+            .iter()
+            .find(|event| event.form_code == "1606")
+            .expect("the 1606 return syncs");
+        assert!(event.obligation_key.contains(":1606:return-"));
+        assert_eq!(event.body["start"]["date"], "2026-10-12");
+    }
+
+    /// Decision P5-9: the penalty clock uses exactly the Calendar's
+    /// override set. An override saved only in the 2027 Forms Set (a
+    /// profile version effective January 1, 2027) moves the 2026 sale's
+    /// 1606 deadline from October 12 to October 20, 2026 on the Calendar
+    /// and in the penalty due date the open page computes from; a typed
+    /// penalty amount stays as entered.
+    #[test]
+    fn a_2027_forms_set_override_moves_a_2026_sale_on_the_calendar_and_its_penalties() {
+        use bir_core::forms::form_1606::Form1606Draft;
+        use bir_core::penalties::PenaltyComponent;
+
+        setup();
+        let window = args(&["2026-09-01", "2026-12-31"]);
+        let due = |rows: &Value| {
+            rows.as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["form_code"] == "1606")
+                .expect("the dated 1606 row")["due_date"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let profile = with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["1606"]).unwrap();
+            db.set_yearly_forms(HEAD, 2027, &["1606"]).unwrap();
+            let profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut sale = Form1606Draft::new_from_profile(&profile, 2026, 1);
+            (
+                sale.transaction_month,
+                sale.transaction_day,
+                sale.transaction_year,
+            ) = (9, 18, 2026);
+            sale.lifecycle.trigger_date_model = true;
+            sale.lifecycle.trigger_date_entered = true;
+            sale.lifecycle.trigger_parts_typed = vec![
+                "transaction_day".into(),
+                "transaction_month".into(),
+                "transaction_year".into(),
+            ];
+            sale.penalty
+                .penalty_overrides
+                .set(PenaltyComponent::Compromise, Some(500.0));
+            db.save_queueable_draft(&sale).unwrap();
+            Ok(profile)
+        })
+        .unwrap();
+        let penalty_due = |profile: &bir_core::profile::TaxpayerProfile| {
+            with_database(|db| {
+                let (_, draft) = db
+                    .list_queueable_drafts::<Form1606Draft>(HEAD, 2026)
+                    .unwrap()
+                    .pop()
+                    .expect("the stored sale");
+                Ok(crate::screen_form_module::finish(db, profile, draft).unwrap())
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            due(&to_json(&deadlines_between(&window).unwrap())),
+            "2026-10-12"
+        );
+        assert_eq!(penalty_due(&profile)["penalty_due_date"], "2026-10-12");
+
+        let profile = with_database(|db| {
+            let mut profile = db.get_profile(HEAD).unwrap().unwrap();
+            let mut version = bir_core::profile::TaxProfileVersion::from_profile_backfill(&profile);
+            version.id = "forms-set-2027".into();
+            version.source = bir_core::profile::TaxProfileVersionSource::UserOverride;
+            version.status = bir_core::profile::TaxProfileVersionStatus::NeedsReview;
+            version.deadline_overrides = vec![bir_core::profile::ProfileDeadlineOverride {
+                id: "sale".into(),
+                title: "Profile extension".into(),
+                source_reference: "RMC test".into(),
+                affected_form_codes: vec!["1606".into()],
+                original_deadline: NaiveDate::from_ymd_opt(2026, 10, 12).unwrap(),
+                adjusted_deadline: NaiveDate::from_ymd_opt(2026, 10, 20).unwrap(),
+                reason: None,
+            }];
+            profile.profile_versions = vec![version];
+            let plan = profile
+                .profile_version_confirmation_plan(
+                    "forms-set-2027",
+                    NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+                )
+                .unwrap();
+            assert!(profile.apply_profile_version_confirmation_plan(&plan));
+            Ok(db
+                .save_profile_with_confirmation_plan(profile, &plan)
+                .unwrap())
+        })
+        .unwrap();
+        assert!(
+            bir_core::integration::profile_deadline_overrides_for_year(&profile, 2026).is_empty(),
+            "the override belongs to 2027 only"
+        );
+        assert_eq!(
+            due(&to_json(&deadlines_between(&window).unwrap())),
+            "2026-10-20"
+        );
+        let opened = penalty_due(&profile);
+        assert_eq!(opened["penalty_due_date"], "2026-10-20");
+        assert_eq!(opened["compromise"], 500.0, "the typed amount stays");
+        assert_eq!(opened["penalty_overrides"]["compromise"], 500.0);
+    }
+
+    /// Round 3, item 5: a profile row that cannot be read skips that
+    /// branch's profile overrides only; the feed still lists every branch.
+    #[test]
+    fn an_unreadable_profile_does_not_empty_the_feed() {
+        setup();
+        with_database(|db| {
+            db.create_taxpayer(NewTaxpayer {
+                tin_root: "987654321".into(),
+                name: "Second Example Inc".into(),
+                taxpayer_type: TaxpayerType::Corporation,
+                birth_date: None,
+                head_office: BranchFacts {
+                    rdo_code: "040".into(),
+                    registered_address: "2 Example Street, Pasig".into(),
+                    zip_code: "1600".into(),
+                    phone: "0280000001".into(),
+                    email: "second@example.com".into(),
+                },
+            })
+            .unwrap();
+            db.set_yearly_forms("98765432100000", 2026, &["1601C"])
+                .unwrap();
+            db.conn_for_tests()
+                .execute(
+                    "UPDATE profiles SET data_json = '{not json' WHERE tin = ?1",
+                    [HEAD],
+                )
+                .unwrap();
+            assert!(db.get_profile(HEAD).is_err(), "the row is unreadable");
+            Ok(())
+        })
+        .unwrap();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-10-31"])).unwrap());
+        let tins: std::collections::BTreeSet<&str> = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["tin"].as_str().unwrap())
+            .collect();
+        assert!(tins.contains("98765432100000"), "{rows}");
+    }
+
+    /// The field names `interface <name>` declares in DECLARATIONS, sorted.
+    fn declared_fields(name: &str) -> Vec<&'static str> {
+        let start = DECLARATIONS
+            .find(&format!("export interface {name} {{"))
+            .unwrap_or_else(|| panic!("interface {name}"));
+        let body = &DECLARATIONS[start..];
+        let body = &body[body.find('{').unwrap() + 1..body.find('}').unwrap()];
+        let mut fields: Vec<&str> = body
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("/**") && !line.starts_with('*'))
+            .filter_map(|line| {
+                line.split_once(':')
+                    .map(|(field, _)| field.trim_end_matches('?'))
+            })
+            .collect();
+        fields.sort_unstable();
+        fields
+    }
+
+    fn keys(value: &Value) -> Vec<&str> {
+        let mut keys: Vec<&str> = value
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
+        keys.sort_unstable();
+        keys
+    }
+
+    /// Review F26: the field names home.js reads from the as-needed rows,
+    /// pinned so the host and the page cannot drift (the DECLARATIONS
+    /// interfaces name the same fields).
+    #[test]
+    fn the_as_needed_json_field_names_are_pinned() {
+        setup_as_needed();
+        let rows = to_json(&deadlines_between(&args(&["2026-10-01", "2026-10-31"])).unwrap());
+        let dated = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["frequency"] == "As needed")
+            .unwrap();
+        let periodic = rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["frequency"] != "As needed")
+            .unwrap();
+        let row_fields = [
+            "branch_code",
+            "branch_count",
+            "branch_name",
+            "draft_id",
+            "due_date",
+            "form_code",
+            "form_name",
+            "frequency",
+            "period",
+            "period_label",
+            "return_key",
+            "status",
+            "taxable_year",
+            "taxpayer_name",
+            "tin",
+            "tin_root",
+        ];
+        assert_eq!(
+            keys(dated),
+            row_fields,
+            "a dated as-needed row is a DeadlineRow"
+        );
+        assert_eq!(keys(periodic), row_fields);
+        with_database(|db| {
+            db.set_yearly_forms(HEAD, 2026, &["2000OT", "2553"])
+                .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let forms = to_json(
+            &as_needed_forms(&HostArguments::new([gpui_shell::HostValue::Number(2026.0)])).unwrap(),
+        );
+        let with_undated = forms
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["form_code"] == "2000OT")
+            .unwrap();
+        assert_eq!(
+            keys(with_undated),
+            [
+                "branch_code",
+                "branch_count",
+                "branch_name",
+                "due_rule",
+                "form_code",
+                "form_name",
+                "taxable_year",
+                "taxpayer_name",
+                "tin",
+                "tin_root",
+                "trigger",
+                "undated",
+            ]
+        );
+        assert_eq!(
+            keys(&with_undated["undated"][0]),
+            ["draft_id", "period", "return_key", "status", "updated_at"]
+        );
+        // And each TypeScript interface declares exactly those fields.
+        assert_eq!(declared_fields("DeadlineRow"), keys(dated));
+        assert_eq!(declared_fields("AsNeededForm"), keys(with_undated));
+        assert_eq!(
+            declared_fields("AsNeededReturn"),
+            keys(&with_undated["undated"][0])
+        );
+    }
+
     #[test]
     fn list_returns_separates_saved_from_filed() {
         setup();
@@ -396,6 +1235,10 @@ mod tests {
         assert_eq!(saved[0]["form_code"], "1601C");
         assert_eq!(saved[0]["status"], "Draft");
         assert_eq!(saved[0]["period_label"], "January 2026");
+        assert_eq!(
+            saved[0]["return_key"], 1,
+            "a 1601C return's stored key is its month"
+        );
         let filed = to_json(&list_returns(&args(&["filed"])).unwrap());
         assert!(filed.as_array().unwrap().is_empty());
         let all = to_json(&list_returns(&args(&["all"])).unwrap());

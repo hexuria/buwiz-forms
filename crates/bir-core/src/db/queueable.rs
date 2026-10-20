@@ -31,6 +31,14 @@ pub enum ClaimQueueableResult<F> {
     Superseded,
 }
 
+/// The filed return an amendment was copied from, as it was then: its first
+/// save goes ahead only while the stored row is still exactly that.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AmendmentBase {
+    pub status: FilingStatus,
+    pub updated_at: String,
+}
+
 /// Result of [`Database::revert_queueable_for_amendment`].
 #[derive(Debug, Clone)]
 pub struct RevertedForAmendment<F> {
@@ -213,6 +221,36 @@ impl Database {
             Ok(draft)
         })
         .transpose()
+    }
+
+    /// Every stored `F` return of a TIN and year, each with its period
+    /// column (an entry-numbered form's entry, a transaction's `MMDD`), in
+    /// one read.
+    pub fn list_queueable_drafts<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+    ) -> Result<Vec<(i64, F)>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, quarter, data_json FROM form_drafts
+             WHERE tin = ?1 AND form_code = ?2 AND taxable_year = ?3
+             ORDER BY quarter",
+        )?;
+        let rows = stmt.query_map(params![tin, F::FORM_CODE, i64::from(taxable_year)], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<i64>>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut drafts = Vec::new();
+        for row in rows {
+            let (id, period, json) = row?;
+            let mut draft: F = serde_json::from_str(&json)?;
+            draft.set_draft_id(Some(id));
+            drafts.push((period.unwrap_or(0), draft));
+        }
+        Ok(drafts)
     }
 
     /// Save an editable Draft. A queued or filed snapshot is never replaced.
@@ -478,6 +516,39 @@ impl Database {
         taxable_year: u16,
         period: i64,
     ) -> Result<RevertedForAmendment<F>, DbError> {
+        self.revert_queueable_inner(tin, taxable_year, period, None, None)
+    }
+
+    /// An amendment's first save, in ONE transaction: the user's revert of
+    /// the filed return (kept byte for byte as its amendment snapshot) and
+    /// `amended` written in its row. Refused, with nothing changed, when the
+    /// row is no longer the filed return `base` describes.
+    pub fn save_queueable_amendment<F: QueueableForm>(
+        &self,
+        amended: &F,
+        base: &AmendmentBase,
+    ) -> Result<i64, DbError> {
+        let reverted = self.revert_queueable_inner(
+            amended.tin(),
+            amended.taxable_year(),
+            amended.period_column(),
+            Some(base),
+            Some(amended),
+        )?;
+        reverted
+            .draft
+            .draft_id()
+            .ok_or_else(|| DbError::Other(format!("{} amendment has no row", F::FORM_CODE)))
+    }
+
+    fn revert_queueable_inner<F: QueueableForm>(
+        &self,
+        tin: &str,
+        taxable_year: u16,
+        period: i64,
+        base: Option<&AmendmentBase>,
+        replacement: Option<&F>,
+    ) -> Result<RevertedForAmendment<F>, DbError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
         let Some((id, raw_json, db_status)) =
             select_row(&tx, F::FORM_CODE, tin, taxable_year, period)?
@@ -489,6 +560,14 @@ impl Database {
         };
         let current: F = serde_json::from_str(&raw_json)?;
         let previous_status = current.lifecycle().status.clone();
+        if let Some(base) = base
+            && (base.status != previous_status || base.updated_at != current.lifecycle().updated_at)
+        {
+            return Err(DbError::Other(format!(
+                "The filed {} return changed since this amendment began; open it again and amend that",
+                F::FORM_CODE
+            )));
+        }
         if db_status != filing_status_to_db(&previous_status) {
             return Err(DbError::Other(format!(
                 "{} return status is inconsistent ({db_status} row, {previous_status:?} data); refusing to revert",
@@ -555,6 +634,24 @@ impl Database {
                 "{} return changed before the revert completed",
                 F::FORM_CODE
             )));
+        }
+        // An amendment's first save writes it over the reverted Draft in the
+        // same transaction: a failure leaves the filed return as it was.
+        if let Some(amended) = replacement {
+            if !amended.lifecycle().is_editable() {
+                return Err(DbError::Other(format!(
+                    "Only a Draft {} amendment may be saved",
+                    F::FORM_CODE
+                )));
+            }
+            let mut amended = amended.clone();
+            amended.set_draft_id(Some(id));
+            tx.execute(
+                "UPDATE form_drafts SET status = 'Draft', data_json = ?1, updated_at = datetime('now')
+                 WHERE id = ?2",
+                params![serde_json::to_string(&amended)?, id],
+            )?;
+            draft = amended;
         }
         tx.commit()?;
         let _ = self.request_google_calendar_sync();

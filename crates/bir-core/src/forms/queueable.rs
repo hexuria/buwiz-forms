@@ -65,6 +65,42 @@ pub struct SubmissionLifecycle {
     pub submission_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_retry_at: Option<String>,
+    /// Profile boxes the filer edited on this return (their on-screen
+    /// keys). They keep the edit when the tax profile changes; every other
+    /// profile box of a Draft follows the profile. Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_edits: Vec<String>,
+    /// The tax-profile values the draft's profile boxes were built from
+    /// (draft path -> value), recorded when the page opens or saves it. A
+    /// profile box follows a later profile change only while it still
+    /// holds this value. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
+    /// The filer entered this as-needed return's trigger date (its removal,
+    /// withholding or transaction date) on the page, so it is no longer the
+    /// date the form pre-fills (decision D8c; see
+    /// [`crate::forms::event_trigger`]). Absent (false) on every draft saved
+    /// before it existed, so their stored bytes are unchanged. Never filed
+    /// or printed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trigger_date_entered: bool,
+    /// The trigger-date fields the filer has typed on this return so far
+    /// (top-level draft fields, sorted), kept so a date typed over two
+    /// sessions, or one part edited after a restart, still counts. Written
+    /// by the host only, from the stored row and its own typed writes;
+    /// absent (empty) on every draft saved before it existed. Never filed
+    /// or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trigger_parts_typed: Vec<String>,
+    /// This draft was created under the typed-trigger model (decision
+    /// P5-7): while it is an undated Draft of a pre-filled form it computes
+    /// no penalties. Written once, when the draft is created, by a builder
+    /// that records the filer's typed trigger date (the shell page; the
+    /// desktop 1606 and 1706 views). Absent (false) on every row stored
+    /// before, which keep the behaviour they had: penalties from the date
+    /// they hold. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trigger_date_model: bool,
 }
 
 impl Default for SubmissionLifecycle {
@@ -88,6 +124,11 @@ impl Default for SubmissionLifecycle {
             submission_attempts: 0,
             submission_error: None,
             next_retry_at: None,
+            profile_edits: Vec::new(),
+            profile_baseline: std::collections::BTreeMap::new(),
+            trigger_date_entered: false,
+            trigger_parts_typed: Vec::new(),
+            trigger_date_model: false,
         }
     }
 }
@@ -175,6 +216,11 @@ impl SubmissionLifecycle {
             "Cannot revert a Paid form to Draft"
         );
         self.status = FilingStatus::Draft;
+        // Back to Draft (an amended copy, a cancelled queue, a refused
+        // submission) its boxes were not built from the profile as it is
+        // now: no baseline, so a later profile change moves nothing until
+        // the filer chooses it (the page offers "Use profile values").
+        self.profile_baseline.clear();
         self.submitted_at = None;
         self.confirmed_at = None;
         self.receipt_id = None;

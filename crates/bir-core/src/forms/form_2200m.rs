@@ -26,6 +26,7 @@ use std::collections::BTreeMap;
 use chrono::{Datelike, NaiveDate};
 use serde::{Deserialize, Serialize};
 
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -311,10 +312,6 @@ fn cents(value: f64) -> f64 {
     parse_official_amount(&official_amount(value)).unwrap_or(0.0)
 }
 
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
-}
-
 /// `isAmountWithinAllowedPrecision`: at most 12 integer digits, else the
 /// official field resets to `0.00`.
 fn within_official_precision(value: f64) -> bool {
@@ -379,7 +376,7 @@ impl Form2200MDraft {
             last_day_of_month(year, month)
         };
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             month,
             day,
@@ -1109,6 +1106,15 @@ impl Form2200MDraft {
             ],
             state: penalty,
             basic_tax_due: "Item 20", |d| d.tax_still_due,
+            // Decision D8 (2026-10-18): due on removal, so the penalties run
+            // from Item 1, the removal date the filer types.
+            typed_due_date: Some(|d: &Self| {
+                chrono::NaiveDate::from_ymd_opt(
+                    i32::from(d.year),
+                    u32::from(d.month),
+                    u32::from(d.day),
+                )
+            }),
         )
     }
 }
@@ -1537,5 +1543,28 @@ mod tests {
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.surcharge = 8_816_764.47;
+        assert!(
+            <Form2200MDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "surcharge"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.surcharge = 1.005;
+        assert!(
+            <Form2200MDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "surcharge"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

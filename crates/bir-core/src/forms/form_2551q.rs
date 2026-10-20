@@ -3,10 +3,12 @@
 //! Data model, carry-forward logic, and auto-computation.
 
 use super::FilingStatus;
+use super::official_inputs::has_cent_precision;
 use crate::filing_queue::{QueueAuthSource, QueueAuthorization};
 use crate::forms::atc::{AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 use crate::penalties::{
-    PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyProfile, TaxpayerClass,
+    PenaltyComponent, PenaltyConfig, PenaltyContext, PenaltyEngine, PenaltyOverrides,
+    PenaltyProfile, TaxpayerClass,
 };
 use crate::profile::{IncomeTaxElection, TaxProfileVersionStatus, TaxpayerProfile, TaxpayerType};
 use chrono::{Datelike, Duration, NaiveDate};
@@ -55,10 +57,6 @@ fn matches_cent_rounded(actual: f64, expected: f64) -> bool {
     actual.is_finite()
         && expected.is_finite()
         && (actual - round_to_cents(expected)).abs() < TWO_DECIMAL_TOLERANCE
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 /// Taxable-period basis selected in Item 1 of Form 2551Q.
@@ -270,6 +268,13 @@ pub struct Form2551QDraft {
     pub compromise: f64,
     #[serde(default)]
     pub total_penalties: f64,
+    /// Items 20-22 the filer entered in place of the computed ones (rule 8,
+    /// the shared model's per-component override): each set component files
+    /// instead of what [`Self::recompute`] computes, the others keep
+    /// computing. Stored under the same JSON keys as every other form's
+    /// (`penalty_overrides/{surcharge,interest,compromise}`).
+    #[serde(default)]
+    pub penalty_overrides: PenaltyOverrides,
     #[serde(default)]
     pub total_amount_payable: f64,
     #[serde(default)]
@@ -332,6 +337,17 @@ pub struct Form2551QDraft {
     pub next_retry_at: Option<String>,
     #[serde(default)]
     pub last_error: Option<String>,
+    /// Profile boxes the filer edited on this return (their on-screen
+    /// keys). They keep the edit when the tax profile changes; every other
+    /// profile box of a Draft follows the profile. Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_edits: Vec<String>,
+    /// The tax-profile values the draft's profile boxes were built from
+    /// (draft path -> value), recorded when the page opens or saves it. A
+    /// profile box follows a later profile change only while it still
+    /// holds this value. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
 
     /// Set to true when this draft was pre-filled from a previous quarter.
     /// UI shows a "Pre-filled from Q{n} {year}" banner when true.
@@ -341,6 +357,16 @@ pub struct Form2551QDraft {
     #[serde(default)]
     pub payment_receipt_path: Option<String>,
 }
+
+/// The page's 2551Q profile boxes (their keys) and the draft field each
+/// writes: what `profile_edits` names.
+const PROFILE_BOXES: [(&str, &str); 5] = [
+    ("frm2551Qv2018:txtRDOCode", "/rdo_code"),
+    ("frm2551Qv2018:registeredName", "/taxpayer_name"),
+    ("frm2551Qv2018:registeredAddress", "/registered_address"),
+    ("frm2551Qv2018:zipCode", "/zip_code"),
+    ("frm2551Qv2018:telNo", "/contact_number"),
+];
 
 impl Form2551QDraft {
     /// Minimum Item 5 count required by application-generated Schedule 1
@@ -422,6 +448,7 @@ impl Form2551QDraft {
             interest: 0.0,
             compromise: 0.0,
             total_penalties: 0.0,
+            penalty_overrides: PenaltyOverrides::default(),
             total_amount_payable: 0.0,
             overpayment_disposition: OverpaymentDisposition::None,
             status: FilingStatus::Draft,
@@ -445,6 +472,8 @@ impl Form2551QDraft {
             submission_attempts: 0,
             next_retry_at: None,
             last_error: None,
+            profile_edits: Vec::new(),
+            profile_baseline: std::collections::BTreeMap::new(),
             carried_forward_from: None,
             payment_receipt_path: None,
         };
@@ -615,6 +644,24 @@ impl Form2551QDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// Whether the filer edited the page's profile box writing `path` on
+    /// this return (`profile_edits` holds the boxes' keys).
+    fn edited_on_return(&self, path: &str) -> bool {
+        PROFILE_BOXES
+            .iter()
+            .any(|(key, field)| *field == path && self.profile_edits.iter().any(|edit| edit == key))
+    }
+
+    fn profile_field_mut(&mut self, path: &str) -> &mut String {
+        match path {
+            "/rdo_code" => &mut self.rdo_code,
+            "/taxpayer_name" => &mut self.taxpayer_name,
+            "/registered_address" => &mut self.registered_address,
+            "/zip_code" => &mut self.zip_code,
+            _ => &mut self.contact_number,
+        }
+    }
+
     fn sync_with_profile_snapshot(
         &mut self,
         profile: &TaxpayerProfile,
@@ -627,11 +674,14 @@ impl Form2551QDraft {
                 && self.business_start_date == profile.business_start_date
                 && self.eopt_tier == profile.eopt_tier
                 && self.annual_income_tax_election == Some(annual_election)
-                && self.rdo_code == profile.rdo_code
-                && self.taxpayer_name == profile.full_name
-                && self.registered_address == profile.registered_address
-                && self.zip_code == profile.zip_code
-                && self.contact_number == profile.phone
+                && (self.rdo_code == profile.rdo_code || self.edited_on_return("/rdo_code"))
+                && (self.taxpayer_name == profile.full_name
+                    || self.edited_on_return("/taxpayer_name"))
+                && (self.registered_address == profile.registered_address
+                    || self.edited_on_return("/registered_address"))
+                && (self.zip_code == profile.zip_code || self.edited_on_return("/zip_code"))
+                && (self.contact_number == profile.phone
+                    || self.edited_on_return("/contact_number"))
                 && self.email == profile.email
                 && effective_profile_version_id.is_none_or(|version_id| {
                     self.effective_profile_version_id.as_deref() == Some(version_id)
@@ -651,11 +701,24 @@ impl Form2551QDraft {
         self.business_start_date = profile.business_start_date;
         self.eopt_tier = profile.eopt_tier.clone();
         self.annual_income_tax_election = Some(annual_election);
-        self.rdo_code = profile.rdo_code.clone();
-        self.taxpayer_name = profile.full_name.clone();
-        self.registered_address = profile.registered_address.clone();
-        self.zip_code = profile.zip_code.clone();
-        self.contact_number = profile.phone.clone();
+        // A profile box the filer edited on this return keeps the edit; the
+        // others take the profile, and their baseline with them, so the
+        // page's profile follow sees them as following.
+        for (path, value) in [
+            ("/rdo_code", &profile.rdo_code),
+            ("/taxpayer_name", &profile.full_name),
+            ("/registered_address", &profile.registered_address),
+            ("/zip_code", &profile.zip_code),
+            ("/contact_number", &profile.phone),
+        ] {
+            if self.edited_on_return(path) {
+                continue;
+            }
+            *self.profile_field_mut(path) = value.clone();
+            if let Some(baseline) = self.profile_baseline.get_mut(path) {
+                *baseline = serde_json::Value::String(value.clone());
+            }
+        }
         self.email = profile.email.clone();
         self.item_13_election = match self.item_13_is_applicable() {
             Some(false)
@@ -810,6 +873,7 @@ impl Form2551QDraft {
         //
         // We pass max(tax_payable, 0) as basic_tax_due so surcharge/interest
         // are computed on the positive amount only. Line 19 itself stays unclamped.
+        self.adopt_legacy_manual_penalties();
         if self.auto_compute_penalties && refresh_auto_penalties {
             if let Some(deadline) = self.filing_deadline() {
                 let today = chrono::Local::now().date_naive();
@@ -867,15 +931,34 @@ impl Form2551QDraft {
             }
         }
 
+        // Rule 8: an entered amount files instead of the computed one.
+        if self.auto_compute_penalties {
+            for (component, slot) in [
+                (PenaltyComponent::Surcharge, &mut self.surcharge),
+                (PenaltyComponent::Interest, &mut self.interest),
+                (PenaltyComponent::Compromise, &mut self.compromise),
+            ] {
+                if let Some(value) = self.penalty_overrides.get(component) {
+                    *slot = round_to_cents(value);
+                }
+            }
+        }
+
         // `2551q-tax-rate-eight-percent`: Item 13 = 8% on this return zeroes
-        // Items 20/21/22 along with the rest of the figures. Profile:
-        // official-match.
-        if self.auto_compute_penalties
-            && matches!(self.item_13_election, Item13Election::EightPercent)
-        {
-            self.surcharge = 0.0;
-            self.interest = 0.0;
-            self.compromise = 0.0;
+        // Items 20/21/22 along with the rest of the figures, and the
+        // official page disables them, so they take no override either.
+        // Profile: official-match. A legacy manual draft (never migrated,
+        // see `adopt_legacy_manual_penalties`) keeps the amounts it was
+        // saved with.
+        if matches!(self.item_13_election, Item13Election::EightPercent) {
+            for component in PenaltyComponent::ALL {
+                self.penalty_overrides.set(component, None);
+            }
+            if self.auto_compute_penalties {
+                self.surcharge = 0.0;
+                self.interest = 0.0;
+                self.compromise = 0.0;
+            }
         }
 
         // Line 23: Total Penalties
@@ -886,6 +969,33 @@ impl Form2551QDraft {
             ((self.tax_payable + self.total_penalties) * 100.0).round() / 100.0;
 
         self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Once, for a Draft saved with the manual switch (all three typed):
+    /// each typed amount becomes that component's override and the switch
+    /// turns off for good (it is the one-time flag), so the return files
+    /// what it filed before and a later blank computes again. A manual draft
+    /// with Item 13 = 8% stays manual (the 8% option takes no override),
+    /// keeping its amounts until its election changes. Returns whether the
+    /// draft changed. Runs before any write
+    /// ([`crate::forms::agent::prepare_for_writes`]) and in
+    /// [`Self::recompute`].
+    pub fn adopt_legacy_manual_penalties(&mut self) -> bool {
+        if self.auto_compute_penalties
+            || !matches!(self.status, FilingStatus::Draft)
+            || matches!(self.item_13_election, Item13Election::EightPercent)
+        {
+            return false;
+        }
+        for (component, value) in [
+            (PenaltyComponent::Surcharge, self.surcharge),
+            (PenaltyComponent::Interest, self.interest),
+            (PenaltyComponent::Compromise, self.compromise),
+        ] {
+            self.penalty_overrides.set(component, Some(value));
+        }
+        self.auto_compute_penalties = true;
+        true
     }
 
     fn submission_fingerprint(&self) -> String {
@@ -1116,6 +1226,13 @@ impl Form2551QDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// The editor's Amended toggle: Yes keeps Items 16 and the on-time
+    /// answer as entered and recomputes.
+    pub fn mark_amended(&mut self) {
+        self.is_amended = true;
+        self.recompute(None);
+    }
+
     /// Transition: Any non-terminal → Draft (revert). Clears submission metadata.
     pub fn revert_to_draft(&mut self) {
         assert!(
@@ -1123,6 +1240,11 @@ impl Form2551QDraft {
             "Cannot revert a Paid form to Draft"
         );
         self.status = FilingStatus::Draft;
+        // Back to Draft (an amended copy, a cancelled queue, a refused
+        // submission) its boxes were not built from the profile as it is
+        // now: no baseline, so a later profile change moves nothing until
+        // the filer chooses it (the page offers "Use profile values").
+        self.profile_baseline.clear();
         self.submitted_at = None;
         self.confirmed_at = None;
         self.receipt_id = None;
@@ -2805,6 +2927,53 @@ mod tests {
         }
     }
 
+    /// The profile reconciliation and the page's profile follow agree: a
+    /// box the filer edited on the return (`profile_edits`) keeps the edit
+    /// through a sync, the others take the profile and their baseline with
+    /// them, and a queued return whose only difference is such an edit is
+    /// not marked stale.
+    #[test]
+    fn profile_sync_keeps_the_returns_own_edits_and_moves_the_baseline() {
+        let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
+        draft.profile_edits = vec!["frm2551Qv2018:txtRDOCode".to_string()];
+        draft.rdo_code = "040".to_string();
+        draft.profile_baseline = std::collections::BTreeMap::from([
+            (
+                "/rdo_code".to_string(),
+                serde_json::json!(test_profile().rdo_code),
+            ),
+            (
+                "/zip_code".to_string(),
+                serde_json::json!(test_profile().zip_code),
+            ),
+        ]);
+        let mut changed = test_profile();
+        changed.rdo_code = "043".to_string();
+        changed.zip_code = "1200".to_string();
+        draft.sync_with_profile(&changed);
+        assert_eq!(draft.rdo_code, "040", "the edit on this return is kept");
+        assert_eq!(draft.zip_code, "1200", "an unedited box follows");
+        assert_eq!(draft.profile_baseline["/zip_code"], "1200");
+        assert_eq!(
+            draft.profile_baseline["/rdo_code"],
+            serde_json::json!(test_profile().rdo_code),
+            "the edited box's baseline is left alone"
+        );
+        // Queued with that edit: the snapshot still matches the profile.
+        draft.status = FilingStatus::Queued;
+        draft.sync_with_profile(&changed);
+        assert!(
+            !draft.profile_snapshot_stale,
+            "{:?}",
+            draft.profile_snapshot_stale_reason
+        );
+        assert_eq!(draft.rdo_code, "040");
+        // An unedited box that differs still marks it stale.
+        changed.zip_code = "1300".to_string();
+        draft.sync_with_profile(&changed);
+        assert!(draft.profile_snapshot_stale);
+    }
+
     #[test]
     fn profile_sync_applies_a_saved_eight_percent_election_to_item_13() {
         let mut draft = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
@@ -4392,5 +4561,199 @@ mod tests {
                 "expected an error for {field}: {errors:?}"
             );
         }
+    }
+
+    /// Rule 8 on 2551Q: Items 20-22 compute by default; a component the
+    /// filer enters files instead and the others keep computing; Items 23
+    /// and 24 add up what is filed; clearing it computes again.
+    #[test]
+    fn an_entered_penalty_files_instead_and_the_others_keep_computing() {
+        // Q1 2024 is long past its deadline: every component is due.
+        let computed = make_draft(500_000.0, 0.0, 2024, 1);
+        assert!(computed.surcharge > 0.0 && computed.interest > 0.0 && computed.compromise > 0.0);
+        assert_eq!(computed.penalty_overrides, PenaltyOverrides::default());
+
+        let mut entered = computed.clone();
+        entered.penalty_overrides.interest = Some(123.45);
+        entered.recompute(None);
+        assert_eq!(entered.interest, 123.45);
+        assert_eq!(entered.surcharge, computed.surcharge);
+        assert_eq!(entered.compromise, computed.compromise);
+        assert_eq!(
+            entered.total_penalties,
+            round_to_cents(computed.surcharge + 123.45 + computed.compromise)
+        );
+        assert_eq!(
+            entered.total_amount_payable,
+            round_to_cents(entered.tax_payable + entered.total_penalties)
+        );
+        assert!(entered.validate().iter().all(|(field, _)| {
+            !matches!(field.as_str(), "surcharge" | "interest" | "compromise")
+        }));
+        // The upload and the print carry what is filed.
+        let map = entered.to_bir_field_map();
+        assert_eq!(map["frm2551Qv2018:txt21"], "123.45");
+
+        entered.penalty_overrides.interest = None;
+        entered.recompute(None);
+        assert_eq!(
+            (entered.surcharge, entered.interest, entered.compromise),
+            (computed.surcharge, computed.interest, computed.compromise)
+        );
+    }
+
+    /// A return whose deadline has not come computes no penalty.
+    #[test]
+    fn a_return_that_is_not_late_computes_no_penalty() {
+        let next = u16::try_from(chrono::Local::now().year() + 1).unwrap();
+        let draft = make_draft(500_000.0, 0.0, next, 4);
+        assert_eq!(
+            (
+                draft.surcharge,
+                draft.interest,
+                draft.compromise,
+                draft.total_penalties
+            ),
+            (0.0, 0.0, 0.0, 0.0)
+        );
+        assert_eq!(draft.total_amount_payable, draft.tax_payable);
+    }
+
+    /// A draft saved with the manual switch files the same amounts: each
+    /// typed amount becomes that component's override.
+    #[test]
+    fn a_manual_penalty_draft_keeps_its_amounts_as_overrides() {
+        let mut draft = make_draft(500_000.0, 0.0, 2024, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 10.0;
+        draft.interest = 0.0;
+        draft.compromise = 1_000.0;
+        draft.recompute(None);
+        assert!(draft.auto_compute_penalties);
+        assert_eq!(
+            (draft.surcharge, draft.interest, draft.compromise),
+            (10.0, 0.0, 1_000.0)
+        );
+        assert_eq!(draft.penalty_overrides.surcharge, Some(10.0));
+        assert_eq!(draft.penalty_overrides.interest, Some(0.0));
+        assert_eq!(draft.penalty_overrides.compromise, Some(1_000.0));
+        assert_eq!(draft.total_penalties, 1_010.0);
+    }
+
+    /// A manual draft on Item 13 = 8% files what it filed before: the 8%
+    /// option takes no override, so it stays manual until its election
+    /// changes, and then adopts its amounts like any manual draft.
+    #[test]
+    fn a_manual_eight_percent_draft_keeps_its_amounts() {
+        let mut draft = make_draft(0.0, 0.0, 2024, 1);
+        draft.item_13_election = Item13Election::EightPercent;
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 10.0;
+        draft.interest = 0.0;
+        draft.compromise = 5.0;
+        draft.recompute(None);
+        assert!(!draft.auto_compute_penalties);
+        assert_eq!(
+            (draft.surcharge, draft.interest, draft.compromise),
+            (10.0, 0.0, 5.0)
+        );
+        assert_eq!(draft.penalty_overrides, PenaltyOverrides::default());
+        assert_eq!(draft.to_bir_field_map()["frm2551Qv2018:txt20"], "10.00");
+        draft.item_13_election = Item13Election::Graduated;
+        draft.recompute(None);
+        assert!(draft.auto_compute_penalties);
+        assert_eq!(draft.penalty_overrides.surcharge, Some(10.0));
+        assert_eq!(draft.penalty_overrides.compromise, Some(5.0));
+        assert_eq!((draft.surcharge, draft.compromise), (10.0, 5.0));
+    }
+
+    /// The migration runs once: a component blanked afterwards computes
+    /// again instead of coming back from the old manual amount.
+    #[test]
+    fn a_blank_after_the_migration_computes_again() {
+        let computed = make_draft(500_000.0, 0.0, 2024, 1);
+        let mut draft = computed.clone();
+        draft.auto_compute_penalties = false;
+        draft.interest = 31.5;
+        assert!(draft.adopt_legacy_manual_penalties());
+        assert!(!draft.adopt_legacy_manual_penalties(), "only once");
+        draft.penalty_overrides.interest = None;
+        draft.recompute(None);
+        assert_eq!(draft.interest, computed.interest);
+        assert_eq!(draft.penalty_overrides.interest, None);
+        assert_eq!(draft.surcharge, computed.surcharge);
+    }
+
+    /// Item 13 = 8% zeroes and disables Items 20-22 on the official page
+    /// (`taxRateOption()`): an override does not survive it.
+    #[test]
+    fn an_eight_percent_return_takes_no_penalty_override() {
+        let mut draft = make_draft(0.0, 0.0, 2024, 1);
+        draft.penalty_overrides.surcharge = Some(100.0);
+        draft.item_13_election = Item13Election::EightPercent;
+        draft.recompute(None);
+        assert_eq!(draft.penalty_overrides, PenaltyOverrides::default());
+        assert_eq!(
+            (
+                draft.surcharge,
+                draft.interest,
+                draft.compromise,
+                draft.total_penalties
+            ),
+            (0.0, 0.0, 0.0, 0.0)
+        );
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn validation_accepts_large_two_decimal_monetary_inputs() {
+        for field in ["schedule", "creditable", "previous", "other", "surcharge"] {
+            let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+            match field {
+                "schedule" => draft.schedule_1[0].taxable_amount = 8_816_764.47,
+                "creditable" => draft.creditable_tax_withheld = 8_816_764.47,
+                "previous" => {
+                    draft.is_amended = true;
+                    draft.tax_paid_previous = 8_816_764.47;
+                }
+                "other" => {
+                    draft.other_tax_credit = 8_816_764.47;
+                    draft.other_tax_credit_description = "Adjustment".into();
+                }
+                "surcharge" => {
+                    draft.auto_compute_penalties = false;
+                    draft.surcharge = 8_816_764.47;
+                }
+                _ => unreachable!(),
+            }
+            draft.recompute(None);
+            if field == "surcharge" {
+                draft.surcharge = 8_816_764.47;
+            }
+
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(_, message)| !message.contains("at most two decimal places")),
+                "{field} large two-decimal input was refused"
+            );
+        }
+
+        let mut draft = make_draft(50_000.0, 0.0, 2026, 1);
+        draft.auto_compute_penalties = false;
+        draft.surcharge = 1.005;
+        draft.recompute(None);
+        draft.surcharge = 1.005;
+        assert!(
+            draft
+                .validate()
+                .iter()
+                .any(|(field, _)| field == "surcharge"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

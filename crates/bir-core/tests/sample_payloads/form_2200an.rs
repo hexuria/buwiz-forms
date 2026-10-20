@@ -69,18 +69,56 @@ fn form_2200an_sample_payload_is_current() {
     );
 }
 
-/// Event-based: the calendar has no 2200-AN deadline.
+/// Due per removal (decision D8): the penalties run from Item 1, the
+/// removal date; the calendar has no 2200-AN deadline.
 #[test]
 fn form_2200an_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200an,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the removal date the sample types (Item 1, 06/30/2025).
+        Deadline::Typed {
+            due: day(2025, 6, 30),
         },
     );
 }
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
+/// PR 11 (2200AN preview.0): Item 3 is the official open `txtSheets` box
+/// (rules/forms/2200an-v2018/fixtures/runtime-control-inventory-v796.json:
+/// not disabled, maxlength 2, default "0"), so the draft keeps what the
+/// filer types and the upload writes it. A draft stored before the field
+/// existed opens at 0, writes the official default "0" as before, and saves
+/// back without the key.
+#[test]
+fn form_2200an_item_3_files_the_sheets_typed() {
+    let sample = sample_2200an();
+    assert_eq!(sample.field_map()["frm2200ANv2018:txtSheets"], "0");
+    let stored = serde_json::to_value(&sample).unwrap();
+    assert!(stored.get("number_of_attached_sheets").is_none());
+    let reopened: Form2200ANDraft = serde_json::from_value(stored.clone()).unwrap();
+    assert_eq!(reopened.number_of_attached_sheets, 0);
+    assert_eq!(serde_json::to_value(&reopened).unwrap(), stored);
+
+    let mut typed = sample;
+    typed.number_of_attached_sheets = 12;
+    typed.recompute();
+    assert_eq!(typed.field_map()["frm2200ANv2018:txtSheets"], "12");
+    let payload = typed.to_bir_xml_payload().unwrap();
+    assert!(
+        payload.contains("<div>frm2200ANv2018:txtSheets=12frm2200ANv2018:txtSheets=</div>"),
+        "the upload carries Item 3"
+    );
+}
+
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
-    vec![serde_json::to_value(sample_2200an()).expect("sample serializes")]
+    // PR 11: Item 3 (txtSheets) is now the draft's number of attached
+    // sheets, left out of the stored draft while 0; a seed with sheets
+    // attached lets the probe bind it. Its payload is never written.
+    let mut sheets = sample_2200an();
+    sheets.number_of_attached_sheets = 2;
+    sheets.recompute();
+    vec![
+        serde_json::to_value(sample_2200an()).expect("sample serializes"),
+        serde_json::to_value(sheets).expect("sheets sample serializes"),
+    ]
 }

@@ -128,24 +128,33 @@ fn string_map(value: &Value) -> BTreeMap<String, String> {
 /// The print field map of a draft as it stands: the function
 /// `form_print_html` calls on the stored draft.
 fn print_map_of(kind: AgentFormKind, draft: &Value) -> Result<BTreeMap<String, String>, String> {
+    use crate::screen_form_module::out_of_line;
     use bir_core::forms::queueable::QueueableForm as _;
-    Ok(match kind {
-        AgentFormKind::Form1601C => {
-            serde_json::from_value::<bir_core::forms::Form1601CDraft>(draft.clone())
-                .map_err(|error| error.to_string())?
-                .to_print_field_map()
-        }
-        AgentFormKind::Form2551Q => {
-            serde_json::from_value::<bir_core::forms::form_2551q::Form2551QDraft>(draft.clone())
-                .map_err(|error| error.to_string())?
-                .to_print_field_map()
-        }
-        AgentFormKind::Queueable(queueable) => bir_core::with_queueable_kind!(queueable, F => {
-            serde_json::from_value::<F>(draft.clone())
-                .map_err(|error| error.to_string())?
-                .print_field_map()
+    match kind {
+        AgentFormKind::Form1601C => out_of_line(|| {
+            Ok(
+                serde_json::from_value::<bir_core::forms::Form1601CDraft>(draft.clone())
+                    .map_err(|error| error.to_string())?
+                    .to_print_field_map(),
+            )
         }),
-    })
+        AgentFormKind::Form2551Q => out_of_line(|| {
+            Ok(
+                serde_json::from_value::<bir_core::forms::form_2551q::Form2551QDraft>(
+                    draft.clone(),
+                )
+                .map_err(|error| error.to_string())?
+                .to_print_field_map(),
+            )
+        }),
+        AgentFormKind::Queueable(queueable) => {
+            bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
+                Ok(serde_json::from_value::<F>(draft.clone())
+                    .map_err(|error| error.to_string())?
+                    .print_field_map())
+            }))
+        }
+    }
 }
 
 // ---------------------------------------------------------------- schema
@@ -343,16 +352,12 @@ fn compare(form: &str, print: &str) -> &'static str {
 // ----------------------------------------------------------- print sheet
 
 /// `writer-cells.json` `not_joined`: writer key -> reviewed reason the sheet
-/// prints it nowhere.
+/// prints it nowhere, after bir-print's Rust-side joins (SHEET_JOINS), as
+/// the print fills it.
 fn not_joined(slug: &str) -> BTreeMap<String, String> {
-    let path = format!(
-        "{}/../../html-frozen/{slug}/writer-cells.json",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    let Ok(raw) = std::fs::read_to_string(&path) else {
+    let Some(payload) = bir_print::frozen_html::merged_writer_cells_json(slug) else {
         return BTreeMap::new();
     };
-    let payload: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
     let mut out = BTreeMap::new();
     for row in payload["not_joined"].as_array().into_iter().flatten() {
         let reason = row["reason"].as_str().unwrap_or_default().to_string();
@@ -1797,9 +1802,63 @@ fn effective_census_classifies_every_control_of_all_43_forms() {
     assert!(missing.is_empty(), "dropdowns without choices: {missing:?}");
     let supplied = census["dropdowns"]["catalog"].as_u64().unwrap_or(0)
         + census["dropdowns"]["awaiting_parent"].as_u64().unwrap_or(0);
-    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05). The 36
-    // 2550M Schedule 1 ATC lists (N03) are table cells, counted apart.
-    assert_eq!(supplied, 82, "catalog lists, dependent ones included");
+    // 80, plus 1606 Item 16A and 1706 Item 14A's RDO lists (R05), less
+    // 2551Q's six Schedule 1 ATC lists (PR 1), 1601FQ Schedule 1's ten
+    // Treaty Code and ATC lists (PR 2) and 2000's three Schedule 1 ATC lists
+    // (PR 4), table cells now; less 1600PT's and 1600VT's mirrored item 6
+    // RDO list, hidden (PR 3); plus 2000's Item 5 RDO list (PR 4) and plus
+    // 3 for 1604C, 1604E and 1604F (PR 6, item 5 RDO); plus 4 for 1702RT,
+    // 1702MX, 1702EX and 1707A (PR 8, each one's item 7 RDO list, now drawn);
+    // plus 4 for 1701 and 1701A (PR 7: their RDO lists, item 5 and the
+    // spouse's, 1701 Part IV item 2 and 1701A item 67, drawn now):
+    // less 1 for 2552 (PR 9: its item 5 runtime RDO select is a hidden copy
+    // of the printed item 5 box) and plus 1 for 1707 (PR 9: its item 5 RDO
+    // list, now a box of its printed item); less 3 for 2200C, 2200M and 2200P
+    // (PR 11: their second RDO select, rdoPg1Pt1I6RDO, repeats the item's
+    // RDO box and is not drawn):
+    // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3. Table cells are counted apart (the 36 2550M
+    // Schedule 1 ATC lists, N03; catalog_lists_have_unique_values_across_the_schema
+    // checks every one).
+    assert_eq!(supplied, 70, "catalog lists, dependent ones included");
+    // The six 2551Q Schedule 1 ATC lists left the field count because they
+    // are table cells now: each is a census control with no field dropdown,
+    // sits in the schema's Schedule 1 table under a dropdown column, and
+    // still has its catalog list.
+    let form_2551q = census["forms"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|form| form["code"] == "2551Q")
+        .unwrap();
+    let table = schema_entry("2551Q").unwrap()["parts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|part| part["items"].as_array().unwrap())
+        .find(|item| item["keys"][0][0] == "drpATC1")
+        .expect("2551Q Schedule 1 table");
+    assert_eq!(table["cols"][0]["t"], "sel");
+    let catalog = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
+    for row in 1..=6 {
+        let key = format!("drpATC{row}");
+        let control = form_2551q["list"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|control| control["k"] == key.as_str())
+            .unwrap_or_else(|| panic!("{key} in the census"));
+        assert!(
+            control["dropdown"].is_null(),
+            "{key} is not a field dropdown"
+        );
+        assert_eq!(table["keys"][row - 1][0], key.as_str());
+        assert!(
+            catalog[&key]
+                .as_array()
+                .is_some_and(|list| !list.is_empty()),
+            "{key} keeps its catalog list"
+        );
+    }
 }
 
 #[test]
@@ -2034,7 +2093,9 @@ fn symptom_p4_1800_branch_code_sits_with_the_donor_tin() {
 
 /// P2a found 1603Q's tax-relief controls under "12 Email Address" and
 /// 1604C's refund date in an unlabelled group; they sit with their printed
-/// items (1603Q 13/13A, 1604C 11).
+/// items (1603Q 13/13A, 1604C 11A: PR 6 moved the refund date from item 11
+/// to its own printed item 11A, html-frozen/1604c-2018/writer-cells.json
+/// "11A Date of refund MM/DD/YYYY").
 #[test]
 fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
     let item_of = |code: &str, key: &str| {
@@ -2059,7 +2120,11 @@ fn symptom_p4_relief_and_refund_controls_sit_with_their_printed_items() {
         "frm1604c:txtRefDate",
         "frm1604c:txtRefYear",
     ] {
-        assert_eq!(item_of("1604C", key), refund, "{key}");
+        assert_eq!(
+            item_of("1604C", key),
+            "11A If Yes, specify the date of refund (MM/DD/YYYY)",
+            "{key}"
+        );
     }
 }
 
@@ -2088,13 +2153,20 @@ fn choose_save_reopen(code: &str, key: &str, value: &str) -> Reopened {
     let kind = kind_of(code).expect("form kind");
     let period = page_period_for(code);
     let opened = open(code, period).expect("form opens");
+    let mut edits = json!({ key: value });
+    // PR 9: 1606's and 1706's relief lists take a choice only once item 11
+    // is Yes (rules/forms fields.json enabled_when "Item 19/20 indicates
+    // ... relief"), so the filer answers Yes in the same batch first.
+    if let Some(yes) = match key {
+        "frm1606:selTreaty" => Some("frm1606:rdTreaty:_1"),
+        "frm1706:selTreaty" => Some("frm1706:rdTreaty:_1"),
+        _ => None,
+    } {
+        edits[yes] = json!("true");
+    }
     let filled = call(
         "screen_form_fill",
-        vec![
-            code.into(),
-            json(opened["draft"].clone()),
-            json(json!({ key: value })),
-        ],
+        vec![code.into(), json(opened["draft"].clone()), json(edits)],
     )
     .expect("fill runs");
     call(
@@ -2234,6 +2306,26 @@ fn p1_relief_dropdowns_offer_each_forms_official_choices() {
             assert_eq!(shown, *value, "{code} {key}: {label} after reopen");
             assert_eq!(printed, *value, "{code} {key}: {label} in print");
         }
+    }
+    // PR 9: with item 11 No the lists are shut: a choice is refused with the
+    // tag the page shows on them, and the draft keeps no relief.
+    for (code, key, value) in [
+        ("1606", "frm1606:selTreaty", "0"),
+        ("1706", "frm1706:selTreaty", "1"),
+    ] {
+        seed_fictional_profile();
+        let opened = open(code, page_period_for(code)).expect("opens");
+        let shut = call(
+            "screen_form_fill",
+            vec![
+                code.into(),
+                json(opened["draft"].clone()),
+                json(json!({ format!("frm{code}:rdTreaty:_2"): "true", key: value })),
+            ],
+        )
+        .expect("fill runs");
+        assert_eq!(shut["rejected"][key], "Needs item 11 = Yes", "{code}");
+        assert_eq!(shut["draft"]["tax_relief"], "no", "{code}");
     }
     // 1606's blank official choice is the page's empty choice: it means no
     // relief, and 0 (International Tax Treaty) is not turned into it.
@@ -2395,17 +2487,24 @@ fn page_option_value(option: &Value) -> Option<String> {
 }
 
 /// Every choice a schema dropdown lists, sent the way the page sends it,
-/// is one the host accepts (unless the page shows the field locked).
+/// is one the host accepts (unless the page shows the field locked, or the
+/// host refuses it while its part is closed: PR 7's
+/// `rows_annual_individual::gated`, 1701MS item 18 column B off a joint
+/// return, whose choices
+/// `annual_individual::form_1701ms_spouse_atc_takes_every_listed_code_on_a_joint_return`
+/// sends on a joint return). A box rule 6 only fades is still sent.
 #[test]
 fn every_listed_dropdown_choice_is_accepted_by_the_host() {
     seed_fictional_profile();
     let mut refused = Vec::new();
+    let mut sent = BTreeSet::new();
     for form in schema() {
         let code = form["c"].as_str().unwrap_or_default();
         let Ok(opened) = open(code, page_period_for(code)) else {
             continue;
         };
         let locks = opened["locks"].as_object().cloned().unwrap_or_default();
+        let kind = AgentFormKind::from_code(code).expect("schema form is an agent form");
         let fields = form["parts"]
             .as_array()
             .into_iter()
@@ -2414,13 +2513,31 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
             .flat_map(|it| it["f"].as_array().into_iter().flatten());
         for field in fields {
             let key = field["k"].as_str().unwrap_or_default();
-            if field["t"] != "sel" || field["c"] == 1 || locks.contains_key(key) {
+            // A box the host refuses until its answer holds (1602Q's 13A
+            // until item 13 is Yes): its choices are taken once it holds
+            // (q3_withholding_item_13_is_answered_on_the_page_and_prints).
+            // A PR 9 gated box that is off now is shut on the page
+            // (form_page.js `isLocked`) and refused by the host with its tag
+            // (tests::as_needed). Every other off box is still tried here.
+            let gated_off =
+                opened["off"].get(key).is_some() && super::rows_as_needed::is_gated(code, key);
+            let gated = rows_withholding::gated(kind_of(code).unwrap(), &opened["draft"], key)
+                == Some(true);
+            if field["t"] != "sel"
+                || field["c"] == 1
+                || locks.contains_key(key)
+                || gated
+                || rows_annual_individual::gated(kind, &opened["draft"], key)
+                || gated_off
+            {
                 continue;
             }
+            sent.insert(format!("{code} {key}"));
             for option in field["o"].as_array().into_iter().flatten() {
                 let Some(value) = page_option_value(option) else {
                     continue;
                 };
+                sent.insert(format!("{code} {key}"));
                 let filled = call(
                     "screen_form_fill",
                     vec![
@@ -2431,10 +2548,52 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                 )
                 .expect("fill runs");
                 if let Some(reason) = filled["rejected"].get(key) {
+                    // PR 5: 1701Q's spouse part takes nothing until Civil
+                    // Status is Married (decision 11); the same choice is
+                    // taken once it is.
+                    if code == "1701Q"
+                        && reason
+                            .as_str()
+                            .is_some_and(super::rows_income_q::is_gate_refusal)
+                    {
+                        let married = call(
+                            "screen_form_fill",
+                            vec![
+                                code.into(),
+                                json(opened["draft"].clone()),
+                                json(json!({
+                                    super::rows_income_q::CIVIL_STATUS: "Married",
+                                    "frm1701q:optType_1": "true",
+                                    key: value,
+                                })),
+                            ],
+                        )
+                        .expect("fill runs");
+                        if let Some(reason) = married["rejected"].get(key) {
+                            refused.push(format!("{code} {key} {value:?} (Married): {reason}"));
+                        }
+                        continue;
+                    }
                     refused.push(format!("{code} {key} {value:?}: {reason}"));
                 }
             }
         }
+    }
+    // Selects rule 6 fades on a fresh return but the host takes: still sent.
+    // (1602Q's lstSpecialTax is not among them since PR 2: the host refuses
+    // it until item 13 is Yes, and the rows_withholding gate above skips it;
+    // q3_withholding_item_13_is_answered_on_the_page_and_prints sends its
+    // choices once item 13 holds. 1606's and 1706's selTreaty are not among
+    // them since PR 9: the host refuses them until item 11 is Yes, and
+    // tests::as_needed sends their choices once it holds.)
+    for key in [
+        "1601C frm1601c:selTreaty",
+        "1604C frm1604c:txtRefMonth",
+        "1604C frm1604c:select13",
+        "1701Q frm1701q:txtSpouseRDOCode",
+        "2553 frm2553:lstTaxTreaty",
+    ] {
+        assert!(sent.contains(key), "{key} is sent");
     }
     // N03 (fixed): 2550M's Schedule 1 ATC selects list the form's own ATC
     // popup and the host writes them through the typed draft.

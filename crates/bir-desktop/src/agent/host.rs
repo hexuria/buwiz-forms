@@ -2503,6 +2503,13 @@ impl BirAgentHost {
         let fields = collect_fill_fields(args)?;
         let source = self.fill_source(args, &fields)?;
         if self.active_view == ActiveView::Form1601C {
+            let from_profile = self
+                .form_1601c
+                .as_ref()
+                .and_then(|form| serde_json::to_value(&form.draft).ok())
+                .and_then(|json| {
+                    self.profile_context(bir_core::forms::agent::AgentFormKind::Form1601C, &json)
+                });
             let form = self.form_1601c.as_mut().ok_or("form 1601C is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
@@ -2523,18 +2530,21 @@ impl BirAgentHost {
                 filled.push(key);
             }
             let mut not_shown = Vec::new();
+            let mut refused = serde_json::Map::new();
             if !official.is_empty() {
                 let json = serde_json::to_value(&draft).map_err(|err| err.to_string())?;
-                let (next, more, also_kept, hidden) = generic::fill_official(
+                let (next, more, also_kept, hidden, also_refused) = generic::fill_official(
                     bir_core::forms::agent::AgentFormKind::Form1601C,
                     &json,
                     &form.assist,
                     &official,
+                    from_profile.as_ref(),
                 )?;
                 draft = serde_json::from_value(next).map_err(|err| err.to_string())?;
                 filled.extend(more);
                 kept.extend(also_kept);
                 not_shown = hidden;
+                refused = also_refused;
             }
             draft.compute();
             form.draft = draft;
@@ -2544,12 +2554,19 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            return Ok(generic::with_not_shown(
-                fill_result("1601C", source, filled, kept),
-                not_shown,
+            return Ok(generic::with_refused(
+                generic::with_not_shown(fill_result("1601C", source, filled, kept), not_shown),
+                refused,
             ));
         }
         if self.active_view == ActiveView::Form2551Q {
+            let from_profile = self
+                .form_2551q
+                .as_ref()
+                .and_then(|form| serde_json::to_value(&form.draft).ok())
+                .and_then(|json| {
+                    self.profile_context(bir_core::forms::agent::AgentFormKind::Form2551Q, &json)
+                });
             let form = self.form_2551q.as_mut().ok_or("form 2551Q is not open")?;
             if !form.draft.is_editable() {
                 return Err("this return is no longer a draft".into());
@@ -2570,18 +2587,21 @@ impl BirAgentHost {
                 filled.push(key);
             }
             let mut not_shown = Vec::new();
+            let mut refused = serde_json::Map::new();
             if !official.is_empty() {
                 let json = serde_json::to_value(&draft).map_err(|err| err.to_string())?;
-                let (next, more, also_kept, hidden) = generic::fill_official(
+                let (next, more, also_kept, hidden, also_refused) = generic::fill_official(
                     bir_core::forms::agent::AgentFormKind::Form2551Q,
                     &json,
                     &form.assist,
                     &official,
+                    from_profile.as_ref(),
                 )?;
                 draft = serde_json::from_value(next).map_err(|err| err.to_string())?;
                 filled.extend(more);
                 kept.extend(also_kept);
                 not_shown = hidden;
+                refused = also_refused;
             }
             draft.recompute(None);
             form.draft = draft;
@@ -2591,9 +2611,9 @@ impl BirAgentHost {
             if !filled.is_empty() {
                 form.validated = false;
             }
-            return Ok(generic::with_not_shown(
-                fill_result("2551Q", source, filled, kept),
-                not_shown,
+            return Ok(generic::with_refused(
+                generic::with_not_shown(fill_result("2551Q", source, filled, kept), not_shown),
+                refused,
             ));
         }
         if let Some(result) = self.fill_generic(&fields, source) {

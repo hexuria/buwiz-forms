@@ -14,7 +14,9 @@
 //! Supported: taxpayer and joint-filing spouse columns without exempt or
 //! special-rate income. Part X (consolidated schedules) and the attachment
 //! pages are only used with exempt/special-rate income, so they keep the
-//! page's defaults; such a return does not validate here.
+//! page's defaults; such a return does not validate here. Part VIII (Tax
+//! Relief Availment) is filed on every return: column A as the filer types
+//! it, with its totals, column B 0.00 (shut on the official page).
 //!
 //! The submission is the `saveEncryptedProfile` loop over the page's
 //! controls, including the two RDO selects `getRdo()` creates
@@ -27,6 +29,7 @@ use super::form_1701::{
     Form1701DeductionMethod, Form1701Draft, Form1701JointFilingStatus, Form1701NolcoRow,
     Form1701OverpaymentDisposition, Form1701Party, Form1701TaxRate,
 };
+use super::penalty_items::{PenaltyItems, PenaltyRounding};
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -169,8 +172,156 @@ impl Form1701Draft {
         value
     }
 
-    /// The official compute chain for both columns.
+    /// The official compute chain for both columns, with Items 27-29 on
+    /// the shared penalty model: the chain runs once for each column's tax
+    /// still due (Item 26), the penalty items file their override, else the
+    /// computed value, and the chain runs again so Items 30-32 add up what
+    /// is filed.
     pub(super) fn official_recompute(&mut self) {
+        self.official_recompute_chain();
+        for items in Self::penalty_declarations() {
+            // A column not on the return (the spouse's off a joint return)
+            // keeps no entry: its Items 27-29 hold 0.00.
+            if !(items.applies)(self) {
+                let state = (items.state_mut)(self);
+                state.clear_overrides();
+                state.computed_penalties = None;
+                continue;
+            }
+            // Until PR 7 the 1701 penalties were typed boxes the model never
+            // computed. A draft stored then, or an imported save file (no
+            // penalty state: version 0), files every amount it holds, a zero
+            // too, and is left exactly as stored. Once the filer types one of
+            // the column's amounts (Edit penalties writes its override), the
+            // others become overrides at the amounts they held and the column
+            // joins the model; "Use the computed amounts" then brings the
+            // computed values back.
+            if (items.state)(self).penalty_model_version
+                < super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                use crate::penalties::PenaltyComponent;
+                let typed = PenaltyComponent::ALL.into_iter().any(|component| {
+                    (items.state)(self)
+                        .penalty_overrides
+                        .get(component)
+                        .is_some()
+                });
+                if !typed {
+                    continue;
+                }
+                let filed = items.filed(self);
+                for (component, value) in PenaltyComponent::ALL.into_iter().zip(filed) {
+                    if (items.state)(self)
+                        .penalty_overrides
+                        .get(component)
+                        .is_none()
+                    {
+                        items.set_override(self, component, Some(value));
+                    }
+                }
+                (items.state_mut)(self).penalty_model_version =
+                    super::penalty_items::PENALTY_MODEL_VERSION;
+            }
+            items.apply(self);
+        }
+        self.official_recompute_chain();
+    }
+
+    /// Items 27-29 (Interest, Surcharge, Compromise) of each column on the
+    /// shared penalty model ([`super::penalty_items`]): the taxpayer/filer's
+    /// (column A), then the spouse's (column B), which apply only on a joint
+    /// return (`spouse_column_active`). The engine runs on Item 26, the
+    /// amount of tax payable before penalties (Item 31 adds Item 30 to it).
+    pub fn penalty_declarations() -> Vec<PenaltyItems<Self>> {
+        use crate::penalties::PenaltyComponent as C;
+        const fn item(component: C) -> u8 {
+            match component {
+                C::Surcharge => 28,
+                C::Interest => 27,
+                C::Compromise => 29,
+            }
+        }
+        let common = PenaltyItems::<Self> {
+            form_code: super::form_1701::FORM_CODE,
+            // The calendar's deadline, not a typed trigger date (PR 11's D8
+            // is for the excise returns only).
+            typed_due_date: None,
+            party: Some("Taxpayer/Filer"),
+            applies: |_| true,
+            schedule: crate::penalties::PenaltyProfile::StandardFiling,
+            fields: ["item_28_taxpayer", "item_27_taxpayer", "item_29_taxpayer"],
+            controls: [
+                "frm1701:txtPg1I28A",
+                "frm1701:txtPg1I27A",
+                "frm1701:txtPg1I29A",
+            ],
+            labels: ["28 Surcharge", "27 Interest", "29 Compromise"],
+            basic_tax_due_label: "Item 26A",
+            rounding: PenaltyRounding::Cents,
+            get: |d, component| {
+                d.get(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Taxpayer,
+                )
+            },
+            set: |d, component, value| {
+                d.put(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Taxpayer,
+                    value,
+                );
+            },
+            basic_tax_due: |d| d.get(Form1701AmountSection::PartIi, 26, Form1701Party::Taxpayer),
+            gross_sales: None,
+            state: |d| &d.penalty.state,
+            state_mut: |d| &mut d.penalty.state,
+            status: |d| d.lifecycle.status.clone(),
+            trigger_date_pending: |d| {
+                d.lifecycle.trigger_date_model && !d.lifecycle.trigger_date_entered
+            },
+            deadline_period: super::penalty_items::calendar_period::<Self>,
+            period_code: |d| QueueableForm::period_code(d),
+            is_amended: |d| d.is_amended,
+            recompute: |d| d.recompute(),
+        };
+        let spouse = PenaltyItems::<Self> {
+            party: Some("Spouse"),
+            applies: |d| d.spouse_column_active(),
+            fields: ["item_28_spouse", "item_27_spouse", "item_29_spouse"],
+            controls: [
+                "frm1701:txtPg1I28B",
+                "frm1701:txtPg1I27B",
+                "frm1701:txtPg1I29B",
+            ],
+            basic_tax_due_label: "Item 26B",
+            get: |d, component| {
+                d.get(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Spouse,
+                )
+            },
+            set: |d, component, value| {
+                d.put(
+                    Form1701AmountSection::PartIi,
+                    item(component),
+                    Form1701Party::Spouse,
+                    value,
+                );
+            },
+            basic_tax_due: |d| d.get(Form1701AmountSection::PartIi, 26, Form1701Party::Spouse),
+            state: |d| &d.spouse_penalty.state,
+            state_mut: |d| &mut d.spouse_penalty.state,
+            ..common
+        };
+        vec![common, spouse]
+    }
+
+    /// The official compute chain for both columns (see
+    /// [`Self::official_recompute`]).
+    fn official_recompute_chain(&mut self) {
         use Form1701AmountSection::*;
         if !self.is_short_period {
             self.period_end_month = 12;
@@ -428,9 +579,51 @@ impl Form1701Draft {
             let credits = peso(credits);
             self.put(PartVii, 10, party, credits);
 
-            // Part VIII applies only to exempt/special-rate income.
-            for item in 1..=10 {
-                self.put(PartViii, item, party, 0.0);
+            // Part VIII, Tax Relief Availment (PR 7, preview.1). The tracked
+            // runtime inventory
+            // (rules/forms/1701-v2018/fixtures/runtime-control-inventory-v796.json)
+            // records column A's items 1, 2, 4, 6, 8 and 9 enabled at load
+            // (`disabled: false`, source lines 3362-3440) and every column B
+            // control disabled at load (`disabled: true`, lines 3363-3447),
+            // with no tracked source that enables them: column A takes the
+            // filer's amounts, column B stays 0.00 on every return. Items 3,
+            // 5, 7 and 10 are computed (calculations.json
+            // 1701-part8-running-totals lists them as outputs of the items
+            // before them); the operators are the printed captions'
+            // (html-frozen/1701-2018 writer-cells and sheet: "Sum of Items 1
+            // and 2", "Item 3 Less Item 4", "Sum of Items 5 and 6", "Sum of
+            // Items 8 and 9"), rounded to whole pesos as the module's
+            // official sums are. Item 6 "(From Part VII Item 8)" stays typed:
+            // the inventory records no function that copies Part VII item 8
+            // into it. The inventory's source hash (debd0a57...) is not the
+            // local mirror's HTA, so the Part VIII function bodies cannot be
+            // checked here. Before PR 7 every item was written 0.00: drafts
+            // this app created hold zeros there and file as before; an
+            // imported return now files its imported Part VIII column A
+            // (form_1701_xml.rs keeps it), which was dropped before.
+            let viii = |this: &mut Self, item: u8| {
+                if party == Form1701Party::Taxpayer {
+                    this.typed(PartViii, item, party)
+                } else {
+                    this.put(PartViii, item, party, 0.0);
+                    0.0
+                }
+            };
+            let (i1, i2) = (viii(self, 1), viii(self, 2));
+            let i3 = peso(i1 + i2);
+            let i4 = viii(self, 4);
+            let i5 = peso(i3 - i4);
+            let i6 = viii(self, 6);
+            let i7 = peso(i5 + i6);
+            let (i8, i9) = (viii(self, 8), viii(self, 9));
+            let i10 = peso(i8 + i9);
+            for (item, value) in [(3, i3), (5, i5), (7, i7), (10, i10)] {
+                let value = if party == Form1701Party::Taxpayer {
+                    value
+                } else {
+                    0.0
+                };
+                self.put(PartViii, item, party, value);
             }
 
             // Part IX (reconciliation).
@@ -1658,6 +1851,26 @@ fn zero_nolco() -> Form1701NolcoRow {
 impl QueueableForm for Form1701Draft {
     fn print_field_map(&self) -> BTreeMap<String, String> {
         self.to_print_field_map()
+    }
+    fn penalty_items() -> Vec<PenaltyItems<Self>> {
+        Self::penalty_declarations()
+    }
+    /// A column still on the typed boxes (a draft stored before PR 7, or an
+    /// imported save file: penalty_model_version 0) computes nothing, so its
+    /// stored state is left exactly as it is; the others resolve their
+    /// deadline and class from the profile as on every wired form.
+    fn apply_penalty_profile(
+        &mut self,
+        profile: &crate::profile::TaxpayerProfile,
+        global_overrides: &[crate::calendar_rules::DeadlineOverride],
+    ) {
+        for items in Self::penalty_items() {
+            if (items.state)(self).penalty_model_version
+                >= super::penalty_items::PENALTY_MODEL_VERSION
+            {
+                items.apply_profile(self, profile, global_overrides);
+            }
+        }
     }
     const FORM_CODE: &'static str = "1701";
     const FORM_TYPE: &'static str = FORM_1701_FORM_TYPE;

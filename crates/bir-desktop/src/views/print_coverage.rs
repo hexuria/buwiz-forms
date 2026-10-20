@@ -99,7 +99,7 @@ fn filled_draft(kind: AgentFormKind, mut draft: Value) -> Value {
             _ => continue,
         };
         // Some boxes refuse a value in this state; the rest still fill.
-        let _ = agent::fill(kind, &mut draft, &entry.key, &Value::from(value));
+        let _ = agent::fill(kind, &mut draft, &entry.key, &Value::from(value), None);
     }
     agent::compute(kind, &mut draft).expect("compute");
     draft
@@ -470,7 +470,7 @@ fn digits(text: &str) -> String {
 }
 
 fn header_parts(document: &str, tin: &str, name: &str) -> (String, String) {
-    let printed = |cell: &str| bir_print::frozen_html::printed_text(document, cell);
+    let printed = |cell: &str| bir_print::frozen_html::printed_cell(document, cell).0;
     if tin == name {
         let line: Vec<char> = printed(tin).chars().collect();
         let split = line.len().min(14);
@@ -485,8 +485,9 @@ fn header_parts(document: &str, tin: &str, name: &str) -> (String, String) {
 
 /// The repeated-header rule: every later page's header prints the TIN and
 /// name page 1 prints (a header comb may hold fewer TIN digits, the branch
-/// being preprinted, and a shorter name, cut at the comb width or at the
-/// last name's comma).
+/// being preprinted, and a shorter name, cut at the last name's comma). A
+/// header past its comb prints whole as plain type over it (rules page
+/// question 4), so each cell is read as it prints (`printed_cell`).
 #[test]
 fn later_page_headers_repeat_the_page_one_name_and_tin() {
     let mut checked = BTreeSet::new();
@@ -497,7 +498,7 @@ fn later_page_headers_repeat_the_page_one_name_and_tin() {
         for (slug, fields) in print_maps(header.code) {
             let document = bir_print::frozen_html::filled_document(slug, &fields)
                 .unwrap_or_else(|error| panic!("{slug}: {error}"));
-            let printed = |cell: &str| bir_print::frozen_html::printed_text(&document, cell);
+            let printed = |cell: &str| bir_print::frozen_html::printed_cell(&document, cell).0;
             let name: String = header.page1_name.iter().map(|cell| printed(cell)).collect();
             let name = name.trim().to_string();
             let tin: String = header

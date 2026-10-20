@@ -45,6 +45,11 @@ pub enum Deadline {
     /// feeds the engine, the check then supplies this resolved deadline the
     /// way an override from the app would.
     None { assumed: NaiveDate },
+    /// Decision D8 (2026-10-18, the excise returns): the due date is the one
+    /// the form reads from what the filer typed (`typed_due_date`), here
+    /// `due` for the sample; a draft stored before the form measured from
+    /// it computes nothing until it joins.
+    Typed { due: NaiveDate },
 }
 
 const KEYS: [&str; 5] = [
@@ -219,6 +224,31 @@ pub fn check<F: QueueableForm>(sample: fn() -> F, deadline: Deadline) {
             (items.state_mut)(&mut late).penalty_due_date = Some(assumed);
         }
     }
+    if let Deadline::Typed { due } = deadline {
+        // Stored before D8 (the model version every other form is on):
+        // nothing is computed, not even from a deadline the app resolved.
+        let mut stored = late.clone();
+        for items in &declarations {
+            let state = (items.state_mut)(&mut stored);
+            state.penalty_model_version = bir_core::forms::penalty_items::PENALTY_MODEL_VERSION;
+            state.penalty_due_date = Some(day(2020, 1, 1));
+        }
+        compute(&mut stored);
+        for items in &applying {
+            assert!(items.typed_due_date.is_some(), "{code}: typed due date");
+            assert_eq!(items.due_date(&stored), None, "{code}: stored before D8");
+            assert_eq!((items.state)(&stored).computed_penalties, None);
+            assert_eq!(items.filed(&stored), [0.0; 3], "{code}: stored before D8");
+        }
+        // A new return, or one that joins, runs from the typed date alone.
+        for items in &declarations {
+            items.join_typed_due_date(&mut late);
+            (items.state_mut)(&mut late).penalty_due_date = Some(day(2020, 1, 1));
+        }
+        for items in &applying {
+            assert_eq!(items.due_date(&late), Some(due), "{code}: typed due date");
+        }
+    }
     compute(&mut late);
     let mut any_positive = false;
     for items in &applying {
@@ -227,7 +257,7 @@ pub fn check<F: QueueableForm>(sample: fn() -> F, deadline: Deadline) {
             .clone()
             .unwrap_or_else(|| panic!("{code}: a late sample computes its penalties"));
         let inputs = &computed.inputs;
-        if let Deadline::Calendar(due) = deadline {
+        if let Deadline::Calendar(due) | Deadline::Typed { due } = deadline {
             assert_eq!(inputs.due_date, due, "{code}: deadline");
         }
         assert_eq!(inputs.filing_date, filed());
@@ -361,10 +391,11 @@ pub fn check<F: QueueableForm>(sample: fn() -> F, deadline: Deadline) {
         "{code}: legacy compromise"
     );
     // The zero item is computed again; an event-based return has no
-    // deadline once the assumed one is gone, so it computes nothing.
+    // deadline once the assumed one is gone, so it computes nothing, and a
+    // D8 draft saved manual-only predates its typed due date.
     let interest = match deadline {
         Deadline::Calendar(_) => base_i,
-        Deadline::None { .. } => 0.0,
+        Deadline::None { .. } | Deadline::Typed { .. } => 0.0,
     };
     assert_eq!(
         items.filed(&legacy),
@@ -373,8 +404,11 @@ pub fn check<F: QueueableForm>(sample: fn() -> F, deadline: Deadline) {
     );
 
     // ---- Queued: the clock moves only at revalidation, and a change there
-    // fails closed; an overridden component does not move.
-    if let Deadline::Calendar(_) = deadline {
+    // fails closed; an overridden component does not move. A typed due date
+    // moves the same way once there is a tax still due to charge.
+    if matches!(deadline, Deadline::Calendar(_))
+        || (matches!(deadline, Deadline::Typed { .. }) && any_positive)
+    {
         let mut queued = base.clone();
         let queue = with_clock(filed(), || queued.queue(QueueAuthSource::Gui));
         if let Err(errors) = queue {
@@ -471,12 +505,16 @@ pub fn check_import<F: QueueableForm>(sample: fn() -> F, import: Import<F>) {
 }
 
 /// Every form that declares penalty items has this check, and every form
-/// listed here declares them.
+/// listed here declares them. 1701Q (PR 5) and 1701 (PR 7) run their own
+/// version of the check (crates/bir-core/tests/sample_payloads/form_1701q.rs
+/// `form_1701q_penalty_items_follow_the_shared_model` and form_1701.rs
+/// `form_1701_penalty_items_follow_the_shared_model`): their items are kept
+/// by item number, not by a field named after them.
 pub const WIRED: &[&str] = &[
     "0605", "0619E", "0619F", "1600PT", "1600VT", "1600WP", "1601EQ", "1601FQ", "1602Q", "1603Q",
-    "1606", "1700", "1701A", "1701MS", "1702MX", "1702Q", "1702RT", "1706", "1707", "1707A",
-    "1800", "1801", "2000", "2000OT", "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S",
-    "2200T", "2550M", "2552", "2553",
+    "1606", "1700", "1701", "1701A", "1701MS", "1701Q", "1702MX", "1702Q", "1702RT", "1706",
+    "1707", "1707A", "1800", "1801", "2000", "2000OT", "2200A", "2200AN", "2200C", "2200M",
+    "2200P", "2200S", "2200T", "2550M", "2552", "2553",
 ];
 
 #[test]
@@ -540,4 +578,37 @@ fn look_alike_fields_are_never_declared() {
             assert_eq!(schedule, expected, "{}", kind.form_code());
         }
     }
+}
+
+/// PR 11 golden, extended by maintainer decision (1800/1801 penalties run from
+/// the due date): a typed due date is declared by
+/// the seven excise returns (D8) and by 1800 and 1801 (P4-4), and by no
+/// other form, so every other form's penalties keep their calendar due date
+/// (the `if let` in `PenaltyItems::due_date` is not taken); each form's
+/// `*_penalty_items_follow_the_shared_model` still pins its computed
+/// amounts.
+#[test]
+fn only_the_excise_and_donor_estate_returns_measure_penalties_from_a_typed_date() {
+    let mut typed = Vec::new();
+    for kind in QueueableKind::ALL {
+        bir_core::with_queueable_kind!(*kind, F => {
+            for items in F::penalty_items() {
+                if items.typed_due_date.is_some() {
+                    typed.push(F::FORM_CODE);
+                }
+            }
+        });
+    }
+    typed.sort_unstable();
+    assert_eq!(
+        typed,
+        [
+            "1800", "1801", "2200A", "2200AN", "2200C", "2200M", "2200P", "2200S", "2200T"
+        ]
+    );
+    assert!(
+        bir_core::forms::form_1601c::Form1601CDraft::penalty_items()
+            .typed_due_date
+            .is_none()
+    );
 }

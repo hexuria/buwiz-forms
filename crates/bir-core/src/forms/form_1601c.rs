@@ -290,6 +290,17 @@ pub struct Form1601CDraft {
     pub submission_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_retry_at: Option<String>,
+    /// Profile boxes the filer edited on this return (their on-screen
+    /// keys). They keep the edit when the tax profile changes; every other
+    /// profile box of a Draft follows the profile. Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_edits: Vec<String>,
+    /// The tax-profile values the draft's profile boxes were built from
+    /// (draft path -> value), recorded when the page opens or saves it. A
+    /// profile box follows a later profile change only while it still
+    /// holds this value. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 impl Form1601CDraft {
@@ -442,6 +453,8 @@ impl Form1601CDraft {
             submission_attempts: 0,
             submission_error: None,
             next_retry_at: None,
+            profile_edits: Vec::new(),
+            profile_baseline: std::collections::BTreeMap::new(),
         }
     }
 
@@ -559,12 +572,23 @@ impl Form1601CDraft {
         self.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
+    /// Set "Amended Return?" to Yes the way the editor does, and recompute.
+    pub fn mark_amended(&mut self) {
+        self.is_amended = true;
+        self.compute();
+    }
+
     pub fn revert_to_draft(&mut self) {
         assert!(
             !matches!(self.status, FilingStatus::Paid),
             "Cannot revert a Paid form to Draft"
         );
         self.status = FilingStatus::Draft;
+        // Back to Draft (an amended copy, a cancelled queue, a refused
+        // submission) its boxes were not built from the profile as it is
+        // now: no baseline, so a later profile change moves nothing until
+        // the filer chooses it (the page offers "Use profile values").
+        self.profile_baseline.clear();
         self.submitted_at = None;
         self.confirmed_at = None;
         self.receipt_id = None;
@@ -724,12 +748,14 @@ impl Form1601CDraft {
             state: |d| &d.penalty,
             state_mut: |d| &mut d.penalty,
             status: |d| d.status.clone(),
+            trigger_date_pending: |_| false,
             deadline_period: |d| {
                 Some(DeadlinePeriod::Monthly {
                     taxable_year: i32::from(d.taxable_year),
                     month: d.month,
                 })
             },
+            typed_due_date: None,
             period_code: |d| d.period_code(),
             is_amended: |d| d.is_amended,
             recompute: |d| d.compute(),

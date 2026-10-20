@@ -271,7 +271,7 @@ impl Form2200CDraft {
             (12, 31)
         };
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             month,
             day,
@@ -758,6 +758,24 @@ impl Form2200CDraft {
             ],
             state: penalty,
             basic_tax_due: "Item 20", |d| d.tax_still_due,
+            // Decision D8 (2026-10-18): a monthly return, due within ten days
+            // after the close of Item 1's month, so the penalties run from
+            // the 10th of the month after it, moved to the next working day
+            // on the app's deadline calendar (`penalty_items::next_business_day`,
+            // shared with 1800 and 1801 since maintainer decision (1800/1801
+            // penalties run from the due date)).
+            typed_due_date: Some(|d: &Self| {
+                if !(1..=12).contains(&d.month) {
+                    return None;
+                }
+                let (year, month) = if d.month == 12 {
+                    (i32::from(d.year).checked_add(1)?, 1)
+                } else {
+                    (i32::from(d.year), u32::from(d.month) + 1)
+                };
+                let tenth = chrono::NaiveDate::from_ymd_opt(year, month, 10)?;
+                Some(super::penalty_items::next_business_day(tenth))
+            }),
             // The typed amount fields take digits only.
             rounding: super::penalty_items::PenaltyRounding::WholePesos,
         )
@@ -1138,5 +1156,39 @@ mod tests {
         assert!(amended.mark_amended());
         assert_eq!(amended.amended_return_answer(), Some(true));
         assert!(submit(&amended).is_ok());
+    }
+
+    /// Review of the excise typed date, and the maintainer decision (1800/1801
+    /// penalties run from the due date) sharing the calendar: the 10th moves
+    /// past a holiday on the calendar it is given, and the app's deadline
+    /// calendar (weekends and the seeded official holidays) moves every 10th
+    /// of 2000 to 2100 exactly as the weekends-only calendar 2200C used
+    /// before (no seeded holiday is a 10th or the weekday after a weekend
+    /// 10th), so 2200C's due dates are unchanged.
+    #[test]
+    fn the_due_date_moves_past_a_holiday_on_the_10th() {
+        use crate::calendar_rules::{BusinessDayCalendar, NonWorkingDay};
+        let tenth = chrono::NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+        assert_eq!(tenth.format("%A").to_string(), "Tuesday");
+        let holiday =
+            BusinessDayCalendar::with_non_working_days(vec![NonWorkingDay::regular_holiday(
+                tenth,
+                "Sample holiday",
+            )]);
+        assert_eq!(
+            holiday.adjust_to_next_business_day(tenth).0,
+            chrono::NaiveDate::from_ymd_opt(2026, 3, 11).unwrap()
+        );
+        let weekends = BusinessDayCalendar::default();
+        for year in 2000..=2100 {
+            for month in 1..=12 {
+                let tenth = chrono::NaiveDate::from_ymd_opt(year, month, 10).unwrap();
+                assert_eq!(
+                    crate::forms::penalty_items::next_business_day(tenth),
+                    weekends.adjust_to_next_business_day(tenth).0,
+                    "{tenth}"
+                );
+            }
+        }
     }
 }

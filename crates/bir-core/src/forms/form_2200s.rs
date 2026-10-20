@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use super::excise_places::{ExcisePlace, is_official_place};
 use super::form_2000::{digits_only, split_tin, tin_error};
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::profile::TaxpayerProfile;
@@ -208,10 +209,6 @@ fn typed(value: f64) -> f64 {
 /// A computed amount as `roundDownComputation` leaves it.
 fn computed(value: f64) -> f64 {
     parse_amount(&round_down_computation_text(value))
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 // ── Model ──
@@ -438,7 +435,7 @@ impl Form2200SDraft {
             last_day_of_month(year, month)
         };
         let mut draft = Self {
-            penalty: crate::forms::penalty_items::PenaltyState::for_profile(profile),
+            penalty: crate::forms::penalty_items::PenaltyState::for_profile_typed_due_date(profile),
             id: None,
             month,
             day,
@@ -516,6 +513,9 @@ impl Form2200SDraft {
             self.surcharge = 0.0;
             self.interest = 0.0;
             self.compromise = 0.0;
+            // The three items are not on the return, so an amount entered
+            // for them while it was a prepayment goes with them.
+            self.penalty.clear_overrides();
         }
         if !self.other_scheme {
             self.other_scheme_text.clear();
@@ -1182,6 +1182,15 @@ impl Form2200SDraft {
             ],
             state: penalty,
             basic_tax_due: "Item 22", |d| d.tax_still_due,
+            // Decision D8 (2026-10-18): due on removal, so the penalties run
+            // from Item 1, the removal date the filer types.
+            typed_due_date: Some(|d: &Self| {
+                chrono::NaiveDate::from_ymd_opt(
+                    i32::from(d.year),
+                    u32::from(d.month),
+                    u32::from(d.day),
+                )
+            }),
             // disablePenalties: Items 23A-23C are open on a prepayment only.
             applies: |d: &Self| d.manner == Form2200SManner::Prepayment,
         )
@@ -1750,5 +1759,28 @@ mod tests {
         assert_eq!(draft.to_bir_field_map()["frm2200S:txtSheets"], "0");
         draft.number_of_attached_sheets = 3;
         assert_eq!(draft.to_bir_field_map()["frm2200S:txtSheets"], "3");
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.surcharge = 8_816_764.47;
+        assert!(
+            <Form2200SDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "amounts"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.surcharge = 1.005;
+        assert!(
+            <Form2200SDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "amounts"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

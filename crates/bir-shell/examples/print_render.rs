@@ -196,8 +196,12 @@ fn main() {
         if only.as_ref().is_some_and(|o| o != &slug) {
             continue;
         }
-        let cells: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(&wc).unwrap()).unwrap();
+        // The joins the print fills: writer-cells.json with bir-print's
+        // Rust-side joins (SHEET_JOINS) merged in.
+        let cells: serde_json::Value = bir_print::frozen_html::merged_writer_cells_json(&slug)
+            .unwrap_or_else(|| {
+                serde_json::from_str(&std::fs::read_to_string(&wc).unwrap()).unwrap()
+            });
         let s = |j: &serde_json::Value, k: &str| j[k].as_str().unwrap_or("").to_string();
         let sheet = std::fs::read_to_string(dir.join("index.html")).unwrap_or_default();
         let slots = slot_counts(&sheet);
@@ -218,6 +222,16 @@ fn main() {
         }
         for j in cells["xbox_joins"].as_array().into_iter().flatten() {
             f.insert(s(j, "writer_key"), "true".into());
+        }
+        // TIN and branch combs are stamped with their official key (name=)
+        // and take no join; the app's print map fills them by that name, so
+        // the worst case fills them too.
+        for (name, n) in &slots {
+            let class = classify(name, "");
+            if *n > 0 && name.contains(':') && matches!(class, "tin" | "branch") {
+                f.entry(name.clone())
+                    .or_insert_with(|| value_for(class, *n));
+            }
         }
         match bir_print::frozen_html::filled_document(&slug, &f) {
             Ok(html) => {

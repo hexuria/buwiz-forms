@@ -507,6 +507,13 @@ impl Form1701Draft {
             parse_optional_money(fields, "frm1701:txtPg1I32AggregateAmtPyble", &mut errors);
         draft.payment_details = parse_payment_details(fields, &mut errors);
         draft.spouse = parse_spouse(fields, &mut errors);
+        // Part IV Item 2 as the page, the print and the upload read it
+        // (`spouse_rdo_code`); the save file's page default `000` means
+        // none was entered (PR 7 review).
+        let spouse_rdo = draft.spouse.rdo_code.trim();
+        if spouse_rdo != "000" {
+            draft.spouse_rdo_code = spouse_rdo.to_string();
+        }
         draft.employers =
             std::array::from_fn(|index| parse_employer(fields, index + 1, &mut errors));
         parse_employer_totals(fields, &mut draft, &mut errors);

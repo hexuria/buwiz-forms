@@ -23,6 +23,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -209,10 +210,6 @@ pub(crate) fn js_to_fixed2(value: f64) -> f64 {
 /// tax-due assignments.
 pub(crate) fn fixed_cents(value: f64) -> f64 {
     cents(js_to_fixed2(value))
-}
-
-pub(crate) fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 /// `round()` turns an amount with more than 12 integer digits into `0.00`.
@@ -1866,5 +1863,28 @@ mod tests {
         draft.surcharge = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.surcharge = 8_816_764.47;
+        assert!(
+            <Form2000Draft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "surcharge"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.surcharge = 1.005;
+        assert!(
+            <Form2000Draft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "surcharge"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

@@ -3,6 +3,7 @@
 pub mod agent;
 pub mod atc;
 pub mod calendar_status;
+pub mod event_trigger;
 pub mod excise_places;
 pub mod form_0605;
 pub mod form_0605_official;
@@ -56,6 +57,7 @@ pub mod form_2551q;
 pub mod form_2552;
 pub mod form_2553;
 pub mod forms_set;
+pub mod kept_text;
 pub mod official_inputs;
 pub mod payment_cells;
 pub mod penalty_items;

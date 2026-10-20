@@ -500,10 +500,11 @@ impl DashboardView {
             let global_overrides = db.get_deadline_overrides();
             self.penalty_estimates =
                 Self::penalty_estimates(&db, profile, &self.actionable_forms, &global_overrides);
-            let mut overrides = global_overrides;
-            overrides.extend(bir_core::integration::profile_deadline_overrides_for_year(
-                profile, year,
-            ));
+            let overrides = bir_core::forms::event_trigger::periodic_overrides(
+                &global_overrides,
+                profile,
+                Some(year),
+            );
             let deadlines_for_year =
                 DeadlineResolver::deadlines_for_forms(&recurring_codes, year as i32, &overrides);
             self.deadlines = deadlines_for_year

@@ -16,7 +16,24 @@ use gpui_shell::{HostError, HostModule, HostObject, HostResult, HostValue};
 use crate::auth_limiter;
 
 thread_local! {
-    static DATABASE: RefCell<Option<Database>> = const { RefCell::new(None) };
+    static DATABASE: RefCell<Option<std::sync::Arc<std::sync::Mutex<Database>>>> =
+        const { RefCell::new(None) };
+}
+
+/// The shared handle behind [`with_database`], exposed for host functions
+/// whose work must *release* the lock mid-call — the inbox poller re-locks
+/// internally during an IMAP fetch, so `check_inbox_now` clones this Arc,
+/// drops its guard, then polls.
+pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    DATABASE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            let (database, _path, _recovered) =
+                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+            *slot = Some(std::sync::Arc::new(std::sync::Mutex::new(database)));
+        }
+        Ok(slot.as_ref().expect("database opened").clone())
+    })
 }
 
 /// One connection for the process — the same owner-lock discipline as painted
@@ -24,15 +41,11 @@ thread_local! {
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
-    DATABASE.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        if slot.is_none() {
-            let (database, _path, _recovered) =
-                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
-            *slot = Some(database);
-        }
-        f(slot.as_ref().expect("database opened"))
-    })
+    let handle = database_handle()?;
+    let guard = handle
+        .lock()
+        .map_err(|_| HostError::new("database lock poisoned"))?;
+    f(&guard)
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -41,7 +54,9 @@ pub(crate) fn with_database<R>(
 #[cfg(test)]
 pub(crate) fn use_ephemeral_database() {
     DATABASE.with(|slot| {
-        *slot.borrow_mut() = Some(Database::open_ephemeral().expect("ephemeral database opens"));
+        *slot.borrow_mut() = Some(std::sync::Arc::new(std::sync::Mutex::new(
+            Database::open_ephemeral().expect("ephemeral database opens"),
+        )));
     });
 }
 
@@ -158,8 +173,30 @@ fn forms_catalog() -> HostResult {
     Ok(HostValue::Array(rows))
 }
 
+/// The only settings the page may use through `get_setting`, `set_setting`
+/// and `delete_setting`: its theme toggle's (`THEME_PREF_KEY`,
+/// `app/shell/theme.js`). Every other setting is host state, such as the
+/// access mode, the admin's TIN root, PIN hash and authenticator secret, and
+/// the recovery key's hash; host code reads and writes those through
+/// `Database` directly.
+const PAGE_SETTING_KEYS: [&str; 1] = ["theme_preference"];
+
+/// The key a page setting verb names, when it is in [`PAGE_SETTING_KEYS`].
+/// Any other key is refused before the database is opened, with an error
+/// that names the key and nothing stored under it.
+fn page_setting_key(arguments: &gpui_shell::HostArguments) -> Result<String, HostError> {
+    let key = arguments.string(0)?;
+    if PAGE_SETTING_KEYS.contains(&key) {
+        Ok(key.to_owned())
+    } else {
+        Err(HostError::new(format!(
+            "setting `{key}` is not available to the page"
+        )))
+    }
+}
+
 fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let key = arguments.string(0)?.to_owned();
+    let key = page_setting_key(arguments)?;
     with_database(|db| {
         db.get_setting(&key)
             .map(HostValue::from)
@@ -168,7 +205,7 @@ fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let key = arguments.string(0)?.to_owned();
+    let key = page_setting_key(arguments)?;
     let value = arguments.string(1)?.to_owned();
     with_database(|db| {
         db.set_setting(&key, &value)
@@ -188,19 +225,121 @@ fn get_profile_by_tin(
         .ok_or_else(|| HostError::new(format!("no taxpayer profile with TIN {tin}")))
 }
 
-fn profile_detail(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let tin = arguments.string(0)?;
-    with_database(|db| serialize(&get_profile_by_tin(db, tin)?))
+/// A profile's five credentials are host state: the page can neither read
+/// them nor set or clear them through the profile verbs. Each keeps its own
+/// host writer instead: the inbox verbs (`set_inbox_app_password`, the
+/// Google grant's persist and disconnect) for the app password and the
+/// tokens; the authenticator verbs (`set_taxpayer_totp`, `set_profile_totp`,
+/// `set_admin_totp`) for a TOTP secret; and the PIN verbs
+/// (`set_taxpayer_pin`, `set_profile_pin`, `set_admin_pin`, `setup_helpdesk`,
+/// `change_to_helpdesk`) for a PIN. The authenticator and PIN verbs store
+/// theirs on the taxpayer (the help desk admin's in settings), never on a
+/// profile. A TOTP secret or PIN hash still on a profile row moves onto its
+/// taxpayer at the next launch when the taxpayer has none (bir-core's
+/// `migrate_v22_taxpayer_credentials`), so one the page could set would
+/// become the taxpayer's.
+const PROFILE_CREDENTIAL_KEYS: [&str; 5] = [
+    "totp_secret",
+    "imap_app_password",
+    "oauth_access_token",
+    "oauth_refresh_token",
+    "profile_pin_hash",
+];
+
+/// A profile's five credentials, in `PROFILE_CREDENTIAL_KEYS` order.
+type ProfileCredentials = [Option<String>; 5];
+
+/// Move `profile`'s credentials out. They are moved, never copied, so the
+/// profile that ends up holding them has the only copy, and its `Drop`
+/// wipes them (all but the TOTP secret, which bir-core's `Drop` skips).
+fn take_credentials(profile: &mut bir_core::profile::TaxpayerProfile) -> ProfileCredentials {
+    [
+        profile.totp_secret.take(),
+        profile.imap_app_password.take(),
+        profile.oauth_access_token.take(),
+        profile.oauth_refresh_token.take(),
+        profile.profile_pin_hash.take(),
+    ]
 }
 
+fn put_credentials(
+    profile: &mut bir_core::profile::TaxpayerProfile,
+    [totp, password, access, refresh, pin_hash]: ProfileCredentials,
+) {
+    profile.totp_secret = totp;
+    profile.imap_app_password = password;
+    profile.oauth_access_token = access;
+    profile.oauth_refresh_token = refresh;
+    profile.profile_pin_hash = pin_hash;
+}
+
+/// A profile as the page receives it: the record without the credential
+/// keys (removed, not sent as null). The values are out of the profile while
+/// the record is built, so none can leave even under a key this list does
+/// not name, and back in before it drops.
+fn redacted_profile(mut profile: bir_core::profile::TaxpayerProfile) -> HostResult {
+    let credentials = take_credentials(&mut profile);
+    let record = serde_json::to_value(&profile);
+    put_credentials(&mut profile, credentials);
+    let mut record = record.map_err(db_error)?;
+    if let Some(fields) = record.as_object_mut() {
+        for key in PROFILE_CREDENTIAL_KEYS {
+            fields.remove(key);
+        }
+    }
+    Ok(json(record))
+}
+
+/// `save_profile` never stores a client's credentials, as
+/// [`keep_stored_trigger_flag`] never stores a client's trigger fields: all
+/// five are taken from the stored row the save writes, or cleared when there
+/// is none. So a page round trip of a redacted profile keeps a stored
+/// password or PIN hash, and no TOTP secret or PIN hash from the page
+/// reaches a row the next launch would move onto the taxpayer. The row is
+/// found the way [`Database::save_profile`] finds it: the one with the
+/// client's `id` (a TIN change re-keys that row), else the one with the
+/// client's TIN.
+fn keep_stored_credentials(
+    db: &Database,
+    profile: &mut bir_core::profile::TaxpayerProfile,
+) -> Result<(), HostError> {
+    let by_tin = db
+        .get_profile_by_tin(&profile.tin.full())
+        .map_err(db_error)?;
+    let mut stored = match profile.id {
+        // bir-core looks rows up by TIN only, so the list is read just when
+        // the id is not the row with this TIN (a TIN change).
+        Some(id) if !by_tin.as_ref().is_some_and(|row| row.id == Some(id)) => db
+            .list_profiles()
+            .map_err(db_error)?
+            .into_iter()
+            .find(|row| row.id == Some(id))
+            .or(by_tin),
+        _ => by_tin,
+    };
+    let credentials = stored.as_mut().map(take_credentials).unwrap_or_default();
+    put_credentials(profile, credentials);
+    Ok(())
+}
+
+/// The stored profile for `tin`, without its credentials.
+fn profile_detail(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    with_database(|db| redacted_profile(get_profile_by_tin(db, tin)?))
+}
+
+/// Save the page's profile. Its credentials are settled from the stored row
+/// ([`keep_stored_credentials`]); the answer is the saved profile without
+/// them.
 fn save_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let profile: bir_core::profile::TaxpayerProfile =
+    let mut profile: bir_core::profile::TaxpayerProfile =
         serde_json::from_value(to_json(arguments.value(0)?))
             .map_err(|error| HostError::new(format!("profile payload: {error}")))?;
     with_database(|db| {
+        keep_stored_credentials(db, &mut profile)?;
         db.save_profile(profile)
             .map_err(|error| HostError::new(error.to_string()))
-            .and_then(|saved| serialize(&saved))
+            .and_then(redacted_profile)
     })
 }
 
@@ -215,7 +354,7 @@ fn set_profile_archived(arguments: &gpui_shell::HostArguments) -> HostResult {
         profile.is_archived = archived;
         db.save_profile(profile)
             .map_err(|error| HostError::new(error.to_string()))
-            .and_then(|saved| serialize(&saved))
+            .and_then(redacted_profile)
     })
 }
 
@@ -360,7 +499,7 @@ fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let key = arguments.string(0)?.to_owned();
+    let key = page_setting_key(arguments)?;
     with_database(|db| {
         db.delete_setting(&key)
             .map(|_| HostValue::Null)
@@ -992,13 +1131,61 @@ fn overlay_fields<T: serde::Serialize + serde::de::DeserializeOwned>(
     serde_json::from_value(merged).map_err(|error| HostError::new(error.to_string()))
 }
 
+/// A generic save never stores a client's `trigger_date_model`,
+/// `trigger_date_entered` or `trigger_parts_typed` (D8c, P5-7). The row it
+/// checks is the one the save writes
+/// ([`bir_core::db::Database::form_draft_for_save`]: a new open-ended
+/// entry has none); that row's three fields are kept when it is the same
+/// draft (`created_at`) and holds exactly these trigger fields, otherwise
+/// all three are removed — this path creates no marker itself.
+fn keep_stored_trigger_flag(
+    db: &Database,
+    tin: &str,
+    form_code: &str,
+    year: u16,
+    quarter: Option<u8>,
+    data: &mut serde_json::Value,
+) -> Result<(), HostError> {
+    let Some(object) = data.as_object_mut() else {
+        return Ok(());
+    };
+    let fields = bir_core::forms::event_trigger::trigger_paths(form_code);
+    let stored: Option<serde_json::Value> = if fields.is_empty() {
+        None
+    } else {
+        db.form_draft_for_save(tin, form_code, year, quarter)
+            .map_err(|error| HostError::new(error.to_string()))?
+    };
+    let same = stored.filter(|stored| {
+        stored.get("created_at").is_some()
+            && stored.get("created_at") == object.get("created_at")
+            && fields
+                .iter()
+                .all(|field| stored.get(*field) == object.get(*field))
+    });
+    // The marker is host state like the typed record beside it (decision
+    // P5-7): the stored row's is copied, a missing stored marker removes
+    // the client's — this save is not a creator and never mints one.
+    for field in [
+        "trigger_date_model",
+        "trigger_date_entered",
+        "trigger_parts_typed",
+    ] {
+        match same.as_ref().and_then(|stored| stored.get(field)) {
+            Some(value) => object.insert(field.into(), value.clone()),
+            None => object.remove(field),
+        };
+    }
+    Ok(())
+}
+
 fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
     let form_code = arguments.string(1)?.to_owned();
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
     let status = filing_status(arguments.string(4)?)?;
-    let data = to_json(arguments.value(5)?);
+    let mut data = to_json(arguments.value(5)?);
     with_database(|db| {
         // The engine requires dedicated typed persistence for these two forms;
         // route them inside the host so the script keeps one uniform call.
@@ -1031,10 +1218,12 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     .map(|id| HostValue::Number(id as f64))
                     .map_err(|error| HostError::new(error.to_string()))
             }
-            _ => db
-                .save_form_draft(&tin, &form_code, year, quarter, &status, &data)
-                .map(|id| HostValue::Number(id as f64))
-                .map_err(|error| HostError::new(error.to_string())),
+            _ => {
+                keep_stored_trigger_flag(db, &tin, &form_code, year, quarter, &mut data)?;
+                db.save_form_draft(&tin, &form_code, year, quarter, &status, &data)
+                    .map(|id| HostValue::Number(id as f64))
+                    .map_err(|error| HostError::new(error.to_string()))
+            }
         }
     })
 }
@@ -1074,7 +1263,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let quarter = optional_quarter(arguments, 3)?;
     with_database(|db| {
         let queued: Result<i64, HostError> = (|| match form_code.as_str() {
-            "2551Q" => {
+            "2551Q" => crate::screen_form_module::out_of_line(|| {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
@@ -1093,8 +1282,8 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 })?;
                 db.save_queued_2551q_draft_and_election(&draft)
                     .map_err(|error| HostError::new(error.to_string()))
-            }
-            "1601C" => {
+            }),
+            "1601C" => crate::screen_form_module::out_of_line(|| {
                 let month = quarter
                     .ok_or_else(|| HostError::new("1601C drafts are monthly: pass the month"))?;
                 let mut draft = db
@@ -1112,12 +1301,12 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 })?;
                 db.save_queued_1601c_draft(&draft)
                     .map_err(|error| HostError::new(error.to_string()))
-            }
+            }),
             _ => {
                 use bir_core::forms::queueable::QueueableKind;
                 let kind = QueueableKind::from_form_code(&form_code)
                     .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
-                bir_core::with_queueable_kind!(kind, F => {
+                bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
                     let mut draft: F = db
                         .get_form_draft(&tin, &form_code, year, quarter)
                         .map_err(|error| HostError::new(error.to_string()))?
@@ -1137,7 +1326,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                         })?;
                     db.save_queued_queueable(&draft)
                         .map_err(|error| HostError::new(error.to_string()))
-                })
+                }))
             }
         })();
         queued.map(|id| HostValue::Number(id as f64))
@@ -1153,7 +1342,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     let quarter = optional_quarter(arguments, 3)?;
     with_database(|db| {
         let result: Result<(), HostError> = (|| match form_code.as_str() {
-            "2551Q" => {
+            "2551Q" => crate::screen_form_module::out_of_line(|| {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
@@ -1164,8 +1353,8 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
                 db.cancel_queued_2551q_submission(&draft)
                     .map_err(|error| HostError::new(error.to_string()))?;
                 Ok(())
-            }
-            "1601C" => {
+            }),
+            "1601C" => crate::screen_form_module::out_of_line(|| {
                 let month = quarter
                     .ok_or_else(|| HostError::new("1601C drafts are monthly: pass the month"))?;
                 let draft = db
@@ -1175,12 +1364,12 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
                 db.cancel_queued_1601c_submission(&draft)
                     .map_err(|error| HostError::new(error.to_string()))?;
                 Ok(())
-            }
+            }),
             _ => {
                 use bir_core::forms::queueable::QueueableKind;
                 let kind = QueueableKind::from_form_code(&form_code)
                     .ok_or_else(|| HostError::new(format!("Form {form_code} is not queueable")))?;
-                bir_core::with_queueable_kind!(kind, F => {
+                bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
                     let draft: F = db
                         .get_form_draft(&tin, &form_code, year, quarter)
                         .map_err(|error| HostError::new(error.to_string()))?
@@ -1190,7 +1379,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
                     db.cancel_queued_queueable(&draft)
                         .map_err(|error| HostError::new(error.to_string()))?;
                     Ok(())
-                })
+                }))
             }
         })();
         result.map(|_| HostValue::Null)
@@ -1424,30 +1613,30 @@ pub(crate) fn print_fields(
     ),
     HostError,
 > {
-    Ok(match form_code {
-        "2551Q" => {
+    match form_code {
+        "2551Q" => crate::screen_form_module::out_of_line(|| {
             let q = quarter.ok_or_else(|| HostError::new("2551Q drafts are quarterly"))?;
             let draft = db
                 .get_2551q_draft(tin, year, q)
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email);
-            (draft.to_print_field_map(), page)
-        }
-        "1601C" => {
+            Ok((draft.to_print_field_map(), page))
+        }),
+        "1601C" => crate::screen_form_module::out_of_line(|| {
             let month = quarter.ok_or_else(|| HostError::new("1601C drafts are monthly"))?;
             let draft = db
                 .get_1601c_draft(tin, year, month)
                 .map_err(|error| HostError::new(error.to_string()))?
                 .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
             let page = receipt_page(db, draft.receipt_id, &draft.email_address);
-            (draft.to_print_field_map(), page)
-        }
+            Ok((draft.to_print_field_map(), page))
+        }),
         _ => {
             use bir_core::forms::queueable::QueueableKind;
             let kind = QueueableKind::from_form_code(form_code)
                 .ok_or_else(|| HostError::new(format!("Form {form_code} is not printable")))?;
-            bir_core::with_queueable_kind!(kind, F => {
+            bir_core::with_queueable_kind!(kind, F => crate::screen_form_module::out_of_line(|| {
                 let draft: F = db
                     .get_form_draft(tin, form_code, year, quarter)
                     .map_err(|error| HostError::new(error.to_string()))?
@@ -1459,10 +1648,10 @@ pub(crate) fn print_fields(
                     draft.lifecycle().receipt_id,
                     draft.submission_email(),
                 );
-                (draft.print_field_map(), page)
-            })
+                Ok((draft.print_field_map(), page))
+            }))
         }
-    })
+    }
 }
 
 /// Fill the form's frozen print sheet, write it to a temp HTML file, and open
@@ -1900,6 +2089,196 @@ mod tests {
 
     fn args(values: Vec<HostValue>) -> HostArguments {
         HostArguments::new(values)
+    }
+
+    /// Round 3, item 4: the generic save never stores a client's
+    /// `trigger_date_entered`; a stored flag for the same date is kept.
+    #[test]
+    fn the_generic_save_keeps_only_the_stored_trigger_flag() {
+        setup();
+        let save = |data: serde_json::Value| {
+            save_form_draft(&args(vec![
+                TIN.into(),
+                "1800".into(),
+                2026_i64.into(),
+                1_i64.into(),
+                "Draft".into(),
+                json(data),
+            ]))
+            .unwrap()
+        };
+        let stored = |field: &str| {
+            with_database(|db| {
+                Ok(db
+                    .get_form_draft::<serde_json::Value>(TIN, "1800", 2026, Some(1))
+                    .unwrap()
+                    .unwrap()[field]
+                    .clone())
+            })
+            .unwrap()
+        };
+        let gift = serde_json::json!({
+            "donation_month": 9, "donation_day": 15, "donation_year": 2026,
+            "created_at": "2026-10-01T00:00:00+00:00",
+            "trigger_date_entered": true,
+        });
+        save(gift.clone());
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+        // A flag stored for this date (as the page's own save leaves it) is
+        // kept on a generic save of the same date, and dropped when the
+        // date changes.
+        with_database(|db| {
+            let mut flagged = gift.clone();
+            flagged["trigger_date_entered"] = serde_json::json!(true);
+            db.save_form_draft(
+                TIN,
+                "1800",
+                2026,
+                Some(1),
+                &bir_core::forms::FilingStatus::Draft,
+                &flagged,
+            )
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        save(gift.clone());
+        assert_eq!(stored("trigger_date_entered"), true);
+        // Another draft (created_at) with the same date does not inherit it.
+        let mut other = gift.clone();
+        other["created_at"] = serde_json::json!("2026-10-02T00:00:00+00:00");
+        save(other);
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+        save(gift.clone());
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+        let mut moved = gift;
+        moved["donation_day"] = serde_json::json!(16);
+        save(moved);
+        assert_eq!(stored("trigger_date_entered"), serde_json::Value::Null);
+        // The marker is host state too (P5-7): a forged `true` on an
+        // unmarked stored row does not persist, and a payload that omits
+        // the key keeps a stored row's marker. The row is `gift` again
+        // (the moved date above was the last save).
+        let mut gift = serde_json::json!({
+            "donation_month": 9, "donation_day": 15, "donation_year": 2026,
+            "created_at": "2026-10-01T00:00:00+00:00",
+            "trigger_date_entered": true,
+        });
+        save(gift.clone());
+        let mut forged = gift.clone();
+        forged["trigger_date_model"] = serde_json::json!(true);
+        save(forged);
+        assert_eq!(stored("trigger_date_model"), serde_json::Value::Null);
+        with_database(|db| {
+            let mut marked = gift.clone();
+            marked["trigger_date_model"] = serde_json::json!(true);
+            marked["trigger_date_entered"] = serde_json::json!(true);
+            db.save_form_draft(
+                TIN,
+                "1800",
+                2026,
+                Some(1),
+                &bir_core::forms::FilingStatus::Draft,
+                &marked,
+            )
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        // A payload that omits the lifecycle keys keeps the stored row's.
+        gift.as_object_mut().unwrap().remove("trigger_date_entered");
+        save(gift);
+        assert_eq!(stored("trigger_date_model"), true);
+        assert_eq!(stored("trigger_date_entered"), true);
+    }
+
+    /// Round 5, item 6: on an open-ended form the generic save with no
+    /// entry adds a new one, so it checks that (absent) row, not entry 1:
+    /// a 1606 sale copied from a flagged entry 1 does not inherit its flag.
+    #[test]
+    fn the_generic_save_checks_the_row_it_writes() {
+        setup();
+        let sale = serde_json::json!({
+            "transaction_month": 9, "transaction_day": 18, "transaction_year": 2026,
+            "created_at": "2026-10-01T00:00:00+00:00",
+            "trigger_date_entered": true,
+            "trigger_parts_typed": ["transaction_day", "transaction_month", "transaction_year"],
+        });
+        with_database(|db| {
+            db.save_form_draft(
+                TIN,
+                "1606",
+                2026,
+                Some(1),
+                &bir_core::forms::FilingStatus::Draft,
+                &sale,
+            )
+            .unwrap();
+            Ok(())
+        })
+        .unwrap();
+        save_form_draft(&args(vec![
+            TIN.into(),
+            "1606".into(),
+            2026_i64.into(),
+            HostValue::Null,
+            "Draft".into(),
+            json(sale.clone()),
+        ]))
+        .unwrap();
+        let rows: Vec<String> = with_database(|db| {
+            let mut stmt = db
+                .conn_for_tests()
+                .prepare("SELECT data_json FROM form_drafts WHERE form_code = '1606' ORDER BY id")
+                .unwrap();
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect();
+            Ok(rows)
+        })
+        .unwrap();
+        assert_eq!(rows.len(), 2, "a new entry");
+        assert!(
+            rows[0].contains("trigger_date_entered"),
+            "entry 1 as stored"
+        );
+        assert!(!rows[1].contains("trigger_date_entered"), "{}", rows[1]);
+        assert!(!rows[1].contains("trigger_parts_typed"), "{}", rows[1]);
+    }
+
+    /// The 2551Q and 1601C arms store no trigger flag. This holds because
+    /// `Form2551QDraft` and `Form1601CDraft` have no such field: the arms
+    /// overlay the client's data on a fresh typed draft, and serde drops
+    /// the unknown key. It fails if either draft type gains the field
+    /// without its arm settling it.
+    #[test]
+    fn the_typed_arms_of_the_generic_save_store_no_trigger_flag() {
+        setup();
+        for (code, slot) in [("2551Q", 1_i64), ("1601C", 1)] {
+            save_form_draft(&args(vec![
+                TIN.into(),
+                code.into(),
+                2026_i64.into(),
+                slot.into(),
+                "Draft".into(),
+                json(serde_json::json!({ "trigger_date_entered": true })),
+            ]))
+            .unwrap_or_else(|error| panic!("{code}: {error}"));
+            let stored: String = with_database(|db| {
+                Ok(db
+                    .conn_for_tests()
+                    .query_row(
+                        "SELECT data_json FROM form_drafts WHERE form_code = ?1",
+                        [code],
+                        |row| row.get(0),
+                    )
+                    .unwrap())
+            })
+            .unwrap();
+            assert!(!stored.contains("trigger_date_entered"), "{code}: {stored}");
+        }
     }
 
     fn has_totp() -> bool {
@@ -2353,6 +2732,487 @@ mod tests {
 
     fn profile_detail_archived(tin: &str) -> bool {
         with_database(|db| Ok(get_profile_by_tin(db, tin)?.is_archived)).unwrap()
+    }
+
+    // ---------- the profile's credentials stay host-side ----------
+
+    /// Distinctive values the host stores before each credential test, in
+    /// `PROFILE_CREDENTIAL_KEYS` order, so a leak or an overwrite cannot
+    /// pass unnoticed.
+    const STORED_CREDENTIALS: [&str; 5] = [
+        "stored-totp-K7Q2",
+        "stored-pass-W9X4",
+        "stored-access-M3R8",
+        "stored-refresh-T5V1",
+        "stored-pin-hash-H6N3",
+    ];
+
+    /// What a page might forge, in the same order.
+    const FORGED_CREDENTIALS: [&str; 5] = [
+        "forged-totp",
+        "forged-pass",
+        "forged-access",
+        "forged-refresh",
+        "forged-pin-hash",
+    ];
+
+    fn store_credentials(tin: &str) {
+        with_database(|db| {
+            let mut profile = get_profile_by_tin(db, tin)?;
+            let [totp, password, access, refresh, pin_hash] =
+                STORED_CREDENTIALS.map(|value| Some(value.to_string()));
+            profile.totp_secret = totp;
+            profile.imap_app_password = password;
+            profile.oauth_access_token = access;
+            profile.oauth_refresh_token = refresh;
+            profile.profile_pin_hash = pin_hash;
+            db.save_profile(profile).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// `tin`'s five stored credentials, in `PROFILE_CREDENTIAL_KEYS` order.
+    fn stored_credentials(tin: &str) -> [Option<String>; 5] {
+        with_database(|db| {
+            let mut profile = get_profile_by_tin(db, tin)?;
+            Ok([
+                profile.totp_secret.take(),
+                profile.imap_app_password.take(),
+                profile.oauth_access_token.take(),
+                profile.oauth_refresh_token.take(),
+                profile.profile_pin_hash.take(),
+            ])
+        })
+        .unwrap()
+    }
+
+    /// Every credential stored on `tin` is still the one `store_credentials`
+    /// wrote. A failure names the key, never a value.
+    fn assert_credentials_kept(tin: &str, after: &str) {
+        let stored = stored_credentials(tin);
+        for ((key, value), expected) in PROFILE_CREDENTIAL_KEYS
+            .into_iter()
+            .zip(stored)
+            .zip(STORED_CREDENTIALS)
+        {
+            assert!(
+                value.as_deref() == Some(expected),
+                "{after} changed the stored {key}"
+            );
+        }
+    }
+
+    /// `verb`'s profile answer carries neither a credential key nor any of
+    /// `values` (in `PROFILE_CREDENTIAL_KEYS` order). A failure names the
+    /// key, never a value.
+    fn assert_no_credentials(answer: &HostValue, verb: &str, values: [&str; 5]) {
+        let record = to_json(answer);
+        let fields = record
+            .as_object()
+            .unwrap_or_else(|| panic!("{verb} answers a profile record"));
+        let raw = record.to_string();
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(values) {
+            assert!(!fields.contains_key(key), "{verb} sent the {key} key");
+            assert!(!raw.contains(value), "{verb} sent the {key} value");
+        }
+    }
+
+    /// The page reads a profile without its credentials: no key, no value,
+    /// and the rest of the record is there.
+    #[test]
+    fn profile_detail_sends_no_credential() {
+        setup();
+        store_credentials(TIN);
+        let detail = profile_detail(&args(vec![s(TIN)])).unwrap();
+        assert_no_credentials(&detail, "profile_detail", STORED_CREDENTIALS);
+        assert_eq!(to_json(&detail)["full_name"], "Example Trading Corp");
+    }
+
+    /// The page's round trip of `profile_detail` (a payload without the
+    /// credential keys) saves its own edit and keeps all five stored values.
+    #[test]
+    fn save_profile_without_the_credential_keys_keeps_the_stored_ones() {
+        setup();
+        store_credentials(TIN);
+        let mut page = to_json(&profile_detail(&args(vec![s(TIN)])).unwrap());
+        for key in PROFILE_CREDENTIAL_KEYS {
+            assert!(page.get(key).is_none(), "the payload carries no {key}");
+        }
+        page["phone"] = serde_json::json!("0281112222");
+        let saved = save_profile(&args(vec![json(page)])).unwrap();
+        assert_no_credentials(&saved, "save_profile", STORED_CREDENTIALS);
+        assert_credentials_kept(TIN, "a save without the credential keys");
+        let phone = with_database(|db| Ok(get_profile_by_tin(db, TIN)?.phone.clone())).unwrap();
+        assert_eq!(phone, "0281112222", "the rest of the payload is saved");
+    }
+
+    /// Forged values leave the stored ones as they were, and so do forged
+    /// nulls: the page can neither set nor clear a credential.
+    #[test]
+    fn save_profile_ignores_forged_credentials() {
+        setup();
+        store_credentials(TIN);
+        let page = to_json(&profile_detail(&args(vec![s(TIN)])).unwrap());
+        let (mut forged, mut nulled) = (page.clone(), page);
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(FORGED_CREDENTIALS) {
+            forged[key] = serde_json::json!(value);
+            nulled[key] = serde_json::Value::Null;
+        }
+        let saved = save_profile(&args(vec![json(forged)])).unwrap();
+        assert_no_credentials(&saved, "save_profile", FORGED_CREDENTIALS);
+        assert_no_credentials(&saved, "save_profile", STORED_CREDENTIALS);
+        assert_credentials_kept(TIN, "a save with forged credentials");
+        save_profile(&args(vec![json(nulled)])).unwrap();
+        assert_credentials_kept(TIN, "a save with null credentials");
+    }
+
+    /// A save for a TIN with no stored row stores no credential, whatever
+    /// the payload carries.
+    #[test]
+    fn save_profile_for_a_new_tin_stores_no_credential() {
+        setup();
+        let mut page = serde_json::json!({
+            "id": null,
+            "full_name": "Sample Holdings Inc",
+            "tin": {"segment1": "987", "segment2": "654", "segment3": "320", "branch": "00000"},
+            "rdo_code": "043",
+            "line_of_business": "Holding company",
+            "registered_address": "2 Sample Road, Makati",
+            "zip_code": "1200",
+            "phone": "0280000001",
+            "email": "books@example.com",
+            "default_form_type": "1702Q",
+            "taxpayer_type": "Corporation",
+        });
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(FORGED_CREDENTIALS) {
+            page[key] = serde_json::json!(value);
+        }
+        let saved = save_profile(&args(vec![json(page)])).unwrap();
+        assert_no_credentials(&saved, "save_profile", FORGED_CREDENTIALS);
+        let stored = stored_credentials("98765432000000");
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(stored) {
+            assert!(value.is_none(), "a new profile stored a {key}");
+        }
+    }
+
+    /// A round trip that moves the profile to a new TIN writes the same row
+    /// (re-keyed by its `id`), so that row's credentials are the ones kept;
+    /// the new TIN has no row of its own to take them from.
+    #[test]
+    fn save_profile_that_moves_the_tin_keeps_the_rows_credentials() {
+        setup();
+        add_branch();
+        store_credentials(BRANCH);
+        let mut page = to_json(&profile_detail(&args(vec![s(BRANCH)])).unwrap());
+        page["tin"]["branch"] = serde_json::json!("00002");
+        let saved = save_profile(&args(vec![json(page)])).unwrap();
+        assert_no_credentials(&saved, "save_profile", STORED_CREDENTIALS);
+        assert_credentials_kept("12345678800002", "a save that moves the TIN");
+        let moved =
+            with_database(|db| Ok(db.get_profile_by_tin(BRANCH).map_err(db_error)?.is_none()))
+                .unwrap();
+        assert!(moved, "the row moved off its old TIN");
+    }
+
+    /// The third verb that answers a profile: archiving keeps the
+    /// credentials stored and leaves them out of the answer.
+    #[test]
+    fn set_profile_archived_answers_without_credentials() {
+        setup();
+        store_credentials(TIN);
+        let archived = set_profile_archived(&args(vec![s(TIN), HostValue::Bool(true)])).unwrap();
+        assert_no_credentials(&archived, "set_profile_archived", STORED_CREDENTIALS);
+        assert_eq!(to_json(&archived)["is_archived"], true);
+        assert_credentials_kept(TIN, "archiving");
+    }
+
+    /// The authenticator's own writers still work: `set_taxpayer_totp` keeps
+    /// the secret on the taxpayer, a page round trip of every branch profile
+    /// neither shows it nor removes it, and the legacy per-branch
+    /// `set_profile_totp` still clears and sets it.
+    #[test]
+    fn the_authenticator_writers_survive_a_profile_round_trip() {
+        setup();
+        add_branch();
+        set_taxpayer_totp(&args(vec![s(ROOT), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        for tin in [TIN, BRANCH] {
+            let page = profile_detail(&args(vec![s(tin)])).unwrap();
+            assert!(
+                !to_json(&page).to_string().contains(SECRET),
+                "profile_detail sent the authenticator secret"
+            );
+            save_profile(&args(vec![page])).unwrap();
+        }
+        assert!(has_totp(), "the round trip kept the authenticator");
+        assert!(truthy(verify_taxpayer_totp(&args(vec![
+            s(ROOT),
+            s(&current_code(SECRET))
+        ]))));
+        set_profile_totp(&args(vec![s(BRANCH), HostValue::Null])).unwrap();
+        assert!(!has_totp());
+        set_profile_totp(&args(vec![s(BRANCH), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        assert!(has_totp());
+    }
+
+    /// A page cannot plant a PIN. For a taxpayer without one, a PIN hash
+    /// sent through `save_profile` is neither answered nor stored: the
+    /// profile row's `profile_pin_hash` stays JSON null. The next launch
+    /// moves only a text value onto the taxpayer (bir-core's
+    /// `test_v22_moves_credentials_onto_the_taxpayer_and_clears_branch_copies`),
+    /// so the taxpayer stays without a PIN.
+    #[test]
+    fn a_pin_hash_from_the_page_is_not_stored() {
+        setup();
+        let planted = bir_core::crypto::hash_pin("1234");
+        let mut page = to_json(&profile_detail(&args(vec![s(TIN)])).unwrap());
+        page["profile_pin_hash"] = serde_json::json!(planted);
+        let saved = to_json(&save_profile(&args(vec![json(page)])).unwrap());
+        assert!(
+            saved.get("profile_pin_hash").is_none(),
+            "save_profile sent the profile_pin_hash key"
+        );
+        assert!(
+            !saved.to_string().contains(&planted),
+            "save_profile sent the PIN hash"
+        );
+        let stored: Option<String> = with_database(|db| {
+            Ok(db
+                .conn_for_tests()
+                .query_row(
+                    "SELECT json_type(data_json, '$.profile_pin_hash') FROM profiles
+                     WHERE tin = ?1",
+                    [TIN],
+                    |row| row.get(0),
+                )
+                .unwrap())
+        })
+        .unwrap();
+        assert_eq!(stored.as_deref(), Some("null"), "the row's PIN hash type");
+        assert_eq!(
+            to_json(&taxpayer_auth(&args(vec![s(ROOT)])).unwrap()),
+            serde_json::json!({"has_pin": false, "has_totp": false})
+        );
+        assert!(!truthy(verify_taxpayer_pin(&args(vec![
+            s(ROOT),
+            s("1234")
+        ]))));
+    }
+
+    /// A PIN hash a profile row already holds (as an older build or the
+    /// legacy profile editor leaves it until the next launch moves it onto
+    /// the taxpayer) is in neither verb's answer, and a page round trip
+    /// leaves it on the row.
+    #[test]
+    fn a_stored_pin_hash_survives_a_page_round_trip_unseen() {
+        setup();
+        let stored = bir_core::crypto::hash_pin("0817");
+        with_database(|db| {
+            let mut profile = get_profile_by_tin(db, TIN)?;
+            profile.profile_pin_hash = Some(stored.clone());
+            db.save_profile(profile).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        let detail = profile_detail(&args(vec![s(TIN)])).unwrap();
+        let saved = save_profile(&args(vec![detail.clone()])).unwrap();
+        for (verb, answer) in [("profile_detail", detail), ("save_profile", saved)] {
+            let record = to_json(&answer);
+            assert!(
+                record.get("profile_pin_hash").is_none(),
+                "{verb} sent the profile_pin_hash key"
+            );
+            assert!(
+                !record.to_string().contains(&stored),
+                "{verb} sent the PIN hash"
+            );
+        }
+        let kept = with_database(|db| {
+            let mut profile = get_profile_by_tin(db, TIN)?;
+            Ok(profile.profile_pin_hash.take())
+        })
+        .unwrap();
+        assert!(
+            kept.as_deref() == Some(stored.as_str()),
+            "the round trip changed the stored PIN hash"
+        );
+    }
+
+    /// The PIN's own writers still work around a page round trip. Each one
+    /// stores the PIN on the taxpayer (the help desk admin's in settings); a
+    /// round trip of every branch profile shows no hash of it, and the PIN
+    /// still verifies afterwards while the one it replaced does not. The
+    /// writers: `set_taxpayer_pin`, the legacy per-branch `set_profile_pin`,
+    /// `set_admin_pin` for the solo owner and for the help desk, and
+    /// `change_to_helpdesk`'s new admin PIN.
+    #[test]
+    fn the_pin_writers_survive_a_profile_round_trip() {
+        setup();
+        add_branch();
+        let round_trip = |pin: &str| {
+            let hash = bir_core::crypto::hash_pin(pin);
+            for tin in [TIN, BRANCH] {
+                let page = profile_detail(&args(vec![s(tin)])).unwrap();
+                assert!(
+                    !to_json(&page).to_string().contains(&hash),
+                    "profile_detail sent the PIN hash"
+                );
+                save_profile(&args(vec![page])).unwrap();
+            }
+        };
+        let taxpayer_pin = |pin: &str| truthy(verify_taxpayer_pin(&args(vec![s(ROOT), s(pin)])));
+        let admin_pin = |pin: &str| truthy(verify_admin_pin(&args(vec![s(pin)])));
+
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        round_trip("0817");
+        assert!(taxpayer_pin("0817"), "set_taxpayer_pin's PIN");
+
+        set_profile_pin(&args(vec![s(BRANCH), s("2468")])).unwrap();
+        round_trip("2468");
+        assert!(taxpayer_pin("2468"), "set_profile_pin's PIN");
+        assert!(!taxpayer_pin("0817"), "the PIN set_profile_pin replaced");
+
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        set_admin_pin(&args(vec![s("4321")])).unwrap();
+        round_trip("4321");
+        assert!(admin_pin("4321"), "set_admin_pin's solo PIN");
+        assert!(taxpayer_pin("4321"), "the solo admin PIN is the owner's");
+        assert!(!taxpayer_pin("2468"), "the PIN set_admin_pin replaced");
+
+        change_to_helpdesk(&args(vec![s("4321"), null(), s("5555")])).unwrap();
+        round_trip("5555");
+        assert!(admin_pin("5555"), "change_to_helpdesk's admin PIN");
+        assert!(
+            !admin_pin("4321"),
+            "the admin PIN change_to_helpdesk replaced"
+        );
+        assert!(taxpayer_pin("4321"), "the former owner keeps their PIN");
+
+        set_admin_pin(&args(vec![s("6666")])).unwrap();
+        round_trip("6666");
+        assert!(admin_pin("6666"), "set_admin_pin's help desk PIN");
+        assert!(!admin_pin("5555"), "the admin PIN set_admin_pin replaced");
+    }
+
+    // ---------- the page reaches only its own settings ----------
+
+    /// The host's own read of `key`.
+    fn stored_setting(key: &str) -> Option<String> {
+        with_database(|db| setting(db, key)).unwrap()
+    }
+
+    /// `verb`'s answer for `key` is the page refusal, whose exact wording
+    /// names the key and nothing stored under it. A failure prints neither
+    /// the answer nor the refusal, since either could carry a stored value.
+    fn assert_refused(answer: HostResult, verb: &str, key: &str) {
+        match answer {
+            Ok(_) => panic!("{verb} answered the page for `{key}`"),
+            Err(refusal) => assert!(
+                refusal.message() == format!("setting `{key}` is not available to the page"),
+                "{verb} refused `{key}` in other words"
+            ),
+        }
+    }
+
+    /// (a) The page's one setting round-trips through the three verbs, and
+    /// each step reaches the database.
+    #[test]
+    fn the_theme_preference_round_trips_through_the_page_verbs() {
+        setup();
+        let key = || s("theme_preference");
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+        assert_eq!(
+            set_setting(&args(vec![key(), s("Dark")])).unwrap(),
+            HostValue::Null
+        );
+        assert_eq!(stored_setting("theme_preference").as_deref(), Some("Dark"));
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("Dark"));
+        assert_eq!(delete_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+        assert_eq!(stored_setting("theme_preference"), None);
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+    }
+
+    /// (b) The help desk admin's authenticator secret stays host-side: the
+    /// page's read is refused, and the refusal carries no value.
+    #[test]
+    fn the_page_cannot_read_the_admin_authenticator_secret() {
+        setup();
+        set(ADMIN_TOTP_SECRET, SECRET);
+        let answer = get_setting(&args(vec![s(ADMIN_TOTP_SECRET)]));
+        assert!(
+            !format!("{answer:?}").contains(SECRET),
+            "get_setting sent the admin authenticator secret"
+        );
+        assert_refused(answer, "get_setting", ADMIN_TOTP_SECRET);
+        assert!(
+            stored_setting(ADMIN_TOTP_SECRET).as_deref() == Some(SECRET),
+            "the refused read changed the stored secret"
+        );
+    }
+
+    /// (c) The page cannot rewrite the access mode.
+    #[test]
+    fn the_page_cannot_rewrite_the_access_mode() {
+        setup();
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        let answer = set_setting(&args(vec![s(ACCESS_MODE), s("helpdesk")]));
+        assert_refused(answer, "set_setting", ACCESS_MODE);
+        assert_eq!(stored_setting(ACCESS_MODE).as_deref(), Some("solo"));
+        assert_eq!(state()["mode"], "solo");
+        assert_eq!(state()["admin_root"], ROOT);
+    }
+
+    /// (d) The page cannot delete the admin's recovery key: the stored hash
+    /// is the same afterwards, and the key it belongs to still works.
+    #[test]
+    fn the_page_cannot_delete_the_recovery_key() {
+        setup();
+        let key = key_of(setup_helpdesk(&args(vec![s("0817")])));
+        let before = stored_setting(RECOVERY_KEY_HASH);
+        assert!(before.is_some(), "setup stores a recovery key hash");
+        let answer = delete_setting(&args(vec![s(RECOVERY_KEY_HASH)]));
+        assert_refused(answer, "delete_setting", RECOVERY_KEY_HASH);
+        assert!(
+            stored_setting(RECOVERY_KEY_HASH) == before,
+            "the refused delete changed the stored recovery key hash"
+        );
+        assert!(truthy(use_recovery_key(&args(vec![s(&key)]))));
+    }
+
+    /// Each of the three verbs refuses every host setting, whatever is
+    /// stored under it, and leaves the stored value as it was; so too a key
+    /// that only looks like the page's.
+    #[test]
+    fn every_other_setting_is_refused_by_all_three_verbs() {
+        setup();
+        const STORED: &str = "stored-setting-P8D2";
+        for key in [
+            ACCESS_MODE,
+            ADMIN_TIN_ROOT,
+            ADMIN_PIN_HASH,
+            ADMIN_TOTP_SECRET,
+            RECOVERY_KEY_HASH,
+            "Theme_Preference",
+            " theme_preference",
+        ] {
+            set(key, STORED);
+            let read = get_setting(&args(vec![s(key)]));
+            assert!(
+                !format!("{read:?}").contains(STORED),
+                "get_setting sent the value of `{key}`"
+            );
+            assert_refused(read, "get_setting", key);
+            assert_refused(
+                set_setting(&args(vec![s(key), s("page-value")])),
+                "set_setting",
+                key,
+            );
+            assert_refused(delete_setting(&args(vec![s(key)])), "delete_setting", key);
+            assert!(
+                stored_setting(key).as_deref() == Some(STORED),
+                "a refused verb changed `{key}`"
+            );
+        }
     }
 
     #[test]

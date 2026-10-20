@@ -85,7 +85,7 @@ function factState(app, field, value) {
 export class TaxpayerActions {
   constructor(app) {
     this.app = app;
-    this.open = { taxpayer: true, branch: true, address: true };
+    this.open = { taxpayer: true, branch: true, address: true, inbox: true };
     this.editSec = null;
     this.inputs = {};
     this.inherit = {};
@@ -95,6 +95,10 @@ export class TaxpayerActions {
     /** Per-field RDO, ZIP and email errors of the section being edited. @type {Record<string, string>} */
     this.factErrors = {};
     this.panelEdit = null;
+    // Confirmation inbox (P2-5): staged credentials edit + verify/check status.
+    this.inbox = null;
+    this.inboxMsg = null;
+    this.inboxBusy = false;
     this.forms = null; // staged Set while editing forms
     this.formsQuery = InputState.new({ placeholder: "Find a form, like 1601C or VAT" });
     this.formsQuery.on("change", (_e, cx) => cx.notify());
@@ -160,6 +164,9 @@ export class TaxpayerActions {
     this.panelEdit = null;
     this.forms = null;
     this.addYear = false;
+    this.inbox = null;
+    this.inboxMsg = null;
+    this.inboxBusy = false;
   }
 
   /** Year switched: staged form edits and the add-year band are dropped. */
@@ -363,6 +370,155 @@ export class TaxpayerActions {
       e.error = message(err);
       cx.notify();
     }
+  }
+
+  // ------------------------------------------------------------ confirmation inbox (P2-5)
+
+  /** The mailbox this branch's BIR receipts are tracked through. */
+  inboxState() {
+    return this.app.store.inboxState(this.app.branch().tin);
+  }
+
+  startInboxEdit(cx) {
+    const s = this.inboxState();
+    const password = InputState.new({
+      placeholder: s.has_app_password ? "Leave empty to keep the stored password" : "16-letter app password",
+    });
+    password.set_masked(true);
+    this.inbox = {
+      method: s.auth_method === "GoogleOAuth" ? "GoogleOAuth" : "AppPassword",
+      email: InputState.new({ value: s.imap_login || "" }),
+      host: InputState.new({ value: s.imap_host || "imap.gmail.com" }),
+      password,
+      error: null,
+    };
+    cx.notify();
+  }
+
+  cancelInboxEdit(cx) {
+    this.inbox = null;
+    cx.notify();
+  }
+
+  /** Stage the method pick without saving; it applies on the next write. */
+  pickInboxMethod(method, cx) {
+    if (!this.inbox) this.startInboxEdit(cx);
+    this.inbox.method = method;
+    cx.notify();
+  }
+
+  saveInbox(cx) {
+    const app = this.app;
+    const ib = this.inbox;
+    // OAuth "saving" is the Connect button's grant; only App Password has a
+    // credentials form to persist.
+    if (!ib || ib.method !== "AppPassword") return;
+    const email = ib.email.value().trim();
+    if (!EMAIL_RE.test(email)) {
+      ib.error = "Type an email like name@example.com.";
+      return cx.notify();
+    }
+    try {
+      app.store.write("set_inbox_app_password", app.branch().tin, {
+        imap_email: email,
+        imap_host: ib.host.value().trim() || null,
+        app_password: ib.password.value().trim() || null,
+      });
+      this.inbox = null;
+      app.toast("Inbox credentials saved. Verify the connection to start tracking.", cx);
+    } catch (e) {
+      ib.error = message(e);
+      cx.notify();
+    }
+  }
+
+  inboxToggleTracking(on, cx) {
+    const app = this.app;
+    try {
+      app.store.write("set_inbox_tracking", app.branch().tin, on);
+      app.toast(on ? "Automated receipt tracking on." : "Automated receipt tracking off.", cx);
+    } catch (e) {
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  inboxDisconnect(cx) {
+    const app = this.app;
+    try {
+      app.store.write("disconnect_inbox_oauth", app.branch().tin);
+      app.toast("Google account disconnected for every profile sharing this inbox.", cx);
+    } catch (e) {
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  /** Browser OAuth leg runs on a host thread; the click's cx ends with the click. */
+  inboxConnect(cx) {
+    const app = this.app;
+    const tin = app.branch().tin;
+    if (this.inboxBusy) return;
+    this.inboxBusy = true;
+    this.inboxMsg = { ok: true, text: "Google sign-in opened in your browser…" };
+    cx.notify();
+    cx.spawn(async (acx) => {
+      try {
+        await app.store.call("connect_inbox_oauth", tin);
+        app.store.bump();
+        this.inboxMsg = null;
+        app.toast("Google account connected. Email tracking is on.", acx, "key-round");
+      } catch (e) {
+        this.inboxMsg = { ok: false, text: message(e) };
+        app.toast(message(e), acx, "triangle-alert");
+      }
+      this.inboxBusy = false;
+      acx.notify();
+    });
+  }
+
+  verifyInbox(cx) {
+    const app = this.app;
+    const tin = app.branch().tin;
+    if (this.inboxBusy) return;
+    this.inboxBusy = true;
+    this.inboxMsg = { ok: true, text: "Testing connection…" };
+    cx.notify();
+    cx.spawn(async (acx) => {
+      try {
+        const r = await app.store.call("test_inbox_connection", tin);
+        app.store.bump();
+        this.inboxMsg = { ok: r.ok, text: r.message };
+        app.toast(r.message, acx, r.ok ? "circle-check" : "triangle-alert");
+      } catch (e) {
+        this.inboxMsg = { ok: false, text: message(e) };
+        app.toast(message(e), acx, "triangle-alert");
+      }
+      this.inboxBusy = false;
+      acx.notify();
+    });
+  }
+
+  checkInboxNow(cx) {
+    const app = this.app;
+    const tin = app.branch().tin;
+    if (this.inboxBusy) return;
+    this.inboxBusy = true;
+    this.inboxMsg = { ok: true, text: "Checking the inbox for BIR confirmations…" };
+    cx.notify();
+    cx.spawn(async (acx) => {
+      try {
+        const r = await app.store.call("check_inbox_now", tin);
+        app.store.bump();
+        this.inboxMsg = r.ok
+          ? { ok: true, text: r.still_pending ? "Checked. A submitted return is still waiting for its confirmation." : "Checked. Everything submitted is confirmed." }
+          : { ok: false, text: r.error || "The check failed." };
+        app.toast(this.inboxMsg.text, acx, r.ok ? "circle-check" : "triangle-alert");
+      } catch (e) {
+        this.inboxMsg = { ok: false, text: message(e) };
+        app.toast(message(e), acx, "triangle-alert");
+      }
+      this.inboxBusy = false;
+      acx.notify();
+    });
   }
 
   // ------------------------------------------------------------ tax years
@@ -828,6 +984,14 @@ function profileTab(cx, app, width) {
       body,
     });
 
+  const ib = app.store.inboxState(b.tin);
+  const inboxMeta = ib
+    ? ib.tracking_enabled
+      ? `Tracking on · ${ib.inbox_email}`
+      : ib.oauth_connected || ib.has_app_password
+        ? `Connected · ${ib.inbox_email || ib.oauth_inbox_email || ""}`
+        : "Not connected"
+    : "Not connected";
   const group = DisclosureGroup(cx, "tp-profile", [
     section("taxpayer", "Taxpayer", "Shared by every branch", taxpayerBody, true),
     section("branch", "Branch", b.is_head_office ? "Head office" : `Branch ${b.code}`, branchBody, true),
@@ -838,8 +1002,170 @@ function profileTab(cx, app, width) {
       addressBody,
       true,
     ),
+    section("inbox", "Confirmation inbox", inboxMeta, inboxBody(cx, app, inner), false),
   ]);
   return ui.canRemove() ? div().flex().flex_col().child(group).child(removeCard(cx, app, t)) : group;
+}
+
+/**
+ * BIR receipt tracking for this branch's mailbox (P2-5): the auth method,
+ * credentials, OAuth connect/disconnect, verify, the tracking switch and a
+ * user-triggered "check now" — all through bir-core's existing fetch→confirm
+ * path. Secrets never render: the password field is masked and the host
+ * answers only `has_app_password`.
+ */
+function inboxBody(cx, app, inner) {
+  const ui = app.taxpayerUi;
+  const s = app.store.inboxState(app.branch().tin);
+  const editing = Boolean(ui.inbox);
+  const method = editing ? ui.inbox.method : s.auth_method;
+
+  const cells = [
+    {
+      full: true,
+      el: Field(cx, "Authentication method", {
+        input: Segmented(
+          cx,
+          "tp-inbox-method",
+          [
+            { value: "GoogleOAuth", label: "Google account (OAuth2)" },
+            { value: "AppPassword", label: "App password" },
+          ],
+          method,
+          (v, cx) => ui.pickInboxMethod(v, cx),
+          { label: "Inbox authentication method" },
+        ),
+      }),
+    },
+  ];
+  if (method === "AppPassword") {
+    cells.push({
+      el: Field(cx, "Inbox email", {
+        value: s.imap_login || s.inbox_email || "Not set",
+        input: editing ? TextField(cx, ui.inbox.email, { id: "tp-inbox-email", label: "Inbox email" }) : null,
+      }),
+    });
+    cells.push({
+      el: Field(cx, "IMAP host", {
+        value: s.imap_host,
+        input: editing ? TextField(cx, ui.inbox.host, { id: "tp-inbox-host", label: "IMAP host" }) : null,
+      }),
+    });
+    cells.push({
+      full: true,
+      el: Field(cx, "App password", {
+        value: s.has_app_password ? "Stored" : "Not set",
+        input: editing ? TextField(cx, ui.inbox.password, { id: "tp-inbox-password", label: "App password", error: Boolean(ui.inbox.error) }) : null,
+        error: editing ? ui.inbox.error : null,
+      }),
+    });
+  } else {
+    cells.push({
+      full: true,
+      el: Field(cx, "Google account", {
+        value: s.oauth_connected ? `Connected as ${s.oauth_inbox_email || s.inbox_email}` : "Not connected",
+      }),
+    });
+  }
+  cells.push({
+    el: Field(cx, "BIR receipt tracking", {
+      input: Switch(cx, "tp-inbox-tracking", s.tracking_enabled, (v, cx) => ui.inboxToggleTracking(v, cx), "Automated BIR receipt tracking"),
+    }),
+  });
+  if (s.last_check_at) {
+    cells.push({
+      el: Field(cx, "Last check", {
+        value: `${shortDate(s.last_check_at)}${s.last_check_status ? ` — ${s.last_check_status}` : ""}`,
+      }),
+    });
+  }
+  const body = div().flex().flex_col().child(FieldGrid(cx, inner, cells));
+
+  if (method === "GoogleOAuth") {
+    body.child(
+      Text(
+        cx,
+        "meta",
+        "Profiles that share this inbox share one Google OAuth credential set. Re-authorize or Disconnect updates every profile using this email.",
+        "fg3",
+      )
+        .mt(SPACE[2])
+        .whitespace_normal(),
+    );
+  }
+  if (method === "AppPassword" && editing) {
+    body.child(
+      Text(
+        cx,
+        "meta",
+        "An app password needs 2-Step Verification on the mail account first (Google / Outlook / Yahoo security settings).",
+        "fg3",
+      )
+        .mt(SPACE[2])
+        .whitespace_normal(),
+    );
+  }
+
+  const actions = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[3]);
+  if (method === "GoogleOAuth") {
+    actions.child(
+      AppButton(cx, "tp-inbox-connect", s.oauth_connected ? "Re-authorize" : "Connect Google account", {
+        variant: "primary",
+        size: "sm",
+        icon: "key-round",
+        onClick: (_e, cx) => ui.inboxConnect(cx),
+      }),
+    );
+    if (s.oauth_connected) {
+      actions.child(AppButton(cx, "tp-inbox-disconnect", "Disconnect", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.inboxDisconnect(cx) }));
+    }
+  }
+  if (editing) {
+    actions.child(AppButton(cx, "tp-inbox-cancel", "Cancel", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.cancelInboxEdit(cx) }));
+    if (method === "AppPassword") {
+      actions.child(AppButton(cx, "tp-inbox-save", "Save", { variant: "primary", size: "sm", icon: "save", onClick: (_e, cx) => ui.saveInbox(cx) }));
+    }
+  } else if (method === "AppPassword") {
+    actions.child(AppButton(cx, "tp-inbox-edit", "Edit credentials", { variant: "ghost", size: "sm", icon: "pencil", onClick: (_e, cx) => ui.startInboxEdit(cx) }));
+  }
+  actions.child(
+    AppButton(cx, "tp-inbox-verify", "Verify connection", {
+      size: "sm",
+      onClick: (_e, cx) => ui.verifyInbox(cx),
+    }),
+  );
+  actions.child(
+    AppButton(cx, "tp-inbox-check", "Check now", {
+      variant: "ghost",
+      size: "sm",
+      icon: "search",
+      onClick: (_e, cx) => ui.checkInboxNow(cx),
+    }),
+  );
+  body.child(actions);
+
+  if (ui.inboxMsg) {
+    body.child(
+      Text(cx, "body", ui.inboxMsg.text, ui.inboxMsg.ok ? "success" : "danger")
+        .mt(SPACE[2])
+        .whitespace_normal(),
+    );
+  }
+  body.child(
+    Text(
+      cx,
+      "meta",
+      s.tracking_enabled
+        ? s.still_pending
+          ? "● Automated BIR receipt tracking is active — a submitted return is still waiting for its confirmation."
+          : "● Automated BIR receipt tracking is active."
+        : "○ Verify your connection to activate email tracking.",
+      s.tracking_enabled ? "success" : "fg3",
+    )
+      .mt(SPACE[2])
+      .whitespace_normal(),
+  );
+  return body;
 }
 
 /**

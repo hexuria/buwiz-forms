@@ -21,6 +21,7 @@ use super::form_0605::{
     Form0605IndexedCode, Form0605MannerOfPayment, Form0605TaxpayerClassification,
     Form0605TypeOfPayment,
 };
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{official_amount, parse_official_amount};
@@ -503,10 +504,6 @@ fn capital(value: &str) -> String {
 
 fn digits_only(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit())
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 /// The table entry an imported or picked code must match exactly.
@@ -1427,6 +1424,29 @@ mod tests {
         assert_eq!(
             alert(7, "01/10"),
             Some("Please enter a valid Return Period on Item 7.")
+        );
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.item_20a_surcharge = 8_816_764.47;
+        assert!(
+            <Form0605Draft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "item_20a_surcharge"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.item_20a_surcharge = 1.005;
+        assert!(
+            <Form0605Draft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "item_20a_surcharge"),
+            "a three-decimal amount must still be refused"
         );
     }
 }

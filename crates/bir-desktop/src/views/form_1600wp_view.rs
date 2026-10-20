@@ -36,7 +36,7 @@ use crate::views::form_header::{
     FormHeaderState, render_header_buttons, render_status_box, revert_for_amendment,
     separate_validate_button,
 };
-use crate::views::queueable_forms::{QueueableFormEvent, QueueableFormView};
+use crate::views::queueable_forms::{self, QueueableFormEvent, QueueableFormView};
 use bir_core::penalties::PenaltyComponent;
 
 const PROFILE_NOTE: &str = "These come from your taxpayer profile. Edit them in Profile Settings.";
@@ -174,6 +174,9 @@ pub struct Form1600WpView {
     schedule_atc_selects: Vec<Entity<ComboboxState>>,
     /// The shared penalty section (computed values, overrides, note).
     penalty: Entity<PenaltySection>,
+    /// The record the draft's penalty inputs were last resolved from (the
+    /// open's); a sync resolves them again when it moves (decision P5-9).
+    resolved_trigger: Option<queueable_forms::TriggerSignature>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -266,6 +269,26 @@ impl Form1600WpView {
             .unwrap_or_default()
     }
 
+    /// The filer typed in a remittance-date box (decision P5-7): record
+    /// the part, or take it out when the box was cleared, before the edit
+    /// is read.
+    fn note_remittance_date_typed(&mut self, field: &str, cx: &App) {
+        if !self.draft.lifecycle.is_editable() {
+            return;
+        }
+        let value = self
+            .input_text(field, cx)
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(0);
+        bir_core::forms::event_trigger::note_trigger_typed(
+            "1600WP",
+            &mut self.draft.lifecycle,
+            field,
+            value,
+        );
+    }
+
     /// Read every editor value into the draft, then recompute and validate.
     /// A malformed number is reported instead of becoming zero.
     fn sync_from_inputs(&mut self, cx: &mut Context<Self>) {
@@ -347,6 +370,7 @@ impl Form1600WpView {
             &mut draft,
             cx,
         ));
+        queueable_forms::resolve_moved_trigger(&mut draft, &mut self.resolved_trigger, &self.db);
         draft.recompute();
         draft.lifecycle.updated_at = chrono::Utc::now().to_rfc3339();
         self.validation_errors = draft.validate();
@@ -1021,11 +1045,18 @@ impl QueueableFormView for Form1600WpView {
             let value = Self::initial(&draft, &key);
             let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
             input.update(cx, |state, cx| state.set_value(value, window, cx));
+            let trigger_field = match key.as_str() {
+                "month" | "day" | "year" => Some(key.clone()),
+                _ => None,
+            };
             subscriptions.push(cx.subscribe_in(
                 &input,
                 window,
-                |this: &mut Self, _, event: &InputEvent, _, cx| {
+                move |this: &mut Self, _, event: &InputEvent, _, cx| {
                     if matches!(event, InputEvent::Change) {
+                        if let Some(field) = &trigger_field {
+                            this.note_remittance_date_typed(field, cx);
+                        }
                         this.validated = false;
                         this.sync_from_inputs(cx);
                     }
@@ -1072,6 +1103,7 @@ impl QueueableFormView for Form1600WpView {
                 this.sync_from_inputs(cx);
             },
         ));
+        let resolved_trigger = Some(queueable_forms::trigger_signature(&draft));
         Self {
             draft,
             db,
@@ -1085,6 +1117,7 @@ impl QueueableFormView for Form1600WpView {
             validated: false,
             schedule_atc_selects,
             penalty,
+            resolved_trigger,
             _subscriptions: subscriptions,
         }
     }
@@ -1095,7 +1128,11 @@ impl QueueableFormView for Form1600WpView {
         } else {
             chrono::Datelike::month(&chrono::Local::now().date_naive()) as u8
         };
-        Form1600WpDraft::new_from_profile(profile, year, month)
+        let mut draft = Form1600WpDraft::new_from_profile(profile, year, month);
+        // This view records the typed remittance date (sync_from_inputs),
+        // so its new drafts follow the typed-trigger model (decision P5-7).
+        draft.lifecycle.trigger_date_model = true;
+        draft
     }
 }
 

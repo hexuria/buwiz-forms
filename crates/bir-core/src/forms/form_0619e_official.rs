@@ -14,6 +14,7 @@ use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0619e::{ATC_CODE, Form0619EDraft, TAX_TYPE_CODE, WithholdingAgentCategory};
+use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
 use super::{FilingPeriod, FormValidator};
 use crate::official_xml::{js_escape, js_unescape, official_amount, parse_official_amount};
@@ -31,12 +32,11 @@ pub const FORM_0619E_AMENDED_ALERT: &str = "If your intention is to make an amen
 /// `loadBGData` splits the escaped, upper-cased address at this length.
 const ADDRESS_SPLIT: usize = 127;
 
+/// Why an address whose official cut lands inside an escape is refused.
+pub(crate) const ADDRESS_SPLIT_REFUSAL: &str = "BIR's program splits this address at character 127, inside a special character. Reword or shorten it near that point.";
+
 fn cents(value: f64) -> f64 {
     parse_official_amount(&official_amount(value)).unwrap_or(0.0)
-}
-
-fn has_cent_precision(value: f64) -> bool {
-    value.is_finite() && ((value * 100.0) - (value * 100.0).round()).abs() < 1e-7
 }
 
 fn digits_only(value: &str) -> bool {
@@ -44,7 +44,11 @@ fn digits_only(value: &str) -> bool {
 }
 
 /// `txtAddress` / `txtAddress2` as `loadBGData` fills them, or `None` when
-/// the address cannot be represented the way the official page splits it.
+/// the address cannot be represented the way the official page splits it:
+/// a character outside Latin-1, or the official cut at character 127 of
+/// the escaped address landing inside a `%XX` escape (the official runtime
+/// cuts there literally; the port refuses rather than file different
+/// lines).
 pub(super) fn official_address_lines(address: &str) -> Option<(String, String)> {
     if address.chars().any(|c| u32::from(c) > 0xFF) {
         return None;
@@ -217,11 +221,13 @@ impl Form0619EDraft {
                 "registered_address",
                 "Please enter Taxpayer's Registered Address on Item 10.",
             );
-        } else if official_address_lines(&self.full_address()).is_none() {
+        } else if self.full_address().chars().any(|c| u32::from(c) > 0xFF) {
             err(
                 "registered_address",
-                "Item 10 cannot be split into the two official address lines; shorten it or remove characters outside Latin-1.",
+                "Item 10 has a character BIR's program cannot carry (outside Latin-1); remove it.",
             );
+        } else if official_address_lines(&self.full_address()).is_none() {
+            err("registered_address", ADDRESS_SPLIT_REFUSAL);
         }
         let zip = self.zip_code.trim();
         if zip.is_empty() {
@@ -531,9 +537,19 @@ mod tests {
         let (one, two) = official_address_lines(&address).unwrap();
         assert_eq!(one.len(), 127);
         assert_eq!(two, "AAA");
-        // 126 plain characters then a space: the cut would split "%20".
+        // 126 plain characters then a space: the cut would split "%20", as
+        // would 125 (the cut after "%2"). The official runtime cuts there
+        // literally; the port refuses.
         let tricky = format!("{} x", "a".repeat(126));
-        assert!(official_address_lines(&tricky).is_none());
+        assert_eq!(official_address_lines(&tricky), None);
+        let tricky = format!("{} x", "a".repeat(125));
+        assert_eq!(official_address_lines(&tricky), None);
+        // 124: the escape ends before the cut, and the lines split there.
+        let fine = format!("{} x", "a".repeat(124));
+        let (one, two) = official_address_lines(&fine).unwrap();
+        assert_eq!(format!("{one}{two}"), fine.to_ascii_uppercase());
+        // A character outside Latin-1 is refused too.
+        assert!(official_address_lines("UNIT \u{4E00} CITY").is_none());
     }
 
     #[test]
@@ -647,5 +663,28 @@ mod tests {
         draft.item_17c_compromise = 99.0;
         draft.keep_entered_penalties();
         assert!(draft.revalidate_queued_before_submission().is_err());
+    }
+
+    /// P5-1: the earlier float-tolerance check refused two-decimal
+    /// amounts above about 2,000,000 (`8_816_764.47 * 100` lands 1.2e-7
+    /// off a whole number); the shared `official_inputs` check accepts
+    /// them again, and a three-decimal amount is still refused.
+    #[test]
+    fn large_two_decimal_amounts_pass_cent_precision() {
+        let mut draft = sample();
+        draft.item_17a_surcharge = 8_816_764.47;
+        assert!(
+            <Form0619EDraft as FormValidator>::validate(&draft)
+                .iter()
+                .all(|(field, _)| field != "item_17a_surcharge"),
+            "a large two-decimal amount must be accepted"
+        );
+        draft.item_17a_surcharge = 1.005;
+        assert!(
+            <Form0619EDraft as FormValidator>::validate(&draft)
+                .iter()
+                .any(|(field, _)| field == "item_17a_surcharge"),
+            "a three-decimal amount must still be refused"
+        );
     }
 }

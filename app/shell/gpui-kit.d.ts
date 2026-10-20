@@ -27983,21 +27983,106 @@ declare module "bir" {
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       locks: Record<string, string>;
-      /** Boxes the taxpayer profile fills (the page marks their items). */
+      /** Boxes the taxpayer profile filled (the page tucks and marks them); a box it left blank is not here and not locked. */
       profile: string[];
+      /** Filled profile boxes the filer may open with Edit; pass the opened ones to `screen_form_fill` as `unlocked`. */
+      profile_edit: string[];
+      /** Opened from the Form library: a blank sample that is never saved. */
+      sample: boolean;
+      /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
+      blank: string[];
+      /** A sample's held box that cannot be typed: what it waits for (shown in the box). */
+      needs: Record<string, string>;
+      /** A printed box the filer cannot fill here, while it shows blank: why, in the filer's words (the schema's reviewed `why`; shown in the box). */
+      whys: Record<string, string>;
+      /** A blank box's reason, shown in the box: what it waits for (a rate its row's ATC, a tick box the amount that ticks it, a date the return it is started with). */
+      waits: Record<string, string>;
+      /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
+      lock_notes: Record<string, string>;
+      /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
+      period_parts: ScreenFormPeriodPart[];
+      /** A sample rebuilt for a period its filer completed. */
+      period_set: boolean;
+      /** An amended return's filed version, kept in its history (null when never amended): open it with `screen_form_filed_original`. */
+      filed_original?: { id: number; status: string; filed_on: string | null } | null;
+      /** Set on the read-only view of a filed original. */
+      filed_original_view?: { status: string; filed_on: string | null };
+      /** When a return was sent to BIR and confirmed (a read-only view says so). */
+      submitted_at: string | null;
+      confirmed_at: string | null;
+      /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
+      amends?: ScreenFormStatus;
+      /** Boxes another answer turns off right now, each with its tag ("Needs item 13 = Yes"; the page fades them). */
+      off: Record<string, string>;
+      /** Each party's Surcharge, Interest and Compromise boxes: locked at the computed amounts until Edit penalties opens them (sent as `unlocked`). */
+      penalties: ScreenFormPenalties[];
+      /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+      pools: Record<string, string>;
       errors: ScreenFormError[];
+  }
+  export interface ScreenFormPeriodPart {
+      key: string;
+      part: "year" | "month" | "year_end_month" | "day" | "quarter" | "date";
+      /** For a quarter's tick box: which quarter. */
+      quarter: number | null;
+  }
+  export interface ScreenFormExisting {
+      form_code: string;
+      year: number;
+      period: number;
+      label: string;
+      status: ScreenFormStatus;
+      updated_at: string;
+      total_payable: number | null;
+      /** What the page may offer: `load` (a draft), `view` (read-only), `amend` (reached BIR, and the form has an amended-return answer), `keep`. */
+      actions: ("load" | "view" | "amend" | "keep")[];
+      submitted_at: string | null;
+      confirmed_at: string | null;
+  }
+  export interface ScreenFormSamplePeriod {
+      complete: boolean;
+      /** A stored return of the form already has this period. */
+      existing?: ScreenFormExisting;
+      /** No stored return: a fresh sample built for exactly this period. */
+      sample?: ScreenFormOpened;
+      /** What `screen_form_open` takes for it: year, period, and the exact stored key (`key`, an existing answer) or the key a new return starts under (`new_key`, with `new_key_from`: the sample it was offered for, its `created_at`, which the open passes back); null: start it with New return. */
+      opens?: { year: number; period: number; key: number | null; new_key?: number | null; new_key_from?: string | null } | null;
+  }
+  export interface ScreenFormPenalties {
+      keys: string[];
+      /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
+      edited: boolean;
+      /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
+      applies: boolean;
   }
   export interface ScreenFormFilled {
       draft: object;
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       rejected: Record<string, string>;
+      penalties: ScreenFormPenalties[];
+      /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+      pools: Record<string, string>;
+      /** A sample's boxes still blank (null for a return). */
+      blank?: string[] | null;
+      /** Rows the filer typed that this edit removed (an answer that closes a section, a cleared ATC): the page asks `message` first and offers Undo with `done`. */
+      removes?: { message: string; done: string; rows: number } | null;
+      /** Locks this fill opened or shut (a folded item, a box an answer shuts): the reason, or null to open the box; `relock_notes` holds each one's note. */
+      relocks?: Record<string, string | null>;
+      relock_notes?: Record<string, string | null>;
   }
   export interface ScreenFormValidated {
       draft: object;
       values: Record<string, string>;
       options: Record<string, ScreenFormOption[]>;
       errors: ScreenFormError[];
+      /** Boxes another answer turns off right now, each with its tag. */
+      off: Record<string, string>;
+      penalties: ScreenFormPenalties[];
+      /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
+      pools: Record<string, string>;
+      /** A sample's boxes still blank (null for a return). */
+      blank?: string[] | null;
   }
   export interface ScreenFormOption {
       value: string;
@@ -28013,14 +28098,24 @@ declare module "bir" {
   }
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
-  export function screen_form_open(tin: string, form_code: string, year: number, period: number): Promise<ScreenFormOpened>;
-  export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): ScreenFormFilled;
+  /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date); `new_key_from`: the sample the host offered `new_key` for (its `created_at`). */
+  export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null, new_key_from?: string | null): Promise<ScreenFormOpened>;
+  /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
+  export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
+  /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
+  /** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved. The filed version is kept in this return's history. */
+  export function screen_form_amend(tin: string, form_code: string, year: number, period: number, key?: number | null): Promise<ScreenFormOpened>;
+  /** An amended return's filed version from its history, read-only. */
+  export function screen_form_filed_original(form_code: string, snapshot_id: number): Promise<ScreenFormOpened>;
+  export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
+  /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
+  export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
   /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
   export function screen_form_print(form_code: string, draft: object): { path: string };
   /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
-  export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>): boolean;
+  export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
   /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
   export function screen_form_queue(form_code: string, draft: object): number;
   /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
@@ -28035,17 +28130,44 @@ declare module "bir" {
       branch_count: number;
       form_code: string;
       form_name: string;
-      frequency: "Monthly" | "Quarterly" | "Annual";
+      frequency: "Monthly" | "Quarterly" | "Annual" | "As needed";
       taxable_year: number;
-      /** Month 1-12, quarter 1-4, or 0 for an annual return. */
+      /** Month 1-12, quarter 1-4, 0 for an annual return, or an as-needed return's stored period. */
       period: number;
       period_label: string;
       due_date: string;
       /** "Not started" | "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid" */
       status: string;
       draft_id: number | null;
+      /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
+      return_key: number | null;
   }
   export function deadlines_between(from: string, to: string): DeadlineRow[];
+  export interface AsNeededReturn {
+      draft_id: number;
+      period: number;
+      return_key: number | null;
+      status: string;
+      updated_at: string;
+  }
+  export interface AsNeededForm {
+      tin: string;
+      tin_root: string;
+      branch_code: string;
+      branch_name: string;
+      taxpayer_name: string;
+      branch_count: number;
+      form_code: string;
+      form_name: string;
+      taxable_year: number;
+      /** What dates a return ("Removal"), null when the form has no trigger-date rule. */
+      trigger: string | null;
+      /** When it is due, as the form's guide says. */
+      due_rule: string;
+      /** Saved returns of the form that hold no trigger date yet. */
+      undated: AsNeededReturn[];
+  }
+  export function as_needed_forms(year: number): AsNeededForm[];
   export interface ReturnRow {
       id: number;
       tin: string;
@@ -28060,6 +28182,8 @@ declare module "bir" {
       period_label: string;
       status: string;
       updated_at: string;
+      /** The return's stored key (`screen_form_open`'s `key`): opens exactly this return. */
+      return_key: number | null;
   }
   export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 }

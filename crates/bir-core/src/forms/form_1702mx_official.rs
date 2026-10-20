@@ -2151,4 +2151,29 @@ mod tests {
             }
         }
     }
+
+    /// The print's Item 9: the registered address the return files on its
+    /// first line, and a later line printed only when the address does not
+    /// already hold it, so nothing prints twice.
+    #[test]
+    fn print_address_lines_are_never_printed_twice() {
+        let mut d = Form1702MXDraft::new_from_profile(&profile(), 2025);
+        d.registered_address = "Unit 5 Bldg A, 123 Ayala Avenue, Makati City".to_string();
+        d.registered_address_lines = [
+            "Unit 5 Bldg A,".to_string(),
+            "123 Ayala Avenue, Makati City".to_string(),
+            "Annex Tower".to_string(),
+        ];
+        let fields = d.to_print_field_map();
+        let line = |n: &str| fields[&format!("frm1702MX:txtPg1Pt1I10RegisteredAddress{n}")].clone();
+        assert_eq!(line(""), "Unit 5 Bldg A, 123 Ayala Avenue, Makati City");
+        assert_eq!(line("2"), "", "already in the address");
+        assert_eq!(line("3"), "Annex Tower", "a line of its own still prints");
+        // The upload keeps every line as stored.
+        let upload = d.to_bir_field_map();
+        assert_eq!(
+            upload["frm1702MX:txtPg1Pt1I10RegisteredAddress2"],
+            "123 Ayala Avenue, Makati City"
+        );
+    }
 }

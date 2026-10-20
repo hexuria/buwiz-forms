@@ -29,6 +29,11 @@ const PAIRED_AMOUNT_ITEMS: &[u8] = &[
     26, 27, 28, 29, 30, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54,
     55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68,
 ];
+/// The amounts checked against the recompute after an import. Item 52 is
+/// typed and restored (USER_ENTERED_AMOUNT_ITEMS), but the compute zeroes it
+/// unless its column is on the 8% rate with an ATC other than II016
+/// (`item52Validate`): a save file carrying a non-zero 52 there is refused,
+/// as it was while 52 was only checked.
 const DERIVED_AMOUNT_ITEMS: &[u8] = &[
     26, 27, 28, 29, 30, 38, 40, 41, 45, 46, 49, 51, 52, 53, 54, 62, 63, 67, 68,
 ];
@@ -857,6 +862,7 @@ impl Form1701QDraft {
             deduction_method,
             contact_number: field(fields, "frm1701q:txtTelno").to_string(),
             line_of_business: field(fields, "frm1701q:txtLOB").to_string(),
+            civil_status: None,
             has_spouse,
             spouse_tin: joined_tin(fields, "Spouse"),
             spouse_rdo_code: normalize_empty_rdo(field(fields, "frm1701q:txtSpouseRDOCode")),
@@ -875,6 +881,10 @@ impl Form1701QDraft {
             item_48_non_operating_income_description: field(fields, "frm1701q:txt48Desc")
                 .to_string(),
             item_61_other_tax_credit_description: field(fields, "frm1701q:txt61Desc").to_string(),
+            // A version-0 state: the first compute keeps every penalty the
+            // savefile carries as the filer's own (form_1701q_official.rs).
+            penalty: Default::default(),
+            spouse_penalty: Default::default(),
             payment_details: Form1701QPaymentDetails {
                 item_32_cash_or_bank_debit_memo: parse_payment_row(fields, 32, true, &mut errors),
                 item_33_check: parse_payment_row(fields, 33, true, &mut errors),
@@ -1897,6 +1907,55 @@ mod tests {
 
         assert_eq!(imported.to_bir_field_map(), fields);
         assert_eq!(imported.payment_details.item_33_check.amount, Some(1_234.5));
+    }
+
+    /// Item 52 is restored only where its column may hold it (8%, an ATC
+    /// other than II016): a save file with a non-zero 52 elsewhere is
+    /// refused, as before item 52 was restored (PR 5 review).
+    #[test]
+    fn item_52_imports_where_the_regime_allows_it_and_is_refused_elsewhere() {
+        let mut draft = valid_draft();
+        draft.atc = Some(Form1701QAtc::Ii015);
+        draft.tax_rate = Some(Form1701QTaxRate::EightPercent);
+        draft.deduction_method = None;
+        draft.set_amount(36, Form1701QParty::Taxpayer, None);
+        draft.set_amount(47, Form1701QParty::Taxpayer, Some(900_000.0));
+        draft.set_amount(52, Form1701QParty::Taxpayer, Some(250_000.0));
+        draft.recompute();
+        let fields = draft.to_bir_field_map_checked().unwrap();
+        assert_eq!(fields["frm1701q:txt52A"], "250,000.00");
+        let imported = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
+            .expect("8% with II015 takes item 52");
+        assert_eq!(
+            imported.amount(52, Form1701QParty::Taxpayer),
+            Some(250_000.0)
+        );
+
+        for (atc, rate, case) in [
+            (Form1701QAtc::Ii016, Form1701QTaxRate::EightPercent, "II016"),
+            (
+                Form1701QAtc::Ii012,
+                Form1701QTaxRate::Graduated,
+                "graduated rates",
+            ),
+        ] {
+            let mut other = draft.clone();
+            other.atc = Some(atc);
+            other.tax_rate = Some(rate);
+            other.deduction_method =
+                (rate == Form1701QTaxRate::Graduated).then_some(Form1701QDeductionMethod::Osd);
+            other.recompute();
+            let mut fields = other.to_bir_field_map_checked().unwrap();
+            fields.insert("frm1701q:txt52A".to_string(), "250,000.00".to_string());
+            let errors = Form1701QDraft::from_bir_xml_payload(&serialize_editable_xml(&fields))
+                .expect_err(case);
+            assert!(
+                errors.iter().any(|(key, message)| key == "frm1701q:txt52A"
+                    && message
+                        == "Saved computed value 250000.00 does not match Rust-owned value 0.00"),
+                "{case}: {errors:?}"
+            );
+        }
     }
 
     #[test]

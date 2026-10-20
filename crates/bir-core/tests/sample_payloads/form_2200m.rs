@@ -126,13 +126,15 @@ fn form_2200m_sample_with_many_rows_is_current() {
     );
 }
 
-/// The calendar's 2200-M rule is quarterly; this return is dated.
+/// The calendar's 2200-M rule is quarterly; this return is dated, and due
+/// per removal (decision D8): the penalties run from Item 1.
 #[test]
 fn form_2200m_penalty_items_follow_the_shared_model() {
     penalty_items::check(
         sample_2200m,
-        Deadline::None {
-            assumed: day(2025, 12, 31),
+        // Decision D8 (2026-10-18): the removal date the sample types (Item 1, 03/14/2025).
+        Deadline::Typed {
+            due: day(2025, 3, 14),
         },
     );
 }

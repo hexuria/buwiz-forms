@@ -140,8 +140,24 @@ fn form_1702ex_popups_sample_payload_is_current() {
 
 /// Every sample draft above, for the agent-form probe (`agent_forms`).
 pub(crate) fn agent_seeds() -> Vec<serde_json::Value> {
+    // Items 48 and 49 (Other Tax Credits/Payments): the draft's two
+    // other_credits rows, which the samples above leave empty, so the
+    // probe can bind their boxes.
+    let mut credits = sample_1702ex();
+    credits.other_credits = vec![
+        Form1702ExRow {
+            description: "Sample credit".to_string(),
+            amount: 1_500.0,
+        },
+        Form1702ExRow {
+            description: "Second credit".to_string(),
+            amount: 700.0,
+        },
+    ];
+    credits.recompute();
     vec![
         serde_json::to_value(sample_1702ex()).expect("sample serializes"),
         serde_json::to_value(sample_1702ex_popups()).expect("sample serializes"),
+        serde_json::to_value(credits).expect("credits sample serializes"),
     ]
 }
