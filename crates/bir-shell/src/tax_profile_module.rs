@@ -886,14 +886,32 @@ fn connect_inbox_oauth_run(
 ) -> HostResult {
     // Blocking: browser consent + a loopback listener. Same error surface the
     // legacy Profile Manager shows ("OAuth failed: ...").
-    let (email, access_token, refresh_token) = bir_core::email::start_oauth_flow()
-        .map_err(|error| HostError::new(format!("OAuth failed: {error}")))?;
+    let (email, access_token, refresh_token) =
+        run_oauth_flow()?.map_err(|error| HostError::new(format!("OAuth failed: {error}")))?;
     if refresh_token.trim().is_empty() {
         return Err(HostError::new(
             "Google did not return a refresh token. Re-authorize with consent so a new refresh token is issued.",
         ));
     }
     persist_oauth_grant(db, tin, &email, &access_token, &refresh_token)
+}
+
+/// The browser sign-in leg: bir-core's `start_oauth_flow`, answering
+/// `(email, access_token, refresh_token)`. Tests run only a fake installed
+/// on this thread through [`TEST_INBOX_OAUTH`]; without one the leg refuses,
+/// so no test opens a browser.
+fn run_oauth_flow() -> Result<Result<(String, String, String), anyhow::Error>, HostError> {
+    #[cfg(test)]
+    {
+        TEST_INBOX_OAUTH
+            .with(|slot| slot.borrow_mut().take())
+            .map(|fake| fake())
+            .ok_or_else(|| HostError::new("The Google sign-in is not available in tests."))
+    }
+    #[cfg(not(test))]
+    {
+        Ok(bir_core::email::start_oauth_flow())
+    }
 }
 
 /// Apply a `test_connection` verdict the way the legacy Email Settings tab
@@ -949,21 +967,49 @@ fn test_inbox_connection_run(
         load_inbox_profile(&guard, tin)?
     };
     // The IMAP probe runs with the lock released — it can take many seconds.
-    let result = bir_core::email::test_connection(&profile);
+    let result = run_connection_test(&profile)?;
     apply_connection_result(db, tin, result)
 }
 
-/// The poll itself. Production delegates to bir-core's fetch→confirm path;
-/// tests install a fake transport through [`TEST_INBOX_POLL`].
+/// The IMAP login probe leg: bir-core's `test_connection`. Tests run only a
+/// fake installed on this thread through [`TEST_INBOX_CONNECTION`]; without
+/// one the leg refuses, so no test reaches a mail server.
+fn run_connection_test(
+    profile: &TaxpayerProfile,
+) -> Result<Result<Option<String>, anyhow::Error>, HostError> {
+    #[cfg(test)]
+    {
+        TEST_INBOX_CONNECTION
+            .with(|slot| slot.borrow_mut().take())
+            .map(|fake| fake(profile))
+            .ok_or_else(|| HostError::new("The inbox connection test is not available in tests."))
+    }
+    #[cfg(not(test))]
+    {
+        Ok(bir_core::email::test_connection(profile))
+    }
+}
+
+/// The poll leg: bir-core's fetch→confirm path. Tests run only a fake
+/// transport installed on this thread through [`TEST_INBOX_POLL`]; without
+/// one the leg refuses, so no test fetches mail.
 fn run_inbox_poll(
     email: &str,
     db: std::sync::Arc<std::sync::Mutex<Database>>,
-) -> (bool, bool, Option<String>) {
+) -> Result<(bool, bool, Option<String>), HostError> {
     #[cfg(test)]
-    if let Some(stub) = TEST_INBOX_POLL.with(|slot| slot.borrow_mut().take()) {
-        return stub(email, db);
+    {
+        TEST_INBOX_POLL
+            .with(|slot| slot.borrow_mut().take())
+            .map(|fake| fake(email, db))
+            .ok_or_else(|| HostError::new("The inbox poll is not available in tests."))
     }
-    bir_core::email::fetch_and_process_emails_for_address(email, db)
+    #[cfg(not(test))]
+    {
+        Ok(bir_core::email::fetch_and_process_emails_for_address(
+            email, db,
+        ))
+    }
 }
 
 /// One user-triggered "check now" — the same inline run the legacy Cron Tasks
@@ -979,7 +1025,7 @@ fn check_inbox_now_run(tin: &str, db: &std::sync::Arc<std::sync::Mutex<Database>
         }
         email
     };
-    let (poll_success, still_pending, err_msg) = run_inbox_poll(&email, db.clone());
+    let (poll_success, still_pending, err_msg) = run_inbox_poll(&email, db.clone())?;
 
     let guard = lock_db(db)?;
     let command = format!("bir_poll_email {email}");
@@ -1023,9 +1069,22 @@ type TestInboxPoll = Box<
     dyn FnOnce(&str, std::sync::Arc<std::sync::Mutex<Database>>) -> (bool, bool, Option<String>),
 >;
 
+/// Fake IMAP login probe installed by tests — answers like `test_connection`.
+#[cfg(test)]
+type TestInboxConnection =
+    Box<dyn FnOnce(&TaxpayerProfile) -> Result<Option<String>, anyhow::Error>>;
+
+/// Fake browser sign-in installed by tests — answers like `start_oauth_flow`.
+#[cfg(test)]
+type TestInboxOAuth = Box<dyn FnOnce() -> Result<(String, String, String), anyhow::Error>>;
+
 #[cfg(test)]
 thread_local! {
     static TEST_INBOX_POLL: std::cell::RefCell<Option<TestInboxPoll>> =
+        const { std::cell::RefCell::new(None) };
+    static TEST_INBOX_CONNECTION: std::cell::RefCell<Option<TestInboxConnection>> =
+        const { std::cell::RefCell::new(None) };
+    static TEST_INBOX_OAUTH: std::cell::RefCell<Option<TestInboxOAuth>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -1842,5 +1901,118 @@ mod tests {
                 .message()
                 .contains("No inbox email is set")
         );
+    }
+
+    // ---------- no test reaches the network through an inbox verb ----------
+
+    /// Calls the registered async verb `name` for `tin` the way the page
+    /// does: its network leg runs on the verb's own thread, which a fake
+    /// installed on the test thread never reaches.
+    fn call_async_verb(name: &str, tin: &str) -> Result<Value, String> {
+        let future = crate::bir_module::module()
+            .begin(name, &args(vec![json!(tin)]))
+            .map_err(|error| error.message().to_string())?;
+        futures::executor::block_on(future)
+            .map(|value| to_json(&value))
+            .map_err(|error| error.message().to_string())
+    }
+
+    /// The poll leg refuses without a fake on its thread, through the
+    /// registered verb (its `inbox-check` thread) and on this one, and the
+    /// job row stays as saved: no poll ran.
+    #[test]
+    fn check_inbox_now_refuses_to_poll_without_a_fake() {
+        setup();
+        with_database(|db| {
+            db.save_job(poll_job("office@example.com")).unwrap();
+            Ok(())
+        })
+        .unwrap();
+        let refused = "The inbox poll is not available in tests.";
+        assert_eq!(
+            call_async_verb("check_inbox_now", HEAD).unwrap_err(),
+            refused
+        );
+        let db = database_handle().unwrap();
+        assert_eq!(
+            check_inbox_now_run(HEAD, &db).unwrap_err().message(),
+            refused
+        );
+        with_database(|db| {
+            let job = db
+                .list_jobs()
+                .unwrap()
+                .into_iter()
+                .find(|job| job.command.as_deref() == Some("bir_poll_email office@example.com"))
+                .unwrap();
+            assert_eq!(job.status, "Queued");
+            assert_eq!(job.retries, 0);
+            assert_eq!(job.last_run_at, None);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// The login probe refuses without a fake on its thread, through the
+    /// registered verb and on this one, before any verdict is recorded (a
+    /// failed probe would turn tracking off). A fake installed on this thread
+    /// answers in its place.
+    #[test]
+    fn test_inbox_connection_refuses_to_log_in_without_a_fake() {
+        setup();
+        ok(set_inbox_tracking, vec![json!(HEAD), json!(true)]);
+        let refused = "The inbox connection test is not available in tests.";
+        assert_eq!(
+            call_async_verb("test_inbox_connection", HEAD).unwrap_err(),
+            refused
+        );
+        let db = database_handle().unwrap();
+        assert_eq!(
+            test_inbox_connection_run(HEAD, &db).unwrap_err().message(),
+            refused
+        );
+        assert_eq!(ok(inbox_state, vec![json!(HEAD)])["tracking_enabled"], true);
+
+        TEST_INBOX_CONNECTION.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(|profile| {
+                assert_eq!(profile.inbox_email(), "office@example.com");
+                Err(anyhow::anyhow!("IMAP login refused"))
+            }));
+        });
+        let verdict = to_json(&test_inbox_connection_run(HEAD, &db).unwrap());
+        assert_eq!(verdict["ok"], false);
+        assert_eq!(verdict["state"]["tracking_enabled"], false);
+    }
+
+    /// The browser sign-in refuses without a fake on its thread, through the
+    /// registered verb and on this one, and nothing is connected. A fake
+    /// installed on this thread answers in its place.
+    #[test]
+    fn connect_inbox_oauth_refuses_to_open_a_browser_without_a_fake() {
+        setup();
+        let refused = "The Google sign-in is not available in tests.";
+        assert_eq!(
+            call_async_verb("connect_inbox_oauth", HEAD).unwrap_err(),
+            refused
+        );
+        let db = database_handle().unwrap();
+        assert_eq!(
+            connect_inbox_oauth_run(HEAD, &db).unwrap_err().message(),
+            refused
+        );
+        assert_eq!(ok(inbox_state, vec![json!(HEAD)])["oauth_connected"], false);
+
+        TEST_INBOX_OAUTH.with(|slot| {
+            *slot.borrow_mut() = Some(Box::new(|| {
+                Ok((
+                    "receipts@example.com".to_string(),
+                    "access-z".to_string(),
+                    "refresh-z".to_string(),
+                ))
+            }));
+        });
+        let state = to_json(&connect_inbox_oauth_run(HEAD, &db).unwrap());
+        assert_eq!(state["oauth_connected"], true);
+        assert_eq!(state["oauth_inbox_email"], "receipts@example.com");
     }
 }

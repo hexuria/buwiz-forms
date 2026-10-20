@@ -26,15 +26,24 @@ struct Harness {
 
 impl Harness {
     fn new() -> Self {
+        let (harness, holder) = Self::new_holding_port();
+        drop(holder);
+        harness
+    }
+
+    /// [`Harness::new`] that keeps its ephemeral listener and hands it back,
+    /// so the test port stays held from the moment it was allocated. A port
+    /// dropped and then bound again can be taken in between by another
+    /// process on the runner (CI saw `AddrInUse`).
+    fn new_holding_port() -> (Self, TcpListener) {
         let dir = tempfile::tempdir().expect("temp dir");
         let holder = TcpListener::bind("127.0.0.1:0").expect("ephemeral port");
         let addr = holder.local_addr().expect("addr").to_string();
-        drop(holder);
         let db = dir.path().join("bir_data.db");
         let log = dir.path().join("logs/bir-headless.log");
         let pid = dir.path().join("bir-headless.pid");
         let runtime = dir.path().join("gpui-agent-runtime");
-        Self {
+        let harness = Self {
             bin: PathBuf::from(env!("CARGO_BIN_EXE_bir-headless")),
             _dir: dir,
             addr,
@@ -43,7 +52,8 @@ impl Harness {
             log,
             pid,
             runtime,
-        }
+        };
+        (harness, holder)
     }
 
     fn cmd(&self, args: &[&str]) -> Command {
@@ -379,8 +389,8 @@ fn detach_status_logs_follow_shutdown_and_second_detach() {
 
 #[test]
 fn foreground_serve_without_detach_still_refuses_busy_bind() {
-    let harness = Harness::new();
-    let holder = TcpListener::bind(&harness.addr).expect("hold the test port");
+    // Held since allocation, not re-bound after `Harness::new` dropped it.
+    let (harness, holder) = Harness::new_holding_port();
     let output = harness.run(&["serve"]);
     assert!(!output.status.success());
     let err = String::from_utf8_lossy(&output.stderr);
