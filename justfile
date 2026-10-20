@@ -90,6 +90,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_form_radio_untick.mjs
     node --experimental-vm-modules tools/test_form_decisions_round_3.mjs
     node --experimental-vm-modules tools/test_home_calendar_as_needed.mjs
+    node --experimental-vm-modules tools/test_taxpayer_export.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check

@@ -1785,6 +1785,87 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
     Ok(HostObject::new().field("kind", "invalid").into())
 }
 
+/// The page's export: `tin`'s profile as a `.zip` archive under the host's
+/// save dialog. The page never chooses the file — the same rule as
+/// `import_archive` — so anything after `(tin, pin)`, or a `pin` that is
+/// not a string or `null`, is refused before anything opens. Tests and
+/// scripted exports call [`export_profile_to`] instead.
+///
+/// A taxpayer with a PIN exports only under it: the PIN is checked under
+/// the same rate limiter as [`verify_taxpayer_pin`], and a refusal —
+/// "This profile's PIN is required to export it." or "Wrong PIN." —
+/// happens before the dialog, so no archive exists without authorization.
+/// A taxpayer without a PIN exports ungated; an authenticator alone is not
+/// a PIN.
+fn export_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
+    if arguments.len() > 2 {
+        return Err(HostError::new(
+            "export_profile takes no path; the host opens the save dialog",
+        ));
+    }
+    let tin = arguments.string(0)?.to_string();
+    let pin = match arguments.get(1) {
+        None | Some(HostValue::Null) => None,
+        Some(HostValue::Str(pin)) => Some(pin.clone()),
+        Some(_) => {
+            return Err(HostError::new(
+                "export_profile takes no path; the host opens the save dialog",
+            ));
+        }
+    };
+    // The profile names its taxpayer's root, the way `set_profile_pin`
+    // resolves a branch TIN; an unknown TIN is refused before the dialog.
+    let tin_root =
+        with_database(|db| Ok(get_profile_by_tin(db, &tin)?.tin.full()[..9].to_string()))?;
+    let authorized = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+        with_database(|db| {
+            let credentials = taxpayer_credentials(db, &tin_root)?;
+            match credentials.pin_hash {
+                // Nothing to check — an authenticator alone is not a PIN —
+                // and nothing counts against the limiter.
+                None => Ok(true),
+                Some(_) if pin.is_none() => Err(HostError::new(
+                    "This profile's PIN is required to export it.",
+                )),
+                Some(hash) => Ok(pin
+                    .as_deref()
+                    .is_some_and(|pin| pin_matches(Some(hash.as_str()), pin))),
+            }
+        })
+    })?;
+    if !authorized {
+        return Err(HostError::new("Wrong PIN."));
+    }
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let Some(path) = rfd::FileDialog::new()
+        .set_title("Save the profile archive")
+        .set_file_name(format!("BIR_Profile_{}_{}.zip", tin, timestamp))
+        .add_filter("Export Archive", &["zip"])
+        .save_file()
+    else {
+        return Ok(HostObject::new().field("kind", "cancelled").into());
+    };
+    export_profile_to(&tin, pin.as_deref(), &path)
+}
+
+/// Write `tin`'s profile archive to `path`; not a verb. The PIN gate is
+/// bir-core's: [`export_profile_data`](bir_core::export_profile_data)
+/// refuses a PIN'd taxpayer without its PIN before the file exists, so a
+/// refusal here leaves nothing on disk either.
+fn export_profile_to(tin: &str, pin: Option<&str>, path: &std::path::Path) -> HostResult {
+    with_database(|db| {
+        bir_core::export_profile_data(db, tin, path, pin).map_err(db_error)?;
+        Ok(HostObject::new()
+            .field("kind", "exported")
+            .field("path", path.display().to_string())
+            .into())
+    })
+}
+
 /// Tax deadlines feed for the calendar page.
 fn list_deadlines() -> HostResult {
     with_database(|db| {
@@ -1837,6 +1918,7 @@ pub fn module() -> HostModule {
         .function("cancel_queued", cancel_queued)
         .function("list_deadlines", |_| list_deadlines())
         .function("import_archive", import_archive)
+        .function("export_profile", export_profile)
         .function("form_print_html", form_print_html)
         .function("list_background_jobs", |_| list_background_jobs())
         .function("delete_background_job", delete_background_job)
@@ -1987,6 +2069,12 @@ export interface ImportResult {
     kind: "database" | "profile" | "invalid" | "cancelled";
 }
 export function import_archive(): ImportResult;
+export interface ExportResult {
+    kind: "exported" | "cancelled";
+    path?: string;
+}
+/** The taxpayer's profile archive under the host's save dialog. A taxpayer with a PIN needs it as `pin`; the page never passes a path — the host chooses the file. */
+export function export_profile(tin: string, pin?: string | null): ExportResult;
 export interface PrintPreview {
     path: string;
 }
@@ -3423,5 +3511,117 @@ mod tests {
         .unwrap();
         assert_eq!(tins, [ARCHIVE_TIN], "the archive's database is open");
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
+    // ---------- export_profile ----------
+
+    /// `export_profile_to` writes `TIN`'s archive under the bir-core gate:
+    /// a PIN'd taxpayer refuses — no PIN, wrong PIN — before the file
+    /// exists, and the right PIN writes it.
+    #[test]
+    fn export_profile_to_needs_a_pinned_taxpayers_pin() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let scratch = ScratchDir::new("export");
+        let archive = scratch.path().join("profile.zip");
+
+        let refusal = export_profile_to(TIN, None, &archive).unwrap_err();
+        assert_eq!(
+            refusal.message(),
+            "This profile's PIN is required to export it."
+        );
+        assert!(!archive.exists(), "a refused export left a file");
+
+        let refusal = export_profile_to(TIN, Some("1234"), &archive).unwrap_err();
+        assert_eq!(refusal.message(), "Wrong PIN.");
+        assert!(!archive.exists(), "a refused export left a file");
+
+        let answer = to_json(&export_profile_to(TIN, Some("0817"), &archive).unwrap());
+        assert_eq!(
+            answer,
+            serde_json::json!({ "kind": "exported", "path": archive.display().to_string() })
+        );
+        assert!(archive.exists());
+    }
+
+    /// A taxpayer without a PIN exports ungated — `None` or a stray PIN —
+    /// and an authenticator alone is not a PIN.
+    #[test]
+    fn export_profile_to_exports_ungated_without_a_pin() {
+        setup();
+        let scratch = ScratchDir::new("export-open");
+        let archive = scratch.path().join("profile.zip");
+        assert_eq!(
+            to_json(&export_profile_to(TIN, None, &archive).unwrap())["kind"],
+            "exported"
+        );
+        assert!(archive.exists());
+
+        set_taxpayer_totp(&args(vec![s(ROOT), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        let archive = scratch.path().join("totp-only.zip");
+        assert_eq!(
+            to_json(&export_profile_to(TIN, None, &archive).unwrap())["kind"],
+            "exported"
+        );
+    }
+
+    /// The page cannot choose the file. The registered verb refuses a call
+    /// past `(tin, pin)` — a path included — and a non-string `pin` before
+    /// a dialog opens; `export_profile_to` is no verb at all.
+    #[test]
+    fn export_profile_refuses_anything_past_the_pin() {
+        setup();
+        let module = module();
+        assert!(module.has("export_profile"));
+        assert!(!module.has("export_profile_to"), "not a verb");
+        for call in [
+            args(vec![s(TIN), s("0817"), s("/tmp/chosen.zip")]),
+            args(vec![
+                s(TIN),
+                json(serde_json::json!({"path": "/tmp/chosen.zip"})),
+            ]),
+        ] {
+            match module.call("export_profile", &call) {
+                Ok(_) => panic!("export_profile answered a call with a path"),
+                Err(refusal) => assert_eq!(
+                    refusal.message(),
+                    "export_profile takes no path; the host opens the save dialog"
+                ),
+            }
+        }
+    }
+
+    /// A PIN'd taxpayer's verb refusals happen before any dialog and share
+    /// `verify_taxpayer_pin`'s limiter: no PIN is the required refusal, a
+    /// wrong PIN counts, six in a row lock the account — the right PIN
+    /// waits — and a missing PIN is not a try.
+    #[test]
+    fn export_profile_wrong_pins_share_the_taxpayer_lockout() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let attempt = |pin: &str| export_profile(&args(vec![s(TIN), s(pin)]));
+        let none = || export_profile(&args(vec![s(TIN)]));
+
+        assert_eq!(
+            none().unwrap_err().message(),
+            "This profile's PIN is required to export it."
+        );
+        for _ in 0..5 {
+            assert_eq!(attempt("1111").unwrap_err().message(), "Wrong PIN.");
+        }
+        // Not a try: the required refusal still answers, not the lockout.
+        assert_eq!(
+            none().unwrap_err().message(),
+            "This profile's PIN is required to export it."
+        );
+        let sixth = attempt("1111").unwrap_err();
+        assert!(sixth.message().contains("Too many wrong tries"), "{sixth}");
+        assert!(
+            attempt("0817")
+                .unwrap_err()
+                .message()
+                .contains("Too many wrong tries"),
+            "the right PIN waits too"
+        );
     }
 }
