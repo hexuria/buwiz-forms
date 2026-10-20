@@ -78,104 +78,112 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
         ));
     }
 
-    for base_dir in base_dirs {
-        // Helper to read file from archive
-        let mut read_from_zip = |name: &str| -> Result<String, DbError> {
-            let full_name = format!("{}{}", base_dir, name);
-            let mut file = archive
-                .by_name(&full_name)
-                .map_err(|e| DbError::Other(e.to_string()))?;
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            Ok(content)
-        };
+    // The whole archive writes under one transaction: a failure partway —
+    // a later profile's malformed JSON, a full disk — must not leave some
+    // profiles imported and some not. `save_profile` rides this transaction
+    // (see its nested-transaction note); COMMIT lands all of it, ROLLBACK
+    // none of it.
+    db.conn.execute_batch("BEGIN IMMEDIATE")?;
+    let result = (|| -> Result<(), DbError> {
+        for base_dir in base_dirs {
+            // Helper to read file from archive
+            let mut read_from_zip = |name: &str| -> Result<String, DbError> {
+                let full_name = format!("{}{}", base_dir, name);
+                let mut file = archive
+                    .by_name(&full_name)
+                    .map_err(|e| DbError::Other(e.to_string()))?;
+                let mut content = String::new();
+                file.read_to_string(&mut content)?;
+                Ok(content)
+            };
 
-        // 0. Read manifest.json for export version (defaults to (0,0,0) for legacy archives)
-        let export_version = match read_from_zip("manifest.json") {
-            Ok(manifest_str) => {
-                let m: serde_json::Value = serde_json::from_str(&manifest_str)?;
-                let ver_str = m
-                    .get("export_version")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("0.0.0");
-                let ver = parse_semver(ver_str);
-                info!(
-                    "Import archive manifest: export_version={}.{}.{}",
-                    ver.0, ver.1, ver.2
-                );
-                ver
-            }
-            Err(_) => {
-                info!("No manifest.json found — treating as legacy (0.0.0) export");
-                (0, 0, 0)
-            }
-        };
+            // 0. Read manifest.json for export version (defaults to (0,0,0) for legacy archives)
+            let export_version = match read_from_zip("manifest.json") {
+                Ok(manifest_str) => {
+                    let m: serde_json::Value = serde_json::from_str(&manifest_str)?;
+                    let ver_str = m
+                        .get("export_version")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("0.0.0");
+                    let ver = parse_semver(ver_str);
+                    info!(
+                        "Import archive manifest: export_version={}.{}.{}",
+                        ver.0, ver.1, ver.2
+                    );
+                    ver
+                }
+                Err(_) => {
+                    info!("No manifest.json found — treating as legacy (0.0.0) export");
+                    (0, 0, 0)
+                }
+            };
 
-        // 1. Read profile.json — parse as Value, migrate, then deserialize
-        let profile_json = read_from_zip("profile.json")?;
-        let mut profile_value: serde_json::Value = serde_json::from_str(&profile_json)?;
-        migrate_profile_json(&mut profile_value, export_version)?;
-        let mut profile: TaxpayerProfile = serde_json::from_value(profile_value)?;
-        let tin = profile.tin.full();
-        // The file's row id and credentials are never used. An id names a
-        // row in the database that wrote the file; here it can be another
-        // taxpayer's row, which the save would overwrite, re-keying that
-        // taxpayer's records onto this TIN. Credentials stay with the
-        // database they were set in. Both come from this database's row with
-        // the same TIN, or are none when there is no such row.
-        let (id, credentials) = match db.get_profile_by_tin(&tin)? {
-            Some(mut stored) => (stored.id, stored.take_credentials()),
-            None => (None, ProfileCredentials::default()),
-        };
-        profile.id = id;
-        profile.put_credentials(credentials);
-        db.save_profile(profile)?;
+            // 1. Read profile.json — parse as Value, migrate, then deserialize
+            let profile_json = read_from_zip("profile.json")?;
+            let mut profile_value: serde_json::Value = serde_json::from_str(&profile_json)?;
+            migrate_profile_json(&mut profile_value, export_version)?;
+            let mut profile: TaxpayerProfile = serde_json::from_value(profile_value)?;
+            let tin = profile.tin.full();
+            // The file's row id and credentials are never used. An id names a
+            // row in the database that wrote the file; here it can be another
+            // taxpayer's row, which the save would overwrite, re-keying that
+            // taxpayer's records onto this TIN. Credentials stay with the
+            // database they were set in. Both come from this database's row with
+            // the same TIN, or are none when there is no such row.
+            let (id, credentials) = match db.get_profile_by_tin(&tin)? {
+                Some(mut stored) => (stored.id, stored.take_credentials()),
+                None => (None, ProfileCredentials::default()),
+            };
+            profile.id = id;
+            profile.put_credentials(credentials);
+            db.save_profile(profile)?;
 
-        // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
-        if let Ok(submissions_json) = read_from_zip("submissions.json") {
-            let mut submissions: Vec<serde_json::Value> = serde_json::from_str(&submissions_json)?;
-            for sub_value in &mut submissions {
-                migrate_submission_json(sub_value, export_version)?;
-            }
-            let typed: Vec<Submission> = submissions
-                .into_iter()
-                .map(serde_json::from_value)
-                .collect::<Result<_, _>>()?;
+            // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
+            if let Ok(submissions_json) = read_from_zip("submissions.json") {
+                let mut submissions: Vec<serde_json::Value> =
+                    serde_json::from_str(&submissions_json)?;
+                for sub_value in &mut submissions {
+                    migrate_submission_json(sub_value, export_version)?;
+                }
+                let typed: Vec<Submission> = submissions
+                    .into_iter()
+                    .map(serde_json::from_value)
+                    .collect::<Result<_, _>>()?;
 
-            for sub in typed {
-                let json_data = serde_json::to_string(&sub.form_data)?;
-                let submitted_at_key = sub.submitted_at.clone().unwrap_or_default();
+                for sub in typed {
+                    let json_data = serde_json::to_string(&sub.form_data)?;
+                    let submitted_at_key = sub.submitted_at.clone().unwrap_or_default();
 
-                // Check if a matching submission already exists (using COALESCE to match the index)
-                let exists: bool = db
-                    .conn
-                    .query_row(
-                        "SELECT 1 FROM submissions
+                    // Check if a matching submission already exists (using COALESCE to match the index)
+                    let exists: bool = db
+                        .conn
+                        .query_row(
+                            "SELECT 1 FROM submissions
                      WHERE tin = ?1 AND form_type = ?2 AND period = ?3
                        AND COALESCE(submitted_at, '') = ?4",
-                        rusqlite::params![tin, sub.form_type, sub.period, submitted_at_key],
-                        |_| Ok(true),
-                    )
-                    .unwrap_or(false);
+                            rusqlite::params![tin, sub.form_type, sub.period, submitted_at_key],
+                            |_| Ok(true),
+                        )
+                        .unwrap_or(false);
 
-                if exists {
-                    db.conn.execute(
-                        "UPDATE submissions SET status = ?1, form_data = ?2, filename = ?3,
+                    if exists {
+                        db.conn.execute(
+                            "UPDATE submissions SET status = ?1, form_data = ?2, filename = ?3,
                                 updated_at = datetime('now')
                          WHERE tin = ?4 AND form_type = ?5 AND period = ?6
                            AND COALESCE(submitted_at, '') = ?7",
-                        rusqlite::params![
-                            sub.status,
-                            json_data,
-                            sub.filename,
-                            tin,
-                            sub.form_type,
-                            sub.period,
-                            submitted_at_key
-                        ],
-                    )?;
-                } else {
-                    db.conn.execute(
+                            rusqlite::params![
+                                sub.status,
+                                json_data,
+                                sub.filename,
+                                tin,
+                                sub.form_type,
+                                sub.period,
+                                submitted_at_key
+                            ],
+                        )?;
+                    } else {
+                        db.conn.execute(
                         "INSERT INTO submissions (tin, form_type, period, status, form_data, submitted_at, filename)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                         rusqlite::params![
@@ -183,24 +191,24 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                             json_data, sub.submitted_at, sub.filename
                         ],
                     )?;
+                    }
                 }
             }
-        }
 
-        // 3. Read drafts.json
-        if let Ok(drafts_json) = read_from_zip("drafts.json") {
-            let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_json)?;
+            // 3. Read drafts.json
+            if let Ok(drafts_json) = read_from_zip("drafts.json") {
+                let drafts: Vec<serde_json::Value> = serde_json::from_str(&drafts_json)?;
 
-            for draft in drafts {
-                if let (Some(form_code), Some(taxable_year), Some(status), Some(data_json)) = (
-                    draft.get("form_code").and_then(|v| v.as_str()),
-                    draft.get("taxable_year").and_then(|v| v.as_i64()),
-                    draft.get("status").and_then(|v| v.as_str()),
-                    draft.get("data_json").and_then(|v| v.as_str()),
-                ) {
-                    let quarter = draft.get("quarter").and_then(|v| v.as_i64());
+                for draft in drafts {
+                    if let (Some(form_code), Some(taxable_year), Some(status), Some(data_json)) = (
+                        draft.get("form_code").and_then(|v| v.as_str()),
+                        draft.get("taxable_year").and_then(|v| v.as_i64()),
+                        draft.get("status").and_then(|v| v.as_str()),
+                        draft.get("data_json").and_then(|v| v.as_str()),
+                    ) {
+                        let quarter = draft.get("quarter").and_then(|v| v.as_i64());
 
-                    db.conn.execute(
+                        db.conn.execute(
                         "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                          ON CONFLICT(tin, form_code, taxable_year, quarter)
@@ -216,39 +224,39 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                             data_json
                         ],
                     )?;
+                    }
                 }
             }
-        }
 
-        // 4. Read receipts
-        if let Ok(manifest_json) = read_from_zip("receipts_manifest.json") {
-            let manifest: Vec<String> = serde_json::from_str(&manifest_json)?;
+            // 4. Read receipts
+            if let Ok(manifest_json) = read_from_zip("receipts_manifest.json") {
+                let manifest: Vec<String> = serde_json::from_str(&manifest_json)?;
 
-            for filename in manifest {
-                let txt_name = format!("Receipts/{}.txt", filename);
-                let html_name = format!("Receipts/{}.html", filename);
+                for filename in manifest {
+                    let txt_name = format!("Receipts/{}.txt", filename);
+                    let html_name = format!("Receipts/{}.html", filename);
 
-                if let Ok(raw_text) = read_from_zip(&txt_name) {
-                    let raw_html = read_from_zip(&html_name).ok();
+                    if let Ok(raw_text) = read_from_zip(&txt_name) {
+                        let raw_html = read_from_zip(&html_name).ok();
 
-                    let mut form_type = "Unknown".to_string();
-                    let mut period = "Unknown".to_string();
-                    let mut received_date = "Unknown".to_string();
-                    let mut received_time = "Unknown".to_string();
+                        let mut form_type = "Unknown".to_string();
+                        let mut period = "Unknown".to_string();
+                        let mut received_date = "Unknown".to_string();
+                        let mut received_time = "Unknown".to_string();
 
-                    if let Ok(parsed) =
-                        crate::receipt::parse_bir_receipt_email(&raw_text, raw_html.clone())
-                    {
-                        received_date = parsed.date_received.to_string();
-                        received_time = parsed.time_received.to_string();
-                    }
+                        if let Ok(parsed) =
+                            crate::receipt::parse_bir_receipt_email(&raw_text, raw_html.clone())
+                        {
+                            received_date = parsed.date_received.to_string();
+                            received_time = parsed.time_received.to_string();
+                        }
 
-                    if let Some(split) = crate::receipt::split_bir_filename(&filename) {
-                        form_type = split.1;
-                        period = split.2;
-                    }
+                        if let Some(split) = crate::receipt::split_bir_filename(&filename) {
+                            form_type = split.1;
+                            period = split.2;
+                        }
 
-                    let _ = db.conn.execute(
+                        let _ = db.conn.execute(
                         "INSERT INTO submission_receipts (filename, tin, form_type, period, received_date, received_time, source_from, raw_text, raw_html)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                          ON CONFLICT(filename) DO UPDATE SET raw_text = excluded.raw_text, raw_html = excluded.raw_html",
@@ -264,39 +272,50 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                             raw_html
                         ],
                     );
+                    }
+                }
+            }
+
+            // 5. Read data_providers.json (added in export v1): a provider's
+            // provider_id and name only, never its credentials or row id. One is
+            // created, with no credentials, only when this TIN has no provider
+            // with that provider_id yet, so an existing provider is never
+            // touched and a re-import adds no duplicate.
+            if let Ok(providers_json) = read_from_zip("data_providers.json") {
+                let providers: Vec<serde_json::Value> = serde_json::from_str(&providers_json)?;
+                let mut known = provider_ids(db, &tin)?;
+                for provider in providers {
+                    let (Some(provider_id), Some(name)) = (
+                        provider.get("provider_id").and_then(|v| v.as_str()),
+                        provider.get("name").and_then(|v| v.as_str()),
+                    ) else {
+                        continue;
+                    };
+                    if known.insert(provider_id.to_string()) {
+                        db.save_data_provider(ProviderConfig {
+                            id: None,
+                            profile_tin: tin.clone(),
+                            provider_id: provider_id.to_string(),
+                            name: name.to_string(),
+                            credentials: BTreeMap::new(),
+                        })?;
+                    }
                 }
             }
         }
 
-        // 5. Read data_providers.json (added in export v1): a provider's
-        // provider_id and name only, never its credentials or row id. One is
-        // created, with no credentials, only when this TIN has no provider
-        // with that provider_id yet, so an existing provider is never
-        // touched and a re-import adds no duplicate.
-        if let Ok(providers_json) = read_from_zip("data_providers.json") {
-            let providers: Vec<serde_json::Value> = serde_json::from_str(&providers_json)?;
-            let mut known = provider_ids(db, &tin)?;
-            for provider in providers {
-                let (Some(provider_id), Some(name)) = (
-                    provider.get("provider_id").and_then(|v| v.as_str()),
-                    provider.get("name").and_then(|v| v.as_str()),
-                ) else {
-                    continue;
-                };
-                if known.insert(provider_id.to_string()) {
-                    db.save_data_provider(ProviderConfig {
-                        id: None,
-                        profile_tin: tin.clone(),
-                        provider_id: provider_id.to_string(),
-                        name: name.to_string(),
-                        credentials: BTreeMap::new(),
-                    })?;
-                }
-            }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => {
+            db.conn.execute_batch("COMMIT")?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = db.conn.execute_batch("ROLLBACK");
+            Err(error)
         }
     }
-
-    Ok(())
 }
 
 /// The provider ids `tin` already has, read without their credentials.
@@ -1239,6 +1258,70 @@ mod tests {
         assert!(
             providers[0].credentials.is_empty(),
             "the provider came back with credentials"
+        );
+    }
+
+    /// The Settings all-profiles backup puts each profile under
+    /// `Profiles/<TIN>/`: the import reads every one, not just a top-level
+    /// `profile.json`.
+    #[test]
+    fn a_combined_archive_imports_every_profile() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let archive = dir.path().join("all-profiles.zip");
+        write_archive(
+            &archive,
+            &[
+                (
+                    &format!("Profiles/{TIN_Y}/profile.json"),
+                    serde_json::to_string(&branch_profile("Combined One", TIN_Y)).unwrap(),
+                ),
+                (
+                    &format!("Profiles/{TIN_X}/profile.json"),
+                    serde_json::to_string(&branch_profile("Combined Two", TIN_X)).unwrap(),
+                ),
+            ],
+        );
+
+        import_profile_data(&db, &archive).unwrap();
+        let mut names: Vec<String> = db
+            .list_profiles()
+            .unwrap()
+            .iter()
+            .map(|profile| profile.full_name.clone())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["Combined One", "Combined Two"]);
+    }
+
+    /// The whole archive writes under one transaction: a later profile's
+    /// bad `profile.json` fails the import and rolls the earlier profile
+    /// back — no half-imported state.
+    #[test]
+    fn a_failed_second_profile_rolls_back_the_whole_import() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let archive = dir.path().join("broken.zip");
+        // The valid profile comes first in the archive, so without the
+        // transaction it would already be saved when the second fails.
+        write_archive(
+            &archive,
+            &[
+                (
+                    &format!("Profiles/{TIN_Y}/profile.json"),
+                    serde_json::to_string(&branch_profile("Rolled Back", TIN_Y)).unwrap(),
+                ),
+                (
+                    &format!("Profiles/{TIN_X}/profile.json"),
+                    "{ not json".to_string(),
+                ),
+            ],
+        );
+
+        assert!(import_profile_data(&db, &archive).is_err());
+        assert!(
+            db.list_profiles().unwrap().is_empty(),
+            "the first profile survived a rolled-back import"
         );
     }
 }

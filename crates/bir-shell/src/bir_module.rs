@@ -1738,18 +1738,26 @@ fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
 
 /// Import the archive at `path`; not a verb. Archive handling stays
 /// host-side and mirrors `ImportExportView`: a zip with `bir_data.db` is a
-/// full database backup, one with a top-level `profile.json` is a profile
+/// full database backup, one with any `profile.json` — top-level, or under
+/// `Profiles/<TIN>/` in a Settings all-profiles backup — is a profile
 /// export, anything else is invalid.
 fn import_archive_from(path: &std::path::Path) -> HostResult {
-    let zip_has = |name: &str| -> bool {
-        std::fs::File::open(path)
-            .ok()
-            .and_then(|file| zip::ZipArchive::new(file).ok())
-            .map(|mut archive| archive.by_name(name).is_ok())
-            .unwrap_or(false)
-    };
-    let is_db = zip_has("bir_data.db");
-    let is_profile = zip_has("profile.json");
+    // What `import_profile_data` accepts: any `profile.json` — top-level
+    // (one profile) or under `Profiles/<TIN>/` (the Settings all-profiles
+    // backup). A database backup's marker is a top-level `bir_data.db`.
+    let entry_names: Vec<String> = std::fs::File::open(path)
+        .ok()
+        .and_then(|file| zip::ZipArchive::new(file).ok())
+        .map(|mut archive| {
+            (0..archive.len())
+                .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let is_db = entry_names.iter().any(|name| name == "bir_data.db");
+    let is_profile = entry_names
+        .iter()
+        .any(|name| name.ends_with("profile.json"));
 
     if is_db {
         // Painted flow (import_export.rs): safety-backup the live file, then
@@ -1763,6 +1771,10 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
         if db_path.exists()
             && let Some(parent) = db_path.parent()
         {
+            // Flush the WAL first: a raw copy of bir_data.db alone can miss
+            // commits still living in -wal, and this copy is the restore
+            // point if the extract corrupts the database.
+            with_database(|db| db.checkpoint().map_err(db_error))?;
             let _ = std::fs::copy(
                 &db_path,
                 parent.join(format!("bir_data.safety-{timestamp}.db")),
@@ -3429,6 +3441,43 @@ mod tests {
         );
     }
 
+    /// The Settings all-profiles backup puts each profile under
+    /// `Profiles/<TIN>/`: `import_archive_from` reads every profile in it,
+    /// not just a top-level `profile.json`.
+    #[test]
+    fn import_archive_from_imports_a_combined_archive() {
+        setup();
+        let scratch = ScratchDir::new("combined");
+        let source = Database::open_ephemeral().unwrap();
+        source
+            .create_taxpayer(new_taxpayer("111222333", "First Combined Corp"))
+            .unwrap();
+        source
+            .create_taxpayer(new_taxpayer("444555666", "Second Combined Corp"))
+            .unwrap();
+        let archive = scratch.path().join("all-profiles.zip");
+        bir_core::export::export_all_profiles_data(&source, &archive).unwrap();
+        drop(source);
+        assert_eq!(
+            to_json(&import_archive_from(&archive).unwrap()),
+            serde_json::json!({ "kind": "profile" })
+        );
+        with_database(|db| {
+            for (tin, name) in [
+                ("11122233300000", "First Combined Corp"),
+                ("44455566600000", "Second Combined Corp"),
+            ] {
+                let profile = db
+                    .get_profile_by_tin(tin)
+                    .map_err(db_error)?
+                    .unwrap_or_else(|| panic!("the imported profile for {tin}"));
+                assert_eq!(profile.full_name, name);
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+
     /// `import_archive_from` replaces the open database with a database
     /// archive, after a safety copy of the file it replaces. That path
     /// writes the app's database file and reads its key, so it runs in a
@@ -3494,12 +3543,30 @@ mod tests {
             to_json(&import_archive_from(&archive).unwrap()),
             serde_json::json!({ "kind": "database" })
         );
-        let safety_copies = std::fs::read_dir(scratch)
+        let safety_copies: Vec<_> = std::fs::read_dir(scratch)
             .unwrap()
-            .map(|entry| entry.unwrap().file_name())
-            .filter(|name| name.to_string_lossy().starts_with("bir_data.safety-"))
-            .count();
-        assert_eq!(safety_copies, 1, "a safety copy of the replaced file");
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("bir_data.safety-")
+            })
+            .collect();
+        assert_eq!(safety_copies.len(), 1, "a safety copy of the replaced file");
+        // The safety copy holds the just-created taxpayer because the import
+        // checkpoints the WAL before copying — a raw copy alone can leave
+        // committed data still in -wal, out of the file it saved.
+        let safety_copy = Database::open(&safety_copies[0]).unwrap();
+        assert!(
+            safety_copy
+                .list_profiles()
+                .unwrap()
+                .iter()
+                .any(|profile| profile.full_name == "Replaced Trading Corp"),
+            "the safety copy missed the committed profile"
+        );
+        drop(safety_copy);
         let tins = with_database(|db| {
             Ok(db
                 .list_profiles()

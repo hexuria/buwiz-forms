@@ -46,6 +46,12 @@ impl ImportExportView {
             .unwrap()
             .as_secs();
         if let Some(parent) = db_path.parent() {
+            // Flush the WAL first: a raw copy alone can miss commits still
+            // living in -wal, and this copy is the restore point if the
+            // extract corrupts the database.
+            if let Ok(db) = self.db.lock() {
+                let _ = db.checkpoint();
+            }
             let safety_backup = parent.join(format!("bir_data.safety-{}.db", timestamp));
             let _ = std::fs::copy(&db_path, safety_backup);
         }
@@ -306,9 +312,12 @@ impl Render for ImportExportView {
                                                 } else { false }
                                             } else { false };
 
+                                            // Any `profile.json` counts as a profile export: top-level for one profile, `Profiles/<TIN>/` for the Settings all-profiles backup — the same marker `import_profile_data` imports.
                                             let is_profile = if let Ok(file) = std::fs::File::open(&path) {
                                                 if let Ok(mut archive) = zip::ZipArchive::new(file) {
-                                                    archive.by_name("profile.json").is_ok()
+                                                    (0..archive.len()).any(|i| {
+                                                        archive.by_index(i).map(|f| f.name().ends_with("profile.json")).unwrap_or(false)
+                                                    })
                                                 } else { false }
                                             } else { false };
 

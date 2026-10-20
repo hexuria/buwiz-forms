@@ -1,6 +1,6 @@
 //! Profile repository — CRUD for TaxpayerProfile.
 
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Database, DbError};
 use crate::profile::{
@@ -456,22 +456,34 @@ impl Database {
             .validate_confirmed_profile_timeline()
             .map_err(DbError::Other)?;
 
-        let tx = self.conn.unchecked_transaction()?;
-        tx.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
+        // A caller may already hold a transaction — the profile import
+        // writes the whole archive atomically. Then this save rides that
+        // transaction (SQLite refuses a nested BEGIN) and only its owner
+        // commits; alone, this save owns and commits its own transaction.
+        let tx = self
+            .conn
+            .is_autocommit()
+            .then(|| self.conn.unchecked_transaction())
+            .transpose()?;
+        let conn: &Connection = match &tx {
+            Some(tx) => tx,
+            None => &self.conn,
+        };
+        conn.execute_batch("PRAGMA defer_foreign_keys = ON;")?;
 
         let json_data = serde_json::to_string(&profile)?;
 
         if let Some(id) = profile.id {
-            let updated = tx.execute(
+            let updated = conn.execute(
                 "UPDATE profiles SET tin = ?1, data_json = ?2 WHERE id = ?3",
                 params![tin, json_data, id],
             )?;
             if updated == 0 {
-                tx.execute(
+                conn.execute(
                     "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
                     params![tin, json_data],
                 )?;
-                profile.id = Some(tx.last_insert_rowid());
+                profile.id = Some(conn.last_insert_rowid());
             }
         } else if let Some(_existing) = self.get_profile(&tin)? {
             return Err(DbError::Sqlite(rusqlite::Error::SqliteFailure(
@@ -479,18 +491,18 @@ impl Database {
                 Some(format!("A profile with TIN {} already exists", tin)),
             )));
         } else {
-            tx.execute(
+            conn.execute(
                 "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
                 params![tin, json_data],
             )?;
-            profile.id = Some(tx.last_insert_rowid());
+            profile.id = Some(conn.last_insert_rowid());
         }
         if let Some(previous_tin) = previous_tin.as_deref() {
-            Self::migrate_profile_tin_references(&tx, previous_tin, &tin)?;
+            Self::migrate_profile_tin_references(conn, previous_tin, &tin)?;
         }
 
         for (year, set) in &profile.per_year_forms {
-            super::forms_set::execute_replace_per_year_forms(&tx, &tin, *year, set)?;
+            super::forms_set::execute_replace_per_year_forms(conn, &tin, *year, set)?;
         }
 
         // Refresh the current year and every already stored year in the same
@@ -531,14 +543,16 @@ impl Database {
                     "Forms Set reconciliation requires review"
                 );
             }
-            super::forms_set::execute_replace_per_year_forms(&tx, &tin, year, &result.forms_set)?;
+            super::forms_set::execute_replace_per_year_forms(conn, &tin, year, &result.forms_set)?;
             profile.per_year_forms.insert(year, result.forms_set);
         }
 
         // Group a newly created (or re-keyed) profile under its taxpayer.
-        super::taxpayers::sync_taxpayer_rows(&tx)?;
+        super::taxpayers::sync_taxpayer_rows(conn)?;
 
-        tx.commit()?;
+        if let Some(tx) = tx {
+            tx.commit()?;
+        }
         Ok(self.finish_post_commit_write(profile, "Taxpayer profile save"))
     }
 
