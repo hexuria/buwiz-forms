@@ -225,69 +225,29 @@ fn get_profile_by_tin(
         .ok_or_else(|| HostError::new(format!("no taxpayer profile with TIN {tin}")))
 }
 
-/// A profile's five credentials are host state: the page can neither read
-/// them nor set or clear them through the profile verbs. Each keeps its own
-/// host writer instead: the inbox verbs (`set_inbox_app_password`, the
-/// Google grant's persist and disconnect) for the app password and the
-/// tokens; the authenticator verbs (`set_taxpayer_totp`, `set_profile_totp`,
-/// `set_admin_totp`) for a TOTP secret; and the PIN verbs
-/// (`set_taxpayer_pin`, `set_profile_pin`, `set_admin_pin`, `setup_helpdesk`,
-/// `change_to_helpdesk`) for a PIN. The authenticator and PIN verbs store
-/// theirs on the taxpayer (the help desk admin's in settings), never on a
-/// profile. A TOTP secret or PIN hash still on a profile row moves onto its
-/// taxpayer at the next launch when the taxpayer has none (bir-core's
-/// `migrate_v22_taxpayer_credentials`), so one the page could set would
-/// become the taxpayer's.
-const PROFILE_CREDENTIAL_KEYS: [&str; 5] = [
-    "totp_secret",
-    "imap_app_password",
-    "oauth_access_token",
-    "oauth_refresh_token",
-    "profile_pin_hash",
-];
-
-/// A profile's five credentials, in `PROFILE_CREDENTIAL_KEYS` order.
-type ProfileCredentials = [Option<String>; 5];
-
-/// Move `profile`'s credentials out. They are moved, never copied, so the
-/// profile that ends up holding them has the only copy, and its `Drop`
-/// wipes them (all but the TOTP secret, which bir-core's `Drop` skips).
-fn take_credentials(profile: &mut bir_core::profile::TaxpayerProfile) -> ProfileCredentials {
-    [
-        profile.totp_secret.take(),
-        profile.imap_app_password.take(),
-        profile.oauth_access_token.take(),
-        profile.oauth_refresh_token.take(),
-        profile.profile_pin_hash.take(),
-    ]
-}
-
-fn put_credentials(
-    profile: &mut bir_core::profile::TaxpayerProfile,
-    [totp, password, access, refresh, pin_hash]: ProfileCredentials,
-) {
-    profile.totp_secret = totp;
-    profile.imap_app_password = password;
-    profile.oauth_access_token = access;
-    profile.oauth_refresh_token = refresh;
-    profile.profile_pin_hash = pin_hash;
-}
-
 /// A profile as the page receives it: the record without the credential
-/// keys (removed, not sent as null). The values are out of the profile while
-/// the record is built, so none can leave even under a key this list does
-/// not name, and back in before it drops.
+/// keys (removed, not sent as null), built by bir-core's
+/// `TaxpayerProfile::record_without_credentials`, which keeps the values out
+/// of the profile while the record is built.
+///
+/// A profile's five credentials (bir-core's `PROFILE_CREDENTIAL_KEYS`) are
+/// host state: the page can neither read them nor set or clear them through
+/// the profile verbs. Each keeps its own host writer instead: the inbox
+/// verbs (`set_inbox_app_password`, the Google grant's persist and
+/// disconnect) for the app password and the tokens; the authenticator verbs
+/// (`set_taxpayer_totp`, `set_profile_totp`, `set_admin_totp`) for a TOTP
+/// secret; and the PIN verbs (`set_taxpayer_pin`, `set_profile_pin`,
+/// `set_admin_pin`, `setup_helpdesk`, `change_to_helpdesk`) for a PIN. The
+/// authenticator and PIN verbs store theirs on the taxpayer (the help desk
+/// admin's in settings), never on a profile. A TOTP secret or PIN hash still
+/// on a profile row moves onto its taxpayer at the next launch when the
+/// taxpayer has none (bir-core's `migrate_v22_taxpayer_credentials`), so one
+/// the page could set would become the taxpayer's.
 fn redacted_profile(mut profile: bir_core::profile::TaxpayerProfile) -> HostResult {
-    let credentials = take_credentials(&mut profile);
-    let record = serde_json::to_value(&profile);
-    put_credentials(&mut profile, credentials);
-    let mut record = record.map_err(db_error)?;
-    if let Some(fields) = record.as_object_mut() {
-        for key in PROFILE_CREDENTIAL_KEYS {
-            fields.remove(key);
-        }
-    }
-    Ok(json(record))
+    profile
+        .record_without_credentials()
+        .map(json)
+        .map_err(db_error)
 }
 
 /// `save_profile` never stores a client's credentials, as
@@ -317,8 +277,11 @@ fn keep_stored_credentials(
             .or(by_tin),
         _ => by_tin,
     };
-    let credentials = stored.as_mut().map(take_credentials).unwrap_or_default();
-    put_credentials(profile, credentials);
+    let credentials = stored
+        .as_mut()
+        .map(bir_core::profile::TaxpayerProfile::take_credentials)
+        .unwrap_or_default();
+    profile.put_credentials(credentials);
     Ok(())
 }
 
@@ -1753,29 +1716,33 @@ fn reset_database() {
     });
 }
 
-/// Native file picker + archive handling stay host-side: the script has no
-/// file dialog. Mirrors `ImportExportView`: a zip with `bir_data.db` is a
-/// full database backup, one with a top-level `profile.json` is a profile
-/// export, anything else is invalid. Optional `path` argument skips the
-/// dialog (used by tests and scripted imports).
+/// The page's import. The host always opens the file dialog (the script has
+/// none), so the page cannot choose the file: a call that passes any
+/// argument is refused before anything opens. Tests and scripted imports
+/// call [`import_archive_from`] instead.
 fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let path = arguments
-        .value(0)
-        .ok()
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .map(std::path::PathBuf::from)
-        .or_else(|| {
-            rfd::FileDialog::new()
-                .set_title("Select an exported .zip archive")
-                .add_filter("Export Archive", &["zip"])
-                .pick_file()
-        });
-    let Some(path) = path else {
+    if !arguments.is_empty() {
+        return Err(HostError::new(
+            "import_archive takes no path; the host opens the file dialog",
+        ));
+    }
+    let Some(path) = rfd::FileDialog::new()
+        .set_title("Select an exported .zip archive")
+        .add_filter("Export Archive", &["zip"])
+        .pick_file()
+    else {
         return Ok(HostObject::new().field("kind", "cancelled").into());
     };
+    import_archive_from(&path)
+}
 
+/// Import the archive at `path`; not a verb. Archive handling stays
+/// host-side and mirrors `ImportExportView`: a zip with `bir_data.db` is a
+/// full database backup, one with a top-level `profile.json` is a profile
+/// export, anything else is invalid.
+fn import_archive_from(path: &std::path::Path) -> HostResult {
     let zip_has = |name: &str| -> bool {
-        std::fs::File::open(&path)
+        std::fs::File::open(path)
             .ok()
             .and_then(|file| zip::ZipArchive::new(file).ok())
             .map(|mut archive| archive.by_name(name).is_ok())
@@ -1802,22 +1769,101 @@ fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
             );
         }
         reset_database();
-        return match bir_core::import::extract_database_zip(&path, &db_path) {
+        return match bir_core::import::extract_database_zip(path, &db_path) {
             Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
             Err(error) => Err(HostError::new(error.to_string())),
         };
     }
 
     if is_profile {
-        return with_database(
-            |db| match bir_core::import::import_profile_data(db, &path) {
-                Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
-                Err(error) => Err(HostError::new(error.to_string())),
-            },
-        );
+        return with_database(|db| match bir_core::import::import_profile_data(db, path) {
+            Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
+            Err(error) => Err(HostError::new(error.to_string())),
+        });
     }
 
     Ok(HostObject::new().field("kind", "invalid").into())
+}
+
+/// The page's export: `tin`'s profile as a `.zip` archive under the host's
+/// save dialog. The page never chooses the file — the same rule as
+/// `import_archive` — so anything after `(tin, pin)`, or a `pin` that is
+/// not a string or `null`, is refused before anything opens. Tests and
+/// scripted exports call [`export_profile_to`] instead.
+///
+/// A taxpayer with a PIN exports only under it: the PIN is checked under
+/// the same rate limiter as [`verify_taxpayer_pin`], and a refusal —
+/// "This profile's PIN is required to export it." or "Wrong PIN." —
+/// happens before the dialog, so no archive exists without authorization.
+/// A taxpayer without a PIN exports ungated; an authenticator alone is not
+/// a PIN.
+fn export_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
+    if arguments.len() > 2 {
+        return Err(HostError::new(
+            "export_profile takes no path; the host opens the save dialog",
+        ));
+    }
+    let tin = arguments.string(0)?.to_string();
+    let pin = match arguments.get(1) {
+        None | Some(HostValue::Null) => None,
+        Some(HostValue::Str(pin)) => Some(pin.clone()),
+        Some(_) => {
+            return Err(HostError::new(
+                "export_profile takes no path; the host opens the save dialog",
+            ));
+        }
+    };
+    // The profile names its taxpayer's root, the way `set_profile_pin`
+    // resolves a branch TIN; an unknown TIN is refused before the dialog.
+    let tin_root =
+        with_database(|db| Ok(get_profile_by_tin(db, &tin)?.tin.full()[..9].to_string()))?;
+    let authorized = auth_limiter::guarded(&auth_limiter::taxpayer(&tin_root), || {
+        with_database(|db| {
+            let credentials = taxpayer_credentials(db, &tin_root)?;
+            match credentials.pin_hash {
+                // Nothing to check — an authenticator alone is not a PIN —
+                // and nothing counts against the limiter.
+                None => Ok(true),
+                Some(_) if pin.is_none() => Err(HostError::new(
+                    "This profile's PIN is required to export it.",
+                )),
+                Some(hash) => Ok(pin
+                    .as_deref()
+                    .is_some_and(|pin| pin_matches(Some(hash.as_str()), pin))),
+            }
+        })
+    })?;
+    if !authorized {
+        return Err(HostError::new("Wrong PIN."));
+    }
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or(0);
+    let Some(path) = rfd::FileDialog::new()
+        .set_title("Save the profile archive")
+        .set_file_name(format!("BIR_Profile_{}_{}.zip", tin, timestamp))
+        .add_filter("Export Archive", &["zip"])
+        .save_file()
+    else {
+        return Ok(HostObject::new().field("kind", "cancelled").into());
+    };
+    export_profile_to(&tin, pin.as_deref(), &path)
+}
+
+/// Write `tin`'s profile archive to `path`; not a verb. The PIN gate is
+/// bir-core's: [`export_profile_data`](bir_core::export_profile_data)
+/// refuses a PIN'd taxpayer without its PIN before the file exists, so a
+/// refusal here leaves nothing on disk either.
+fn export_profile_to(tin: &str, pin: Option<&str>, path: &std::path::Path) -> HostResult {
+    with_database(|db| {
+        bir_core::export_profile_data(db, tin, path, pin).map_err(db_error)?;
+        Ok(HostObject::new()
+            .field("kind", "exported")
+            .field("path", path.display().to_string())
+            .into())
+    })
 }
 
 /// Tax deadlines feed for the calendar page.
@@ -1872,6 +1918,7 @@ pub fn module() -> HostModule {
         .function("cancel_queued", cancel_queued)
         .function("list_deadlines", |_| list_deadlines())
         .function("import_archive", import_archive)
+        .function("export_profile", export_profile)
         .function("form_print_html", form_print_html)
         .function("list_background_jobs", |_| list_background_jobs())
         .function("delete_background_job", delete_background_job)
@@ -2021,7 +2068,13 @@ export function list_deadlines(): TaxDeadline[];
 export interface ImportResult {
     kind: "database" | "profile" | "invalid" | "cancelled";
 }
-export function import_archive(path?: string): ImportResult;
+export function import_archive(): ImportResult;
+export interface ExportResult {
+    kind: "exported" | "cancelled";
+    path?: string;
+}
+/** The taxpayer's profile archive under the host's save dialog. A taxpayer with a PIN needs it as `pin`; the page never passes a path — the host chooses the file. */
+export function export_profile(tin: string, pin?: string | null): ExportResult;
 export interface PrintPreview {
     path: string;
 }
@@ -2059,7 +2112,7 @@ export function job_log_tail(): JobLogTail;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bir_core::profile::TaxpayerType;
+    use bir_core::profile::{PROFILE_CREDENTIAL_KEYS, TaxpayerType};
     use bir_core::tax_profile::{BranchFacts, NewTaxpayer};
     use gpui_shell::HostArguments;
 
@@ -3225,5 +3278,350 @@ mod tests {
             .expect("sync half");
         let answer = futures::executor::block_on(future).unwrap();
         assert_eq!(answer, HostValue::Bool(false));
+    }
+
+    // ---------- import: the host always opens the file dialog ----------
+
+    /// A directory under the system temp dir, removed when this drops.
+    struct ScratchDir(std::path::PathBuf);
+
+    impl ScratchDir {
+        fn new(label: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "bir-shell-import-{label}-{}-{nanos}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    const ARCHIVE_TIN: &str = "98765432000000";
+
+    fn new_taxpayer(tin_root: &str, name: &str) -> NewTaxpayer {
+        NewTaxpayer {
+            tin_root: tin_root.into(),
+            name: name.into(),
+            taxpayer_type: TaxpayerType::Corporation,
+            birth_date: None,
+            head_office: BranchFacts {
+                rdo_code: "043".into(),
+                registered_address: "2 Sample Road, Makati".into(),
+                zip_code: "1200".into(),
+                phone: "0280000001".into(),
+                email: "books@example.com".into(),
+            },
+        }
+    }
+
+    /// A profile archive of `ARCHIVE_TIN` with one submission, exported
+    /// from a database of its own.
+    fn profile_archive(scratch: &ScratchDir) -> std::path::PathBuf {
+        let source = Database::open_ephemeral().unwrap();
+        source
+            .create_taxpayer(new_taxpayer("987654320", "Archived Holdings Inc"))
+            .unwrap();
+        source
+            .save_submission(bir_core::db::Submission {
+                id: None,
+                tin: ARCHIVE_TIN.into(),
+                form_type: "1702Q".into(),
+                period: "2026Q1".into(),
+                status: "Draft".into(),
+                form_data: Default::default(),
+                submitted_at: None,
+                filename: None,
+                created_at: None,
+                updated_at: None,
+            })
+            .unwrap();
+        let archive = scratch.path().join("profile.zip");
+        bir_core::export::export_profile_data(&source, ARCHIVE_TIN, &archive, None).unwrap();
+        archive
+    }
+
+    fn archive_imported() -> bool {
+        with_database(|db| {
+            Ok(db
+                .get_profile_by_tin(ARCHIVE_TIN)
+                .map_err(db_error)?
+                .is_some())
+        })
+        .unwrap()
+    }
+
+    /// The page cannot choose the file. The registered verb refuses a call
+    /// with any argument, a path included, before a dialog opens, and
+    /// imports nothing; `import_archive_from` is no verb at all.
+    #[test]
+    fn import_archive_refuses_any_argument() {
+        setup();
+        let scratch = ScratchDir::new("refused");
+        let archive = profile_archive(&scratch);
+        let module = module();
+        assert!(module.has("import_archive"));
+        assert!(!module.has("import_archive_from"), "not a verb");
+        // The path first: a verb that took it would import it here instead
+        // of falling through to a dialog.
+        for argument in [
+            s(&archive.display().to_string()),
+            HostValue::Null,
+            HostValue::Bool(true),
+        ] {
+            match module.call("import_archive", &args(vec![argument])) {
+                Ok(_) => panic!("import_archive answered a call with an argument"),
+                Err(refusal) => assert_eq!(
+                    refusal.message(),
+                    "import_archive takes no path; the host opens the file dialog"
+                ),
+            }
+            assert!(!archive_imported(), "a refused call imported the archive");
+        }
+    }
+
+    /// `import_archive_from` imports a profile archive into the open
+    /// database, and answers `invalid` for a zip that is neither export.
+    #[test]
+    fn import_archive_from_imports_a_profile_archive() {
+        setup();
+        let scratch = ScratchDir::new("profile");
+        let archive = profile_archive(&scratch);
+        assert_eq!(
+            to_json(&import_archive_from(&archive).unwrap()),
+            serde_json::json!({ "kind": "profile" })
+        );
+        with_database(|db| {
+            let profile = db
+                .get_profile_by_tin(ARCHIVE_TIN)
+                .map_err(db_error)?
+                .expect("the imported profile");
+            assert_eq!(profile.full_name, "Archived Holdings Inc");
+            let submissions = db.list_submissions_for_tin(ARCHIVE_TIN).map_err(db_error)?;
+            assert_eq!(submissions.len(), 1);
+            assert_eq!(submissions[0].form_type, "1702Q");
+            Ok(())
+        })
+        .unwrap();
+
+        let other = scratch.path().join("other.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&other).unwrap());
+        zip.start_file("notes.txt", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut zip, b"not an export").unwrap();
+        zip.finish().unwrap();
+        assert_eq!(
+            to_json(&import_archive_from(&other).unwrap()),
+            serde_json::json!({ "kind": "invalid" })
+        );
+    }
+
+    /// `import_archive_from` replaces the open database with a database
+    /// archive, after a safety copy of the file it replaces. That path
+    /// writes the app's database file and reads its key, so it runs in a
+    /// child test process whose `BIR_DATABASE_PATH` is a scratch file and
+    /// whose `EBIR_TEST_ENV` keeps the key off the keychain: never the live
+    /// database.
+    #[test]
+    fn import_archive_from_restores_a_database_archive() {
+        const SCRATCH: &str = "BIR_SHELL_IMPORT_ARCHIVE_SCRATCH";
+        if let Some(scratch) = std::env::var_os(SCRATCH) {
+            restore_a_database_archive_in(std::path::Path::new(&scratch));
+            return;
+        }
+        let scratch = ScratchDir::new("database");
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "bir_module::tests::import_archive_from_restores_a_database_archive",
+                "--nocapture",
+            ])
+            .current_dir(scratch.path())
+            .env(SCRATCH, scratch.path())
+            .env("BIR_DATABASE_PATH", scratch.path().join("bir_data.db"))
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .status()
+            .unwrap();
+        assert!(status.success(), "the database import child failed");
+        assert_eq!(
+            std::fs::read_to_string(scratch.path().join("child-done"))
+                .ok()
+                .as_deref(),
+            Some("ok"),
+            "the child ran the import"
+        );
+    }
+
+    /// The child's half of the test above, in the scratch environment its
+    /// parent set; it refuses to run anywhere else.
+    fn restore_a_database_archive_in(scratch: &std::path::Path) {
+        let file = scratch.join("bir_data.db");
+        assert_eq!(db::app_database_path(), file, "the scratch database");
+        assert!(
+            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            "the key stays off the keychain"
+        );
+        with_database(|db| {
+            db.create_taxpayer(new_taxpayer("123456788", "Replaced Trading Corp"))
+                .map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        let source = Database::open(scratch.join("source.db")).unwrap();
+        source
+            .create_taxpayer(new_taxpayer("987654320", "Restored Holdings Inc"))
+            .unwrap();
+        source.checkpoint().unwrap();
+        let archive = scratch.join("backup.zip");
+        bir_core::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+
+        assert_eq!(
+            to_json(&import_archive_from(&archive).unwrap()),
+            serde_json::json!({ "kind": "database" })
+        );
+        let safety_copies = std::fs::read_dir(scratch)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().starts_with("bir_data.safety-"))
+            .count();
+        assert_eq!(safety_copies, 1, "a safety copy of the replaced file");
+        let tins = with_database(|db| {
+            Ok(db
+                .list_profiles()
+                .map_err(db_error)?
+                .iter()
+                .map(|profile| profile.tin.full())
+                .collect::<Vec<_>>())
+        })
+        .unwrap();
+        assert_eq!(tins, [ARCHIVE_TIN], "the archive's database is open");
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
+    // ---------- export_profile ----------
+
+    /// `export_profile_to` writes `TIN`'s archive under the bir-core gate:
+    /// a PIN'd taxpayer refuses — no PIN, wrong PIN — before the file
+    /// exists, and the right PIN writes it.
+    #[test]
+    fn export_profile_to_needs_a_pinned_taxpayers_pin() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let scratch = ScratchDir::new("export");
+        let archive = scratch.path().join("profile.zip");
+
+        let refusal = export_profile_to(TIN, None, &archive).unwrap_err();
+        assert_eq!(
+            refusal.message(),
+            "This profile's PIN is required to export it."
+        );
+        assert!(!archive.exists(), "a refused export left a file");
+
+        let refusal = export_profile_to(TIN, Some("1234"), &archive).unwrap_err();
+        assert_eq!(refusal.message(), "Wrong PIN.");
+        assert!(!archive.exists(), "a refused export left a file");
+
+        let answer = to_json(&export_profile_to(TIN, Some("0817"), &archive).unwrap());
+        assert_eq!(
+            answer,
+            serde_json::json!({ "kind": "exported", "path": archive.display().to_string() })
+        );
+        assert!(archive.exists());
+    }
+
+    /// A taxpayer without a PIN exports ungated — `None` or a stray PIN —
+    /// and an authenticator alone is not a PIN.
+    #[test]
+    fn export_profile_to_exports_ungated_without_a_pin() {
+        setup();
+        let scratch = ScratchDir::new("export-open");
+        let archive = scratch.path().join("profile.zip");
+        assert_eq!(
+            to_json(&export_profile_to(TIN, None, &archive).unwrap())["kind"],
+            "exported"
+        );
+        assert!(archive.exists());
+
+        set_taxpayer_totp(&args(vec![s(ROOT), s(SECRET), s(&current_code(SECRET))])).unwrap();
+        let archive = scratch.path().join("totp-only.zip");
+        assert_eq!(
+            to_json(&export_profile_to(TIN, None, &archive).unwrap())["kind"],
+            "exported"
+        );
+    }
+
+    /// The page cannot choose the file. The registered verb refuses a call
+    /// past `(tin, pin)` — a path included — and a non-string `pin` before
+    /// a dialog opens; `export_profile_to` is no verb at all.
+    #[test]
+    fn export_profile_refuses_anything_past_the_pin() {
+        setup();
+        let module = module();
+        assert!(module.has("export_profile"));
+        assert!(!module.has("export_profile_to"), "not a verb");
+        for call in [
+            args(vec![s(TIN), s("0817"), s("/tmp/chosen.zip")]),
+            args(vec![
+                s(TIN),
+                json(serde_json::json!({"path": "/tmp/chosen.zip"})),
+            ]),
+        ] {
+            match module.call("export_profile", &call) {
+                Ok(_) => panic!("export_profile answered a call with a path"),
+                Err(refusal) => assert_eq!(
+                    refusal.message(),
+                    "export_profile takes no path; the host opens the save dialog"
+                ),
+            }
+        }
+    }
+
+    /// A PIN'd taxpayer's verb refusals happen before any dialog and share
+    /// `verify_taxpayer_pin`'s limiter: no PIN is the required refusal, a
+    /// wrong PIN counts, six in a row lock the account — the right PIN
+    /// waits — and a missing PIN is not a try.
+    #[test]
+    fn export_profile_wrong_pins_share_the_taxpayer_lockout() {
+        setup();
+        set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
+        let attempt = |pin: &str| export_profile(&args(vec![s(TIN), s(pin)]));
+        let none = || export_profile(&args(vec![s(TIN)]));
+
+        assert_eq!(
+            none().unwrap_err().message(),
+            "This profile's PIN is required to export it."
+        );
+        for _ in 0..5 {
+            assert_eq!(attempt("1111").unwrap_err().message(), "Wrong PIN.");
+        }
+        // Not a try: the required refusal still answers, not the lockout.
+        assert_eq!(
+            none().unwrap_err().message(),
+            "This profile's PIN is required to export it."
+        );
+        let sixth = attempt("1111").unwrap_err();
+        assert!(sixth.message().contains("Too many wrong tries"), "{sixth}");
+        assert!(
+            attempt("0817")
+                .unwrap_err()
+                .message()
+                .contains("Too many wrong tries"),
+            "the right PIN waits too"
+        );
     }
 }

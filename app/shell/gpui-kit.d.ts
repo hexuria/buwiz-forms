@@ -27837,7 +27837,7 @@ declare module "bir" {
   export interface ImportResult {
       kind: "database" | "profile" | "invalid" | "cancelled";
   }
-  export function import_archive(path?: string): ImportResult;
+  export function import_archive(): ImportResult;
   export interface PrintPreview {
       path: string;
   }

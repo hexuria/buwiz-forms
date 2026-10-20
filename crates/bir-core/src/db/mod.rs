@@ -287,6 +287,14 @@ pub enum DbError {
         .0.display()
     )]
     LiveDatabaseInUse(PathBuf),
+    /// Exporting a profile whose taxpayer has a PIN, without it. The text is
+    /// the refusal a caller surfaces as-is.
+    #[error("This profile's PIN is required to export it.")]
+    PinRequired,
+    /// The PIN given for a profile export is not the taxpayer's. The text is
+    /// the refusal a caller surfaces as-is.
+    #[error("Wrong PIN.")]
+    PinMismatch,
 }
 
 // =========================================================================

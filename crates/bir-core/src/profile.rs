@@ -1300,21 +1300,105 @@ impl TaxProfileVersion {
     }
 }
 
+/// The serialized keys of a profile's five credentials, in the order
+/// [`ProfileCredentials`] holds them: the authenticator secret, the inbox
+/// app password, the Google access and refresh tokens, and the PIN hash.
+///
+/// Each is host state with a writer of its own. A profile record that
+/// leaves the host has none of these keys: the shell's page reads profiles
+/// without them, and a profile export writes none of them. A profile import
+/// never stores the file's.
+pub const PROFILE_CREDENTIAL_KEYS: [&str; 5] = [
+    "totp_secret",
+    "imap_app_password",
+    "oauth_access_token",
+    "oauth_refresh_token",
+    "profile_pin_hash",
+];
+
+/// A profile's five credentials while they are out of it, in
+/// [`PROFILE_CREDENTIAL_KEYS`] order.
+///
+/// They are moved, never copied: [`TaxpayerProfile::take_credentials`]
+/// moves them out and [`TaxpayerProfile::put_credentials`] moves them into
+/// a profile, so whichever profile ends up holding them has the only copy
+/// and wipes it when it drops. A value still held here is wiped when this
+/// drops. There is no `Clone` or `Debug`, so no copy or log line can carry
+/// one.
+#[derive(Default)]
+pub struct ProfileCredentials([Option<String>; 5]);
+
+impl Drop for ProfileCredentials {
+    fn drop(&mut self) {
+        wipe(&mut self.0);
+    }
+}
+
+/// Overwrite every credential in `values`, in place.
+fn wipe<'a>(values: impl IntoIterator<Item = &'a mut Option<String>>) {
+    use zeroize::Zeroize;
+    for value in values.into_iter().flatten() {
+        value.zeroize();
+    }
+}
+
+impl TaxpayerProfile {
+    /// The profile's five credentials, in [`PROFILE_CREDENTIAL_KEYS`] order.
+    /// Taking, putting and wiping all go through this one list, so none of
+    /// the five is skipped.
+    fn credential_fields(&mut self) -> [&mut Option<String>; 5] {
+        [
+            &mut self.totp_secret,
+            &mut self.imap_app_password,
+            &mut self.oauth_access_token,
+            &mut self.oauth_refresh_token,
+            &mut self.profile_pin_hash,
+        ]
+    }
+
+    /// Move the profile's credentials out, leaving it none.
+    pub fn take_credentials(&mut self) -> ProfileCredentials {
+        ProfileCredentials(self.credential_fields().map(Option::take))
+    }
+
+    /// Move `credentials` in, in place of the profile's own, which are
+    /// wiped. Putting [`ProfileCredentials::default`] clears all five.
+    pub fn put_credentials(&mut self, mut credentials: ProfileCredentials) {
+        for (field, value) in self.credential_fields().into_iter().zip(&mut credentials.0) {
+            std::mem::swap(field, value);
+        }
+        // `credentials` now holds the replaced values and wipes them as it
+        // drops.
+    }
+
+    /// The profile as a JSON record without the credential keys (removed,
+    /// not written as null). The values are out of the profile while the
+    /// record is built, so none can leave even under a key
+    /// [`PROFILE_CREDENTIAL_KEYS`] does not name, and back in before this
+    /// returns.
+    pub fn record_without_credentials(&mut self) -> serde_json::Result<serde_json::Value> {
+        let credentials = self.take_credentials();
+        let record = serde_json::to_value(&*self);
+        self.put_credentials(credentials);
+        let mut record = record?;
+        if let Some(fields) = record.as_object_mut() {
+            for key in PROFILE_CREDENTIAL_KEYS {
+                fields.remove(key);
+            }
+        }
+        Ok(record)
+    }
+
+    /// Overwrite every credential the profile holds, in place. `Drop` runs
+    /// this.
+    fn wipe_credentials(&mut self) {
+        wipe(self.credential_fields());
+    }
+}
+
 impl Drop for TaxpayerProfile {
     fn drop(&mut self) {
-        use zeroize::Zeroize;
-        if let Some(ref mut pw) = self.imap_app_password {
-            pw.zeroize();
-        }
-        if let Some(ref mut t) = self.oauth_access_token {
-            t.zeroize();
-        }
-        if let Some(ref mut t) = self.oauth_refresh_token {
-            t.zeroize();
-        }
-        if let Some(ref mut h) = self.profile_pin_hash {
-            h.zeroize();
-        }
+        self.wipe_credentials();
     }
 }
 
@@ -1352,6 +1436,85 @@ mod tests {
         profile.imap_email = Some("   ".into());
         profile.email = "  ".into();
         assert_eq!(profile.tracking_mailbox(), None);
+    }
+
+    /// The wipe `Drop` runs overwrites all five credentials, the TOTP secret
+    /// included. A failure names the field, never its value.
+    #[test]
+    fn the_drop_wipe_covers_every_credential() {
+        let mut profile = test_profile();
+        profile.totp_secret = Some("wipe-totp-K7Q2".into());
+        profile.imap_app_password = Some("wipe-pass-W9X4".into());
+        profile.oauth_access_token = Some("wipe-access-M3R8".into());
+        profile.oauth_refresh_token = Some("wipe-refresh-T5V1".into());
+        profile.profile_pin_hash = Some("wipe-pin-hash-H6N3".into());
+        profile.wipe_credentials();
+        for (field, value) in [
+            ("totp_secret", &profile.totp_secret),
+            ("imap_app_password", &profile.imap_app_password),
+            ("oauth_access_token", &profile.oauth_access_token),
+            ("oauth_refresh_token", &profile.oauth_refresh_token),
+            ("profile_pin_hash", &profile.profile_pin_hash),
+        ] {
+            assert!(value.as_deref() == Some(""), "{field} was not wiped");
+        }
+    }
+
+    /// `PROFILE_CREDENTIAL_KEYS` names the five fields in the order the
+    /// helpers move them; `record_without_credentials` leaves out every key
+    /// and value while the profile keeps all five; `take_credentials` leaves
+    /// none behind and `put_credentials` moves them, in order, in place of
+    /// another profile's. A failure names the key, never a value.
+    #[test]
+    fn the_credential_helpers_move_the_five_named_fields() {
+        const CREDENTIALS: [&str; 5] = [
+            "keys-totp-K7Q2",
+            "keys-pass-W9X4",
+            "keys-access-M3R8",
+            "keys-refresh-T5V1",
+            "keys-pin-hash-H6N3",
+        ];
+        let mut profile = test_profile();
+        profile.totp_secret = Some(CREDENTIALS[0].into());
+        profile.imap_app_password = Some(CREDENTIALS[1].into());
+        profile.oauth_access_token = Some(CREDENTIALS[2].into());
+        profile.oauth_refresh_token = Some(CREDENTIALS[3].into());
+        profile.profile_pin_hash = Some(CREDENTIALS[4].into());
+        let record = serde_json::to_value(&profile).unwrap();
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(CREDENTIALS) {
+            assert!(record[key] == value, "{key} does not name its credential");
+        }
+
+        let without = profile.record_without_credentials().unwrap();
+        let raw = without.to_string();
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(CREDENTIALS) {
+            assert!(without.get(key).is_none(), "the record has the {key} key");
+            assert!(!raw.contains(value), "the record has the {key} value");
+        }
+        assert_eq!(without["full_name"], "Flat compatibility name");
+        assert!(
+            serde_json::to_value(&profile).unwrap() == record,
+            "building the record changed the profile"
+        );
+
+        let taken = profile.take_credentials();
+        let emptied = serde_json::to_value(&profile).unwrap();
+        for key in PROFILE_CREDENTIAL_KEYS {
+            assert!(emptied[key].is_null(), "take left the {key}");
+        }
+        let mut other = test_profile();
+        other.totp_secret = Some("keys-replaced".into());
+        other.put_credentials(taken);
+        let moved = serde_json::to_value(&other).unwrap();
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(CREDENTIALS) {
+            assert!(moved[key] == value, "put did not move the {key}");
+        }
+
+        other.put_credentials(ProfileCredentials::default());
+        let cleared = serde_json::to_value(&other).unwrap();
+        for key in PROFILE_CREDENTIAL_KEYS {
+            assert!(cleared[key].is_null(), "putting none left the {key}");
+        }
     }
 
     fn confirmed_version(

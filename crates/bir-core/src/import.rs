@@ -1,5 +1,7 @@
 use crate::db::{Database, DbError, Submission};
-use crate::profile::TaxpayerProfile;
+use crate::integration::providers::ProviderConfig;
+use crate::profile::{ProfileCredentials, TaxpayerProfile};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -113,8 +115,20 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
         let profile_json = read_from_zip("profile.json")?;
         let mut profile_value: serde_json::Value = serde_json::from_str(&profile_json)?;
         migrate_profile_json(&mut profile_value, export_version)?;
-        let profile: TaxpayerProfile = serde_json::from_value(profile_value)?;
+        let mut profile: TaxpayerProfile = serde_json::from_value(profile_value)?;
         let tin = profile.tin.full();
+        // The file's row id and credentials are never used. An id names a
+        // row in the database that wrote the file; here it can be another
+        // taxpayer's row, which the save would overwrite, re-keying that
+        // taxpayer's records onto this TIN. Credentials stay with the
+        // database they were set in. Both come from this database's row with
+        // the same TIN, or are none when there is no such row.
+        let (id, credentials) = match db.get_profile_by_tin(&tin)? {
+            Some(mut stored) => (stored.id, stored.take_credentials()),
+            None => (None, ProfileCredentials::default()),
+        };
+        profile.id = id;
+        profile.put_credentials(credentials);
         db.save_profile(profile)?;
 
         // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
@@ -254,26 +268,46 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
             }
         }
 
-        // 5. Read data_providers.json (added in export v1)
+        // 5. Read data_providers.json (added in export v1): a provider's
+        // provider_id and name only, never its credentials or row id. One is
+        // created, with no credentials, only when this TIN has no provider
+        // with that provider_id yet, so an existing provider is never
+        // touched and a re-import adds no duplicate.
         if let Ok(providers_json) = read_from_zip("data_providers.json") {
             let providers: Vec<serde_json::Value> = serde_json::from_str(&providers_json)?;
-            for p in providers {
-                if let (Some(provider_id), Some(name), Some(credentials_json)) = (
-                    p.get("provider_id").and_then(|v| v.as_str()),
-                    p.get("name").and_then(|v| v.as_str()),
-                    p.get("credentials").map(|v| v.to_string()),
-                ) {
-                    let _ = db.conn.execute(
-                        "INSERT INTO data_providers (profile_tin, provider_id, name, credentials_json)
-                         VALUES (?1, ?2, ?3, ?4)",
-                        rusqlite::params![tin, provider_id, name, credentials_json],
-                    );
+            let mut known = provider_ids(db, &tin)?;
+            for provider in providers {
+                let (Some(provider_id), Some(name)) = (
+                    provider.get("provider_id").and_then(|v| v.as_str()),
+                    provider.get("name").and_then(|v| v.as_str()),
+                ) else {
+                    continue;
+                };
+                if known.insert(provider_id.to_string()) {
+                    db.save_data_provider(ProviderConfig {
+                        id: None,
+                        profile_tin: tin.clone(),
+                        provider_id: provider_id.to_string(),
+                        name: name.to_string(),
+                        credentials: BTreeMap::new(),
+                    })?;
                 }
             }
         }
     }
 
     Ok(())
+}
+
+/// The provider ids `tin` already has, read without their credentials.
+fn provider_ids(db: &Database, tin: &str) -> Result<BTreeSet<String>, DbError> {
+    let mut statement = db
+        .conn
+        .prepare("SELECT provider_id FROM data_providers WHERE profile_tin = ?1")?;
+    let ids = statement
+        .query_map([tin], |row| row.get::<_, String>(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(ids)
 }
 
 pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
@@ -420,7 +454,7 @@ mod tests {
 
         // Export to zip
         let export_zip = dir.path().join("export.zip");
-        crate::export::export_profile_data(&db, "123456789000", &export_zip).unwrap();
+        crate::export::export_profile_data(&db, "123456789000", &export_zip, None).unwrap();
         assert!(export_zip.exists());
 
         // Import into new DB
@@ -616,7 +650,7 @@ mod tests {
 
         // Export
         let export_zip = dir.path().join("idem_export.zip");
-        crate::export::export_profile_data(&db, "555555555000", &export_zip).unwrap();
+        crate::export::export_profile_data(&db, "555555555000", &export_zip, None).unwrap();
 
         // Import into a new DB twice
         let db2_path = dir.path().join("test_idem2.db");
@@ -715,7 +749,7 @@ mod tests {
 
         // Export
         let export_zip = dir.path().join("manifest_test.zip");
-        crate::export::export_profile_data(&db, "777777777000", &export_zip).unwrap();
+        crate::export::export_profile_data(&db, "777777777000", &export_zip, None).unwrap();
 
         // Read the ZIP and extract manifest.json directly
         let file = std::fs::File::open(&export_zip).unwrap();
@@ -752,5 +786,459 @@ mod tests {
         assert!((0, 0, 1) < (0, 2, 0));
         assert!((0, 0, 1) >= (0, 0, 1));
         assert!((1, 0, 0) < (1, 0, 1));
+    }
+
+    // ---------- an archive's row id and credentials are never used ----------
+
+    use crate::profile::PROFILE_CREDENTIAL_KEYS;
+
+    const TIN_Y: &str = "11122233300000";
+    const TIN_X: &str = "44455566600000";
+
+    /// Distinctive values this database stores, in `PROFILE_CREDENTIAL_KEYS`
+    /// order, so a leak or an overwrite cannot pass unnoticed.
+    const STORED_CREDENTIALS: [&str; 5] = [
+        "stored-totp-K7Q2",
+        "stored-pass-W9X4",
+        "stored-access-M3R8",
+        "stored-refresh-T5V1",
+        "stored-pin-hash-H6N3",
+    ];
+
+    /// What a crafted archive carries, in the same order.
+    const FORGED_CREDENTIALS: [&str; 5] = [
+        "forged-totp-J4P9",
+        "forged-pass-C2L6",
+        "forged-access-Z8D1",
+        "forged-refresh-Y3F7",
+        "forged-pin-hash-B5G2",
+    ];
+
+    const STORED_PROVIDER_KEY: &str = "stored-provider-key-R2S6";
+    const FORGED_PROVIDER_KEY: &str = "forged-provider-key-U4K8";
+
+    /// A profile for the 14-digit `tin`.
+    fn branch_profile(full_name: &str, tin: &str) -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": full_name,
+            "tin": {
+                "segment1": &tin[0..3],
+                "segment2": &tin[3..6],
+                "segment3": &tin[6..9],
+                "branch": &tin[9..],
+            },
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Sample Street, Pasig",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "books@example.com",
+            "default_form_type": "2551Q",
+        }))
+        .expect("profile fixture")
+    }
+
+    fn set_credentials(profile: &mut TaxpayerProfile, values: [&str; 5]) {
+        let [totp, password, access, refresh, pin_hash] =
+            values.map(|value| Some(value.to_string()));
+        profile.totp_secret = totp;
+        profile.imap_app_password = password;
+        profile.oauth_access_token = access;
+        profile.oauth_refresh_token = refresh;
+        profile.profile_pin_hash = pin_hash;
+    }
+
+    /// `tin`'s five stored credentials, in `PROFILE_CREDENTIAL_KEYS` order.
+    fn stored_credentials(db: &Database, tin: &str) -> [Option<String>; 5] {
+        let mut profile = db
+            .get_profile_by_tin(tin)
+            .unwrap()
+            .expect("a stored profile");
+        [
+            profile.totp_secret.take(),
+            profile.imap_app_password.take(),
+            profile.oauth_access_token.take(),
+            profile.oauth_refresh_token.take(),
+            profile.profile_pin_hash.take(),
+        ]
+    }
+
+    /// Write a zip archive holding `entries` as (name, contents).
+    fn write_archive(path: &Path, entries: &[(&str, String)]) {
+        let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
+        for (name, contents) in entries {
+            zip.start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            std::io::Write::write_all(&mut zip, contents.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    /// A crafted profile archive: `profile` with the five forged credentials
+    /// and the row id `id`, and `providers` as its data_providers.json.
+    fn crafted_archive(
+        path: &Path,
+        profile: &TaxpayerProfile,
+        id: i64,
+        providers: serde_json::Value,
+    ) {
+        let mut record = serde_json::to_value(profile).unwrap();
+        record["id"] = serde_json::json!(id);
+        for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(FORGED_CREDENTIALS) {
+            record[key] = serde_json::json!(value);
+        }
+        let manifest = serde_json::json!({ "export_version": env!("CARGO_PKG_VERSION") });
+        write_archive(
+            path,
+            &[
+                ("manifest.json", manifest.to_string()),
+                ("profile.json", record.to_string()),
+                ("data_providers.json", providers.to_string()),
+            ],
+        );
+    }
+
+    /// Providers as a crafted data_providers.json carries them: each with a
+    /// row id, another TIN, and credentials.
+    fn forged_providers(provider_ids: &[&str]) -> serde_json::Value {
+        provider_ids
+            .iter()
+            .enumerate()
+            .map(|(index, provider_id)| {
+                serde_json::json!({
+                    "id": 900 + index,
+                    "profile_tin": "99988877700000",
+                    "provider_id": provider_id,
+                    "name": format!("Forged {provider_id}"),
+                    "credentials": { "api_key": FORGED_PROVIDER_KEY },
+                })
+            })
+            .collect()
+    }
+
+    /// No forged value is stored where a credential can live: a profile row,
+    /// a provider's credentials, or a taxpayer's PIN and authenticator. A
+    /// failure names the key, never the value.
+    fn assert_no_forged_value(db: &Database) {
+        let column = |sql: &str| -> Vec<String> {
+            let mut statement = db.conn.prepare(sql).unwrap();
+            statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        let stored = [
+            column("SELECT data_json FROM profiles"),
+            column("SELECT credentials_json FROM data_providers"),
+            column("SELECT COALESCE(pin_hash, '') || COALESCE(totp_secret, '') FROM taxpayers"),
+        ]
+        .concat();
+        for row in &stored {
+            for (key, value) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(FORGED_CREDENTIALS) {
+                assert!(!row.contains(value), "the database stored the forged {key}");
+            }
+            assert!(
+                !row.contains(FORGED_PROVIDER_KEY),
+                "the database stored the forged provider credential"
+            );
+        }
+    }
+
+    /// An archive for a TIN this database has: the row keeps its own five
+    /// credentials and its own row id, whether the file names that row's id
+    /// or one that names no row here, and takes the file's other fields. The
+    /// stored provider keeps its name and credentials, a provider id the TIN
+    /// lacks is added without credentials, and nothing is duplicated.
+    #[test]
+    fn an_import_keeps_the_stored_rows_credentials_and_id() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let mut stored = branch_profile("Stored Name", TIN_Y);
+        set_credentials(&mut stored, STORED_CREDENTIALS);
+        let row_id = db.save_profile(stored).unwrap().id.expect("a row id");
+        let provider_credentials =
+            BTreeMap::from([("api_key".to_string(), STORED_PROVIDER_KEY.to_string())]);
+        db.save_data_provider(ProviderConfig {
+            id: None,
+            profile_tin: TIN_Y.into(),
+            provider_id: "generic".into(),
+            name: "Books".into(),
+            credentials: provider_credentials.clone(),
+        })
+        .unwrap();
+
+        for (round, file_id) in [row_id, 4242].into_iter().enumerate() {
+            let archive = dir.path().join(format!("crafted-{round}.zip"));
+            let name = format!("Imported Name {round}");
+            crafted_archive(
+                &archive,
+                &branch_profile(&name, TIN_Y),
+                file_id,
+                forged_providers(&["generic", "taxman"]),
+            );
+            import_profile_data(&db, &archive).unwrap();
+
+            let imported = db.get_profile_by_tin(TIN_Y).unwrap().expect("the row");
+            assert_eq!(imported.id, Some(row_id), "the row keeps its id");
+            assert_eq!(
+                imported.full_name, name,
+                "the file's other fields are stored"
+            );
+            drop(imported);
+            for ((key, value), expected) in PROFILE_CREDENTIAL_KEYS
+                .into_iter()
+                .zip(stored_credentials(&db, TIN_Y))
+                .zip(STORED_CREDENTIALS)
+            {
+                assert!(
+                    value.as_deref() == Some(expected),
+                    "the import changed the stored {key}"
+                );
+            }
+            assert_no_forged_value(&db);
+
+            let providers = db.get_data_providers(TIN_Y).unwrap();
+            assert_eq!(providers.len(), 2, "one provider per provider_id");
+            let generic = providers
+                .iter()
+                .find(|provider| provider.provider_id == "generic")
+                .expect("the stored provider");
+            assert_eq!(generic.name, "Books", "the stored provider keeps its name");
+            assert!(
+                generic.credentials == provider_credentials,
+                "the import changed the stored provider's credentials"
+            );
+            let taxman = providers
+                .iter()
+                .find(|provider| provider.provider_id == "taxman")
+                .expect("the added provider");
+            assert_eq!(taxman.name, "Forged taxman");
+            assert!(
+                taxman.credentials.is_empty(),
+                "the added provider has credentials"
+            );
+        }
+        assert_eq!(db.list_profiles().unwrap().len(), 1, "no second row");
+    }
+
+    /// An archive for a TIN this database lacks: the new row stores none of
+    /// the file's five credentials, and its provider is added without
+    /// credentials. Importing it again adds no second provider.
+    #[test]
+    fn an_import_for_a_new_tin_stores_no_credential() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let archive = dir.path().join("crafted.zip");
+        crafted_archive(
+            &archive,
+            &branch_profile("New Taxpayer", TIN_X),
+            4242,
+            forged_providers(&["generic"]),
+        );
+        for _ in 0..2 {
+            import_profile_data(&db, &archive).unwrap();
+            for (key, value) in PROFILE_CREDENTIAL_KEYS
+                .into_iter()
+                .zip(stored_credentials(&db, TIN_X))
+            {
+                assert!(value.is_none(), "a new profile stored a {key}");
+            }
+            assert_no_forged_value(&db);
+            let providers = db.get_data_providers(TIN_X).unwrap();
+            assert_eq!(providers.len(), 1, "one provider per provider_id");
+            assert_eq!(providers[0].name, "Forged generic");
+            assert!(
+                providers[0].credentials.is_empty(),
+                "the added provider has credentials"
+            );
+        }
+    }
+
+    /// The regression test for a data-corruption bug. The file's `id`
+    /// reached `save_profile`, which reads it as this database's row: here
+    /// row 1 is taxpayer Y's, so importing taxpayer X's archive that says
+    /// `"id": 1` overwrote Y's profile with X's and re-keyed Y's draft and
+    /// submission onto X's TIN. Y must keep its row, draft and submission,
+    /// and X must get a row of its own.
+    #[test]
+    fn an_archive_row_id_never_names_another_taxpayers_row() {
+        let dir = tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let y = db
+            .save_profile(branch_profile("Taxpayer Y", TIN_Y))
+            .unwrap();
+        assert_eq!(y.id, Some(1), "Y holds row 1");
+        drop(y);
+        let submission = |tin: &str, form_type: &str, period: &str, owner: &str| Submission {
+            id: None,
+            tin: tin.into(),
+            form_type: form_type.into(),
+            period: period.into(),
+            status: "Draft".into(),
+            form_data: BTreeMap::from([("owner".to_string(), owner.to_string())]),
+            submitted_at: None,
+            filename: None,
+            created_at: None,
+            updated_at: None,
+        };
+        db.save_submission(submission(TIN_Y, "2551Q", "2026Q1", "Y"))
+            .unwrap();
+        db.save_form_draft(
+            TIN_Y,
+            "1701Q",
+            2026,
+            Some(1),
+            &crate::forms::FilingStatus::Draft,
+            &serde_json::json!({ "owner": "Y" }),
+        )
+        .unwrap();
+
+        let archive = dir.path().join("taxpayer-x.zip");
+        let mut x = serde_json::to_value(branch_profile("Taxpayer X", TIN_X)).unwrap();
+        x["id"] = serde_json::json!(1);
+        let x_submissions = [submission(TIN_X, "2550Q", "2026Q2", "X")];
+        write_archive(
+            &archive,
+            &[
+                ("profile.json", x.to_string()),
+                (
+                    "submissions.json",
+                    serde_json::to_string(&x_submissions).unwrap(),
+                ),
+            ],
+        );
+        import_profile_data(&db, &archive).unwrap();
+
+        let y = db
+            .get_profile_by_tin(TIN_Y)
+            .unwrap()
+            .expect("Y's profile is still there");
+        assert_eq!(y.id, Some(1), "Y keeps row 1");
+        assert_eq!(y.full_name, "Taxpayer Y");
+        let x = db
+            .get_profile_by_tin(TIN_X)
+            .unwrap()
+            .expect("X is imported");
+        assert!(x.id.is_some_and(|id| id != 1), "X gets a row of its own");
+        assert_eq!(x.full_name, "Taxpayer X");
+        assert_eq!(db.list_profiles().unwrap().len(), 2);
+
+        let owners = |tin: &str| -> Vec<String> {
+            db.list_submissions_for_tin(tin)
+                .unwrap()
+                .into_iter()
+                .map(|submission| submission.form_data["owner"].clone())
+                .collect()
+        };
+        assert_eq!(owners(TIN_Y), ["Y"], "Y's submission stays Y's");
+        assert_eq!(owners(TIN_X), ["X"], "X has only its own submission");
+        let draft = |tin: &str| -> Option<serde_json::Value> {
+            db.get_form_draft(tin, "1701Q", 2026, Some(1)).unwrap()
+        };
+        assert_eq!(draft(TIN_Y).expect("Y's draft stays Y's")["owner"], "Y");
+        assert!(draft(TIN_X).is_none(), "X has none of Y's drafts");
+    }
+
+    /// Export, then import into a fresh database: every profile field
+    /// matches except the row id, which is the new database's own, and the
+    /// five credentials, which are none. The provider comes back with its
+    /// provider_id and name and no credentials.
+    #[test]
+    fn a_round_trip_keeps_every_profile_field_but_the_id_and_credentials() {
+        use crate::profile::{
+            ComplianceSourceMode, EmailAuthMethod, EoptTier, ExciseTaxCategory, IncomeTaxElection,
+            TaxClassification, TaxElectionHistory,
+        };
+        let date = |year, month, day| chrono::NaiveDate::from_ymd_opt(year, month, day).unwrap();
+        let dir = tempdir().unwrap();
+        let source = Database::open_ephemeral().unwrap();
+        // Row 1 is another taxpayer's, so the exported profile is row 2: not
+        // the id a fresh database gives the import.
+        source
+            .save_profile(branch_profile("Earlier Taxpayer", TIN_Y))
+            .unwrap();
+        let mut profile = branch_profile("Round Trip Corp", TIN_X);
+        profile.is_vat_registered = true;
+        profile.business_start_date = Some(date(2020, 1, 15));
+        profile.birth_date = Some(date(1985, 6, 30));
+        profile.tax_classification = Some(TaxClassification::SelfEmployed);
+        profile.eopt_tier = Some(EoptTier::Small);
+        profile.is_bmbe = true;
+        profile.is_create_msme = true;
+        profile.is_expanded_withholding_agent = true;
+        profile.atc_codes = vec!["WI010".into(), "WC010".into()];
+        profile.excise_tax_categories = vec![ExciseTaxCategory::Alcohol];
+        profile.tax_elections = vec![TaxElectionHistory {
+            taxable_year: 2026,
+            election: IncomeTaxElection::EightPercent,
+            elected_at: date(2026, 2, 1).and_hms_opt(9, 30, 0).unwrap(),
+            source_form: "2551Q".into(),
+        }];
+        profile.email_tracking_enabled = true;
+        profile.email_auth_method = EmailAuthMethod::GoogleOAuth;
+        profile.imap_email = Some("receipts@example.com".into());
+        profile.imap_host = Some("imap.example.com".into());
+        profile.test_notification_enabled = true;
+        profile.has_employees = true;
+        profile.withholds_compensation = true;
+        profile.withholds_expanded = true;
+        profile.withholds_final = true;
+        profile.is_top_withholding_agent = true;
+        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        set_credentials(&mut profile, STORED_CREDENTIALS);
+        // A stored PIN hash gates the export, so the row's is the hash of
+        // the PIN the call below passes. The file's still never imports.
+        profile.profile_pin_hash = Some(crate::crypto::hash_pin("0817"));
+        assert_eq!(source.save_profile(profile).unwrap().id, Some(2));
+        source
+            .save_data_provider(ProviderConfig {
+                id: None,
+                profile_tin: TIN_X.into(),
+                provider_id: "generic".into(),
+                name: "Books".into(),
+                credentials: BTreeMap::from([(
+                    "api_key".to_string(),
+                    STORED_PROVIDER_KEY.to_string(),
+                )]),
+            })
+            .unwrap();
+
+        let archive = dir.path().join("round-trip.zip");
+        crate::export::export_profile_data(&source, TIN_X, &archive, Some("0817")).unwrap();
+        let target = Database::open_ephemeral().unwrap();
+        import_profile_data(&target, &archive).unwrap();
+
+        // Records without the credentials, so a failure prints none.
+        let comparable = |db: &Database| -> serde_json::Value {
+            let mut profile = db.get_profile_by_tin(TIN_X).unwrap().expect("the profile");
+            let mut record = profile.record_without_credentials().unwrap();
+            record.as_object_mut().unwrap().remove("id");
+            record
+        };
+        assert_eq!(
+            comparable(&target),
+            comparable(&source),
+            "a profile field changed on the round trip"
+        );
+        let imported = target.get_profile_by_tin(TIN_X).unwrap().unwrap();
+        assert_eq!(imported.id, Some(1), "the import is this database's row");
+        drop(imported);
+        for (key, value) in PROFILE_CREDENTIAL_KEYS
+            .into_iter()
+            .zip(stored_credentials(&target, TIN_X))
+        {
+            assert!(value.is_none(), "the round trip stored a {key}");
+        }
+
+        let providers = target.get_data_providers(TIN_X).unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_id, "generic");
+        assert_eq!(providers[0].name, "Books");
+        assert!(
+            providers[0].credentials.is_empty(),
+            "the provider came back with credentials"
+        );
     }
 }

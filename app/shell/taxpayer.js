@@ -8,7 +8,7 @@
 // file only shapes input and reports what the data layer answers.
 
 import { div } from "gpui-kit";
-import { InputState } from "gpui-base";
+import { InputState, OtpState } from "gpui-base";
 import {
   tokens,
   SPACE,
@@ -43,6 +43,7 @@ import {
   Banner,
   DigitEntry,
   DigitCells,
+  PinCells,
   ComboState,
   ComboField,
 } from "./ui.js";
@@ -110,6 +111,10 @@ export class TaxpayerActions {
     this.newTp = null;
     this.newBranch = null;
     this.deleteArmed = false;
+    // Profile export (P3): the taxpayer PIN gates saving the archive when one
+    // is set. Typed here, sent to the host, cleared after every attempt — the
+    // page never keeps it.
+    this.exportOtp = OtpState.new(4, { masked: true });
   }
 
   /** Archive and delete: the admin only, never on the admin's own account. */
@@ -151,6 +156,30 @@ export class TaxpayerActions {
       app.writeLocal(SELECTION_KEY, { root: null, code: null });
       app.go("home", cx);
       app.toast(`${t.name} deleted.`, cx, "trash");
+    } catch (e) {
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  /**
+   * Export this profile through the host's save dialog. The archive never
+   * carries credentials; when the taxpayer has a PIN the typed cells gate the
+   * export and are cleared after every attempt, so the PIN never sits in page
+   * state. A cancelled dialog is quiet.
+   */
+  exportProfile(cx) {
+    const app = this.app;
+    const t = app.taxpayer();
+    const hasPin = Boolean(app.taxpayerCreds(t.tin_root).has_pin);
+    const pin = hasPin ? this.exportOtp.value() : null;
+    if (hasPin && pin.length !== 4) {
+      this.exportOtp.set_value("");
+      return app.toast("Type all 4 digits of the profile PIN first.", cx, "lock");
+    }
+    this.exportOtp.set_value("");
+    try {
+      const r = app.store.write("export_profile", app.branch().tin, pin);
+      if (r.kind === "exported") app.toast("Profile exported.", cx, "download");
     } catch (e) {
       app.toast(message(e), cx, "triangle-alert");
     }
@@ -1004,7 +1033,9 @@ function profileTab(cx, app, width) {
     ),
     section("inbox", "Confirmation inbox", inboxMeta, inboxBody(cx, app, inner), false),
   ]);
-  return ui.canRemove() ? div().flex().flex_col().child(group).child(removeCard(cx, app, t)) : group;
+  const out = div().flex().flex_col().child(group).child(exportCard(cx, app, t));
+  if (ui.canRemove()) out.child(removeCard(cx, app, t));
+  return out;
 }
 
 /**
@@ -1166,6 +1197,38 @@ function inboxBody(cx, app, inner) {
       .whitespace_normal(),
   );
   return body;
+}
+
+/**
+ * Export card: everyone on the page may save this profile's credential-free
+ * archive. A taxpayer PIN, when one is set, is typed into PIN cells and sent
+ * to the host's export_profile verb; the cells are cleared by exportProfile
+ * after every attempt, and the save dialog itself is the host's.
+ */
+function exportCard(cx, app, tp) {
+  const ui = app.taxpayerUi;
+  const hasPin = Boolean(app.taxpayerCreds(tp.tin_root).has_pin);
+  return div()
+    .flex()
+    .flex_col()
+    .child(SectionTitle(cx, "Export"))
+    .child(
+      Card(cx, "tp-export", [
+        SettingRow(
+          cx,
+          "tp-export",
+          "Export this profile",
+          hasPin ? "The archive leaves out credentials; the profile PIN gates saving it" : "Saves a credential-free archive of every branch and return",
+          div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(SPACE[2])
+            .when(hasPin, (el) => el.child(PinCells(cx, ui.exportOtp, "tp-export-pin")))
+            .child(AppButton(cx, "tp-export-btn", "Export", { size: "sm", icon: "download", onClick: (_e, cx) => ui.exportProfile(cx) })),
+        ),
+      ]),
+    );
 }
 
 /**
