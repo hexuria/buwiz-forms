@@ -1304,8 +1304,10 @@ impl TaxProfileVersion {
 /// [`ProfileCredentials`] holds them: the authenticator secret, the inbox
 /// app password, the Google access and refresh tokens, and the PIN hash.
 ///
-/// Each is host state with a writer of its own, and a profile import never
-/// stores the file's. The shell's page reads profiles without these keys.
+/// Each is host state with a writer of its own. A profile record that
+/// leaves the host has none of these keys: the shell's page reads profiles
+/// without them, and a profile export writes none of them. A profile import
+/// never stores the file's.
 pub const PROFILE_CREDENTIAL_KEYS: [&str; 5] = [
     "totp_secret",
     "imap_app_password",

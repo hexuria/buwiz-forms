@@ -1140,4 +1140,102 @@ mod tests {
         assert_eq!(draft(TIN_Y).expect("Y's draft stays Y's")["owner"], "Y");
         assert!(draft(TIN_X).is_none(), "X has none of Y's drafts");
     }
+
+    /// Export, then import into a fresh database: every profile field
+    /// matches except the row id, which is the new database's own, and the
+    /// five credentials, which are none. The provider comes back with its
+    /// provider_id and name and no credentials.
+    #[test]
+    fn a_round_trip_keeps_every_profile_field_but_the_id_and_credentials() {
+        use crate::profile::{
+            ComplianceSourceMode, EmailAuthMethod, EoptTier, ExciseTaxCategory, IncomeTaxElection,
+            TaxClassification, TaxElectionHistory,
+        };
+        let date = |year, month, day| chrono::NaiveDate::from_ymd_opt(year, month, day).unwrap();
+        let dir = tempdir().unwrap();
+        let source = Database::open_ephemeral().unwrap();
+        // Row 1 is another taxpayer's, so the exported profile is row 2: not
+        // the id a fresh database gives the import.
+        source
+            .save_profile(branch_profile("Earlier Taxpayer", TIN_Y))
+            .unwrap();
+        let mut profile = branch_profile("Round Trip Corp", TIN_X);
+        profile.is_vat_registered = true;
+        profile.business_start_date = Some(date(2020, 1, 15));
+        profile.birth_date = Some(date(1985, 6, 30));
+        profile.tax_classification = Some(TaxClassification::SelfEmployed);
+        profile.eopt_tier = Some(EoptTier::Small);
+        profile.is_bmbe = true;
+        profile.is_create_msme = true;
+        profile.is_expanded_withholding_agent = true;
+        profile.atc_codes = vec!["WI010".into(), "WC010".into()];
+        profile.excise_tax_categories = vec![ExciseTaxCategory::Alcohol];
+        profile.tax_elections = vec![TaxElectionHistory {
+            taxable_year: 2026,
+            election: IncomeTaxElection::EightPercent,
+            elected_at: date(2026, 2, 1).and_hms_opt(9, 30, 0).unwrap(),
+            source_form: "2551Q".into(),
+        }];
+        profile.email_tracking_enabled = true;
+        profile.email_auth_method = EmailAuthMethod::GoogleOAuth;
+        profile.imap_email = Some("receipts@example.com".into());
+        profile.imap_host = Some("imap.example.com".into());
+        profile.test_notification_enabled = true;
+        profile.has_employees = true;
+        profile.withholds_compensation = true;
+        profile.withholds_expanded = true;
+        profile.withholds_final = true;
+        profile.is_top_withholding_agent = true;
+        profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
+        set_credentials(&mut profile, STORED_CREDENTIALS);
+        assert_eq!(source.save_profile(profile).unwrap().id, Some(2));
+        source
+            .save_data_provider(ProviderConfig {
+                id: None,
+                profile_tin: TIN_X.into(),
+                provider_id: "generic".into(),
+                name: "Books".into(),
+                credentials: BTreeMap::from([(
+                    "api_key".to_string(),
+                    STORED_PROVIDER_KEY.to_string(),
+                )]),
+            })
+            .unwrap();
+
+        let archive = dir.path().join("round-trip.zip");
+        crate::export::export_profile_data(&source, TIN_X, &archive).unwrap();
+        let target = Database::open_ephemeral().unwrap();
+        import_profile_data(&target, &archive).unwrap();
+
+        // Records without the credentials, so a failure prints none.
+        let comparable = |db: &Database| -> serde_json::Value {
+            let mut profile = db.get_profile_by_tin(TIN_X).unwrap().expect("the profile");
+            let mut record = profile.record_without_credentials().unwrap();
+            record.as_object_mut().unwrap().remove("id");
+            record
+        };
+        assert_eq!(
+            comparable(&target),
+            comparable(&source),
+            "a profile field changed on the round trip"
+        );
+        let imported = target.get_profile_by_tin(TIN_X).unwrap().unwrap();
+        assert_eq!(imported.id, Some(1), "the import is this database's row");
+        drop(imported);
+        for (key, value) in PROFILE_CREDENTIAL_KEYS
+            .into_iter()
+            .zip(stored_credentials(&target, TIN_X))
+        {
+            assert!(value.is_none(), "the round trip stored a {key}");
+        }
+
+        let providers = target.get_data_providers(TIN_X).unwrap();
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider_id, "generic");
+        assert_eq!(providers[0].name, "Books");
+        assert!(
+            providers[0].credentials.is_empty(),
+            "the provider came back with credentials"
+        );
+    }
 }

@@ -4,6 +4,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use zip::write::SimpleFileOptions;
 
+/// Write `tin`'s profile archive. Like every profile archive it carries no
+/// credential and no profile or provider row id (see `write_profile_to_zip`).
 pub fn export_profile_data(db: &Database, tin: &str, export_file: &Path) -> Result<(), DbError> {
     let file = fs::File::create(export_file)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -16,6 +18,8 @@ pub fn export_profile_data(db: &Database, tin: &str, export_file: &Path) -> Resu
     Ok(())
 }
 
+/// Write every profile's archive under `Profiles/<tin>/`, each without
+/// credentials or row ids, as [`export_profile_data`] writes one.
 pub fn export_all_profiles_data(db: &Database, export_file: &Path) -> Result<(), DbError> {
     let file = fs::File::create(export_file)?;
     let mut zip = zip::ZipWriter::new(file);
@@ -33,6 +37,14 @@ pub fn export_all_profiles_data(db: &Database, export_file: &Path) -> Result<(),
     Ok(())
 }
 
+/// One profile's archive entries under `base_dir`.
+///
+/// A profile export carries no credentials: profile.json has none of the
+/// five credential keys, and data_providers.json has each provider's
+/// provider_id and name only. Nor does it carry the profile's or a
+/// provider's row id, which names a row in this database and means nothing
+/// in another. The full database backup ([`export_database_zip`]) is a
+/// whole-database copy by design and keeps everything.
 fn write_profile_to_zip<W: Write + std::io::Seek>(
     zip: &mut zip::ZipWriter<W>,
     db: &Database,
@@ -48,9 +60,13 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     zip.start_file(format!("{}manifest.json", base_dir), options)?;
     zip.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
 
-    // 1. Profile JSON
-    if let Some(profile) = db.get_profile_by_tin(tin)? {
-        let profile_json = serde_json::to_string_pretty(&profile)?;
+    // 1. Profile JSON, without the credentials and the row id
+    if let Some(mut profile) = db.get_profile_by_tin(tin)? {
+        let mut record = profile.record_without_credentials()?;
+        if let Some(fields) = record.as_object_mut() {
+            fields.remove("id");
+        }
+        let profile_json = serde_json::to_string_pretty(&record)?;
         zip.start_file(format!("{}profile.json", base_dir), options)?;
         zip.write_all(profile_json.as_bytes())?;
     }
@@ -110,8 +126,20 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     zip.start_file(format!("{}receipts_manifest.json", base_dir), options)?;
     zip.write_all(metadata_json.as_bytes())?;
 
-    // 5. Data Providers JSON
-    let providers = db.get_data_providers(tin)?;
+    // 5. Data Providers JSON: each provider's provider_id and name only,
+    // read without its credentials, in `Database::get_data_providers` order
+    let mut providers_stmt = db.conn.prepare(
+        "SELECT provider_id, name FROM data_providers
+         WHERE profile_tin = ?1 ORDER BY created_at DESC",
+    )?;
+    let providers = providers_stmt
+        .query_map([tin], |row| {
+            Ok(serde_json::json!({
+                "provider_id": row.get::<_, String>(0)?,
+                "name": row.get::<_, String>(1)?,
+            }))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
     if !providers.is_empty() {
         let providers_json = serde_json::to_string_pretty(&providers)?;
         zip.start_file(format!("{}data_providers.json", base_dir), options)?;
@@ -283,5 +311,131 @@ mod tests {
             )
             .expect("read exported value");
         assert_eq!(value, "preserved");
+    }
+
+    // ---------- a profile export carries no credential and no row id ----------
+
+    use crate::integration::providers::ProviderConfig;
+    use crate::profile::{PROFILE_CREDENTIAL_KEYS, TaxpayerProfile};
+    use std::collections::BTreeMap;
+
+    const TIN: &str = "12345678800000";
+
+    /// Distinctive values stored on the profile, in `PROFILE_CREDENTIAL_KEYS`
+    /// order.
+    const PROFILE_SECRETS: [&str; 5] = [
+        "export-totp-K7Q2",
+        "export-pass-W9X4",
+        "export-access-M3R8",
+        "export-refresh-T5V1",
+        "export-pin-hash-H6N3",
+    ];
+
+    /// Distinctive values stored as a provider's credentials.
+    const PROVIDER_SECRETS: [&str; 2] = ["export-provider-key-R2S6", "export-provider-token-V7N5"];
+
+    /// Every entry of the archive at `path`, as (name, contents).
+    fn archive_entries(path: &Path) -> Vec<(String, Vec<u8>)> {
+        let mut archive = zip::ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
+        (0..archive.len())
+            .map(|index| {
+                let mut entry = archive.by_index(index).unwrap();
+                let mut contents = Vec::new();
+                entry.read_to_end(&mut contents).unwrap();
+                (entry.name().to_string(), contents)
+            })
+            .collect()
+    }
+
+    fn contains(haystack: &[u8], needle: &str) -> bool {
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle.as_bytes())
+    }
+
+    /// Both profile exports write profile.json without the five credential
+    /// keys and without `id`, data_providers.json with each provider's
+    /// provider_id and name only, and no stored secret in any entry's name or
+    /// bytes. A failure names the entry and the key, never a value.
+    #[test]
+    fn a_profile_export_carries_no_credential_and_no_row_id() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let mut profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Export Sample Corp",
+            "tin": { "segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000" },
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Sample Street, Pasig",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "books@example.com",
+            "default_form_type": "2551Q",
+        }))
+        .unwrap();
+        let [totp, password, access, refresh, pin_hash] =
+            PROFILE_SECRETS.map(|secret| Some(secret.to_string()));
+        profile.totp_secret = totp;
+        profile.imap_app_password = password;
+        profile.oauth_access_token = access;
+        profile.oauth_refresh_token = refresh;
+        profile.profile_pin_hash = pin_hash;
+        db.save_profile(profile).unwrap();
+        db.save_data_provider(ProviderConfig {
+            id: None,
+            profile_tin: TIN.into(),
+            provider_id: "generic".into(),
+            name: "Books".into(),
+            credentials: BTreeMap::from([
+                ("api_key".to_string(), PROVIDER_SECRETS[0].to_string()),
+                ("token".to_string(), PROVIDER_SECRETS[1].to_string()),
+            ]),
+        })
+        .unwrap();
+
+        let single = directory.path().join("profile.zip");
+        export_profile_data(&db, TIN, &single).unwrap();
+        let all = directory.path().join("all-profiles.zip");
+        export_all_profiles_data(&db, &all).unwrap();
+
+        for (archive, base) in [(single, String::new()), (all, format!("Profiles/{TIN}/"))] {
+            let entries = archive_entries(&archive);
+            for (name, contents) in &entries {
+                for (key, secret) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(PROFILE_SECRETS) {
+                    assert!(
+                        !name.contains(secret) && !contains(contents, secret),
+                        "{name} carries the stored {key}"
+                    );
+                }
+                for secret in PROVIDER_SECRETS {
+                    assert!(
+                        !name.contains(secret) && !contains(contents, secret),
+                        "{name} carries a stored provider credential"
+                    );
+                }
+            }
+            let entry = |file: &str| -> serde_json::Value {
+                let name = format!("{base}{file}");
+                let (_, contents) = entries
+                    .iter()
+                    .find(|(entry, _)| *entry == name)
+                    .unwrap_or_else(|| panic!("{name} is in the archive"));
+                serde_json::from_slice(contents).unwrap()
+            };
+            let profile = entry("profile.json");
+            for key in PROFILE_CREDENTIAL_KEYS.into_iter().chain(["id"]) {
+                assert!(
+                    profile.get(key).is_none(),
+                    "{base}profile.json has the {key} key"
+                );
+            }
+            assert_eq!(profile["full_name"], "Export Sample Corp");
+            assert!(
+                entry("data_providers.json")
+                    == serde_json::json!([{ "provider_id": "generic", "name": "Books" }]),
+                "{base}data_providers.json carries more than each provider's provider_id and name"
+            );
+        }
     }
 }
