@@ -1716,29 +1716,33 @@ fn reset_database() {
     });
 }
 
-/// Native file picker + archive handling stay host-side: the script has no
-/// file dialog. Mirrors `ImportExportView`: a zip with `bir_data.db` is a
-/// full database backup, one with a top-level `profile.json` is a profile
-/// export, anything else is invalid. Optional `path` argument skips the
-/// dialog (used by tests and scripted imports).
+/// The page's import. The host always opens the file dialog (the script has
+/// none), so the page cannot choose the file: a call that passes any
+/// argument is refused before anything opens. Tests and scripted imports
+/// call [`import_archive_from`] instead.
 fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let path = arguments
-        .value(0)
-        .ok()
-        .and_then(|value| value.as_str().map(str::to_owned))
-        .map(std::path::PathBuf::from)
-        .or_else(|| {
-            rfd::FileDialog::new()
-                .set_title("Select an exported .zip archive")
-                .add_filter("Export Archive", &["zip"])
-                .pick_file()
-        });
-    let Some(path) = path else {
+    if !arguments.is_empty() {
+        return Err(HostError::new(
+            "import_archive takes no path; the host opens the file dialog",
+        ));
+    }
+    let Some(path) = rfd::FileDialog::new()
+        .set_title("Select an exported .zip archive")
+        .add_filter("Export Archive", &["zip"])
+        .pick_file()
+    else {
         return Ok(HostObject::new().field("kind", "cancelled").into());
     };
+    import_archive_from(&path)
+}
 
+/// Import the archive at `path`; not a verb. Archive handling stays
+/// host-side and mirrors `ImportExportView`: a zip with `bir_data.db` is a
+/// full database backup, one with a top-level `profile.json` is a profile
+/// export, anything else is invalid.
+fn import_archive_from(path: &std::path::Path) -> HostResult {
     let zip_has = |name: &str| -> bool {
-        std::fs::File::open(&path)
+        std::fs::File::open(path)
             .ok()
             .and_then(|file| zip::ZipArchive::new(file).ok())
             .map(|mut archive| archive.by_name(name).is_ok())
@@ -1765,19 +1769,17 @@ fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
             );
         }
         reset_database();
-        return match bir_core::import::extract_database_zip(&path, &db_path) {
+        return match bir_core::import::extract_database_zip(path, &db_path) {
             Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
             Err(error) => Err(HostError::new(error.to_string())),
         };
     }
 
     if is_profile {
-        return with_database(
-            |db| match bir_core::import::import_profile_data(db, &path) {
-                Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
-                Err(error) => Err(HostError::new(error.to_string())),
-            },
-        );
+        return with_database(|db| match bir_core::import::import_profile_data(db, path) {
+            Ok(()) => Ok(HostObject::new().field("kind", "profile").into()),
+            Err(error) => Err(HostError::new(error.to_string())),
+        });
     }
 
     Ok(HostObject::new().field("kind", "invalid").into())
@@ -1984,7 +1986,7 @@ export function list_deadlines(): TaxDeadline[];
 export interface ImportResult {
     kind: "database" | "profile" | "invalid" | "cancelled";
 }
-export function import_archive(path?: string): ImportResult;
+export function import_archive(): ImportResult;
 export interface PrintPreview {
     path: string;
 }
@@ -3188,5 +3190,238 @@ mod tests {
             .expect("sync half");
         let answer = futures::executor::block_on(future).unwrap();
         assert_eq!(answer, HostValue::Bool(false));
+    }
+
+    // ---------- import: the host always opens the file dialog ----------
+
+    /// A directory under the system temp dir, removed when this drops.
+    struct ScratchDir(std::path::PathBuf);
+
+    impl ScratchDir {
+        fn new(label: &str) -> Self {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "bir-shell-import-{label}-{}-{nanos}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    const ARCHIVE_TIN: &str = "98765432000000";
+
+    fn new_taxpayer(tin_root: &str, name: &str) -> NewTaxpayer {
+        NewTaxpayer {
+            tin_root: tin_root.into(),
+            name: name.into(),
+            taxpayer_type: TaxpayerType::Corporation,
+            birth_date: None,
+            head_office: BranchFacts {
+                rdo_code: "043".into(),
+                registered_address: "2 Sample Road, Makati".into(),
+                zip_code: "1200".into(),
+                phone: "0280000001".into(),
+                email: "books@example.com".into(),
+            },
+        }
+    }
+
+    /// A profile archive of `ARCHIVE_TIN` with one submission, exported
+    /// from a database of its own.
+    fn profile_archive(scratch: &ScratchDir) -> std::path::PathBuf {
+        let source = Database::open_ephemeral().unwrap();
+        source
+            .create_taxpayer(new_taxpayer("987654320", "Archived Holdings Inc"))
+            .unwrap();
+        source
+            .save_submission(bir_core::db::Submission {
+                id: None,
+                tin: ARCHIVE_TIN.into(),
+                form_type: "1702Q".into(),
+                period: "2026Q1".into(),
+                status: "Draft".into(),
+                form_data: Default::default(),
+                submitted_at: None,
+                filename: None,
+                created_at: None,
+                updated_at: None,
+            })
+            .unwrap();
+        let archive = scratch.path().join("profile.zip");
+        bir_core::export::export_profile_data(&source, ARCHIVE_TIN, &archive).unwrap();
+        archive
+    }
+
+    fn archive_imported() -> bool {
+        with_database(|db| {
+            Ok(db
+                .get_profile_by_tin(ARCHIVE_TIN)
+                .map_err(db_error)?
+                .is_some())
+        })
+        .unwrap()
+    }
+
+    /// The page cannot choose the file. The registered verb refuses a call
+    /// with any argument, a path included, before a dialog opens, and
+    /// imports nothing; `import_archive_from` is no verb at all.
+    #[test]
+    fn import_archive_refuses_any_argument() {
+        setup();
+        let scratch = ScratchDir::new("refused");
+        let archive = profile_archive(&scratch);
+        let module = module();
+        assert!(module.has("import_archive"));
+        assert!(!module.has("import_archive_from"), "not a verb");
+        // The path first: a verb that took it would import it here instead
+        // of falling through to a dialog.
+        for argument in [
+            s(&archive.display().to_string()),
+            HostValue::Null,
+            HostValue::Bool(true),
+        ] {
+            match module.call("import_archive", &args(vec![argument])) {
+                Ok(_) => panic!("import_archive answered a call with an argument"),
+                Err(refusal) => assert_eq!(
+                    refusal.message(),
+                    "import_archive takes no path; the host opens the file dialog"
+                ),
+            }
+            assert!(!archive_imported(), "a refused call imported the archive");
+        }
+    }
+
+    /// `import_archive_from` imports a profile archive into the open
+    /// database, and answers `invalid` for a zip that is neither export.
+    #[test]
+    fn import_archive_from_imports_a_profile_archive() {
+        setup();
+        let scratch = ScratchDir::new("profile");
+        let archive = profile_archive(&scratch);
+        assert_eq!(
+            to_json(&import_archive_from(&archive).unwrap()),
+            serde_json::json!({ "kind": "profile" })
+        );
+        with_database(|db| {
+            let profile = db
+                .get_profile_by_tin(ARCHIVE_TIN)
+                .map_err(db_error)?
+                .expect("the imported profile");
+            assert_eq!(profile.full_name, "Archived Holdings Inc");
+            let submissions = db.list_submissions_for_tin(ARCHIVE_TIN).map_err(db_error)?;
+            assert_eq!(submissions.len(), 1);
+            assert_eq!(submissions[0].form_type, "1702Q");
+            Ok(())
+        })
+        .unwrap();
+
+        let other = scratch.path().join("other.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&other).unwrap());
+        zip.start_file("notes.txt", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut zip, b"not an export").unwrap();
+        zip.finish().unwrap();
+        assert_eq!(
+            to_json(&import_archive_from(&other).unwrap()),
+            serde_json::json!({ "kind": "invalid" })
+        );
+    }
+
+    /// `import_archive_from` replaces the open database with a database
+    /// archive, after a safety copy of the file it replaces. That path
+    /// writes the app's database file and reads its key, so it runs in a
+    /// child test process whose `BIR_DATABASE_PATH` is a scratch file and
+    /// whose `EBIR_TEST_ENV` keeps the key off the keychain: never the live
+    /// database.
+    #[test]
+    fn import_archive_from_restores_a_database_archive() {
+        const SCRATCH: &str = "BIR_SHELL_IMPORT_ARCHIVE_SCRATCH";
+        if let Some(scratch) = std::env::var_os(SCRATCH) {
+            restore_a_database_archive_in(std::path::Path::new(&scratch));
+            return;
+        }
+        let scratch = ScratchDir::new("database");
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "bir_module::tests::import_archive_from_restores_a_database_archive",
+                "--nocapture",
+            ])
+            .current_dir(scratch.path())
+            .env(SCRATCH, scratch.path())
+            .env("BIR_DATABASE_PATH", scratch.path().join("bir_data.db"))
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .status()
+            .unwrap();
+        assert!(status.success(), "the database import child failed");
+        assert_eq!(
+            std::fs::read_to_string(scratch.path().join("child-done"))
+                .ok()
+                .as_deref(),
+            Some("ok"),
+            "the child ran the import"
+        );
+    }
+
+    /// The child's half of the test above, in the scratch environment its
+    /// parent set; it refuses to run anywhere else.
+    fn restore_a_database_archive_in(scratch: &std::path::Path) {
+        let file = scratch.join("bir_data.db");
+        assert_eq!(db::app_database_path(), file, "the scratch database");
+        assert!(
+            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            "the key stays off the keychain"
+        );
+        with_database(|db| {
+            db.create_taxpayer(new_taxpayer("123456788", "Replaced Trading Corp"))
+                .map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        let source = Database::open(scratch.join("source.db")).unwrap();
+        source
+            .create_taxpayer(new_taxpayer("987654320", "Restored Holdings Inc"))
+            .unwrap();
+        source.checkpoint().unwrap();
+        let archive = scratch.join("backup.zip");
+        bir_core::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+
+        assert_eq!(
+            to_json(&import_archive_from(&archive).unwrap()),
+            serde_json::json!({ "kind": "database" })
+        );
+        let safety_copies = std::fs::read_dir(scratch)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().starts_with("bir_data.safety-"))
+            .count();
+        assert_eq!(safety_copies, 1, "a safety copy of the replaced file");
+        let tins = with_database(|db| {
+            Ok(db
+                .list_profiles()
+                .map_err(db_error)?
+                .iter()
+                .map(|profile| profile.tin.full())
+                .collect::<Vec<_>>())
+        })
+        .unwrap();
+        assert_eq!(tins, [ARCHIVE_TIN], "the archive's database is open");
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 }
