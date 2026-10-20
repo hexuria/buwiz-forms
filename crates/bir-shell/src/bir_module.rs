@@ -173,8 +173,30 @@ fn forms_catalog() -> HostResult {
     Ok(HostValue::Array(rows))
 }
 
+/// The only settings the page may use through `get_setting`, `set_setting`
+/// and `delete_setting`: its theme toggle's (`THEME_PREF_KEY`,
+/// `app/shell/theme.js`). Every other setting is host state, such as the
+/// access mode, the admin's TIN root, PIN hash and authenticator secret, and
+/// the recovery key's hash; host code reads and writes those through
+/// `Database` directly.
+const PAGE_SETTING_KEYS: [&str; 1] = ["theme_preference"];
+
+/// The key a page setting verb names, when it is in [`PAGE_SETTING_KEYS`].
+/// Any other key is refused before the database is opened, with an error
+/// that names the key and nothing stored under it.
+fn page_setting_key(arguments: &gpui_shell::HostArguments) -> Result<String, HostError> {
+    let key = arguments.string(0)?;
+    if PAGE_SETTING_KEYS.contains(&key) {
+        Ok(key.to_owned())
+    } else {
+        Err(HostError::new(format!(
+            "setting `{key}` is not available to the page"
+        )))
+    }
+}
+
 fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let key = arguments.string(0)?.to_owned();
+    let key = page_setting_key(arguments)?;
     with_database(|db| {
         db.get_setting(&key)
             .map(HostValue::from)
@@ -183,7 +205,7 @@ fn get_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 fn set_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let key = arguments.string(0)?.to_owned();
+    let key = page_setting_key(arguments)?;
     let value = arguments.string(1)?.to_owned();
     with_database(|db| {
         db.set_setting(&key, &value)
@@ -464,7 +486,7 @@ fn generate_totp_secret(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 fn delete_setting(arguments: &gpui_shell::HostArguments) -> HostResult {
-    let key = arguments.string(0)?.to_owned();
+    let key = page_setting_key(arguments)?;
     with_database(|db| {
         db.delete_setting(&key)
             .map(|_| HostValue::Null)
@@ -2914,6 +2936,127 @@ mod tests {
         assert!(!has_totp());
         set_profile_totp(&args(vec![s(BRANCH), s(SECRET), s(&current_code(SECRET))])).unwrap();
         assert!(has_totp());
+    }
+
+    // ---------- the page reaches only its own settings ----------
+
+    /// The host's own read of `key`.
+    fn stored_setting(key: &str) -> Option<String> {
+        with_database(|db| setting(db, key)).unwrap()
+    }
+
+    /// `verb`'s answer for `key` is the page refusal, whose exact wording
+    /// names the key and nothing stored under it. A failure prints neither
+    /// the answer nor the refusal, since either could carry a stored value.
+    fn assert_refused(answer: HostResult, verb: &str, key: &str) {
+        match answer {
+            Ok(_) => panic!("{verb} answered the page for `{key}`"),
+            Err(refusal) => assert!(
+                refusal.message() == format!("setting `{key}` is not available to the page"),
+                "{verb} refused `{key}` in other words"
+            ),
+        }
+    }
+
+    /// (a) The page's one setting round-trips through the three verbs, and
+    /// each step reaches the database.
+    #[test]
+    fn the_theme_preference_round_trips_through_the_page_verbs() {
+        setup();
+        let key = || s("theme_preference");
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+        assert_eq!(
+            set_setting(&args(vec![key(), s("Dark")])).unwrap(),
+            HostValue::Null
+        );
+        assert_eq!(stored_setting("theme_preference").as_deref(), Some("Dark"));
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), s("Dark"));
+        assert_eq!(delete_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+        assert_eq!(stored_setting("theme_preference"), None);
+        assert_eq!(get_setting(&args(vec![key()])).unwrap(), HostValue::Null);
+    }
+
+    /// (b) The help desk admin's authenticator secret stays host-side: the
+    /// page's read is refused, and the refusal carries no value.
+    #[test]
+    fn the_page_cannot_read_the_admin_authenticator_secret() {
+        setup();
+        set(ADMIN_TOTP_SECRET, SECRET);
+        let answer = get_setting(&args(vec![s(ADMIN_TOTP_SECRET)]));
+        assert!(
+            !format!("{answer:?}").contains(SECRET),
+            "get_setting sent the admin authenticator secret"
+        );
+        assert_refused(answer, "get_setting", ADMIN_TOTP_SECRET);
+        assert!(
+            stored_setting(ADMIN_TOTP_SECRET).as_deref() == Some(SECRET),
+            "the refused read changed the stored secret"
+        );
+    }
+
+    /// (c) The page cannot rewrite the access mode.
+    #[test]
+    fn the_page_cannot_rewrite_the_access_mode() {
+        setup();
+        setup_solo(&args(vec![s(ROOT)])).unwrap();
+        let answer = set_setting(&args(vec![s(ACCESS_MODE), s("helpdesk")]));
+        assert_refused(answer, "set_setting", ACCESS_MODE);
+        assert_eq!(stored_setting(ACCESS_MODE).as_deref(), Some("solo"));
+        assert_eq!(state()["mode"], "solo");
+        assert_eq!(state()["admin_root"], ROOT);
+    }
+
+    /// (d) The page cannot delete the admin's recovery key: the stored hash
+    /// is the same afterwards, and the key it belongs to still works.
+    #[test]
+    fn the_page_cannot_delete_the_recovery_key() {
+        setup();
+        let key = key_of(setup_helpdesk(&args(vec![s("0817")])));
+        let before = stored_setting(RECOVERY_KEY_HASH);
+        assert!(before.is_some(), "setup stores a recovery key hash");
+        let answer = delete_setting(&args(vec![s(RECOVERY_KEY_HASH)]));
+        assert_refused(answer, "delete_setting", RECOVERY_KEY_HASH);
+        assert!(
+            stored_setting(RECOVERY_KEY_HASH) == before,
+            "the refused delete changed the stored recovery key hash"
+        );
+        assert!(truthy(use_recovery_key(&args(vec![s(&key)]))));
+    }
+
+    /// Each of the three verbs refuses every host setting, whatever is
+    /// stored under it, and leaves the stored value as it was; so too a key
+    /// that only looks like the page's.
+    #[test]
+    fn every_other_setting_is_refused_by_all_three_verbs() {
+        setup();
+        const STORED: &str = "stored-setting-P8D2";
+        for key in [
+            ACCESS_MODE,
+            ADMIN_TIN_ROOT,
+            ADMIN_PIN_HASH,
+            ADMIN_TOTP_SECRET,
+            RECOVERY_KEY_HASH,
+            "Theme_Preference",
+            " theme_preference",
+        ] {
+            set(key, STORED);
+            let read = get_setting(&args(vec![s(key)]));
+            assert!(
+                !format!("{read:?}").contains(STORED),
+                "get_setting sent the value of `{key}`"
+            );
+            assert_refused(read, "get_setting", key);
+            assert_refused(
+                set_setting(&args(vec![s(key), s("page-value")])),
+                "set_setting",
+                key,
+            );
+            assert_refused(delete_setting(&args(vec![s(key)])), "delete_setting", key);
+            assert!(
+                stored_setting(key).as_deref() == Some(STORED),
+                "a refused verb changed `{key}`"
+            );
+        }
     }
 
     #[test]
