@@ -167,6 +167,66 @@ impl BirAgentHost {
         self.generic_form = Some(state);
     }
 
+    /// The draft the profile alone makes for this return's TIN, year and
+    /// period, and its field map (`agent::FromProfile`): what `fill`'s
+    /// profile-blank check reads, as the page's own `from_profile` draft
+    /// decides it (its `load_draft(..., fresh)` twin). `None` when the
+    /// return's identity or its profile cannot be read — `fill` then keeps
+    /// every profile box locked, the conservative verdict.
+    pub(super) fn profile_context(
+        &self,
+        kind: AgentFormKind,
+        draft: &Value,
+    ) -> Option<agent::FromProfile> {
+        let identity = agent::identity(kind, draft).ok()?;
+        let profile = self.load_profile(&identity.tin).ok()?;
+        let year = identity.taxable_year;
+        let period = u8::try_from(period_column(&identity.period)).unwrap_or(u8::MAX);
+        let mut fresh = match kind {
+            AgentFormKind::Form1601C => serde_json::to_value(
+                bir_core::forms::form_1601c::Form1601CDraft::new_unanswered_from_profile(
+                    &profile,
+                    year,
+                    period.clamp(1, 12),
+                ),
+            ),
+            AgentFormKind::Form2551Q => serde_json::to_value(
+                bir_core::forms::form_2551q::Form2551QDraft::new_from_profile(
+                    &profile,
+                    year,
+                    period.clamp(1, 4),
+                ),
+            ),
+            AgentFormKind::Queueable(QueueableKind::Form2550Q) => serde_json::to_value(
+                bir_core::forms::form_2550q::Form2550QDraft::new_from_profile(
+                    &profile,
+                    year,
+                    period.clamp(1, 4),
+                ),
+            ),
+            AgentFormKind::Queueable(queueable) => {
+                serde_json::to_value((crate::views::queueable_forms::spec_for_kind(queueable)?
+                    .new)(&profile, year, period))
+            }
+        }
+        .ok()?;
+        // What the page's open finishes a fresh draft with: the penalties
+        // the Calendar resolves now, then a recompute — the field map below
+        // reads the computed draft.
+        let overrides = self
+            .db
+            .as_ref()
+            .and_then(|db| db.lock().ok().map(|guard| guard.get_deadline_overrides()))
+            .unwrap_or_default();
+        let _ = agent::apply_penalty_profile(kind, &mut fresh, &profile, &overrides);
+        agent::compute(kind, &mut fresh).ok()?;
+        let values = serde_json::to_value(agent::field_map(kind, &fresh).ok()?).ok()?;
+        Some(agent::FromProfile {
+            draft: fresh,
+            values,
+        })
+    }
+
     /// `form.open` for a generic-queue form: the page's own draft for this
     /// taxpayer and period (stored, else prefilled from the profile).
     pub(super) fn open_generic(
@@ -316,14 +376,22 @@ impl BirAgentHost {
         source: BoxSource,
     ) -> Option<Result<DispatchResult, String>> {
         let db = self.db.clone();
+        let from_profile = self
+            .active_generic()
+            .and_then(|form| self.profile_context(form.kind, &form.draft));
         let form = self.active_generic_mut()?;
         Some((|| {
             if !form.is_editable() {
                 return Err("this return is no longer a draft".into());
             }
             let record = trigger_record(form.kind, &form.draft);
-            let (draft, filled, kept, not_shown, refused) =
-                fill_official(form.kind, &form.draft, &form.assist, fields)?;
+            let (draft, filled, kept, not_shown, refused) = fill_official(
+                form.kind,
+                &form.draft,
+                &form.assist,
+                fields,
+                from_profile.as_ref(),
+            )?;
             form.draft = draft;
             // A write that moved the record the penalties resolve from (a
             // typed trigger date) resolves them again, as the page's own
@@ -696,6 +764,7 @@ pub(super) fn fill_official(
     draft: &Value,
     assist: &AssistState,
     fields: &serde_json::Map<String, Value>,
+    from_profile: Option<&agent::FromProfile>,
 ) -> Result<OfficialFill, String> {
     let mut next = draft.clone();
     let (mut filled, mut kept) = (Vec::new(), Vec::new());
@@ -706,7 +775,17 @@ pub(super) fn fill_official(
             kept.push(key.clone());
             continue;
         }
-        if let Err(why) = agent::fill(kind, &mut next, key, value) {
+        // 2553's item-13 keys are the desktop's own to edit (the page
+        // writes them through `rows_dst_pt_vat`'s cells; here
+        // `tax_treaty_2553` applies the same rule below), so they write
+        // through the host-owned path rather than `fill`'s host-written
+        // refusal.
+        let write = if tax_treaty_key(kind, key) {
+            agent::fill_host_owned(kind, &mut next, key, value)
+        } else {
+            agent::fill(kind, &mut next, key, value, from_profile)
+        };
+        if let Err(why) = write {
             refused.insert(key.clone(), Value::String(why));
             continue;
         }
@@ -773,6 +852,13 @@ pub(super) fn fill_official(
 /// 2553 item 13's list (`lstTaxTreaty`).
 const TAX_TREATY_LIST: &str = "frm2553:lstTaxTreaty";
 
+/// The keys the desktop edits for 2553's item 13 (`tax_treaty_2553`), where
+/// the page edits them through `rows_dst_pt_vat`'s cells — the Yes/No
+/// radios and the relief list.
+fn tax_treaty_key(kind: AgentFormKind, key: &str) -> bool {
+    kind.form_code() == "2553" && (key.starts_with("frm2553:optTreaty") || key == TAX_TREATY_LIST)
+}
+
 /// What the assistant is told when it answers 2553 item 13 Yes without its
 /// list: the page's own reason, that nothing in the call was applied, and
 /// what to do.
@@ -828,7 +914,7 @@ fn tax_treaty_2553(
             let mut alone = before.clone();
             fields
                 .get(key)
-                .is_some_and(|value| agent::fill(kind, &mut alone, key, value).is_ok())
+                .is_some_and(|value| agent::fill_host_owned(kind, &mut alone, key, value).is_ok())
                 && chosen(&alone)
         });
     if !says_yes {
@@ -839,7 +925,7 @@ fn tax_treaty_2553(
         .filter(|_| filled.iter().any(|key| key == TAX_TREATY_LIST))
         && matches!(fill_text(list).as_str(), "1" | "2")
     {
-        return agent::fill(kind, next, TAX_TREATY_LIST, list);
+        return agent::fill_host_owned(kind, next, TAX_TREATY_LIST, list);
     }
     if chosen(before) {
         next["tax_treaty"] = before["tax_treaty"].clone();
@@ -1107,9 +1193,12 @@ mod tests {
         assert_eq!(refused.len(), 2, "{filled}");
         for key in ["AtcCode1", "AtcCode5"] {
             let why = refused[key].as_str().unwrap();
+            // The page writes the ATC popup's tick boxes itself: a
+            // host-written refusal that keeps the probe's note on where
+            // the real edit is.
             assert!(
                 why.starts_with(&format!(
-                    "`{key}` cannot be filled from here: the ATC popup's tick box"
+                    "`{key}` cannot be filled from here: it is written through the form's own editors: the ATC popup's tick box"
                 )),
                 "{why}"
             );

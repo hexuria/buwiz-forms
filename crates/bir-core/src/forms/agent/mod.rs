@@ -23,7 +23,7 @@ use std::sync::OnceLock;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use super::form_1601c::Form1601CDraft;
 use super::form_2551q::{Form2551QDraft, Form2551QEntries};
@@ -832,45 +832,468 @@ impl AgentFormDef {
     }
 }
 
+// ------------------------------------------------------------------ locks
+//
+// The effective lock every writer shares (decision P4-19): what the form
+// page's `locks` map shows and what `fill` refuses are one computation.
+// The page-specific parts — which keys the page's host writes through its
+// own editors and which on-screen keys repeat an official control — are
+// pinned data (`data/agent-locks.json`, generated from the page's own
+// classifiers by bir-shell's `agent_locks` tests; regenerate with
+// `UPDATE_AGENT_LOCKS=1 cargo test --manifest-path crates/bir-shell/Cargo.toml agent_locks_table`).
+//
+// NOT here, deliberately: the page's draft-dependent relocks
+// (`rows_dst_pt_vat`, `rows_annual_corporate`, `rows_as_needed` and
+// `rows_income_q` relock their row families from the draft as the page
+// builds it, and `penalties` locks a computed penalty group until the
+// filer's own Edit opens it). Those interleave with page-only UX state
+// (the penalties Edit, typed trigger parts) and stay in `bir-shell`'s
+// `screen_form_module`: the page applies them on top of this map, and
+// `fill` does not consult them — moving them core-side is a follow-up
+// decision, not part of this change.
+
+/// The draft the taxpayer profile alone makes for a return's period, and
+/// its box values (official key -> string): what decides whether the
+/// profile filled a box ([`profile_blank`]). The two writers build the
+/// values differently:
+///
+/// - the form page (bir-shell `opened_json`) recomputes the profile's own
+///   fresh draft (`load_draft(..., fresh = true)`) and reads it with
+///   `values_json`: the [`field_map`] plus each duplicate occurrence the
+///   page shows (`txtEmail#occurrence-1`) and the page's display-only
+///   text (the row modules' additions, an unescaped line of business);
+/// - the desktop assistant (bir-desktop `profile_context`) builds the draft
+///   for the open return's TIN, year and period and reads it with
+///   [`field_map`] alone.
+///
+/// The two maps differ, but [`profile_blank`] reads a bound box's own
+/// draft field before them, so the verdicts do not: bir-shell's
+/// `the_page_and_the_desktop_lock_alike_for_a_full_profile` and
+/// `..._for_a_sparse_profile` (`screen_form_module/tests/agent_locks.rs`)
+/// pin [`locks`] and the [`fill`] verdicts as identical for both contexts
+/// of one profile draft, on every form.
+#[derive(Debug, Clone)]
+pub struct FromProfile {
+    pub draft: Value,
+    pub values: Value,
+}
+
+/// A package's page-side lock data (`data/agent-locks.json`): keys the
+/// page's host writes through its own editors (`catalogs::host_writes` and
+/// the row modules', bound or not), and the on-screen keys that repeat an
+/// official control id (`#occurrence-`) without a binding of their own.
+#[derive(Debug, Default, Deserialize)]
+struct AgentLocks {
+    #[serde(default)]
+    host_written: BTreeSet<String>,
+    #[serde(default)]
+    occurrence_aliases: BTreeMap<String, String>,
+}
+
+fn agent_locks(package: &str) -> &'static AgentLocks {
+    static PARSED: OnceLock<BTreeMap<String, AgentLocks>> = OnceLock::new();
+    static EMPTY: AgentLocks = AgentLocks {
+        host_written: BTreeSet::new(),
+        occurrence_aliases: BTreeMap::new(),
+    };
+    PARSED
+        .get_or_init(|| {
+            serde_json::from_str(include_str!("../../../data/agent-locks.json"))
+                .expect("data/agent-locks.json parses")
+        })
+        .get(package)
+        .unwrap_or(&EMPTY)
+}
+
+/// Whether the page's host writes `key` through its own editors (a row
+/// cell, a catalog control, a gate a row module owns), never through the
+/// box's draft binding. Bound or not, `fill` refuses it: a write by box
+/// key would bypass the host's own logic.
+pub fn host_writes(kind: AgentFormKind, key: &str) -> bool {
+    agent_locks(kind.package()).host_written.contains(key)
+}
+
+/// On-screen keys that repeat an official control id
+/// (`txtEmail#occurrence-2`) and have no binding of their own, each with
+/// that official key. The draft holds one value per official key and the
+/// field map, the XML and the print sheet all write it under the official
+/// key, so every occurrence shows that one value. Read-only: `fill`
+/// refuses these keys, so every write goes through a bound box.
+pub fn occurrence_aliases(kind: AgentFormKind) -> Vec<(&'static String, &'static str)> {
+    agent_locks(kind.package())
+        .occurrence_aliases
+        .iter()
+        .map(|(key, official)| (key, official.as_str()))
+        .collect()
+}
+
+/// The filer's own name or registered name. The open draft copies it from
+/// the taxpayer profile, but the probe compares raw profile strings and
+/// the forms print it in capitals, so it is not always detected as a
+/// profile box. Spouse, payee, buyer and seller names stay typed.
+pub fn is_profile_name(key: &str) -> bool {
+    let tail = key.rsplit(':').next().unwrap_or(key).to_ascii_lowercase();
+    let Some(rest) = tail.strip_prefix("txt") else {
+        return false;
+    };
+    let stem = rest.trim_end_matches(|c: char| c.is_ascii_digit());
+    ["taxpayername", "registeredname"].iter().any(|name| {
+        stem.strip_suffix(name).is_some_and(|prefix| {
+            prefix
+                .chars()
+                .all(|c| c.is_ascii_digit() || matches!(c, 'p' | 'g' | 't' | 'i' | 'm'))
+        })
+    })
+}
+
+/// Whether `key`'s own binding carries [`Lock::Profile`].
+pub fn has_profile_lock(def: &AgentFormDef, key: &str) -> bool {
+    matches!(
+        def.bindings.get(key),
+        Some(BoundBox {
+            lock: Some(Lock::Profile),
+            ..
+        })
+    )
+}
+
+/// A box the taxpayer profile fills: bound (itself or through its item's
+/// group box) with a profile lock, or the filer's own name.
+pub fn is_profile_box(def: &AgentFormDef, entry: &BoxDef) -> bool {
+    !entry.computed
+        && entry.is_user_box()
+        && def.bindings.contains_key(&entry.key)
+        && (has_profile_lock(def, &entry.key)
+            || is_profile_name(&entry.key)
+            || entry
+                .group
+                .as_deref()
+                .is_some_and(|group| has_profile_lock(def, group)))
+}
+
+/// Whether the profile left `key` blank. A bound box reads the draft field
+/// it writes (a Page 2 header bound to `/taxpayer_name` is filled when the
+/// name is, whatever its own field-map slot shows); a field the draft does
+/// not have yet falls back to the field map, and a box missing there too
+/// counts as filled. Blank: no text, an all-zero code (the official
+/// runtime's empty RDO, `000`), zero, false, or no radio of its item
+/// ticked.
+pub fn profile_blank(def: &AgentFormDef, key: &str, from_profile: &FromProfile) -> bool {
+    let zeros = |text: &str| text.trim().chars().all(|c| c == '0');
+    let shown = |key: &str| {
+        from_profile.values[key]
+            .as_str()
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    };
+    if let Some(
+        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. },
+    ) = def.bindings.get(key).map(|bound| &bound.binding)
+    {
+        return match from_profile.draft.pointer(path) {
+            Some(Value::Null) => true,
+            Some(Value::String(text)) => zeros(text),
+            Some(Value::Number(number)) => number.as_f64() == Some(0.0),
+            Some(Value::Bool(set)) => !set,
+            Some(_) => false,
+            None => from_profile
+                .values
+                .get(key)
+                .is_some_and(|_| zeros(&shown(key))),
+        };
+    }
+    let entry = def.box_def(key);
+    let group = match entry {
+        Some(entry) if entry.radio_group => Some(entry),
+        Some(entry) => entry.group.as_deref().and_then(|group| def.box_def(group)),
+        None => None,
+    };
+    match (group, entry) {
+        (Some(group), _) => !group.members.iter().any(|member| shown(member) == "true"),
+        (None, Some(entry)) if entry.is_radio() => shown(key) != "true",
+        _ => zeros(&shown(key)),
+    }
+}
+
+/// Why a box key refuses a write, the families the page's lock map and
+/// [`fill_box`] read from one computation. `None` from [`gate`] means the
+/// key is open for this writer.
+enum Gate {
+    /// A repeated official control (`#occurrence-`): the reason says where
+    /// the one bound box is filled instead.
+    Alias(String),
+    /// Not a box on this form at all.
+    NotABox,
+    /// Computed by BIR's own formulas.
+    Computed,
+    /// A hidden control, not a box.
+    Hidden,
+    /// The page's host writes it through its own editors; a write by box
+    /// key would bypass them.
+    HostWritten,
+    /// A bound box's effective lock: its own, the filer's own name read as
+    /// the profile's, or its radio item's group lock. The `allowed` list
+    /// of [`fill_box`] may lift it.
+    Lock(Lock),
+    /// A user box no binding writes: the `unmapped` reason, or no field in
+    /// this app's draft.
+    Unmapped,
+}
+
+/// What an occurrence alias's lock says: the alias repeats `official`
+/// (never written by key itself), so the reason redirects there — or says
+/// the page cannot write that official field at all.
+fn alias_reason(def: &AgentFormDef, official: &str, from_profile: Option<&FromProfile>) -> String {
+    match def.bindings.get(official) {
+        Some(BoundBox {
+            lock: Some(Lock::Profile),
+            ..
+        }) => {
+            if from_profile.is_some_and(|fp| profile_blank(def, official, fp)) {
+                format!("repeats `{official}`; fill it there")
+            } else {
+                format!("repeats `{official}` from the tax profile; use Edit on that box")
+            }
+        }
+        Some(BoundBox {
+            lock: Some(lock), ..
+        }) => lock.reason().to_string(),
+        Some(_) => format!("repeats `{official}`; fill it there"),
+        None => format!("repeats the official field `{official}`, which this page cannot write"),
+    }
+}
+
+/// The one effective verdict for `key`: the same families, in the same
+/// order, as the page's lock map decides them — an occurrence alias first
+/// (it overwrites whatever the box's own classification said), then the
+/// box's own gate. `from_profile = None` cannot prove a profile box blank,
+/// so the profile lock stands (the conservative verdict).
+fn gate(def: &AgentFormDef, key: &str, from_profile: Option<&FromProfile>) -> Option<Gate> {
+    if let Some(official) = agent_locks(&def.package).occurrence_aliases.get(key) {
+        return Some(Gate::Alias(alias_reason(def, official, from_profile)));
+    }
+    let Some(entry) = def.box_def(key) else {
+        return Some(Gate::NotABox);
+    };
+    if entry.computed || entry.required == "computed" {
+        return Some(Gate::Computed);
+    }
+    if !entry.is_user_box() {
+        return Some(Gate::Hidden);
+    }
+    if agent_locks(&def.package).host_written.contains(key) {
+        return Some(Gate::HostWritten);
+    }
+    match def.bindings.get(key) {
+        Some(bound) => {
+            // The filer's own name reads as the profile's; a radio member
+            // without a lock of its own takes its item's group lock (as the
+            // page's bound_lock falls back — so an election item's every
+            // radio is refused to the assistant, not only the pinned ones).
+            let lock = if is_profile_name(key) {
+                Some(Lock::Profile)
+            } else {
+                bound.lock.or_else(|| {
+                    entry
+                        .group
+                        .as_deref()
+                        .and_then(|group| def.bindings.get(group))
+                        .and_then(|bound| bound.lock)
+                })
+            };
+            match lock {
+                Some(Lock::Profile)
+                    if is_profile_box(def, entry)
+                        && from_profile.is_some_and(|fp| profile_blank(def, key, fp)) =>
+                {
+                    None
+                }
+                Some(lock) => Some(Gate::Lock(lock)),
+                None => None,
+            }
+        }
+        None => Some(Gate::Unmapped),
+    }
+}
+
+impl Gate {
+    /// The reason this gate's key shows in the page's `locks` map, or
+    /// `None` when the page draws no lock for it: a hidden control is
+    /// never shown, an election is the user's own answer, and a box the
+    /// host writes stays open on the page — all refused to `fill` alike.
+    fn page_reason(&self, def: &AgentFormDef, key: &str) -> Option<String> {
+        match self {
+            Self::Alias(reason) => Some(reason.clone()),
+            Self::Computed => Some("computed by BIR's own formulas".to_string()),
+            Self::Lock(lock @ (Lock::Profile | Lock::Identity)) => Some(lock.reason().to_string()),
+            Self::Unmapped => Some(format!(
+                "cannot be filled here: {}",
+                def.unmapped
+                    .get(key)
+                    .map(String::as_str)
+                    .unwrap_or("it has no field in this app's draft")
+            )),
+            Self::NotABox | Self::Hidden | Self::HostWritten | Self::Lock(Lock::Election) => None,
+        }
+    }
+
+    /// `fill`'s refusal text for this gate. The families that existed
+    /// before read exactly as `def.refusal` gave them; the new ones name
+    /// their redirect (an alias) or the host that owns the box.
+    fn fill_reason(&self, def: &AgentFormDef, key: &str) -> String {
+        match self {
+            Self::Alias(reason) => reason.clone(),
+            Self::Lock(lock) => format!("`{key}` {}", lock.reason()),
+            Self::HostWritten => {
+                // The probe's unmapped note says where the real edit is
+                // ("the ATC popup's tick box…: chosen in the row"); keep it.
+                let detail = def
+                    .unmapped
+                    .get(key)
+                    .map(|note| format!(": {note}"))
+                    .unwrap_or_default();
+                format!(
+                    "`{key}` cannot be filled from here: it is written through the form's own editors{detail}"
+                )
+            }
+            Self::NotABox | Self::Computed | Self::Hidden | Self::Unmapped => def
+                .refusal(key)
+                .expect("each of these gates is a refusal()"),
+        }
+    }
+}
+
+/// Why each box is locked on the page: the lock map `screen_form_open`
+/// shows. A profile box is locked only where the profile gave it a value
+/// ([`FromProfile`]; the page's Edit then opens it for this return); one
+/// the profile left blank loses its profile lock and is an ordinary box,
+/// whatever the filer has typed into it since.
+///
+/// The page applies its draft-dependent relocks and penalty group locks
+/// on top of this map (see the `locks` section's note): this is the shared
+/// base every writer — page and assistant alike — reads.
+pub fn locks(kind: AgentFormKind, from_profile: &FromProfile) -> Map<String, Value> {
+    let def = kind.definition();
+    let agent_locks = agent_locks(&def.package);
+    let mut locks = Map::new();
+    for key in def.boxes.iter().map(|entry| entry.key.as_str()) {
+        // The page draws no lock for a box it writes through its own
+        // editors — a computed one included: the host's edit is open to
+        // the filer. `fill` still refuses it (its gate is unaffected).
+        if agent_locks.host_written.contains(key) {
+            continue;
+        }
+        if let Some(gate) = gate(def, key, Some(from_profile))
+            && let Some(reason) = gate.page_reason(def, key)
+        {
+            locks.insert(key.to_string(), Value::String(reason));
+        }
+    }
+    // A duplicate occurrence's reason is inserted after the boxes' pass:
+    // it overwrites whatever the alias key's own box classification said.
+    for key in agent_locks.occurrence_aliases.keys().map(String::as_str) {
+        if let Some(gate) = gate(def, key, Some(from_profile))
+            && let Some(reason) = gate.page_reason(def, key)
+        {
+            locks.insert(key.to_string(), Value::String(reason));
+        }
+    }
+    locks
+}
+
+/// Boxes the taxpayer profile filled (`from_profile`), plus repeated
+/// occurrences of one; a box the profile left blank is not listed. The
+/// extracted schema's auto flag is a guess; this is what the app does.
+pub fn profile_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec<String> {
+    let def = kind.definition();
+    let mut keys: Vec<String> = def
+        .boxes
+        .iter()
+        .filter(|entry| is_profile_box(def, entry) && !profile_blank(def, &entry.key, from_profile))
+        .map(|entry| entry.key.clone())
+        .collect();
+    for (key, official) in occurrence_aliases(kind) {
+        if has_profile_lock(def, official) && !profile_blank(def, official, from_profile) {
+            keys.push(key.clone());
+        }
+    }
+    keys
+}
+
+/// The filled profile boxes the page may open with Edit: the edit stays on
+/// this return (`screen_form_fill`'s `unlocked`) and never reaches the
+/// profile. Repeated occurrences are not here; they follow their box.
+pub fn profile_edit_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec<String> {
+    let def = kind.definition();
+    profile_keys(kind, from_profile)
+        .into_iter()
+        .filter(|key| {
+            def.bindings.contains_key(key)
+                && def
+                    .box_def(key)
+                    .is_some_and(|entry| entry.required != "computed")
+        })
+        .collect()
+}
+
 // ------------------------------------------------------------------ fill
 
 /// Write official box `key` of `draft` to `value` (no recompute; call
-/// [`compute`] after the last box). Refuses computed, locked and unknown
-/// boxes with the reason.
+/// [`compute`] after the last box). Refuses exactly what the page locks
+/// against the assistant: computed, locked, hidden, unmapped, host-written
+/// and occurrence-alias keys, each with the page's reason.
+///
+/// `from_profile` is the draft the profile alone makes for this return's
+/// period and its field map ([`FromProfile`], as [`locks`] reads): a
+/// profile box the profile left blank is an ordinary box and takes the
+/// write. `None` cannot prove the blank, so every profile box keeps its
+/// lock — the conservative verdict.
 pub fn fill(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
     value: &Value,
+    from_profile: Option<&FromProfile>,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, &[])
+    fill_box(kind, draft, key, value, &[], from_profile, false)
 }
 
-/// [`fill`] for the user's own form page. The one difference: an income-tax
-/// election ([`Lock::Election`]) is the user's to answer, so it is written;
-/// the assistant is still refused it through [`fill`]. Identity, profile,
-/// computed, hidden and unbound boxes are refused exactly as in [`fill`].
+/// [`fill`] for the user's own form page. Two differences: an income-tax
+/// election ([`Lock::Election`]) is the user's to answer, and a bound box
+/// the host writes through its own editors writes — the page's edit
+/// pipeline is that host. Identity, profile, computed, hidden and unbound
+/// boxes are refused exactly as in [`fill`].
 pub fn fill_as_user(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, &[Lock::Election])
+    fill_box(kind, draft, key, value, &[Lock::Election], None, true)
 }
 
 /// [`fill_as_user`] for a box the user chose to edit on their own form page
 /// after it was filled from the profile ([`Lock::Profile`]): the edit stays
 /// on this return's draft and the profile is never written. The assistant is
 /// still refused profile boxes through [`fill`]; identity, computed, hidden
-/// and unbound boxes are refused exactly as in [`fill`].
+/// and unbound boxes are refused exactly as in [`fill`], and a bound
+/// host-written box writes as in [`fill_as_user`].
 pub fn fill_profile_box_as_user(
     kind: AgentFormKind,
     draft: &mut Value,
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, &[Lock::Election, Lock::Profile])
+    fill_box(
+        kind,
+        draft,
+        key,
+        value,
+        &[Lock::Election, Lock::Profile],
+        None,
+        true,
+    )
 }
 
 /// Draft fields that hold a return's own period. Exact names: a field that
@@ -930,7 +1353,15 @@ pub fn write_period_box(
     key: &str,
     value: &Value,
 ) -> Result<(), String> {
-    fill_box(kind, draft, key, value, &[Lock::Election, Lock::Identity])
+    fill_box(
+        kind,
+        draft,
+        key,
+        value,
+        &[Lock::Election, Lock::Identity],
+        None,
+        true,
+    )
 }
 
 fn fill_box(
@@ -939,35 +1370,71 @@ fn fill_box(
     key: &str,
     value: &Value,
     allowed: &[Lock],
+    from_profile: Option<&FromProfile>,
+    as_host: bool,
 ) -> Result<(), String> {
     prepare_for_writes(kind, draft)?;
     let def = kind.definition();
-    let lock = def.bindings.get(key).and_then(|bound| bound.lock);
-    let let_through = match lock {
-        Some(Lock::Election) => allowed.contains(&Lock::Election),
-        // Only the lock itself is lifted: a computed or hidden box stays refused.
-        Some(lock @ (Lock::Profile | Lock::Identity)) => {
-            allowed.contains(&lock)
+    let verdict = gate(def, key, from_profile);
+    // Only the lock itself is lifted: a computed or hidden box, an alias
+    // and an unbound key stay refused whatever `allowed` holds. A
+    // host-written key stays refused to `fill` (as_host = false, the
+    // assistant); a page writer (as_host = true) is that host's own edit
+    // pipeline, so a bound host key writes — an unbound one has nothing to
+    // write and keeps its refusal.
+    let let_through = match verdict {
+        Some(Gate::HostWritten) => as_host && def.bindings.contains_key(key),
+        Some(Gate::Lock(Lock::Election)) => allowed.contains(&Lock::Election),
+        Some(Gate::Lock(Lock::Profile)) => allowed.contains(&Lock::Profile),
+        Some(Gate::Lock(Lock::Identity)) => {
+            allowed.contains(&Lock::Identity)
                 && def
-                    .box_def(key)
-                    .is_some_and(|entry| entry.is_user_box() && entry.required != "computed")
-                && (lock != Lock::Identity
-                    || def
-                        .bindings
-                        .get(key)
-                        .is_some_and(|bound| writes_only_the_period(&bound.binding)))
+                    .bindings
+                    .get(key)
+                    .is_some_and(|bound| writes_only_the_period(&bound.binding))
         }
         _ => false,
     };
-    if let Some(reason) = def.refusal(key)
+    if let Some(gate) = verdict
         && !let_through
     {
-        return Err(reason);
+        return Err(gate.fill_reason(def, key));
     }
-    let bound = def
-        .bindings
-        .get(key)
-        .expect("refusal() is None only for bound boxes");
+    write_bound_box(kind, def, draft, key, value)
+}
+
+/// [`fill`] for a key the host itself edits — the page writes it through
+/// its own editors (a row cell, a catalog control), and the desktop host
+/// does the same for the keys its own gate owns (2553's item 13, where
+/// `tax_treaty_2553` is the editor `rows_dst_pt_vat`'s cells are on the
+/// page). Only the host-written gate is lifted — the caller applies the
+/// host's own rule — so an unbound, computed, hidden, aliased or locked
+/// box is refused exactly as in [`fill`].
+///
+/// Never for a key the assistant names itself: `fill` keeps refusing it.
+pub fn fill_host_owned(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    prepare_for_writes(kind, draft)?;
+    let def = kind.definition();
+    match gate(def, key, None) {
+        None | Some(Gate::HostWritten) => {}
+        Some(gate) => return Err(gate.fill_reason(def, key)),
+    }
+    write_bound_box(kind, def, draft, key, value)
+}
+
+fn write_bound_box(
+    kind: AgentFormKind,
+    def: &AgentFormDef,
+    draft: &mut Value,
+    key: &str,
+    value: &Value,
+) -> Result<(), String> {
+    let bound = def.bindings.get(key).expect("a gate-passed key is bound");
     let text = value_text(value);
     match &bound.binding {
         Binding::Text {
@@ -1636,7 +2103,13 @@ mod tests {
         .unwrap();
         let mut draft =
             serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
-        let refused = fill(kind, &mut draft, "frm2551Qv2018:taxRate", &Value::from("2"));
+        let refused = fill(
+            kind,
+            &mut draft,
+            "frm2551Qv2018:taxRate",
+            &Value::from("2"),
+            None,
+        );
         assert!(refused.unwrap_err().contains("election"));
         fill_as_user(kind, &mut draft, "frm2551Qv2018:taxRate", &Value::from("2")).unwrap();
         assert_eq!(draft["item_13_election"], "eight_percent");
@@ -1674,7 +2147,7 @@ mod tests {
                 let mut draft = Value::Null;
                 let value = Value::from("x");
                 for (writer, result) in [
-                    ("fill", fill(kind, &mut draft, key, &value)),
+                    ("fill", fill(kind, &mut draft, key, &value, None)),
                     ("fill_as_user", fill_as_user(kind, &mut draft, key, &value)),
                 ] {
                     let refused = result.expect_err(key);
@@ -1975,5 +2448,181 @@ mod tests {
             serde_json::json!({"rows": [{"a": 1.0, "b": "x"}, {"a": 0.0, "b": ""}, {"a": 5.0, "b": ""}]})
         );
         assert!(set_path(&mut draft, "/other/0/a", Value::from(1), &rows).is_err());
+    }
+
+    /// The profile alone decides whether a profile box is locked: a box it
+    /// filled stays locked to the assistant, while one it left blank loses
+    /// the lock and is an ordinary box (`None` cannot prove the blank and
+    /// stays locked — the conservative verdict). 2551Q's Item 10 phone and
+    /// Item 11 email are the profile boxes this profile leaves empty.
+    #[test]
+    fn a_profile_box_the_profile_left_blank_is_an_ordinary_box() {
+        let kind = AgentFormKind::Form2551Q;
+        let profile: crate::profile::TaxpayerProfile = serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Example Store",
+            "tin": {"segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street",
+            "zip_code": "1600",
+            "phone": "",
+            "email": "",
+            "default_form_type": "2551Qv2018"
+        }))
+        .unwrap();
+        let mut from_profile_draft =
+            serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+        compute(kind, &mut from_profile_draft).unwrap();
+        let map = field_map(kind, &from_profile_draft).unwrap();
+        let from_profile = FromProfile {
+            values: Value::Object(
+                map.into_iter()
+                    .map(|(key, value)| (key, Value::String(value)))
+                    .collect(),
+            ),
+            draft: from_profile_draft,
+        };
+        // The blank ones open in the shared lock map and take a fill; the
+        // filled RDO box stays locked.
+        let locks = locks(kind, &from_profile);
+        for blank in ["frm2551Qv2018:telNo", "txtEmail#occurrence-1"] {
+            assert!(!locks.contains_key(blank), "{blank} is open on the page");
+            assert!(
+                !profile_keys(kind, &from_profile)
+                    .iter()
+                    .any(|key| key == blank),
+                "{blank} is not a filled profile box"
+            );
+            let mut draft =
+                serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+            fill(
+                kind,
+                &mut draft,
+                blank,
+                &Value::from("the assistant's answer"),
+                Some(&from_profile),
+            )
+            .unwrap_or_else(|error| panic!("{blank}: {error}"));
+            // Without the profile context the same box keeps its lock.
+            let refused = fill(kind, &mut draft, blank, &Value::from("x"), None).expect_err(blank);
+            assert!(
+                refused.contains(Lock::Profile.reason()),
+                "{blank}: {refused}"
+            );
+        }
+        assert_eq!(
+            draft_contact(&from_profile.draft),
+            ("".to_string(), "".to_string()),
+            "the profile really left them blank"
+        );
+        let mut draft =
+            serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+        let refused = fill(
+            kind,
+            &mut draft,
+            "frm2551Qv2018:txtRDOCode",
+            &Value::from("x"),
+            Some(&from_profile),
+        )
+        .expect_err("a filled profile box stays locked");
+        assert!(refused.contains(Lock::Profile.reason()), "{refused}");
+    }
+
+    fn draft_contact(draft: &Value) -> (String, String) {
+        (
+            draft["contact_number"].as_str().unwrap_or("").to_string(),
+            draft["email"].as_str().unwrap_or("").to_string(),
+        )
+    }
+
+    /// Every host-written key and every occurrence alias the pinned
+    /// `agent-locks.json` names is refused to `fill` — bound or not — with
+    /// the reason the page shows for it. This is the artifact's coverage
+    /// over every form, and the assistant side of the byte-pinned
+    /// `agent_locks_table` test in bir-shell.
+    #[test]
+    fn the_assistant_is_refused_what_the_host_writes_and_an_alias_repeats() {
+        let mut host_written = 0;
+        let mut aliases = 0;
+        for kind in AgentFormKind::all() {
+            let def = kind.definition();
+            for (key, official) in occurrence_aliases(kind) {
+                let mut draft = Value::Null;
+                let refused = fill(kind, &mut draft, key, &Value::from("x"), None).expect_err(key);
+                assert!(refused.contains("repeats"), "{key}: {refused}");
+                assert!(refused.contains(official), "{key}: {refused}");
+                aliases += 1;
+            }
+            for key in def
+                .boxes
+                .iter()
+                .map(|entry| entry.key.as_str())
+                .chain(def.bindings.keys().map(String::as_str))
+            {
+                if matches!(gate(def, key, None), Some(Gate::HostWritten)) {
+                    let mut draft = Value::Null;
+                    let refused =
+                        fill(kind, &mut draft, key, &Value::from("x"), None).expect_err(key);
+                    assert!(
+                        refused.contains("written through the form's own editors"),
+                        "{key}: {refused}"
+                    );
+                    host_written += 1;
+                }
+            }
+        }
+        assert!(
+            host_written > 0 && aliases > 0,
+            "agent-locks.json covers every form: {host_written} host-written, {aliases} aliases"
+        );
+    }
+
+    /// The election-group fallback is deliberate: a bound radio member
+    /// with no lock of its own under an election-locked group is still
+    /// refused to `fill`, though the page draws no lock for it (no pinned
+    /// form has such a member today — the group locks its members — so a
+    /// synthetic definition pins the rule).
+    #[test]
+    fn a_member_without_a_lock_under_an_election_group_is_still_refused() {
+        let def: AgentFormDef = serde_json::from_value(serde_json::json!({
+            "package": "test",
+            "form_code": "TEST",
+            "boxes": [
+                {
+                    "key": "grp", "label": "g", "kind": "select",
+                    "required": "optional", "radio_group": true,
+                    "members": ["mA", "mB"],
+                    "options": [{"value": "a"}, {"value": "b"}]
+                },
+                {"key": "mA", "label": "a", "kind": "radio", "required": "optional", "group": "grp"},
+                {"key": "mB", "label": "b", "kind": "radio", "required": "optional", "group": "grp"}
+            ],
+            "bindings": {
+                "grp": {"type": "choice", "lock": "election", "options": [
+                    {"value": "a", "set": {"/pick": "a"}},
+                    {"value": "b", "set": {"/pick": "b"}}
+                ]},
+                "mA": {"type": "choice", "lock": "election", "options": [
+                    {"value": "true", "set": {"/pick": "a"}}
+                ]},
+                "mB": {"type": "choice", "options": [
+                    {"value": "true", "set": {"/pick": "b"}}
+                ]}
+            }
+        }))
+        .unwrap();
+        assert!(
+            matches!(gate(&def, "mB", None), Some(Gate::Lock(Lock::Election))),
+            "a bound member inherits its election-locked group's lock"
+        );
+        assert_eq!(
+            Gate::Lock(Lock::Election).page_reason(&def, "mB"),
+            None,
+            "the page shows it open — the refusal is the assistant's half"
+        );
+        assert!(
+            gate(&def, "mA", None).is_some_and(|gate| matches!(gate, Gate::Lock(Lock::Election)))
+        );
     }
 }

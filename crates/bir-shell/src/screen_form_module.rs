@@ -27,7 +27,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
 use bir_core::db::Database;
-use bir_core::forms::agent::{self, AgentFormDef, AgentFormKind, Binding, BoundBox, BoxDef};
+#[cfg(test)]
+use bir_core::forms::agent::BoundBox;
+use bir_core::forms::agent::{self, AgentFormDef, AgentFormKind, Binding, BoxDef};
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
 use bir_core::forms::registry::FilingFrequency;
 use bir_core::forms::{FilingPeriod, FilingStatus};
@@ -1939,213 +1941,13 @@ fn mmdd_keys(
 
 // ------------------------------------------------------- draft evaluation
 
-/// Why a box on the form cannot be edited here, or `None` when it can (or
-/// when it is a hidden control, which the page never shows).
-fn lock_reason(def: &AgentFormDef, entry: &BoxDef) -> Option<String> {
-    if entry.computed || entry.required == "computed" {
-        return Some("computed by BIR's own formulas".to_string());
-    }
-    if !entry.is_user_box() {
-        return None;
-    }
-    // An income-tax election is the user's to answer: it is locked against
-    // the assistant only, so the page leaves it open.
-    let bound_lock = |key: &str| match def.bindings.get(key) {
-        Some(BoundBox {
-            lock: Some(lock), ..
-        }) if *lock != bir_core::forms::agent::Lock::Election => Some(lock.reason().to_string()),
-        _ => None,
-    };
-    if def.bindings.contains_key(&entry.key) && is_profile_name(&entry.key) {
-        return Some(bir_core::forms::agent::Lock::Profile.reason().to_string());
-    }
-    if def.bindings.contains_key(&entry.key) {
-        // A radio is locked when its item (group box) is.
-        return bound_lock(&entry.key).or_else(|| entry.group.as_deref().and_then(bound_lock));
-    }
-    Some(format!(
-        "cannot be filled here: {}",
-        def.unmapped
-            .get(&entry.key)
-            .map(String::as_str)
-            .unwrap_or("it has no field in this app's draft")
-    ))
-}
-
-/// The filer's own name or registered name. The open draft copies it from
-/// the taxpayer profile, but the probe compares raw profile strings and the
-/// forms print it in capitals, so it is not always detected as a profile box.
-/// Spouse, payee, buyer and seller names stay typed.
-fn is_profile_name(key: &str) -> bool {
-    let tail = key.rsplit(':').next().unwrap_or(key).to_ascii_lowercase();
-    let Some(rest) = tail.strip_prefix("txt") else {
-        return false;
-    };
-    let stem = rest.trim_end_matches(|c: char| c.is_ascii_digit());
-    ["taxpayername", "registeredname"].iter().any(|name| {
-        stem.strip_suffix(name).is_some_and(|prefix| {
-            prefix
-                .chars()
-                .all(|c| c.is_ascii_digit() || matches!(c, 'p' | 'g' | 't' | 'i' | 'm'))
-        })
-    })
-}
-
-/// The draft the profile alone makes for a return's period, and its field
-/// map: what decides whether the profile filled a box.
-struct FromProfile {
-    draft: Value,
-    values: Value,
-}
-
-/// Why each box is locked on the page. A profile box is locked only where
-/// the profile gave it a value ([`FromProfile`]; the page's Edit then opens
-/// it for this return); one the profile left blank loses its profile lock
-/// and is an ordinary box, whatever the filer has typed into it since.
-fn locks(kind: AgentFormKind, from_profile: &FromProfile) -> Map<String, Value> {
-    let def = kind.definition();
-    let profile_reason = bir_core::forms::agent::Lock::Profile.reason();
-    let mut locks: Map<String, Value> = def
-        .boxes
-        .iter()
-        .filter_map(|entry| {
-            let open = is_profile_box(def, entry) && profile_blank(def, &entry.key, from_profile);
-            lock_reason(def, entry)
-                .filter(|reason| !(open && reason == profile_reason))
-                .filter(|_| !catalogs::host_writes(kind, &entry.key))
-                .map(|reason| (entry.key.clone(), Value::String(reason)))
-        })
-        .collect();
-    // A duplicate occurrence shows its official field (see `values_json`)
-    // but is never written by key: say where that field is edited instead
-    // of "not written by this app's field map".
-    for (key, official) in occurrence_aliases(kind) {
-        let reason = match def.bindings.get(official) {
-            Some(BoundBox {
-                lock: Some(bir_core::forms::agent::Lock::Profile),
-                ..
-            }) => {
-                if profile_blank(def, official, from_profile) {
-                    format!("repeats `{official}`; fill it there")
-                } else {
-                    format!("repeats `{official}` from the tax profile; use Edit on that box")
-                }
-            }
-            Some(BoundBox {
-                lock: Some(lock), ..
-            }) => lock.reason().to_string(),
-            Some(_) => format!("repeats `{official}`; fill it there"),
-            None => {
-                format!("repeats the official field `{official}`, which this page cannot write")
-            }
-        };
-        locks.insert(key.clone(), Value::String(reason));
-    }
-    locks
-}
-
-fn has_profile_lock(def: &AgentFormDef, key: &str) -> bool {
-    matches!(
-        def.bindings.get(key),
-        Some(BoundBox {
-            lock: Some(bir_core::forms::agent::Lock::Profile),
-            ..
-        })
-    )
-}
-
-/// A box the taxpayer profile fills: bound (itself or through its item's
-/// group box) with a profile lock, or the filer's own name.
-fn is_profile_box(def: &AgentFormDef, entry: &BoxDef) -> bool {
-    !entry.computed
-        && entry.is_user_box()
-        && def.bindings.contains_key(&entry.key)
-        && (has_profile_lock(def, &entry.key)
-            || is_profile_name(&entry.key)
-            || entry
-                .group
-                .as_deref()
-                .is_some_and(|group| has_profile_lock(def, group)))
-}
-
-/// Whether the profile left `key` blank. A bound box reads the draft field
-/// it writes (a Page 2 header bound to `/taxpayer_name` is filled when the
-/// name is, whatever its own field-map slot shows); a field the draft does
-/// not have yet falls back to the field map, and a box missing there too
-/// counts as filled. Blank: no text, an all-zero code (the official
-/// runtime's empty RDO, `000`), zero, false, or no radio of its item ticked.
-fn profile_blank(def: &AgentFormDef, key: &str, from_profile: &FromProfile) -> bool {
-    let zeros = |text: &str| text.trim().chars().all(|c| c == '0');
-    let shown = |key: &str| {
-        from_profile.values[key]
-            .as_str()
-            .unwrap_or("")
-            .trim()
-            .to_string()
-    };
-    if let Some(
-        Binding::Text { path, .. } | Binding::Amount { path, .. } | Binding::Whole { path, .. },
-    ) = def.bindings.get(key).map(|bound| &bound.binding)
-    {
-        return match from_profile.draft.pointer(path) {
-            Some(Value::Null) => true,
-            Some(Value::String(text)) => zeros(text),
-            Some(Value::Number(number)) => number.as_f64() == Some(0.0),
-            Some(Value::Bool(set)) => !set,
-            Some(_) => false,
-            None => from_profile
-                .values
-                .get(key)
-                .is_some_and(|_| zeros(&shown(key))),
-        };
-    }
-    let entry = def.box_def(key);
-    let group = match entry {
-        Some(entry) if entry.radio_group => Some(entry),
-        Some(entry) => entry.group.as_deref().and_then(|group| def.box_def(group)),
-        None => None,
-    };
-    match (group, entry) {
-        (Some(group), _) => !group.members.iter().any(|member| shown(member) == "true"),
-        (None, Some(entry)) if entry.is_radio() => shown(key) != "true",
-        _ => zeros(&shown(key)),
-    }
-}
-
-/// Boxes the taxpayer profile filled (`from_profile`), plus repeated
-/// occurrences of one; a box the profile left blank is not listed. The
-/// extracted schema's auto flag is a guess; this is what the app does.
-fn profile_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec<String> {
-    let def = kind.definition();
-    let mut keys: Vec<String> = def
-        .boxes
-        .iter()
-        .filter(|entry| is_profile_box(def, entry) && !profile_blank(def, &entry.key, from_profile))
-        .map(|entry| entry.key.clone())
-        .collect();
-    for (key, official) in occurrence_aliases(kind) {
-        if has_profile_lock(def, official) && !profile_blank(def, official, from_profile) {
-            keys.push(key.clone());
-        }
-    }
-    keys
-}
-
-/// The filled profile boxes the page may open with Edit: the edit stays on
-/// this return (`screen_form_fill`'s `unlocked`) and never reaches the
-/// profile. Repeated occurrences are not here; they follow their box.
-fn profile_edit_keys(kind: AgentFormKind, from_profile: &FromProfile) -> Vec<String> {
-    let def = kind.definition();
-    profile_keys(kind, from_profile)
-        .into_iter()
-        .filter(|key| {
-            def.bindings.contains_key(key)
-                && def
-                    .box_def(key)
-                    .is_some_and(|entry| entry.required != "computed")
-        })
-        .collect()
-}
+// The effective lock map and its profile-box machinery moved core-side in
+// PR 15 (decision P4-19): `agent::locks`, `agent::FromProfile`,
+// `agent::is_profile_box`, `agent::profile_blank`, `agent::profile_keys`
+// and `agent::profile_edit_keys` are the one computation `agent::fill`
+// also reads, so the assistant refuses exactly the keys this page locks.
+// The draft-dependent relocks and penalty group locks below stay here:
+// they interleave with page-only UX state (the penalties Edit).
 
 /// Where a draft keeps `field` (`profile_edits`, `profile_baseline`): at
 /// its top level. Every generic draft flattens its lifecycle there, and
@@ -2606,7 +2408,7 @@ fn profile_paths(kind: AgentFormKind) -> BTreeSet<&'static str> {
     let def = kind.definition();
     def.boxes
         .iter()
-        .filter(|entry| is_profile_box(def, entry))
+        .filter(|entry| agent::is_profile_box(def, entry))
         .flat_map(|entry| bound_paths(def, &entry.key))
         .filter(|path| !is_period_path(path))
         .collect()
@@ -2644,7 +2446,7 @@ fn profile_box_keys(kind: AgentFormKind) -> Vec<&'static String> {
     let def = kind.definition();
     def.boxes
         .iter()
-        .filter(|entry| is_profile_box(def, entry))
+        .filter(|entry| agent::is_profile_box(def, entry))
         .map(|entry| &entry.key)
         .collect()
 }
@@ -2810,21 +2612,6 @@ fn follow_profile(
     Ok(Some(notes))
 }
 
-/// On-screen keys that repeat an official control id (`txtEmail#occurrence-2`,
-/// the rules corpus's name for the same `serialized_key` placed again on the
-/// official form) and have no binding of their own, each with that official
-/// key. The draft holds one value per official key and the field map, the
-/// XML and the print sheet all write it under the official key, so every
-/// occurrence shows that one value. Read-only: `fill` still refuses these
-/// keys, so every write goes through a bound box of the typed draft.
-fn occurrence_aliases(kind: AgentFormKind) -> Vec<(&'static String, &'static str)> {
-    let def = kind.definition();
-    occurrence_keys(kind)
-        .into_iter()
-        .filter(|(key, _)| !def.bindings.contains_key(*key))
-        .collect()
-}
-
 /// Every on-screen key that repeats an official control id, bound or not,
 /// with that official key. A bound one (2551Q's Item 11 email, keyed
 /// `txtEmail#occurrence-1`) writes its draft field like any box; the field
@@ -2923,7 +2710,11 @@ fn values_json(kind: AgentFormKind, draft: &Value) -> Result<Value, String> {
     // header, written only once that sheet prints) shows the draft field it
     // writes, so a locked box never reads blank; the map, XML and print are
     // unchanged.
-    for entry in def.boxes.iter().filter(|entry| is_profile_box(def, entry)) {
+    for entry in def
+        .boxes
+        .iter()
+        .filter(|entry| agent::is_profile_box(def, entry))
+    {
         if map
             .get(&entry.key)
             .is_some_and(|shown| !shown.trim().is_empty())
@@ -3555,7 +3346,7 @@ fn opened_json(
     }
     let mut from_profile_draft = from_profile;
     agent::compute(kind, &mut from_profile_draft)?;
-    let from_profile = FromProfile {
+    let from_profile = agent::FromProfile {
         values: values_json(kind, &from_profile_draft)?,
         draft: from_profile_draft,
     };
@@ -3565,7 +3356,7 @@ fn opened_json(
         tracing::warn!("{code}: comparing with the tax profile failed: {error}");
         Vec::new()
     });
-    let mut locks = locks(kind, &from_profile);
+    let mut locks = agent::locks(kind, &from_profile);
     rows_dst_pt_vat::relock(kind, &draft, &mut locks);
     rows_annual_corporate::relock(kind, &draft, &mut locks);
     // PR 9's forms' computed boxes the probe called derived.
@@ -3591,8 +3382,8 @@ fn opened_json(
     // 1701Q's spouse penalties while column B is not on the return: faded
     // with what opens them, not locked (PR 5, rows_income_q.rs).
     rows_income_q::relock(kind, &draft, &mut locks);
-    let profile = profile_keys(kind, &from_profile);
-    let profile_edit = profile_edit_keys(kind, &from_profile);
+    let profile = agent::profile_keys(kind, &from_profile);
+    let profile_edit = agent::profile_edit_keys(kind, &from_profile);
     let parts = if sample.is_some() {
         sample_period_parts(kind)
     } else {
@@ -3932,12 +3723,12 @@ fn sample_blank_keys(kind: AgentFormKind, here: &Value, other: &Value) -> Vec<St
     let profile: BTreeSet<String> = def
         .boxes
         .iter()
-        .filter(|entry| is_profile_box(def, entry))
+        .filter(|entry| agent::is_profile_box(def, entry))
         .map(|entry| entry.key.clone())
         .chain(
-            occurrence_aliases(kind)
+            agent::occurrence_aliases(kind)
                 .into_iter()
-                .filter(|(_, official)| has_profile_lock(def, official))
+                .filter(|(_, official)| agent::has_profile_lock(def, official))
                 .map(|(key, _)| key.clone()),
         )
         .collect();
@@ -4780,7 +4571,7 @@ fn apply_screen_edits_here(
         // keeps the lock it reports.
         if def
             .box_def(&key)
-            .is_some_and(|entry| is_profile_box(def, entry))
+            .is_some_and(|entry| agent::is_profile_box(def, entry))
             && !profile_open.contains(&key)
         {
             let reason = bir_core::forms::agent::Lock::Profile.reason();
@@ -4955,7 +4746,7 @@ fn apply_screen_edits_here(
                 // changes later (`follow_profile`).
                 if def
                     .box_def(&key)
-                    .is_some_and(|entry| is_profile_box(def, entry))
+                    .is_some_and(|entry| agent::is_profile_box(def, entry))
                 {
                     mark_profile_edit(&mut next, &key);
                 }
@@ -6279,6 +6070,8 @@ mod tests {
     // sweep and its recorder, then the rule's own tests.
     mod radio_untick;
     mod radio_untick_rule;
+    // PR 15: the shared effective-lock table pinned core-side (P4-19).
+    mod agent_locks;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -13829,7 +13622,7 @@ mod tests {
             // Without Edit the page's fill keeps refusing a profile-locked box.
             let refused = fill(code, &opened["draft"], Value::Object(edits.clone()));
             for key in &keys {
-                if has_profile_lock(def, key) && refused["rejected"].get(*key).is_none() {
+                if agent::has_profile_lock(def, key) && refused["rejected"].get(*key).is_none() {
                     failures.push(format!("{code}: {key} was written without Edit"));
                 }
             }
@@ -17348,8 +17141,14 @@ mod tests {
                     );
                 }
                 // The assistant's fill is as it was.
-                agent::fill(kind, &mut opened["draft"].clone(), &keys[0], &json!("1"))
-                    .unwrap_or_else(|e| panic!("{code}: {e}"));
+                agent::fill(
+                    kind,
+                    &mut opened["draft"].clone(),
+                    &keys[0],
+                    &json!("1"),
+                    None,
+                )
+                .unwrap_or_else(|e| panic!("{code}: {e}"));
             }
         }
         assert_eq!(found, expected);

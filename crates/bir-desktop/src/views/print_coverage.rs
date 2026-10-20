@@ -99,7 +99,7 @@ fn filled_draft(kind: AgentFormKind, mut draft: Value) -> Value {
             _ => continue,
         };
         // Some boxes refuse a value in this state; the rest still fill.
-        let _ = agent::fill(kind, &mut draft, &entry.key, &Value::from(value));
+        let _ = agent::fill(kind, &mut draft, &entry.key, &Value::from(value), None);
     }
     agent::compute(kind, &mut draft).expect("compute");
     draft

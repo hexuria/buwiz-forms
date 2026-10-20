@@ -238,7 +238,7 @@ fn filling_a_box_shows_its_value_in_the_official_box() {
                 continue;
             }
             let mut draft = seed.clone();
-            if agent::fill(kind, &mut draft, &entry.key, &value).is_err() {
+            if agent::fill(kind, &mut draft, &entry.key, &value, None).is_err() {
                 continue;
             }
             agent::compute(kind, &mut draft).expect("recompute");
