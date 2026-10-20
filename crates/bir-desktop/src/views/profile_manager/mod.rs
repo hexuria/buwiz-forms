@@ -257,6 +257,9 @@ pub struct ProfileManagerView {
 
     enable_profile_pin: bool,
     profile_pin_input: Entity<OtpState>,
+    /// The Export tab's "this profile's PIN" entry — separate from
+    /// `profile_pin_input`, which the Security tab uses to *set* one.
+    export_pin_input: Entity<OtpState>,
 
     is_totp_enabled: bool,
     show_totp_setup: bool,
@@ -630,6 +633,11 @@ impl ProfileManagerView {
             input = input.masked(true);
             input
         });
+        let export_pin_input = cx.new(|cx| {
+            let mut input = OtpState::new(4, window, cx);
+            input = input.masked(true);
+            input
+        });
 
         let setup_totp_state = cx.new(|cx| {
             let mut state = OtpState::new(6, window, cx);
@@ -925,6 +933,7 @@ impl ProfileManagerView {
             gemini_ocr_status: None,
             enable_profile_pin: false,
             profile_pin_input,
+            export_pin_input,
             is_totp_enabled: false,
             show_totp_setup: false,
             setup_totp_state,
@@ -1665,6 +1674,8 @@ impl ProfileManagerView {
         self.stored_profile_pin_hash = profile.profile_pin_hash.clone();
         self.enable_profile_pin = profile.profile_pin_hash.is_some();
         self.profile_pin_input
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.export_pin_input
             .update(cx, |input, cx| input.set_value("", window, cx));
 
         self.stored_totp_secret = profile.totp_secret.clone();
