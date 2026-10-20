@@ -225,69 +225,29 @@ fn get_profile_by_tin(
         .ok_or_else(|| HostError::new(format!("no taxpayer profile with TIN {tin}")))
 }
 
-/// A profile's five credentials are host state: the page can neither read
-/// them nor set or clear them through the profile verbs. Each keeps its own
-/// host writer instead: the inbox verbs (`set_inbox_app_password`, the
-/// Google grant's persist and disconnect) for the app password and the
-/// tokens; the authenticator verbs (`set_taxpayer_totp`, `set_profile_totp`,
-/// `set_admin_totp`) for a TOTP secret; and the PIN verbs
-/// (`set_taxpayer_pin`, `set_profile_pin`, `set_admin_pin`, `setup_helpdesk`,
-/// `change_to_helpdesk`) for a PIN. The authenticator and PIN verbs store
-/// theirs on the taxpayer (the help desk admin's in settings), never on a
-/// profile. A TOTP secret or PIN hash still on a profile row moves onto its
-/// taxpayer at the next launch when the taxpayer has none (bir-core's
-/// `migrate_v22_taxpayer_credentials`), so one the page could set would
-/// become the taxpayer's.
-const PROFILE_CREDENTIAL_KEYS: [&str; 5] = [
-    "totp_secret",
-    "imap_app_password",
-    "oauth_access_token",
-    "oauth_refresh_token",
-    "profile_pin_hash",
-];
-
-/// A profile's five credentials, in `PROFILE_CREDENTIAL_KEYS` order.
-type ProfileCredentials = [Option<String>; 5];
-
-/// Move `profile`'s credentials out. They are moved, never copied, so the
-/// profile that ends up holding them has the only copy, and its `Drop`
-/// wipes them, all five.
-fn take_credentials(profile: &mut bir_core::profile::TaxpayerProfile) -> ProfileCredentials {
-    [
-        profile.totp_secret.take(),
-        profile.imap_app_password.take(),
-        profile.oauth_access_token.take(),
-        profile.oauth_refresh_token.take(),
-        profile.profile_pin_hash.take(),
-    ]
-}
-
-fn put_credentials(
-    profile: &mut bir_core::profile::TaxpayerProfile,
-    [totp, password, access, refresh, pin_hash]: ProfileCredentials,
-) {
-    profile.totp_secret = totp;
-    profile.imap_app_password = password;
-    profile.oauth_access_token = access;
-    profile.oauth_refresh_token = refresh;
-    profile.profile_pin_hash = pin_hash;
-}
-
 /// A profile as the page receives it: the record without the credential
-/// keys (removed, not sent as null). The values are out of the profile while
-/// the record is built, so none can leave even under a key this list does
-/// not name, and back in before it drops.
+/// keys (removed, not sent as null), built by bir-core's
+/// `TaxpayerProfile::record_without_credentials`, which keeps the values out
+/// of the profile while the record is built.
+///
+/// A profile's five credentials (bir-core's `PROFILE_CREDENTIAL_KEYS`) are
+/// host state: the page can neither read them nor set or clear them through
+/// the profile verbs. Each keeps its own host writer instead: the inbox
+/// verbs (`set_inbox_app_password`, the Google grant's persist and
+/// disconnect) for the app password and the tokens; the authenticator verbs
+/// (`set_taxpayer_totp`, `set_profile_totp`, `set_admin_totp`) for a TOTP
+/// secret; and the PIN verbs (`set_taxpayer_pin`, `set_profile_pin`,
+/// `set_admin_pin`, `setup_helpdesk`, `change_to_helpdesk`) for a PIN. The
+/// authenticator and PIN verbs store theirs on the taxpayer (the help desk
+/// admin's in settings), never on a profile. A TOTP secret or PIN hash still
+/// on a profile row moves onto its taxpayer at the next launch when the
+/// taxpayer has none (bir-core's `migrate_v22_taxpayer_credentials`), so one
+/// the page could set would become the taxpayer's.
 fn redacted_profile(mut profile: bir_core::profile::TaxpayerProfile) -> HostResult {
-    let credentials = take_credentials(&mut profile);
-    let record = serde_json::to_value(&profile);
-    put_credentials(&mut profile, credentials);
-    let mut record = record.map_err(db_error)?;
-    if let Some(fields) = record.as_object_mut() {
-        for key in PROFILE_CREDENTIAL_KEYS {
-            fields.remove(key);
-        }
-    }
-    Ok(json(record))
+    profile
+        .record_without_credentials()
+        .map(json)
+        .map_err(db_error)
 }
 
 /// `save_profile` never stores a client's credentials, as
@@ -317,8 +277,11 @@ fn keep_stored_credentials(
             .or(by_tin),
         _ => by_tin,
     };
-    let credentials = stored.as_mut().map(take_credentials).unwrap_or_default();
-    put_credentials(profile, credentials);
+    let credentials = stored
+        .as_mut()
+        .map(bir_core::profile::TaxpayerProfile::take_credentials)
+        .unwrap_or_default();
+    profile.put_credentials(credentials);
     Ok(())
 }
 
@@ -2059,7 +2022,7 @@ export function job_log_tail(): JobLogTail;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bir_core::profile::TaxpayerType;
+    use bir_core::profile::{PROFILE_CREDENTIAL_KEYS, TaxpayerType};
     use bir_core::tax_profile::{BranchFacts, NewTaxpayer};
     use gpui_shell::HostArguments;
 
