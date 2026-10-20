@@ -1,4 +1,5 @@
 use crate::db::{Database, DbError};
+use crate::tax_profile::TaxProfileError;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -6,7 +7,70 @@ use zip::write::SimpleFileOptions;
 
 /// Write `tin`'s profile archive. Like every profile archive it carries no
 /// credential and no profile or provider row id (see `write_profile_to_zip`).
-pub fn export_profile_data(db: &Database, tin: &str, export_file: &Path) -> Result<(), DbError> {
+///
+/// Exporting a profile whose taxpayer has a PIN requires that PIN (the
+/// maintainer's 2026-10-20 decision): the check runs before the archive file
+/// is created, so a refusal leaves nothing on disk. A taxpayer without a PIN
+/// — one with only an authenticator included — exports ungated.
+pub fn export_profile_data(
+    db: &Database,
+    tin: &str,
+    export_file: &Path,
+    pin: Option<&str>,
+) -> Result<(), DbError> {
+    check_export_pin(db, tin, pin)?;
+    write_profile_zip(db, tin, export_file)
+}
+
+/// The administrator's delete-with-backup export — bir-desktop's
+/// `export_and_delete_profile` is its one caller: the same archive
+/// [`export_profile_data`] writes, without the taxpayer PIN gate, because
+/// that flow already confirmed the administrator's app-lock credential and
+/// its save dialog is the deletion's confirmation.
+pub fn export_profile_backup_as_admin(
+    db: &Database,
+    tin: &str,
+    export_file: &Path,
+) -> Result<(), DbError> {
+    write_profile_zip(db, tin, export_file)
+}
+
+/// The gate [`export_profile_data`] applies before it creates `export_file`:
+/// when the profile's taxpayer (the TIN root's `taxpayers` row) has a
+/// `pin_hash`, `pin` must match it. A missing taxpayer row means no PIN to
+/// check, and a taxpayer without a `pin_hash` — including one with only an
+/// authenticator — is ungated.
+///
+/// `taxpayers.pin_hash` is authoritative when it holds a PIN. A legacy
+/// `profile_pin_hash` still sitting on the profile row — what the desktop
+/// profile manager writes until the next launch's v22 repair lifts it onto
+/// the taxpayer — gates the export the same way, so a PIN is never bypassed
+/// between the save that sets it and the open that lifts it.
+fn check_export_pin(db: &Database, tin: &str, pin: Option<&str>) -> Result<(), DbError> {
+    let root: String = tin.chars().filter(|c| c.is_ascii_digit()).take(9).collect();
+    let stored = match db.taxpayer_credentials(&root) {
+        Ok(credentials) => credentials.pin_hash,
+        Err(TaxProfileError::NotFound(_) | TaxProfileError::Invalid(_)) => None,
+        Err(TaxProfileError::Db(error)) => return Err(error),
+        Err(error) => return Err(DbError::Other(error.to_string())),
+    };
+    let required = match stored {
+        Some(hash) => Some(hash),
+        None => db
+            .get_profile(tin)?
+            .and_then(|mut profile| profile.profile_pin_hash.take()),
+    };
+    let Some(pin_hash) = required else {
+        return Ok(());
+    };
+    match pin {
+        None => Err(DbError::PinRequired),
+        Some(pin) if crate::crypto::hash_pin(pin) == pin_hash => Ok(()),
+        Some(_) => Err(DbError::PinMismatch),
+    }
+}
+
+fn write_profile_zip(db: &Database, tin: &str, export_file: &Path) -> Result<(), DbError> {
     let file = fs::File::create(export_file)?;
     let mut zip = zip::ZipWriter::new(file);
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
@@ -353,15 +417,9 @@ mod tests {
             .any(|window| window == needle.as_bytes())
     }
 
-    /// Both profile exports write profile.json without the five credential
-    /// keys and without `id`, data_providers.json with each provider's
-    /// provider_id and name only, and no stored secret in any entry's name or
-    /// bytes. A failure names the entry and the key, never a value.
-    #[test]
-    fn a_profile_export_carries_no_credential_and_no_row_id() {
-        let directory = tempfile::tempdir().unwrap();
-        let db = Database::open_ephemeral().unwrap();
-        let mut profile: TaxpayerProfile = serde_json::from_value(serde_json::json!({
+    /// `TIN`'s profile as the export tests write it: credentials unset.
+    fn export_sample() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
             "id": null,
             "full_name": "Export Sample Corp",
             "tin": { "segment1": "123", "segment2": "456", "segment3": "788", "branch": "00000" },
@@ -373,14 +431,29 @@ mod tests {
             "email": "books@example.com",
             "default_form_type": "2551Q",
         }))
-        .unwrap();
-        let [totp, password, access, refresh, pin_hash] =
+        .unwrap()
+    }
+
+    /// Both profile exports write profile.json without the five credential
+    /// keys and without `id`, data_providers.json with each provider's
+    /// provider_id and name only, and no stored secret in any entry's name or
+    /// bytes. A failure names the entry and the key, never a value.
+    #[test]
+    fn a_profile_export_carries_no_credential_and_no_row_id() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let mut profile = export_sample();
+        let [totp, password, access, refresh, _pin] =
             PROFILE_SECRETS.map(|secret| Some(secret.to_string()));
         profile.totp_secret = totp;
         profile.imap_app_password = password;
         profile.oauth_access_token = access;
         profile.oauth_refresh_token = refresh;
-        profile.profile_pin_hash = pin_hash;
+        // A profile-row PIN gates this export, so what is stored is the hash
+        // of the PIN the call below passes.
+        let pin = "0817";
+        let stored_pin_hash = crate::crypto::hash_pin(pin);
+        profile.profile_pin_hash = Some(stored_pin_hash.clone());
         db.save_profile(profile).unwrap();
         db.save_data_provider(ProviderConfig {
             id: None,
@@ -395,7 +468,7 @@ mod tests {
         .unwrap();
 
         let single = directory.path().join("profile.zip");
-        export_profile_data(&db, TIN, &single).unwrap();
+        export_profile_data(&db, TIN, &single, Some(pin)).unwrap();
         let all = directory.path().join("all-profiles.zip");
         export_all_profiles_data(&db, &all).unwrap();
 
@@ -403,8 +476,13 @@ mod tests {
             let entries = archive_entries(&archive);
             for (name, contents) in &entries {
                 for (key, secret) in PROFILE_CREDENTIAL_KEYS.into_iter().zip(PROFILE_SECRETS) {
+                    let stored = if key == "profile_pin_hash" {
+                        stored_pin_hash.as_str()
+                    } else {
+                        secret
+                    };
                     assert!(
-                        !name.contains(secret) && !contains(contents, secret),
+                        !name.contains(stored) && !contains(contents, stored),
                         "{name} carries the stored {key}"
                     );
                 }
@@ -437,5 +515,120 @@ mod tests {
                 "{base}data_providers.json carries more than each provider's provider_id and name"
             );
         }
+    }
+
+    // ---------- a taxpayer PIN gates the export, decided 2026-10-20 ----------
+
+    /// `TIN`'s profile in a database whose taxpayer row carries the hash of
+    /// `pin` (or no PIN at all): what `check_export_pin` reads.
+    fn db_with_taxpayer_pin(pin: Option<&str>) -> Database {
+        let db = Database::open_ephemeral().unwrap();
+        db.save_profile(export_sample()).unwrap();
+        if let Some(pin) = pin {
+            db.set_taxpayer_pin_hash("123456788", Some(&crate::crypto::hash_pin(pin)))
+                .unwrap();
+        }
+        db
+    }
+
+    /// No PIN given: refused as `PinRequired` before the file exists; a wrong
+    /// PIN: `PinMismatch` the same way; the right PIN writes the same
+    /// credential-free archive.
+    #[test]
+    fn exporting_a_pinned_taxpayers_profile_needs_the_pin() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = db_with_taxpayer_pin(Some("0817"));
+
+        let missing = directory.path().join("no-pin.zip");
+        let refusal = export_profile_data(&db, TIN, &missing, None).unwrap_err();
+        assert!(matches!(refusal, DbError::PinRequired), "{refusal}");
+        assert_eq!(
+            refusal.to_string(),
+            "This profile's PIN is required to export it."
+        );
+        assert!(!missing.exists(), "a refused export left a file");
+
+        let wrong = directory.path().join("wrong-pin.zip");
+        let refusal = export_profile_data(&db, TIN, &wrong, Some("1234")).unwrap_err();
+        assert!(matches!(refusal, DbError::PinMismatch), "{refusal}");
+        assert_eq!(refusal.to_string(), "Wrong PIN.");
+        assert!(!wrong.exists(), "a refused export left a file");
+
+        let right = directory.path().join("profile.zip");
+        export_profile_data(&db, TIN, &right, Some("0817")).unwrap();
+        let entries = archive_entries(&right);
+        let (_, contents) = entries
+            .iter()
+            .find(|(name, _)| name == "profile.json")
+            .expect("profile.json is in the archive");
+        let profile: serde_json::Value = serde_json::from_slice(contents).unwrap();
+        for key in PROFILE_CREDENTIAL_KEYS.into_iter().chain(["id"]) {
+            assert!(profile.get(key).is_none(), "profile.json has the {key} key");
+        }
+    }
+
+    /// A legacy `profile_pin_hash` still on the profile row — the desktop
+    /// profile manager's store, lifted onto the taxpayer only at the next
+    /// launch — gates the export the same way, and never overrules a PIN the
+    /// taxpayer row holds.
+    #[test]
+    fn a_profile_row_pin_gates_the_export_until_it_is_lifted() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = Database::open_ephemeral().unwrap();
+        let mut profile = export_sample();
+        profile.profile_pin_hash = Some(crate::crypto::hash_pin("6810"));
+        db.save_profile(profile).unwrap();
+
+        let missing = directory.path().join("no-pin.zip");
+        let refusal = export_profile_data(&db, TIN, &missing, None).unwrap_err();
+        assert!(matches!(refusal, DbError::PinRequired), "{refusal}");
+        assert!(!missing.exists(), "a refused export left a file");
+
+        export_profile_data(
+            &db,
+            TIN,
+            &directory.path().join("profile.zip"),
+            Some("6810"),
+        )
+        .unwrap();
+
+        // Once the taxpayer holds its own PIN, it alone answers the gate.
+        db.set_taxpayer_pin_hash("123456788", Some(&crate::crypto::hash_pin("0817")))
+            .unwrap();
+        let stale = directory.path().join("stale.zip");
+        let refusal = export_profile_data(&db, TIN, &stale, Some("6810")).unwrap_err();
+        assert!(matches!(refusal, DbError::PinMismatch), "{refusal}");
+        assert!(!stale.exists(), "a refused export left a file");
+        export_profile_data(&db, TIN, &directory.path().join("ok.zip"), Some("0817")).unwrap();
+    }
+
+    /// With no PIN on the taxpayer the export is ungated — and an
+    /// authenticator alone is not a PIN, so the gate stays off for it.
+    #[test]
+    fn a_taxpayer_without_a_pin_exports_ungated() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = db_with_taxpayer_pin(None);
+        export_profile_data(&db, TIN, &directory.path().join("plain.zip"), None).unwrap();
+
+        db.set_taxpayer_totp_secret("123456788", Some("JBSWY3DPEHPK3PXP"))
+            .unwrap();
+        export_profile_data(&db, TIN, &directory.path().join("totp.zip"), None).unwrap();
+        export_profile_data(&db, TIN, &directory.path().join("totp2.zip"), Some("9999")).unwrap();
+    }
+
+    /// The administrator's delete-with-backup export writes the archive
+    /// without the taxpayer's PIN.
+    #[test]
+    fn the_admin_backup_exports_a_pinned_profile_without_the_pin() {
+        let directory = tempfile::tempdir().unwrap();
+        let db = db_with_taxpayer_pin(Some("0817"));
+        let backup = directory.path().join("backup.zip");
+        export_profile_backup_as_admin(&db, TIN, &backup).unwrap();
+        assert!(
+            archive_entries(&backup)
+                .iter()
+                .any(|(name, _)| name == "profile.json"),
+            "the admin backup wrote the profile"
+        );
     }
 }

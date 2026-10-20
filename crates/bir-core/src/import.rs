@@ -454,7 +454,7 @@ mod tests {
 
         // Export to zip
         let export_zip = dir.path().join("export.zip");
-        crate::export::export_profile_data(&db, "123456789000", &export_zip).unwrap();
+        crate::export::export_profile_data(&db, "123456789000", &export_zip, None).unwrap();
         assert!(export_zip.exists());
 
         // Import into new DB
@@ -650,7 +650,7 @@ mod tests {
 
         // Export
         let export_zip = dir.path().join("idem_export.zip");
-        crate::export::export_profile_data(&db, "555555555000", &export_zip).unwrap();
+        crate::export::export_profile_data(&db, "555555555000", &export_zip, None).unwrap();
 
         // Import into a new DB twice
         let db2_path = dir.path().join("test_idem2.db");
@@ -749,7 +749,7 @@ mod tests {
 
         // Export
         let export_zip = dir.path().join("manifest_test.zip");
-        crate::export::export_profile_data(&db, "777777777000", &export_zip).unwrap();
+        crate::export::export_profile_data(&db, "777777777000", &export_zip, None).unwrap();
 
         // Read the ZIP and extract manifest.json directly
         let file = std::fs::File::open(&export_zip).unwrap();
@@ -1188,6 +1188,9 @@ mod tests {
         profile.is_top_withholding_agent = true;
         profile.compliance_source_mode = ComplianceSourceMode::TemporalSuggestion;
         set_credentials(&mut profile, STORED_CREDENTIALS);
+        // A stored PIN hash gates the export, so the row's is the hash of
+        // the PIN the call below passes. The file's still never imports.
+        profile.profile_pin_hash = Some(crate::crypto::hash_pin("0817"));
         assert_eq!(source.save_profile(profile).unwrap().id, Some(2));
         source
             .save_data_provider(ProviderConfig {
@@ -1203,7 +1206,7 @@ mod tests {
             .unwrap();
 
         let archive = dir.path().join("round-trip.zip");
-        crate::export::export_profile_data(&source, TIN_X, &archive).unwrap();
+        crate::export::export_profile_data(&source, TIN_X, &archive, Some("0817")).unwrap();
         let target = Database::open_ephemeral().unwrap();
         import_profile_data(&target, &archive).unwrap();
 

@@ -3262,7 +3262,7 @@ mod tests {
             })
             .unwrap();
         let archive = scratch.path().join("profile.zip");
-        bir_core::export::export_profile_data(&source, ARCHIVE_TIN, &archive).unwrap();
+        bir_core::export::export_profile_data(&source, ARCHIVE_TIN, &archive, None).unwrap();
         archive
     }
 

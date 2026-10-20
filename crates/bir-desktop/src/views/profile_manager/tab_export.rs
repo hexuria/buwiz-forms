@@ -63,6 +63,7 @@ impl ProfileManagerView {
                                         &db,
                                         &tin,
                                         &backup_path,
+                                        None,
                                     ) {
                                         Ok(_) => Ok(backup_path),
                                         Err(e) => Err(e.to_string()),

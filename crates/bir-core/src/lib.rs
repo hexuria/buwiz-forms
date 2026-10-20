@@ -72,7 +72,10 @@ pub use bir_xml::{
 pub use email::{
     ImapAuthenticator, fetch_and_process_emails, get_oauth_email, start_oauth_flow, test_connection,
 };
-pub use export::{export_database_zip, export_existing_database_zip, export_profile_data};
+pub use export::{
+    export_database_zip, export_existing_database_zip, export_profile_backup_as_admin,
+    export_profile_data,
+};
 pub use filing_queue::{QueueAuthSource, QueueAuthorization, QueueCompletion, parse_1601c_period};
 pub use form_rules::{
     CheckedFinalCopyPayload, CheckedFinalCopyPayloadError, ShadowEvaluationOutcome,

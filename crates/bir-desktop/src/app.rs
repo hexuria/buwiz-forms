@@ -1387,7 +1387,7 @@ impl AppState {
                     .db
                     .lock()
                     .map_err(|_| "Database lock poisoned".to_string())?;
-                bir_core::export_profile_data(&db, &tin, &export_dir)
+                bir_core::export_profile_data(&db, &tin, &export_dir, None)
                     .map_err(|error| format!("Profile export failed: {error}"))?;
                 db.delete_profile(&tin)
                     .map_err(|error| format!("Profile deletion failed: {error}"))?;
