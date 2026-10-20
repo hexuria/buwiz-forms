@@ -2,11 +2,12 @@ use crate::integration::models::UniversalTaxPayload;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use thiserror::Error;
+use zeroize::Zeroize;
 
 pub mod generic;
 
 /// Configuration for a specific data source connection
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
     pub id: Option<i64>,
     pub profile_tin: String,
@@ -16,6 +17,29 @@ pub struct ProviderConfig {
     pub name: String,
     /// Encrypted credentials and settings (URL, API Key, Token)
     pub credentials: BTreeMap<String, String>,
+}
+
+// `credentials` holds secrets: never print the values, and wipe them from
+// memory when the config drops — the same rule `TaxpayerProfile`'s
+// credentials follow (AGENT.md §3).
+impl std::fmt::Debug for ProviderConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProviderConfig")
+            .field("id", &self.id)
+            .field("profile_tin", &self.profile_tin)
+            .field("provider_id", &self.provider_id)
+            .field("name", &self.name)
+            .field("credentials", &self.credentials.keys())
+            .finish()
+    }
+}
+
+impl Drop for ProviderConfig {
+    fn drop(&mut self) {
+        for secret in self.credentials.values_mut() {
+            secret.zeroize();
+        }
+    }
 }
 
 #[derive(Error, Debug)]
