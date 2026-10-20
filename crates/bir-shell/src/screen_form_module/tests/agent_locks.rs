@@ -14,17 +14,67 @@
 //! different `values` maps — the page `values_json`, the desktop
 //! `agent::field_map` alone. The `..._lock_alike_...` tests pin that both
 //! give one lock map and one `fill` verdict on every form.
+//!
+//! PR 17 (decision P4-19, part 2): the draft-dependent layer moved
+//! core-side too (`agent::draft_locks`). The page's penalty groups, which
+//! this page's schema decides, join the same pin (`penalty_groups`), and
+//! `the_page_locks_are_cores_base_and_draft_layers_on_every_form` pins the
+//! open's lock map as core's base map plus its draft layer.
 
 use super::*;
+use bir_core::forms::agent::draft_locks::penalties::{COMPONENTS, Group, override_of};
 use std::path::PathBuf;
 
 fn data_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../bir-core/data/agent-locks.json")
 }
 
+/// The page's penalty groups, read off its own schema: each party whose
+/// three overrides all have a box on the page that the filer types — not
+/// computed by the pinned definition nor by the page schema (1700's spouse
+/// Total Penalties is bound to an override too, but shows the total) — in
+/// the schema's key order, the filer's own party first. This is what
+/// `penalties::groups` computed before PR 17; core reads it pinned.
+fn schema_penalty_groups(kind: AgentFormKind) -> Vec<Group> {
+    let def = kind.definition();
+    let mut groups: Vec<(Group, Vec<&str>)> = Vec::new();
+    for key in schema_keys(kind.form_code()) {
+        let Some((prefix, component)) = override_of(kind, key) else {
+            continue;
+        };
+        if def.box_def(key).is_some_and(|entry| entry.computed)
+            || schema_computed(kind.form_code(), key)
+        {
+            continue;
+        }
+        match groups.iter_mut().find(|(group, _)| group.prefix == prefix) {
+            Some((group, components)) => {
+                group.keys.push(key.clone());
+                components.push(component);
+            }
+            None => groups.push((
+                Group {
+                    prefix,
+                    keys: vec![key.clone()],
+                },
+                vec![component],
+            )),
+        }
+    }
+    let mut groups: Vec<Group> = groups
+        .into_iter()
+        .filter(|(_, components)| COMPONENTS.iter().all(|c| components.contains(c)))
+        .map(|(group, _)| group)
+        .collect();
+    // The filer's own items first, as the forms declare them.
+    groups.sort_by_key(|group| group.prefix.contains("spouse"));
+    groups
+}
+
 /// The pin's content: for every package, the host-written keys and the
 /// occurrence aliases, over the pinned definition's box and binding keys —
-/// exactly the universe `gate` reads them against core-side.
+/// exactly the universe `gate` reads them against core-side — and the
+/// page's penalty groups ([`schema_penalty_groups`]).
 fn table() -> String {
     let mut packages = Map::new();
     for kind in AgentFormKind::all() {
@@ -45,7 +95,8 @@ fn table() -> String {
             .filter(|(key, _)| !def.bindings.contains_key(*key))
             .map(|(key, official)| (key.clone(), Value::from(official)))
             .collect();
-        if host_written.is_empty() && occurrence_aliases.is_empty() {
+        let penalty_groups = schema_penalty_groups(kind);
+        if host_written.is_empty() && occurrence_aliases.is_empty() && penalty_groups.is_empty() {
             continue;
         }
         packages.insert(
@@ -53,6 +104,7 @@ fn table() -> String {
             json!({
                 "host_written": host_written,
                 "occurrence_aliases": occurrence_aliases,
+                "penalty_groups": penalty_groups,
             }),
         );
     }
@@ -403,5 +455,255 @@ fn the_page_and_the_desktop_lock_alike_for_a_sparse_profile() {
             && compared.keys > compared.blank + compared.filled
             && compared.differing_reads > 0,
         "{compared:?}"
+    );
+}
+
+/// The open's lock map for `draft` — the page's own lock pipeline,
+/// `opened_json`, as a return's open runs it — against core's for the same
+/// inputs: `agent::locks` over the profile context the open builds, then
+/// `agent::draft_locks` on the draft the open evaluated. Each key the two
+/// disagree on lands in `failures` as `(form, key, page, core)`, and so does
+/// a map held in another order. Each key either map holds, and every
+/// computed penalty box, is also asked alone, the way `agent::fill` asks
+/// it (`draft_locks::draft_lock` over the base map's own entry): that too
+/// must be the page's lock. Returns the open.
+fn page_and_core_locks(
+    kind: AgentFormKind,
+    year: u16,
+    period: u8,
+    draft: Value,
+    what: &str,
+    failures: &mut Vec<String>,
+) -> Value {
+    let code = kind.form_code();
+    let from_profile = with_database(|db| {
+        let profile = db
+            .get_profile_by_tin(TIN)
+            .map_err(|error| HostError::new(error.to_string()))?
+            .ok_or_else(|| HostError::new("no profile".to_string()))?;
+        load_draft(db, kind, &profile, year, period, true, None).map_err(HostError::new)
+    })
+    .unwrap_or_else(|error| panic!("{code}: {error:?}"));
+    let profile_draft = from_profile.clone();
+    let opened = on_large_stack(move || {
+        opened_json(
+            kind,
+            year,
+            period,
+            draft,
+            profile_draft,
+            None,
+            BTreeSet::new(),
+        )
+    })
+    .and_then(|result| result)
+    .unwrap_or_else(|error| panic!("{code} {what}: {error}"));
+    // Core, from the open's own inputs: the profile context it builds, and
+    // the draft it evaluated (`opened["draft"]`).
+    let mut context_draft = from_profile;
+    agent::compute(kind, &mut context_draft).unwrap_or_else(|error| panic!("{code}: {error}"));
+    let context = agent::FromProfile {
+        values: values_json(kind, &context_draft).unwrap_or_else(|error| panic!("{code}: {error}")),
+        draft: context_draft,
+    };
+    let base = agent::locks(kind, &context);
+    let mut core = base.clone();
+    agent::draft_locks(kind, &opened["draft"], &mut core);
+    let page = opened["locks"].as_object().expect("the open's locks");
+    let keys: BTreeSet<&String> = page.keys().chain(core.keys()).collect();
+    for key in &keys {
+        if page.get(*key) != core.get(*key) {
+            failures.push(format!(
+                "{what}: ({code}, {key}, {:?}, {:?})",
+                page.get(*key),
+                core.get(*key)
+            ));
+        }
+    }
+    if page.keys().ne(core.keys()) {
+        failures.push(format!(
+            "{what}: {code}: the page holds its locks in another order than core"
+        ));
+    }
+    let mut asked: BTreeSet<String> = keys.into_iter().cloned().collect();
+    asked.extend(
+        penalties::computed_groups(kind)
+            .into_iter()
+            .flat_map(|group| group.keys),
+    );
+    for key in &asked {
+        let alone = agent::draft_locks::draft_lock(
+            kind,
+            &opened["draft"],
+            key,
+            base.get(key).and_then(Value::as_str),
+        );
+        let shown = page.get(key).and_then(Value::as_str);
+        if alone.as_deref() != shown {
+            failures.push(format!(
+                "{what}, asked alone: ({code}, {key}, {shown:?}, {alone:?})"
+            ));
+        }
+    }
+    opened
+}
+
+/// PR 17 (decision P4-19, part 2): on every form, the open's lock map is
+/// core's base map with core's draft-dependent layer over it — the one
+/// computation `agent::fill` refuses with — key by key and in order:
+///
+/// - (a) for the form's Form library sample draft;
+/// - (b) on every form with computed penalties, for that draft with each
+///   penalty group that is on the return edited through the page's own
+///   Edit (its keys are then open on both sides);
+/// - (c) on 1702RT, for a 2019 return (item 42 shut) and for one with a
+///   folded (Add more...) item.
+///
+/// And a fill's `relocks` are core's `live_locks` of the draft it leaves.
+#[test]
+fn the_page_locks_are_cores_base_and_draft_layers_on_every_form() {
+    use bir_core::forms::agent::draft_locks::annual_corporate::{
+        RT_FOLDED_LOCK, RT_MCIT_BEFORE_2020, RT_MCIT_DUE,
+    };
+    setup();
+    let mut failures = Vec::new();
+    let (mut forms, mut edited_groups) = (0, Vec::new());
+    for kind in AgentFormKind::all() {
+        let code = kind.form_code();
+        // (a) The Form library sample, through the page's lock pipeline.
+        let sampled = sample(code);
+        let mut draft = sampled["draft"].clone();
+        take_sample_mark(&mut draft);
+        let year = u16::try_from(sampled["year"].as_u64().unwrap()).unwrap();
+        let period = u8::try_from(sampled["period"].as_u64().unwrap()).unwrap();
+        let opened = page_and_core_locks(kind, year, period, draft, "sample", &mut failures);
+        forms += 1;
+        // A fill's relocks.
+        let filled = fill(code, &sampled["draft"], json!({}));
+        let mut left = filled["draft"].clone();
+        take_sample_mark(&mut left);
+        let live = Value::Object(agent::live_locks(kind, &left));
+        if filled["relocks"] != live {
+            failures.push(format!(
+                "relocks: {code}: page {}, core {live}",
+                filled["relocks"]
+            ));
+        }
+        // (b) Each computed penalty group on the return, edited.
+        for group in penalties::computed_groups(kind) {
+            if !penalties::applies(kind, &group, &opened["draft"]) {
+                continue;
+            }
+            let refs: Vec<&str> = group.keys.iter().map(String::as_str).collect();
+            let edited = fill_unlocked(
+                code,
+                &sampled["draft"],
+                json!({ &group.keys[0]: "1" }),
+                &refs,
+            );
+            if edited["rejected"] != json!({}) {
+                failures.push(format!(
+                    "edited: {code}: the page's Edit was refused: {}",
+                    edited["rejected"]
+                ));
+                continue;
+            }
+            let mut draft = edited["draft"].clone();
+            take_sample_mark(&mut draft);
+            let opened = page_and_core_locks(kind, year, period, draft, "edited", &mut failures);
+            assert!(
+                penalties::edited(&group, &opened["draft"]),
+                "{code}: {:?} is edited",
+                group.keys
+            );
+            for key in &group.keys {
+                if let Some(lock) = opened["locks"].get(key) {
+                    failures.push(format!("edited: {code}: {key} is still locked: {lock}"));
+                }
+            }
+            edited_groups.push(format!("{code} {}", group.keys[0]));
+        }
+    }
+    // (c) 1702RT before 2020 (MCIT applies from the profile's 2015 start),
+    // and with item 17i folded.
+    let kind = kind_of("1702RT").unwrap();
+    let old = open_for(TIN, "1702RT", 2019, 0);
+    let opened = page_and_core_locks(
+        kind,
+        2019,
+        0,
+        old["draft"].clone(),
+        "1702RT 2019",
+        &mut failures,
+    );
+    assert_eq!(opened["locks"][RT_MCIT_DUE], RT_MCIT_BEFORE_2020);
+    let folded = fill(
+        "1702RT",
+        &open("1702RT", 0)["draft"],
+        json!({
+            "frm1702RT:txtPg3Sc1I17i.1C1": "Training",
+            "frm1702RT:txtPg3Sc1I17i.1C2": "100",
+            "frm1702RT:txtPg3Sc1I17i.2C1": "Seminars",
+            "frm1702RT:txtPg3Sc1I17i.2C2": "200",
+        }),
+    );
+    let opened = page_and_core_locks(
+        kind,
+        YEAR as u16,
+        0,
+        folded["draft"].clone(),
+        "1702RT folded",
+        &mut failures,
+    );
+    for key in ["frm1702RT:txtPg3Sc1I17iC1", "frm1702RT:txtPg3Sc1I17iC2"] {
+        assert_eq!(opened["locks"][key], RT_FOLDED_LOCK, "{key}");
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+    assert_eq!(forms, AgentFormKind::all().len());
+    // Every computed group on the sample's return, by its first box: the 42
+    // computed groups but the six off the return as it stands (the spouse
+    // columns of 1700, 1701, 1701A, 1701MS and 1701Q with no spouse, and
+    // 2200S's Items 23A-23C off a prepayment).
+    edited_groups.sort();
+    assert_eq!(
+        edited_groups,
+        [
+            "0619E frm0619E:txtTax17A",
+            "0619F frm0619F:txtTax18A",
+            "1600PT frm1600PT:txtPg1P2I23Surcharge",
+            "1600VT frm1600VT:txtPg1P2I23Surcharge",
+            "1600WP frm1600WP:txtTax15A",
+            "1601C frm1601c:txtTax32",
+            "1601EQ frm1601EQ:txtTax26",
+            "1601FQ frm1601FQ:txtTax28",
+            "1602Q frm1602Q:txt24",
+            "1603Q frm1603Q:txtTax19",
+            "1606 frm1606:txtCompromise",
+            "1700 frm1700:txtPg1I31A",
+            "1701 frm1701:txtPg1I27A",
+            "1701A frm1701A:txt25A",
+            "1701MS frm1701MS:txtCompromise28a",
+            "1701Q frm1701q:txt64A",
+            "1702MX frm1702MX:txtPg1Pt2I17",
+            "1702Q frm1702q:txtTax21",
+            "1702RT frm1702RT:txtPg1Pt2I17Surcharge",
+            "1706 frm1706:txtCompromise",
+            "1707 frm1707:txtPg1P2I17Compromise",
+            "1707A frm1707Av2021:txtI18ASurcharge",
+            "1800 frm1800v2018:Compromise",
+            "1801 frm1801v2018:txtPen_Compromise",
+            "2000 frm2000:txtTax17A",
+            "2000OT frm2000OT:txtTax20A",
+            "2200A frm2200Av2020:txtPen_Compromise",
+            "2200AN frm2200ANv2018:txt21A",
+            "2200C frm2200C:txtPg1P3I21ASurcharge",
+            "2200M frm2200M:txtPg1P3I21ASurcharge",
+            "2200P frm2200P:txtPg1P3I21ASurcharge",
+            "2200T frm2200Tv2020:txtPen_Compromise",
+            "2550M frm2550m:txtTax25A",
+            "2551Q frm2551Qv2018:txt20",
+            "2552 frm2552:txtPg1P2I21Surcharge",
+            "2553 frm2553:txt22A",
+        ]
     );
 }

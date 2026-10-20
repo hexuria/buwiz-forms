@@ -29,6 +29,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use bir_core::forms::agent::draft_locks::annual_individual as draft_locks;
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::form_1700::{Form1700CivilStatus, Form1700Draft};
 use bir_core::forms::form_1701::{Form1701CivilStatus, Form1701Draft};
@@ -1430,30 +1431,15 @@ pub(super) fn mark_from(form: &mut Value, code: &str) {
 /// The lock of a 1701 penalty column that still holds the filer's own
 /// amounts (a draft stored, or a save file imported, before the penalty
 /// model: penalty_model_version 0); "computed from the due date" would be
-/// wrong there.
-pub(crate) const KEPT_AS_ENTERED: &str =
-    "kept as entered before penalties were computed; choose Edit penalties to change them.";
+/// wrong there. bir-core's (`agent::draft_locks::annual_individual`), which
+/// locks the column on the page and refuses it to the assistant alike.
+pub(crate) const KEPT_AS_ENTERED: &str = draft_locks::KEPT_AS_ENTERED;
 
-/// The penalty declaration and stored state version of a 1701 penalty box.
-fn penalty_column(kind: AgentFormKind, draft: &Value, key: &str) -> Option<(usize, u8)> {
-    if kind.form_code() != "1701" {
-        return None;
-    }
-    let form: Form1701Draft = serde_json::from_value(draft.clone()).ok()?;
-    Form1701Draft::penalty_declarations()
-        .iter()
-        .enumerate()
-        .find(|(_, items)| items.controls.contains(&key))
-        .map(|(n, items)| (n, (items.state)(&form).penalty_model_version))
-}
-
-/// [`KEPT_AS_ENTERED`] for a penalty box of a column still on its typed
-/// amounts, `None` for every other box.
-pub(super) fn penalty_lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
-    penalty_column(kind, draft, key)
-        .filter(|(_, version)| *version < bir_core::forms::penalty_items::PENALTY_MODEL_VERSION)
-        .map(|_| KEPT_AS_ENTERED)
-}
+// [`KEPT_AS_ENTERED`] for a penalty box of a column still on its typed
+// amounts, `None` for every other box; and the room a 1701 or 1701Q column
+// with no penalty state gets before an amount lands in it (bir-core's: the
+// penalty layer's trial gives it too).
+pub(super) use draft_locks::{make_room, penalty_lock};
 
 /// Whether a penalty group's column holds the filer's own amounts: the page
 /// offers "Use the computed amounts" as soon as Edit opens it.
@@ -1465,7 +1451,7 @@ pub(super) fn kept_as_entered(kind: AgentFormKind, keys: &[String], draft: &Valu
 /// A blank written to a column still on its typed amounts ("Use the
 /// computed amounts") joins the model, so the computed amounts file.
 pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    let Some((n, version)) = penalty_column(kind, draft, key) else {
+    let Some((n, version)) = draft_locks::penalty_column(kind, draft, key) else {
         return;
     };
     if version >= bir_core::forms::penalty_items::PENALTY_MODEL_VERSION {
@@ -1479,38 +1465,6 @@ pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
         bir_core::forms::penalty_items::PENALTY_MODEL_VERSION;
     if let Ok(value) = serde_json::to_value(&form) {
         *draft = value;
-    }
-}
-
-/// A 1701 or 1701Q draft stored, or a save file imported, before the
-/// penalty model has no `penalty` / `spouse_penalty` object, so an amount
-/// typed after Edit penalties has no override to land in (round 4: a keyless
-/// 1701Q's typed 64A was refused). Give the column its (default, version 0)
-/// state first: the typed amount becomes its override and the column joins
-/// the model (form_1701_official.rs `official_recompute`; for 1701Q,
-/// form_1701q_official.rs's legacy-column join in its recompute, and
-/// penalty_items.rs `adopt_legacy_manual_penalties`). `penalties::applies` uses it on its trial copy too, so a
-/// kept keyless column reads as on the return; opening writes nothing.
-pub(super) fn make_room(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    if matches!(kind.form_code(), "1701" | "1701Q") {
-        give_state(kind, draft, key);
-    }
-}
-
-/// Give `key`'s penalty column a default state when it has none.
-fn give_state(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    let Some(path) = super::penalties::path_of(kind, key) else {
-        return;
-    };
-    let Some(slot) = path.trim_start_matches('/').split('/').next() else {
-        return;
-    };
-    if let Some(object) = draft.as_object_mut()
-        && object.get(slot).is_none_or(Value::is_null)
-        && let Ok(state) =
-            serde_json::to_value(bir_core::forms::penalty_items::PenaltyState::default())
-    {
-        object.insert(slot.to_string(), state);
     }
 }
 

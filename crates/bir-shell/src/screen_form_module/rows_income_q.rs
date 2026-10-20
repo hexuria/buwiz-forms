@@ -28,6 +28,7 @@
 
 use std::collections::BTreeMap;
 
+use bir_core::forms::agent::draft_locks::income_q as draft_locks;
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::form_1701q::{
     Form1701QAtc, Form1701QCivilStatus, Form1701QDraft, Form1701QFilerType, Form1701QParty,
@@ -636,30 +637,13 @@ pub(super) fn values(kind: AgentFormKind, draft: &Value, map: &mut BTreeMap<Stri
 /// The lock of a 1701Q penalty column that still holds the filer's own
 /// amounts (a draft stored, or a save file imported, before the penalty
 /// model: penalty_model_version 0); "computed from the due date" would be
-/// wrong there.
-pub(crate) const KEPT_AS_ENTERED: &str =
-    "kept as entered before penalties were computed; choose Edit penalties to change them.";
+/// wrong there. bir-core's (`agent::draft_locks::income_q`), which locks
+/// the column on the page and refuses it to the assistant alike.
+pub(crate) const KEPT_AS_ENTERED: &str = draft_locks::KEPT_AS_ENTERED;
 
-/// The penalty declaration and stored state version of a 1701Q penalty box.
-fn penalty_column(kind: AgentFormKind, draft: &Value, key: &str) -> Option<(usize, u8)> {
-    if !is_1701q(kind) {
-        return None;
-    }
-    let form = typed(draft).ok()?;
-    Form1701QDraft::penalty_declarations()
-        .iter()
-        .enumerate()
-        .find(|(_, items)| items.controls.contains(&key))
-        .map(|(n, items)| (n, (items.state)(&form).penalty_model_version))
-}
-
-/// [`KEPT_AS_ENTERED`] for a penalty box of a column still on its typed
-/// amounts, `None` for every other box.
-pub(super) fn penalty_lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<&'static str> {
-    penalty_column(kind, draft, key)
-        .filter(|(_, version)| *version < bir_core::forms::penalty_items::PENALTY_MODEL_VERSION)
-        .map(|_| KEPT_AS_ENTERED)
-}
+// [`KEPT_AS_ENTERED`] for a penalty box of a column still on its typed
+// amounts, `None` for every other box (bir-core's).
+pub(super) use draft_locks::penalty_lock;
 
 /// Whether a penalty group's column holds the filer's own amounts: the page
 /// offers "Use the computed amounts" as soon as Edit opens it.
@@ -671,7 +655,7 @@ pub(super) fn kept_as_entered(kind: AgentFormKind, keys: &[String], draft: &Valu
 /// A blank written to a column still on its typed amounts ("Use the
 /// computed amounts") joins the model, so the computed amounts file.
 pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
-    let Some((n, version)) = penalty_column(kind, draft, key) else {
+    let Some((n, version)) = draft_locks::penalty_column(kind, draft, key) else {
         return;
     };
     if version >= bir_core::forms::penalty_items::PENALTY_MODEL_VERSION {
@@ -684,24 +668,6 @@ pub(super) fn join_model(kind: AgentFormKind, draft: &mut Value, key: &str) {
     (items.state_mut)(&mut form).penalty_model_version =
         bir_core::forms::penalty_items::PENALTY_MODEL_VERSION;
     let _ = store(draft, &form);
-}
-
-/// The spouse's penalty boxes (64B-66B) while their column is not part of
-/// the return: rule 6 fades them with what opens them (`gated` or the
-/// form's own clearing), so no penalty lock stands beside the tag.
-pub(super) fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
-    if !is_1701q(kind) {
-        return;
-    }
-    let Ok(form) = typed(draft) else {
-        return;
-    };
-    let spouse = &Form1701QDraft::penalty_declarations()[1];
-    if !(spouse.applies)(&form) {
-        for key in spouse.controls {
-            locks.remove(key);
-        }
-    }
 }
 
 /// A typed entry's printed item for a message: `36A`, `21`, or the

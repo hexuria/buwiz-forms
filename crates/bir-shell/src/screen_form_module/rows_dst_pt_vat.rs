@@ -41,6 +41,18 @@
 //! Field keys, the official XML and the print map are the forms' own and
 //! unchanged.
 
+// The locks themselves — 2000's 15B and 15C, 2553's classification,
+// printed-row and quarter boxes — and the 2553 printed rows they follow are
+// bir-core's (`agent::draft_locks::dst_pt_vat`, decision P4-19), so the
+// page and the assistant lock alike; the cells here write against them.
+pub(super) use bir_core::forms::agent::draft_locks::dst_pt_vat::PT_PRINTED_ROWS;
+#[cfg(test)]
+pub(super) use bir_core::forms::agent::draft_locks::dst_pt_vat::{
+    CLASSIFICATION_LOCK, PRINTED_LOCK,
+};
+use bir_core::forms::agent::draft_locks::dst_pt_vat::{
+    PT_FIRST_ITEM, PT_ROWS, misplaced_entry, printed_option, same_entry,
+};
 use bir_core::forms::agent::{self, AgentFormKind};
 use bir_core::forms::form_2000::Form2000Draft;
 use bir_core::forms::form_2553::{FORM_2553_ATC_OPTIONS, Form2553AtcOption, Form2553Draft};
@@ -65,38 +77,11 @@ pub(super) enum Cell {
     PtOverpayment,
 }
 
-/// The 2553 rows the sheet preprints, each with its printed entry of the
-/// official popup (`FORM_2553_ATC_OPTIONS` index) and its printed caption.
-pub(super) const PT_PRINTED_ROWS: [(usize, &str, &str, &str); 4] = [
-    (
-        0,
-        "Philippine Amusement and Gaming Corp. (Pagcor)",
-        "OT010",
-        "5%",
-    ),
-    (2, "Clark Development Corporations", "OT011", "5%"),
-    (
-        3,
-        "Special/Regular Economic/Free Port Zone Enterprises",
-        "OT011",
-        "5%",
-    ),
-    (1, "Others", "OT012", ""),
-];
-/// Rows 14-18.
-const PT_ROWS: usize = 5;
-/// 2553's first ATC item.
-const PT_FIRST_ITEM: usize = 14;
-
 /// What a 2000 Schedule 1 rate waits for while it is blank (PR 2's words
 /// for the same box on 1601EQ and 1601FQ).
 pub(super) const RATE_WAITS: &str = "Shows the ATC's rate once this row's ATC is chosen.";
 /// What 2553's item 18A waits for.
 pub(super) const ATC_18_WAITS: &str = "Shows the classification of the ATC chosen in 18B.";
-/// The lock reason of a 2553 row 14-17 ATC (B) or 5% rate (D): the sheet
-/// preprints them next to the row's amounts.
-pub(super) const PRINTED_LOCK: &str =
-    "printed on the form: a new entry on this row is the row's printed entry";
 /// The 2553 rows' short printed names, rows 14-17.
 const PT_SHORT_NAMES: [&str; 4] = [
     "Pagcor",
@@ -104,30 +89,6 @@ const PT_SHORT_NAMES: [&str; 4] = [
     "Special/Regular Economic/Free Port Zone Enterprises",
     "Others",
 ];
-
-/// The lock reason of a 2553 classification box (column A): the official
-/// popup writes it with the row's ATC (`getATCCode`), so it follows the
-/// ATC chosen in the row's B box.
-pub(super) const CLASSIFICATION_LOCK: &str =
-    "follows the ATC chosen in this row's ATC box (column B)";
-
-fn pt_option(index: usize) -> &'static Form2553AtcOption {
-    &FORM_2553_ATC_OPTIONS[index]
-}
-
-/// The printed option of a 2553 row 14-17.
-fn printed_option(row: usize) -> Option<&'static Form2553AtcOption> {
-    PT_PRINTED_ROWS
-        .get(row)
-        .map(|(index, _, _, _)| pt_option(*index))
-}
-
-fn same_entry(
-    row: &bir_core::forms::form_2553::Form2553AtcRow,
-    option: &Form2553AtcOption,
-) -> bool {
-    row.atc_code == option.code && row.description == option.description
-}
 
 /// What a row whose entry is held on another row says (the amount path and
 /// the ATC list alike).
@@ -146,13 +107,11 @@ fn held_elsewhere(form: &Form2553Draft, row: usize, option: &Form2553AtcOption) 
 }
 
 /// A stored row 14-17 holding another entry than the one the sheet prints
-/// there: `(item, its ATC, what it says)`.
+/// there (bir-core's `misplaced_entry`, which keeps its ATC and rate open):
+/// what it says.
 fn misplaced(form: &Form2553Draft, row: usize) -> Option<String> {
+    let entry = misplaced_entry(form, row)?;
     let printed = printed_option(row)?;
-    let entry = form.schedule.get(row).filter(|entry| !entry.is_empty())?;
-    if same_entry(entry, printed) {
-        return None;
-    }
     Some(format!(
         "Row {} prints {} ({}); your {} entry won't print on this row. Clear it or move it to row 18.",
         PT_FIRST_ITEM + row,
@@ -585,50 +544,6 @@ pub(super) fn waits(kind: AgentFormKind) -> Map<String, Value> {
         _ => {}
     }
     out
-}
-
-/// The boxes this module shuts, and why, over the probed locks: 2553's
-/// classification boxes (14A-18A), its quarter boxes (the return's own period),
-/// and 2000's 15B and 15C, which `recompute` totals from Schedules 2 and 3.
-pub(super) fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
-    match kind.form_code() {
-        "2000" => {
-            for key in ["frm2000:txtTax15B", "frm2000:txtTax15C"] {
-                locks.insert(key.into(), json!("computed by BIR's own formulas"));
-            }
-        }
-        "2553" => {
-            for item in PT_FIRST_ITEM..PT_FIRST_ITEM + PT_ROWS {
-                locks.insert(format!("frm2553:txt{item}A"), json!(CLASSIFICATION_LOCK));
-            }
-            // Rows 14-17: a new entry's ATC and preprinted rate are the
-            // sheet's; a stored row holding another entry stays open so the
-            // filer can clear it ([`notices`] says why).
-            let form = typed::<Form2553Draft>(draft).ok();
-            for (row, printed) in
-                (0..PT_PRINTED_ROWS.len()).filter_map(|r| Some((r, printed_option(r)?)))
-            {
-                if form
-                    .as_ref()
-                    .is_some_and(|form| misplaced(form, row).is_some())
-                {
-                    continue;
-                }
-                let item = PT_FIRST_ITEM + row;
-                locks.insert(format!("frm2553:txt{item}B"), json!(PRINTED_LOCK));
-                if !printed.rate_is_editable {
-                    locks.insert(format!("frm2553:txt{item}D"), json!(PRINTED_LOCK));
-                }
-            }
-            for quarter in 1..=4 {
-                locks.insert(
-                    format!("frm2553:optQtr:_{quarter}"),
-                    json!(agent::Lock::Identity.reason()),
-                );
-            }
-        }
-        _ => {}
-    }
 }
 
 fn amount_of(row: &Value, field: &str) -> f64 {
