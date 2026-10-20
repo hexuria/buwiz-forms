@@ -853,10 +853,25 @@ impl AgentFormDef {
 // decision, not part of this change.
 
 /// The draft the taxpayer profile alone makes for a return's period, and
-/// its field map: what decides whether the profile filled a box. The page
-/// builds it from the profile's own fresh draft (`load_draft(..., fresh =
-/// true)`) and that draft's `values_json`; the desktop assistant builds
-/// the same pair for the open return's TIN, year and period.
+/// its box values (official key -> string): what decides whether the
+/// profile filled a box ([`profile_blank`]). The two writers build the
+/// values differently:
+///
+/// - the form page (bir-shell `opened_json`) recomputes the profile's own
+///   fresh draft (`load_draft(..., fresh = true)`) and reads it with
+///   `values_json`: the [`field_map`] plus each duplicate occurrence the
+///   page shows (`txtEmail#occurrence-1`) and the page's display-only
+///   text (the row modules' additions, an unescaped line of business);
+/// - the desktop assistant (bir-desktop `profile_context`) builds the draft
+///   for the open return's TIN, year and period and reads it with
+///   [`field_map`] alone.
+///
+/// The two maps differ, but [`profile_blank`] reads a bound box's own
+/// draft field before them, so the verdicts do not: bir-shell's
+/// `the_page_and_the_desktop_lock_alike_for_a_full_profile` and
+/// `..._for_a_sparse_profile` (`screen_form_module/tests/agent_locks.rs`)
+/// pin [`locks`] and the [`fill`] verdicts as identical for both contexts
+/// of one profile draft, on every form.
 #[derive(Debug, Clone)]
 pub struct FromProfile {
     pub draft: Value,
