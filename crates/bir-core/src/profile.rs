@@ -1300,21 +1300,33 @@ impl TaxProfileVersion {
     }
 }
 
+impl TaxpayerProfile {
+    /// The profile's five credentials: the authenticator secret, the inbox
+    /// app password, the Google access and refresh tokens, and the PIN hash.
+    /// `Drop` wipes through this one list, so none of the five is skipped.
+    fn credential_fields(&mut self) -> [&mut Option<String>; 5] {
+        [
+            &mut self.totp_secret,
+            &mut self.imap_app_password,
+            &mut self.oauth_access_token,
+            &mut self.oauth_refresh_token,
+            &mut self.profile_pin_hash,
+        ]
+    }
+
+    /// Overwrite every credential the profile holds, in place. `Drop` runs
+    /// this.
+    fn wipe_credentials(&mut self) {
+        use zeroize::Zeroize;
+        for value in self.credential_fields().into_iter().flatten() {
+            value.zeroize();
+        }
+    }
+}
+
 impl Drop for TaxpayerProfile {
     fn drop(&mut self) {
-        use zeroize::Zeroize;
-        if let Some(ref mut pw) = self.imap_app_password {
-            pw.zeroize();
-        }
-        if let Some(ref mut t) = self.oauth_access_token {
-            t.zeroize();
-        }
-        if let Some(ref mut t) = self.oauth_refresh_token {
-            t.zeroize();
-        }
-        if let Some(ref mut h) = self.profile_pin_hash {
-            h.zeroize();
-        }
+        self.wipe_credentials();
     }
 }
 
@@ -1352,6 +1364,28 @@ mod tests {
         profile.imap_email = Some("   ".into());
         profile.email = "  ".into();
         assert_eq!(profile.tracking_mailbox(), None);
+    }
+
+    /// The wipe `Drop` runs overwrites all five credentials, the TOTP secret
+    /// included. A failure names the field, never its value.
+    #[test]
+    fn the_drop_wipe_covers_every_credential() {
+        let mut profile = test_profile();
+        profile.totp_secret = Some("wipe-totp-K7Q2".into());
+        profile.imap_app_password = Some("wipe-pass-W9X4".into());
+        profile.oauth_access_token = Some("wipe-access-M3R8".into());
+        profile.oauth_refresh_token = Some("wipe-refresh-T5V1".into());
+        profile.profile_pin_hash = Some("wipe-pin-hash-H6N3".into());
+        profile.wipe_credentials();
+        for (field, value) in [
+            ("totp_secret", &profile.totp_secret),
+            ("imap_app_password", &profile.imap_app_password),
+            ("oauth_access_token", &profile.oauth_access_token),
+            ("oauth_refresh_token", &profile.oauth_refresh_token),
+            ("profile_pin_hash", &profile.profile_pin_hash),
+        ] {
+            assert!(value.as_deref() == Some(""), "{field} was not wiped");
+        }
     }
 
     fn confirmed_version(

@@ -251,7 +251,7 @@ type ProfileCredentials = [Option<String>; 5];
 
 /// Move `profile`'s credentials out. They are moved, never copied, so the
 /// profile that ends up holding them has the only copy, and its `Drop`
-/// wipes them (all but the TOTP secret, which bir-core's `Drop` skips).
+/// wipes them, all five.
 fn take_credentials(profile: &mut bir_core::profile::TaxpayerProfile) -> ProfileCredentials {
     [
         profile.totp_secret.take(),
