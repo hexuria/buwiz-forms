@@ -27,6 +27,8 @@ WizardStyle=modern
 [Files]
 Source: "{#StageDir}\bir.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StageDir}\app\*"; DestDir: "{app}\app"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#StageDir}\print-overrides\*"; DestDir: "{app}\print-overrides"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\eBIRForms"; Filename: "{app}\bir.exe"; IconFilename: "{app}\assets\icon.ico"

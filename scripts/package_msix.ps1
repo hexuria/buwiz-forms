@@ -5,6 +5,12 @@ param(
 
     [string]$AssetsDir = "assets",
 
+    # The gpui-shell app payload resolves app/ and print-overrides/ beside
+    # bir.exe at runtime — see crates/bir-shell/src/packaged.rs.
+    [string]$AppDir = "app",
+
+    [string]$PrintOverridesDir = "print-overrides",
+
     [Parameter(Mandatory = $true)]
     [string]$Version,
 
@@ -37,6 +43,8 @@ function Get-MsvcVersion {
 
 $exeFullPath = (Resolve-Path $ExePath).Path
 $assetsFullPath = (Resolve-Path $AssetsDir).Path
+$appFullPath = (Resolve-Path $AppDir).Path
+$printOverridesFullPath = (Resolve-Path $PrintOverridesDir).Path
 $outFullPath = [IO.Path]::GetFullPath($OutFile)
 $outDirectory = Split-Path -Parent $outFullPath
 if (-not (Test-Path $outDirectory)) {
@@ -53,6 +61,11 @@ try {
     New-Item -ItemType Directory -Path $stage | Out-Null
     Copy-Item -LiteralPath $exeFullPath -Destination (Join-Path $stage 'bir.exe')
     Copy-Item -LiteralPath $assetsFullPath -Destination (Join-Path $stage 'assets') -Recurse
+    Copy-Item -LiteralPath $appFullPath -Destination (Join-Path $stage 'app') -Recurse
+    Copy-Item -LiteralPath $printOverridesFullPath -Destination (Join-Path $stage 'print-overrides') -Recurse
+    if (-not (Test-Path (Join-Path $stage 'app\main.js') -PathType Leaf)) {
+        throw "Shell app entry missing from MSIX payload: $stage\app\main.js"
+    }
 
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path $vswhere)) {
