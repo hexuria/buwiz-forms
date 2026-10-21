@@ -9,8 +9,8 @@
 // with a "Checking…" chip while it runs. The html-frozen/ sheets stay the
 // print output and are not touched here.
 
-import { View, div } from "gpui-kit";
-import { InputState, CalendarState, Popup } from "gpui-base";
+import { View, div, list } from "gpui-kit";
+import { InputState, CalendarState, Popup, Scrollbar, VirtualListScrollHandle } from "gpui-base";
 import { Spinner } from "gpui-component";
 import {
   tokens,
@@ -321,9 +321,31 @@ export class FormPageActions {
   /** Release a form's retained views, text states and focus handles. */
   release(state) {
     for (const row of state?.rowViews?.values() || []) row.entity.release();
+    for (const group of state?.groupViews?.values() || []) group.entity.release();
     for (const input of state?.inputs?.values() || []) input.release();
     for (const handle of state?.editFocus?.values() || []) handle.release();
     state?.checkButton?.entity.release();
+    state?.topView?.entity.release();
+    state?.navView?.entity.release();
+    // The scroll handle belongs to whichever form is on screen: dropping it
+    // while releasing a kept-aside state would leave the live list driving a
+    // dead handle (the host logs it and falls back, but the position is lost).
+    if (state == null || state === this.state) {
+      this.partsScroll?.release();
+      this.partsScroll = null;
+      this.partsScrollCount = 0;
+    }
+  }
+
+  /**
+   * The parts list's scroll handle, created on the first draw that has one
+   * and released when the return closes. `jumpTo` moves the list through it
+   * (`scroll_to_item`), and the `scrolldrive` start param sweeps it so a
+   * perf run scrolls without synthetic input events.
+   */
+  partsScrollHandle() {
+    if (!this.partsScroll) this.partsScroll = VirtualListScrollHandle.new();
+    return this.partsScroll;
   }
 
   /**
@@ -392,6 +414,7 @@ export class FormPageActions {
       openParts: new Set([0]),
       inputs: new Map(),
       rowViews: new Map(),
+      groupViews: new Map(),
       pending: {},
       dirty: false,
       saved: false,
@@ -404,6 +427,11 @@ export class FormPageActions {
       entity: cx.new(FormCheckButton, { ui: this, state: this.state }),
       checking: false,
     };
+    // The page head and the chip navigator are retained views too: inside a
+    // virtual list, items may only embed entities or handler-free elements.
+    const column = app.layout().column;
+    this.state.topView = { entity: cx.new(FormTopView, { ui: this, state: this.state, width: column }) };
+    this.state.navView = { entity: cx.new(FormNavView, { ui: this, state: this.state, width: column }) };
     cx.spawn(async (acx) => {
       try {
         const key = opts.returnKey ?? null;
@@ -626,6 +654,14 @@ export class FormPageActions {
           });
         }
       });
+      // The "From tax profile" fold is a retained view too: list items may
+      // only embed entities or handler-free elements, and the banner keeps a
+      // click and a key handler of its own.
+      if (this.tuckedItems(partIndex).length && !s.groupViews.has(partIndex)) {
+        const tucked = this.tuckedItems(partIndex);
+        const props = { ui: this, state: s, pi: partIndex, tucked, border: tucked[0] > 0 };
+        s.groupViews.set(partIndex, { props, entity: cx.new(FormGroupView, props) });
+      }
       this.refreshRows();
     }
   }
@@ -709,9 +745,20 @@ export class FormPageActions {
   /** Retained rows keep their snapshots until something they display changes. */
   refreshRows() {
     const s = this.state;
-    if (!s?.rowViews) return;
+    if (!s) return;
     const width = this.rowWidth();
     s.rowLayoutWidth = width;
+    // The chrome views have no snapshot to diff: pushing props is cheap and
+    // lets a mounted entity decide for itself whether it redraws.
+    const column = this.app.layout().column;
+    s.topView?.entity.set_props({ ui: this, state: s, width: column });
+    s.navView?.entity.set_props({ ui: this, state: s, width: column });
+    for (const group of s.groupViews?.values() || []) {
+      const props = { ...group.props, state: s, tucked: this.tuckedItems(group.props.pi), border: this.tuckedItems(group.props.pi)[0] > 0 };
+      group.props = props;
+      group.entity.set_props(props);
+    }
+    if (!s.rowViews) return;
     for (const row of s.rowViews.values()) {
       if (!s.openParts.has(row.props.pi)) continue;
       const props = { ...row.props, width };
@@ -767,6 +814,13 @@ export class FormPageActions {
     this.ensureInputs(i, cx);
     s.openParts = new Set([i]);
     this.refreshRows();
+    // Folded parts leave a short list that may not reach the scroll offset the
+    // long one had — put the chosen part's header at the top explicitly.
+    if (this.partsScroll && s.schema) {
+      const sideNav = this.app.layout().column >= BREAK.formNav;
+      const at = partItems(this, s, s.schema, sideNav).findIndex((it) => it.key === `h:${i}`);
+      if (at >= 0) this.partsScroll.scroll_to_item(at, "top");
+    }
     cx.notify();
   }
 
@@ -2735,6 +2789,224 @@ class FormItemView extends View {
   }
 }
 
+/**
+ * The "From tax profile" fold banner as a retained view: list items may only
+ * embed entities or handler-free elements, and the banner carries a click and
+ * a key handler of its own.
+ */
+class FormGroupView extends View {
+  init(props) { this.props = props; }
+  update(props) { this.props = props; }
+  render(cx) {
+    const { ui, state, pi, tucked, border } = this.props;
+    if (state !== ui.state) return div();
+    return profileGroup(cx, ui, pi, tucked, border);
+  }
+}
+
+/**
+ * The page's head: title, chips, action buttons and the taxpayer bar, plus the
+ * one-time notes and profile banners that sit above the parts. Retained for
+ * the same reason as FormGroupView — it is the first item of the parts list,
+ * where only entities and handler-free elements may appear.
+ */
+class FormTopView extends View {
+  init(props) { this.props = props; }
+  update(props) { this.props = props; }
+  render(cx) {
+    const { ui, state: s, width } = this.props;
+    if (s !== ui.state) return div();
+    const app = ui.app;
+    const t = tokens(cx);
+    const f = s.schema;
+    // The return's own TIN and branch decide whose it is; never a name match
+    // or whichever taxpayer happens to be selected.
+    const branch = app.branchFor(s.tin);
+    const tp = branch ? app.taxpayers().find((x) => x.tin_root === branch.tin_root) : null;
+    const branchCode = String(s.tin).slice(9) || "00000";
+    const draftLayout = f.q < 0.8;
+
+    // A library sample saves as its period's return; Queue and Print save it first.
+    const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
+    if (s.filedOriginal && !s.filedOriginalView) {
+      actions.push(AppButton(cx, "fp-filed-original", "View the filed original", { size: "sm", icon: "history", onClick: (_e, cx) => ui.openFiledOriginal(cx) }));
+    }
+    if (s.filedOriginalView) {
+      actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
+    } else if (s.sample) {
+      if (s.editable) actions.push(s.checkButton.entity);
+      actions.push(AppButton(cx, "fp-start-return", "Start a return", { size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
+      actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
+      actions.push(AppButton(cx, "fp-save", "Save", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
+    } else if (s.status === "Queued") {
+      actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
+    } else if (s.editable) {
+      actions.push(s.checkButton.entity);
+      actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
+      actions.push(AppButton(cx, "fp-save", "Save draft", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
+    }
+
+    const chips = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[2]);
+    chips.child(Chip(cx, f.freq)).child(Chip(cx, `${f.pages} page${f.pages > 1 ? "s" : ""}`)).child(Chip(cx, `${f.n} fields`));
+    if (draftLayout) chips.child(Chip(cx, "Draft layout", "warning", "triangle-alert"));
+    if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
+    if (s.amends || s.filedOriginal) chips.child(Chip(cx, "Amended return", "warning"));
+    if (s.filedOriginalView) chips.child(Chip(cx, "Filed original · read-only", "success"));
+
+    const head = div()
+      .flex()
+      .flex_row()
+      .flex_wrap()
+      .items_start()
+      .gap(14)
+      .child(
+        div()
+          .flex()
+          .flex_col()
+          .flex_1()
+          .min_w(Math.min(width, 420))
+          .child(MetaLine(cx, [Code(cx, `BIR Form ${f.c}`), `Revision ${f.rev}`]))
+          .child(Text(cx, "page", f.t).mt(SPACE[1]).whitespace_normal())
+          .child(chips),
+      )
+      .child(
+        div()
+          .flex()
+          .flex_row()
+          .flex_wrap()
+          .gap(SPACE[2])
+          .children(actions),
+      );
+
+    const bar = div()
+      .flex()
+      .flex_row()
+      .flex_wrap()
+      .items_center()
+      .gap_x(SPACE[3])
+      .gap_y(SPACE[2])
+      .my(SPACE[5])
+      .py(10)
+      .px(SPACE[3])
+      .rounded(RADIUS.card)
+      .border(1)
+      .border_color(t.border)
+      .bg(t.bg);
+    if (tp) {
+      bar
+        .child(Avatar(cx, tp.name, 20, tp.tin_root))
+        .child(Text(cx, "control", tp.name).font_weight(600))
+        .child(Code(cx, formatTin(tp.tin_root, branchCode), "fg2").font_weight(400))
+        .child(Text(cx, "meta", branch ? branch.name : "", "fg2"));
+    } else {
+      bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
+    }
+    bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
+    bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
+    if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
+    bar.child(div().flex_1());
+    // Guided mode walks the fields a template marks, so it shows only when this
+    // branch's template for the form marks some.
+    const template = app.store.templates(s.tin).find((x) => x.form_code === s.code);
+    if (template && template.marked > 0) {
+      bar.child(
+        div()
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(SPACE[2])
+          .child(Text(cx, "meta", "Guided mode", "fg2"))
+          .child(
+            Switch(cx, "fp-guided", s.guided, (v, cx) => {
+              s.guided = v;
+              cx.notify();
+            }, "Guided mode"),
+          ),
+      );
+    }
+
+    const page = div().flex().flex_col().child(head).child(bar);
+    if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
+    // A draft whose untouched profile boxes followed a later profile change.
+    if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
+    // A one-time note from the host (shown on the opening it was given for).
+    for (const note of s.notes || []) page.child(Text(cx, "meta", note.text, "fg2").mb(SPACE[4]).whitespace_normal());
+
+    if (s.editable && s.profileDiffers?.length) {
+      page.child(
+        div()
+          .flex()
+          .flex_row()
+          .flex_wrap()
+          .items_center()
+          .gap(SPACE[2])
+          .mb(SPACE[4])
+          .child(Text(cx, "meta", profileDiffersNote(s.profileDiffers), "fg2").whitespace_normal())
+          .child(AppButton(cx, "fp-use-profile", "Use profile values", { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.useProfileValues(cx) })),
+      );
+    }
+    // An amended return says where its filed version is; that version, opened
+    // from its history, says what it is.
+    if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());
+    if (s.filedOriginalView) page.child(Text(cx, "meta", filedOriginalStrip(s.filedOriginalView), "fg2").mb(SPACE[4]).whitespace_normal());
+    // A return that left the app is read-only, and says when it went.
+    if (!s.editable && !s.filedOriginalView && (s.submittedAt || s.confirmedAt)) {
+      const parts = [];
+      if (s.submittedAt) parts.push(`Sent to BIR ${shortDate(s.submittedAt)}`);
+      if (s.confirmedAt) parts.push(`confirmed ${shortDate(s.confirmedAt)}`);
+      page.child(Text(cx, "meta", `${parts.join(", ")}. Nothing here can be changed.`, "fg2").mb(SPACE[4]).whitespace_normal());
+    }
+    return page;
+  }
+}
+
+/**
+ * The chip-row part navigator a narrow window shows above the parts, retained
+ * for the same reason as FormTopView: it is a list item, and each chip keeps
+ * its own `jumpTo` click.
+ */
+class FormNavView extends View {
+  init(props) { this.props = props; }
+  update(props) { this.props = props; }
+  render(cx) {
+    const { ui, state: s } = this.props;
+    if (s !== ui.state) return div();
+    const t = tokens(cx);
+    const f = s.schema;
+    const nav = div().flex().flex_row().flex_wrap().gap(SPACE[1]).mb(SPACE[4]);
+    f.parts.forEach((p, i) => {
+      const errors = Object.keys(s.messages).filter((id) => id.startsWith(`${i}:`)).length;
+      nav.child(
+        div()
+          .id(`fp-nav-${i}`)
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(SPACE[1])
+          .cursor_pointer()
+          .on_click((_e, cx) => ui.jumpTo(i, cx))
+          .child(Chip(cx, `${partName(p, i)} · ${p.items.length}`, s.openParts.has(i) ? "accent" : "neutral"))
+          .when(errors > 0, (el) =>
+            el.child(
+              div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .h(18)
+                .min_w(18)
+                .px(5)
+                .rounded(RADIUS.full)
+                .bg(t.danger)
+                .child(Text(cx, "cap", String(errors), "primaryFg").text_color(t.surface)),
+            ),
+          ),
+      );
+    });
+    return nav;
+  }
+}
+
 function itemRow(cx, ui, it, pi, ii, width) {
   const s = ui.state;
   const t = tokens(cx);
@@ -3201,6 +3473,48 @@ export function renderRemovalConfirm(cx, app) {
 // ---------------------------------------------------------------- page
 
 /**
+ * The parts column as a flat item stream for the lazy list: item 0 is the
+ * page head (a retained view), a narrow window then interposes the chip
+ * navigator, and each part contributes a header item plus, while open, one
+ * item per visible row — the "From tax profile" fold keeps a banner item
+ * where its first tucked row sits, with the tucked rows after it in the
+ * order they show when unfolded. List items render during layout, so they
+ * may only be handler-free chrome plus retained entities: rows and the
+ * banner are entities, and the header's toggle is dispatched through the
+ * list's on_item_click by key. `jumpTo` builds the same stream to find the
+ * index a `scroll_to_item` should land on.
+ */
+function partItems(ui, s, f, sideNav) {
+  const items = [{ kind: "page", key: "P" }];
+  if (!sideNav) items.push({ kind: "nav", key: "N" });
+  f.parts.forEach((p, pi) => {
+    // Dev start route only (BIR_SHELL_START solo=<part>): draw that part alone.
+    if (ui.devSolo != null && pi !== ui.devSolo) return;
+    const open = s.openParts.has(pi);
+    const start = items.length;
+    items.push({ kind: "head", pi, key: `h:${pi}` });
+    if (open) {
+      // Items the profile filled fold into one group where the first sits.
+      const tucked = ui.tuckedItems(pi);
+      p.items.forEach((it, ii) => {
+        // Dev start route only (BIR_SHELL_START items=a-b): show a slice.
+        if (ui.devItems && (ii < ui.devItems.from || ii > ui.devItems.to)) return;
+        if (tucked.includes(ii)) {
+          if (ii !== tucked[0]) return;
+          items.push({ kind: "group", pi, key: `g:${pi}`, first: ii === 0 });
+          if (s.profileOpen.has(pi)) for (const tj of tucked) items.push({ kind: "row", pi, ii: tj, key: `r:${pi}:${tj}`, sep: tj === 0 });
+          return;
+        }
+        items.push({ kind: "row", pi, ii, key: `r:${pi}:${ii}` });
+      });
+      if (items.length > start + 1) items[start + 1].first = true;
+    }
+    items[items.length - 1].last = true;
+  });
+  return items;
+}
+
+/**
  * The form page's pieces: the header (title, actions, taxpayer bar), the part
  * navigator and the parts. `renderFormPage` stacks them in the main scroll
  * area; `renderFormSplit` pins the navigator beside a form that scrolls on
@@ -3215,143 +3529,12 @@ function formContent(cx, app, width) {
   if (!f) {
     return { early: PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." }) };
   }
-  // The return's own TIN and branch decide whose it is; never a name match
-  // or whichever taxpayer happens to be selected.
-  const branch = app.branchFor(s.tin);
-  const tp = branch ? app.taxpayers().find((x) => x.tin_root === branch.tin_root) : null;
-  const branchCode = String(s.tin).slice(9) || "00000";
-  const draftLayout = f.q < 0.8;
-
-  // A library sample saves as its period's return; Queue and Print save it first.
-  const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
-  if (s.filedOriginal && !s.filedOriginalView) {
-    actions.push(AppButton(cx, "fp-filed-original", "View the filed original", { size: "sm", icon: "history", onClick: (_e, cx) => ui.openFiledOriginal(cx) }));
-  }
-  if (s.filedOriginalView) {
-    actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
-  } else if (s.sample) {
-    if (s.editable) actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-start-return", "Start a return", { size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
-    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
-    actions.push(AppButton(cx, "fp-save", "Save", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
-  } else if (s.status === "Queued") {
-    actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
-  } else if (s.editable) {
-    actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
-    actions.push(AppButton(cx, "fp-save", "Save draft", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
-  }
-
-  const chips = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[2]);
-  chips.child(Chip(cx, f.freq)).child(Chip(cx, `${f.pages} page${f.pages > 1 ? "s" : ""}`)).child(Chip(cx, `${f.n} fields`));
-  if (draftLayout) chips.child(Chip(cx, "Draft layout", "warning", "triangle-alert"));
-  if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
-  if (s.amends || s.filedOriginal) chips.child(Chip(cx, "Amended return", "warning"));
-  if (s.filedOriginalView) chips.child(Chip(cx, "Filed original · read-only", "success"));
-
-  const head = div()
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .items_start()
-    .gap(14)
-    .child(
-      div()
-        .flex()
-        .flex_col()
-        .flex_1()
-        .min_w(Math.min(width, 420))
-        .child(MetaLine(cx, [Code(cx, `BIR Form ${f.c}`), `Revision ${f.rev}`]))
-        .child(Text(cx, "page", f.t).mt(SPACE[1]).whitespace_normal())
-        .child(chips),
-    )
-    .child(
-      div()
-        .flex()
-        .flex_row()
-        .flex_wrap()
-        .gap(SPACE[2])
-        .children(actions),
-    );
-
-  const bar = div()
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .items_center()
-    .gap_x(SPACE[3])
-    .gap_y(SPACE[2])
-    .my(SPACE[5])
-    .py(10)
-    .px(SPACE[3])
-    .rounded(RADIUS.card)
-    .border(1)
-    .border_color(t.border)
-    .bg(t.bg);
-  if (tp) {
-    bar
-      .child(Avatar(cx, tp.name, 20, tp.tin_root))
-      .child(Text(cx, "control", tp.name).font_weight(600))
-      .child(Code(cx, formatTin(tp.tin_root, branchCode), "fg2").font_weight(400))
-      .child(Text(cx, "meta", branch ? branch.name : "", "fg2"));
-  } else {
-    bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
-  }
-  bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
-  bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
-  if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
-  bar.child(div().flex_1());
-  // Guided mode walks the fields a template marks, so it shows only when this
-  // branch's template for the form marks some.
-  const template = app.store.templates(s.tin).find((x) => x.form_code === s.code);
-  if (template && template.marked > 0) {
-    bar.child(
-      div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(SPACE[2])
-        .child(Text(cx, "meta", "Guided mode", "fg2"))
-        .child(
-          Switch(cx, "fp-guided", s.guided, (v, cx) => {
-            s.guided = v;
-            cx.notify();
-          }, "Guided mode"),
-        ),
-    );
-  }
-
-  const page = div().flex().flex_col().child(head).child(bar);
-  if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
-  // A draft whose untouched profile boxes followed a later profile change.
-  if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
-  // A one-time note from the host (shown on the opening it was given for).
-  for (const note of s.notes || []) page.child(Text(cx, "meta", note.text, "fg2").mb(SPACE[4]).whitespace_normal());
-
-  if (s.editable && s.profileDiffers?.length) {
-    page.child(
-      div()
-        .flex()
-        .flex_row()
-        .flex_wrap()
-        .items_center()
-        .gap(SPACE[2])
-        .mb(SPACE[4])
-        .child(Text(cx, "meta", profileDiffersNote(s.profileDiffers), "fg2").whitespace_normal())
-        .child(AppButton(cx, "fp-use-profile", "Use profile values", { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.useProfileValues(cx) })),
-    );
-  }
-  // An amended return says where its filed version is; that version, opened
-  // from its history, says what it is.
-  if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());
-  if (s.filedOriginalView) page.child(Text(cx, "meta", filedOriginalStrip(s.filedOriginalView), "fg2").mb(SPACE[4]).whitespace_normal());
-  // A return that left the app is read-only, and says when it went.
-  if (!s.editable && !s.filedOriginalView && (s.submittedAt || s.confirmedAt)) {
-    const parts = [];
-    if (s.submittedAt) parts.push(`Sent to BIR ${shortDate(s.submittedAt)}`);
-    if (s.confirmedAt) parts.push(`confirmed ${shortDate(s.confirmedAt)}`);
-    page.child(Text(cx, "meta", `${parts.join(", ")}. Nothing here can be changed.`, "fg2").mb(SPACE[4]).whitespace_normal());
-  }
+  // The page head (title, actions, taxpayer bar, notes and profile banners)
+  // is a retained view: it renders as the parts list's first item, where only
+  // entities and handler-free elements may appear. `page` wraps it for the
+  // eager path and the error/loading states, which keep the stacked layout.
+  const page = div().flex().flex_col();
+  if (s.topView) page.child(s.topView.entity);
   if (s.error) {
     return { page: page.child(div().p(SPACE[4]).rounded(RADIUS.card).bg(t.dangerSoft).child(Text(cx, "body", s.error, "danger").whitespace_normal())) };
   }
@@ -3377,7 +3560,10 @@ function formContent(cx, app, width) {
       .rounded(RADIUS.full)
       .bg(danger ? t.danger : t.hover)
       .child(Text(cx, "cap", text, danger ? "primaryFg" : "fg2").when(danger, (el) => el.text_color(t.surface)));
-  const nav = sideNav ? div().flex().flex_col().gap(2).w(208).flex_none() : div().flex().flex_row().flex_wrap().gap(SPACE[1]).mb(SPACE[4]);
+  // Below the navigator width the chips are a retained view (FormNavView),
+  // rendered as the parts list's second item, so `nav` exists only for the
+  // pinned side navigator.
+  const nav = sideNav ? div().flex().flex_col().gap(2).w(208).flex_none() : null;
   // Heading: where you are, and a link to the next part with something to fix.
   const openOne = s.openParts.size === 1 ? [...s.openParts][0] : -1;
   const navHead = div()
@@ -3433,39 +3619,45 @@ function formContent(cx, app, width) {
         )
         .child(div().flex().flex_row().flex_none().gap(SPACE[1]).when(errors > 0, (el) => el.child(badge(String(errors), true))).child(badge(String(p.items.length), false)));
       navRows.push(row);
-    } else {
-      nav.child(
-        div()
-          .id(`fp-nav-${i}`)
-          .flex()
-          .flex_row()
-          .items_center()
-          .gap(SPACE[1])
-          .cursor_pointer()
-          .on_click((_e, cx) => ui.jumpTo(i, cx))
-          .child(Chip(cx, `${partName(p, i)} · ${p.items.length}`, s.openParts.has(i) ? "accent" : "neutral"))
-          .when(errors > 0, (el) => el.child(badge(String(errors), true))),
-      );
     }
   });
 
-  const parts = div().flex().flex_col().gap(SPACE[4]).w(partsW);
-  f.parts.forEach((p, pi) => {
-    // Dev start route only (BIR_SHELL_START solo=<part>): draw that part alone.
-    if (ui.devSolo != null && pi !== ui.devSolo) return;
-    const open = s.openParts.has(pi);
-    const card = div()
-      .id(`fp-part-${pi}`)
-      .flex()
-      .flex_col()
-      .rounded(RADIUS.card)
-      .border(1)
-      .border_color(t.border)
-      .bg(t.surface)
-      .overflow_hidden()
-      .child(
+  const items = partItems(ui, s, f, sideNav);
+
+  // The list owns the scroll area, so the top and bottom padding a scroll
+  // column carried become part of the first and last items.
+  const topPad = sideNav ? 28 : app.layout().mainWidth < BREAK.narrowContent ? 20 : 28;
+  const renderPartItem = (i, icx) => {
+    const it = items[i];
+    const t2 = tokens(icx);
+    if (it.kind === "page") return div().pt(topPad).child(s.topView ? s.topView.entity : div());
+    if (it.kind === "nav") return div().child(s.navView ? s.navView.entity : div());
+    // One card's chrome spread across its part's items: the header item carries
+    // the top border and rounded corners, the last visible item the bottom,
+    // every item the sides. `first` marks the body's first item (the divider
+    // under the header) and `sep` the tucked row 0's divider under the banner.
+    const chrome = (inner, { top = false, last = false } = {}) => {
+      const tail = i === items.length - 1 ? 56 : last ? SPACE[4] : 0;
+      return div()
+        .w(partsW)
+        .when(tail > 0, (el) => el.pb(tail))
+        .child(
+          div()
+            .border_l(1)
+            .border_r(1)
+            .border_color(t2.border)
+            .bg(t2.surface)
+            .when(top, (el) => el.border_t(1).rounded_t(RADIUS.card))
+            .when(last, (el) => el.border_b(1).rounded_b(RADIUS.card).overflow_hidden())
+            .child(inner),
+        );
+    };
+    if (it.kind === "head") {
+      const p = f.parts[it.pi];
+      const open = s.openParts.has(it.pi);
+      return chrome(
         div()
-          .id(`fp-part-${pi}-toggle`)
+          .id(`fp-part-${it.pi}-toggle`)
           .flex()
           .flex_row()
           .items_center()
@@ -3474,42 +3666,28 @@ function formContent(cx, app, width) {
           .pl(SPACE[3])
           .pr(SPACE[4])
           .cursor_pointer()
-          .accessibility_label(partName(p, pi))
-          .on_click((_e, cx) => ui.togglePart(pi, cx))
-          .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
+          .accessibility_label(partName(p, it.pi))
+          .child(Icon(icx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
           // min_w(0) lets a long part name wrap instead of running under the count.
-          .child(Text(cx, "control", partName(p, pi)).font_weight(600).flex_1().min_w(0).whitespace_normal())
-          .child(Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3").flex_none()),
+          .child(Text(icx, "control", partName(p, it.pi)).font_weight(600).flex_1().min_w(0).whitespace_normal())
+          .child(Text(icx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3").flex_none()),
+        { top: true, last: Boolean(it.last) },
       );
-    if (open) {
-      const body = div().flex().flex_col().border_t(1).border_color(t.border);
-      const rowOf = (ii) => {
-        const retained = s.rowViews.get(`${pi}:${ii}`);
-        const row = retained ? retained.entity : itemRow(cx, ui, p.items[ii], pi, ii, partsW);
-        if (!retained && ii > 0) row.border_t(1).border_color(t.border);
-        return row;
-      };
-      // Items the profile filled fold into one group where the first sits.
-      const tucked = ui.tuckedItems(pi);
-      p.items.forEach((it, ii) => {
-        // Dev start route only (BIR_SHELL_START items=a-b): show a slice.
-        if (ui.devItems && (ii < ui.devItems.from || ii > ui.devItems.to)) return;
-        if (tucked.includes(ii)) {
-          if (ii !== tucked[0]) return;
-          body.child(profileGroup(cx, ui, pi, tucked, ii > 0));
-          if (s.profileOpen.has(pi)) {
-            for (const tj of tucked) body.child(tj === 0 ? div().border_t(1).border_color(t.border).child(rowOf(tj)) : rowOf(tj));
-          }
-          return;
-        }
-        body.child(rowOf(ii));
-      });
-      card.child(body);
     }
-    parts.child(card);
-  });
+    if (it.kind === "group") {
+      const gv = s.groupViews?.get(it.pi);
+      return chrome(div().when(it.first, (el) => el.border_t(1).border_color(t2.border)).child(gv ? gv.entity : div()), { last: Boolean(it.last) });
+    }
+    const rv = s.rowViews?.get(`${it.pi}:${it.ii}`);
+    return chrome(
+      div()
+        .when(it.first || it.sep, (el) => el.border_t(1).border_color(t2.border))
+        .child(rv ? rv.entity : div()),
+      { last: Boolean(it.last) },
+    );
+  };
 
-  return { page, nav, navHead, attn, navRows, parts, sideNav };
+  return { page, nav, navHead, attn, navRows, items, renderPartItem, partsW, sideNav };
 }
 
 /**
@@ -3530,47 +3708,93 @@ export function renderFormPage(cx, app, width) {
 function drawFormPage(cx, app, width) {
   const c = formContent(cx, app, width);
   if (c.early) return c.early;
-  if (!c.parts) return c.page;
+  if (!c.items) return c.page;
+  // Eager rendering of the same item stream: the window draws the virtualized
+  // list via renderFormSplit; this path stays for callers without a live list
+  // owner (the node shell tests).
+  const col = div().flex().flex_col();
+  for (let i = 1; i < c.items.length; i++) col.child(c.renderPartItem(i, cx));
   if (c.sideNav) {
     c.nav.child(c.navHead).when(Boolean(c.attn), (el) => el.child(c.attn));
     for (const row of c.navRows) c.nav.child(row);
-    return c.page.child(div().flex().flex_row().items_start().gap(28).child(c.nav).child(c.parts));
+    return c.page.child(div().flex().flex_row().items_start().gap(28).child(c.nav).child(col));
   }
-  return c.page.child(c.nav).child(c.parts);
+  return c.page.child(col);
 }
 
 /**
- * Wide windows: the part navigator is pinned beside the form instead of
- * scrolling away with it. The form scrolls in its own area; the navigator's
- * heading stays put and its list scrolls on its own (with a scrollbar) when
- * the parts need more height than the window has, so the wheel over it never
- * moves the form. `null` below the side-navigator width, where the page
- * keeps one scroll area and a chip row. `L` is the shell's layout().
+ * The form brings its own scrolling column: a lazy `list` renders the page
+ * head, the chip navigator (below the side-navigator width) and the parts as
+ * one item stream, so scrolling materializes only the rows on screen. On wide
+ * windows the part navigator is pinned beside it; its heading stays put and
+ * its list scrolls on its own (with a scrollbar) when the parts need more
+ * height than the window has, so the wheel over it never moves the form.
+ * `null` when there is no form content to lay out (the main scroll area draws
+ * the early states). `L` is the shell's layout().
  */
 export function renderFormSplit(cx, app, L) {
   const split = drawFormSplit(cx, app, L);
-  // Drawn by this layout (null: the narrow layout draws the page instead).
+  // Drawn by this layout (null: the main scroll area draws the page instead).
   if (split) notesDrawn(app);
   return split;
 }
 
 function drawFormSplit(cx, app, L) {
-  if (L.column < BREAK.formNav) return null;
   const c = formContent(cx, app, L.column);
   if (c.early) return null;
+  if (!c.items) {
+    // Error/loading: below the navigator width the narrow page draws it.
+    if (L.column < BREAK.formNav) return null;
+    // The column's left edge, matching the centred column of the main scroll area.
+    const left = Math.max(L.padX, Math.floor((L.mainWidth - L.column) / 2));
+    const navW = 208 + 6;
+    const formW = L.column - 208 - 28;
+    const navCol = div().flex().flex_col().flex_none().w(left + navW).pl(left).h_full().min_h(0).pt(28).pb(16);
+    const body = div().flex().flex_col().w(formW + 22).pl(22).pt(28).pb(56).child(c.page);
+    return div()
+      .id("fp-split")
+      .flex()
+      .flex_row()
+      .flex_1()
+      .min_h(0)
+      .w_full()
+      .child(navCol)
+      .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
+  }
+  const partsList = list("fp-parts", c.items.length, (i) => c.items[i].key, (i, icx) => c.renderPartItem(i, icx))
+    .track_scroll(app.formUi.partsScrollHandle())
+    .on_item_click((key, cx) => {
+      if (key.startsWith("h:")) app.formUi.togglePart(Number(key.slice(2)), cx);
+    });
+  app.formUi.partsScrollCount = c.items.length;
+  if (!c.sideNav) {
+    // Narrow windows: the page head and chip navigator are the list's first
+    // items, so the whole page still reads as one scrolling column.
+    return div()
+      .id("fp-split")
+      .relative()
+      .flex_1()
+      .min_h(0)
+      .w_full()
+      .child(div().h_full().w_full().px(L.padX).flex().flex_row().justify_center().child(partsList.h_full().w(c.partsW)))
+      .child(Scrollbar.vertical("fp-parts").absolute().inset_0());
+  }
   // The column's left edge, matching the centred column of the main scroll area.
   const left = Math.max(L.padX, Math.floor((L.mainWidth - L.column) / 2));
   const navW = 208 + 6; // the rows plus room for the list's scrollbar
-  const formW = L.column - 208 - 28;
-  const navCol = div().flex().flex_col().flex_none().w(left + navW).pl(left).h_full().min_h(0).pt(28).pb(16);
-  if (c.parts) {
-    navCol
-      .child(c.navHead)
-      .when(Boolean(c.attn), (el) => el.child(c.attn))
-      .child(div().id("fp-nav-list").flex().flex_col().gap(2).flex_1().min_h(0).w(navW).overflow_y_scrollbar().children(c.navRows));
-  }
-  const body = div().flex().flex_col().w(formW + 22).pl(22).pt(28).pb(56).child(c.page);
-  if (c.parts) body.child(c.parts);
+  const navCol = div()
+    .flex()
+    .flex_col()
+    .flex_none()
+    .w(left + navW)
+    .pl(left)
+    .h_full()
+    .min_h(0)
+    .pt(28)
+    .pb(16)
+    .child(c.navHead)
+    .when(Boolean(c.attn), (el) => el.child(c.attn))
+    .child(div().id("fp-nav-list").flex().flex_col().gap(2).flex_1().min_h(0).w(navW).overflow_y_scrollbar().children(c.navRows));
   return div()
     .id("fp-split")
     .flex()
@@ -3579,5 +3803,14 @@ function drawFormSplit(cx, app, L) {
     .min_h(0)
     .w_full()
     .child(navCol)
-    .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
+    .child(
+      div()
+        .id("fp-scroll")
+        .relative()
+        .flex_1()
+        .min_w(0)
+        .h_full()
+        .child(div().h_full().pl(22).child(partsList.h_full().w(c.partsW)))
+        .child(Scrollbar.vertical("fp-parts").absolute().inset_0()),
+    );
 }

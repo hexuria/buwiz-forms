@@ -98,8 +98,8 @@ const InputState = { new({ value = "" } = {}) { let text = value; const on = {};
 const CalendarState = { new() { return { set_value() {}, value: () => null, year: () => 2026, month: () => 10, today: () => "2026-10-17", month_days: () => [[]], on() {}, release() { return true; } }; } };
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, Math, Number, String, Object, Array, window: { viewport_size: () => ({ width: 1400, height: 900 }) } });
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
-const kit = mock("gpui-kit", { div: element, svg: element, View });
-const base = mock("gpui-base", { InputState, CalendarState, Popup: { new: element } });
+const kit = mock("gpui-kit", { div: element, svg: element, View, list: element });
+const base = mock("gpui-base", { InputState, CalendarState, Popup: { new: element }, Scrollbar: { vertical: element }, VirtualListScrollHandle: { new: () => ({ scroll_to_item() {}, scroll_to_bottom() {}, release() { return true } }) } });
 const components = mock("gpui-component", { Spinner: { new: element } });
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;

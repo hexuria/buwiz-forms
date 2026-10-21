@@ -123,7 +123,9 @@ class BirApp extends View {
     // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
     // (also "palette=<query>", "edit=<profile section>", and on a form
     // "choose=<key>~<value>|...", "select=<key>", "more=<part>:<item>",
-    // "save", "items=<a>-<b>", "solo=<part>", and the sign-in steps listed
+    // "save", "items=<a>-<b>", "solo=<part>", "openparts=1" (every part open,
+    // for scroll perf runs), "scrolldrive=<secs>" (sweeps the parts list's
+    // scroll handle, for the same runs), and the sign-in steps listed
     // at runAccessStep; none bypasses a PIN)
     // or "...;form=2551Q/2026/3" opens a screen at launch, so a screen can be
     // checked headlessly (one launch, one screenshot). Unset in normal use.
@@ -243,6 +245,53 @@ class BirApp extends View {
       } else if (key === "solo") {
         this.formUi.devSolo = Number(value);
         this.formUi.jumpTo(Number(value), cx);
+      } else if (key === "openparts") {
+        // Perf harness only: open every part at once (what scroll measurements
+        // exercise). Chunked so no single script task crosses the 5 s watchdog.
+        this.afterFormLoads(cx, (cx) => {
+          const s = this.formUi.state;
+          if (!s?.schema) return;
+          s.openParts = new Set(s.schema.parts.map((_p, i) => i));
+          let i = 0;
+          const step = (cx) => {
+            const end = Math.min(i + 4, s.schema.parts.length);
+            for (; i < end; i++) this.formUi.ensureInputs(i, cx);
+            if (i < s.schema.parts.length) return cx.timer.after(30, step);
+            this.formUi.refreshRows();
+            cx.notify();
+          };
+          step(cx);
+        });
+      } else if (key === "scrolldrive") {
+        // Perf harness only: sweep the parts list's scroll handle through the
+        // item stream, so BIR_SHELL_METRICS records what scrolling
+        // materializes without needing synthetic input events. Pair with
+        // openparts=1 for the worst case: "…;openparts=1;scrolldrive=15".
+        const ui = this.formUi;
+        this.afterFormLoads(cx, (cx) => {
+          const deadline = Date.now() + (Number(value) || 12) * 1000;
+          let i = 0;
+          let dir = 1;
+          const sweep = (cx) => {
+            if (Date.now() > deadline) return;
+            const count = ui.partsScrollCount || 0;
+            if (ui.partsScroll && count > 1) {
+              i += dir * 2;
+              if (i >= count - 1) { i = count - 1; dir = -1; }
+              if (i <= 0) { i = 0; dir = 1; }
+              ui.partsScroll.scroll_to_item(i);
+            }
+            // A pending scroll_to_item is consumed by the next frame, and
+            // nothing schedules frames without input — invalidate() is what a
+            // wheel event's view notify does, so a tick here stands in for
+            // one scroll event: on the old layout it re-materialized every
+            // open row, on the list it re-renders the thin shell and the rows
+            // the sweep just brought into view.
+            this.invalidate();
+            cx.timer.after(40, sweep);
+          };
+          cx.timer.after(800, sweep); // let the first layout settle
+        });
       } else this.runAccessStep(key, value, cx);
     }
     cx.notify();

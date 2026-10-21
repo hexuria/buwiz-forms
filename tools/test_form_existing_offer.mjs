@@ -67,8 +67,8 @@ const mod = source("app/shell/form_page.js");
 const chrome = source("app/shell/chrome.js");
 const recentMod = source("app/shell/recent.js");
 const linked = {
-  "gpui-kit": mock("gpui-kit", { div: element, svg: element, View }),
-  "gpui-base": mock("gpui-base", { InputState, CalendarState: {}, Popup: { new: element } }),
+  "gpui-kit": mock("gpui-kit", { div: element, svg: element, View, list: element }),
+  "gpui-base": mock("gpui-base", { InputState, CalendarState: {}, Popup: { new: element }, Scrollbar: { vertical: element }, VirtualListScrollHandle: { new: () => ({ scroll_to_item() {}, scroll_to_bottom() {}, release() { return true } }) } }),
   "gpui-component": mock("gpui-component", { Spinner: { new: element } }),
   process: mock("process", { default: { platform: "darwin" } }),
   "./ui.js": mock("./ui.js", uiExports),

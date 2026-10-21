@@ -37,6 +37,17 @@ for every change to app/shell, and reviewers should reject code that breaks them
 8. **Profile-derived and computed boxes are read-only.** They render with
    `lockedBox`, have no `InputState` change handler that writes, and never
    trigger a fill.
+9. **Long scrolling columns are lazy `list`s, and a lazy item renders only
+   chrome plus retained entities.** The form page's parts column is
+   `list("fp-parts", …)` driven by a flat, keyed item stream (page head, chip
+   navigator, `h:<part>` headers, `g:<part>` profile banners, `r:<part>:<item>`
+   rows) — scrolling materializes only what is on screen. An item renderer
+   runs during layout, so it must not create entities, `InputState`s, focus
+   handles or click handlers; anything with handlers is a retained `View`
+   (`FormTopView`, `FormNavView`, `FormItemView`, `FormGroupView`) created when
+   the part opened, embedded by the renderer. Header actions dispatch through
+   the list's `on_item_click` by key. Keys must stay stable and domain-derived
+   so a fold changes which items exist, never what an item is.
 
 ## Measuring
 
@@ -46,6 +57,25 @@ rows rebuild:
 
     node --experimental-vm-modules tools/test_form_row_invalidation.mjs
     node --experimental-vm-modules tools/test_date_field_rows.mjs
+
+The lazy parts list has its own guard — the item stream's keys, the fold
+behaviour and the "no retained state inside a renderer" rule:
+
+    node --experimental-vm-modules tools/test_form_virtualized_parts.mjs
+
+Runtime baselines come from `BIR_SHELL_METRICS=1` on the release shell
+(materializations per active second). Form 1702MX, all 17 parts open
+(198 rows), 1440×900, a `scroll_to_item` sweep ticking ~25×/s — the same
+per-tick invalidate a wheel event produces:
+
+| Path | Materializations/s | Materialize ms/s | Animation hitches (xctrace, ~16 s window) |
+|---|---|---|---|
+| Rebuilt parts column (before) | ~1,400 | ~98 | 10, worst 117 ms; 12 frames >33 ms |
+| Lazy `list` + retained rows (after) | ~8–110, only rows entering view | ~1–8 | 0 |
+
+The same sweep on 1701 (all 14 parts open, 946 boxes): ~1,700–2,300
+materializations/s before, ~70–120 after. A hover crossing a row boundary
+re-renders only that row's retained view, never the page.
 
 Current baselines:
 
