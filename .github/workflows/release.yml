@@ -40,7 +40,7 @@ jobs:
           test "$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
           test "$(git tag --points-at "$GITHUB_SHA" --list "$GITHUB_REF_NAME")" = "$GITHUB_REF_NAME"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          git ls-files --error-unmatch Cargo.lock package-lock.json
+          git ls-files --error-unmatch Cargo.lock package-lock.json crates/bir-shell/Cargo.lock
 
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Release tag must use exact vMAJOR.MINOR.PATCH syntax: $GITHUB_REF_NAME" >&2
