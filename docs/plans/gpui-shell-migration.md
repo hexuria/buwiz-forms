@@ -5,12 +5,22 @@ Tick items there and here in the same PR.
 
 ## Cutover gate: failed headed parity comparison
 
-**Packaging stays on the painted application. Do not retire its views or
-dependencies.** The shell workspace builds on all three CI platforms, but
-compilation and generic field-spec coverage do not establish product parity.
-The earlier S1–S6 completion claims are superseded by this comparison.
-`just run` currently selects the development shell; `just run-painted` remains
-the reference. This development default is not approval to ship the shell.
+**Do not retire the painted application's views or dependencies.** The shell
+workspace builds on all three CI platforms, but compilation and generic
+field-spec coverage do not establish product parity. The earlier S1–S6
+completion claims are superseded by this comparison. `just run` currently
+selects the development shell; `just run-painted` remains the reference. This
+development default is not approval to call the product cutover complete.
+
+*S7 packaging leg:* release CI now ships the shell as `eBIRForms` — the DMG,
+Windows installer/MSIX and Linux packages carry `bir-shell` under the shipped
+`bir` name plus the `app/` and `print-overrides/` resources it resolves from
+the bundle layout (`crates/bir-shell/src/packaged.rs`). `bir-desktop` stays
+buildable for development and is still what `just app`/`testflight` packages
+for MAS: the shell lacks a `mas_build` equivalent and its QuickJS JIT needs a
+sandboxed executable-memory entitlement story first. The blocking parity
+checklist below remains open; it gates the `src/views/` retirement and the
+0.6.1 dependency graph, not the artifact layout.
 
 Both Linux applications were rebuilt and compared at equal window geometry,
 using separate synthetic scratch databases. All inherited `BIR_SFTP_*`
@@ -243,7 +253,7 @@ widen them.
 | S4 | Form slices A–E | 45 `form_*_view` ports grouped by family (061x/160x/170x/180x/2000x/2200x/255x) — sub-PRs per family | Each form: load spec, edit fields, validate, save draft, print-preview handoff parity vs native on identical seed |
 | S5 | Remaining views | dashboard, global_dashboard, profile_manager, queueable_forms, notifications, import_export polish, admin/cron/debug/dev_mode views | Full nav sweep works; no missing-route panics |
 | S6 | Print/preview/queue | `bir.print*` module + host-opened `gpui_wry` preview window, filing queue actions, SFTP dry-run path | Print preview of a seeded draft opens; dry-run queue submission produces expected artifacts |
-| S7 | Cutover | flip default `bir` binary target to bir-shell, retire `src/views/` + 0.6.1 dep graph, packaging/CI/README updates | `just check`/`just test` green; packaged artifacts build; parity checklist closed |
+| S7 | Cutover | flip default `bir` binary target to bir-shell, retire `src/views/` + 0.6.1 dep graph, packaging/CI/README updates. *Packaging leg done:* release artifacts ship bir-shell as `bir` + `app/`/`print-overrides/`; MAS still packages bir-desktop until the shell gains a `mas_build`-equivalent entitlement story | `just check`/`just test` green; packaged artifacts build; parity checklist closed |
 
 ## Test oracle per slice
 
