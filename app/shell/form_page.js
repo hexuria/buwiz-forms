@@ -252,51 +252,6 @@ function itemKeys(it) {
 }
 
 /**
- * Lay `text` over stacked lines of `slots` character boxes (rule 5), as the
- * host splits a pooled address (combs::split_lines): each line but the last
- * ends at the last space run that starts within its boxes, the run kept at
- * the end of that line, and the last takes the rest, so the lines put end
- * to end are the text. A word longer than its line is cut at the line's
- * last box when `cutWords` (the host splits these lines into saved fields),
- * else it stays whole on the line (the boxes are only shown).
- */
-export function splitLines(text, slots, cutWords = false) {
-  const lines = [];
-  let rest = [...String(text ?? "").trim()];
-  const space = (c) => /\s/.test(c);
-  slots.forEach((n, i) => {
-    if (i === slots.length - 1 || rest.length <= n) {
-      lines.push(rest.join(""));
-      rest = [];
-      return;
-    }
-    let cut = -1;
-    for (let p = n; p >= 1; p--) {
-      if (space(rest[p]) && !space(rest[p - 1])) {
-        cut = p;
-        break;
-      }
-    }
-    if (cut < 0 && cutWords) cut = n;
-    else {
-      if (cut < 0) {
-        cut = n;
-        while (cut < rest.length && !space(rest[cut])) cut++;
-      }
-      while (cut < rest.length && space(rest[cut])) cut++;
-    }
-    lines.push(rest.slice(0, cut).join(""));
-    rest = rest.slice(cut);
-  });
-  return lines;
-}
-
-/** Whether `text` fits the boxes of `slots`: boxes until it no longer fits. */
-export function fitsBoxes(text, slots, cutWords = false) {
-  return splitLines(text, slots, cutWords).every((line, i) => line.trimEnd().length <= slots[i]);
-}
-
-/**
  * "1,234.50" from a number-ish string; empty stays empty. `whole`: a box
  * over a whole-number field shows whole pesos ("1,234"); a typed fraction
  * stays as typed so the box's own message explains it.
@@ -2263,11 +2218,6 @@ function control(cx, ui, f, itemLabel, multi, available) {
   if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
   void t;
   wrap.child(el);
-  // Rule 5: the printed boxes, while the text fits them.
-  const slots = f.pool ? f.pool.slots : f.slots ? [f.slots] : null;
-  const text = f.pool ? ui.poolText(f) : value;
-  const cutWords = Boolean(f.pool && f.pool.write.length > 1);
-  if (slots && fitsBoxes(text, slots, cutWords)) wrap.child(charBoxes(cx, f.k, splitLines(text, slots, cutWords).map((line) => line.trimEnd()), slots));
   return wrap;
 }
 
@@ -2310,32 +2260,6 @@ function fromHint(cx, ui, it, id) {
       .child(Text(cx, "meta", `${from.l}: ₱${amount}`, "fg3"))
       .child(AppButton(cx, `fp-from-use-${id}`, "Use it", { size: "sm", variant: "ghost", onClick: (_e, cx) => ui.useFrom(from, cx) })),
   ];
-}
-
-/** Rows of character boxes, one character each, as the paper prints them. */
-function charBoxes(cx, k, lines, slots) {
-  const t = tokens(cx);
-  const rows = div().id(`fp-boxes-${k}`).flex().flex_col().gap(2).accessibility_label(`${slots.join(" + ")} character boxes`);
-  lines.forEach((line, i) => {
-    const row = div().flex().flex_row().flex_wrap();
-    for (let c = 0; c < slots[i]; c++) {
-      row.child(
-        div()
-          .flex()
-          .items_center()
-          .justify_center()
-          .w(14)
-          .h(18)
-          .border_l(c ? 0 : 1)
-          .border_r(1)
-          .border_y(1)
-          .border_color(t.border)
-          .child(Text(cx, "cap", line[c] || "", "fg2")),
-      );
-    }
-    rows.child(row);
-  });
-  return rows;
 }
 
 /** BIR's own words for the income-tax ATCs the forms list as bare codes. */
