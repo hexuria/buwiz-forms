@@ -61,12 +61,18 @@ case "$TARGET" in
 esac
 
 OUT="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
-BIN="$ROOT/target/$TARGET/release/bir"
+# The shipped app is the gpui-shell host: crates/bir-shell is a standalone
+# workspace, so its binaries land under crates/bir-shell/target. BIN_DIR may be
+# overridden to package a differently-rooted build (e.g. the painted app).
+BIN_DIR="${BIN_DIR:-$ROOT/crates/bir-shell/target/$TARGET/release}"
+BIN="$BIN_DIR/bir"
 if [ ! -x "$BIN" ]; then
     echo "Release binary is missing or not executable: $BIN" >&2
     exit 1
 fi
 for required in \
+    "$ROOT/app/main.js" \
+    "$ROOT/print-overrides" \
     "$ROOT/assets/linux/dev.goldcoders.bir.desktop" \
     "$ROOT/assets/linux/install-desktop-entry.sh" \
     "$ROOT/assets/linux/icons/hicolor/48x48/apps/dev.goldcoders.bir.png" \
@@ -105,6 +111,11 @@ payload="$stage/eBIRForms-Linux-${ARCH}-${VERSION}"
 mkdir -p "$payload"
 install -m 755 "$BIN" "$payload/bir"
 cp -R "$ROOT/assets" "$payload/assets"
+# The shell resolves app/ and print-overrides/ beside the executable (tarball)
+# or under /usr/share/ebirforms (system packages) — see
+# crates/bir-shell/src/packaged.rs.
+cp -R "$ROOT/app" "$payload/app"
+cp -R "$ROOT/print-overrides" "$payload/print-overrides"
 install -m 755 "$ROOT/assets/linux/install-desktop-entry.sh" "$payload/install-desktop-entry.sh"
 check_launcher() {
     local applications="$1"
@@ -132,19 +143,20 @@ check_launcher \
     "$tarball_root/$(basename "$payload")/assets/linux" \
     "$tarball_root/$(basename "$payload")/assets/linux/icons/hicolor"
 
-cargo deb --locked -p bir-desktop --no-build --target "$TARGET" \
-    --deb-version "$VERSION" -o "$deb"
+cargo deb --locked --manifest-path crates/bir-shell/Cargo.toml --no-build \
+    --target "$TARGET" --deb-version "$VERSION" -o "$deb"
 deb_root="$stage/deb-extracted"
 mkdir -p "$deb_root"
 dpkg-deb --extract "$deb" "$deb_root"
 python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$deb_root"
 test -x "$deb_root/usr/bin/ebirforms"
-test -d "$deb_root/usr/share/ebirforms/assets"
+test -f "$deb_root/usr/share/ebirforms/app/main.js"
+test -d "$deb_root/usr/share/ebirforms/print-overrides"
 check_launcher "$deb_root/usr/share/applications" "$deb_root/usr/share/icons/hicolor"
 
 rpm_metadata="$stage/rpm-metadata.toml"
 printf 'version = "%s"\n' "$rpm_version" > "$rpm_metadata"
-cargo generate-rpm -p crates/bir-desktop --target "$TARGET" \
+cargo generate-rpm -p crates/bir-shell --target "$TARGET" \
     --metadata-overwrite="$rpm_metadata" -o "$rpm"
 if ! command -v rpm2archive >/dev/null 2>&1; then
     echo "rpm2archive is required to audit the generated RPM payload" >&2
@@ -155,7 +167,8 @@ mkdir -p "$rpm_root"
 rpm2archive --nocompression - < "$rpm" | tar -xf - -C "$rpm_root"
 python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$rpm_root"
 test -x "$rpm_root/usr/bin/ebirforms"
-test -d "$rpm_root/usr/share/ebirforms/assets"
+test -f "$rpm_root/usr/share/ebirforms/app/main.js"
+test -d "$rpm_root/usr/share/ebirforms/print-overrides"
 check_launcher "$rpm_root/usr/share/applications" "$rpm_root/usr/share/icons/hicolor"
 
 produced=("$deb" "$rpm" "$tarball")
@@ -187,8 +200,10 @@ sha256sums=('${archive_sha256}')
 package() {
   local app_root="\$srcdir/eBIRForms-Linux-x64-${VERSION}"
   install -Dm755 "\$app_root/bir" "\$pkgdir/usr/bin/ebirforms"
-  install -d "\$pkgdir/usr/share/ebirforms/assets"
-  cp -a "\$app_root/assets/." "\$pkgdir/usr/share/ebirforms/assets/"
+  install -d "\$pkgdir/usr/share/ebirforms/app"
+  cp -a "\$app_root/app/." "\$pkgdir/usr/share/ebirforms/app/"
+  install -d "\$pkgdir/usr/share/ebirforms/print-overrides"
+  cp -a "\$app_root/print-overrides/." "\$pkgdir/usr/share/ebirforms/print-overrides/"
   install -Dm644 "\$app_root/assets/linux/dev.goldcoders.bir.desktop" "\$pkgdir/usr/share/applications/dev.goldcoders.bir.desktop"
   for size in 48 64 128 256 512; do
     install -Dm644 "\$app_root/assets/linux/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png" "\$pkgdir/usr/share/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png"
@@ -232,7 +247,8 @@ PKGBUILD
     tar --zstd -xf "$OUT/${base_name}.pkg.tar.zst" -C "$arch_root"
     python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$arch_root"
     test -x "$arch_root/usr/bin/ebirforms"
-    test -d "$arch_root/usr/share/ebirforms/assets"
+    test -f "$arch_root/usr/share/ebirforms/app/main.js"
+    test -d "$arch_root/usr/share/ebirforms/print-overrides"
     check_launcher "$arch_root/usr/share/applications" "$arch_root/usr/share/icons/hicolor"
     produced+=("$OUT/${base_name}.pkg.tar.zst" "$OUT/ebirforms-bin.PKGBUILD")
 fi
