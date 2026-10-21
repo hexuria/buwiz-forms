@@ -188,10 +188,8 @@ mod tests {
 
     #[test]
     fn overrides_env_override_wins_over_the_packaged_layout() {
-        let root = std::env::temp_dir().join(format!(
-            "bir-shell-overrides-{}",
-            std::process::id()
-        ));
+        let tag = format!("bir-shell-overrides-{}", std::process::id());
+        let root = std::env::temp_dir().join(tag);
         let _ = std::fs::remove_dir_all(&root);
         let bin = root.join("install-dir");
         std::fs::create_dir_all(bin.join("print-overrides")).expect("packaged overrides");
@@ -208,10 +206,8 @@ mod tests {
 
     #[test]
     fn packaged_overrides_beside_the_executable_are_used() {
-        let root = std::env::temp_dir().join(format!(
-            "bir-shell-overrides-pkg-{}",
-            std::process::id()
-        ));
+        let tag = format!("bir-shell-overrides-pkg-{}", std::process::id());
+        let root = std::env::temp_dir().join(tag);
         let _ = std::fs::remove_dir_all(&root);
         let bin = root.join("install-dir");
         let overrides = bin.join("print-overrides");
