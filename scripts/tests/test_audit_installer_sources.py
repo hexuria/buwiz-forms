@@ -17,8 +17,14 @@ class InstallerSourcePolicyTests(unittest.TestCase):
         self.root = Path(temporary_directory.name) / "stage"
         self.root.mkdir()
         (self.root / "assets").mkdir()
+        (self.root / "app").mkdir()
+        (self.root / "print-overrides").mkdir()
         (self.root / "bir.exe").write_bytes(b"exe")
         (self.root / "assets" / "icon.ico").write_bytes(b"icon")
+        (self.root / "app" / "main.js").write_text("// entry", encoding="utf-8")
+        (self.root / "print-overrides" / "stub.css").write_text(
+            "/* override */", encoding="utf-8"
+        )
 
     def add_script(self, files: str) -> Path:
         return self.write_script(f"[Files]\n{files}\n")
@@ -43,7 +49,7 @@ class InstallerSourcePolicyTests(unittest.TestCase):
 
     def test_real_installer_stage_dir_guard_is_supported(self) -> None:
         installer = Path(__file__).resolve().parents[2] / "installer.iss"
-        self.assertEqual(validate_installer_sources(installer, self.root), 2)
+        self.assertEqual(validate_installer_sources(installer, self.root), 4)
 
     def test_full_line_comments_and_quoted_stage_macro_are_not_directives(
         self,

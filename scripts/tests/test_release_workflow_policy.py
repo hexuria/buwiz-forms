@@ -453,7 +453,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("ubuntu-22.04-arm", linux)
         self.assertIn("x86_64-unknown-linux-gnu", linux)
         self.assertIn("aarch64-unknown-linux-gnu", linux)
-        self.assertIn("cargo build --locked --release --target", linux)
+        # The shipped binary builds from the standalone bir-shell workspace.
+        self.assertIn(
+            "cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target",
+            linux,
+        )
         self.assertIn("build-packages.sh --version", linux)
         self.assertIn("smoke-test.sh --out", linux)
         self.assertIn("name: linux-release-${{ matrix.arch }}", linux)
