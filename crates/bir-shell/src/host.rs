@@ -2,6 +2,7 @@
 //! the monorepo but embedding the `bir` host module and our capability policy
 //! instead of the CLI's local-app defaults.
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -17,17 +18,49 @@ use gpui_shell::{
 };
 
 use crate::bir_module;
+use crate::packaged;
 
 /// The JavaScript application directory.
 ///
-/// `BIR_SHELL_APP` wins (used by tests and packaged layouts). Development
-/// builds default to `<repo>/app`; the packaged layout will install a fixed
-/// relative path in S7.
+/// Lookup order:
+/// 1. `BIR_SHELL_APP` — tests and overrides always win.
+/// 2. The packaged layout beside the running executable
+///    ([`crate::packaged`]): `Contents/Resources/app` in a macOS bundle,
+///    `app/` beside the executable in a Windows/Linux install or an unpacked
+///    archive, and `/usr/share/ebirforms/app` for deb/rpm/pacman installs.
+/// 3. Development checkout `<repo>/app` — debug builds only, because a
+///    shipped binary must not resolve a path baked in at build time.
 pub fn app_root() -> PathBuf {
-    if let Some(dir) = std::env::var_os("BIR_SHELL_APP") {
+    app_root_from(
+        std::env::var_os("BIR_SHELL_APP"),
+        std::env::current_exe().ok(),
+    )
+}
+
+fn app_root_from(env_override: Option<OsString>, executable: Option<PathBuf>) -> PathBuf {
+    if let Some(dir) = env_override {
         return PathBuf::from(dir);
     }
+    if let Some(dir) = packaged::dir("app", executable.as_deref(), packaged::application_present) {
+        return dir;
+    }
+    dev_app_root()
+}
+
+/// The checkout's `app/` for development runs and tests.
+#[cfg(debug_assertions)]
+fn dev_app_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../app")
+}
+
+/// No packaged `app/` was found: answer the location it would have occupied
+/// beside the executable so the load failure names the real path.
+#[cfg(not(debug_assertions))]
+fn dev_app_root() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("app")))
+        .unwrap_or_else(|| PathBuf::from("app"))
 }
 
 /// Capabilities the `app/` JavaScript may exercise. Everything not listed is
@@ -195,4 +228,76 @@ fn hold_window_size(window: &mut Window, cx: &mut App, target: Size<Pixels>) {
             }
         })
         .detach();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    struct Tree(PathBuf);
+
+    impl Tree {
+        fn new(name: &str) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "bir-shell-host-{}-{}",
+                std::process::id(),
+                name
+            ));
+            let _ = fs::remove_dir_all(&root);
+            fs::create_dir_all(&root).expect("temp tree");
+            // The resolver canonicalizes the executable path, so compare
+            // against the resolved root (/var -> /private/var on macOS).
+            let root = root.canonicalize().unwrap_or(root);
+            Self(root)
+        }
+    }
+
+    impl Drop for Tree {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn env_override_wins_over_every_layout() {
+        let tree = Tree::new("env-wins");
+        let packaged_app = tree.0.join("install-dir/app");
+        fs::create_dir_all(&packaged_app).expect("packaged app");
+        fs::write(packaged_app.join("main.js"), "// entry").expect("entry");
+        let exe = tree.0.join("install-dir/bir");
+        fs::write(&exe, "").expect("exe");
+
+        let chosen = PathBuf::from("/override/app");
+        assert_eq!(
+            app_root_from(Some(chosen.clone().into_os_string()), Some(exe)),
+            chosen
+        );
+    }
+
+    #[test]
+    fn a_packaged_app_beside_the_executable_is_used() {
+        let tree = Tree::new("packaged-app");
+        let app = tree.0.join("eBIRForms.app/Contents/Resources/app");
+        fs::create_dir_all(&app).expect("bundled app");
+        fs::write(app.join("main.js"), "// entry").expect("entry");
+        let exe = tree.0.join("eBIRForms.app/Contents/MacOS/bir");
+        fs::create_dir_all(exe.parent().unwrap()).expect("MacOS dir");
+        fs::write(&exe, "").expect("exe");
+
+        assert_eq!(app_root_from(None, Some(exe)), app);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn nothing_packaged_falls_back_to_the_checkout() {
+        let tree = Tree::new("dev-fallback");
+        let exe = tree.0.join("install-dir/bir");
+        fs::create_dir_all(exe.parent().unwrap()).expect("exe dir");
+        fs::write(&exe, "").expect("exe");
+
+        let expected = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../app");
+        assert_eq!(app_root_from(None, Some(exe)), expected);
+        assert!(expected.join("main.js").is_file());
+    }
 }

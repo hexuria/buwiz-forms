@@ -70,15 +70,57 @@ pub fn prepare_html(html: &str) -> String {
     }
 }
 
-/// Per-form override layer: `print-overrides/<slug>.css` (directory
-/// overridable with `BIR_PRINT_OVERRIDES`), read at render time and injected
-/// after the frozen CSS for that slug only. The frozen HTML is never edited.
+/// Per-form override layer: `print-overrides/<slug>.css`, read at render time
+/// and injected after the frozen CSS for that slug only. The frozen HTML is
+/// never edited.
+///
+/// Lookup order:
+/// 1. `BIR_PRINT_OVERRIDES` — tests and overrides always win.
+/// 2. The packaged layout beside the running executable
+///    ([`crate::packaged`]): `Contents/Resources/print-overrides` in a macOS
+///    bundle, `print-overrides/` beside the executable in a Windows/Linux
+///    install or an unpacked archive, and `/usr/share/ebirforms/print-overrides`
+///    for deb/rpm/pacman installs.
+/// 3. Development checkout `<repo>/print-overrides` — debug builds only,
+///    because a shipped binary must not resolve a path baked in at build time.
 pub fn overrides_dir() -> std::path::PathBuf {
-    std::env::var_os("BIR_PRINT_OVERRIDES")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../print-overrides")
-        })
+    overrides_dir_from(
+        std::env::var_os("BIR_PRINT_OVERRIDES"),
+        std::env::current_exe().ok(),
+    )
+}
+
+fn overrides_dir_from(
+    env_override: Option<std::ffi::OsString>,
+    executable: Option<std::path::PathBuf>,
+) -> std::path::PathBuf {
+    if let Some(dir) = env_override {
+        return std::path::PathBuf::from(dir);
+    }
+    if let Some(dir) = crate::packaged::dir(
+        "print-overrides",
+        executable.as_deref(),
+        crate::packaged::directory_present,
+    ) {
+        return dir;
+    }
+    dev_overrides_dir()
+}
+
+/// The checkout's `print-overrides/` for development runs and tests.
+#[cfg(debug_assertions)]
+fn dev_overrides_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../print-overrides")
+}
+
+/// No packaged `print-overrides/` was found: the location it would have
+/// occupied beside the executable (which simply reads as "no override").
+#[cfg(not(debug_assertions))]
+fn dev_overrides_dir() -> std::path::PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("print-overrides")))
+        .unwrap_or_else(|| std::path::PathBuf::from("print-overrides"))
 }
 
 /// [`prepare_html`] plus `slug`'s override stylesheet (when `apply_override`
@@ -142,5 +184,45 @@ mod tests {
             super::prepare_html_for("no-such-slug-xyz", html, true),
             super::prepare_html(html)
         );
+    }
+
+    #[test]
+    fn overrides_env_override_wins_over_the_packaged_layout() {
+        let root = std::env::temp_dir().join(format!(
+            "bir-shell-overrides-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let bin = root.join("install-dir");
+        std::fs::create_dir_all(bin.join("print-overrides")).expect("packaged overrides");
+        let exe = bin.join("bir");
+        std::fs::write(&exe, "").expect("exe");
+
+        let chosen = std::path::PathBuf::from("/override/print-overrides");
+        assert_eq!(
+            super::overrides_dir_from(Some(chosen.clone().into_os_string()), Some(exe)),
+            chosen
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn packaged_overrides_beside_the_executable_are_used() {
+        let root = std::env::temp_dir().join(format!(
+            "bir-shell-overrides-pkg-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let bin = root.join("install-dir");
+        let overrides = bin.join("print-overrides");
+        std::fs::create_dir_all(&overrides).expect("packaged overrides");
+        let exe = bin.join("bir");
+        std::fs::write(&exe, "").expect("exe");
+
+        // The resolver canonicalizes the executable path, so compare against
+        // the resolved root (/var -> /private/var on macOS).
+        let expected = overrides.canonicalize().unwrap_or(overrides);
+        assert_eq!(super::overrides_dir_from(None, Some(exe)), expected);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
