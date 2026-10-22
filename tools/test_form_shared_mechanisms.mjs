@@ -9,8 +9,8 @@
 //  - rule 4: 12102020, 12-10-2020 and 12/10/2020 reach the draft as
 //    12/10/2020 and the box shows "Dec 10, 2020" (locked and table boxes
 //    too); the calendar's month and year lists move its grid.
-//  - rule 5: boxes until the text no longer fits, then a plain field; an
-//    email never has boxes; a stacked address is one box over its lines.
+//  - rule 5: a stacked address is one box over its lines — the whole text
+//    goes to the host, and what the host holds is what the box shows.
 //  - rule 6: a box the host reports off is faded, takes no typing, says
 //    what turns it on, and comes alive when the next check says so.
 //  - rule 8: penalties show the computed amounts, locked; one Edit opens
@@ -159,7 +159,7 @@ const periods = mock("./periods.js", { periodLabel: () => "October 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
 await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
 await mod.evaluate();
-const { FormPageActions, renderFormPage, formatMoney, formatLongDate, shownDate, moveCalendar, splitLines, fitsBoxes, needsText } = mod.namespace;
+const { FormPageActions, renderFormPage, formatMoney, formatLongDate, shownDate, moveCalendar, needsText } = mod.namespace;
 
 // The host: values as the field map writes them; a fill takes edits as given.
 let hostValues = {
@@ -396,28 +396,13 @@ assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("paid1")]: "02/1
 assert.equal(input(K("paid1")).value(), "Feb 14, 2026", "and shows it as Feb 14, 2026");
 console.log("PASS rule 4: dates show as Dec 10, 2020 and the calendar changes month and year.");
 
-// ---- Rule 5: character boxes only where the length is known.
+// ---- Rule 5: a stacked address is one box over its lines.
 const long = "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI"; // 61
-assert.equal(JSON.stringify(splitLines(long, [40, 31])), JSON.stringify(["UNIT 5 BLDG A, 123 AYALA AVENUE CORNER ", "PASEO DE ROXAS, MAKATI"]), "line 1 ends at the last space before character 40, the space kept at its end");
-assert.ok(fitsBoxes(long, [40, 31]));
-assert.ok(!fitsBoxes(`${long} CITY 1226 METRO MANILA`, [40, 31]), "past 71 the boxes no longer fit");
-assert.equal(JSON.stringify(splitLines(`${"A".repeat(45)} B`, [40, 31])), JSON.stringify([`${"A".repeat(45)} `, "B"]), "shown only, a word longer than the line stays whole");
-assert.equal(JSON.stringify(splitLines(`${"A".repeat(45)} B`, [40, 31], true)), JSON.stringify(["A".repeat(40), "AAAAA B"]), "split into saved lines, it is cut at the last box");
-assert.ok(!fitsBoxes(`${"A".repeat(45)} B`, [40, 31]), "so it does not fit the boxes");
-assert.ok(!fitsBoxes("A".repeat(41), [40]));
-for (const text of [long, `${long} CITY 1226 METRO MANILA`, `${"A".repeat(45)} B C`, "UNIT 5  BLDG A,   123 AYALA AVENUE  CORNER PASEO DE ROXAS"]) {
-  for (const cut of [false, true]) assert.equal(splitLines(text, [40, 31], cut).join(""), text, "put end to end, the lines are the text");
-}
 frame();
-assert.ok(ids.has(`fp-boxes-${K("zip")}`), "a ZIP code keeps its four boxes");
-assert.ok(ids.has(`fp-boxes-${K("name")}`), "a name shows boxes while it fits");
-assert.ok(!ids.has(`fp-boxes-${K("email")}`), "an email is always a plain field");
-assert.ok(!ids.has(`fp-boxes-${K("phone")}`) && !ids.has(`fp-boxes-${K("sales")}`), "no boxes where the sheet gives none");
 input(K("name")).type("EXAMPLE TRADING AND GENERAL MERCHANDISE CORP");
 input(K("name")).fire("blur");
 await settle(); frame();
 assert.equal(ui.state.values[K("name")], "EXAMPLE TRADING AND GENERAL MERCHANDISE CORP", "the name is kept whole");
-assert.ok(!ids.has(`fp-boxes-${K("name")}`), "past its 40 boxes the name is a plain field");
 // A two-line address is one box over 40 + 31 slots, read from the draft
 // (the host's pools), never from the field map's cut lines.
 assert.equal(ui.state.inputs.has(K("addr2")), false, "the second line has no box of its own");
@@ -428,13 +413,11 @@ assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("addr1")]: long 
 await settle(); frame();
 assert.notEqual(ui.state.values[K("addr1")], long, "(the field map cuts it)");
 assert.equal(input(K("addr1")).value(), long, "the box shows the whole address");
-assert.ok(ids.has(`fp-boxes-${K("addr1")}`), "71 slots hold 61 characters");
 const longer = `${long} CITY 1226 METRO MANILA`;
 input(K("addr1")).type(longer);
 input(K("addr1")).fire("blur");
 await settle(); frame();
 assert.equal(ui.poolText({ pool: { keys: [K("addr1")] } }), longer, "never cut");
-assert.ok(!ids.has(`fp-boxes-${K("addr1")}`), "past 71 both lines are one plain field");
 // Another box's edit leaves the address as the host holds it.
 input(K("phone")).type("0287654321");
 input(K("phone")).fire("blur");
@@ -452,7 +435,7 @@ input(K("line1")).fire("blur");
 assert.equal(JSON.stringify(lastFill()[3]), JSON.stringify({ [K("line1")]: "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226" }), "sent as one text");
 await settle(); frame();
 assert.equal(input(K("line1")).value(), "UNIT 5 BLDG A, 123 AYALA AVENUE CORNER PASEO DE ROXAS, MAKATI CITY 1226", "the box keeps what was typed");
-console.log("PASS rule 5: boxes until the text no longer fits; an address is one pool.");
+console.log("PASS rule 5: a stacked address is one box over its lines.");
 
 // ---- Rule 6: a box another answer turns off looks off and says why.
 assert.equal(needsText("Needs Amended Return = Yes"), "Needs Amended Return = Yes", "the host's tag shows as it is");
