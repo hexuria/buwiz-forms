@@ -11,6 +11,7 @@
 mod auth_limiter;
 mod bir_module;
 mod blitz_render;
+mod cloud_account;
 mod dashboard_module;
 mod host;
 mod logging;

@@ -1436,7 +1436,7 @@ declare module "gpui-kit" {
     /** Sets the width. */
     w<Self extends Element>(this: Self, value: Length): Self;
 
-    // The 3146 no-argument style methods, generated from GPUI's reflection
+    // The 3148 no-argument style methods, generated from GPUI's reflection
     // table. A name here is a name the runtime dispatches, and the
     // documentation is GPUI's own.
     /**
@@ -2917,6 +2917,10 @@ declare module "gpui-kit" {
      * [Docs](https://tailwindcss.com/docs/cursor)
      */
     cursor_w_resize<Self extends Element>(this: Self): Self;
+    /** Draws a debug border around this element. */
+    debug<Self extends Element>(this: Self): Self;
+    /** Draws a debug border on all conforming elements below this element. */
+    debug_below<Self extends Element>(this: Self): Self;
     debug_blue<Self extends Element>(this: Self): Self;
     debug_green<Self extends Element>(this: Self): Self;
     debug_pink<Self extends Element>(this: Self): Self;
@@ -27875,6 +27879,28 @@ declare module "bir" {
   /** A screen failure (`error` / `warn` / `info` / `debug`) for the Logs tab and the daily log file. Secrets are redacted. */
   export function record_screen_log(level: string, message: string): null;
 
+  export interface CloudAccountStatus {
+      server_url: string;
+      server_url_source: string;
+      signed_in: boolean;
+      email: string | null;
+      user_id: string | null;
+      offline: boolean;
+      detail: string;
+  }
+  export interface CloudSignInStart {
+      user_code: string;
+      verification_uri: string;
+      verification_uri_complete: string;
+      browser_opened: boolean;
+  }
+  export function cloud_account_status(): CloudAccountStatus;
+  export function cloud_account_set_server_url(url: string): CloudAccountStatus;
+  export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
+  export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
+  export function cloud_account_refresh(): Promise<CloudAccountStatus>;
+  export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
+
   export type BranchFieldName = "rdo_code" | "registered_address" | "zip_code" | "phone" | "email";
   export interface BranchFacts {
       rdo_code: string;
@@ -28190,6 +28216,8 @@ declare module "bir" {
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
   /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
   export function screen_form_print(form_code: string, draft: object): { path: string };
+  /** Print preview of a Form library sample as the page holds it, staged edits included and its held boxes blank. Nothing is saved and no period is needed; the preview then follows `screen_form_preview_sync`. */
+  export function screen_form_print_sample(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): { path: string };
   /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
   export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
   /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */

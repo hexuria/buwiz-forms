@@ -2188,11 +2188,13 @@ pub fn module() -> HostModule {
         .function("purge_archived_jobs", |_| purge_archived_jobs())
         .function("job_log_tail", |_| job_log_tail())
         .function("record_screen_log", record_screen_log);
+    let module = crate::cloud_account::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}",
+        crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,

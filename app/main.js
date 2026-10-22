@@ -39,6 +39,7 @@ import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
 import { SecurityActions } from "./shell/security.js";
+import { AccountActions } from "./shell/account.js";
 import { SetupChange } from "./shell/setup_change.js";
 import { renderCronTasksPage } from "./shell/cron_tasks.js";
 
@@ -952,6 +953,7 @@ class BirApp extends View {
     this.setup = { step: "choose", pinOtp: OtpState.new(4, { masked: true }), key: null };
     this.setupPending = null;
     this.security = new SecurityActions(this);
+    this.account = new AccountActions(this);
     this.setupChange = new SetupChange(this);
     this.applyScope();
   }

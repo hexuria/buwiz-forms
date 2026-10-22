@@ -69,6 +69,9 @@ bir-print = { path = "../bir-print" }
 anyhow = "1"
 chrono = "0.4"
 hex = "0.4"
+# OS keychain for the Buwiz refresh token. Without a backend feature, keyring
+# 3.x keeps secrets in memory on Linux, so name Secret Service explicitly.
+keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
 rfd = "0.17.2"
 reqwest = { version = "0.12", features = ["rustls-tls", "blocking"], default-features = false }
 sha2 = "0.10"

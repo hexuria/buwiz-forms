@@ -23,6 +23,7 @@ import {
 } from "./ui.js";
 import { SecurityCard } from "./security.js";
 import { SetupCard } from "./setup_change.js";
+import { AccountCard } from "./account.js";
 
 
 function jobChip(cx, status) {
@@ -113,7 +114,9 @@ export function renderSettings(cx, app, _width) {
     .flex()
     .flex_col()
     .child(PageHeader(cx, { title: "Settings", lede: "Preferences for this computer, and your PIN. Taxpayer details live in each tax profile." }))
-    .child(div().mt(28).child(SectionTitle(cx, "Appearance", true)))
+    .child(div().mt(28).child(SectionTitle(cx, "Account", true)))
+    .child(AccountCard(cx, app))
+    .child(SectionTitle(cx, "Appearance"))
     .child(appearance);
   const version = `eBIRForms ${app.info.app_version || ""}`;
   // A setup change just moved the admin. Until the old session signs out,
