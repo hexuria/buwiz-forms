@@ -5,7 +5,7 @@ use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
     excise_places, form_1600wp, form_1601c, form_1601eq, form_1601fq, form_1701a,
-    form_1702mx_official, form_1702q, form_2000, form_2200s, form_2550m,
+    form_1702mx_official, form_1702q, form_2000, form_2200s, form_2550m, form_2551q,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -225,6 +225,47 @@ pub(super) fn fill(
         *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
         return Ok(());
     }
+    // 2551Q Schedule 1: a choice is the official option number (PT010 has
+    // a 3% and a 1% entry); the row takes that ATC and keeps its amount, and
+    // the rate follows the period on recompute. A blank choice clears it.
+    if kind == AgentFormKind::Form2551Q
+        && let Some(row) = atc_2551q_row(key)
+        && let Some(choice) = value.as_str()
+    {
+        let mut typed: form_2551q::Form2551QDraft =
+            serde_json::from_value(draft.clone()).map_err(|e| e.to_string())?;
+        if typed.item_13_election == form_2551q::Item13Election::EightPercent {
+            return Err("Schedule 1 is disabled while Item 13 is the 8% option.".to_string());
+        }
+        while typed.schedule_1.len() <= row {
+            typed.schedule_1.push(form_2551q::Schedule1Row {
+                atc: String::new(),
+                atc_description: String::new(),
+                taxable_amount: 0.0,
+                tax_rate: 0.0,
+                tax_due: 0.0,
+            });
+        }
+        let current = &mut typed.schedule_1[row];
+        if choice.trim().is_empty() {
+            current.atc.clear();
+            current.atc_description.clear();
+            current.tax_rate = 0.0;
+        } else {
+            let option = atc_2551q_options()["options"]
+                .as_array()
+                .and_then(|options| options.iter().find(|o| o["value"] == choice))
+                .ok_or_else(|| "Choose an ATC from this return's list.".to_string())?;
+            let code = option["code"].as_str().unwrap_or_default();
+            let mut chosen = form_2551q::Schedule1Row::new(code)
+                .ok_or_else(|| format!("ATC {code} is not in this return's list."))?;
+            chosen.taxable_amount = current.taxable_amount;
+            *current = chosen;
+        }
+        current.recompute();
+        *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
     let loc = location(kind, key);
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
     match lift {
@@ -279,6 +320,25 @@ pub(super) fn inactive_schedule(kind: AgentFormKind, key: &str, draft: &Value) -
     .ok()
     .and_then(|transaction| transaction.schedule());
     selected != u8::try_from(schedule).ok()
+}
+
+/// 2551Q's official Schedule 1 ATC options, numbered as the XML holds them.
+fn atc_2551q_options() -> &'static Value {
+    static ATCS: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    ATCS.get_or_init(|| {
+        serde_json::from_str(include_str!(
+            "../../../bir-core/data/official-xml/2551q-v2018-atc-options.json"
+        ))
+        .expect("pinned 2551Q ATC options")
+    })
+}
+
+/// The Schedule 1 row (0-based) a 2551Q `drpATC1..6` box edits.
+fn atc_2551q_row(key: &str) -> Option<usize> {
+    key.strip_prefix("drpATC")
+        .and_then(|n| n.parse::<usize>().ok())
+        .filter(|n| (1..=form_2551q::FORM_2551Q_XML_SCHEDULE_ROW_CAPACITY).contains(n))
+        .map(|n| n - 1)
 }
 
 fn atc_2000_row(kind: AgentFormKind, key: &str) -> Option<usize> {
@@ -783,18 +843,12 @@ fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Va
                 })
                 .collect(),
         ),
-        // These six boxes are currently locked by the agent seam; supplying
-        // labels does not unlock them or implement the missing row editor.
+        // Each choice writes its row's ATC and description (the agent
+        // form's `drpATC1..6` choice bindings); the rate follows the period.
         "2551Q" if key.starts_with("drpATC") => {
             // The field map holds a 1-based option value, not PT010 etc.
             // In particular PT010 has separate 3% and 1% entries.
-            static ATCS: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
-            let atcs = ATCS.get_or_init(|| {
-                serde_json::from_str(include_str!(
-                    "../../../bir-core/data/official-xml/2551q-v2018-atc-options.json"
-                ))
-                .expect("pinned 2551Q ATC options")
-            });
+            let atcs = atc_2551q_options();
             Some(
                 atcs["options"]
                     .as_array()
