@@ -81,6 +81,9 @@ fn capabilities() -> Capabilities {
                 "BIR_SFTP_DRY_RUN",
                 "EBIR_TEST_ENV",
                 "BIR_SHELL_START",
+                // Test hook: install a verified update this many seconds
+                // after the prompt appears, without a click.
+                "BIR_UPDATE_INSTALL_AFTER_SECS",
             ]
             .iter()
             .map(|name| name.to_string()),
@@ -115,6 +118,11 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
             // it: queued returns send while the shell runs, with no painted
             // `bir` or `bir-headless` beside it.
             bir_module::open_database_at_launch();
+            // Help → Check for Updates…, then the background feed check.
+            // `updater_menu` is a standalone Help menu so it does not depend
+            // on the application-menu branch; see that module for the rebase.
+            crate::updater_menu::install(cx);
+            crate::updater::start();
 
             on_exit_request(|request, _window, _cx| {
                 std::process::exit(request.code());

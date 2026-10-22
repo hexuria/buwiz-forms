@@ -336,3 +336,12 @@ jobs:
             || gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes \
             || gh release view "$TAG" >/dev/null 2>&1
           gh release upload "$TAG" ./*.dmg ./*.sha256 --clobber
+
+      - name: Check out the manifest script
+        uses: actions/checkout@v4
+
+      - name: Publish update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 scripts/publish_update_manifest.py --tag "$TAG" --repo "$GH_REPO"

@@ -37,6 +37,7 @@ import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/
 import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
+import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
 import { SecurityActions } from "./shell/security.js";
 import { SetupChange } from "./shell/setup_change.js";
 import { renderCronTasksPage } from "./shell/cron_tasks.js";
@@ -141,33 +142,61 @@ class BirApp extends View {
     // without the agent feature answers null.
     cx.timer.every(50, (cx) => this.applyAgent(cx));
 
+    // The host checks for a release on its own thread. Polling is how the
+    // prompt appears: the host does not push into the script.
+    this.updateStatus = null;
+    this.updateInstallArmed = false;
+    const watchUpdate = (cx) => {
+      if (pollUpdateStatus(this)) cx.notify();
+      const delay = Number(process.env.BIR_UPDATE_INSTALL_AFTER_SECS || "");
+      if (
+        delay > 0 &&
+        !this.updateInstallArmed &&
+        this.updateStatus &&
+        this.updateStatus.phase === "ready"
+      ) {
+        this.updateInstallArmed = true;
+        cx.timer.after(delay * 1000, () => installReadyUpdate());
+      }
+    };
+    cx.timer.after(500, (cx) => watchUpdate(cx));
+    cx.timer.every(1000, (cx) => watchUpdate(cx));
+
     // Key bindings travel the focus path; give the root the keyboard at
     // launch so shortcuts work before anything else is clicked.
     cx.timer.after(50, () => this.focusRoot.focus());
 
     // gpui-shell re-runs `render` only when script state changes, and gives
-    // scripts no resize event, so layout widths computed from the window size
-    // (pixel widths keep text layout cheap) would go stale after a resize.
-    // Poll the viewport and re-render when it changes.
+    // scripts no resize event. Widths taken from the window would stay at the
+    // last poll while the pane's flex layout moves every frame. Poll and
+    // re-render when the size changes. The docked/overlay choice waits until
+    // the size has held still: a drag through 860 px must not turn the sidebar
+    // into an overlay on top of the page for a frame.
     this.lastViewport = "";
     this.wasNarrow = null;
+    this.viewportSettled = false;
     cx.timer.every(200, (cx) => {
       if (this.view === "form") this.formUi.refreshLayout();
       const vp = window.viewport_size();
       const key = `${Math.round(vp.width)}x${Math.round(vp.height)}`;
       if (key !== this.lastViewport) {
-        // Crossing below 860 px turns the sidebar and panel into overlays;
-        // they start closed there rather than covering the page.
-        const narrow = vp.width < BREAK.overlays;
-        if (narrow && this.wasNarrow === false) {
-          this.sidebarOpen = false;
-          this.panel = null;
-        }
-        if (!narrow && this.wasNarrow === true) this.sidebarOpen = true;
-        this.wasNarrow = narrow;
         this.lastViewport = key;
+        this.viewportSettled = false;
         cx.notify();
+        return;
       }
+      if (this.viewportSettled) return;
+      this.viewportSettled = true;
+      // Crossing below 860 px turns the sidebar and panel into overlays;
+      // they start closed there rather than covering the page.
+      const narrow = vp.width < BREAK.overlays;
+      if (narrow && this.wasNarrow === false) {
+        this.sidebarOpen = false;
+        this.panel = null;
+      }
+      if (!narrow && this.wasNarrow === true) this.sidebarOpen = true;
+      this.wasNarrow = narrow;
+      cx.notify();
     });
 
     // Shortcuts use Cmd on macOS and Ctrl elsewhere; both chords are bound
@@ -510,7 +539,10 @@ class BirApp extends View {
   // ---------------------------------------------------------------- navigation
 
   narrow() {
-    return window.viewport_size().width < BREAK.overlays;
+    // The last viewport that held still. While a resize is in progress, keep
+    // that dock mode so a transient reading does not cover the page.
+    if (this.wasNarrow === null) return window.viewport_size().width < BREAK.overlays;
+    return this.wasNarrow;
   }
 
   go(view, cx) {
@@ -707,6 +739,12 @@ class BirApp extends View {
   setPref(key, value, cx) {
     this.prefs[key] = value;
     this.writeLocal(PREFS_KEY, this.prefs);
+    cx.notify();
+  }
+
+  setAutoUpdateDownload(enabled, cx) {
+    setAutoUpdateDownload(enabled);
+    if (this.updateStatus) this.updateStatus.auto_download = Boolean(enabled);
     cx.notify();
   }
 
@@ -1442,7 +1480,7 @@ class BirApp extends View {
   /** Width of the main surface's content column, from the window size. */
   layout() {
     const vp = window.viewport_size();
-    const narrow = vp.width < BREAK.overlays;
+    const narrow = this.narrow();
     const sidebarDocked = this.sidebarOpen && !narrow;
     const panelDocked = Boolean(this.panel) && !narrow;
     const left = sidebarDocked ? SIZE.sidebar : SIZE.mainInset;
@@ -1469,8 +1507,10 @@ class BirApp extends View {
     // taxpayer is drawn behind them. First launch's "Just me" types its
     // taxpayer on the normal New taxpayer page; a help desk's recovery key
     // stays on screen after the mode is saved, until it was written down.
-    if ((this.needsSetup() && this.setupPending !== "solo") || this.setup.step === "helpdesk-key") return renderSetup(cx, this);
-    if (this.appLocked) return renderSignIn(cx, this);
+    if ((this.needsSetup() && this.setupPending !== "solo") || this.setup.step === "helpdesk-key") {
+      return renderUpdatePrompt(cx, this, renderSetup(cx, this));
+    }
+    if (this.appLocked) return renderUpdatePrompt(cx, this, renderSignIn(cx, this));
     const L = this.layout();
 
     // A form on a wide window brings its own two scroll areas (the part
@@ -1508,7 +1548,11 @@ class BirApp extends View {
               .px(L.padX)
               .pt(L.mainWidth < BREAK.narrowContent ? 20 : 28)
               .pb(56)
-              .child(div().flex().flex_col().w(L.column).child(this.renderView(cx, L.column))),
+              // Fill the pane, capped by the settled column. A pixel `w()` from the
+              // last poll stays wider than the pane during a drag and, centred,
+              // paints under the sidebar. `w_full` tracks the pane every frame;
+              // a stale `max_w` only delays growing, it does not overflow.
+              .child(div().flex().flex_col().w_full().max_w(L.column).min_w(0).child(this.renderView(cx, L.column))),
           ),
       ));
 
@@ -1594,6 +1638,6 @@ class BirApp extends View {
         Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress } : {}),
       );
     }
-    return root;
+    return renderUpdatePrompt(cx, this, root);
   }
 }
