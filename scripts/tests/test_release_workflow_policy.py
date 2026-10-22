@@ -443,7 +443,12 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         linux_job = self.job("build-linux")
         self.assertIn("uses: ./.github/workflows/release-linux.yml", linux_job)
         self.assertIn("tag: ${{ github.ref_name }}", linux_job)
+        # The Linux build compiles the Google OAuth client in like macOS and
+        # Windows do; a called workflow only sees it through inherited secrets.
+        self.assertIn("secrets: inherit", linux_job)
         linux = self.linux_release_workflow
+        self.assertIn("GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}", linux)
+        self.assertIn("GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}", linux)
         self.assertIn('if [[ -n "$RELEASE_TAG" ]]; then', linux)
         self.assertNotIn('GITHUB_EVENT_NAME" == workflow_call', linux)
         self.assertIn(

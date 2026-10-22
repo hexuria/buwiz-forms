@@ -133,6 +133,10 @@ jobs:
     uses: ./.github/workflows/release-linux.yml
     with:
       tag: ${{ github.ref_name }}
+    # A called workflow does not see this file's env, so the Google OAuth
+    # client the shell compiles in (option_env! in bir-core) has to reach it
+    # as secrets, the same way build-windows gets them.
+    secrets: inherit
 
   # ── Create GitHub Release ───────────────────────────────────────────────
   release:
