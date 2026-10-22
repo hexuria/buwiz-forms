@@ -7773,19 +7773,37 @@ mod tests {
     }
 
     #[test]
-    fn catalog_2551q_uses_official_option_numbers_without_unlocking_rows() {
+    fn catalog_2551q_rows_take_an_official_atc_choice() {
         setup();
         let opened = open("2551Q", 3);
-        let rows = opened["options"]["drpATC1"].as_array().unwrap();
+        let rows = opened["options"]["drpATC2"].as_array().unwrap();
         assert_eq!(rows.len(), 23);
         for value in ["1", "23"] {
             let row = rows.iter().find(|o| o["value"] == value).unwrap();
             assert!(row["label"].as_str().unwrap().contains("PT010"));
         }
-        let filled = fill("2551Q", &opened["draft"], json!({"drpATC1": "1"}));
-        assert!(filled["rejected"].get("drpATC1").is_some());
-        assert_eq!(filled["draft"]["schedule_1"], opened["draft"]["schedule_1"]);
-        assert_eq!(filled["values"]["drpATC1"], opened["values"]["drpATC1"]);
+        // A row other than PT010's takes any official ATC, and a blank
+        // choice clears it again.
+        let other = rows
+            .iter()
+            .find(|o| !o["label"].as_str().unwrap().contains("PT010"))
+            .unwrap();
+        let code = other["label"]
+            .as_str()
+            .unwrap()
+            .split(" — ")
+            .next()
+            .unwrap();
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"drpATC2": other["value"]}),
+        );
+        assert!(filled["rejected"].get("drpATC2").is_none(), "{filled}");
+        assert_eq!(filled["draft"]["schedule_1"][1]["atc"], code);
+        let cleared = fill("2551Q", &filled["draft"], json!({"drpATC2": ""}));
+        assert!(cleared["rejected"].get("drpATC2").is_none(), "{cleared}");
+        assert_eq!(cleared["draft"]["schedule_1"][1]["atc"], "");
     }
 
     #[test]
