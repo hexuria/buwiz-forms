@@ -795,19 +795,13 @@ impl Form2551QDraft {
             // legacy profile does not own its historical commencement date.
             1
         } else {
+            // The redesigned tax profile records no commencement date, so a
+            // later quarter without one cannot be classified: the filer's own
+            // Item 13 answer stands, as on the official form.
             return None;
         };
 
         Some(self.quarter == initial_quarter)
-    }
-
-    fn item_13_needs_business_start_snapshot(&self) -> bool {
-        matches!(self.taxpayer_type, Some(TaxpayerType::Individual))
-            && self.quarter != 1
-            && self.business_start_date.is_none()
-            && self.schedule_1.iter().any(|row| row.atc.trim() == "PT010")
-            && (1..=4).contains(&self.quarter)
-            && (1..=12).contains(&self.year_end_month)
     }
 
     /// A later return with Section 116 activity must inherit the taxpayer's
@@ -1758,12 +1752,6 @@ impl FormValidator for Form2551QDraft {
             errors.push((
                 "taxpayer_type".to_string(),
                 "Taxpayer type snapshot is required to determine Item 13 applicability; reopen this draft from its taxpayer profile"
-                    .to_string(),
-            ));
-        } else if self.item_13_needs_business_start_snapshot() {
-            errors.push((
-                "business_start_date".to_string(),
-                "Business start date is required to determine whether this is a new registrant's initial-quarter return; update the taxpayer profile and reopen this draft"
                     .to_string(),
             ));
         }
@@ -3197,16 +3185,30 @@ mod tests {
     }
 
     #[test]
-    fn later_quarter_without_business_start_snapshot_fails_closed() {
+    fn later_quarter_without_business_start_accepts_the_filers_item_13() {
+        // The redesigned tax profile records no commencement date; a later
+        // quarter without one is an existing registrant's return and must not
+        // block filing on a box the official form never asks for.
         let mut profile = test_profile();
         profile.business_start_date = None;
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 2);
         draft.item_13_election = Item13Election::NotApplicable;
 
         assert_eq!(draft.item_13_is_applicable(), None);
-        assert!(draft.validate().iter().any(|(field, message)| {
-            field == "business_start_date" && message.contains("initial-quarter return")
-        }));
+        for election in [
+            Item13Election::NotApplicable,
+            Item13Election::Graduated,
+            Item13Election::EightPercent,
+        ] {
+            draft.item_13_election = election;
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(field, _)| field != "business_start_date" && field != "item_13_election"),
+                "{election:?} must be accepted when the start date is unknown"
+            );
+        }
     }
 
     #[test]
