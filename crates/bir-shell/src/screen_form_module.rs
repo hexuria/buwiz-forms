@@ -241,6 +241,8 @@ export function screen_form_validate(form_code: string, draft: object): Promise<
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
 /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
 export function screen_form_print(form_code: string, draft: object): { path: string };
+/** Print preview of a Form library sample as the page holds it, staged edits included and its held boxes blank. Nothing is saved and no period is needed; the preview then follows `screen_form_preview_sync`. */
+export function screen_form_print_sample(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): { path: string };
 /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
 export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
@@ -267,6 +269,7 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("screen_form_validate", screen_form_validate)
         .function("screen_form_save", screen_form_save)
         .function("screen_form_print", screen_form_print)
+        .function("screen_form_print_sample", screen_form_print_sample)
         .function("screen_form_preview_sync", screen_form_preview_sync)
         .function("screen_form_queue", screen_form_queue)
         .function("screen_form_cancel_queue", screen_form_cancel_queue)
@@ -5913,9 +5916,96 @@ fn screen_form_print(arguments: &HostArguments) -> HostResult {
     })
 }
 
+/// The page's draft (argument 1) with its staged edits (argument 2, the
+/// boxes opened with Edit as argument 3) applied to a copy, recomputed, in
+/// memory. A Form library sample's mark comes back with the held boxes the
+/// edits did not fill, which print blank as the page shows them.
+fn draft_with_staged_edits(
+    kind: AgentFormKind,
+    arguments: &HostArguments,
+) -> Result<(Value, Option<SampleMark>), HostError> {
+    let mut draft = draft_argument(arguments, 1)?;
+    let mut sample = take_sample_mark(&mut draft);
+    take_amendment_mark(&mut draft);
+    if let Some(edits) = arguments.value(2).ok().and_then(|v| v.as_object()) {
+        let edits: Map<String, Value> =
+            edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
+        if !edits.is_empty() {
+            let unlocked = unlocked_argument(arguments, 3);
+            let rejected =
+                apply_screen_edits(kind, &mut draft, &edits, true, &unlocked).unwrap_or_default();
+            let _ = agent::compute(kind, &mut draft);
+            if let Some(mark) = &mut sample {
+                mark.blank
+                    .retain(|key| !edits.contains_key(key) || rejected.contains_key(key));
+            }
+        }
+    }
+    Ok((draft, sample))
+}
+
+/// The print sheet's fields for `draft`; a sample's held boxes print blank.
+fn page_print_map(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+    sample: Option<&SampleMark>,
+) -> Result<
+    (
+        BTreeMap<String, String>,
+        Option<bir_print::frozen_html::ReceiptPage>,
+    ),
+    HostError,
+> {
+    let (mut fields, receipt) = print_map(db, kind, draft)?;
+    if let Some(mark) = sample {
+        for key in &mark.blank {
+            if let Some(value) = fields.get_mut(key) {
+                value.clear();
+            }
+        }
+    }
+    Ok((fields, receipt))
+}
+
+/// Print preview of a Form library sample as the page holds it (decided
+/// 2026-10-22): its draft with the staged edits, in memory, its held boxes
+/// blank. It needs no period and writes nothing to the database: no return
+/// is stored. Edits then reach it through `screen_form_preview_sync`.
+fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
+    let code = arguments.string(0)?.to_owned();
+    let kind = kind_of(&code)?;
+    let (draft, sample) = draft_with_staged_edits(kind, arguments)?;
+    if sample.is_none() {
+        return Err(host_error(format!(
+            "Form {code}: only a Form library sample previews unsaved; print a return with screen_form_print"
+        )));
+    }
+    let slug = crate::bir_module::print_slug_for(kind.form_code())
+        .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
+    let identity = agent::identity(kind, &draft).map_err(host_error)?;
+    with_database(|db| {
+        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
+        let profile = db
+            .get_profile_by_tin(&identity.tin)
+            .ok()
+            .flatten()
+            .map(|p| p.full_name.clone());
+        crate::bir_module::open_print_preview(
+            slug,
+            kind.form_code(),
+            identity.taxable_year,
+            &fields,
+            receipt.as_ref(),
+            profile,
+        )
+    })
+}
+
 /// Live sync form -> preview: apply the page's staged edits to a copy of the
 /// draft, fill the frozen sheet in memory, staticize it, and hand it to the
 /// open preview window for this form (which re-renders only changed sheets).
+/// A Form library sample's preview follows it the same way, held boxes blank.
 fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     let started = std::time::Instant::now();
     let code = arguments.string(0)?.to_owned();
@@ -5923,25 +6013,11 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     if !crate::print_preview_window::has_live(kind.form_code()) {
         return Ok(HostValue::Bool(false));
     }
-    let mut draft = draft_argument(arguments, 1)?;
-    // A sample has no print preview to follow.
-    if take_sample_mark(&mut draft).is_some() {
-        return Ok(HostValue::Bool(false));
-    }
-    take_amendment_mark(&mut draft);
-    if let Some(edits) = arguments.value(2).ok().and_then(|v| v.as_object()) {
-        let edits: Map<String, Value> =
-            edits.iter().map(|(k, v)| (k.clone(), to_json(v))).collect();
-        if !edits.is_empty() {
-            let unlocked = unlocked_argument(arguments, 3);
-            let _ = apply_screen_edits(kind, &mut draft, &edits, true, &unlocked);
-            let _ = agent::compute(kind, &mut draft);
-        }
-    }
+    let (draft, sample) = draft_with_staged_edits(kind, arguments)?;
     let slug = crate::bir_module::print_slug_for(kind.form_code())
         .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
     with_database(|db| {
-        let (fields, receipt) = print_map(db, kind, &draft)?;
+        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
         let slug = slug.to_string();
         // Template fill + prepare + staticize run off the UI thread.
         let produce = Box::new(move || {
@@ -13140,6 +13216,107 @@ mod tests {
                 "{code}: not replaced"
             );
         }
+    }
+
+    /// Print preview of a Form library sample (decided 2026-10-22): opens at
+    /// once from the page's draft and staged edits, even with no period set,
+    /// and stores nothing, on every form with a print sheet.
+    #[test]
+    fn a_sample_previews_from_the_page_and_stores_no_return() {
+        setup();
+        let stored = || raw_count("SELECT COUNT(*) FROM form_drafts");
+        let before = stored();
+        for kind in AgentFormKind::all() {
+            let code = kind.form_code();
+            if crate::bir_module::print_slug_for(code).is_none() {
+                continue;
+            }
+            let shown = sample(code);
+            let path = call(
+                "screen_form_print_sample",
+                vec![code.into(), json(shown["draft"].clone()), json(json!({}))],
+            )
+            .unwrap_or_else(|error| panic!("{code} previews as a sample: {error}"));
+            let path = path["path"].as_str().expect("a preview path");
+            assert!(std::path::Path::new(path).exists(), "{code}: {path}");
+            assert_eq!(
+                stored(),
+                before,
+                "{code}: a sample's preview stores nothing"
+            );
+        }
+
+        let sheets = "frm2551Qv2018:txtSheets";
+        let shown = sample("2551Q");
+        // The open preview follows the sample's edits.
+        let synced = call(
+            "screen_form_preview_sync",
+            vec![
+                "2551Q".into(),
+                json(shown["draft"].clone()),
+                json(json!({ sheets: "4" })),
+            ],
+        )
+        .expect("the preview syncs");
+        assert_eq!(
+            synced,
+            Value::Bool(true),
+            "a sample's preview follows edits"
+        );
+        assert_eq!(stored(), before);
+
+        // A return still prints only once saved: the sample is no return.
+        let refused = call(
+            "screen_form_print",
+            vec!["2551Q".into(), json(shown["draft"].clone())],
+        );
+        assert!(refused.is_err(), "screen_form_print takes a return");
+    }
+
+    /// What a sample's preview prints: the page's staged edits, and its held
+    /// boxes blank as the page shows them.
+    #[test]
+    fn a_samples_preview_prints_its_edits_and_its_held_boxes_blank() {
+        setup();
+        let year = "frm2551Qv2018:txtYear";
+        let sheets = "frm2551Qv2018:txtSheets";
+        let kind = kind_of("2551Q").unwrap();
+        let shown = sample("2551Q");
+        assert!(strings(&shown["blank"]).contains(year));
+        let printed = |edits: Value| {
+            let arguments = args(vec![
+                "2551Q".into(),
+                json(shown["draft"].clone()),
+                json(edits),
+            ]);
+            let (draft, mark) = draft_with_staged_edits(kind, &arguments).unwrap();
+            assert!(mark.is_some(), "the sample's mark");
+            with_database(|db| page_print_map(db, kind, &draft, mark.as_ref()))
+                .unwrap()
+                .0
+        };
+        let fields = printed(json!({ sheets: "3" }));
+        assert_eq!(
+            fields.get(sheets).map(String::as_str),
+            Some("3"),
+            "{fields:?}"
+        );
+        assert_eq!(
+            fields.get(year).map(String::as_str),
+            Some(""),
+            "the held year"
+        );
+        // The same draft as a return prints its placeholder year.
+        let mut unmarked = shown["draft"].clone();
+        unmarked.as_object_mut().unwrap().remove(SAMPLE_MARK);
+        let whole = with_database(|db| print_map(db, kind, &unmarked))
+            .unwrap()
+            .0;
+        assert_eq!(
+            whole.get(year).map(String::as_str),
+            Some(sample_year().to_string().as_str()),
+            "{whole:?}"
+        );
     }
 
     /// The profile with the facts a filer may leave out left blank.

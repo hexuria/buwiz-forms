@@ -1016,7 +1016,7 @@ export class FormPageActions {
    * write) and asks the host about the period PERIOD_ASK_DELAY after the
    * last change, so a year typed digit by digit is asked about once. Any
    * change closes an offer still on screen and forgets the last answer: an
-   * offer, Start a return and the fast lane only ever act on the answer for
+   * offer, Save and the fast lane only ever act on the answer for
    * the period the boxes show now. A new complete period rebuilds the
    * sample for it, with what the filer typed elsewhere applied again; a
    * period that already has a stored return is offered (offerExisting),
@@ -1058,7 +1058,6 @@ export class FormPageActions {
         r = await this.app.store.call("screen_form_sample_period", s.tin, s.code, JSON.parse(asked));
       } catch (e) {
         if (s.periodInFlight === asked) s.periodInFlight = null;
-        s.startAfterAnswer = false;
         if (token === this.token) this.app.toast(message(e), acx, "triangle-alert");
         return;
       }
@@ -1066,13 +1065,7 @@ export class FormPageActions {
       if (token !== this.token || asked !== this.state.periodAsked) return;
       s.periodAnswered = asked;
       this.takePeriod(r, acx);
-      // Start a return pressed while this answer was pending acts on it now
-      // (an existing return was offered by the answer itself).
-      if (s.startAfterAnswer) {
-        s.startAfterAnswer = false;
-        if (this.state === s && !s.existing) this.startReturn(acx);
-      }
-      // Save (or Queue or Print) waiting for this answer goes on with it.
+      // Save (or Queue) waiting for this answer goes on with it.
       if (s.saveAfterAnswer) {
         const { then } = s.saveAfterAnswer;
         s.saveAfterAnswer = null;
@@ -1334,34 +1327,6 @@ export class FormPageActions {
       this.toPlaceholder((s.periodToken = (s.periodToken || 0) + 1), cx, null);
     }
     this.notify(cx);
-  }
-
-  /**
-   * Start a return from a sample: the return its period matched (exactly
-   * that one, by its stored key), offered first when one is stored; New
-   * return while the period is not set, and always for a form whose
-   * returns are numbered entries rather than periods (no `opens`).
-   */
-  startReturn(cx) {
-    const s = this.state;
-    // A period change still waiting for its answer (the pause before the
-    // ask): ask now, and act once the answer is in.
-    if (s.periodAsked && s.periodAnswered !== s.periodAsked && Object.keys(s.periodValues || {}).length) {
-      s.startAfterAnswer = true;
-      if (s.periodInFlight !== s.periodAsked) {
-        s.periodSeq = (s.periodSeq || 0) + 1;
-        this.askPeriod(s.periodAsked, cx);
-      }
-      return;
-    }
-    if (!s.opens) return this.app.startNewReturn(cx, s.code);
-    if (s.existing) return this.offerExisting(s.existing, cx);
-    // `new_key_from` names the sample the host offered `new_key` for.
-    const { year, period, key, new_key: newKey, new_key_from: newKeyFrom } = s.opens;
-    this.app.openForm(
-      { tin: s.tin, code: s.code, year, period, ...(key != null ? { returnKey: key } : newKey != null ? { newKey, ...(newKeyFrom != null ? { newKeyFrom } : {}) } : {}) },
-      cx,
-    );
   }
 
   /** Computed and locked boxes follow the draft; user boxes keep what was typed. */
@@ -1903,7 +1868,7 @@ export class FormPageActions {
    * already has a stored return is offered (offerExisting), never saved
    * over; a period not set yet is asked for in the app's period modal.
    * Saved, the return it became opens, and `then(cx)` runs on it (Queue
-   * and Print go on that way).
+   * goes on that way).
    */
   saveSample(cx, then = null) {
     const s = this.state;
@@ -2109,11 +2074,23 @@ export class FormPageActions {
    * Print preview of the return as saved: the official sheet, filled. An
    * amendment not saved yet prints from the page and is not saved: its
    * first save is the filer's own choice, as it reverts the filed return.
+   * A Form library sample (decided 2026-10-22) previews at once from the
+   * page, staged edits included, blank where the page is blank: no period
+   * is asked for and nothing is saved.
    */
   print(cx) {
     const s = this.state;
-    // A sample is saved first (as Save does), then its return is printed.
-    if (s.sample) return this.saveSample(cx, (acx) => this.print(acx));
+    if (s.sample) {
+      try {
+        const pending = s.pending || {};
+        this.app.store.call("screen_form_print_sample", s.code, s.draft, pending, this.unlockedFor(pending));
+        s.previewOpen = true;
+        this.app.toast("Print preview opened. It follows your edits live.", cx, "printer");
+      } catch (e) {
+        this.app.toast(message(e), cx, "triangle-alert");
+      }
+      return;
+    }
     if (s.amends && !s.saved) this.flush(cx);
     else if (s.editable && !this.ensureSaved(cx)) return;
     try {
@@ -3146,7 +3123,8 @@ function formContent(cx, app, width) {
   const branchCode = String(s.tin).slice(9) || "00000";
   const draftLayout = f.q < 0.8;
 
-  // A library sample saves as its period's return; Queue and Print save it first.
+  // A library sample saves as its period's return (Queue saves it first);
+  // Print preview shows it as it stands, saving nothing.
   const actions = [AppButton(cx, "fp-print", "Print preview", { size: "sm", icon: "printer", onClick: (_e, cx) => ui.print(cx) })];
   if (s.filedOriginal && !s.filedOriginalView) {
     actions.push(AppButton(cx, "fp-filed-original", "View the filed original", { size: "sm", icon: "history", onClick: (_e, cx) => ui.openFiledOriginal(cx) }));
@@ -3155,7 +3133,6 @@ function formContent(cx, app, width) {
     actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
   } else if (s.sample) {
     if (s.editable) actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-start-return", "Start a return", { size: "sm", icon: "plus", onClick: (_e, cx) => ui.startReturn(cx) }));
     actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
     actions.push(AppButton(cx, "fp-save", "Save", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
   } else if (s.status === "Queued") {
