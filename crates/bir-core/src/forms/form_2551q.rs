@@ -1977,6 +1977,21 @@ impl FormValidator for Form2551QDraft {
                 ));
             }
 
+            // A row with no ATC is the official blank option ("0" in the
+            // XML, as for an absent row). It is unused only while it holds
+            // no amount: an amount there has no rate and no classification.
+            if normalized_atc.is_empty() {
+                if row.taxable_amount != 0.0 || row.tax_due != 0.0 {
+                    errors.push((
+                        field,
+                        format!(
+                            "Schedule 1 row {} has an amount but no ATC; choose its ATC or clear the amount",
+                            i + 1
+                        ),
+                    ));
+                }
+                continue;
+            }
             let Some(entry) = find_atc(row.atc.trim()) else {
                 errors.push((
                     field,
@@ -3338,6 +3353,66 @@ mod tests {
                 .iter()
                 .all(|(field, _)| !field.starts_with("schedule_1_row_")),
             "an all-NIL Schedule 1 must validate under the 8% election: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn schedule_1_row_with_an_amount_needs_an_atc() {
+        fn blank_row(taxable_amount: f64) -> Schedule1Row {
+            Schedule1Row {
+                atc: String::new(),
+                atc_description: String::new(),
+                taxable_amount,
+                tax_rate: 0.0,
+                tax_due: 0.0,
+            }
+        }
+        let message =
+            "Schedule 1 row 2 has an amount but no ATC; choose its ATC or clear the amount";
+
+        // An unclassified amount has no rate: it must not validate, queue,
+        // or survive the pre-submission revalidation.
+        let mut unclassified = make_draft(50_000.0, 0.0, 2026, 1);
+        unclassified.schedule_1.push(blank_row(5_000.0));
+        unclassified.recompute(None);
+        let errors = unclassified.validate();
+        assert!(
+            errors
+                .iter()
+                .any(|(field, text)| field == "schedule_1_row_2" && text == message),
+            "{errors:?}"
+        );
+        let errors = unclassified
+            .clone()
+            .transition_to_queued()
+            .expect_err("an amount without an ATC must not queue");
+        assert!(errors.iter().any(|(field, _)| field == "schedule_1_row_2"));
+
+        let mut queued = make_draft(50_000.0, 0.0, 2026, 1);
+        queued.schedule_1.push(blank_row(0.0));
+        queued.recompute(None);
+        queued
+            .transition_to_queued()
+            .expect("a blank row with no amount should queue");
+        queued.schedule_1[1].taxable_amount = 5_000.0;
+        let errors = queued
+            .revalidate_queued_before_submission()
+            .expect_err("an amount without an ATC must fail queue revalidation");
+        assert!(
+            errors
+                .iter()
+                .any(|(field, text)| field == "schedule_1_row_2" && text == message),
+            "{errors:?}"
+        );
+
+        // A row with neither an ATC nor an amount is simply unused.
+        let mut unused = make_draft(50_000.0, 0.0, 2026, 1);
+        unused.schedule_1.push(blank_row(0.0));
+        unused.recompute(None);
+        let errors = unused.validate();
+        assert!(
+            errors.iter().all(|(field, _)| field != "schedule_1_row_2"),
+            "{errors:?}"
         );
     }
 

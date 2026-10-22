@@ -7807,6 +7807,43 @@ mod tests {
     }
 
     #[test]
+    fn catalog_2551q_row_amount_without_an_atc_is_an_error() {
+        setup();
+        let opened = open("2551Q", 3);
+        let row_error = |validated: &Value| {
+            validated["errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|e| e["field"] == "schedule_1_row_2")
+                .cloned()
+        };
+        let validate = |draft: &Value| {
+            call_async(
+                "screen_form_validate",
+                vec!["2551Q".into(), json(draft.clone())],
+            )
+            .unwrap()
+        };
+        // A blank ATC choice on row 2 leaves an unused row: no error.
+        let blank = fill("2551Q", &opened["draft"], json!({"drpATC2": ""}));
+        assert!(blank["rejected"].get("drpATC2").is_none(), "{blank}");
+        assert_eq!(blank["draft"]["schedule_1"][1]["atc"], "");
+        assert!(row_error(&validate(&blank["draft"])).is_none());
+        // An amount typed on that row has no rate: the filer is told.
+        let typed = fill("2551Q", &blank["draft"], json!({"txtATCAmt2": "5000"}));
+        assert!(typed["rejected"].get("txtATCAmt2").is_none(), "{typed}");
+        assert_eq!(typed["draft"]["schedule_1"][1]["taxable_amount"], 5000.0);
+        let validated = validate(&typed["draft"]);
+        let error = row_error(&validated).expect("row 2 amount without an ATC");
+        assert_eq!(
+            error["message"],
+            "Schedule 1 row 2 has an amount but no ATC; choose its ATC or clear the amount"
+        );
+        assert_error_keys_on_screen("2551Q", &validated["errors"]);
+    }
+
+    #[test]
     fn catalog_2000_distinguishes_same_code_with_different_tax_calculations() {
         use bir_core::forms::form_2000::Form2000Draft;
 
