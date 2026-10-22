@@ -796,8 +796,9 @@ impl Form2551QDraft {
             1
         } else {
             // The redesigned tax profile records no commencement date, so a
-            // later quarter without one is an existing registrant's return.
-            return Some(false);
+            // later quarter without one cannot be classified: the filer's own
+            // Item 13 answer stands, as on the official form.
+            return None;
         };
 
         Some(self.quarter == initial_quarter)
@@ -3184,7 +3185,7 @@ mod tests {
     }
 
     #[test]
-    fn later_quarter_without_business_start_is_not_an_initial_quarter() {
+    fn later_quarter_without_business_start_accepts_the_filers_item_13() {
         // The redesigned tax profile records no commencement date; a later
         // quarter without one is an existing registrant's return and must not
         // block filing on a box the official form never asks for.
@@ -3193,13 +3194,21 @@ mod tests {
         let mut draft = Form2551QDraft::new_from_profile(&profile, 2026, 2);
         draft.item_13_election = Item13Election::NotApplicable;
 
-        assert_eq!(draft.item_13_is_applicable(), Some(false));
-        assert!(
-            draft
-                .validate()
-                .iter()
-                .all(|(field, _)| field != "business_start_date" && field != "item_13_election")
-        );
+        assert_eq!(draft.item_13_is_applicable(), None);
+        for election in [
+            Item13Election::NotApplicable,
+            Item13Election::Graduated,
+            Item13Election::EightPercent,
+        ] {
+            draft.item_13_election = election;
+            assert!(
+                draft
+                    .validate()
+                    .iter()
+                    .all(|(field, _)| field != "business_start_date" && field != "item_13_election"),
+                "{election:?} must be accepted when the start date is unknown"
+            );
+        }
     }
 
     #[test]
