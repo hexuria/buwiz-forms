@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main", "codex/**" ]
   pull_request:
-    branches: [ "main", "gol/**", "codex/**" ]
+    branches: [ "main", "gol/**", "codex/**", "feat/**" ]
   # Nightly safety net: the full CI, validation audits included, on main.
   # 18:00 UTC is 02:00 in Manila.
   schedule:
