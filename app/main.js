@@ -131,9 +131,9 @@ class BirApp extends View {
     if (start) cx.timer.after(400, (cx) => this.runStartRoute(start, cx));
 
     // In-app notifications work while the app runs: the submission worker
-    // (painted app or bir-headless) shares this database, so new
-    // submissions and BIR confirmations are picked up by polling and shown
-    // as a toast plus an unread dot on the bell.
+    // (started by this shell's host at launch, on the same database
+    // connection) records new submissions and BIR confirmations there, and
+    // polling picks them up as a toast plus an unread dot on the bell.
     cx.timer.every(30000, (cx) => this.pollEvents(cx));
 
     // Key bindings travel the focus path; give the root the keyboard at

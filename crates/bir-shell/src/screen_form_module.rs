@@ -6048,7 +6048,7 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
             "{code} is queued with queue_form_draft (month or quarter)"
         )));
     };
-    with_database(|db| {
+    let queued = with_database(|db| {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
@@ -6072,7 +6072,9 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
                 .map(|id| HostValue::Number(id as f64))
                 .map_err(|error| host_error(error.to_string()))
         }))
-    })
+    })?;
+    crate::bir_module::wake_submission_worker();
+    Ok(queued)
 }
 
 /// Take a queued return out of the queue so it is an editable draft again.
@@ -6087,7 +6089,7 @@ fn screen_form_cancel_queue(arguments: &HostArguments) -> HostResult {
             "{code} is cancelled with cancel_queued"
         )));
     };
-    with_database(|db| {
+    let cancelled = with_database(|db| {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
@@ -6097,7 +6099,9 @@ fn screen_form_cancel_queue(arguments: &HostArguments) -> HostResult {
                 .map(|_| HostValue::Null)
                 .map_err(|error| host_error(error.to_string()))
         }))
-    })
+    })?;
+    crate::bir_module::wake_submission_worker();
+    Ok(cancelled)
 }
 
 /// The period column the draft is stored under, which is what the queue and
@@ -7562,6 +7566,52 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Queue and Cancel queue wake the submission worker, through both the
+    /// page verbs and the period verbs, so a queued return is sent now
+    /// rather than on the worker's next tick. A refused queue wakes nothing.
+    #[test]
+    fn queueing_and_cancelling_wake_the_submission_worker() {
+        use crate::bir_module::submission_worker_wakes as wakes;
+        setup();
+        let saved = save("0619E", &open("0619E", 7)["draft"]);
+        let start = wakes();
+
+        call(
+            "screen_form_queue",
+            vec!["0619E".into(), json(saved["draft"].clone())],
+        )
+        .unwrap_or_else(|error| panic!("0619E queues: {}", error.message()));
+        assert_eq!(wakes(), start + 1, "screen_form_queue wakes the worker");
+        call(
+            "screen_form_cancel_queue",
+            vec!["0619E".into(), json(open("0619E", 7)["draft"].clone())],
+        )
+        .unwrap_or_else(|error| panic!("0619E cancels: {}", error.message()));
+        assert_eq!(
+            wakes(),
+            start + 2,
+            "screen_form_cancel_queue wakes the worker"
+        );
+
+        let period =
+            || -> Vec<HostValue> { vec![TIN.into(), "0619E".into(), YEAR.into(), 7i64.into()] };
+        call("queue_form_draft", period())
+            .unwrap_or_else(|error| panic!("queue_form_draft: {}", error.message()));
+        assert_eq!(open("0619E", 7)["status"], "Queued");
+        assert_eq!(wakes(), start + 3, "queue_form_draft wakes the worker");
+        call("cancel_queued", period())
+            .unwrap_or_else(|error| panic!("cancel_queued: {}", error.message()));
+        assert_eq!(open("0619E", 7)["status"], "Draft");
+        assert_eq!(wakes(), start + 4, "cancel_queued wakes the worker");
+
+        let refused = call(
+            "screen_form_queue",
+            vec!["1601C".into(), json(open("1601C", 7)["draft"].clone())],
+        );
+        assert!(refused.is_err());
+        assert_eq!(wakes(), start + 4, "a refused queue wakes nothing");
     }
 
     #[test]

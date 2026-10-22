@@ -73,6 +73,9 @@ serde = { version = "1", features = ["derive"] }
 zip = { version = "2", default-features = false, features = ["deflate", "time"] }
 serde_json = "1"
 tracing = "0.1"
+# The submission worker (`bir_core::background_cron`) runs on its own Tokio
+# runtime, as in painted `bir` and `bir-headless`.
+tokio = { version = "1", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Bridges the OS sign-in prompt (run on its own thread) into a host future.
 futures = "0.3"
