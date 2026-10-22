@@ -476,7 +476,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         self.assertIn("timeout-minutes:", smoke_step)
         smoke_script = LINUX_SMOKE_SCRIPT_PATH.read_text(encoding="utf-8")
         self.assertIn('in_time=(timeout --kill-after=30 "$CONTAINER_TIMEOUT")', smoke_script)
-        self.assertNotRegex(smoke_script, r'(debian:12|fedora:latest|opensuse/tumbleweed|archlinux:latest|"\$image") bash -euc')
+        self.assertNotRegex(smoke_script, r'(?m)^\s*docker run')
         self.assertIn("name: linux-release-${{ matrix.arch }}", linux)
         self.assertIn("cargo install --locked", self.linux_build_script)
         self.assertIn("cargo-deb 3.7.0", self.linux_build_script)
