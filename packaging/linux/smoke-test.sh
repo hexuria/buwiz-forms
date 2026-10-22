@@ -47,6 +47,19 @@ version="$(basename "${tarballs[0]}" .tar.gz)"
 version="${version#"$prefix"}"
 platform="linux/$DOCKER_ARCH"
 
+# Every container run gets a hard wall-clock cap, so one stalled package
+# download fails this script instead of hanging the release job.
+# SMOKE_CONTAINER_TIMEOUT overrides it (seconds). The cap wraps the docker
+# client on the runner rather than running inside the image: as the
+# container's PID 1, coreutils timeout exits 125 on fedora:latest.
+CONTAINER_TIMEOUT="${SMOKE_CONTAINER_TIMEOUT:-600}"
+in_time=(timeout --kill-after=30 "$CONTAINER_TIMEOUT")
+
+# apt in the Debian/Ubuntu images: give up on a stalled mirror connection
+# after 30 s and retry, rather than waiting minutes on one socket (the x64
+# v0.1.0 run sat 390 s and 428 s on single archive.ubuntu.com downloads).
+apt_ci_config="printf '%s\\n' 'Acquire::Retries \"5\";' 'Acquire::http::Timeout \"30\";' 'Acquire::https::Timeout \"30\";' > /etc/apt/apt.conf.d/80ci-network"
+
 check_system_install=$(cat <<'SYSTEM_CHECK'
 set -eu
 test -x /usr/bin/ebirforms
@@ -67,8 +80,9 @@ SYSTEM_CHECK
 install_deb_image() {
     local image="$1"
     local file="$2"
-    docker run --rm --platform "$platform" \
+    "${in_time[@]}" docker run --rm --platform "$platform" \
         -v "$OUT:/packages:ro" "$image" bash -euc "
+            $apt_ci_config
             apt-get update
             apt-get install -y /packages/$file
             $check_system_install
@@ -80,14 +94,14 @@ install_deb_image debian:12 "$(basename "${debs[0]}")"
 install_deb_image ubuntu:22.04 "$(basename "${debs[0]}")"
 install_deb_image ubuntu:24.04 "$(basename "${debs[0]}")"
 
-docker run --rm --platform "$platform" \
+"${in_time[@]}" docker run --rm --platform "$platform" \
     -v "$OUT:/packages:ro" fedora:latest bash -euc "
         dnf install -y /packages/$(basename "${rpms[0]}")
         $check_system_install
     "
 printf 'PASS: fedora:latest installed %s\n' "$(basename "${rpms[0]}")"
 
-docker run --rm --platform "$platform" \
+"${in_time[@]}" docker run --rm --platform "$platform" \
     -v "$OUT:/packages:ro" opensuse/tumbleweed bash -euc "
         zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks install --allow-unsigned-rpm /packages/$(basename "${rpms[0]}")
         $check_system_install
@@ -100,7 +114,7 @@ if [ "$ARCH" = x64 ]; then
         echo "Expected one Arch package for x64 in $OUT" >&2
         exit 1
     fi
-    docker run --rm --platform linux/amd64 \
+    "${in_time[@]}" docker run --rm --platform linux/amd64 \
         -v "$OUT:/packages:ro" archlinux:latest bash -euc "
             pacman -Syu --noconfirm
             pacman -U --noconfirm /packages/$(basename "${arch_packages[0]}")
@@ -110,8 +124,9 @@ if [ "$ARCH" = x64 ]; then
 fi
 
 tarball_name="$(basename "${tarballs[0]}")"
-docker run --rm --platform "$platform" \
+"${in_time[@]}" docker run --rm --platform "$platform" \
     -v "$OUT:/packages:ro" debian:12 bash -euc "
+        $apt_ci_config
         apt-get update
         apt-get install -y \
             libgtk-3-0 libwebkit2gtk-4.1-0 libvulkan1 libxkbcommon0 \
@@ -146,11 +161,11 @@ if [ "$ARCH" = x64 ]; then
     fi
     for image in debian:12 fedora:latest; do
         if [ "$image" = debian:12 ]; then
-            install_command='apt-get update && apt-get install -y curl ca-certificates'
+            install_command="$apt_ci_config && apt-get update && apt-get install -y curl ca-certificates"
         else
             install_command='dnf install -y curl ca-certificates'
         fi
-        docker run --rm --platform "$platform" \
+        "${in_time[@]}" docker run --rm --platform "$platform" \
             -v "$OUT:/packages:ro" -e INSTALL_VERSION="$version" "$image" bash -euc "
                 $install_command
                 sh /packages/install-linux.sh --from-dir /packages --version \"\$INSTALL_VERSION\"

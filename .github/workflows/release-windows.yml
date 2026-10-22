@@ -56,14 +56,22 @@ jobs:
           $release = '${{ inputs.release == true }}' -eq 'true'
           $hasPfx = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX)
           $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
-          if ($release -and -not $hasPfx) {
-            throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PFX"
-          }
-          if ($release -and -not $hasPassword) {
+          # A release with neither secret ships unsigned installers (with a
+          # visible warning) instead of failing: there is no code-signing
+          # certificate yet. Exactly one of the pair set is a misconfiguration
+          # and still fails closed; with both set the artifacts are signed and
+          # verified as before.
+          if ($hasPfx -and -not $hasPassword) {
             throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PASSWORD"
+          }
+          if ($hasPassword -and -not $hasPfx) {
+            throw "Missing required Windows release secret: WINDOWS_CERTIFICATE_PFX"
           }
           if (-not ($hasPfx -and $hasPassword)) {
             "WINDOWS_SIGNING=0" >> $env:GITHUB_ENV
+            if ($release) {
+              Write-Output "::warning title=Unsigned Windows release::WINDOWS_CERTIFICATE_PFX and WINDOWS_CERTIFICATE_PASSWORD are not set; the Setup.exe and MSI in this release are NOT Authenticode-signed and Windows SmartScreen will warn on install."
+            }
             Write-Warning "Windows release artifacts are unsigned because signing secrets are unavailable."
           } else {
             "WINDOWS_SIGNING=1" >> $env:GITHUB_ENV

@@ -148,6 +148,10 @@ jobs:
         run: packaging/linux/build-packages.sh --version "${{ steps.version.outputs.version }}" --target "${{ matrix.target }}" --out target/release-artifacts
 
       - name: Smoke test Linux packages
+        # Normally 4 (arm64) to 10 (x64) minutes; each container is also
+        # capped inside the script, so a stall fails here instead of holding
+        # the release for the 6-hour job default.
+        timeout-minutes: 30
         run: packaging/linux/smoke-test.sh --out target/release-artifacts --arch "${{ matrix.arch }}"
 
       - name: Upload Linux artifacts
