@@ -947,6 +947,7 @@ name = "bir-mcp"
 version = "0.1.0"
 dependencies = [
  "gpui-agent",
+ "reqwest",
  "serde_json",
  "tempfile",
  "tiny_http",

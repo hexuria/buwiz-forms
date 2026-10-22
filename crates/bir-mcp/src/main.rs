@@ -4,9 +4,12 @@
 //! Environment: `BIR_MCP_TOKENS` (0600 JSON file of per-app agent tokens),
 //! `GPUI_AGENT_TOKEN` (fallback agent token for any app),
 //! `GPUI_AGENT_RUNTIME_DIR` (upstream discovery directory override),
-//! `BIR_MCP_HTTP_TOKEN` (bearer token, required with `--http`).
+//! `BIR_MCP_HTTP_TOKEN` (bearer token, required with `--http`),
+//! `BUWIZ_MCP_URL` and `BUWIZ_ACCESS_TOKEN` (when the URL is set, every tool
+//! requires a buwiz-server agent token that covers a taxpayer with a working pass).
 use bir_mcp::client::AgentBirHost;
 use bir_mcp::http;
+use bir_mcp::license::License;
 use bir_mcp::server::{Server, serve};
 use std::process::ExitCode;
 
@@ -25,7 +28,10 @@ Environment:
   BIR_MCP_TOKENS          JSON file {\"<connect id or pid>\": \"<agent token>\"}; must be mode 0600
   GPUI_AGENT_TOKEN        fallback agent token for any app without an entry in BIR_MCP_TOKENS
   GPUI_AGENT_RUNTIME_DIR  gpui-agent discovery directory (default: gpui-agent's per-user runtime dir)
-  BIR_MCP_HTTP_TOKEN      with --http: every request must send `Authorization: Bearer <this>`";
+  BIR_MCP_HTTP_TOKEN      with --http: every request must send `Authorization: Bearer <this>`
+  BUWIZ_MCP_URL           buwiz-server origin (e.g. https://app.example). When set,
+                          every tool checks a Buwiz agent token first.
+  BUWIZ_ACCESS_TOKEN      agent access token for that check. Required when BUWIZ_MCP_URL is set.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -56,8 +62,22 @@ fn main() -> ExitCode {
     }
 }
 
+fn licensed_server() -> Result<Server<AgentBirHost>, String> {
+    let license = License::from_parts(
+        std::env::var("BUWIZ_MCP_URL").ok().as_deref(),
+        std::env::var("BUWIZ_ACCESS_TOKEN").ok().as_deref(),
+    )?;
+    Ok(Server::with_license(AgentBirHost::from_env(), license))
+}
+
 fn serve_stdio() -> ExitCode {
-    let mut server = Server::new(AgentBirHost::from_env());
+    let mut server = match licensed_server() {
+        Ok(server) => server,
+        Err(error) => {
+            eprintln!("bir-mcp: {error}");
+            return ExitCode::from(2);
+        }
+    };
     match serve(
         &mut server,
         std::io::stdin().lock(),
@@ -85,7 +105,13 @@ fn serve_http(addr: &str) -> ExitCode {
         .to_ip()
         .map_or_else(|| addr.to_string(), |a| a.to_string());
     eprintln!("bir-mcp: serving MCP at http://{bound}{}", http::MCP_PATH);
-    let mut server = Server::new(AgentBirHost::from_env());
+    let mut server = match licensed_server() {
+        Ok(server) => server,
+        Err(error) => {
+            eprintln!("bir-mcp: {error}");
+            return ExitCode::from(2);
+        }
+    };
     http::serve_http(&mut server, &listener, &token);
     ExitCode::SUCCESS
 }

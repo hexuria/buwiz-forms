@@ -2,6 +2,7 @@
 //! `initialize`, `notifications/initialized`, `ping`, `tools/list` and
 //! `tools/call`. stdout carries protocol messages only; diagnostics go to
 //! stderr.
+use crate::license::License;
 use crate::tools::{self, APP_INFO, Action, HostCall};
 use serde_json::{Map, Value, json};
 use std::io::{BufRead, Write};
@@ -82,13 +83,21 @@ impl Selection {
 pub struct Server<H> {
     host: H,
     selected: Option<Selection>,
+    license: License,
 }
 
 impl<H: BirHost> Server<H> {
     pub fn new(host: H) -> Self {
+        Self::with_license(host, License::open())
+    }
+
+    /// `license` is checked before every tool. [`License::open`] is the
+    /// local default: tools run with no buwiz-server round trip.
+    pub fn with_license(host: H, license: License) -> Self {
         Self {
             host,
             selected: None,
+            license,
         }
     }
 
@@ -151,6 +160,11 @@ impl<H: BirHost> Server<H> {
             INVALID_PARAMS,
             "tools/call requires params.name".to_string(),
         ))?;
+        // A missing or unlicensed Buwiz token stops every tool, including
+        // list and connect, before this process talks to a BIR app.
+        if let Err(message) = self.license.allow() {
+            return Ok(tool_result(message, true));
+        }
         let tool = tools::find(name).ok_or((INVALID_PARAMS, format!("unknown tool: {name}")))?;
         let empty = Map::new();
         let arguments = match params.get("arguments") {
@@ -871,6 +885,29 @@ mod tests {
         );
         // A refused bir_connect argument check does not drop the selection.
         assert!(server.selected().is_some());
+    }
+
+    #[test]
+    fn an_unlicensed_token_refuses_every_tool_before_the_host_is_touched() {
+        use crate::license::{License, UNLICENSED};
+        let server_stub = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let addr = server_stub.server_addr().to_ip().unwrap();
+        let served = std::thread::spawn(move || {
+            let request = server_stub.recv().unwrap();
+            let body = r#"{"jsonrpc":"2.0","id":1,"result":{"isError":false,"structuredContent":{"profiles":[]}}}"#;
+            request
+                .respond(tiny_http::Response::from_string(body).with_status_code(200))
+                .unwrap();
+        });
+        let mut server = Server::with_license(
+            FakeHost::single(),
+            License::required(format!("http://{addr}"), "agent-token"),
+        );
+        let reply = server.handle(call(1, "bir_list_apps", json!({}))).unwrap();
+        assert_eq!(reply["result"]["isError"], true);
+        assert_eq!(text(&reply), UNLICENSED);
+        assert!(server.host().calls.is_empty());
+        served.join().unwrap();
     }
 
     #[test]
