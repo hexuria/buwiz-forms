@@ -222,6 +222,11 @@ pub fn redact_secrets(input: &str) -> String {
     text = labeled_secret()
         .replace_all(&text, "$1[redacted]")
         .into_owned();
+    // Dev start routes print `recovery key XXXX-XXXX-XXXX-XXXX` with a space,
+    // which the labeled form (it wants `=` or `:`) does not catch.
+    text = recovery_key_phrase()
+        .replace_all(&text, "$1[redacted]")
+        .into_owned();
     text = text.replace(TEST_MASTER_KEY, "[redacted]");
     text = labeled_hex_key()
         .replace_all(&text, "$1[redacted]")
@@ -237,9 +242,17 @@ fn labeled_secret() -> &'static Regex {
     static PATTERN: OnceLock<Regex> = OnceLock::new();
     PATTERN.get_or_init(|| {
         Regex::new(
-            r#"(?i)(\b(?:password|passwd|pwd|secret|access_token|refresh_token|id_token|client_secret|api_key|master_key|db_key|encryption_key|app_password|imap_app_password|oauth_access_token|oauth_refresh_token|authorization)\b["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|\S+)"#,
+            r#"(?i)(\b(?:password|passwd|pwd|secret|access_token|refresh_token|id_token|client_secret|api_key|master_key|db_key|encryption_key|app_password|imap_app_password|oauth_access_token|oauth_refresh_token|authorization|recovery_key)\b["']?\s*[=:]\s*)(?:"[^"]*"|'[^']*'|\S+)"#,
         )
         .expect("secret redaction pattern")
+    })
+}
+
+fn recovery_key_phrase() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"(?i)(\brecovery[_ ]key\b\s*[=:]?\s*)([0-9A-Z]{4}(?:-[0-9A-Z]{4}){3})")
+            .expect("recovery key pattern")
     })
 }
 
@@ -395,7 +408,7 @@ mod tests {
     fn redaction_strips_credentials_and_keeps_tins_and_ordinary_text() {
         let tin = "12345678800000";
         let line = format!(
-            "draft tin={tin} password=s3cret-token access_token=\"ya29.SUPERSECRET\" Authorization: Bearer abc.def master_key={TEST_MASTER_KEY} refresh 1//0refreshTOKEN Failed to access OS keyring"
+            "draft tin={tin} password=s3cret-token access_token=\"ya29.SUPERSECRET\" Authorization: Bearer abc.def master_key={TEST_MASTER_KEY} refresh 1//0refreshTOKEN recovery key ABCD-EFGH-IJKL-MNOP Failed to access OS keyring"
         );
         let redacted = redact_secrets(&line);
         assert!(redacted.contains(tin), "{redacted}");
@@ -408,6 +421,7 @@ mod tests {
         assert!(!redacted.contains("abc.def"), "{redacted}");
         assert!(!redacted.contains(TEST_MASTER_KEY), "{redacted}");
         assert!(!redacted.contains("1//0refreshTOKEN"), "{redacted}");
+        assert!(!redacted.contains("ABCD-EFGH-IJKL-MNOP"), "{redacted}");
         assert!(redacted.contains("[redacted]"), "{redacted}");
         let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         assert_eq!(redact_secrets(digest), digest);
