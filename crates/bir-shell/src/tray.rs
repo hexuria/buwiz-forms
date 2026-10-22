@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use global_hotkey::hotkey::HotKey;
-use gpui::{App, AsyncApp};
+use gpui_shell::gpui::{App, AsyncApp};
 
 static HIDDEN: AtomicBool = AtomicBool::new(false);
 static TRAY_UP: AtomicBool = AtomicBool::new(false);
@@ -252,8 +252,22 @@ pub fn hide_to_tray() {
 /// Bring the windows back and take focus.
 pub fn show_app(cx: &mut App) {
     HIDDEN.store(false, Ordering::SeqCst);
-    platform_show();
-    cx.activate(true);
+    // The caller (tray poll, menu action, or Dock reopen) already holds the
+    // `App` borrow. Ordering a window front notifies GPUI synchronously, and
+    // that callback has to borrow `App` itself — doing it here logs
+    // "RefCell already borrowed" and, with no window visible yet, AppKit
+    // opens an empty dialog. Yield first so this borrow ends.
+    let later = cx.to_async();
+    cx.foreground_executor()
+        .spawn(async move {
+            later
+                .background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+            platform_show();
+            later.update(|cx| cx.activate(true));
+        })
+        .detach();
 }
 
 fn toggle(cx: &mut App) {
@@ -302,21 +316,28 @@ fn macos_is_accessory() -> Option<bool> {
     Some(macos_app()?.activationPolicy() == NSApplicationActivationPolicy::Accessory)
 }
 
+/// Standard document windows only. The status item and its menu are panels at
+/// a raised level; ordering those front turns the menu into a second on-screen
+/// window (an empty `AXDialog`).
 #[cfg(target_os = "macos")]
-fn macos_each_window(f: impl Fn(&objc2_app_kit::NSWindow)) {
+fn macos_each_app_window(f: impl Fn(&objc2_app_kit::NSWindow)) {
+    use objc2_app_kit::NSNormalWindowLevel;
     let Some(app) = macos_app() else {
         return;
     };
     let windows = app.windows();
     for index in 0..windows.count() {
-        f(&windows.objectAtIndex(index));
+        let window = windows.objectAtIndex(index);
+        if window.level() == NSNormalWindowLevel {
+            f(&window);
+        }
     }
 }
 
 #[cfg(target_os = "macos")]
 fn macos_hide() {
     use objc2_app_kit::NSApplicationActivationPolicy;
-    macos_each_window(|window| window.orderOut(None));
+    macos_each_app_window(|window| window.orderOut(None));
     if let Some(app) = macos_app() {
         let _ = app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
     }
@@ -329,8 +350,12 @@ fn macos_show() {
         return;
     };
     let was_regular = app.activationPolicy() == NSApplicationActivationPolicy::Regular;
+    // Order the real window front before leaving Accessory. That switch asks
+    // the delegate to reopen, and with no visible window AppKit creates a new
+    // one. A visible window makes the delegate return without borrowing `App`
+    // again (this call is already inside a borrow).
+    macos_each_app_window(|window| window.makeKeyAndOrderFront(None));
     let _ = app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
-    macos_each_window(|window| window.makeKeyAndOrderFront(None));
     if was_regular {
         #[allow(deprecated)]
         app.activateIgnoringOtherApps(true);
@@ -364,7 +389,7 @@ fn reclaim_menu_bar() {
         };
         #[allow(deprecated)]
         app.activateIgnoringOtherApps(true);
-        macos_each_window(|window| window.makeKeyAndOrderFront(None));
+        macos_each_app_window(|window| window.makeKeyAndOrderFront(None));
     }
 
     let dock = NSRunningApplication::runningApplicationsWithBundleIdentifier(&NSString::from_str(

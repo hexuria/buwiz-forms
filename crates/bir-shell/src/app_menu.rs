@@ -10,17 +10,20 @@
 //! be what Cmd+Q did in the painted app; it is not `cx.hide()` (which keeps
 //! the Dock icon).
 
-#[cfg(not(target_os = "macos"))]
-use gpui::prelude::*;
-use gpui::{
-    Action, App, Entity, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, Window, actions,
-};
+// gpui-shell re-exports whichever engine the `gpui-fast` feature selected.
+// A direct `gpui` import stays on crates.io gpui-pre and is a different type
+// once that feature is on.
 #[cfg(not(target_os = "macos"))]
 use gpui_component::menu::AppMenuBar;
 use gpui_shell::ShellRoot;
 use gpui_shell::action::ShellAction;
+use gpui_shell::gpui::{
+    self, Action, App, Entity, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, Window,
+};
+#[cfg(not(target_os = "macos"))]
+use gpui_shell::gpui::{div, prelude::*, px};
 
-actions!(
+gpui::actions!(
     bir_shell,
     [
         AboutApplication,
