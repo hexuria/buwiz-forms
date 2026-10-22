@@ -153,9 +153,7 @@ const app = {
         // The host counts a year only with all four digits.
         if (!/^\d{4}$/.test(year || "") || !quarter) return Promise.resolve({ complete: false });
         const key = quarter; // a quarterly return's stored key is its quarter
-        // 2032: the host offered the key for this sample (`new_key_from`, its created_at).
-        const from = year === "2032" ? { new_key_from: "2026-10-19T00:00:00+00:00" } : {};
-        if (year !== "2024") return Promise.resolve({ complete: true, opens: { year: Number(year), period: quarter, key: null, new_key: quarter, ...from }, sample: freshSample(Number(year), quarter) });
+        if (year !== "2024") return Promise.resolve({ complete: true, opens: { year: Number(year), period: quarter, key: null, new_key: quarter }, sample: freshSample(Number(year), quarter) });
         const s = stored[quarter];
         return Promise.resolve({
           complete: true,
@@ -405,7 +403,7 @@ await undo();
 app.fastLane.drafts = false;
 
 // B6: a period change closes a stale offer at once; its buttons then do
-// nothing, and Start a return waits for the new answer.
+// nothing.
 sample.periodAsked = null;
 await tick(1);
 offer();
@@ -467,43 +465,13 @@ await undo();
 assert.equal(inputsOf(sample), shownBeforeKeep);
 app.overlay = null; app.existingOffer = null;
 
-// B4: no period answer (an entry-numbered form, or the period not set):
-// Start a return opens New return.
 sample.periodValues = {}; sample.periodAsked = null;
 ui.choose({ [quarterKeys[2]]: "false" }, cx);
 await settle();
-ui.startReturn(cx);
-assert.equal(json(calls.at(-1)), json(["startNewReturn"]));
 // A period part set without typing (a picker, a click) shows in its box.
 ui.choose({ [K("txtYear")]: "2031" }, cx);
 await settle();
 assert.equal(yearInput.value(), "2031", "the year box shows the year set");
-
-// F4: Start a return pressed during the pause before the ask asks now and
-// acts on that answer (a new return started under the typed period's key),
-// never New return for a period that is complete.
-const newReturnsBefore = calls.filter((c) => c[0] === "startNewReturn").length;
-ui.choose({ [quarterKeys[1]]: "true" }, cx);
-assert.equal(sample.opens, null, "the answer is pending");
-ui.startReturn(cx);
-assert.equal(calls.filter((c) => c[0] === "startNewReturn").length, newReturnsBefore, "not New return");
-await settle();
-assert.equal(calls.filter((c) => c[0] === "startNewReturn").length, newReturnsBefore);
-assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2031, period: 2, newKey: 2 }));
-assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2031, 2, null, 2]), "a new return under the typed key");
-
-// D8c round 5: an offered key carries the sample it was offered for
-// (`new_key_from`); the open passes it back as the seventh argument. The
-// six-argument open above is unchanged when there is none.
-ui.open({ code: "2551Q", tin: "12345678800000", year: 2026, period: 0, sample: true }, cx);
-await settle();
-ui.choose({ [K("txtYear")]: "2032" }, cx);
-ui.choose({ [quarterKeys[0]]: "true" }, cx);
-await settle();
-ui.startReturn(cx);
-await settle();
-assert.equal(json(calls.filter((c) => c[0] === "openForm").at(-1)[1]), json({ tin: "12345678800000", code: "2551Q", year: 2032, period: 1, newKey: 1, newKeyFrom: "2026-10-19T00:00:00+00:00" }));
-assert.equal(json(lastOpen().slice(1)), json(["12345678800000", "2551Q", 2032, 1, null, 1, "2026-10-19T00:00:00+00:00"]), "the offering sample reaches the host");
 
 // D4: an amended return names its filed original; View the filed original
 // opens it read-only from the history, with a strip saying what it is.

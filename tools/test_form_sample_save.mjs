@@ -9,8 +9,11 @@
 //  - a period not set asks for it in the app's period modal (the form's
 //    period parts); an incomplete answer asks again and says why; a period
 //    typed but not answered yet is asked about first;
-//  - Queue and Print save the sample the same way, then queue or print
-//    the return it became.
+//  - Queue saves the sample the same way, then queues the return it
+//    became;
+//  - (decided 2026-10-22) the header is exactly Print preview, Check, Queue
+//    and Save, and Print preview opens at once from the page's values: no
+//    period modal, nothing saved, no stored return.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -66,7 +69,7 @@ await mod.link((s) => ({
   "./periods.js": mock("./periods.js", { periodLabel: () => "Q2 2025" }),
 })[s]);
 await mod.evaluate();
-const { FormPageActions, renderSamplePeriod, renderExistingOffer } = mod.namespace;
+const { FormPageActions, renderSamplePeriod, renderExistingOffer, renderFormPage } = mod.namespace;
 
 const quarterKeys = [1, 2, 3, 4].map((n) => K(`qtr_${n}`));
 const periodParts = [{ key: K("txtYear"), part: "year", quarter: null }, ...quarterKeys.map((key, i) => ({ key, part: "quarter", quarter: i + 1 }))];
@@ -115,6 +118,8 @@ const app = {
       if (name === "screen_form_fill") return { draft: { ...args[1], typed: { ...(args[1].typed || {}), ...args[2] } }, values: { ...args[2] }, options: {}, rejected: {} };
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: {}, options: {}, errors: [] });
       if (name === "screen_form_print") return true;
+      if (name === "screen_form_print_sample") return { path: "/tmp/preview.html" };
+      if (name === "screen_form_preview_sync") return true;
       if (name === "screen_form_sample_period") {
         const parts = args[2];
         const quarter = quarterKeys.findIndex((k) => parts[k] === "true") + 1;
@@ -251,7 +256,7 @@ assert.equal(named("screen_form_save").length, saves + 1, "saved on the answer")
 assert.equal(named("screen_form_save").at(-1)[2].which, "fresh 2025 Q1");
 console.log("PASS: Save waits for the period's answer, then saves.");
 
-// ---- Queue and Print save first, then act on the return.
+// ---- Queue saves first, then acts on the return.
 await openSample();
 ui.setPeriodPart({ [K("txtYear")]: "2025", ...tick(2) }, cx);
 await settle();
@@ -261,13 +266,48 @@ await settle();
 assert.equal(named("screen_form_save").length, saves + 1, "Queue saves the sample");
 assert.equal(json(named("queue_form_draft").at(-1)), json(["queue_form_draft", "12345678800000", "2551Q", 2025, 2]), "then queues the return");
 await openSample();
-ui.setPeriodPart({ [K("txtYear")]: "2025", ...tick(3) }, cx);
-await settle();
-ui.print(cx);
-await settle();
-assert.equal(named("screen_form_save").at(-1)[2].which, "fresh 2025 Q3", "Print saves the sample");
-assert.equal(json(named("screen_form_print").at(-1)[2]), json({ id: 77 }), "then prints the return");
-await openSample();
 ui.queue(cx);
 assert.equal(app.overlay, "sample-period", "with no period, Queue asks for it too");
-console.log("PASS: Queue and Print save a sample as Save does, then queue or print its return.");
+console.log("PASS: Queue saves a sample as Save does, then queues its return.");
+
+// ---- Decided 2026-10-22: a sample's header is Print preview, Check, Queue and Save.
+const HEADER = ["fp-print", "fp-check", "fp-start-return", "fp-queue", "fp-save", "fp-filed-original", "fp-back-to-amendment", "fp-cancel-queue"];
+await openSample();
+buttons.clear();
+renderFormPage(cx, app, 1056);
+// The Check button is its own entity, drawn when the header mounts it.
+assert.deepEqual([...buttons.keys()].filter((id) => HEADER.includes(id)).sort(), ["fp-check", "fp-print", "fp-queue", "fp-save"], "exactly four header buttons on a sample");
+console.log("PASS: a sample's header is Print preview, Check, Queue and Save.");
+
+// ---- Print preview on a fresh sample opens at once: no period, nothing saved.
+const STORING = ["screen_form_save", "screen_form_queue", "queue_form_draft", "screen_form_print", "screen_form_sample_period"];
+await openSample();
+app.overlay = null; app.samplePeriod = null; // Queue's modal above
+ui.edit(AMOUNT, "9", cx); // staged, not flushed yet
+let mark = calls.length;
+buttons.get("fp-print").onClick({}, cx);
+assert.equal(app.overlay, null, "no period modal");
+assert.equal(app.samplePeriod, null);
+let after = calls.slice(mark);
+assert.deepEqual(after.filter((c) => STORING.includes(c[0])), [], "nothing saved, queued or printed as a return");
+const preview = named("screen_form_print_sample").at(-1);
+assert.ok(preview, "the sample preview verb");
+assert.equal(preview[1], "2551Q");
+assert.equal(preview[2], ui.state.draft, "the draft on the page");
+assert.equal(json(preview[3]), json({ [AMOUNT]: "9" }), "with the staged edits");
+assert.equal(ui.state.previewOpen, true, "the preview follows edits");
+assert.ok(ui.state.sample, "the page still holds the sample");
+await settle();
+assert.deepEqual(calls.slice(mark).filter((c) => STORING.includes(c[0])), [], "still nothing stored after the edit flushes");
+assert.ok(named("screen_form_preview_sync").length > 0 && calls.slice(mark).some((c) => c[0] === "screen_form_preview_sync"), "live sync follows the sample");
+// Its period set, Print preview still saves nothing.
+await openSample();
+ui.setPeriodPart({ [K("txtYear")]: "2025", ...tick(3) }, cx);
+await settle();
+mark = calls.length;
+ui.print(cx);
+await settle();
+after = calls.slice(mark);
+assert.deepEqual(after.filter((c) => STORING.includes(c[0])), [], "a set period does not save on print either");
+assert.equal(named("screen_form_print_sample").at(-1)[2].which, "fresh 2025 Q3", "it previews the sample built for its period");
+console.log("PASS: Print preview on a sample opens at once from the page and stores nothing.");

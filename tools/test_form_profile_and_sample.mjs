@@ -2,7 +2,8 @@
 // real app/shell/form_page.js with a mocked host:
 //  - a Form library sample shows its period and date boxes blank, keeps one
 //    blank until the host accepts an edit for it, does not judge a blank
-//    one, offers Start a return, and is never saved, queued or printed;
+//    one, has Print preview, Check, Queue and Save (no Start a return), is
+//    never saved or queued before its period is set, and previews at once;
 //  - profile-filled items fold into "From tax profile · N filled boxes"; a
 //    box the profile left blank stays in paper order; the profile mark turns
 //    into Edit on hover or keyboard focus; Edit (click or Enter) opens the
@@ -137,7 +138,7 @@ const app = {
         return { draft: args[1], values: { ...hostValues }, options: {}, rejected };
       }
       if (name === "screen_form_validate") return Promise.resolve({ draft: args[1], values: { ...hostValues }, options: {}, errors: validateErrors });
-      if (name === "screen_form_preview_sync" || name === "screen_form_print") return true;
+      if (name === "screen_form_preview_sync" || name === "screen_form_print" || name === "screen_form_print_sample") return true;
       throw Error(name);
     },
   },
@@ -163,12 +164,12 @@ assert.equal(ui.state.values[K("qtr_1")], "", "quarter blank");
 // Decided 2026-10-17: a sample saves as its period's return, so it has
 // Save, and Queue and Print (they save it first).
 assert.ok(buttons.includes("fp-save") && buttons.includes("fp-queue") && buttons.includes("fp-print"), `Save, Queue and Print on a sample: ${buttons}`);
+// Decided 2026-10-22: no Start a return in a sample's header.
+assert.ok(!buttons.includes("fp-start-return"), `no Start a return on a sample: ${buttons}`);
 assert.ok(texts.some((t) => /Save makes it your return for its period.*Save asks for it.*New return/.test(t)), "the sample says what Save does");
 assert.ok(texts.includes("Sample from the Form library"), "no period in the taxpayer bar");
 assert.ok(texts.includes("Shows once the period is typed"), "a locked blank box says what it waits for");
 assert.ok(texts.includes("Set when you start a return"), "a shut radio group says what it waits for");
-press(clicks, "fp-start-return");
-assert.equal(json(calls.at(-1)), json(["startNewReturn", "2551Q"]), "Start a return opens New return for this form");
 
 // The host's refill stays blank, and a check naming only blank boxes waits.
 // The host holds back what the blank period cannot judge; the page shows
@@ -189,16 +190,21 @@ ui.choose({ [K("rtnMonth")]: "06" }, cx);
 await settle(); frame();
 assert.equal(ui.state.values[K("rtnMonth")], "06", "an accepted edit shows");
 
-// Its period not set, Save, Queue and Print ask for the period in the
-// app's own modal and write nothing yet (tools/test_form_sample_save.mjs
-// drives the rest); Cancel queue has nothing to cancel.
+// Its period not set, Save and Queue ask for the period in the app's own
+// modal and write nothing yet (tools/test_form_sample_save.mjs drives the
+// rest); Print preview opens at once and stores nothing; Cancel queue has
+// nothing to cancel.
 const writes = () => calls.filter((c) => ["screen_form_save", "screen_form_queue", "queue_form_draft", "screen_form_print", "cancel_queued", "screen_form_cancel_queue"].includes(c[0])).length;
-for (const action of ["save", "queue", "print"]) {
+for (const action of ["save", "queue"]) {
   app.overlay = null;
   ui[action](cx);
   assert.equal(app.overlay, "sample-period", `${action} asks for the period`);
   ui.closeSamplePeriod(cx);
 }
+app.overlay = null;
+ui.print(cx);
+assert.equal(app.overlay, null, "print asks for no period");
+assert.equal(calls.filter((c) => c[0] === "screen_form_print_sample").length, 1, "print previews the sample");
 ui.cancelQueue(cx);
 assert.equal(writes(), 0, "nothing is saved, queued or printed before the period is set");
 assert.ok(toasts.at(-1).includes("New return"), "Cancel queue says what a sample is");
@@ -406,8 +412,6 @@ await settleAll();
 assert.equal(ui.state.draft, draftBefore, "an existing return changes nothing by itself");
 assert.equal(ui.state.existing.label, "Q1 2024", "offerExisting holds what the chosen UI needs");
 assert.equal(opens.length, 0);
-ui.startReturn(cx);
-assert.equal(opens.length, 0, "Start a return offers the stored return, it does not open it");
 // Q2 has none: the sample is rebuilt for it and the typed answer goes on again.
 const before = fills().length;
 ui.choose(Object.fromEntries(quarterKeys.map((k, i) => [k, i === 1 ? "true" : "false"])), cx);
@@ -418,6 +422,4 @@ const reapplied = fills().slice(before).find((c) => c[2] && c[2].rebuilt === 2);
 assert.ok(reapplied, "the typed values were filled onto the rebuilt draft");
 assert.equal(reapplied[3][K("amendedRtn_2")], "true");
 assert.equal(ui.state.periodSet, true);
-ui.startReturn(cx);
-assert.equal(JSON.stringify(opens.at(-1)), JSON.stringify({ tin: "12345678800000", code: "2551Q", year: 2024, period: 2 }), "Start a return opens that period's return");
 console.log("PASS: a sample's period parts are page inputs; complete, the host offers a stored return or rebuilds the sample.");
