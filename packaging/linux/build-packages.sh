@@ -152,6 +152,7 @@ python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$deb_root"
 test -x "$deb_root/usr/bin/ebirforms"
 test -f "$deb_root/usr/share/ebirforms/app/main.js"
 test -d "$deb_root/usr/share/ebirforms/print-overrides"
+test -d "$deb_root/usr/share/ebirforms/assets"
 check_launcher "$deb_root/usr/share/applications" "$deb_root/usr/share/icons/hicolor"
 
 rpm_metadata="$stage/rpm-metadata.toml"
@@ -169,6 +170,7 @@ python3 "$ROOT/scripts/audit_no_legacy.py" --package-root "$rpm_root"
 test -x "$rpm_root/usr/bin/ebirforms"
 test -f "$rpm_root/usr/share/ebirforms/app/main.js"
 test -d "$rpm_root/usr/share/ebirforms/print-overrides"
+test -d "$rpm_root/usr/share/ebirforms/assets"
 check_launcher "$rpm_root/usr/share/applications" "$rpm_root/usr/share/icons/hicolor"
 
 produced=("$deb" "$rpm" "$tarball")
@@ -204,6 +206,8 @@ package() {
   cp -a "\$app_root/app/." "\$pkgdir/usr/share/ebirforms/app/"
   install -d "\$pkgdir/usr/share/ebirforms/print-overrides"
   cp -a "\$app_root/print-overrides/." "\$pkgdir/usr/share/ebirforms/print-overrides/"
+  install -d "\$pkgdir/usr/share/ebirforms/assets"
+  cp -a "\$app_root/assets/." "\$pkgdir/usr/share/ebirforms/assets/"
   install -Dm644 "\$app_root/assets/linux/dev.goldcoders.bir.desktop" "\$pkgdir/usr/share/applications/dev.goldcoders.bir.desktop"
   for size in 48 64 128 256 512; do
     install -Dm644 "\$app_root/assets/linux/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png" "\$pkgdir/usr/share/icons/hicolor/\${size}x\${size}/apps/dev.goldcoders.bir.png"
@@ -249,6 +253,7 @@ PKGBUILD
     test -x "$arch_root/usr/bin/ebirforms"
     test -f "$arch_root/usr/share/ebirforms/app/main.js"
     test -d "$arch_root/usr/share/ebirforms/print-overrides"
+    test -d "$arch_root/usr/share/ebirforms/assets"
     check_launcher "$arch_root/usr/share/applications" "$arch_root/usr/share/icons/hicolor"
     produced+=("$OUT/${base_name}.pkg.tar.zst" "$OUT/ebirforms-bin.PKGBUILD")
 fi

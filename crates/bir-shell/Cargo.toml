@@ -176,6 +176,7 @@ assets = [
     ["target/release/bir", "usr/bin/ebirforms", "755"],
     ["../../app/**/*", "usr/share/ebirforms/app/", "644"],
     ["../../print-overrides/**/*", "usr/share/ebirforms/print-overrides/", "644"],
+    ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
     # Launcher + icon theme entries; file name, Icon= and StartupWMClass= are
     # the app id.
     ["../../assets/linux/dev.goldcoders.bir.desktop", "usr/share/applications/", "644"],
@@ -190,6 +191,7 @@ assets = [
     { source = "target/release/bir", dest = "/usr/bin/ebirforms", mode = "755" },
     { source = "../../app/**/*", dest = "/usr/share/ebirforms/app/", mode = "644" },
     { source = "../../print-overrides/**/*", dest = "/usr/share/ebirforms/print-overrides/", mode = "644" },
+    { source = "../../assets/**/*", dest = "/usr/share/ebirforms/assets/", mode = "644" },
     { source = "../../assets/linux/dev.goldcoders.bir.desktop", dest = "/usr/share/applications/dev.goldcoders.bir.desktop", mode = "644" },
     { source = "../../assets/linux/icons/hicolor/**/*", dest = "/usr/share/icons/hicolor/", mode = "644" },
 ]
