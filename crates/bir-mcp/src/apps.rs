@@ -4,10 +4,12 @@
 use gpui_agent::discovery::{self, HostRecord};
 use std::path::Path;
 
-/// `app` in a BIR host's record (GUI and headless alike).
+/// `app` in a painted BIR host's record. `bir-shell` publishes its own name.
 pub const BIR_APP: &str = "bir-desktop";
-/// Executable basenames of the two BIR hosts.
-pub const BIR_EXECUTABLES: [&str; 2] = ["bir", "bir-headless"];
+/// `app` values that are BIR. Headless still publishes `bir-desktop`.
+pub const BIR_APPS: [&str; 2] = [BIR_APP, "bir-shell"];
+/// Executable basenames of the BIR hosts. A packaged shell is renamed to `bir`.
+pub const BIR_EXECUTABLES: [&str; 3] = ["bir", "bir-headless", "bir-shell"];
 const HEADLESS_EXECUTABLE: &str = "bir-headless";
 
 fn executable_name(record: &HostRecord) -> &str {
@@ -18,7 +20,7 @@ fn executable_name(record: &HostRecord) -> &str {
 }
 
 pub fn is_bir(record: &HostRecord) -> bool {
-    record.app == BIR_APP || BIR_EXECUTABLES.contains(&executable_name(record))
+    BIR_APPS.contains(&record.app.as_str()) || BIR_EXECUTABLES.contains(&executable_name(record))
 }
 
 /// `desktop` or `headless`, from the record alone (`app.info` is the
@@ -213,5 +215,65 @@ mod tests {
         assert!(still_published(root, me, &gui));
         assert!(!still_published(root, me, "127.0.0.1:9"));
         assert!(!still_published(root, i32::MAX as u32, &gui));
+    }
+
+    #[test]
+    fn bir_shell_is_a_desktop_bir_app_and_a_foreign_app_is_not() {
+        assert!(is_bir(&record(
+            "127.0.0.1:9",
+            "bir-shell",
+            "ebirforms",
+            None
+        )));
+        assert!(is_bir(&record(
+            "127.0.0.1:9",
+            "custom",
+            "/usr/bin/bir-shell",
+            None
+        )));
+        assert!(!is_bir(&record(
+            "127.0.0.1:9",
+            "nativechat",
+            "nativechat",
+            None
+        )));
+
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let (_shell, shell) = listener();
+        let (_chat, chat) = listener();
+        let _a = publish_record(
+            root,
+            &record(
+                &shell,
+                "bir-shell",
+                "/x/target/debug/bir-shell",
+                Some("bir-shell"),
+            ),
+        )
+        .unwrap();
+        let _c = publish_record(root, &record(&chat, "nativechat", "nativechat", None)).unwrap();
+
+        let found = live(root);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(app_id(&found[0]), "bir-shell");
+        assert_eq!(mode(&found[0]), "desktop");
+        assert_eq!(resolve(root, "bir-shell").unwrap().addr, shell);
+        let foreign = resolve(root, "nativechat").unwrap_err();
+        assert!(foreign.contains("not a BIR app"), "{foreign}");
+
+        // A packaged install renames the binary to `bir` and still publishes
+        // app `bir-shell`. Two of those share a name, so connect needs an id.
+        let (_renamed, renamed) = listener();
+        let _b =
+            publish_record(root, &record(&renamed, "bir-shell", "/usr/bin/bir", None)).unwrap();
+        let found = live(root);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert_eq!(
+            mode(found.iter().find(|r| r.addr == renamed).unwrap()),
+            "desktop"
+        );
+        let both = resolve(root, "bir-shell").unwrap_err();
+        assert!(both.contains("more than one"), "{both}");
     }
 }

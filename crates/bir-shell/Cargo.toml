@@ -28,6 +28,11 @@ path = "src/main.rs"
 # through `gpui_kit`, so one feature switches every layer; never mix a direct
 # upstream `gpui` import with it.
 gpui-fast = ["gpui-kit/gpui-fast", "gpui-shell/gpui-fast", "gpui-component/gpui-fast"]
+# gpui-agent control plane. Off in a normal build. When compiled in, the
+# listener still starts only if `GPUI_AGENT=1` (and a release build also
+# needs `GPUI_AGENT_ALLOW_RELEASE=1`). Same protocol rev as bir-desktop and
+# bir-mcp.
+agent = ["dep:gpui-agent"]
 
 [dependencies]
 # gpui-shell is published only via the monorepo git (the crates.io `gpui-shell`
@@ -65,6 +70,7 @@ smallvec = "1"
 
 bir-core = { path = "../bir-core" }
 bir-print = { path = "../bir-print" }
+gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3", optional = true }
 
 anyhow = "1"
 chrono = "0.4"

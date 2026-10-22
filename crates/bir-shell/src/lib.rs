@@ -8,6 +8,8 @@
 //! See `docs/plans/gpui-shell-migration.md` (tracking issue #135) for the
 //! slice plan.
 
+#[cfg(feature = "agent")]
+mod agent;
 mod auth_limiter;
 mod bir_module;
 mod blitz_render;
