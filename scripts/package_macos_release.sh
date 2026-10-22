@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 # Package the signed, notarized, stapled universal macOS DMG for a release.
 #
-# Expects both cargo release builds to already exist:
-#   target/aarch64-apple-darwin/release/bir-desktop
-#   target/x86_64-apple-darwin/release/bir-desktop
+# Expects both cargo release builds to already exist. For the shipped
+# gpui-shell app (BIN_NAME=bir-shell BIN_TARGET_ROOT=crates/bir-shell/target):
+#   crates/bir-shell/target/aarch64-apple-darwin/release/bir-shell
+#   crates/bir-shell/target/x86_64-apple-darwin/release/bir-shell
 #
 # Environment:
 #   VERSION               required, must match ^[0-9]+\.[0-9]+\.[0-9]+$
+#   BIN_NAME              cargo binary in <triple>/release to package
+#                         (default "bir-desktop"; "bir-shell" for the shell)
+#   BIN_TARGET_ROOT       directory holding <triple>/release
+#                         (default "target"; "crates/bir-shell/target" for the
+#                         shell, a standalone workspace with its own target dir)
+#   RESOURCE_DIRS         repo-relative directories also staged into
+#                         Contents/Resources next to assets/ — "app
+#                         print-overrides" for the shell, empty for the
+#                         painted app
 #   BUILD_NUMBER          default: parsed from the justfile BUILD_NUMBER line
 #   SIGNING_IDENTITY      default "-" (ad-hoc, local smoke tests only);
 #                         otherwise a codesign identity name or SHA-1
@@ -35,6 +45,9 @@ fi
 
 APP_NAME="${APP_NAME:-eBIRForms}"
 BUNDLE_ID="${BUNDLE_ID:-dev.goldcoders.bir}"
+BIN_NAME="${BIN_NAME:-bir-desktop}"
+BIN_TARGET_ROOT="${BIN_TARGET_ROOT:-target}"
+RESOURCE_DIRS="${RESOURCE_DIRS:-}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 NOTARY_KEY_PATH="${NOTARY_KEY_PATH:-}"
 NOTARY_KEY_ID="${NOTARY_KEY_ID:-}"
@@ -85,9 +98,12 @@ OUT_DIR="${OUT_DIR:-target/release-artifacts}"
 # ── Preconditions ────────────────────────────────────────────────────────────
 
 for triple in aarch64-apple-darwin x86_64-apple-darwin; do
-  if [[ ! -f "target/$triple/release/bir-desktop" ]]; then
-    fail "missing target/$triple/release/bir-desktop — run: cargo build --locked --release --target $triple"
+  if [[ ! -f "$BIN_TARGET_ROOT/$triple/release/$BIN_NAME" ]]; then
+    fail "missing $BIN_TARGET_ROOT/$triple/release/$BIN_NAME — run the release build for $triple"
   fi
+done
+for resource_dir in $RESOURCE_DIRS; do
+  [[ -d "$resource_dir" ]] || fail "resource directory missing: $resource_dir"
 done
 
 keychain_args=()
@@ -149,11 +165,11 @@ PYEOF
 
 # ── a. Universal binary ──────────────────────────────────────────────────────
 
-python3 scripts/alias_desktop_bin.py target/aarch64-apple-darwin/release
-python3 scripts/alias_desktop_bin.py target/x86_64-apple-darwin/release
+python3 scripts/alias_desktop_bin.py "$BIN_TARGET_ROOT/aarch64-apple-darwin/release" "$BIN_NAME"
+python3 scripts/alias_desktop_bin.py "$BIN_TARGET_ROOT/x86_64-apple-darwin/release" "$BIN_NAME"
 lipo -create \
-  target/aarch64-apple-darwin/release/bir \
-  target/x86_64-apple-darwin/release/bir \
+  "$BIN_TARGET_ROOT/aarch64-apple-darwin/release/bir" \
+  "$BIN_TARGET_ROOT/x86_64-apple-darwin/release/bir" \
   -output "$OUT_DIR/bir"
 chmod +x "$OUT_DIR/bir"
 
@@ -175,6 +191,12 @@ cp "$OUT_DIR/bir" "$APP/Contents/MacOS/"
 cp -R assets "$APP/Contents/Resources/"
 rm -rf "$APP/Contents/Resources/assets/macos"
 cp assets/AppIcon.icns "$APP/Contents/Resources/"
+# The shell's runtime resources: `app/` (the JavaScript UI) and
+# `print-overrides/` resolve at Contents/Resources/<name> — see
+# crates/bir-shell/src/packaged.rs.
+for resource_dir in $RESOURCE_DIRS; do
+  cp -R "$resource_dir" "$APP/Contents/Resources/"
+done
 
 cp assets/macos/Info.plist "$APP/Contents/Info.plist"
 sed -i '' "s/VERSION_PLACEHOLDER/${VERSION}/g" "$APP/Contents/Info.plist"

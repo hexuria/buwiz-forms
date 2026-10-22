@@ -452,6 +452,35 @@ def wait_preview(client: AgentClient, proc: subprocess.Popen, timeout: float = 3
     )
 
 
+def wait_ui(client: AgentClient, proc: subprocess.Popen, timeout: float = 60) -> None:
+    """Hold until the UI thread proves it drains the agent mailbox.
+
+    `hello` is answered by the bridge thread, so it only proves the TCP side
+    is bound. A mailbox-routed request is queued first and answered when the
+    UI thread drains it; a drain timeout therefore means the request still
+    executes, only late — retrying a write after it would run the write
+    twice. Polling a read-only `snapshot` until it answers is the safe
+    readiness probe before the first write: a cold start (migrations, the
+    first frame, WARP device init) can keep the UI thread busy well past the
+    mailbox wait on a debug build.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise SmokeError(
+                "process exited before the UI thread answered: "
+                f"{classify_exit(proc.returncode)}"
+            )
+        try:
+            reply = client.request({"op": "snapshot"})
+            if reply.get("ok"):
+                return
+        except (OSError, ValueError, json.JSONDecodeError):
+            pass
+        time.sleep(0.5)
+    raise SmokeError(f"the UI thread did not answer a snapshot within {timeout}s")
+
+
 def wait_status(client: AgentClient, proc: subprocess.Popen, timeout: float = 90) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -520,6 +549,8 @@ def run_phase(bin_path: Path, work: Path, phase: str) -> dict[str, Any]:
         else:
             raise SmokeError(f"hello did not answer within 60s: {last_error}")
         result["step_reached"] = "hello"
+        wait_ui(client, proc)
+        result["step_reached"] = "ui ready"
         year = time.localtime().tm_year
         seed_profile(client, year)
         result["step_reached"] = "seeded profile"

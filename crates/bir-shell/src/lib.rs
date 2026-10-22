@@ -13,6 +13,7 @@ mod bir_module;
 mod blitz_render;
 mod dashboard_module;
 mod host;
+mod packaged;
 pub mod print_preview_window;
 pub mod print_sheet;
 mod screen_form_module;

@@ -229,6 +229,11 @@ try {
     if (-not (Test-Path (Join-Path $installLocation 'bir.exe') -PathType Leaf)) {
         throw "Registered package does not contain bir.exe in $installLocation"
     }
+    foreach ($shellResource in @('app\main.js', 'print-overrides')) {
+        if (-not (Test-Path (Join-Path $installLocation $shellResource))) {
+            throw "Registered package does not contain $shellResource in $installLocation"
+        }
+    }
     $familyName = $installedPackage.PackageFamilyName
 
     New-Item -ItemType Directory -Force -Path $tempRoot, $scratchLocalAppData | Out-Null
@@ -253,6 +258,9 @@ try {
     $layoutExe = Join-Path $layoutPath 'bir.exe'
     if (-not (Test-Path $layoutExe -PathType Leaf)) {
         throw 'Unpacked MSIX layout does not contain bir.exe.'
+    }
+    if (-not (Test-Path (Join-Path $layoutPath 'app\main.js') -PathType Leaf)) {
+        throw 'Unpacked MSIX layout does not contain app\main.js.'
     }
     $runtimeFiles = @(
         Get-ChildItem -Path $layoutPath -File |

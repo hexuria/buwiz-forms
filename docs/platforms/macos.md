@@ -101,12 +101,16 @@ there, but nobody has run it on that platform.
 
 ## Packaging
 
-- The release workflow builds arm64 and x86_64, joins them with `lipo`, makes
-  the `.app`, signs it, builds a DMG, notarizes it with `notarytool` and checks
-  it with `spctl`. It needs the Apple secrets listed in
+- The release workflow builds `bir-shell` for arm64 and x86_64, joins them
+  with `lipo`, makes the `.app` — `Contents/MacOS/bir` plus `app/`,
+  `print-overrides/` and `assets/` under `Contents/Resources` — signs it,
+  builds a DMG, notarizes it with `notarytool` and checks it with `spctl`.
+  It needs the Apple secrets listed in
   [DEVELOPMENT.md](../DEVELOPMENT.md#cicd-secrets--codesigning).
-- `just app` builds the sandboxed Mac App Store package (feature `mas_build`).
-  It needs App Store Connect credentials for the build number.
+- `just app` still builds the sandboxed Mac App Store package from the painted
+  `bir-desktop` (feature `mas_build`): the shell has no `mas_build` equivalent
+  or sandboxed JIT entitlement story yet (docs/plans/gpui-shell-migration.md,
+  S7). It needs App Store Connect credentials for the build number.
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control

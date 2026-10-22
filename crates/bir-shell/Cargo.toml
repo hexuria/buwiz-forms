@@ -156,3 +156,42 @@ parley = { opt-level = 3 }
 fontique = { opt-level = 3 }
 skrifa = { opt-level = 3 }
 html5ever = { opt-level = 3 }
+
+# Linux system packages. `target/release/bir` resolves inside this workspace's
+# target dir (crates/bir-shell/target/<triple>/release) after
+# scripts/alias_desktop_bin.py names the built bir-shell binary `bir`; `../../`
+# reaches the repository root. app/ and print-overrides/ resolve under
+# /usr/share/ebirforms at runtime — see src/packaged.rs. The runtime deps match
+# bir-desktop's list: the shell also links webkit2gtk via lb-wry.
+[package.metadata.deb]
+name = "ebirforms"
+maintainer = "Goldcoders Corp <support@goldcoders.dev>"
+priority = "optional"
+section = "utils"
+depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
+extended-description = """eBIRForms Desktop — Philippine BIR tax return filing application.
+Supports form preparation, validation, submission via SFTP, email confirmation
+tracking, and PDF generation for BIR Form 2551Q and related forms."""
+assets = [
+    ["target/release/bir", "usr/bin/ebirforms", "755"],
+    ["../../app/**/*", "usr/share/ebirforms/app/", "644"],
+    ["../../print-overrides/**/*", "usr/share/ebirforms/print-overrides/", "644"],
+    ["../../assets/**/*", "usr/share/ebirforms/assets/", "644"],
+    # Launcher + icon theme entries; file name, Icon= and StartupWMClass= are
+    # the app id.
+    ["../../assets/linux/dev.goldcoders.bir.desktop", "usr/share/applications/", "644"],
+    ["../../assets/linux/icons/hicolor/**/*", "usr/share/icons/hicolor/", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "ebirforms"
+auto-req = "auto"
+requires = { "libvulkan.so.1()(64bit)" = "", "libwebkit2gtk-4.1.so.0()(64bit)" = "" }
+assets = [
+    { source = "target/release/bir", dest = "/usr/bin/ebirforms", mode = "755" },
+    { source = "../../app/**/*", dest = "/usr/share/ebirforms/app/", mode = "644" },
+    { source = "../../print-overrides/**/*", dest = "/usr/share/ebirforms/print-overrides/", mode = "644" },
+    { source = "../../assets/**/*", dest = "/usr/share/ebirforms/assets/", mode = "644" },
+    { source = "../../assets/linux/dev.goldcoders.bir.desktop", dest = "/usr/share/applications/dev.goldcoders.bir.desktop", mode = "644" },
+    { source = "../../assets/linux/icons/hicolor/**/*", dest = "/usr/share/icons/hicolor/", mode = "644" },
+]

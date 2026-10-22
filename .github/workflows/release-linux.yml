@@ -11,7 +11,7 @@ on:
     paths:
       - .github/workflows/release-linux.yml
       - packaging/linux/**
-      - crates/bir-desktop/Cargo.toml
+      - crates/bir-shell/Cargo.toml
       - assets/linux/**
   workflow_dispatch:
 
@@ -74,8 +74,13 @@ jobs:
           toolchain: 1.99.0
           targets: ${{ matrix.target }}
 
+      # The shipped binary builds from the standalone bir-shell workspace, so
+      # cache its target dir under the same family shell-check saves on main.
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/bir-shell
+          shared-key: shell-${{ runner.os }}
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -95,11 +100,14 @@ jobs:
           python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
           python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
+      # The shipped app is the gpui-shell host (crates/bir-shell — a standalone
+      # workspace with its own lockfile and target dir), built with no
+      # features. The painted bir-desktop stays buildable but is not shipped.
       - name: Build release binary
-        run: cargo build --locked --release --target ${{ matrix.target }}
+        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target ${{ matrix.target }}
 
       - name: Stage desktop executable name
-        run: python3 scripts/alias_desktop_bin.py target/${{ matrix.target }}/release
+        run: python3 scripts/alias_desktop_bin.py crates/bir-shell/target/${{ matrix.target }}/release bir-shell
 
       - name: Resolve package version
         id: version

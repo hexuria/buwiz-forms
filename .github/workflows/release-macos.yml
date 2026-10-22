@@ -49,7 +49,7 @@ jobs:
         shell: bash
         run: |
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          git ls-files --error-unmatch Cargo.lock package-lock.json
+          git ls-files --error-unmatch Cargo.lock package-lock.json crates/bir-shell/Cargo.lock
 
           CARGO_VERSION="$(awk -F '"' '
             /^\[workspace\.package\]$/ { in_workspace_package = 1; next }
@@ -188,8 +188,13 @@ jobs:
           toolchain: 1.99.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      # The shipped binary builds from the standalone bir-shell workspace, so
+      # cache its target dir under the same family shell-check saves on main.
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/bir-shell
+          shared-key: shell-${{ runner.os }}
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -209,11 +214,15 @@ jobs:
           python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
           python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision ${{ github.sha }} --out assets/form-renderer-build-identity.json
 
+      # The shipped app is the gpui-shell host (crates/bir-shell — a standalone
+      # workspace with its own lockfile and target dir), built with no
+      # features: release runs the upstream engine. The painted bir-desktop
+      # stays buildable but is not shipped.
       - name: Build ARM64
-        run: cargo build --locked --release --target aarch64-apple-darwin
+        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target aarch64-apple-darwin
 
       - name: Build x86_64
-        run: cargo build --locked --release --target x86_64-apple-darwin
+        run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target x86_64-apple-darwin
 
       - name: Import signing certificate into temporary keychain
         shell: bash
@@ -274,6 +283,9 @@ jobs:
           VERSION: ${{ needs.preflight.outputs.version }}
           NOTARY_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          BIN_NAME: bir-shell
+          BIN_TARGET_ROOT: crates/bir-shell/target
+          RESOURCE_DIRS: app print-overrides
         run: |
           REQUIRE_NOTARIZATION=1 bash scripts/package_macos_release.sh
 

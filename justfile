@@ -504,22 +504,27 @@ exe: check-exe-prerequisites build-frozen-html-identity
 
     $ISCC = "{{ISCC}}"
     
-    cargo build --locked --release --target {{WIN_TARGET}}
+    # The shipped app is the gpui-shell host (crates/bir-shell, a standalone
+    # workspace) built with no features; the painted bir-desktop stays
+    # buildable for development but is not packaged.
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
         $cargoExitCode = $LASTEXITCODE
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting EXE packaging.")
         exit $cargoExitCode
     }
-    {{PYTHON}} scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
+    {{PYTHON}} scripts/alias_desktop_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    
+
     $VERSION = "{{VERSION}}"
-    
+
     $stageDir = "target\installer-stage"
     if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
-    Copy-Item "target\{{WIN_TARGET}}\release\bir.exe" "$stageDir\bir.exe"
+    Copy-Item "crates\bir-shell\target\{{WIN_TARGET}}\release\bir.exe" "$stageDir\bir.exe"
     Copy-Item "assets" "$stageDir\assets" -Recurse
+    Copy-Item "app" "$stageDir\app" -Recurse
+    Copy-Item "print-overrides" "$stageDir\print-overrides" -Recurse
 
     {{PYTHON}} scripts/audit_no_legacy.py --package-root $stageDir
     if ($LASTEXITCODE -ne 0) {
@@ -554,20 +559,25 @@ msix: build-frozen-html-identity
     Write-Warning "STORE-ONLY MSIX candidate; not a public GitHub release artifact"
     Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"
     
-    cargo build --locked --release --target {{WIN_TARGET}}
+    # The shipped app is the gpui-shell host (crates/bir-shell, a standalone
+    # workspace) built with no features; the painted bir-desktop stays
+    # buildable for development but is not packaged.
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
         $cargoExitCode = $LASTEXITCODE
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting MSIX packaging.")
         exit $cargoExitCode
     }
-    {{PYTHON}} scripts/alias_desktop_bin.py "target/{{WIN_TARGET}}/release"
+    {{PYTHON}} scripts/alias_desktop_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    
+
     $VERSION = "{{VERSION}}"
     $MSIX_PATH = "target/release-artifacts/{{APP_NAME}}-Windows-$VERSION.msix"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/package_msix.ps1 `
-        -ExePath "target/{{WIN_TARGET}}/release/bir.exe" `
+        -ExePath "crates/bir-shell/target/{{WIN_TARGET}}/release/bir.exe" `
         -AssetsDir assets `
+        -AppDir app `
+        -PrintOverridesDir print-overrides `
         -Version $VERSION `
         -BuildNumber {{BUILD_NUMBER}} `
         -OutFile $MSIX_PATH `
@@ -707,27 +717,29 @@ clean:
 
 # --- Hidden OS-specific packaging tasks ---
 
+# Packages the shipped gpui-shell app: crates/bir-shell is a standalone
+# workspace built with no features, and the .app stages app/ and
+# print-overrides/ under Contents/Resources where the shell resolves them
+# (crates/bir-shell/src/packaged.rs). The painted bir-desktop stays buildable
+# for development but is not packaged here.
 _package-mac args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
-    FEATURES=""
     for arg in {{args}}; do
         case "$arg" in
-            --native-evidence) FEATURES="${FEATURES:+$FEATURES,}dev-tools" ;;
-            --agent)         FEATURES="${FEATURES:+$FEATURES,}agent" ; AGENT=1 ;;
+            --native-evidence|--agent)
+                echo "⚠️  $arg is a bir-desktop feature; the shipped shell ignores it" ;;
         esac
     done
-    FEATURES_FLAG=""
-    if [ -n "$FEATURES" ]; then FEATURES_FLAG="--features $FEATURES"; fi
     echo "Building for ARM64..."
-    cargo build --locked --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{MAC_ARM_TARGET}}
     echo "Building for x86_64..."
-    cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
-    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
-    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{MAC_X86_TARGET}}
+    {{PYTHON}} scripts/alias_desktop_bin.py crates/bir-shell/target/{{MAC_ARM_TARGET}}/release bir-shell
+    {{PYTHON}} scripts/alias_desktop_bin.py crates/bir-shell/target/{{MAC_X86_TARGET}}/release bir-shell
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
-    lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
+    lipo -create crates/bir-shell/target/{{MAC_ARM_TARGET}}/release/bir crates/bir-shell/target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
     echo "Creating .app bundle..."
     rm -rf "{{MAC_APP}}"
     mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
@@ -735,6 +747,8 @@ _package-mac args="": build-frozen-html-identity
     cp -R assets "{{MAC_APP}}/Contents/Resources/"
     rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
     cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
+    cp -R app "{{MAC_APP}}/Contents/Resources/"
+    cp -R print-overrides "{{MAC_APP}}/Contents/Resources/"
 
     cp assets/macos/Info.plist "{{MAC_APP}}/Contents/Info.plist"
     sed -i '' "s/VERSION_PLACEHOLDER/{{VERSION}}/g" "{{MAC_APP}}/Contents/Info.plist"
@@ -764,11 +778,18 @@ _package-mac args="": build-frozen-html-identity
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
 
+# MAS/TestFlight still packages the painted bir-desktop + mas_build — a
+# conservative hold, not the shipped-app story. bir-shell has no mas_build
+# equivalent yet, and its QuickJS JIT engine needs the sandboxed
+# allow-unsigned-executable-memory/allow-jit entitlement story worked out
+# before App Store submission. Non-store releases (DMG, EXE, deb/rpm) ship
+# bir-shell; cutting MAS over is follow-up work (see
+# docs/plans/gpui-shell-migration.md, S7).
 _package-mac-appstore args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
     CERT="${CODESIGN_IDENTITY:--}"
-    echo "Building for Mac App Store..."
+    echo "Building for Mac App Store (painted bir-desktop — see deferral note above)..."
     # Always include mas_build feature
     FEATURES="mas_build"
     for arg in {{args}}; do
@@ -865,15 +886,18 @@ _check-linux-launcher apps_dir icons_dir:
     if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate "$ENTRY"; fi
     echo "✅ Linux launcher + icons present"
 
+# Packages the shipped gpui-shell app (crates/bir-shell, standalone workspace,
+# no features). deb/rpm metadata lives in crates/bir-shell/Cargo.toml; the
+# tarball fallback stages app/ and print-overrides/ beside the binary.
 _package-linux: build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
-    cargo build --locked --release --target {{LINUX_TARGET}}
-    {{PYTHON}} scripts/alias_desktop_bin.py target/{{LINUX_TARGET}}/release
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{LINUX_TARGET}}
+    {{PYTHON}} scripts/alias_desktop_bin.py crates/bir-shell/target/{{LINUX_TARGET}}/release bir-shell
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then
         DEB="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"
-        cargo deb --locked -p bir-desktop --no-build --target {{LINUX_TARGET}} -o "$DEB"
+        cargo deb --locked --manifest-path crates/bir-shell/Cargo.toml --no-build --target {{LINUX_TARGET}} -o "$DEB"
         AUDIT_ROOT="$(mktemp -d)"
         trap 'rm -rf "$AUDIT_ROOT"' EXIT
         dpkg-deb --extract "$DEB" "$AUDIT_ROOT"
@@ -887,8 +911,10 @@ _package-linux: build-frozen-html-identity
         PKG="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-{{VERSION}}"
         TARBALL="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.tar.gz"
         mkdir -p "$PKG"
-        cp target/{{LINUX_TARGET}}/release/bir "$PKG/"
+        cp crates/bir-shell/target/{{LINUX_TARGET}}/release/bir "$PKG/"
         cp -R assets "$PKG/"
+        cp -R app "$PKG/"
+        cp -R print-overrides "$PKG/"
         cp assets/linux/install-desktop-entry.sh "$PKG/"
         {{PYTHON}} scripts/audit_no_legacy.py --package-root "$PKG"
         if [ "$DEV_MODE" = "true" ] || [ "$DEVELOPER_MODE" = "true" ]; then

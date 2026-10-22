@@ -74,17 +74,18 @@ sudo zypper --no-gpg-checks install --allow-unsigned-rpm ./eBIRForms-Linux-x64-<
 sudo pacman -U ./eBIRForms-Linux-x64-<version>.pkg.tar.zst
 ```
 
-The `.deb` and `.rpm` install `/usr/bin/ebirforms`, assets under
-`/usr/share/ebirforms/assets/`, a desktop entry, and five hicolor icon sizes.
-The package metadata declares runtime libraries; RPM dependencies are detected
-from the binary's linked shared libraries.
+The `.deb` and `.rpm` install `/usr/bin/ebirforms`, the shell's `app/` and
+`print-overrides/` under `/usr/share/ebirforms/`, a desktop entry, and five
+hicolor icon sizes. The package metadata declares runtime libraries; RPM
+dependencies are detected from the binary's linked shared libraries.
 
 ### Tarball
 
 Use `--tarball` with the installer or download the `.tar.gz` release asset. To
 install manually, extract it and run `./install-desktop-entry.sh`; launch with
-`./bir`. The tarball contains `bir`, `assets/`, and the desktop-entry installer
-at its top level.
+`./bir`. The tarball contains `bir`, `app/`, `print-overrides/`, `assets/`,
+and the desktop-entry installer at its top level; the shell resolves `app/`
+and `print-overrides/` beside the binary.
 
 ### Runtime requirements
 

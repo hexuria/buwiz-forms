@@ -285,18 +285,20 @@ jobs:
         $auditExitCode = $LASTEXITCODE
         if ($auditExitCode -ne 0) { exit $auditExitCode }
 
-    # #96: the shipped bir-desktop.exe must carry the /STACK reserve from
-    # crates/bir-desktop/build.rs. Checking the PE header here means reverting
+    # #96: the shipped bir.exe must carry the /STACK reserve from
+    # crates/bir-shell/build.rs. The shipped binary is the gpui-shell host
+    # (built by `just exe` above into the standalone workspace's target dir
+    # and aliased to bir.exe); checking the PE header here means reverting
     # the linker policy fails CI instead of silently returning to 1 MiB.
-    - name: Verify bir-desktop PE stack reserve
+    - name: Verify shipped bir.exe PE stack reserve
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        python scripts/check_pe_stack_reserve.py target/x86_64-pc-windows-msvc/release/bir-desktop.exe
+        python scripts/check_pe_stack_reserve.py crates/bir-shell/target/x86_64-pc-windows-msvc/release/bir.exe
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        cargo build --locked -p bir-desktop --bin bir-desktop
+        cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        python scripts/check_pe_stack_reserve.py target/debug/bir-desktop.exe
+        python scripts/check_pe_stack_reserve.py crates/bir-shell/target/debug/bir-shell.exe
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   # Decides what this run tests, from the files it changes:

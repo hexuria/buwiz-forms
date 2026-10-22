@@ -124,12 +124,19 @@ scroll semantics, and the AI-agent playbook — is in
 
 The headless agent is the package `bir` (`crates/bir`, binary `bir`). Users install it
 from git: `cargo install --git https://github.com/hexuria/buwiz-forms bir --locked`.
-The desktop GUI is the cargo target `bir-desktop` in `crates/bir-desktop`, so
-the two binaries never collide. Packaging renames the desktop build output:
-`scripts/alias_desktop_bin.py <target dir>` copies `bir-desktop` to `bir`
-(`bir.exe` on Windows) before the dmg, deb and exe steps, so installed
-artifacts and the `[package.metadata.deb]` asset path still use `bir`. Run it
-after `cargo build --release` and before `cargo deb --no-build`.
+The shipped desktop GUI is the cargo target `bir-shell` in `crates/bir-shell`
+(a standalone workspace with its own lockfile and target dir); the painted
+`bir-desktop` in `crates/bir-desktop` stays buildable for development and is
+still what `just app`/`testflight` packages for MAS. Neither collides with the
+`bir` CLI. Packaging renames the shipped build output:
+`scripts/alias_desktop_bin.py <target dir> [src name]` copies `bir-shell`
+(the default src name is `bir-desktop`) to `bir` (`bir.exe` on Windows) before
+the dmg, deb and exe steps, so installed artifacts and the
+`[package.metadata.deb]` asset path still use `bir`. Run it after
+`cargo build --release` and before `cargo deb --no-build`. Release packages
+also stage `app/` and `print-overrides/` where the shell resolves them
+(`Contents/Resources/` on macOS, beside `bir` on Windows/tarball,
+`/usr/share/ebirforms/` for deb/rpm — `crates/bir-shell/src/packaged.rs`).
 
 - Desktop releases use tags `vMAJOR.MINOR.PATCH` (`just publish`).
 - The CLI uses tags `bir-vMAJOR.MINOR.PATCH` (`just publish-bir`, which runs
