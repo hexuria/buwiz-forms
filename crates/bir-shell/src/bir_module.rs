@@ -18,22 +18,100 @@ use crate::auth_limiter;
 thread_local! {
     static DATABASE: RefCell<Option<std::sync::Arc<std::sync::Mutex<Database>>>> =
         const { RefCell::new(None) };
+    /// The handle holds an in-memory placeholder because [`reset_database`]
+    /// let go of the live file; the next call reopens the file into it.
+    static RELEASED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
 /// whose work must *release* the lock mid-call — the inbox poller re-locks
 /// internally during an IMAP fetch, so `check_inbox_now` clones this Arc,
 /// drops its guard, then polls.
+///
+/// The first open also starts the submission worker on this same handle,
+/// and the handle is never replaced afterwards (a database import reopens
+/// the file *inside* it), so the worker always sees the database the page
+/// sees.
 pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     DATABASE.with(|slot| {
         let mut slot = slot.borrow_mut();
-        if slot.is_none() {
-            let (database, _path, _recovered) =
-                db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
-            *slot = Some(std::sync::Arc::new(std::sync::Mutex::new(database)));
+        match slot.as_ref() {
+            None => {
+                let (database, _path, _recovered) =
+                    db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+                let handle = std::sync::Arc::new(std::sync::Mutex::new(database));
+                start_submission_worker(handle.clone());
+                *slot = Some(handle);
+            }
+            Some(handle) if RELEASED.get() => {
+                let (database, _path, _recovered) =
+                    db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+                *handle
+                    .lock()
+                    .map_err(|_| HostError::new("database lock poisoned"))? = database;
+                RELEASED.set(false);
+            }
+            Some(_) => {}
         }
         Ok(slot.as_ref().expect("database opened").clone())
     })
+}
+
+static SUBMISSION_WORKER: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
+/// Start `bir_core::background_cron` — queued submissions, their retries,
+/// confirmation-inbox polls and scheduled jobs — once per process, on its own
+/// thread and Tokio runtime, exactly as painted `bir` and `bir-headless`
+/// do. It shares `db`, the one owner-locked connection, rather than opening
+/// a second. `BIR_SFTP_DRY_RUN` is read by the worker's transport, unchanged.
+fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
+    if SUBMISSION_WORKER.set(()).is_err() {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("bir-submission-worker".into())
+        .spawn(move || match tokio::runtime::Runtime::new() {
+            Ok(runtime) => runtime.block_on(bir_core::background_cron::start_cron_jobs(db)),
+            Err(error) => {
+                tracing::error!("submission worker not started: no Tokio runtime: {error}");
+            }
+        });
+    if let Err(error) = spawned {
+        tracing::error!("submission worker not started: {error}");
+    }
+}
+
+/// Open the database when the shell launches; `host::run` calls this.
+pub(crate) fn open_database_at_launch() {
+    if let Err(error) = database_handle() {
+        tracing::warn!("database not opened at launch: {}", error.message());
+    }
+}
+
+/// Whether this process started the submission worker.
+#[cfg(test)]
+pub(crate) fn submission_worker_started() -> bool {
+    SUBMISSION_WORKER.get().is_some()
+}
+
+#[cfg(test)]
+thread_local! {
+    static SUBMISSION_WORKER_WAKES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread's host calls woke the submission worker.
+#[cfg(test)]
+pub(crate) fn submission_worker_wakes() -> u32 {
+    SUBMISSION_WORKER_WAKES.with(std::cell::Cell::get)
+}
+
+/// Tell the submission worker the queue changed, so a queued return goes out
+/// now rather than on the worker's next one-minute tick (the painted views
+/// and the agent host do the same after Queue and Cancel queue).
+pub(crate) fn wake_submission_worker() {
+    #[cfg(test)]
+    SUBMISSION_WORKER_WAKES.with(|wakes| wakes.set(wakes.get() + 1));
+    bir_core::background_cron::wake();
 }
 
 /// One connection for the process — the same owner-lock discipline as painted
@@ -58,6 +136,7 @@ pub(crate) fn use_ephemeral_database() {
             Database::open_ephemeral().expect("ephemeral database opens"),
         )));
     });
+    RELEASED.set(false);
 }
 
 /// `serde_json::Value` → `HostValue`. bir-core serializes cleanly; the
@@ -1224,7 +1303,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let form_code = arguments.string(1)?.to_owned();
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
-    with_database(|db| {
+    let queued = with_database(|db| {
         let queued: Result<i64, HostError> = (|| match form_code.as_str() {
             "2551Q" => crate::screen_form_module::out_of_line(|| {
                 let q = quarter.ok_or_else(|| {
@@ -1293,7 +1372,9 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
             }
         })();
         queued.map(|id| HostValue::Number(id as f64))
-    })
+    })?;
+    wake_submission_worker();
+    Ok(queued)
 }
 
 /// Cancel an unclaimed queued submission back to Draft (same guards as the
@@ -1303,7 +1384,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     let form_code = arguments.string(1)?.to_owned();
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
-    with_database(|db| {
+    let cancelled = with_database(|db| {
         let result: Result<(), HostError> = (|| match form_code.as_str() {
             "2551Q" => crate::screen_form_module::out_of_line(|| {
                 let q = quarter.ok_or_else(|| {
@@ -1346,7 +1427,9 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
             }
         })();
         result.map(|_| HostValue::Null)
-    })
+    })?;
+    wake_submission_worker();
+    Ok(cancelled)
 }
 
 /// The painted Background Tasks page merges `job_queue` rows with every
@@ -1707,13 +1790,25 @@ fn open_in_system_browser(path: &std::path::Path) -> Result<(), HostError> {
         .map_err(|error| HostError::new(error.to_string()))
 }
 
-/// Drop the cached connection — used after a database-replace import so the
+/// Close the live connection — used before a database-replace import so the
 /// next `with_database` reopens the freshly extracted file (and re-acquires
-/// the owner lock the dropped handle was holding).
-fn reset_database() {
+/// the owner lock the closed connection was holding). The submission worker
+/// shares the handle, so the connection is swapped for an in-memory
+/// placeholder inside it rather than the handle being dropped: dropping it
+/// would leave the worker holding the old file and its owner lock.
+fn reset_database() -> Result<(), HostError> {
     DATABASE.with(|slot| {
-        slot.borrow_mut().take();
-    });
+        let slot = slot.borrow();
+        let Some(handle) = slot.as_ref() else {
+            return Ok(());
+        };
+        let placeholder = Database::open_ephemeral().map_err(db_error)?;
+        *handle
+            .lock()
+            .map_err(|_| HostError::new("database lock poisoned"))? = placeholder;
+        RELEASED.set(true);
+        Ok(())
+    })
 }
 
 /// The page's import. The host always opens the file dialog (the script has
@@ -1780,7 +1875,7 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
                 parent.join(format!("bir_data.safety-{timestamp}.db")),
             );
         }
-        reset_database();
+        reset_database()?;
         return match bir_core::import::extract_database_zip(path, &db_path) {
             Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
             Err(error) => Err(HostError::new(error.to_string())),
@@ -3577,6 +3672,100 @@ mod tests {
         })
         .unwrap();
         assert_eq!(tins, [ARCHIVE_TIN], "the archive's database is open");
+        std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
+    // ---------- the submission worker ----------
+
+    /// The shell's launch starts the submission worker on the database it
+    /// opens, so a queued return is sent without painted `bir` or
+    /// `bir-headless` running. Opening the database reads its key, so this
+    /// runs in a child test process on a scratch `BIR_DATABASE_PATH` with
+    /// `EBIR_TEST_ENV` (key off the keychain) and `BIR_SFTP_DRY_RUN`: never
+    /// the live database, never BIR.
+    #[test]
+    fn the_shell_launch_starts_the_submission_worker() {
+        const SCRATCH: &str = "BIR_SHELL_SUBMISSION_WORKER_SCRATCH";
+        if let Some(scratch) = std::env::var_os(SCRATCH) {
+            start_the_submission_worker_in(std::path::Path::new(&scratch));
+            return;
+        }
+        let scratch = ScratchDir::new("worker");
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "bir_module::tests::the_shell_launch_starts_the_submission_worker",
+                "--nocapture",
+            ])
+            .current_dir(scratch.path())
+            .env(SCRATCH, scratch.path())
+            .env("BIR_DATABASE_PATH", scratch.path().join("bir_data.db"))
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .status()
+            .unwrap();
+        assert!(status.success(), "the submission worker child failed");
+        assert_eq!(
+            std::fs::read_to_string(scratch.path().join("child-done"))
+                .ok()
+                .as_deref(),
+            Some("ok"),
+            "the child ran the launch"
+        );
+    }
+
+    /// The child's half of the test above. A profile with the test
+    /// notification on makes every worker tick record a heartbeat alert, so
+    /// the alert appearing proves the worker runs on the shell's database.
+    fn start_the_submission_worker_in(scratch: &std::path::Path) {
+        assert_eq!(
+            db::app_database_path(),
+            scratch.join("bir_data.db"),
+            "the scratch database"
+        );
+        assert!(
+            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            "the key stays off the keychain"
+        );
+        assert!(!submission_worker_started(), "nothing runs before launch");
+
+        open_database_at_launch();
+        assert!(submission_worker_started(), "the launch started the worker");
+
+        with_database(|db| {
+            db.create_taxpayer(new_taxpayer("123456788", "Worker Trading Corp"))
+                .map_err(db_error)?;
+            let mut profile = db
+                .list_profiles()
+                .map_err(db_error)?
+                .into_iter()
+                .next()
+                .expect("the created profile");
+            profile.test_notification_enabled = true;
+            db.save_profile(profile).map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        wake_submission_worker();
+
+        let heartbeat = || {
+            with_database(|db| {
+                Ok(db
+                    .list_active_alerts(None)
+                    .map_err(db_error)?
+                    .iter()
+                    .any(|alert| alert.kind == db::alert_kinds::CRON_HEARTBEAT))
+            })
+            .unwrap()
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !heartbeat() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the submission worker never ticked on the shell's database"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
     }
 

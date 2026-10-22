@@ -78,6 +78,10 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
             }
             set_capabilities(capabilities());
             export_module(bir_module::module()).expect("bir module must export");
+            // Open the database now, which starts the submission worker on
+            // it: queued returns send while the shell runs, with no painted
+            // `bir` or `bir-headless` beside it.
+            bir_module::open_database_at_launch();
 
             on_exit_request(|request, _window, _cx| {
                 std::process::exit(request.code());
