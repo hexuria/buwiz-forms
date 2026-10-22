@@ -101,7 +101,7 @@ fn publish_menus(cx: &mut App) {
 /// the native bar, so the script root stays the window root. Elsewhere the
 /// script view sits under an in-window menu bar.
 #[cfg(target_os = "macos")]
-pub fn attach_window(
+pub(crate) fn attach_window(
     root: Entity<ShellRoot>,
     window: &mut Window,
     cx: &mut App,
@@ -113,7 +113,7 @@ pub fn attach_window(
 /// Close hides. The tray poll starts with the window, and the script view
 /// sits under the in-window menu bar.
 #[cfg(not(target_os = "macos"))]
-pub fn attach_window(
+pub(crate) fn attach_window(
     root: Entity<ShellRoot>,
     window: &mut Window,
     cx: &mut App,
@@ -131,8 +131,11 @@ fn arm_window(window: &mut Window, cx: &mut App) {
     });
 }
 
+/// In-window menu bar over the script root. `pub(crate)` because
+/// `open_window` names this type, and a private type there is a hard error
+/// off macOS.
 #[cfg(not(target_os = "macos"))]
-struct DesktopMenuFrame {
+pub(crate) struct DesktopMenuFrame {
     menu: Entity<AppMenuBar>,
     root: Entity<ShellRoot>,
 }
