@@ -1624,7 +1624,7 @@ fn load_draft(
         AgentFormKind::Form2551Q => {
             return out_of_line(|| {
                 let quarter = period.clamp(1, 4);
-                let draft = match store
+                let mut draft = match store
                     .map(|db| db.get_2551q_draft(tin, year, quarter))
                     .transpose()
                     .map_err(|error| read_error("2551Q", error))?
@@ -1634,6 +1634,12 @@ fn load_draft(
                     None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
                     None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
                 };
+                // A later quarter takes the Item 13 answer of its filed Q1
+                // in this app, and is locked to it (`draft_locks::item_13`).
+                if let Some(db) = store {
+                    agent::draft_locks::item_13::refresh(db, &mut draft)
+                        .map_err(|error| read_error("2551Q", error))?;
+                }
                 serde_json::to_value(draft).map_err(|error| error.to_string())
             });
         }
@@ -3436,10 +3442,15 @@ fn opened_json(
     let lock_notes: Map<String, Value> = locks
         .iter()
         .map(|(key, reason)| {
-            (
-                key.clone(),
-                json!(lock_note_for(code, key, reason.as_str().unwrap_or(""))),
-            )
+            let reason = reason.as_str().unwrap_or("");
+            // 2551Q's Item 13 locked to its filed Q1 is already the filer's
+            // words, with the year.
+            let note = if reason.starts_with(agent::draft_locks::item_13::REASON_START) {
+                reason
+            } else {
+                lock_note_for(code, key, reason)
+            };
+            (key.clone(), json!(note))
         })
         .collect();
     let stored_period = if sample.is_some() {
@@ -4550,6 +4561,12 @@ fn apply_screen_edits_here(
         }
         if !editable {
             rejected.insert(key.clone(), json!("this return is no longer a draft"));
+            continue;
+        }
+        // 2551Q's Item 13 on a later quarter whose filed Q1 is in this app
+        // is that Q1's answer (`draft_locks::item_13`).
+        if let Some(lock) = agent::draft_locks::item_13::lock(kind, draft, &key) {
+            rejected.insert(key.clone(), Value::String(format!("`{key}`: {lock}")));
             continue;
         }
         // A box the page shows as the profile's (core-locked, or the filer's
@@ -7527,6 +7544,56 @@ mod tests {
         );
         assert!(
             filled["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            filled["rejected"]
+        );
+        assert_eq!(filled["draft"]["item_13_election"], "eight_percent");
+    }
+
+    /// Item 13 is answered once a year, on the initial quarter: with this
+    /// TIN's filed Q1 of the year in the app, a later quarter opens with
+    /// Q1's answer, its Item 13 boxes in `locks` with why, and a fill of
+    /// them is rejected. Q1 still a Draft leaves Item 13 the filer's.
+    #[test]
+    fn a_filed_q1_locks_item_13_on_a_later_quarter() {
+        use bir_core::forms::agent::draft_locks::item_13;
+        setup();
+        let q1 = fill(
+            "2551Q",
+            &open("2551Q", 1)["draft"],
+            json!({"frm2551Qv2018:taxRate": "2"}),
+        );
+        assert_eq!(
+            q1["draft"]["item_13_election"], "eight_percent",
+            "{}",
+            q1["rejected"]
+        );
+        save("2551Q", &q1["draft"]);
+        let draft_q1 = open("2551Q", 3);
+        for key in item_13::KEYS {
+            assert!(draft_q1["locks"].get(key).is_none(), "{key} open");
+        }
+        store_filed("2551Q", &open("2551Q", 1)["draft"], "Submitted");
+        let opened = open("2551Q", 3);
+        assert_eq!(opened["draft"]["item_13_election"], "eight_percent");
+        for key in item_13::KEYS {
+            let lock = opened["locks"][key].as_str().unwrap_or_default();
+            assert!(
+                lock.starts_with("Set on your filed Q1 return for 2026"),
+                "{key}: {lock}"
+            );
+            assert_eq!(opened["lock_notes"][key], lock, "{key}");
+        }
+        let filled = fill(
+            "2551Q",
+            &opened["draft"],
+            json!({"frm2551Qv2018:taxRate": "1"}),
+        );
+        let rejected = filled["rejected"]["frm2551Qv2018:taxRate"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            rejected.contains("Set on your filed Q1 return for 2026"),
             "{}",
             filled["rejected"]
         );
