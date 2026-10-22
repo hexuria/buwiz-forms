@@ -8,16 +8,19 @@
 //! See `docs/plans/gpui-shell-migration.md` (tracking issue #135) for the
 //! slice plan.
 
+mod app_menu;
 mod auth_limiter;
 mod bir_module;
 mod blitz_render;
 mod dashboard_module;
 mod host;
+mod hotkey;
 mod packaged;
 pub mod print_preview_window;
 pub mod print_sheet;
 mod screen_form_module;
 pub mod static_html;
 mod tax_profile_module;
+mod tray;
 
 pub use host::{app_root, run};

@@ -58,6 +58,8 @@ pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Databa
 }
 
 static SUBMISSION_WORKER: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+static WORKER_THREAD: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> =
+    std::sync::Mutex::new(None);
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — once per process, on its own
@@ -76,9 +78,80 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
                 tracing::error!("submission worker not started: no Tokio runtime: {error}");
             }
         });
-    if let Err(error) = spawned {
-        tracing::error!("submission worker not started: {error}");
+    match spawned {
+        Ok(handle) => {
+            if let Ok(mut slot) = WORKER_THREAD.lock() {
+                *slot = Some(handle);
+            }
+        }
+        Err(error) => tracing::error!("submission worker not started: {error}"),
     }
+}
+
+/// Stop the submission worker and release the owner lock.
+///
+/// Quit (the menu, Cmd/Ctrl+Q, `process.exit`) calls this. The worker finishes
+/// the tick it is on, drops its database handle, and this thread checkpoints
+/// and closes. A second call does nothing. Safe when the database was never
+/// opened.
+pub(crate) fn shutdown_for_quit() {
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    bir_core::background_cron::request_shutdown();
+    let handle = WORKER_THREAD.lock().ok().and_then(|mut slot| slot.take());
+    if let Some(handle) = handle {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = handle.join();
+            let _ = tx.send(());
+        });
+        if rx.recv_timeout(std::time::Duration::from_secs(5)).is_err() {
+            tracing::warn!("submission worker did not stop within 5s; quitting anyway");
+        }
+    }
+    release_database();
+}
+
+fn release_database() {
+    DATABASE.with(|slot| {
+        let Some(handle) = slot.borrow_mut().take() else {
+            return;
+        };
+        match std::sync::Arc::try_unwrap(handle) {
+            Ok(mutex) => {
+                let db = match mutex.into_inner() {
+                    Ok(db) => db,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
+                if let Err(error) = db.close() {
+                    tracing::warn!("database close failed: {error}");
+                }
+            }
+            Err(handle) => match handle.try_lock() {
+                Ok(db) => {
+                    if let Err(error) = db.checkpoint() {
+                        tracing::warn!("database checkpoint failed: {error}");
+                    }
+                }
+                Err(_) => tracing::warn!(
+                    "database still in use at quit; the owner lock releases when the process exits"
+                ),
+            },
+        }
+    });
+}
+
+/// The stored global-show chord, if the database is already open and a key
+/// is saved. Does not open the database: a missing handle means "not set".
+pub(crate) fn stored_global_hotkey() -> Option<String> {
+    let handle = DATABASE.with(|slot| slot.borrow().clone())?;
+    let db = handle.lock().ok()?;
+    db.get_setting("global_hotkey_key")
+        .ok()
+        .flatten()
+        .filter(|value| !value.is_empty())
 }
 
 /// Open the database when the shell launches; `host::run` calls this.

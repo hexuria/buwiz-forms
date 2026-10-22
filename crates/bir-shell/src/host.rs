@@ -71,8 +71,9 @@ fn capabilities() -> Capabilities {
         .storage(true)
         .clipboard_read(true)
         .clipboard_write(true)
-        // `process.exit` quits the app — the same authority the window close
-        // button already has.
+        // `process.exit` quits after the submission worker stops and the
+        // database lock is released. The window close button hides to the
+        // tray instead of exiting.
         .exit(true)
         // The JS reads configuration env, never arbitrary secrets.
         .env_variables(
@@ -93,46 +94,55 @@ fn capabilities() -> Capabilities {
 pub fn run(root: PathBuf) -> anyhow::Result<()> {
     let root = resolve_app_root(&root, "main.js").unwrap_or(root);
 
-    gpui_kit::platform::application()
-        .with_assets(AppAssets::new(root.clone()))
-        .run(move |cx| {
-            let components =
-                gpui_shell::components::components().expect("component catalog must build");
-            init_with_components(cx, &components);
+    // Linux tray menus panic unless GTK is initialized before GPUI connects.
+    crate::tray::init_gtk();
 
-            // Debug builds get eval + unfrozen prototypes for console work;
-            // release stays closed.
-            set_development_mode(cfg!(debug_assertions));
+    let app = gpui_kit::platform::application().with_assets(AppAssets::new(root.clone()));
+    // Dock / taskbar click after a hide brings the windows back.
+    // `on_reopen` borrows the application; `run` takes it.
+    app.on_reopen(crate::tray::show_app);
+    app.run(move |cx| {
+        let components =
+            gpui_shell::components::components().expect("component catalog must build");
+        init_with_components(cx, &components);
+        crate::app_menu::install(cx);
 
-            // Storage identity — same key painted `bir` would use so the JS
-            // `storage` API lands in the app's own data dir.
-            if let Err(error) = set_bundle_id("com.buwiz.bir") {
-                tracing::warn!("storage unavailable: {error}");
-            }
-            set_capabilities(capabilities());
-            export_module(bir_module::module()).expect("bir module must export");
-            // Open the database now, which starts the submission worker on
-            // it: queued returns send while the shell runs, with no painted
-            // `bir` or `bir-headless` beside it.
-            bir_module::open_database_at_launch();
+        // Debug builds get eval + unfrozen prototypes for console work;
+        // release stays closed.
+        set_development_mode(cfg!(debug_assertions));
 
-            on_exit_request(|request, _window, _cx| {
-                std::process::exit(request.code());
-            });
+        // Storage identity — same key painted `bir` would use so the JS
+        // `storage` API lands in the app's own data dir.
+        if let Err(error) = set_bundle_id("com.buwiz.bir") {
+            tracing::warn!("storage unavailable: {error}");
+        }
+        set_capabilities(capabilities());
+        export_module(bir_module::module()).expect("bir module must export");
+        // Open the database now, which starts the submission worker on
+        // it: queued returns send while the shell runs, with no painted
+        // `bir` or `bir-headless` beside it.
+        bir_module::open_database_at_launch();
 
-            let runtime = match ShellRuntime::new_with_components(cx, components) {
-                Ok(runtime) => runtime,
-                Err(error) => {
-                    eprintln!("failed to start the script runtime: {error}");
-                    std::process::exit(1);
-                }
-            };
-            runtime.set_editor_files(true);
-
-            open_main_window(cx, runtime, root);
-            crate::print_preview_window::start(cx);
-            cx.activate(true);
+        on_exit_request(|request, _window, _cx| {
+            let code = request.code();
+            crate::tray::drop_tray();
+            bir_module::shutdown_for_quit();
+            std::process::exit(code);
         });
+
+        let runtime = match ShellRuntime::new_with_components(cx, components) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                eprintln!("failed to start the script runtime: {error}");
+                std::process::exit(1);
+            }
+        };
+        runtime.set_editor_files(true);
+
+        open_main_window(cx, runtime, root);
+        crate::print_preview_window::start(cx);
+        cx.activate(true);
+    });
     Ok(())
 }
 
@@ -164,7 +174,8 @@ fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
         if std::env::var_os("BIR_SHELL_METRICS").is_some() {
             log_runtime_metrics(window, cx, runtime.clone());
         }
-        runtime.load(&root, window, cx)
+        let shell = runtime.load(&root, window, cx);
+        crate::app_menu::attach_window(shell, window, cx)
     })
     .expect("main window must open");
 }
