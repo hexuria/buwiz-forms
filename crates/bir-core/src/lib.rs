@@ -38,6 +38,7 @@ pub mod job_display;
 mod keychain;
 pub mod legacy_migration;
 pub mod log_files;
+pub mod logging;
 pub mod naming;
 pub mod news_fetcher;
 pub mod notification;
