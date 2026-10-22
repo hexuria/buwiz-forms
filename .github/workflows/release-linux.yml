@@ -24,6 +24,11 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Compiled into the binary through option_env! (bir-core email OAuth and
+  # Google Calendar). release.yml passes them with `secrets: inherit`; the
+  # macOS and Windows release builds already set the same two variables.
+  GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+  GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
 
 jobs:
   build-linux:
@@ -67,6 +72,15 @@ jobs:
             mesa-vulkan-drivers \
             rpm \
             zstd
+
+      - name: Report Google OAuth build inputs
+        shell: bash
+        run: |
+          for name in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::optional secret $name is not set; the build will ship without Google OAuth credentials"
+            fi
+          done
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
