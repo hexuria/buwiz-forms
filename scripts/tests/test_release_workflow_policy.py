@@ -257,6 +257,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )[0]
         self.assertIn("inputs.release", signing)
         self.assertIn("Missing required Windows release secret", signing)
+        # No certificate yet: a release builds unsigned with a visible warning,
+        # never silently, and only when neither secret is set.
+        self.assertIn("::warning title=Unsigned Windows release::", signing)
+        self.assertIn("$hasPfx -and -not $hasPassword", signing)
+        self.assertIn("$hasPassword -and -not $hasPfx", signing)
         self.assertIn("WINDOWS_CERTIFICATE_PFX", signing)
         self.assertIn("WINDOWS_CERTIFICATE_PASSWORD", signing)
 
@@ -465,6 +470,13 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         self.assertIn("build-packages.sh --version", linux)
         self.assertIn("smoke-test.sh --out", linux)
+        smoke_step = linux.split("- name: Smoke test Linux packages", maxsplit=1)[1].split(
+            "\n      - name:", maxsplit=1
+        )[0]
+        self.assertIn("timeout-minutes:", smoke_step)
+        smoke_script = LINUX_SMOKE_SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn('in_time=(timeout --kill-after=30 "$CONTAINER_TIMEOUT")', smoke_script)
+        self.assertNotRegex(smoke_script, r'(debian:12|fedora:latest|opensuse/tumbleweed|archlinux:latest|"\$image") bash -euc')
         self.assertIn("name: linux-release-${{ matrix.arch }}", linux)
         self.assertIn("cargo install --locked", self.linux_build_script)
         self.assertIn("cargo-deb 3.7.0", self.linux_build_script)
