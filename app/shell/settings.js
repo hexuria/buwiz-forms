@@ -69,6 +69,19 @@ export function renderSettings(cx, app, _width) {
       "One line per part in On this form; point at a part for its full name",
       Switch(cx, "settings-compact-form-nav-switch", app.prefs.compactFormNav, (v, cx) => app.setPref("compactFormNav", v, cx), "Compact form sections"),
     ),
+    SettingRow(
+      cx,
+      "settings-auto-update",
+      "Download updates automatically",
+      "A newer release downloads in the background. You choose when to install.",
+      Switch(
+        cx,
+        "settings-auto-update-switch",
+        !app.updateStatus || app.updateStatus.auto_download !== false,
+        (v, cx) => app.setAutoUpdateDownload(v, cx),
+        "Download updates automatically",
+      ),
+    ),
   ]);
 
   const data = Card(cx, "settings-data", [

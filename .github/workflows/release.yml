@@ -161,6 +161,16 @@ jobs:
             artifacts/**/*.pkg.tar.zst
             artifacts/**/*.PKGBUILD
             artifacts/**/SHA256SUMS-linux-*.txt
+            artifacts/**/SHA256SUMS-windows-*.txt
             artifacts/**/install-linux.sh
             artifacts/**/*-Setup.exe
             artifacts/**/*.msi
+
+      - name: Check out the manifest script
+        uses: actions/checkout@v4
+
+      - name: Publish update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 scripts/publish_update_manifest.py --tag "${{ github.ref_name }}" --repo "${{ github.repository }}"
