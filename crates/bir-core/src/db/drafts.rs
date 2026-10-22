@@ -1649,20 +1649,25 @@ impl Database {
                         "2551Q confirmation receipt has an invalid received timestamp".to_string(),
                     )
                 })?;
-            let submitted_at = chrono::DateTime::parse_from_rfc3339(
-                existing
-                    .submitted_at
-                    .as_deref()
-                    .expect("submitted timestamp checked above"),
-            )
-            .map_err(|_| {
+            let submitted_at = existing
+                .submitted_at
+                .as_deref()
+                .expect("submitted timestamp checked above");
+            chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|_| {
                 DbError::Other(
                     "Submitted 2551Q snapshot has an invalid submission timestamp".to_string(),
                 )
             })?;
-            if received_at < submitted_at {
+            if !crate::filing_queue::receipt_belongs_to_this_generation(
+                received_at,
+                existing
+                    .queue_authorization
+                    .as_ref()
+                    .map(|auth| auth.authorized_at.as_str()),
+                submitted_at,
+            ) {
                 return Err(DbError::Other(
-                    "2551Q confirmation receipt predates the submitted snapshot".to_string(),
+                    "2551Q confirmation receipt predates this queued generation".to_string(),
                 ));
             }
             received_at.to_rfc3339()
@@ -3546,6 +3551,13 @@ mod tests {
         draft
             .transition_to_queued()
             .expect("a Q1 graduated election should queue");
+        // Pin the queue time a few minutes before the fixed `submitted_at`
+        // below (12:00:00 PHT) so receipt windows are deterministic.
+        draft
+            .queue_authorization
+            .as_mut()
+            .expect("queueing records an authorization")
+            .authorized_at = "2026-04-25T03:55:00+00:00".to_string();
         draft
     }
 
@@ -5576,6 +5588,60 @@ mod tests {
     }
 
     #[test]
+    fn email_poll_confirms_a_2551q_whose_bir_stamp_precedes_the_local_submitted_time() {
+        // Live 22 October 2026: BIR stamps the file when the SFTP PUT lands
+        // and prints only the minute ("11:58 AM"), while the row turns
+        // Submitted after PUT returns (11:58:xx). Comparing the receipt to
+        // `submitted_at` ignored both confirmations on every poll, so the
+        // watcher jobs never finished. The floor is the queue time, as 1601C.
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let receipt_filename = submitted
+            .submission_filename
+            .clone()
+            .unwrap()
+            .replace("#test@example.com#", "");
+
+        // Older than this queued generation (11:55 PHT, minus skew): ignored.
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "11:50:00");
+        let stale = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            db.confirm_2551q_from_receipt(&stale).unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Ignored
+        );
+
+        // Same generation, stamped a minute before local Submitted: confirms.
+        db.conn
+            .execute(
+                "UPDATE submission_receipts SET received_time = '11:59:00' WHERE id = ?1",
+                params![receipt_id],
+            )
+            .unwrap();
+        let receipt = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            db.confirm_2551q_from_receipt(&receipt).unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
+        );
+        let persisted = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Confirmed);
+        assert_eq!(persisted.receipt_id, Some(receipt_id));
+        assert_eq!(
+            persisted.confirmed_at.as_deref(),
+            Some("2026-04-25T11:59:00+08:00")
+        );
+    }
+
+    #[test]
     fn unpersisted_receipt_cannot_fall_through_to_manual_confirmation() {
         let db = test_db();
         let submitted = submitted_2551q_draft(&db, &test_profile());
@@ -5676,7 +5742,7 @@ mod tests {
         db.conn
             .execute(
                 "UPDATE submission_receipts
-                 SET received_time = '11:59:59'
+                 SET received_time = '11:52:59'
                  WHERE id = ?1",
                 params![receipt_id],
             )
