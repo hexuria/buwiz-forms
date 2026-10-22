@@ -1217,11 +1217,15 @@ fn commit_linux_tree(root: &Path, staged: &Path, exe_name: &std::ffi::OsStr) -> 
     Ok(())
 }
 
+// macOS renames the .app aside and Linux renames a tarball tree. Windows
+// starts the verified installer and does not call either helper.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn sibling(path: &Path, suffix: &str) -> PathBuf {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     path.with_file_name(format!("{name}{suffix}"))
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn relaunch(exe: &Path) -> Result<(), String> {
     if !exe.is_file() {
         return Err(format!(
