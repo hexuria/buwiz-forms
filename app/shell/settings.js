@@ -7,13 +7,12 @@
 // and quits when it does not, and that is not a preference.
 
 import { div } from "gpui-kit";
-import { Input, Popup } from "gpui-base";
+import { Popup } from "gpui-base";
 import {
   tokens,
   SPACE,
   RADIUS,
   SIZE,
-  TYPE,
   Text,
   Line,
   Icon,
@@ -26,6 +25,7 @@ import {
   NavRow,
   GroupLabel,
   Avatar,
+  TextField,
 } from "./ui.js";
 import { SecurityCard } from "./security.js";
 import { SetupCard } from "./setup_change.js";
@@ -47,29 +47,24 @@ const JOBS_COLUMN = 680;
 
 function SearchBox(cx, state) {
   const t = tokens(cx);
+  // Same chrome as the library search: the field's own border is off so the
+  // icon and the placeholder sit in one rounded box.
   return div()
     .id("settings-search")
     .flex()
     .flex_row()
     .items_center()
-    .gap(8)
+    .gap(SPACE[2])
     .h(SIZE.control)
     .mt(SPACE[3])
-    .px(10)
+    .pl(10)
+    .pr(SPACE[2])
     .rounded(RADIUS.row)
     .border(1)
     .border_color(t.borderStrong)
     .bg(t.surface)
-    .child(Icon(cx, "search", { size: SIZE.iconSmall, color: "fg3" }))
-    .child(
-        Input.new(state)
-        .flex_1()
-        .h(SIZE.control - 2)
-        .text_size(TYPE.body.size)
-        .text_color(t.fg)
-        .bg(t.surface)
-        .accessibility_label("Search settings"),
-    );
+    .child(Icon(cx, "search", { color: "fg3" }))
+    .child(TextField(cx, state, { id: "settings-search-input", label: "Search settings" }).border(0).px(0).h(30).flex_1().bg(t.surface));
 }
 
 function BackLink(cx, app) {
