@@ -10,12 +10,16 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 static WAKE_TX: OnceLock<mpsc::Sender<()>> = OnceLock::new();
 static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
+/// Set by [`request_shutdown`]. The cron loop finishes the tick it is already
+/// on, then returns, so the submission worker can drop the database.
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WakeDispatchStatus {
@@ -29,6 +33,20 @@ pub fn get_active_jobs() -> Arc<Mutex<HashSet<String>>> {
     ACTIVE_JOBS
         .get_or_init(|| Arc::new(Mutex::new(HashSet::new())))
         .clone()
+}
+
+/// Stop [`start_cron_jobs`] after the tick that is already running.
+///
+/// Wakes a loop that is waiting out its 60 second gap so quit does not sit
+/// there. A second call is a no-op aside from another wake.
+pub fn request_shutdown() {
+    SHUTDOWN.store(true, Ordering::SeqCst);
+    wake();
+}
+
+/// Whether [`request_shutdown`] has been asked for in this process.
+pub fn shutdown_requested() -> bool {
+    SHUTDOWN.load(Ordering::SeqCst)
 }
 
 pub fn wake() {
@@ -62,8 +80,14 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     let _ = WAKE_TX.set(tx);
 
     loop {
+        if shutdown_requested() {
+            break;
+        }
         // We run a tick, then wait for either 60 seconds or a wake signal.
         run_queue_tick(db.clone()).await;
+        if shutdown_requested() {
+            break;
+        }
 
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
@@ -72,6 +96,7 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
             }
         }
     }
+    info!("Background cron engine stopped");
 }
 
 /// Runs a single iteration of the background job queue.

@@ -20,5 +20,7 @@ pub mod print_sheet;
 mod screen_form_module;
 pub mod static_html;
 mod tax_profile_module;
+mod updater;
+mod updater_menu;
 
 pub use host::{app_root, run};
