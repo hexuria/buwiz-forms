@@ -69,21 +69,6 @@ struct Assets {
     base: PathBuf,
 }
 
-/// One file per UTC day (`ebirforms.YYYY-MM-DD.log`). Older days are pruned
-/// by `bir_core::log_files::maintain` once the database — and with it the
-/// user's retention setting — is open; see `run_gui`.
-fn persistent_log_appender() -> Option<tracing_appender::rolling::RollingFileAppender> {
-    let logs_dir = bir_core::log_files::log_dir();
-    let _ = std::fs::create_dir_all(&logs_dir);
-    tracing_appender::rolling::RollingFileAppender::builder()
-        .rotation(tracing_appender::rolling::Rotation::DAILY)
-        .filename_prefix(bir_core::log_files::LOG_FILE_PREFIX)
-        .filename_suffix(bir_core::log_files::LOG_FILE_SUFFIX)
-        .build(&logs_dir)
-        .map_err(|error| eprintln!("log file appender unavailable: {error}"))
-        .ok()
-}
-
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> gpui::Result<Option<std::borrow::Cow<'static, [u8]>>> {
         std::fs::read(self.base.join(path))
@@ -174,58 +159,16 @@ pub fn run_gui() {
     ipc::prevent_multiple_instances();
     platform::enforce_single_instance();
 
-    // `DEVELOPER_MODE=true` (any build), or the Dev Mode "Verbose logs"
-    // switch (debug builds; read here, so it takes effect on next start).
-    let developer_mode = std::env::var("DEVELOPER_MODE")
-        .unwrap_or_else(|_| "false".to_string())
-        .to_lowercase()
-        == "true"
-        || bir_core::dev_mode::verbose_logs().value;
-
-    // Initialize structured logging. The native-output diagnostic intentionally
-    // remains stdout-only because its external driver captures that stream and
-    // must not depend on the mutable shared app-group log.
-    use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
-
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        // The binary crate is `bir` (bin target name); its modules log under
-        // that target, not `bir_desktop`, so both are listed to avoid silently
-        // dropping app-level logs.
-        if developer_mode {
-            "bir=debug,bir_desktop=debug,bir_print=debug,bir_core=info"
-                .parse()
-                .unwrap()
-        } else {
-            "bir=info,bir_desktop=info,bir_print=error,bir_core=info"
-                .parse()
-                .unwrap()
-        }
+    // Same daily file the Logs tab tails (`<data_dir>/logs/ebirforms.*.log`,
+    // the App Group container on macOS). `install` also scrubs tokens,
+    // passwords, and the database key, and records panics. The native-output
+    // diagnostic stays on stdout as well: its driver captures that stream and
+    // must not depend on the shared log file alone.
+    let developer_mode = bir_core::logging::developer_mode_enabled();
+    let _ = bir_core::logging::install(bir_core::logging::InstallOptions {
+        developer_mode,
+        default_filter: bir_core::logging::desktop_filter(developer_mode),
     });
-
-    let stdout_layer = tracing_subscriber::fmt::layer()
-        .with_target(true)
-        .with_file(developer_mode)
-        .with_line_number(developer_mode);
-
-    let file_layer = persistent_log_appender().map(|appender| {
-        tracing_subscriber::fmt::layer()
-            .with_writer(appender)
-            .with_ansi(false)
-            .with_target(true)
-            .with_file(developer_mode)
-            .with_line_number(developer_mode)
-    });
-
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(stdout_layer)
-        .with(file_layer)
-        .init();
-
-    tracing::info!(
-        "🔍 Tracing initialized (developer_mode: {})",
-        developer_mode
-    );
 
     // tray-icon's muda `Menu` panics on Linux unless GTK is initialized first.
     // Do this before GPUI opens the X11 client so GDK can attach a screen.
@@ -614,8 +557,29 @@ mod startup_tests {
     use super::*;
 
     #[::core::prelude::v1::test]
-    fn persistent_log_appender_writes_under_the_app_data_dir() {
-        assert!(persistent_log_appender().is_some());
+    fn persistent_log_writes_under_the_app_log_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let developer_mode = false;
+        let options = bir_core::logging::InstallOptions {
+            developer_mode,
+            default_filter: bir_core::logging::desktop_filter(developer_mode),
+        };
+        temp_env::with_vars(
+            [
+                ("BIR_LOG_DIR", Some(dir.path().as_os_str())),
+                ("RUST_LOG", None),
+            ],
+            || {
+                bir_core::logging::with_thread_subscriber(options, || {
+                    tracing::info!(target: "bir_desktop", "desktop-log-probe-9f3a");
+                });
+                let path = bir_core::log_files::today_log_path(dir.path());
+                let text = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+                assert!(path.starts_with(dir.path()));
+                assert!(text.contains("desktop-log-probe-9f3a"), "{text}");
+            },
+        );
     }
 
     #[::core::prelude::v1::test]

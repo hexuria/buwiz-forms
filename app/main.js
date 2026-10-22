@@ -1278,6 +1278,12 @@ class BirApp extends View {
     cx.notify();
   }
 
+  /** Logs tab level, same tokens as painted bir: All Logs, Error, Warn, Info. */
+  setCronLogFilter(name, cx) {
+    this.cronLogFilter = name;
+    cx.notify();
+  }
+
   deleteJob(id, cx) {
     try {
       this.store.write("delete_background_job", id);
@@ -1382,6 +1388,15 @@ class BirApp extends View {
   }
 
   render(cx) {
+    try {
+      return this.paint(cx);
+    } catch (error) {
+      this.store.logScreen("error", `screen: ${errorText(error)}`);
+      throw error;
+    }
+  }
+
+  paint(cx) {
     const t = tokens(cx);
     // First launch and sign-in take the whole window: nothing that names a
     // taxpayer is drawn behind them. First launch's "Just me" types its
