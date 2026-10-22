@@ -162,28 +162,36 @@ class BirApp extends View {
     cx.timer.after(50, () => this.focusRoot.focus());
 
     // gpui-shell re-runs `render` only when script state changes, and gives
-    // scripts no resize event, so layout widths computed from the window size
-    // (pixel widths keep text layout cheap) would go stale after a resize.
-    // Poll the viewport and re-render when it changes.
+    // scripts no resize event. Widths taken from the window would stay at the
+    // last poll while the pane's flex layout moves every frame. Poll and
+    // re-render when the size changes. The docked/overlay choice waits until
+    // the size has held still: a drag through 860 px must not turn the sidebar
+    // into an overlay on top of the page for a frame.
     this.lastViewport = "";
     this.wasNarrow = null;
+    this.viewportSettled = false;
     cx.timer.every(200, (cx) => {
       if (this.view === "form") this.formUi.refreshLayout();
       const vp = window.viewport_size();
       const key = `${Math.round(vp.width)}x${Math.round(vp.height)}`;
       if (key !== this.lastViewport) {
-        // Crossing below 860 px turns the sidebar and panel into overlays;
-        // they start closed there rather than covering the page.
-        const narrow = vp.width < BREAK.overlays;
-        if (narrow && this.wasNarrow === false) {
-          this.sidebarOpen = false;
-          this.panel = null;
-        }
-        if (!narrow && this.wasNarrow === true) this.sidebarOpen = true;
-        this.wasNarrow = narrow;
         this.lastViewport = key;
+        this.viewportSettled = false;
         cx.notify();
+        return;
       }
+      if (this.viewportSettled) return;
+      this.viewportSettled = true;
+      // Crossing below 860 px turns the sidebar and panel into overlays;
+      // they start closed there rather than covering the page.
+      const narrow = vp.width < BREAK.overlays;
+      if (narrow && this.wasNarrow === false) {
+        this.sidebarOpen = false;
+        this.panel = null;
+      }
+      if (!narrow && this.wasNarrow === true) this.sidebarOpen = true;
+      this.wasNarrow = narrow;
+      cx.notify();
     });
 
     // Shortcuts use Cmd on macOS and Ctrl elsewhere; both chords are bound
@@ -464,7 +472,10 @@ class BirApp extends View {
   // ---------------------------------------------------------------- navigation
 
   narrow() {
-    return window.viewport_size().width < BREAK.overlays;
+    // The last viewport that held still. While a resize is in progress, keep
+    // that dock mode so a transient reading does not cover the page.
+    if (this.wasNarrow === null) return window.viewport_size().width < BREAK.overlays;
+    return this.wasNarrow;
   }
 
   go(view, cx) {
@@ -1402,7 +1413,7 @@ class BirApp extends View {
   /** Width of the main surface's content column, from the window size. */
   layout() {
     const vp = window.viewport_size();
-    const narrow = vp.width < BREAK.overlays;
+    const narrow = this.narrow();
     const sidebarDocked = this.sidebarOpen && !narrow;
     const panelDocked = Boolean(this.panel) && !narrow;
     const left = sidebarDocked ? SIZE.sidebar : SIZE.mainInset;
@@ -1470,7 +1481,11 @@ class BirApp extends View {
               .px(L.padX)
               .pt(L.mainWidth < BREAK.narrowContent ? 20 : 28)
               .pb(56)
-              .child(div().flex().flex_col().w(L.column).child(this.renderView(cx, L.column))),
+              // Fill the pane, capped by the settled column. A pixel `w()` from the
+              // last poll stays wider than the pane during a drag and, centred,
+              // paints under the sidebar. `w_full` tracks the pane every frame;
+              // a stale `max_w` only delays growing, it does not overflow.
+              .child(div().flex().flex_col().w_full().max_w(L.column).min_w(0).child(this.renderView(cx, L.column))),
           ),
       ));
 
