@@ -121,6 +121,42 @@ class WindowsSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(windows_smoke.SmokeError, "within 30s"):
                 windows_smoke.wait_preview(client, proc)
 
+    def test_wait_ui_retries_until_snapshot_answers(self):
+        proc = Mock()
+        proc.poll.return_value = None
+        client = Mock()
+        client.request.side_effect = [
+            {"ok": False, "error": windows_smoke.MAILBOX_DRAIN_TIMEOUT},
+            {"ok": True, "tree": {"id": "root", "nodes": []}},
+        ]
+        with patch.object(windows_smoke.time, "sleep"):
+            windows_smoke.wait_ui(client, proc)
+        self.assertEqual(client.request.call_count, 2)
+
+    def test_wait_ui_still_has_a_bounded_deadline(self):
+        proc = Mock()
+        proc.poll.return_value = None
+        client = Mock()
+        client.request.return_value = {
+            "ok": False,
+            "error": windows_smoke.MAILBOX_DRAIN_TIMEOUT,
+        }
+        with (
+            patch.object(windows_smoke.time, "monotonic", side_effect=[0, 0, 61]),
+            patch.object(windows_smoke.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(windows_smoke.SmokeError, "within 60s"):
+                windows_smoke.wait_ui(client, proc)
+
+    def test_wait_ui_fails_fast_when_the_process_exits(self):
+        proc = Mock()
+        proc.poll.return_value = 1
+        proc.returncode = 1
+        client = Mock()
+        with self.assertRaisesRegex(windows_smoke.SmokeError, "exited"):
+            windows_smoke.wait_ui(client, proc)
+        client.request.assert_not_called()
+
     def test_smoke_env_strips_sftp(self):
         with tempfile.TemporaryDirectory() as directory:
             env = windows_smoke.smoke_env(
