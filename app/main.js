@@ -360,14 +360,27 @@ class BirApp extends View {
       );
     } else if (cmd.op === "choose" && cmd.edits) {
       this.afterFormLoads(cx, (cx) => {
-        const s = this.formUi.state;
-        if (s && s.inputs) {
-          for (const [k, v] of Object.entries(cmd.edits)) {
-            const input = s.inputs.get(k);
-            if (input && input.value() !== String(v)) input.set_value(String(v));
+        const ui = this.formUi;
+        const s = ui && ui.state;
+        if (!s) return;
+        // Row redraws follow `s.values`, not the input widget. Write both,
+        // let the page commit the draft, then write again: a fill the page
+        // accepts replaces `s.values`, and a box it leaves unchanged still
+        // has to show what the agent wrote.
+        const edits = {};
+        for (const [k, v] of Object.entries(cmd.edits)) edits[k] = String(v);
+        const paint = () => {
+          for (const [k, v] of Object.entries(edits)) {
+            s.values[k] = v;
+            const input = s.inputs && s.inputs.get(k);
+            if (input && input.value() !== v) input.set_value(v);
           }
-        }
-        this.formUi.choose(cmd.edits, cx);
+          ui.refreshRows();
+          ui.notify(cx);
+        };
+        paint();
+        ui.choose(edits, cx);
+        paint();
       });
     }
   }
