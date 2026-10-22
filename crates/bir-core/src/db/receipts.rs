@@ -186,7 +186,7 @@ impl Database {
         let submitted_at = draft.submitted_at.as_deref().ok_or_else(|| {
             DbError::Other("Submitted 2551Q draft has no submission timestamp".to_string())
         })?;
-        let submitted_dt = chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|error| {
+        chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|error| {
             DbError::Other(format!(
                 "Submitted 2551Q draft has an invalid submission timestamp: {error}"
             ))
@@ -205,11 +205,18 @@ impl Database {
             .from_local_datetime(&receipt_naive)
             .single()
             .ok_or_else(|| DbError::Other("Receipt received timestamp is ambiguous".to_string()))?;
-        if receipt_dt < submitted_dt {
+        // BIR stamps the file when the SFTP PUT lands (minute precision);
+        // `submitted_at` is written after PUT returns. Floor on the queue
+        // time, as 1601C does, or a same-minute receipt is ignored forever.
+        let authorized_at = draft
+            .queue_authorization
+            .as_ref()
+            .map(|auth| auth.authorized_at.as_str());
+        if !receipt_belongs_to_this_generation(receipt_dt, authorized_at, submitted_at) {
             tracing::info!(
-                "Ignoring old receipt {} for draft submitted at {}",
+                "Ignoring old receipt {} for 2551Q draft submitted at {}",
                 receipt.filename,
-                submitted_dt
+                submitted_at
             );
             return Ok(ReceiptConfirmationOutcome::Ignored);
         }

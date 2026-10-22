@@ -1649,20 +1649,25 @@ impl Database {
                         "2551Q confirmation receipt has an invalid received timestamp".to_string(),
                     )
                 })?;
-            let submitted_at = chrono::DateTime::parse_from_rfc3339(
-                existing
-                    .submitted_at
-                    .as_deref()
-                    .expect("submitted timestamp checked above"),
-            )
-            .map_err(|_| {
+            let submitted_at = existing
+                .submitted_at
+                .as_deref()
+                .expect("submitted timestamp checked above");
+            chrono::DateTime::parse_from_rfc3339(submitted_at).map_err(|_| {
                 DbError::Other(
                     "Submitted 2551Q snapshot has an invalid submission timestamp".to_string(),
                 )
             })?;
-            if received_at < submitted_at {
+            if !crate::filing_queue::receipt_belongs_to_this_generation(
+                received_at,
+                existing
+                    .queue_authorization
+                    .as_ref()
+                    .map(|auth| auth.authorized_at.as_str()),
+                submitted_at,
+            ) {
                 return Err(DbError::Other(
-                    "2551Q confirmation receipt predates the submitted snapshot".to_string(),
+                    "2551Q confirmation receipt predates this queued generation".to_string(),
                 ));
             }
             received_at.to_rfc3339()
@@ -5600,7 +5605,10 @@ mod tests {
         // Older than this queued generation (11:55 PHT, minus skew): ignored.
         let receipt_id =
             insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "11:50:00");
-        let stale = db.get_submission_receipt_by_id(receipt_id).unwrap().unwrap();
+        let stale = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
         assert_eq!(
             db.confirm_2551q_from_receipt(&stale).unwrap(),
             crate::db::ReceiptConfirmationOutcome::Ignored
@@ -5613,7 +5621,10 @@ mod tests {
                 params![receipt_id],
             )
             .unwrap();
-        let receipt = db.get_submission_receipt_by_id(receipt_id).unwrap().unwrap();
+        let receipt = db
+            .get_submission_receipt_by_id(receipt_id)
+            .unwrap()
+            .unwrap();
         assert_eq!(
             db.confirm_2551q_from_receipt(&receipt).unwrap(),
             crate::db::ReceiptConfirmationOutcome::Confirmed
@@ -5731,7 +5742,7 @@ mod tests {
         db.conn
             .execute(
                 "UPDATE submission_receipts
-                 SET received_time = '11:59:59'
+                 SET received_time = '11:52:59'
                  WHERE id = ?1",
                 params![receipt_id],
             )
