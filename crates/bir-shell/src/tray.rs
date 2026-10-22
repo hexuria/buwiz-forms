@@ -23,7 +23,19 @@ struct TrayUi {
     show: tray_icon::menu::MenuId,
     hide: tray_icon::menu::MenuId,
     quit: tray_icon::menu::MenuId,
+    /// XEmbed status icon for trays that do not host StatusNotifierItem
+    /// (stalonetray). Stored so the icon stays registered until the tray is
+    /// dropped; nothing else reads it.
+    #[cfg(target_os = "linux")]
+    #[allow(dead_code)]
+    xembed: Option<XembedIcon>,
 }
+
+#[cfg(target_os = "linux")]
+struct XembedIcon(*mut gtk::ffi::GtkStatusIcon);
+
+#[cfg(target_os = "linux")]
+static XEMBED_ACTIVATE: AtomicBool = AtomicBool::new(false);
 
 /// GTK must be up before the tray menu is built, and before GPUI opens its
 /// own display connection. No-op off Linux.
@@ -49,6 +61,33 @@ pub fn drop_tray() {
     TRAY_UP.store(false, Ordering::SeqCst);
 }
 
+/// StatusNotifierItem registers over D-Bus from GTK callbacks. Nothing else
+/// runs the GTK loop, so without this the icon PNG is written and the item
+/// never appears. Non-blocking; safe to call on the thread that ran
+/// [`init_gtk`].
+#[cfg(target_os = "linux")]
+fn pump_gtk() {
+    while gtk::events_pending() {
+        gtk::main_iteration_do(false);
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for XembedIcon {
+    fn drop(&mut self) {
+        if self.0.is_null() {
+            return;
+        }
+        unsafe extern "C" {
+            fn g_object_unref(object: *mut std::ffi::c_void);
+        }
+        unsafe {
+            gtk::ffi::gtk_status_icon_set_visible(self.0, 0);
+            g_object_unref(self.0.cast());
+        }
+    }
+}
+
 /// Create the status item and poll its menu, clicks, and the global hotkey
 /// for the life of the process.
 pub fn start(cx: &mut App) {
@@ -60,6 +99,72 @@ pub fn start(cx: &mut App) {
         }
         cx.spawn(async move |cx| poll_loop(cx).await).detach();
     });
+}
+
+/// XEmbed icon for system trays that only speak the freedesktop tray
+/// protocol. StatusNotifier (libayatana-appindicator) does not embed there.
+/// The same `e_logo.png` the SNI icon uses is the pixmap.
+#[cfg(target_os = "linux")]
+fn install_xembed_icon() -> Option<XembedIcon> {
+    let path = write_tray_logo()?;
+    let path = std::ffi::CString::new(path.to_string_lossy().as_bytes()).ok()?;
+    let tooltip = c"eBIRForms";
+    unsafe {
+        let icon = gtk::ffi::gtk_status_icon_new_from_file(path.as_ptr());
+        if icon.is_null() {
+            return None;
+        }
+        gtk::ffi::gtk_status_icon_set_tooltip_text(icon, tooltip.as_ptr());
+        gtk::ffi::gtk_status_icon_set_visible(icon, 1);
+        connect_xembed_activate(icon);
+        Some(XembedIcon(icon))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn write_tray_logo() -> Option<std::path::PathBuf> {
+    let dir = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("ebirforms-tray");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join("e_logo.png");
+    std::fs::write(&path, include_bytes!("../../../assets/images/e_logo.png")).ok()?;
+    Some(path)
+}
+
+#[cfg(target_os = "linux")]
+unsafe fn connect_xembed_activate(icon: *mut gtk::ffi::GtkStatusIcon) {
+    unsafe extern "C" {
+        fn g_signal_connect_data(
+            instance: *mut std::ffi::c_void,
+            detailed_signal: *const std::ffi::c_char,
+            c_handler: Option<unsafe extern "C" fn()>,
+            data: *mut std::ffi::c_void,
+            destroy_data: Option<
+                unsafe extern "C" fn(*mut std::ffi::c_void, *mut std::ffi::c_void),
+            >,
+            connect_flags: u32,
+        ) -> u64;
+    }
+
+    unsafe extern "C" fn on_activate(_icon: *mut gtk::ffi::GtkStatusIcon) {
+        XEMBED_ACTIVATE.store(true, Ordering::SeqCst);
+    }
+
+    let callback = unsafe {
+        std::mem::transmute::<*const (), Option<unsafe extern "C" fn()>>(on_activate as *const ())
+    };
+    unsafe {
+        g_signal_connect_data(
+            icon.cast(),
+            c"activate".as_ptr(),
+            callback,
+            std::ptr::null_mut(),
+            None,
+            0,
+        );
+    }
 }
 
 fn try_create_tray() -> Option<TrayUi> {
@@ -90,11 +195,17 @@ fn try_create_tray() -> Option<TrayUi> {
             .with_icon(icon)
             .build()
             .map_err(|error| error.to_string())?;
+        #[cfg(target_os = "linux")]
+        let xembed = install_xembed_icon();
+        #[cfg(target_os = "linux")]
+        pump_gtk();
         Ok::<TrayUi, String>(TrayUi {
             _icon: tray,
             show: show.id().clone(),
             hide: hide.id().clone(),
             quit: quit.id().clone(),
+            #[cfg(target_os = "linux")]
+            xembed,
         })
     }));
     match created {
@@ -121,8 +232,12 @@ async fn poll_loop(cx: &mut AsyncApp) {
         if stop {
             break;
         }
+        // Linux pumps GTK on this tick so StatusNotifier registration and
+        // menu events are not stuck behind a 100ms poll. 32ms is one frame
+        // at 30fps and stays inside the 16–50ms range the tray needs.
+        let wait = if cfg!(target_os = "linux") { 32 } else { 100 };
         cx.background_executor()
-            .timer(std::time::Duration::from_millis(100))
+            .timer(std::time::Duration::from_millis(wait))
             .await;
     }
 }
@@ -134,6 +249,13 @@ enum TrayCommand {
 }
 
 fn poll_tray(cx: &mut App) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        pump_gtk();
+        if XEMBED_ACTIVATE.swap(false, Ordering::SeqCst) && app_is_hidden() {
+            show_app(cx);
+        }
+    }
     while let Ok(event) = tray_icon::menu::MenuEvent::receiver().try_recv() {
         let command = TRAY.with(|slot| {
             let slot = slot.borrow();

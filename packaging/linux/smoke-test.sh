@@ -130,6 +130,7 @@ tarball_name="$(basename "${tarballs[0]}")"
         apt-get update
         apt-get install -y \
             libgtk-3-0 libwebkit2gtk-4.1-0 libvulkan1 libxkbcommon0 \
+            libayatana-appindicator3-1 \
             libxkbcommon-x11-0 libwayland-client0 libx11-6 libxcb1 \
             libasound2 libudev1 libpolkit-gobject-1-0 fontconfig libfreetype6
         mkdir -p /opt/ebirforms

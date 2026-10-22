@@ -186,7 +186,7 @@ name = "ebirforms"
 maintainer = "Goldcoders Corp <support@goldcoders.dev>"
 priority = "optional"
 section = "utils"
-depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
+depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6, libayatana-appindicator3-1"
 extended-description = """eBIRForms Desktop — Philippine BIR tax return filing application.
 Supports form preparation, validation, submission via SFTP, email confirmation
 tracking, and PDF generation for BIR Form 2551Q and related forms."""
@@ -204,7 +204,7 @@ assets = [
 [package.metadata.generate-rpm]
 name = "ebirforms"
 auto-req = "auto"
-requires = { "libvulkan.so.1()(64bit)" = "", "libwebkit2gtk-4.1.so.0()(64bit)" = "" }
+requires = { "libvulkan.so.1()(64bit)" = "", "libwebkit2gtk-4.1.so.0()(64bit)" = "", "libayatana-appindicator3.so.1()(64bit)" = "" }
 assets = [
     { source = "target/release/bir", dest = "/usr/bin/ebirforms", mode = "755" },
     { source = "../../app/**/*", dest = "/usr/share/ebirforms/app/", mode = "644" },
