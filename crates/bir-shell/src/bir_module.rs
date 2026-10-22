@@ -2657,7 +2657,12 @@ mod tests {
             "{}",
             info["logs_dir"]
         );
-        assert!(info["data_dir"].as_str().unwrap().contains("taxman-ebir"));
+        // Linux is ~/.taxman-ebir. macOS is the App Group container, Windows
+        // is %LOCALAPPDATA%\Taxman\eBIRForms. The field must be that path.
+        assert_eq!(
+            info["data_dir"].as_str().unwrap(),
+            bir_core::platform::data_dir().display().to_string()
+        );
         assert!(info["hotkey_presets"].as_array().unwrap().len() >= 4);
 
         set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
