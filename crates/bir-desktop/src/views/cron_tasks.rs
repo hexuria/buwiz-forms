@@ -63,14 +63,11 @@ enum LogLevel {
 }
 
 fn log_line_level(line: &str) -> LogLevel {
-    if line.contains(" ERROR ") || line.contains(" FATAL ") {
-        LogLevel::Error
-    } else if line.contains(" WARN ") {
-        LogLevel::Warn
-    } else if line.contains(" INFO ") {
-        LogLevel::Info
-    } else {
-        LogLevel::Other
+    match bir_core::logging::log_line_level(line) {
+        bir_core::logging::LogLineLevel::Error => LogLevel::Error,
+        bir_core::logging::LogLineLevel::Warn => LogLevel::Warn,
+        bir_core::logging::LogLineLevel::Info => LogLevel::Info,
+        bir_core::logging::LogLineLevel::Other => LogLevel::Other,
     }
 }
 

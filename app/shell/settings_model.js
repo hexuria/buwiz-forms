@@ -23,6 +23,7 @@ export const SETTINGS_ROWS = {
     { id: "theme", search: "theme appearance light dark system" },
     { id: "recent", search: "recent returns sidebar" },
     { id: "compact", search: "compact form sections" },
+    { id: "updates", search: "download updates automatically release install" },
   ],
   account: [
     { id: "identity", search: "account name email tin profile sign out add account taxpayer" },

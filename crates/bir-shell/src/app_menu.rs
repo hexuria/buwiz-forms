@@ -2,8 +2,10 @@
 //!
 //! macOS gets the native menu bar (`cx.set_menus`): the app menu App Store
 //! review expects, plus File, Edit, View, Window and Help. Linux and Windows
-//! get the same actions in an in-window [`gpui_component::menu::AppMenuBar`],
-//! which is what GPUI draws there — `set_menus` only stores the model.
+//! get the same actions in an in-window bar drawn by [`DesktopMenuFrame`].
+//! `set_menus` only stores the model on those platforms; the stock
+//! `AppMenuBar` is not used, because its titles follow gpui-component's
+//! light theme and disappear on the shell's dark window.
 //!
 //! Cmd+Q / Ctrl+Q quits: the submission worker stops and the database lock is
 //! released. Cmd+H / Ctrl+H hides to the menu-bar status item. That used to
@@ -14,14 +16,19 @@
 // A direct `gpui` import stays on crates.io gpui-pre and is a different type
 // once that feature is on.
 #[cfg(not(target_os = "macos"))]
-use gpui_component::menu::AppMenuBar;
+use gpui_component::menu::PopupMenu;
 use gpui_shell::ShellRoot;
 use gpui_shell::action::ShellAction;
 use gpui_shell::gpui::{
     self, Action, App, Entity, KeyBinding, Menu, MenuItem, OsAction, SystemMenuType, Window,
 };
 #[cfg(not(target_os = "macos"))]
-use gpui_shell::gpui::{div, prelude::*, px};
+use gpui_shell::gpui::{
+    Anchor, AnyWindowHandle, DismissEvent, MouseButton, OwnedMenu, OwnedMenuItem, Subscription,
+    anchored, deferred, div, prelude::*, px,
+};
+#[cfg(not(target_os = "macos"))]
+use std::cell::RefCell;
 
 gpui::actions!(
     bir_shell,
@@ -43,6 +50,7 @@ gpui::actions!(
         BringAllToFront,
         OpenSupportEmail,
         OpenCompanyWebsite,
+        CheckForUpdates,
     ]
 );
 
@@ -88,6 +96,17 @@ pub fn install(cx: &mut App) {
     bind_global_keys(cx);
     register_actions(cx);
     publish_menus(cx);
+    // The updater relaunches with this set so a screenshot can show the
+    // version. The dialog is the application About, not a second menu bar.
+    if std::env::var_os("BIR_SHOW_ABOUT").is_some() {
+        cx.spawn(async move |cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(2))
+                .await;
+            cx.update(show_about);
+        })
+        .detach();
+    }
 }
 
 fn publish_menus(cx: &mut App) {
@@ -119,11 +138,17 @@ pub(crate) fn attach_window(
     cx: &mut App,
 ) -> Entity<DesktopMenuFrame> {
     arm_window(window, cx);
-    let menu = AppMenuBar::new(cx);
-    cx.new(|_| DesktopMenuFrame { menu, root })
+    cx.new(|_| DesktopMenuFrame {
+        root,
+        open: None,
+        popup: None,
+        dismiss: None,
+        about: false,
+    })
 }
 
 fn arm_window(window: &mut Window, cx: &mut App) {
+    remember_main_window(window);
     crate::tray::start(cx);
     window.on_window_should_close(cx, |_, cx| {
         hide_or_quit(cx);
@@ -131,28 +156,232 @@ fn arm_window(window: &mut Window, cx: &mut App) {
     });
 }
 
+#[cfg(not(target_os = "macos"))]
+thread_local! {
+    static MAIN_WINDOW: RefCell<Option<AnyWindowHandle>> = const { RefCell::new(None) };
+}
+
+/// The shell window menu clicks should hit. Recorded when that window opens.
+#[cfg(not(target_os = "macos"))]
+fn remember_main_window(window: &Window) {
+    let handle = window.window_handle();
+    MAIN_WINDOW.with(|slot| *slot.borrow_mut() = Some(handle));
+}
+
+#[cfg(target_os = "macos")]
+fn remember_main_window(window: &Window) {
+    let _ = window;
+}
+
 /// In-window menu bar over the script root. `pub(crate)` because
 /// `open_window` names this type, and a private type there is a hard error
 /// off macOS.
+///
+/// The bar is not [`gpui_component::menu::AppMenuBar`]. That widget's titles
+/// are ghost buttons, and those read gpui-component's theme, which stays on
+/// the light palette (`secondary_foreground` near black). The shell paints
+/// the window from gpui-base's theme, so on a dark theme the titles were
+/// black on black and only showed up when the hover chip painted a lighter
+/// background. These titles read gpui-base's foreground at render time, the
+/// same palette the shell applies for light and dark.
 #[cfg(not(target_os = "macos"))]
 pub(crate) struct DesktopMenuFrame {
-    menu: Entity<AppMenuBar>,
     root: Entity<ShellRoot>,
+    open: Option<usize>,
+    popup: Option<Entity<PopupMenu>>,
+    dismiss: Option<Subscription>,
+    about: bool,
+}
+
+#[cfg(any(test, not(target_os = "macos")))]
+#[derive(Clone, Copy)]
+struct MenuBarColors {
+    background: gpui_shell::gpui::Hsla,
+    foreground: gpui_shell::gpui::Hsla,
+    hover: gpui_shell::gpui::Hsla,
+    active: gpui_shell::gpui::Hsla,
+    border: gpui_shell::gpui::Hsla,
+    surface: gpui_shell::gpui::Hsla,
+}
+
+/// Bar and title colors from the theme the shell actually applies.
+#[cfg(any(test, not(target_os = "macos")))]
+fn menu_bar_colors(colors: &gpui_base::ColorTokens) -> MenuBarColors {
+    MenuBarColors {
+        background: colors.background,
+        foreground: colors.foreground,
+        // `secondary` is the shell's hover chip; `accent` is the selected chip.
+        hover: colors.secondary,
+        active: colors.accent,
+        border: colors.border,
+        surface: colors.surface,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+impl DesktopMenuFrame {
+    fn close_menu(&mut self) {
+        self.dismiss.take();
+        self.popup.take();
+        self.open = None;
+    }
+
+    fn open_menu(&mut self, ix: usize) {
+        if self.open == Some(ix) && self.popup.is_some() {
+            return;
+        }
+        self.dismiss.take();
+        self.popup.take();
+        self.open = Some(ix);
+    }
+
+    fn ensure_popup(&mut self, menus: &[OwnedMenu], window: &mut Window, cx: &mut Context<Self>) {
+        let Some(ix) = self.open else {
+            return;
+        };
+        if self.popup.is_some() {
+            return;
+        }
+        let Some(menu) = menus.get(ix) else {
+            self.open = None;
+            return;
+        };
+        let items = menu.items.clone();
+        let popup = PopupMenu::build(window, cx, move |menu, window, cx| {
+            fill_popup(menu, &items, window, cx)
+        });
+        self.dismiss = Some(cx.subscribe_in(&popup, window, Self::on_popup_dismiss));
+        self.popup = Some(popup);
+    }
+
+    fn on_popup_dismiss(
+        &mut self,
+        _: &Entity<PopupMenu>,
+        _: &DismissEvent,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_menu();
+        cx.notify();
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn fill_popup(
+    mut menu: PopupMenu,
+    items: &[OwnedMenuItem],
+    window: &mut Window,
+    cx: &mut Context<PopupMenu>,
+) -> PopupMenu {
+    for item in items {
+        menu = match item {
+            OwnedMenuItem::Separator => menu.separator(),
+            OwnedMenuItem::Action {
+                name,
+                action,
+                checked,
+                disabled,
+                ..
+            } => menu.menu_with_check_and_disabled(
+                name.clone(),
+                *checked,
+                action.boxed_clone(),
+                *disabled,
+            ),
+            OwnedMenuItem::Submenu(submenu) => {
+                let nested = submenu.items.clone();
+                menu.submenu(submenu.name.clone(), window, cx, move |menu, window, cx| {
+                    fill_popup(menu, &nested, window, cx)
+                })
+            }
+            OwnedMenuItem::SystemMenu(_) => menu,
+        };
+    }
+    menu
 }
 
 #[cfg(not(target_os = "macos"))]
 impl Render for DesktopMenuFrame {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let menus: Vec<OwnedMenu> = gpui_component::GlobalState::global(cx).app_menus().to_vec();
+        self.ensure_popup(&menus, window, cx);
+        let colors = menu_bar_colors(&gpui_base::Theme::global(cx).tokens.colors);
+        let open = self.open;
+        let popup = self.popup.clone();
+        let about = self.about;
+        let foreground = colors.foreground;
+        let hover = colors.hover;
+        let active = colors.active;
+
         div()
+            .relative()
             .size_full()
             .flex()
             .flex_col()
             .child(
                 div()
+                    .id("app-menu-bar")
                     .w_full()
                     .h(px(30.0))
+                    .min_h(px(30.0))
                     .flex_none()
-                    .child(self.menu.clone()),
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .px_1()
+                    .bg(colors.background)
+                    .border_b_1()
+                    .border_color(colors.border)
+                    .children(menus.into_iter().enumerate().map(|(ix, menu)| {
+                        let opened = open == Some(ix);
+                        let title_fg = foreground;
+                        let title_hover = hover;
+                        let title_active = active;
+                        div()
+                            .id(("app-menu-title", ix))
+                            .relative()
+                            .h(px(24.0))
+                            .px(px(8.0))
+                            .flex()
+                            .items_center()
+                            .rounded(px(4.0))
+                            .text_size(px(13.0))
+                            .text_color(title_fg)
+                            .when(opened, |this| this.bg(title_active).text_color(title_fg))
+                            .hover(move |style| style.bg(title_hover).text_color(title_fg))
+                            .child(menu.name.clone())
+                            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                                if *hovered && this.open.is_some() && this.open != Some(ix) {
+                                    this.open_menu(ix);
+                                    cx.notify();
+                                }
+                            }))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                window.listener_for(&cx.entity(), move |this, _, window, cx| {
+                                    window.prevent_default();
+                                    cx.stop_propagation();
+                                    if this.open == Some(ix) {
+                                        this.close_menu();
+                                    } else {
+                                        this.open_menu(ix);
+                                    }
+                                    cx.notify();
+                                }),
+                            )
+                            .when(opened, |this| {
+                                let Some(popup) = popup.clone() else {
+                                    return this;
+                                };
+                                this.child(deferred(
+                                    anchored()
+                                        .anchor(Anchor::TopLeft)
+                                        .snap_to_window_with_margin(px(8.))
+                                        .child(div().occlude().top(px(4.)).child(popup)),
+                                ))
+                            })
+                    })),
             )
             .child(
                 div()
@@ -161,7 +390,73 @@ impl Render for DesktopMenuFrame {
                     .min_h(px(0.0))
                     .child(self.root.clone()),
             )
+            .when(about, |this| this.child(about_overlay(colors, cx)))
     }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn about_overlay(colors: MenuBarColors, cx: &mut Context<DesktopMenuFrame>) -> impl IntoElement {
+    let body = about_body();
+    div()
+        .id("about-scrim")
+        .absolute()
+        .size_full()
+        .top_0()
+        .left_0()
+        .occlude()
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(colors.foreground.opacity(0.35))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|this, _, _, cx| {
+                this.about = false;
+                cx.notify();
+            }),
+        )
+        .child(
+            div()
+                .id("about-panel")
+                .occlude()
+                .min_w(px(280.0))
+                .p(px(20.0))
+                .flex()
+                .flex_col()
+                .gap_2()
+                .rounded(px(8.0))
+                .bg(colors.surface)
+                .text_color(colors.foreground)
+                .border_1()
+                .border_color(colors.border)
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .children(
+                    body.lines()
+                        .map(|line| div().text_size(px(13.0)).child(line.to_string())),
+                )
+                .child(
+                    div()
+                        .id("about-ok")
+                        .mt(px(8.0))
+                        .h(px(28.0))
+                        .px(px(12.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(4.0))
+                        .bg(colors.active)
+                        .text_color(colors.foreground)
+                        .text_size(px(13.0))
+                        .child("OK")
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(|this, _, _, cx| {
+                                this.about = false;
+                                cx.notify();
+                            }),
+                        ),
+                ),
+        )
 }
 
 /// Stop the submission worker, release the database lock, drop the tray, quit.
@@ -183,7 +478,7 @@ pub fn hide_or_quit(cx: &mut App) {
 }
 
 fn register_actions(cx: &mut App) {
-    cx.on_action(|_: &AboutApplication, _| show_about())
+    cx.on_action(|_: &AboutApplication, cx| show_about(cx))
         .on_action(|_: &OpenSettings, cx| dispatch_script("open-settings", cx))
         .on_action(|_: &NewReturn, cx| dispatch_script("new-return", cx))
         .on_action(|_: &ToggleSidebar, cx| dispatch_script("toggle-sidebar", cx))
@@ -206,6 +501,7 @@ fn register_actions(cx: &mut App) {
         })
         .on_action(|_: &OpenSupportEmail, cx| cx.open_url(SUPPORT_URL))
         .on_action(|_: &OpenCompanyWebsite, cx| cx.open_url(WEBSITE_URL))
+        .on_action(|_: &CheckForUpdates, _cx| crate::updater::check_now())
         .on_action(|action: &ShellAction, cx| {
             // The caption close button dispatches this. Every other script
             // action still belongs to the view that named it.
@@ -223,16 +519,40 @@ fn dispatch_script(id: &'static str, cx: &mut App) {
     });
 }
 
-fn with_window(cx: &mut App, f: impl FnOnce(&mut Window, &mut App)) {
-    let Some(handle) = cx
-        .active_window()
+/// The window menu actions belong to. The shell window recorded at open wins;
+/// otherwise the active window, then any window still open.
+fn target_window(cx: &App) -> Option<gpui_shell::gpui::AnyWindowHandle> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let remembered = MAIN_WINDOW.with(|slot| *slot.borrow());
+        if let Some(handle) = remembered
+            && cx.windows().contains(&handle)
+        {
+            return Some(handle);
+        }
+    }
+    cx.active_window()
+        .filter(|handle| cx.windows().contains(handle))
         .or_else(|| cx.windows().into_iter().next())
-    else {
+}
+
+/// Run `f` on the main window after the current update returns.
+///
+/// A menu click dispatches its action from inside the window update the popup
+/// deferred into. Updating that same window again finds it taken out of the
+/// map and logs `window not found`, so the click does nothing. Keyboard
+/// shortcuts never take this path: the script binds them itself. Deferring
+/// lands the call once the window is back in the map.
+fn with_window(cx: &mut App, f: impl FnOnce(&mut Window, &mut App) + 'static) {
+    let Some(handle) = target_window(cx) else {
+        tracing::warn!("menu action had no window");
         return;
     };
-    if let Err(error) = handle.update(cx, |_, window, cx| f(window, cx)) {
-        tracing::warn!("menu action had no window: {error}");
-    }
+    cx.defer(move |cx| {
+        if let Err(error) = handle.update(cx, |_, window, cx| f(window, cx)) {
+            tracing::warn!("menu action had no window: {error}");
+        }
+    });
 }
 
 fn bring_all_to_front(cx: &mut App) {
@@ -248,16 +568,30 @@ fn bring_all_to_front(cx: &mut App) {
     crate::tray::show_app(cx);
 }
 
-fn show_about() {
-    let body = about_body();
-    // rfd's macOS dialog hops to the main thread itself. Spawning keeps the
-    // GPUI action handler from nesting a modal run loop inside the menu click.
-    std::thread::spawn(move || {
-        let _ = rfd::MessageDialog::new()
-            .set_title("About eBIRForms")
-            .set_description(&body)
-            .set_level(rfd::MessageLevel::Info)
-            .show();
+fn show_about(cx: &mut App) {
+    // macOS keeps the native dialog. Linux rfd shells out to zenity, which is
+    // not part of the app, so Linux and Windows draw the same text in-window.
+    #[cfg(target_os = "macos")]
+    {
+        let _ = cx;
+        let body = about_body();
+        std::thread::spawn(move || {
+            let _ = rfd::MessageDialog::new()
+                .set_title("About eBIRForms")
+                .set_description(&body)
+                .set_level(rfd::MessageLevel::Info)
+                .show();
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    with_window(cx, |window, cx| {
+        let Some(Some(root)) = window.root::<DesktopMenuFrame>() else {
+            return;
+        };
+        root.update(cx, |frame, cx| {
+            frame.about = true;
+            cx.notify();
+        });
     });
 }
 
@@ -343,6 +677,7 @@ fn file_menu(platform: MenuPlatform) -> Menu {
         }
         MenuPlatform::Linux => {
             items.push(MenuItem::separator());
+            items.push(MenuItem::action("Close Window", CloseWindow));
             items.push(MenuItem::action("Hide eBIRForms", HideToTray));
             items.push(MenuItem::separator());
             items.push(MenuItem::action("Quit eBIRForms", QuitApplication));
@@ -408,6 +743,7 @@ fn help_menu(include_about: bool) -> Menu {
         items.push(MenuItem::action("About eBIRForms", AboutApplication));
         items.push(MenuItem::separator());
     }
+    items.push(MenuItem::action("Check for Updates…", CheckForUpdates));
     items.push(MenuItem::action("Contact Support…", OpenSupportEmail));
     items.push(MenuItem::action("Goldcoders Website", OpenCompanyWebsite));
     Menu::new("Help").items(items)
@@ -535,8 +871,16 @@ mod tests {
         let file = menu(&menus, "File");
         assert_eq!(
             titles(file),
-            ["New Return…", "-", "Hide eBIRForms", "-", "Quit eBIRForms",]
+            [
+                "New Return…",
+                "-",
+                "Close Window",
+                "Hide eBIRForms",
+                "-",
+                "Quit eBIRForms",
+            ]
         );
+        assert!(is_action::<CloseWindow>(named(file, "Close Window")));
         assert!(is_action::<QuitApplication>(named(file, "Quit eBIRForms")));
         assert!(is_action::<HideToTray>(named(file, "Hide eBIRForms")));
         assert!(is_action::<OpenSettings>(named(
@@ -546,6 +890,10 @@ mod tests {
         assert!(is_action::<AboutApplication>(named(
             menu(&menus, "Help"),
             "About eBIRForms"
+        )));
+        assert!(is_action::<CheckForUpdates>(named(
+            menu(&menus, "Help"),
+            "Check for Updates…"
         )));
         assert_eq!(titles(menu(&menus, "Window")), ["Minimize", "Zoom"]);
         assert!(titles(menu(&menus, "View")).contains(&"Enter Full Screen".to_string()));
@@ -567,6 +915,10 @@ mod tests {
             menu(&menus, "Help"),
             "About eBIRForms"
         )));
+        assert!(is_action::<CheckForUpdates>(named(
+            menu(&menus, "Help"),
+            "Check for Updates…"
+        )));
         assert!(titles(menu(&menus, "View")).contains(&"Enter Full Screen".to_string()));
     }
 
@@ -576,7 +928,18 @@ mod tests {
         assert_eq!(WEBSITE_URL, "https://goldcoders.dev");
         let menus = app_menus(MenuPlatform::Macos);
         let help = menu(&menus, "Help");
-        assert_eq!(titles(help), ["Contact Support…", "Goldcoders Website"]);
+        assert_eq!(
+            titles(help),
+            [
+                "Check for Updates…",
+                "Contact Support…",
+                "Goldcoders Website"
+            ]
+        );
+        assert!(is_action::<CheckForUpdates>(named(
+            help,
+            "Check for Updates…"
+        )));
         assert!(is_action::<OpenSupportEmail>(named(
             help,
             "Contact Support…"
@@ -585,5 +948,31 @@ mod tests {
             help,
             "Goldcoders Website"
         )));
+    }
+
+    /// Titles take the theme foreground, not the light-theme secondary color
+    /// the stock menu bar paints. Dark foreground is lighter than its bar;
+    /// light foreground is darker than its bar.
+    #[test]
+    fn menu_bar_titles_follow_the_theme_foreground() {
+        for colors in [
+            gpui_base::ColorTokens::dark(),
+            gpui_base::ColorTokens::light(),
+        ] {
+            let bar = menu_bar_colors(&colors);
+            assert_eq!(bar.foreground, colors.foreground);
+            assert_eq!(bar.background, colors.background);
+            assert_eq!(bar.border, colors.border);
+            assert_eq!(bar.surface, colors.surface);
+            assert_ne!(bar.foreground, bar.background);
+            let dark = colors.background.l < 0.5;
+            if dark {
+                assert!(bar.foreground.l > bar.background.l);
+            } else {
+                assert!(bar.foreground.l < bar.background.l);
+            }
+            assert_ne!(bar.hover, bar.foreground);
+            assert_ne!(bar.active, bar.foreground);
+        }
     }
 }

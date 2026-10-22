@@ -926,16 +926,30 @@ export function Field(cx, label, opts = {}) {
 }
 
 /**
- * A two-column field grid with 16 × 32 gaps (one column when `width` is
- * under 640 − padding). Cells get pixel widths computed from `width`, per
- * the layout lesson: no flex-grown text cells.
+ * Smallest width at which two fields share a row. The 9-digit TIN is about
+ * 274 px, and the longest placeholder ("Type a code or district, like 050
+ * or Makati", 13 px) is 251 px plus the field's 10 px padding each side.
+ * Below this the next field wraps onto its own line instead of squeezing
+ * the digits or clipping the placeholder.
+ */
+const FIELD_PAIR_MIN = 280;
+
+/**
+ * A two-column field grid with 16 × 32 gaps. A cell shares its row only
+ * while it can stay at least {@link FIELD_PAIR_MIN} wide; otherwise it
+ * wraps (Taxpayer type under TIN, RDO under ZIP, Email under Phone). A
+ * `full` cell always takes a row. The grid is the width of its parent —
+ * `width` stays in the signature for callers — so a stale pixel width from
+ * the viewport poll cannot paint past the pane.
  */
 export function FieldGrid(cx, width, cells) {
-  const oneCol = width < 420;
-  const colW = oneCol ? width : Math.floor((width - 32) / 2);
-  const grid = div().flex().flex_row().flex_wrap().gap_x(32).gap_y(16).w(width);
+  void width;
+  const grid = div().flex().flex_row().flex_wrap().items_start().gap_x(32).gap_y(16).w_full().min_w(0);
   for (const cell of cells) {
-    grid.child(div().w(cell.full || oneCol ? width : colW).min_w(0).child(cell.el));
+    const slot = div().min_w(0).child(cell.el);
+    if (cell.full) slot.w_full().flex_none();
+    else slot.flex_1().flex_basis(0).min_w(FIELD_PAIR_MIN);
+    grid.child(slot);
   }
   return grid;
 }
@@ -1472,15 +1486,18 @@ export class DigitEntry {
   }
 }
 
-/** The cells of a `DigitEntry`, groups separated by a dash like the printed TIN. */
+/** The cells of a `DigitEntry`, groups separated by a dash like the printed TIN.
+ *  The groups stay on one line: a narrow pane stacks the neighbouring field
+ *  under this row rather than wrapping 123-456- onto a second line. */
 export function DigitCells(cx, entry, id, opts = {}) {
   const t = tokens(cx);
-  const row = div().id(id).flex().flex_row().flex_wrap().items_center().gap(6);
+  const row = div().id(id).flex().flex_row().flex_nowrap().flex_none().items_center().gap(6);
   entry.groups.forEach((g, i) => {
-    if (i) row.child(Text(cx, "body", "-", "fg3"));
+    if (i) row.child(Text(cx, "body", "-", "fg3").flex_none());
     row.child(
       OtpInput.new(g)
         .flex()
+        .flex_none()
         .gap(3)
         .cell_style((cell) =>
           cell

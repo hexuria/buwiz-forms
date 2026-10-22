@@ -23,7 +23,7 @@ const rows = (view, id) => host(view.find((section) => section.id === id).rows);
 {
   const view = settingsView("", true);
   assert.deepEqual(ids(view), ["general", "account", "transfer", "jobs", "computer"]);
-  assert.deepEqual(rows(view, "general"), ["theme", "recent", "compact"]);
+  assert.deepEqual(rows(view, "general"), ["theme", "recent", "compact", "updates"]);
   assert.ok(rows(view, "transfer").includes("import"));
   assert.equal(String(shownSection("account", view)), "account");
 }
@@ -50,7 +50,7 @@ const rows = (view, id) => host(view.find((section) => section.id === id).rows);
 {
   const view = settingsView("personal", true);
   assert.deepEqual(ids(view), ["general", "account"]);
-  assert.deepEqual(rows(view, "general"), ["theme", "recent", "compact"], "a section word keeps every row");
+  assert.deepEqual(rows(view, "general"), ["theme", "recent", "compact", "updates"], "a section word keeps every row");
 }
 
 {

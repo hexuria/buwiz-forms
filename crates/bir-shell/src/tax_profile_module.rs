@@ -944,6 +944,7 @@ fn apply_connection_result(
                 .into())
         }
         Err(error) => {
+            tracing::warn!(%error, "IMAP login failed");
             let mut profile = load_inbox_profile(&guard, tin)?;
             profile.email_tracking_enabled = false;
             guard

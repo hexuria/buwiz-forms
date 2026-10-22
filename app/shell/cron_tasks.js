@@ -96,6 +96,31 @@ function jobsTab(cx, app, width) {
   );
 }
 
+/**
+ * Same markers painted bir classifies on (` ERROR ` / ` FATAL ` / ` WARN ` /
+ * ` INFO `). See `bir_core::logging::log_line_level`.
+ */
+function logLineLevel(line) {
+  if (line.includes(" ERROR ") || line.includes(" FATAL ")) return "Error";
+  if (line.includes(" WARN ")) return "Warn";
+  if (line.includes(" INFO ")) return "Info";
+  return "Other";
+}
+
+const LOG_FILTERS = [
+  { value: "All Logs", label: "All" },
+  { value: "Error", label: "Error" },
+  { value: "Warn", label: "Warn" },
+  { value: "Info", label: "Info" },
+];
+
+function lineColor(level) {
+  if (level === "Error") return "danger";
+  if (level === "Warn") return "warning";
+  if (level === "Info") return "fg";
+  return "fg2";
+}
+
 function logsTab(cx, app, width) {
   const t = tokens(cx);
   /** @type {{ file_name: string, lines: number, content: string, error?: string }} */
@@ -107,10 +132,34 @@ function logsTab(cx, app, width) {
   } catch (e) {
     error = String(e);
   }
+  const filter = app.cronLogFilter || "All Logs";
+  // `String#split` keeps a trailing empty piece when the file ends in a
+  // newline. Painted bir uses `str::lines`, which drops that piece.
   const lines = String(log.content || "").split("\n");
-  const shown = lines.slice(-LOG_LINES);
-  // One wrapped text block: a separate element per line costs a text layout
-  // each and took render past gpui-shell's 2 s limit.
+  if (lines.length && lines[lines.length - 1] === "") lines.pop();
+  const matching = lines.filter((line) => filter === "All Logs" || logLineLevel(line) === filter);
+  const shown = matching.slice(-LOG_LINES);
+  // The tail is capped (a separate element per line of the whole file took
+  // render past gpui-shell's 2 s limit). Each kept line is its own element so
+  // Error / Warn / Info can take the same colors as painted bir.
+  const body = div().w(width - 2 * SPACE[3] - 2).flex().flex_col();
+  if (!shown.length || (shown.length === 1 && !shown[0])) {
+    body.child(Text(cx, "meta", filter === "All Logs" ? "No log entries yet today." : "No lines at this level.", "fg2"));
+  } else {
+    shown.forEach((line, index) => {
+      body.child(
+        div()
+          .id(`log-line-${index}`)
+          .w(width - 2 * SPACE[3] - 2)
+          .text_size(11)
+          .line_height("16px")
+          .font_family(cx.theme().typography.mono)
+          .text_color(t[lineColor(logLineLevel(line))] || t.fg2)
+          .whitespace_normal()
+          .child(line || " "),
+      );
+    });
+  }
   const box = div()
     .id("log-box")
     .w(width)
@@ -120,16 +169,7 @@ function logsTab(cx, app, width) {
     .border_color(t.border)
     .bg(t.bg)
     .overflow_hidden()
-    .child(
-      div()
-        .w(width - 2 * SPACE[3] - 2)
-        .text_size(11)
-        .line_height("16px")
-        .font_family(cx.theme().typography.mono)
-        .text_color(t.fg2)
-        .whitespace_normal()
-        .child(shown.join("\n") || " "),
-    );
+    .child(body);
   const head = div()
     .flex()
     .flex_row()
@@ -138,10 +178,15 @@ function logsTab(cx, app, width) {
     .gap(SPACE[3])
     .mb(SPACE[4])
     .child(
+      Segmented(cx, "logs-filter", LOG_FILTERS, filter, (v, cx) => app.setCronLogFilter(v, cx), {
+        label: "Log level",
+      }),
+    )
+    .child(
       Text(
         cx,
         "meta",
-        `${log.file_name || "No log file yet"} · ${log.lines} lines${lines.length > LOG_LINES ? ` · showing the last ${LOG_LINES}` : ""}`,
+        `${log.file_name || "No log file yet"} · ${log.lines} lines${matching.length > LOG_LINES ? ` · showing the last ${LOG_LINES}` : ""}`,
         "fg2",
       ),
     )

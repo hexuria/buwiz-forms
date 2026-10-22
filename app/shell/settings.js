@@ -264,6 +264,23 @@ function generalCards(cx, app, rows) {
       ),
     );
   }
+  if (rows.includes("updates")) {
+    appearance.push(
+      SettingRow(
+        cx,
+        "settings-auto-update",
+        "Download updates automatically",
+        "A newer release downloads in the background. You choose when to install.",
+        Switch(
+          cx,
+          "settings-auto-update-switch",
+          !app.updateStatus || app.updateStatus.auto_download !== false,
+          (v, cx) => app.setAutoUpdateDownload(v, cx),
+          "Download updates automatically",
+        ),
+      ),
+    );
+  }
   return appearance.length ? [labeled(cx, "Appearance", Card(cx, "settings-appearance", appearance))] : [];
 }
 

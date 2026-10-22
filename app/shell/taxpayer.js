@@ -516,6 +516,7 @@ export class TaxpayerActions {
         const r = await app.store.call("test_inbox_connection", tin);
         app.store.bump();
         this.inboxMsg = { ok: r.ok, text: r.message };
+        if (!r.ok) app.store.logScreen("error", `inbox verify: ${r.message}`);
         app.toast(r.message, acx, r.ok ? "circle-check" : "triangle-alert");
       } catch (e) {
         this.inboxMsg = { ok: false, text: message(e) };
@@ -540,6 +541,7 @@ export class TaxpayerActions {
         this.inboxMsg = r.ok
           ? { ok: true, text: r.still_pending ? "Checked. A submitted return is still waiting for its confirmation." : "Checked. Everything submitted is confirmed." }
           : { ok: false, text: r.error || "The check failed." };
+        if (!r.ok) app.store.logScreen("error", `inbox check: ${this.inboxMsg.text}`);
         app.toast(this.inboxMsg.text, acx, r.ok ? "circle-check" : "triangle-alert");
       } catch (e) {
         this.inboxMsg = { ok: false, text: message(e) };
