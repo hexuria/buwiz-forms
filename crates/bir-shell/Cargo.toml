@@ -80,13 +80,13 @@ tracing = "0.1"
 # The submission worker (`bir_core::background_cron`) runs on its own Tokio
 # runtime, as in painted `bir` and `bir-headless`.
 tokio = { version = "1", features = ["rt-multi-thread"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Bridges the OS sign-in prompt (run on its own thread) into a host future.
 futures = "0.3"
 
 [dev-dependencies]
 # Tests produce a current authenticator code for a generated secret.
 totp-rs = "5.7.1"
+temp-env = "0.3"
 # Host tests stage filed returns and failing writes with raw SQL.
 bir-core = { path = "../bir-core", features = ["test-support"] }
 

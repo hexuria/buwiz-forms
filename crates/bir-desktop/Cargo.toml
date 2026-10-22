@@ -51,11 +51,9 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
 keyring = { workspace = true }
 base64 = "0.22"
-tracing-appender = "0.2.3"
 tokio = { workspace = true }
 chrono = { workspace = true }
 rfd = "0.17.2"
