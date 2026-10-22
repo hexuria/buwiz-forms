@@ -47,6 +47,26 @@ export class Store {
     this.zipList = null;
   }
 
+  /**
+   * A screen failure for the daily log and the Logs tab. `console.*` also
+   * lands there (`gpui_shell::script`); this is the path that does not go
+   * through `console`. Logging must not hide the original failure.
+   */
+  logScreen(level, message) {
+    const text = String(message);
+    try {
+      if (typeof bir.record_screen_log === "function") {
+        bir.record_screen_log(level, text);
+        return;
+      }
+    } catch {
+      // Fall through to console, which the shell subscriber also records.
+    }
+    if (level === "error") console.error(text);
+    else if (level === "warn" || level === "warning") console.warn(text);
+    else console.log(text);
+  }
+
   /** Drop every cached read. Call after any write. */
   bump() {
     this.version += 1;
@@ -76,7 +96,9 @@ export class Store {
       this.errors.delete(key);
       this.failedAt.delete(key);
     } catch (e) {
-      this.errors.set(key, String(e));
+      const text = String(e);
+      if (this.errors.get(key) !== text) this.logScreen("error", `bir.${name}: ${errorText(e)}`);
+      this.errors.set(key, text);
       this.failedAt.set(key, Date.now());
     }
     this.cache.set(key, value);
@@ -103,6 +125,9 @@ export class Store {
   write(name, ...args) {
     try {
       return this.call(name, ...args);
+    } catch (e) {
+      this.logScreen("error", `bir.${name}: ${errorText(e)}`);
+      throw e;
     } finally {
       this.bump();
     }

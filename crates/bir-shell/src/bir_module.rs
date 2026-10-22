@@ -82,9 +82,22 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 }
 
 /// Open the database when the shell launches; `host::run` calls this.
+///
+/// Also adopts the legacy log file and prunes to the user's retention, then
+/// (in the shipping binary) re-checks that every six hours. Tests do not
+/// start the sleeper thread: it would keep the test process alive.
 pub(crate) fn open_database_at_launch() {
-    if let Err(error) = database_handle() {
-        tracing::warn!("database not opened at launch: {}", error.message());
+    match database_handle() {
+        Ok(handle) => {
+            if let Ok(guard) = handle.lock() {
+                let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), &guard);
+            }
+            #[cfg(not(test))]
+            bir_core::log_files::spawn_retention(handle);
+        }
+        Err(error) => {
+            tracing::warn!("database not opened at launch: {}", error.message());
+        }
     }
 }
 
@@ -1530,9 +1543,19 @@ fn purge_archived_jobs() -> HostResult {
     })
 }
 
+/// A JavaScript screen failure. `console.*` already reaches tracing as
+/// `gpui_shell::script`; this is the path a caught screen error takes when
+/// it never calls `console` (a failed host read, a render throw).
+fn record_screen_log(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let level = arguments.string(0)?.to_owned();
+    let message = arguments.string(1)?.to_owned();
+    crate::logging::record_screen_log(&level, &message);
+    Ok(HostValue::Null)
+}
+
 /// Today's rotated log (`ebirforms.YYYY-MM-DD.log`), tailed like the painted
 /// Logs tab — it keeps at most the newest 5,000 lines.
-fn job_log_tail() -> HostResult {
+pub(crate) fn job_log_tail() -> HostResult {
     let logs_path = bir_core::log_files::today_log_path(&bir_core::log_files::log_dir());
     let file_name = logs_path
         .file_name()
@@ -2047,6 +2070,7 @@ pub fn module() -> HostModule {
         .function("archive_background_job", archive_background_job)
         .function("purge_archived_jobs", |_| purge_archived_jobs())
         .function("job_log_tail", |_| job_log_tail())
+        .function("record_screen_log", record_screen_log)
         .function("agent_take", |_| agent_take());
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
@@ -2230,6 +2254,8 @@ export interface JobLogTail {
     content: string;
 }
 export function job_log_tail(): JobLogTail;
+/** A screen failure (`error` / `warn` / `info` / `debug`) for the Logs tab and the daily log file. Secrets are redacted. */
+export function record_screen_log(level: string, message: string): null;
 /** Next UI command from the gpui-agent host, or null when none is waiting. */
 export function agent_take(): string | null;
 "#;

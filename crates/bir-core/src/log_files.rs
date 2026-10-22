@@ -1,8 +1,8 @@
 //! Application log files on disk: naming, today's file, retention pruning.
 //!
-//! The painted app writes one file per UTC day through
-//! `tracing_appender::rolling` (`ebirforms.YYYY-MM-DD.log`) and prunes
-//! older days on a user-set retention. Before this the appender was
+//! Painted `bir` and `bir-shell` both write one file per UTC day through
+//! `tracing_appender::rolling` (`ebirforms.YYYY-MM-DD.log`) and prune older
+//! days on a user-set retention. Before rotation the appender was
 //! `rolling::never`: a single `ebirforms.log` that nothing ever truncated,
 //! which on a busy machine grows by tens of megabytes a year.
 
@@ -26,7 +26,17 @@ pub const MAX_RETENTION_DAYS: u32 = 365;
 pub const RETENTION_CHOICES: [u32; 5] = [3, 7, 14, 30, 90];
 
 /// `<data_dir>/logs`, the directory both binaries write under.
+///
+/// On macOS `data_dir` is the App Group container
+/// (`~/Library/Group Containers/group.dev.goldcoders.bir`), so the files land
+/// in that container's `logs` folder. `BIR_LOG_DIR`, when set and non-empty,
+/// replaces the directory — tests point it at a scratch folder.
 pub fn log_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("BIR_LOG_DIR")
+        && !dir.is_empty()
+    {
+        return PathBuf::from(dir);
+    }
     crate::platform::data_dir().join("logs")
 }
 
@@ -131,6 +141,29 @@ pub fn maintain(dir: &Path, db: &Database) -> Vec<PathBuf> {
     prune_rotated_logs(dir, retention_days(db), chrono::Utc::now().date_naive())
 }
 
+/// Re-check retention every six hours so a long-running process crosses
+/// midnight without growing past the setting. The caller owns `db` for the
+/// life of the process; the thread sleeps, so only the real binaries should
+/// start it (a test process would not exit).
+pub fn spawn_retention(db: std::sync::Arc<std::sync::Mutex<Database>>) {
+    static STARTED: std::sync::Once = std::sync::Once::new();
+    STARTED.call_once(|| {
+        let spawned = std::thread::Builder::new()
+            .name("bir-log-retention".into())
+            .spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
+                    if let Ok(guard) = db.lock() {
+                        let _ = maintain(&log_dir(), &guard);
+                    }
+                }
+            });
+        if let Err(error) = spawned {
+            eprintln!("log retention thread not started: {error}");
+        }
+    });
+}
+
 /// All kept days concatenated oldest → newest, for Export.
 pub fn combined_log_text(dir: &Path) -> String {
     let mut out = String::new();
@@ -231,6 +264,18 @@ mod tests {
         std::fs::write(dir.path().join(dated_file_name(day(2026, 9, 12))), "b\n").unwrap();
         std::fs::write(dir.path().join(dated_file_name(day(2026, 9, 11))), "a").unwrap();
         assert_eq!(combined_log_text(dir.path()), "a\nb\n");
+    }
+
+    #[test]
+    fn log_dir_honors_bir_log_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let expected = dir.path().join("custom-logs");
+        temp_env::with_var("BIR_LOG_DIR", Some(expected.as_os_str()), || {
+            assert_eq!(log_dir(), expected);
+        });
+        temp_env::with_var("BIR_LOG_DIR", Some(""), || {
+            assert_ne!(log_dir(), PathBuf::from(""));
+        });
     }
 
     #[test]

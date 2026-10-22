@@ -15,6 +15,7 @@ mod bir_module;
 mod blitz_render;
 mod dashboard_module;
 mod host;
+mod logging;
 mod packaged;
 pub mod print_preview_window;
 pub mod print_sheet;

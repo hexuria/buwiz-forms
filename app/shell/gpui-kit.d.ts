@@ -27872,6 +27872,10 @@ declare module "bir" {
       content: string;
   }
   export function job_log_tail(): JobLogTail;
+  /** A screen failure (`error` / `warn` / `info` / `debug`) for the Logs tab and the daily log file. Secrets are redacted. */
+  export function record_screen_log(level: string, message: string): null;
+  /** Next UI command from the gpui-agent host, or null when none is waiting. */
+  export function agent_take(): string | null;
 
   export type BranchFieldName = "rdo_code" | "registered_address" | "zip_code" | "phone" | "email";
   export interface BranchFacts {
