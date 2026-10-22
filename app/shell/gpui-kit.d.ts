@@ -1436,7 +1436,7 @@ declare module "gpui-kit" {
     /** Sets the width. */
     w<Self extends Element>(this: Self, value: Length): Self;
 
-    // The 3148 no-argument style methods, generated from GPUI's reflection
+    // The 3146 no-argument style methods, generated from GPUI's reflection
     // table. A name here is a name the runtime dispatches, and the
     // documentation is GPUI's own.
     /**
@@ -2917,10 +2917,6 @@ declare module "gpui-kit" {
      * [Docs](https://tailwindcss.com/docs/cursor)
      */
     cursor_w_resize<Self extends Element>(this: Self): Self;
-    /** Draws a debug border around this element. */
-    debug<Self extends Element>(this: Self): Self;
-    /** Draws a debug border on all conforming elements below this element. */
-    debug_below<Self extends Element>(this: Self): Self;
     debug_blue<Self extends Element>(this: Self): Self;
     debug_green<Self extends Element>(this: Self): Self;
     debug_pink<Self extends Element>(this: Self): Self;
@@ -27838,6 +27834,12 @@ declare module "bir" {
       kind: "database" | "profile" | "invalid" | "cancelled";
   }
   export function import_archive(): ImportResult;
+  export interface ExportResult {
+      kind: "exported" | "cancelled";
+      path?: string;
+  }
+  /** The taxpayer's profile archive under the host's save dialog. A taxpayer with a PIN needs it as `pin`; the page never passes a path — the host chooses the file. */
+  export function export_profile(tin: string, pin?: string | null): ExportResult;
   export interface PrintPreview {
       path: string;
   }
@@ -27956,6 +27958,57 @@ declare module "bir" {
   export function list_rdos(): RdoOption[];
   export function list_zip_codes(): string[];
 
+  export type InboxAuthMethod = "AppPassword" | "GoogleOAuth";
+  export interface InboxState {
+      tin: string;
+      /** Mailbox the poller keys on: imap_email, else the branch email. */
+      inbox_email: string;
+      auth_method: InboxAuthMethod;
+      tracking_enabled: boolean;
+      /** The stored IMAP login, "" when the mailbox falls back to the branch email. */
+      imap_login: string;
+      imap_host: string;
+      /** An app password is stored — the secret itself never crosses the bridge. */
+      has_app_password: boolean;
+      /** A usable Google refresh token exists on the profile or the inbox row. */
+      oauth_connected: boolean;
+      oauth_inbox_email: string | null;
+      oauth_updated_at: string | null;
+      /** A sibling on this inbox still has a Submitted return awaiting its BIR receipt. */
+      still_pending: boolean;
+      matching_tins: string[];
+      /** Last run of this inbox's `bir_poll_email` job, when one exists. */
+      last_check_at: string | null;
+      last_check_status: string | null;
+      last_check_log: string | null;
+  }
+  export interface InboxCredentialsInput {
+      imap_email: string;
+      /** Blank means the default imap.gmail.com. */
+      imap_host?: string | null;
+      /** Omitted keeps the stored password; a string replaces it (spaces stripped). */
+      app_password?: string | null;
+  }
+  export interface InboxVerifyResult { ok: boolean; message: string; state: InboxState; }
+  export interface InboxCheckResult {
+      ok: boolean;
+      still_pending: boolean;
+      error: string | null;
+      state: InboxState;
+  }
+  export function inbox_state(tin: string): InboxState;
+  /** Stores App Password credentials on the profile (encrypted DB); tracking stays off until Verify succeeds. */
+  export function set_inbox_app_password(tin: string, input: InboxCredentialsInput): InboxState;
+  export function set_inbox_tracking(tin: string, enabled: boolean): InboxState;
+  /** Clears the Google grant for this inbox across every profile sharing it. */
+  export function disconnect_inbox_oauth(tin: string): InboxState;
+  /** Runs the browser OAuth flow, then persists the grant to the shared inbox row. */
+  export function connect_inbox_oauth(tin: string): Promise<InboxState>;
+  /** Real IMAP login probe: success turns tracking on, failure turns it off. */
+  export function test_inbox_connection(tin: string): Promise<InboxVerifyResult>;
+  /** Runs the cron-side fetch→confirm poll for this inbox once, updating its job row. */
+  export function check_inbox_now(tin: string): Promise<InboxCheckResult>;
+
   export interface ScreenFormIndexEntry {
       c: string;
       t: string;
@@ -27969,6 +28022,9 @@ declare module "bir" {
       field: string;
       message: string;
       keys: string[];
+      /** A notice the filer may mark checked without changing anything: the token `screen_form_check_notice` takes, and its button's label. */
+      dismiss?: string;
+      dismiss_label?: string;
   }
   export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
   export interface ScreenFormOpened {
@@ -27987,7 +28043,7 @@ declare module "bir" {
       profile: string[];
       /** Filled profile boxes the filer may open with Edit; pass the opened ones to `screen_form_fill` as `unlocked`. */
       profile_edit: string[];
-      /** Opened from the Form library: a blank sample that is never saved. */
+      /** Opened from the Form library: a blank sample; saved once its period is set, it becomes that period's return. */
       sample: boolean;
       /** A sample's boxes shown blank while its period is not set: its period parts and everything that follows the period. */
       blank: string[];
@@ -27997,6 +28053,8 @@ declare module "bir" {
       whys: Record<string, string>;
       /** A blank box's reason, shown in the box: what it waits for (a rate its row's ATC, a tick box the amount that ticks it, a date the return it is started with). */
       waits: Record<string, string>;
+      /** An untouched date whose message the page holds until it is edited or Check / Save is pressed (1800/1801 item 1). */
+      quiet?: { field: string; keys: string[] } | null;
       /** Why each locked box is shut, in the filer's words (drawn under its item while the box shows blank). */
       lock_notes: Record<string, string>;
       /** A sample's period parts: page inputs (never draft writes) the filer sets the period with. */
@@ -28018,6 +28076,12 @@ declare module "bir" {
       penalties: ScreenFormPenalties[];
       /** Each pooled address (by its first line) as the draft holds it: the page shows this, never the field map's cut lines. */
       pools: Record<string, string>;
+      /** A stored Draft whose profile boxes the filer did not edit followed a later tax-profile change (saved): what changed ("RDO 050 → 043"). Empty when nothing moved. */
+      profile_updates?: string[];
+      /** A Draft saved before it recorded its profile baseline (or reverted to Draft): its unedited profile boxes that differ from the profile now ("RDO 039 (profile 043)"), not changed; `screen_form_use_profile` applies them. */
+      profile_differs?: string[];
+      /** One-time notes this opening offers (`key`, `text`); show the ones `screen_form_notes_seen` records. */
+      notes?: { key: string; text: string }[];
       errors: ScreenFormError[];
   }
   export interface ScreenFormPeriodPart {
@@ -28052,6 +28116,8 @@ declare module "bir" {
       keys: string[];
       /** The filer entered the amounts: they file instead of the computed ones; blanks go back to the computed. */
       edited: boolean;
+      /** The amounts are kept as entered before penalties were computed (1701Q, 1701): "Use the computed amounts" works once Edit opens them. */
+      kept?: boolean;
       /** The party is on the return as it stands (a spouse's column with no spouse is not): only then is Edit offered. */
       applies: boolean;
   }
@@ -28091,16 +28157,21 @@ declare module "bir" {
       selected?: boolean;
   }
   export interface ScreenFormSaved {
-      id: number;
-      status: ScreenFormStatus;
-      stored_period: number | null;
-      draft: object;
+      /** A Form library sample: false when its period already has a stored return (nothing saved; `existing` and `opens` are the offer). */
+      saved?: boolean;
+      existing?: ScreenFormExisting;
+      /** A saved sample: open the return it became with these (`screen_form_open`'s year, period and key). */
+      opens?: { year: number; period: number; key: number | null };
+      id?: number;
+      status?: ScreenFormStatus;
+      stored_period?: number | null;
+      draft?: object;
   }
   export function screen_form_schema(form_code: string): object;
   export function screen_forms_index(): ScreenFormIndexEntry[];
   /** `key`: the exact stored return (a transaction's MMDD, 2553's quarter; gone, the open fails), else the latest of the period. `new_key`: no stored return, a new one started under that key (the typed date); `new_key_from`: the sample the host offered `new_key` for (its `created_at`). */
   export function screen_form_open(tin: string, form_code: string, year: number, period: number, key?: number | null, new_key?: number | null, new_key_from?: string | null): Promise<ScreenFormOpened>;
-  /** The Form library's blank sample of a form for this taxpayer: reads no stored return, computes no penalty, and is never saved, queued or printed (its draft is marked). */
+  /** The Form library's blank sample of a form for this taxpayer: reads no stored return and computes no penalty (its draft is marked). Saved once its period is set, it becomes that period's return; queue and print take the saved return. */
   export function screen_form_sample(tin: string, form_code: string): Promise<ScreenFormOpened>;
   /** A sample's typed period parts (key -> value): incomplete, an existing stored return, or a fresh sample for that period. */
   /** A NEW amended return copied from a stored one that reached BIR; nothing is stored until it is saved. The filed version is kept in this return's history. */
@@ -28110,7 +28181,10 @@ declare module "bir" {
   export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
   /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
   export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
+  /** "Use profile values" on a draft that differs from the tax profile (`profile_differs`): every profile box the filer did not edit takes the profile's value, and they follow later profile changes. Nothing is saved; save the draft. */
+  export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object): ScreenFormFilled;
   export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
+  /** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
   /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
   export function screen_form_print(form_code: string, draft: object): { path: string };
@@ -28120,6 +28194,10 @@ declare module "bir" {
   export function screen_form_queue(form_code: string, draft: object): number;
   /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
   export function screen_form_cancel_queue(form_code: string, draft: object): null;
+  /** Record one-time notes (`ScreenFormOpened.notes` keys) as seen, each only if not yet recorded; the keys this call recorded, which are the notes to show. */
+  export function screen_form_notes_seen(keys: string[]): string[];
+  /** Mark a notice (`ScreenFormError.dismiss`) of a saved draft checked; the return is not changed. */
+  export function screen_form_check_notice(form_code: string, draft: object, token: string): null;
 
   export interface DeadlineRow {
       tin: string;
