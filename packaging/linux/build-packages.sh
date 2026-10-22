@@ -80,7 +80,7 @@ for required in \
     "$ROOT/assets/linux/icons/hicolor/128x128/apps/dev.goldcoders.bir.png" \
     "$ROOT/assets/linux/icons/hicolor/256x256/apps/dev.goldcoders.bir.png" \
     "$ROOT/assets/linux/icons/hicolor/512x512/apps/dev.goldcoders.bir.png"; do
-    test -f "$required" || { echo "Required Linux packaging file is missing: $required" >&2; exit 1; }
+    test -e "$required" || { echo "Required Linux packaging file is missing: $required" >&2; exit 1; }
 done
 
 rpm_version="${VERSION//-/\~}"
