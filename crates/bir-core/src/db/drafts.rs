@@ -3546,6 +3546,13 @@ mod tests {
         draft
             .transition_to_queued()
             .expect("a Q1 graduated election should queue");
+        // Pin the queue time a few minutes before the fixed `submitted_at`
+        // below (12:00:00 PHT) so receipt windows are deterministic.
+        draft
+            .queue_authorization
+            .as_mut()
+            .expect("queueing records an authorization")
+            .authorized_at = "2026-04-25T03:55:00+00:00".to_string();
         draft
     }
 
@@ -5572,6 +5579,54 @@ mod tests {
         assert_eq!(
             persisted.submission_filename.as_deref(),
             Some(submitted_filename.as_str())
+        );
+    }
+
+    #[test]
+    fn email_poll_confirms_a_2551q_whose_bir_stamp_precedes_the_local_submitted_time() {
+        // Live 22 October 2026: BIR stamps the file when the SFTP PUT lands
+        // and prints only the minute ("11:58 AM"), while the row turns
+        // Submitted after PUT returns (11:58:xx). Comparing the receipt to
+        // `submitted_at` ignored both confirmations on every poll, so the
+        // watcher jobs never finished. The floor is the queue time, as 1601C.
+        let db = test_db();
+        let submitted = submitted_2551q_draft(&db, &test_profile());
+        let receipt_filename = submitted
+            .submission_filename
+            .clone()
+            .unwrap()
+            .replace("#test@example.com#", "");
+
+        // Older than this queued generation (11:55 PHT, minus skew): ignored.
+        let receipt_id =
+            insert_2551q_receipt(&db, &submitted, &receipt_filename, "2026-04-25", "11:50:00");
+        let stale = db.get_submission_receipt_by_id(receipt_id).unwrap().unwrap();
+        assert_eq!(
+            db.confirm_2551q_from_receipt(&stale).unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Ignored
+        );
+
+        // Same generation, stamped a minute before local Submitted: confirms.
+        db.conn
+            .execute(
+                "UPDATE submission_receipts SET received_time = '11:59:00' WHERE id = ?1",
+                params![receipt_id],
+            )
+            .unwrap();
+        let receipt = db.get_submission_receipt_by_id(receipt_id).unwrap().unwrap();
+        assert_eq!(
+            db.confirm_2551q_from_receipt(&receipt).unwrap(),
+            crate::db::ReceiptConfirmationOutcome::Confirmed
+        );
+        let persisted = db
+            .get_2551q_draft(&submitted.tin, submitted.taxable_year, submitted.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.status, FilingStatus::Confirmed);
+        assert_eq!(persisted.receipt_id, Some(receipt_id));
+        assert_eq!(
+            persisted.confirmed_at.as_deref(),
+            Some("2026-04-25T11:59:00+08:00")
         );
     }
 
