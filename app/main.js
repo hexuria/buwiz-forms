@@ -37,6 +37,7 @@ import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/
 import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
+import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
 import { SecurityActions } from "./shell/security.js";
 import { SetupChange } from "./shell/setup_change.js";
 import { renderCronTasksPage } from "./shell/cron_tasks.js";
@@ -135,6 +136,26 @@ class BirApp extends View {
     // connection) records new submissions and BIR confirmations there, and
     // polling picks them up as a toast plus an unread dot on the bell.
     cx.timer.every(30000, (cx) => this.pollEvents(cx));
+
+    // The host checks for a release on its own thread. Polling is how the
+    // prompt appears: the host does not push into the script.
+    this.updateStatus = null;
+    this.updateInstallArmed = false;
+    const watchUpdate = (cx) => {
+      if (pollUpdateStatus(this)) cx.notify();
+      const delay = Number(process.env.BIR_UPDATE_INSTALL_AFTER_SECS || "");
+      if (
+        delay > 0 &&
+        !this.updateInstallArmed &&
+        this.updateStatus &&
+        this.updateStatus.phase === "ready"
+      ) {
+        this.updateInstallArmed = true;
+        cx.timer.after(delay * 1000, () => installReadyUpdate());
+      }
+    };
+    cx.timer.after(500, (cx) => watchUpdate(cx));
+    cx.timer.every(1000, (cx) => watchUpdate(cx));
 
     // Key bindings travel the focus path; give the root the keyboard at
     // launch so shortcuts work before anything else is clicked.
@@ -640,6 +661,12 @@ class BirApp extends View {
   setPref(key, value, cx) {
     this.prefs[key] = value;
     this.writeLocal(PREFS_KEY, this.prefs);
+    cx.notify();
+  }
+
+  setAutoUpdateDownload(enabled, cx) {
+    setAutoUpdateDownload(enabled);
+    if (this.updateStatus) this.updateStatus.auto_download = Boolean(enabled);
     cx.notify();
   }
 
@@ -1387,8 +1414,10 @@ class BirApp extends View {
     // taxpayer is drawn behind them. First launch's "Just me" types its
     // taxpayer on the normal New taxpayer page; a help desk's recovery key
     // stays on screen after the mode is saved, until it was written down.
-    if ((this.needsSetup() && this.setupPending !== "solo") || this.setup.step === "helpdesk-key") return renderSetup(cx, this);
-    if (this.appLocked) return renderSignIn(cx, this);
+    if ((this.needsSetup() && this.setupPending !== "solo") || this.setup.step === "helpdesk-key") {
+      return renderUpdatePrompt(cx, this, renderSetup(cx, this));
+    }
+    if (this.appLocked) return renderUpdatePrompt(cx, this, renderSignIn(cx, this));
     const L = this.layout();
 
     // A form on a wide window brings its own two scroll areas (the part
@@ -1512,6 +1541,6 @@ class BirApp extends View {
         Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress } : {}),
       );
     }
-    return root;
+    return renderUpdatePrompt(cx, this, root);
   }
 }
