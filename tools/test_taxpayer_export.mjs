@@ -145,7 +145,7 @@ const linked = {
 };
 await taxpayerMod.link((s) => linked[s]);
 await taxpayerMod.evaluate();
-const { TaxpayerActions, renderTaxpayerPage } = taxpayerMod.namespace;
+const { TaxpayerActions, renderTaxpayerPage, profileExportCard } = taxpayerMod.namespace;
 
 const TIN = "12345678800000";
 const ROOT = "123456788";
@@ -195,11 +195,19 @@ function makeApp({ hasPin, exportResult, exportError }) {
 
 const exportBtn = (tree) => find(tree, (i) => i.button === "tp-export-btn")[0];
 const pinCells = (tree) => find(tree, (i) => i.pinCells === "tp-export-pin");
+const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
+
+// The profile page no longer draws export; Settings does.
+{
+  const { app } = makeApp({ hasPin: false, exportResult: { kind: "exported" } });
+  const page = renderTaxpayerPage(cx, app, "profile", 900);
+  assert.equal(exportBtn(page), undefined, "export moved off the tax profile page");
+}
 
 // No PIN configured: a direct Export button, no PIN cells.
 {
   const { app, calls, toasts } = makeApp({ hasPin: false, exportResult: { kind: "exported", path: "/tmp/p.zip" } });
-  const tree = renderTaxpayerPage(cx, app, "profile", 900);
+  const tree = exportTree(app);
   assert.equal(pinCells(tree).length, 0, "no PIN cells without a configured PIN");
   const btn = exportBtn(tree);
   assert.ok(btn, "Export button rendered");
@@ -211,7 +219,7 @@ const pinCells = (tree) => find(tree, (i) => i.pinCells === "tp-export-pin");
 // PIN configured: PIN cells render, and Export sends the typed digits.
 {
   const { app, calls, toasts } = makeApp({ hasPin: true, exportResult: { kind: "exported", path: "/tmp/p.zip" } });
-  const tree = renderTaxpayerPage(cx, app, "profile", 900);
+  const tree = exportTree(app);
   assert.equal(pinCells(tree).length, 1, "PIN cells render when has_pin");
   app.taxpayerUi.exportOtp.set_value("4321");
   click(exportBtn(tree));
@@ -223,7 +231,7 @@ const pinCells = (tree) => find(tree, (i) => i.pinCells === "tp-export-pin");
 // PIN configured: the host's refusal is toasted and the cells still clear.
 {
   const { app, calls, toasts } = makeApp({ hasPin: true, exportError: new Error("Wrong PIN.") });
-  const tree = renderTaxpayerPage(cx, app, "profile", 900);
+  const tree = exportTree(app);
   assert.equal(pinCells(tree).length, 1);
   app.taxpayerUi.exportOtp.set_value("0000");
   click(exportBtn(tree));
@@ -236,7 +244,7 @@ const pinCells = (tree) => find(tree, (i) => i.pinCells === "tp-export-pin");
 // PIN would still burn a rate-limited attempt); the cells clear.
 {
   const { app, calls, toasts } = makeApp({ hasPin: true, exportResult: { kind: "exported" } });
-  renderTaxpayerPage(cx, app, "profile", 900);
+  exportTree(app);
   app.taxpayerUi.exportOtp.set_value("12");
   app.taxpayerUi.exportProfile(cx);
   assert.equal(calls.length, 0, "partial PIN never reaches the host");
@@ -247,7 +255,7 @@ const pinCells = (tree) => find(tree, (i) => i.pinCells === "tp-export-pin");
 // A cancelled save dialog is quiet: no toast, no export claim.
 {
   const { app, calls, toasts } = makeApp({ hasPin: false, exportResult: { kind: "cancelled" } });
-  const tree = renderTaxpayerPage(cx, app, "profile", 900);
+  const tree = exportTree(app);
   click(exportBtn(tree));
   assert.deepEqual(calls, [["export_profile", TIN, null]]);
   assert.equal(toasts.length, 0, "cancelled dialog makes no toast");

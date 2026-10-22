@@ -102,6 +102,10 @@ class BirApp extends View {
     if (!storedRead) this.writeLocal(READ_KEY, [...this.readIds]);
     this.knownEvents = new Set(this.notifications().map((n) => n.id));
     this.prefs = { showRecent: true, compactFormNav: false, ...this.readLocal(PREFS_KEY, {}) };
+    this.settingsSection = "general";
+    this.settingsMenu = null;
+    this.settingsSearch = InputState.new({ placeholder: "Search" });
+    this.settingsSearch.on("change", (_e, cx) => cx.notify());
 
     // Screen state.
     this.palette = { input: InputState.new({ placeholder: "Search taxpayers, forms and pages" }), index: 0 };
@@ -197,6 +201,7 @@ class BirApp extends View {
       else if (key === "branch") this.selectBranch(value, cx);
       else if (key === "theme") this.setThemePreference(value, cx);
       else if (key === "view") this.go(value, cx);
+      else if (key === "section") this.settingsSection = value;
       else if (key === "panel") this.togglePanel(value, cx);
       else if (key === "scope") this.library.scope = value;
       // Compact form sections for this run only; Settings is what saves it.
@@ -449,6 +454,11 @@ class BirApp extends View {
   go(view, cx) {
     // A removal's Undo is for the page it was offered on.
     this.formUi?.leavingPage?.();
+    // Background tasks live in Settings › Jobs.
+    if (view === "cron_tasks") {
+      this.settingsSection = "jobs";
+      view = "settings";
+    }
     if (view !== this.view) {
       this.history.push(this.view);
       this.forward = [];
@@ -540,13 +550,18 @@ class BirApp extends View {
     cx.notify();
   }
 
-  /** Esc: the topmost thing closes — an overlay, then a menu, then a panel. */
+  /** Esc: the topmost thing closes — an overlay, a menu, Settings, then a panel. */
   dismiss(cx) {
     if (this.overlay) return this.closeOverlay(cx);
     if (this.accountMenu) {
       this.accountMenu = false;
       return cx.notify();
     }
+    if (this.settingsMenu) {
+      this.settingsMenu = null;
+      return cx.notify();
+    }
+    if (this.view === "settings") return this.closeSettings(cx);
     if (this.panel) {
       this.panel = null;
       return cx.notify();
@@ -640,6 +655,59 @@ class BirApp extends View {
   setPref(key, value, cx) {
     this.prefs[key] = value;
     this.writeLocal(PREFS_KEY, this.prefs);
+    cx.notify();
+  }
+
+  /** System info, re-read after a settings write clears the store cache. */
+  liveInfo() {
+    return this.store.systemInfo();
+  }
+
+  settingsQuery() {
+    return this.settingsSearch.value();
+  }
+
+  openSettings(cx) {
+    if (this.view !== "settings") this.go("settings", cx);
+  }
+
+  openSettingsSection(id, cx) {
+    this.settingsSection = id;
+    this.settingsMenu = null;
+    cx.notify();
+  }
+
+  /** Esc and Back to app. Leaving a finished computer-setup change signs out. */
+  closeSettings(cx) {
+    if (this.view !== "settings") return;
+    this.settingsMenu = null;
+    if (this.history.length) this.goBack(cx);
+    else this.go("home", cx);
+  }
+
+  /** The profile page's own editor, for the pencil on an account row. */
+  editTaxpayerSection(section, cx) {
+    this.go("profile", cx);
+    this.taxpayerUi.startEdit(section, cx);
+  }
+
+  setGlobalHotkey(combo, cx) {
+    try {
+      this.store.write("set_global_hotkey", combo);
+      this.settingsMenu = null;
+    } catch (e) {
+      this.toast(errorText(e), cx, "triangle-alert");
+    }
+    cx.notify();
+  }
+
+  setLogRetention(days, cx) {
+    try {
+      this.store.write("set_log_retention", days);
+      this.settingsMenu = null;
+    } catch (e) {
+      this.toast(errorText(e), cx, "triangle-alert");
+    }
     cx.notify();
   }
 
@@ -1393,47 +1461,53 @@ class BirApp extends View {
 
     // A form on a wide window brings its own two scroll areas (the part
     // navigator pinned beside the form); everything else scrolls as one.
-    const formSplit = this.view === "form" && !this.isFresh() ? renderFormSplit(cx, this, L) : null;
-    const main = div()
-      .id("main-surface")
-      .flex()
-      .flex_col()
-      .flex_1()
-      .min_w(0)
-      .min_h(0)
-      .mb(SIZE.mainInset)
-      .when(!L.sidebarDocked, (el) => el.ml(SIZE.mainInset))
-      .when(!L.panelDocked, (el) => el.mr(SIZE.mainInset))
-      .rounded(RADIUS.card)
-      .border(1)
-      .border_color(t.border)
-      .bg(t.surface)
-      .overflow_hidden()
-      .when(Boolean(formSplit), (el) => el.child(formSplit))
-      .when(!formSplit, (el) => el.child(
-        div()
-          .id("main-scroll")
+    const settingsOpen = this.view === "settings";
+    const formSplit = !settingsOpen && this.view === "form" && !this.isFresh() ? renderFormSplit(cx, this, L) : null;
+    const main = settingsOpen
+      ? null
+      : div()
+          .id("main-surface")
+          .flex()
+          .flex_col()
           .flex_1()
+          .min_w(0)
           .min_h(0)
-          .overflow_y_scroll()
-          .overflow_x_hidden()
-          .child(
+          .mb(SIZE.mainInset)
+          .when(!L.sidebarDocked, (el) => el.ml(SIZE.mainInset))
+          .when(!L.panelDocked, (el) => el.mr(SIZE.mainInset))
+          .rounded(RADIUS.card)
+          .border(1)
+          .border_color(t.border)
+          .bg(t.surface)
+          .overflow_hidden()
+          .when(Boolean(formSplit), (el) => el.child(formSplit))
+          .when(!formSplit, (el) => el.child(
             div()
-              .flex()
-              .flex_col()
-              .items_center()
-              .w_full()
-              .px(L.padX)
-              .pt(L.mainWidth < BREAK.narrowContent ? 20 : 28)
-              .pb(56)
-              .child(div().flex().flex_col().w(L.column).child(this.renderView(cx, L.column))),
-          ),
-      ));
-
+              .id("main-scroll")
+              .flex_1()
+              .min_h(0)
+              .overflow_y_scroll()
+              .overflow_x_hidden()
+              .child(
+                div()
+                  .flex()
+                  .flex_col()
+                  .items_center()
+                  .w_full()
+                  .px(L.padX)
+                  .pt(L.mainWidth < BREAK.narrowContent ? 20 : 28)
+                  .pb(56)
+                  .child(div().flex().flex_col().w(L.column).child(this.renderView(cx, L.column))),
+              ),
+          ));
     const body = div().flex().flex_row().flex_1().min_h(0).w_full();
-    if (L.sidebarDocked) body.child(renderSidebar(cx, this));
-    body.child(main);
-    if (L.panelDocked) body.child(renderRightPanel(cx, this));
+    if (settingsOpen) {
+      body.child(renderSettings(cx, this, L.vp.width, L.vp.height - SIZE.titleBar));
+    } else {
+      if (L.sidebarDocked) body.child(renderSidebar(cx, this));
+      body.child(main);
+      if (L.panelDocked) body.child(renderRightPanel(cx, this));
+    }
 
     const root = div()
       .id("app-root")
@@ -1449,7 +1523,7 @@ class BirApp extends View {
       .on_action("new-return", (_e, cx) => this.startNewReturn(cx))
       .on_action("toggle-theme", (_e, cx) => this.cycleTheme(cx))
       .on_action("toggle-right-panel", (_e, cx) => this.toggleRightPanel(cx))
-      .on_action("open-settings", (_e, cx) => this.go("settings", cx))
+      .on_action("open-settings", (_e, cx) => this.openSettings(cx))
       .on_action("lock-app", (_e, cx) => this.lockApp(cx))
       .on_action("go-back", (_e, cx) => this.goBack(cx))
       .on_action("go-forward", (_e, cx) => this.goForward(cx))
@@ -1460,7 +1534,7 @@ class BirApp extends View {
       .child(body);
 
     // Below 860 px the sidebar and the panel float over the main surface.
-    if (L.narrow && (this.sidebarOpen || this.panel)) {
+    if (!settingsOpen && L.narrow && (this.sidebarOpen || this.panel)) {
       root.child(
         div()
           .id("overlay-scrim")
