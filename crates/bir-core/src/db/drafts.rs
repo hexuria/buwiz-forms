@@ -1861,6 +1861,23 @@ impl Database {
         Ok(id)
     }
 
+    /// Item 13 as this TIN's Q1 2551Q of `year` filed it, when this app
+    /// holds that Q1 and it was filed (Submitted, Confirmed or Paid); `None`
+    /// for no Q1 here, or one still a Draft or Queued.
+    pub fn filed_2551q_q1_item_13(
+        &self,
+        tin: &str,
+        year: u16,
+    ) -> Result<Option<crate::forms::form_2551q::Item13Election>, DbError> {
+        Ok(self.get_2551q_draft(tin, year, 1)?.and_then(|q1| {
+            matches!(
+                q1.status,
+                FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
+            )
+            .then_some(q1.item_13_election)
+        }))
+    }
+
     /// Load a 2551Q draft for a specific (tin, year, quarter).
     /// Returns None if no draft exists for that slot.
     pub fn get_2551q_draft(

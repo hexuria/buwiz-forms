@@ -220,6 +220,15 @@ pub struct Form2551QDraft {
     /// deserialize to `None` and fail closed until refreshed from the profile.
     #[serde(default)]
     pub annual_income_tax_election: Option<AnnualIncomeTaxElection>,
+    /// Item 13 as the filed (Submitted, Confirmed or Paid) Q1 return of this
+    /// TIN and taxable year in this app answered it, recorded on a later
+    /// quarter's editable draft when it is opened
+    /// ([`Self::adopt_filed_q1_item_13`]). Item 13 is answered once a year,
+    /// on the initial quarter: while this is set the later quarter's Item 13
+    /// is that answer and is locked. `None` (no filed Q1 here, e.g. Q1 was
+    /// filed before migrating) leaves Item 13 the filer's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filed_q1_item_13: Option<Item13Election>,
 
     // === Part I — pre-filled from profile, read-only in UI ===
     pub rdo_code: String,
@@ -428,6 +437,7 @@ impl Form2551QDraft {
             tax_relief_specification: String::new(),
             item_13_election: Item13Election::Unanswered,
             annual_income_tax_election: Some(annual_election),
+            filed_q1_item_13: None,
             rdo_code: profile.rdo_code.clone(),
             taxpayer_name: profile.full_name.clone(),
             registered_address: profile.registered_address.clone(),
@@ -721,6 +731,10 @@ impl Form2551QDraft {
         }
         self.email = profile.email.clone();
         self.item_13_election = match self.item_13_is_applicable() {
+            // The filed Q1's answer stands for the rest of its year.
+            _ if self.filed_q1_item_13().is_some() => {
+                self.filed_q1_item_13().unwrap_or(self.item_13_election)
+            }
             Some(false)
                 if self.later_period_requires_recorded_annual_election()
                     && matches!(
@@ -751,6 +765,29 @@ impl Form2551QDraft {
         self.effective_profile_version_id = effective_profile_version_id.map(ToOwned::to_owned);
         self.profile_resolution_error = None;
         self.updated_at = chrono::Utc::now().to_rfc3339();
+    }
+
+    /// Record the Item 13 answer of this TIN's filed Q1 return of the same
+    /// taxable year (`filed`, `None` when this app holds none) on an editable
+    /// later-quarter draft, and take it as this return's Item 13. A Q1 draft,
+    /// or a return that left Draft, is not changed.
+    pub fn adopt_filed_q1_item_13(&mut self, filed: Option<Item13Election>) {
+        if !matches!(self.status, FilingStatus::Draft) {
+            return;
+        }
+        self.filed_q1_item_13 = filed
+            .filter(|election| *election != Item13Election::Unanswered)
+            .filter(|_| self.quarter != 1);
+        if let Some(election) = self.filed_q1_item_13 {
+            self.item_13_election = election;
+        }
+    }
+
+    /// The filed Q1's Item 13 this later-quarter return is locked to.
+    pub fn filed_q1_item_13(&self) -> Option<Item13Election> {
+        self.filed_q1_item_13
+            .filter(|election| *election != Item13Election::Unanswered)
+            .filter(|_| self.quarter != 1)
     }
 
     /// Whether the official Item 13 election applies to this return.
@@ -1795,6 +1832,20 @@ impl FormValidator for Form2551QDraft {
                         .to_string(),
                 )),
                 _ => {}
+            }
+        }
+        // A later quarter whose filed Q1 is in this app files Q1's answer:
+        // Item 13 is answered once a year, on the initial quarter.
+        if let Some(filed) = self.filed_q1_item_13() {
+            errors.retain(|(field, _)| field != "item_13_election");
+            if self.item_13_election != filed {
+                errors.push((
+                    "item_13_election".to_string(),
+                    format!(
+                        "Item 13 must match your filed Q1 return for {}",
+                        self.taxable_year
+                    ),
+                ));
             }
         }
 

@@ -7,8 +7,8 @@
 //! the desktop assistant read one implementation: the page draws them and
 //! [`super::fill`] refuses them.
 //!
-//! [`draft_locks`] applies five layers, in this order, each named after the
-//! page's row module it came from:
+//! [`draft_locks`] applies six layers, in this order, each named after the
+//! page's row module it came from (the last after the rule it carries):
 //!
 //! 1. [`dst_pt_vat`] (PR 4): 2000's 15B and 15C, computed; 2553's
 //!    classification boxes 14A-18A, its printed rows' ATC and rate, and its
@@ -24,6 +24,8 @@
 //! 5. [`income_q`] (PR 5): 1701Q's spouse penalties, while column B is not
 //!    on the return, are taken off again: the page fades them with what
 //!    opens them, so no penalty lock stands beside that.
+//! 6. [`item_13`]: 2551Q's Item 13 on a later quarter whose filed Q1 this
+//!    app holds, locked to that Q1's answer.
 //!
 //! [`live_locks`] are the locks a page fill reports back (`relocks`), so a
 //! box shuts or opens as soon as the answer that decides it is typed.
@@ -42,7 +44,7 @@ use serde_json::{Map, Value};
 use super::AgentFormKind;
 
 /// Lay the draft-dependent locks over `locks`, the base map
-/// ([`super::locks`]), the way the page's open does: the five layers of this
+/// ([`super::locks`]), the way the page's open does: the six layers of this
 /// module's note, in that order, with their own reasons. A layer may replace
 /// a base reason with an exact one (2000's 15B, which the probe calls
 /// derived, is computed), and the last one takes 1701Q's spouse penalty
@@ -72,7 +74,7 @@ pub fn draft_lock(
     locks.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-/// The five layers; `only` limits the penalty layer to that key's group.
+/// The six layers; `only` limits the penalty layer to that key's group.
 fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, only: Option<&str>) {
     dst_pt_vat::relock(kind, draft, locks);
     annual_corporate::relock(kind, draft, locks);
@@ -84,6 +86,8 @@ fn layers(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>, on
     // 1701Q's spouse penalties while column B is not on the return: faded
     // with what opens them, not locked (PR 5).
     income_q::relock(kind, draft, locks);
+    // 2551Q's Item 13 on a later quarter whose filed Q1 is in this app.
+    item_13::relock(kind, draft, locks);
 }
 
 /// The locks a fill leaves, each key with its reason or `null` (open), for
@@ -1130,6 +1134,82 @@ pub mod excise {
     }
 }
 
+pub mod item_13 {
+    //! 2551Q Item 13, the income-tax-rate election, is answered once a year,
+    //! on the initial quarter. A later quarter (Q2-Q4) of a TIN whose Q1 of
+    //! the same taxable year this app holds as filed (Submitted, Confirmed or
+    //! Paid) takes that Q1's answer, and its Item 13 boxes are locked to it.
+    //! Without one here (Q1 filed in the original eBIRForms before
+    //! migrating, or not filed yet) Item 13 stays the filer's.
+    //!
+    //! The fact comes from the database when the return is opened
+    //! ([`refresh`]): the draft keeps it as `filed_q1_item_13`
+    //! ([`Form2551QDraft::adopt_filed_q1_item_13`]), and the lock reads it
+    //! there, so the page's open, its fill and the assistant judge one value.
+
+    use serde_json::{Map, Value};
+
+    use crate::db::{Database, DbError};
+    use crate::forms::agent::AgentFormKind;
+    use crate::forms::form_2551q::Form2551QDraft;
+
+    /// The Item 13 group box and its two radios.
+    pub const KEYS: [&str; 3] = [
+        "frm2551Qv2018:taxRate",
+        "frm2551Qv2018:taxRate1",
+        "frm2551Qv2018:taxRate2",
+    ];
+
+    /// The start of every Item 13 lock reason (the filer's words).
+    pub const REASON_START: &str = "Set on your filed Q1 return for ";
+
+    /// Record on `draft` the Item 13 answer of its TIN's filed Q1 of the
+    /// same taxable year that `db` holds (none clears it). A Q1 draft, or a
+    /// return that left Draft, is not changed.
+    pub fn refresh(db: &Database, draft: &mut Form2551QDraft) -> Result<(), DbError> {
+        if draft.quarter == 1 || !draft.is_editable() {
+            return Ok(());
+        }
+        let filed = db.filed_2551q_q1_item_13(&draft.tin, draft.taxable_year)?;
+        draft.adopt_filed_q1_item_13(filed);
+        Ok(())
+    }
+
+    /// Why Item 13 of `draft` is locked: a later quarter holding its filed
+    /// Q1's answer.
+    fn reason(kind: AgentFormKind, draft: &Value) -> Option<String> {
+        if kind != AgentFormKind::Form2551Q || draft["quarter"].as_u64() == Some(1) {
+            return None;
+        }
+        let filed = draft["filed_q1_item_13"].as_str()?;
+        if filed == "unanswered" {
+            return None;
+        }
+        let year = draft["taxable_year"].as_u64()?;
+        Some(format!(
+            "{REASON_START}{year}. Item 13 is answered once a year, on the initial quarter."
+        ))
+    }
+
+    /// The lock on `key` when it is an Item 13 box of a locked return.
+    pub fn lock(kind: AgentFormKind, draft: &Value, key: &str) -> Option<String> {
+        if !KEYS.contains(&key) {
+            return None;
+        }
+        reason(kind, draft)
+    }
+
+    /// Lock the Item 13 boxes of a later quarter holding its filed Q1's
+    /// answer.
+    pub fn relock(kind: AgentFormKind, draft: &Value, locks: &mut Map<String, Value>) {
+        if let Some(reason) = reason(kind, draft) {
+            for key in KEYS {
+                locks.insert(key.to_string(), Value::from(reason.clone()));
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! The assistant's half of the draft-dependent layer: [`super::super::fill`]
@@ -1432,5 +1512,183 @@ mod tests {
             Some(penalties::LOCK)
         );
         assert_eq!(draft_lock(kind, &draft, "frm2553:txt19A", None), None);
+    }
+
+    /// 2551Q Item 13 on a later quarter: locked to the filed Q1's election
+    /// when this app holds that Q1 (same TIN, same taxable year), open
+    /// otherwise.
+    mod item_13_q1 {
+        use serde_json::Value;
+
+        use super::{draft_lock, kind, page_lock, profile};
+        use crate::db::Database;
+        use crate::forms::FilingStatus;
+        use crate::forms::agent::draft_locks::item_13;
+        use crate::forms::form_2551q::{Form2551QDraft, Item13Election};
+
+        fn draft(year: u16, quarter: u8) -> Form2551QDraft {
+            Form2551QDraft::new_from_profile(&profile("2551Qv2018", "Individual"), year, quarter)
+        }
+
+        /// Store a Q1 of `year` for `tin` with `status` and Item 13 `election`.
+        fn store_q1(
+            db: &Database,
+            tin: &str,
+            year: u16,
+            status: FilingStatus,
+            election: Item13Election,
+        ) {
+            let mut q1 = draft(year, 1);
+            q1.tin = tin.to_string();
+            q1.item_13_election = election;
+            let id = db.save_2551q_draft(&q1).unwrap();
+            q1.id = Some(id);
+            q1.status = status;
+            let status = serde_json::to_value(&q1.status).unwrap();
+            db.conn
+                .execute(
+                    "UPDATE form_drafts SET status = ?1, data_json = ?2 WHERE id = ?3",
+                    rusqlite::params![
+                        status.as_str().unwrap(),
+                        serde_json::to_string(&q1).unwrap(),
+                        id
+                    ],
+                )
+                .unwrap();
+        }
+
+        /// The draft as the page opens it from `db`.
+        fn opened(db: &Database, mut draft: Form2551QDraft) -> Value {
+            item_13::refresh(db, &mut draft).unwrap();
+            let mut json = serde_json::to_value(draft).unwrap();
+            crate::forms::agent::compute(kind("2551Q"), &mut json).unwrap();
+            json
+        }
+
+        fn tin() -> String {
+            draft(2026, 3).tin
+        }
+
+        #[test]
+        fn a_filed_q1_locks_a_later_quarters_item_13_to_its_election() {
+            for status in [
+                FilingStatus::Submitted,
+                FilingStatus::Confirmed,
+                FilingStatus::Paid,
+            ] {
+                let db = Database::open_in_memory_for_tests().unwrap();
+                store_q1(
+                    &db,
+                    &tin(),
+                    2026,
+                    status.clone(),
+                    Item13Election::EightPercent,
+                );
+                let mut q3 = draft(2026, 3);
+                q3.item_13_election = Item13Election::Graduated;
+                let q3 = opened(&db, q3);
+                assert_eq!(q3["item_13_election"], "eight_percent", "{status:?}");
+                for key in item_13::KEYS {
+                    let lock = page_lock(kind("2551Q"), &q3, key)
+                        .unwrap_or_else(|| panic!("{key} is locked on {status:?}"));
+                    assert!(
+                        lock.starts_with("Set on your filed Q1 return for 2026"),
+                        "{lock}"
+                    );
+                    assert_eq!(
+                        draft_lock(kind("2551Q"), &q3, key, None).as_deref(),
+                        Some(lock.as_str())
+                    );
+                    assert_eq!(item_13::lock(kind("2551Q"), &q3, key), Some(lock));
+                }
+                // The locked answer validates on the later quarter.
+                let typed: Form2551QDraft = serde_json::from_value(q3).unwrap();
+                assert!(
+                    crate::forms::FormValidator::validate(&typed)
+                        .iter()
+                        .all(|(field, _)| field != "item_13_election"),
+                    "{status:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn no_filed_q1_leaves_item_13_open() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            let mut q3 = draft(2026, 3);
+            q3.item_13_election = Item13Election::Graduated;
+            let q3 = opened(&db, q3);
+            assert_eq!(q3["item_13_election"], "graduated");
+            for key in item_13::KEYS {
+                assert_eq!(page_lock(kind("2551Q"), &q3, key), None, "{key}");
+            }
+        }
+
+        #[test]
+        fn a_q1_that_is_only_a_draft_or_queued_leaves_item_13_open() {
+            for status in [FilingStatus::Draft, FilingStatus::Queued] {
+                let db = Database::open_in_memory_for_tests().unwrap();
+                store_q1(
+                    &db,
+                    &tin(),
+                    2026,
+                    status.clone(),
+                    Item13Election::EightPercent,
+                );
+                let mut q3 = draft(2026, 3);
+                q3.item_13_election = Item13Election::Graduated;
+                let q3 = opened(&db, q3);
+                assert_eq!(q3["item_13_election"], "graduated", "{status:?}");
+                for key in item_13::KEYS {
+                    assert_eq!(page_lock(kind("2551Q"), &q3, key), None, "{status:?} {key}");
+                }
+            }
+        }
+
+        #[test]
+        fn a_filed_q1_of_another_tin_or_year_leaves_item_13_open() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            store_q1(
+                &db,
+                "99988877700000",
+                2026,
+                FilingStatus::Submitted,
+                Item13Election::EightPercent,
+            );
+            store_q1(
+                &db,
+                &tin(),
+                2025,
+                FilingStatus::Submitted,
+                Item13Election::EightPercent,
+            );
+            let mut q3 = draft(2026, 3);
+            q3.item_13_election = Item13Election::Graduated;
+            let q3 = opened(&db, q3);
+            assert_eq!(q3["item_13_election"], "graduated");
+            for key in item_13::KEYS {
+                assert_eq!(page_lock(kind("2551Q"), &q3, key), None, "{key}");
+            }
+        }
+
+        #[test]
+        fn the_q1_draft_itself_is_never_locked() {
+            let db = Database::open_in_memory_for_tests().unwrap();
+            store_q1(
+                &db,
+                &tin(),
+                2026,
+                FilingStatus::Submitted,
+                Item13Election::EightPercent,
+            );
+            // An editable Q1 of the same year (an amendment's copy).
+            let mut q1 = draft(2026, 1);
+            q1.item_13_election = Item13Election::Graduated;
+            let q1 = opened(&db, q1);
+            assert_eq!(q1["item_13_election"], "graduated");
+            for key in item_13::KEYS {
+                assert_eq!(page_lock(kind("2551Q"), &q1, key), None, "{key}");
+            }
+        }
     }
 }
