@@ -23,5 +23,6 @@ mod screen_form_module;
 pub mod static_html;
 mod tax_profile_module;
 mod tray;
+mod updater;
 
 pub use host::{app_root, run};

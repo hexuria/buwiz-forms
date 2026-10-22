@@ -50,6 +50,7 @@ gpui::actions!(
         BringAllToFront,
         OpenSupportEmail,
         OpenCompanyWebsite,
+        CheckForUpdates,
     ]
 );
 
@@ -95,6 +96,17 @@ pub fn install(cx: &mut App) {
     bind_global_keys(cx);
     register_actions(cx);
     publish_menus(cx);
+    // The updater relaunches with this set so a screenshot can show the
+    // version. The dialog is the application About, not a second menu bar.
+    if std::env::var_os("BIR_SHOW_ABOUT").is_some() {
+        cx.spawn(async move |cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_secs(2))
+                .await;
+            cx.update(show_about);
+        })
+        .detach();
+    }
 }
 
 fn publish_menus(cx: &mut App) {
@@ -489,6 +501,7 @@ fn register_actions(cx: &mut App) {
         })
         .on_action(|_: &OpenSupportEmail, cx| cx.open_url(SUPPORT_URL))
         .on_action(|_: &OpenCompanyWebsite, cx| cx.open_url(WEBSITE_URL))
+        .on_action(|_: &CheckForUpdates, _cx| crate::updater::check_now())
         .on_action(|action: &ShellAction, cx| {
             // The caption close button dispatches this. Every other script
             // action still belongs to the view that named it.
@@ -730,6 +743,7 @@ fn help_menu(include_about: bool) -> Menu {
         items.push(MenuItem::action("About eBIRForms", AboutApplication));
         items.push(MenuItem::separator());
     }
+    items.push(MenuItem::action("Check for Updates…", CheckForUpdates));
     items.push(MenuItem::action("Contact Support…", OpenSupportEmail));
     items.push(MenuItem::action("Goldcoders Website", OpenCompanyWebsite));
     Menu::new("Help").items(items)
@@ -877,6 +891,10 @@ mod tests {
             menu(&menus, "Help"),
             "About eBIRForms"
         )));
+        assert!(is_action::<CheckForUpdates>(named(
+            menu(&menus, "Help"),
+            "Check for Updates…"
+        )));
         assert_eq!(titles(menu(&menus, "Window")), ["Minimize", "Zoom"]);
         assert!(titles(menu(&menus, "View")).contains(&"Enter Full Screen".to_string()));
     }
@@ -897,6 +915,10 @@ mod tests {
             menu(&menus, "Help"),
             "About eBIRForms"
         )));
+        assert!(is_action::<CheckForUpdates>(named(
+            menu(&menus, "Help"),
+            "Check for Updates…"
+        )));
         assert!(titles(menu(&menus, "View")).contains(&"Enter Full Screen".to_string()));
     }
 
@@ -906,7 +928,18 @@ mod tests {
         assert_eq!(WEBSITE_URL, "https://goldcoders.dev");
         let menus = app_menus(MenuPlatform::Macos);
         let help = menu(&menus, "Help");
-        assert_eq!(titles(help), ["Contact Support…", "Goldcoders Website"]);
+        assert_eq!(
+            titles(help),
+            [
+                "Check for Updates…",
+                "Contact Support…",
+                "Goldcoders Website"
+            ]
+        );
+        assert!(is_action::<CheckForUpdates>(named(
+            help,
+            "Check for Updates…"
+        )));
         assert!(is_action::<OpenSupportEmail>(named(
             help,
             "Contact Support…"

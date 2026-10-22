@@ -366,6 +366,19 @@ jobs:
           $msiAuditExitCode = $LASTEXITCODE
           if ($msiAuditExitCode -ne 0) { exit $msiAuditExitCode }
 
+      - name: Write Windows checksums
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem "target/release-artifacts" -File | Where-Object {
+            $_.Name -like "*-Setup.exe" -or $_.Extension -eq ".msi"
+          } | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          }
+          if (-not $lines) { throw "no Windows installer to checksum" }
+          $out = "target/release-artifacts/SHA256SUMS-windows-x64.txt"
+          Set-Content -Path $out -Value $lines -Encoding ascii
+
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -374,6 +387,7 @@ jobs:
           path: |
             target/release-artifacts/*-Setup.exe
             target/release-artifacts/*.msi
+            target/release-artifacts/SHA256SUMS-windows-x64.txt
 
       - name: Upload Windows stage for MSIX packaging
         uses: actions/upload-artifact@v4

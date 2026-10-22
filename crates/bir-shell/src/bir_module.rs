@@ -60,6 +60,8 @@ pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Databa
 static SUBMISSION_WORKER: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 static WORKER_THREAD: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(None);
+static OWNER_LOCK_RELEASED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — once per process, on its own
@@ -90,10 +92,14 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 
 /// Stop the submission worker and release the owner lock.
 ///
-/// Quit (the menu, Cmd/Ctrl+Q, `process.exit`) calls this. The worker finishes
-/// the tick it is on, drops its database handle, and this thread checkpoints
-/// and closes. A second call does nothing. Safe when the database was never
-/// opened.
+/// Quit (the menu, Cmd/Ctrl+Q, `process.exit`) and an update install call
+/// this. The worker finishes the tick it is on, drops its database handle,
+/// and this thread checkpoints and closes. A second call does nothing. Safe
+/// when the database was never opened.
+///
+/// An update install calls it before starting the new process, because the
+/// owner lock is a process-wide flock and the replacement cannot open the
+/// database until this process has dropped it.
 pub(crate) fn shutdown_for_quit() {
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
@@ -117,6 +123,7 @@ pub(crate) fn shutdown_for_quit() {
 fn release_database() {
     DATABASE.with(|slot| {
         let Some(handle) = slot.borrow_mut().take() else {
+            OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
             return;
         };
         match std::sync::Arc::try_unwrap(handle) {
@@ -128,6 +135,10 @@ fn release_database() {
                 if let Err(error) = db.close() {
                     tracing::warn!("database close failed: {error}");
                 }
+                // `close` drops the owner lock on both success and a failed
+                // checkpoint: the fields were moved out, so the guard drops
+                // when this function returns.
+                OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
             }
             Err(handle) => match handle.try_lock() {
                 Ok(db) => {
@@ -152,6 +163,13 @@ pub(crate) fn stored_global_hotkey() -> Option<String> {
         .ok()
         .flatten()
         .filter(|value| !value.is_empty())
+}
+
+/// Whether [`shutdown_for_quit`] dropped the owner lock. An update refuses to
+/// relaunch when this is still false: the new process would lose the race
+/// for the encrypted database.
+pub(crate) fn owner_lock_released() -> bool {
+    OWNER_LOCK_RELEASED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// Open the database when the shell launches; `host::run` calls this.
@@ -285,6 +303,53 @@ fn system_info() -> HostResult {
         )
         .field("runtime", "gpui-shell")
         .into())
+}
+
+fn update_status() -> HostResult {
+    let status = crate::updater::current_status();
+    let version = match status.version {
+        Some(version) => HostValue::from(version),
+        None => HostValue::Null,
+    };
+    let message = match status.message {
+        Some(message) => HostValue::from(message),
+        None => HostValue::Null,
+    };
+    Ok(HostObject::new()
+        .field("phase", status.phase)
+        .field("version", version)
+        .field("message", message)
+        .field("auto_download", status.auto_download)
+        .field("current_version", status.current_version)
+        .into())
+}
+
+fn install_update() -> HostResult {
+    crate::updater::install_ready_update();
+    Ok(HostValue::Null)
+}
+
+fn dismiss_update() -> HostResult {
+    crate::updater::dismiss();
+    Ok(HostValue::Null)
+}
+
+fn check_for_updates() -> HostResult {
+    crate::updater::check_now();
+    Ok(HostValue::Null)
+}
+
+fn set_auto_update_download(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let enabled = arguments.boolean(0)?;
+    with_database(|db| {
+        db.set_setting(
+            crate::updater::AUTO_DOWNLOAD_SETTING,
+            if enabled { "1" } else { "0" },
+        )
+        .map_err(|error| HostError::new(error.to_string()))?;
+        crate::updater::set_auto_download(enabled);
+        Ok(HostValue::Null)
+    })
 }
 
 fn list_profiles() -> HostResult {
@@ -2082,6 +2147,11 @@ fn list_deadlines() -> HostResult {
 pub fn module() -> HostModule {
     let module = HostModule::new("bir")
         .function("system_info", |_| system_info())
+        .function("update_status", |_| update_status())
+        .function("install_update", |_| install_update())
+        .function("dismiss_update", |_| dismiss_update())
+        .function("check_for_updates", |_| check_for_updates())
+        .function("set_auto_update_download", set_auto_update_download)
         .function("list_profiles", |_| list_profiles())
         .function("forms_catalog", |_| forms_catalog())
         .function("get_setting", get_setting)
@@ -2172,6 +2242,28 @@ export interface FormCatalogEntry {
     is_deprecated: boolean;
 }
 export function system_info(): SystemInfo;
+
+export interface UpdateStatus {
+    /** idle, checking, downloading, ready, failed, up_to_date, available, or installing. */
+    phase: string;
+    /** The release that was found, or null. */
+    version: string | null;
+    /** A sentence for a failure or "already current", or null. */
+    message: string | null;
+    /** Whether a newer release downloads without asking. */
+    auto_download: boolean;
+    /** The version compiled into this binary. */
+    current_version: string;
+}
+export function update_status(): UpdateStatus;
+/** Replace this install with the verified download and relaunch. */
+export function install_update(): null;
+/** Hide the update prompt until the next check. */
+export function dismiss_update(): null;
+/** Look for a release now, and download it even when auto-download is off. */
+export function check_for_updates(): null;
+/** `auto_update_download`. Off is `0`; anything else leaves downloading on. */
+export function set_auto_update_download(enabled: boolean): null;
 export function list_profiles(): ProfileSummary[];
 export function forms_catalog(): FormCatalogEntry[];
 export function get_setting(key: string): string | null;
