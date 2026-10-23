@@ -91,8 +91,9 @@ impl<H: BirHost> Server<H> {
         Self::with_license(host, License::open())
     }
 
-    /// `license` is checked before every tool. [`License::open`] is the
-    /// local default: tools run with no buwiz-server round trip.
+    /// `license` is checked before every tool. [`License::open`] is what
+    /// [`Server::new`] uses so tool tests do not call buwiz-server. The
+    /// `bir-mcp` binary passes a desktop session or an agent token instead.
     pub fn with_license(host: H, license: License) -> Self {
         Self {
             host,

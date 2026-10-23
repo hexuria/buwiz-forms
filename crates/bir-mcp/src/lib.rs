@@ -10,5 +10,6 @@ pub mod client;
 pub mod http;
 pub mod license;
 pub mod server;
+pub mod signin;
 pub mod tokens;
 pub mod tools;

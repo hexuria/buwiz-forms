@@ -1,24 +1,33 @@
 //! Buwiz sign-in gate for every bir-mcp tool.
 //!
-//! Left open unless `BUWIZ_MCP_URL` is set. When it is set, each tool asks
-//! buwiz-server's MCP endpoint whether `BUWIZ_ACCESS_TOKEN` is a live agent
-//! token and whether that agent can see at least one taxpayer through a
-//! working pass. buwiz-server already answers 401 for a bad token and lists
-//! a profile with empty `permissions` when the pass no longer covers it
-//! (`list_tax_profiles`). This module turns those two answers into one
-//! refusal the model can show the user, and it does that before bir-mcp
+//! * [`License::Open`] — library default (`Server::new`). No network call.
+//! * [`License::Required`] — `BUWIZ_ACCESS_TOKEN` is set. Each tool POSTs
+//!   `{origin}/mcp` `list_tax_profiles` with that agent token.
+//! * [`License::Desktop`] — a session from `bir-mcp login`. Each tool GETs
+//!   `{origin}/api/tax-profiles` with the user access token, and refreshes
+//!   that token once on HTTP 401.
+//!
+//! buwiz-server answers 401 for a bad token and lists a profile with empty
+//! `permissions` when the pass no longer covers it. This module turns those
+//! answers into one refusal the model can show the user, before bir-mcp
 //! talks to a BIR app.
 //!
 //! There is no separate subscription product on buwiz-server: the working
-//! pass is the license. A signed-in agent with no usable pass is refused
+//! pass (or an owned profile, which carries the same non-empty permissions)
+//! is the license. A signed-in account with no usable profile is refused
 //! here the same way an unknown token is, with a different sentence.
+//!
+//! [`License::from_parts`] stays the agent-token constructor: an empty URL
+//! leaves the gate open. The `bir-mcp` binary does not use that open path.
 
+use crate::signin::SessionStore;
 use serde_json::{Value, json};
 use std::time::Duration;
 
 /// Shown when the token is missing or buwiz-server answers 401.
-pub const UNAUTHENTICATED: &str = "Buwiz sign-in required. Set BUWIZ_ACCESS_TOKEN to a live \
-buwiz-server agent token. bir-mcp will not drive BIR until that token is accepted.";
+pub const UNAUTHENTICATED: &str = "Buwiz sign-in required. Run `bir-mcp login` and approve this \
+computer on the device page, or set BUWIZ_ACCESS_TOKEN to a live buwiz-server agent token. \
+bir-mcp will not drive BIR until that sign-in is accepted.";
 
 /// Shown when the token is live but no connected taxpayer has a working pass.
 pub const UNLICENSED: &str = "Buwiz access required. This token is signed in, but no connected \
@@ -34,6 +43,14 @@ pub enum License {
     Open,
     /// Every tool checks this origin with this agent token first.
     Required { base: String, token: String },
+    /// Every tool checks this origin with the desktop user access token.
+    /// `persist` writes a refreshed pair back to the OS keychain.
+    Desktop {
+        base: String,
+        access: String,
+        refresh: String,
+        persist: bool,
+    },
 }
 
 impl License {
@@ -63,11 +80,81 @@ impl License {
         Ok(Self::required(url, token.to_string()))
     }
 
+    /// Desktop session from `bir-mcp login`. `persist` stores a refreshed
+    /// pair in the OS keychain. Tests leave it false.
+    pub fn desktop(
+        base: impl Into<String>,
+        access: impl Into<String>,
+        refresh: impl Into<String>,
+        persist: bool,
+    ) -> Self {
+        Self::Desktop {
+            base: base.into().trim().trim_end_matches('/').to_string(),
+            access: access.into(),
+            refresh: refresh.into(),
+            persist,
+        }
+    }
+
     /// `Ok` when this tool may run. The error string is the tool result text.
-    pub fn allow(&self) -> Result<(), String> {
+    /// A desktop session may replace its access token after one refresh.
+    pub fn allow(&mut self) -> Result<(), String> {
+        if matches!(self, Self::Desktop { .. }) {
+            return self.allow_desktop();
+        }
         match self {
             Self::Open => Ok(()),
             Self::Required { base, token } => check(base, token),
+            Self::Desktop { .. } => unreachable!("desktop sessions are handled above"),
+        }
+    }
+
+    fn allow_desktop(&mut self) -> Result<(), String> {
+        let (base, access, refresh, persist) = match self {
+            Self::Desktop {
+                base,
+                access,
+                refresh,
+                persist,
+            } => (base.clone(), access.clone(), refresh.clone(), *persist),
+            _ => unreachable!("allow_desktop is only for a desktop session"),
+        };
+        match check_desktop(&base, &access) {
+            Ok(()) => Ok(()),
+            Err(message) if message == UNAUTHENTICATED && !refresh.is_empty() => {
+                self.retry_desktop(&base, &refresh, persist)
+            }
+            other => other,
+        }
+    }
+
+    fn retry_desktop(&mut self, base: &str, refresh: &str, persist: bool) -> Result<(), String> {
+        let session =
+            match crate::signin::exchange_refresh(base, refresh, crate::signin::unix_now()) {
+                Ok(session) => session,
+                Err(_) => {
+                    if persist {
+                        let _ = SessionStore::clear(&crate::signin::KeyringStore);
+                    }
+                    return Err(UNAUTHENTICATED.to_string());
+                }
+            };
+        if let Self::Desktop {
+            access, refresh, ..
+        } = self
+        {
+            *access = session.access_token.clone();
+            *refresh = session.refresh_token.clone();
+        }
+        if persist {
+            let _ = SessionStore::save(&crate::signin::KeyringStore, &session);
+        }
+        match check_desktop(base, &session.access_token) {
+            Err(message) if message == UNAUTHENTICATED && persist => {
+                let _ = SessionStore::clear(&crate::signin::KeyringStore);
+                Err(message)
+            }
+            other => other,
         }
     }
 }
@@ -153,17 +240,67 @@ pub fn interpret(status: u16, body: &str) -> Result<(), String> {
     else {
         return Err("buwiz-server license reply had no profile list".to_string());
     };
-    let licensed = profiles.iter().any(|profile| {
-        profile
-            .get("permissions")
-            .and_then(Value::as_array)
-            .is_some_and(|ids| !ids.is_empty())
-    });
-    if licensed {
+    if profiles_have_access(profiles) {
         Ok(())
     } else {
         Err(UNLICENSED.to_string())
     }
+}
+
+fn check_desktop(base: &str, token: &str) -> Result<(), String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err(UNAUTHENTICATED.to_string());
+    }
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| format!("could not prepare the Buwiz license check: {error}"))?;
+    let response = client
+        .get(format!("{base}/api/tax-profiles"))
+        .header("authorization", format!("Bearer {token}"))
+        .header("accept", "application/json")
+        .send()
+        .map_err(|error| {
+            format!("could not reach buwiz-server at {base} to check the Buwiz pass: {error}")
+        })?;
+    let status = response.status().as_u16();
+    let body = response.text().map_err(|error| {
+        format!("buwiz-server closed the license check before a body arrived: {error}")
+    })?;
+    interpret_desktop(status, &body)
+}
+
+/// Map a `GET /api/tax-profiles` reply to allow or refuse.
+pub fn interpret_desktop(status: u16, body: &str) -> Result<(), String> {
+    if status == 401 {
+        return Err(UNAUTHENTICATED.to_string());
+    }
+    if status != 200 {
+        return Err(format!(
+            "buwiz-server answered HTTP {status} while checking the Buwiz pass"
+        ));
+    }
+    let value: Value = serde_json::from_str(body)
+        .map_err(|_| "buwiz-server returned a license reply bir-mcp could not read".to_string())?;
+    let Some(profiles) = value.get("profiles").and_then(Value::as_array) else {
+        return Err("buwiz-server license reply had no profile list".to_string());
+    };
+    if profiles_have_access(profiles) {
+        Ok(())
+    } else {
+        Err(UNLICENSED.to_string())
+    }
+}
+
+fn profiles_have_access(profiles: &[Value]) -> bool {
+    profiles.iter().any(|profile| {
+        profile
+            .get("permissions")
+            .and_then(Value::as_array)
+            .is_some_and(|ids| !ids.is_empty())
+    })
 }
 
 #[cfg(test)]
@@ -209,7 +346,7 @@ mod tests {
                 assert_eq!(base, "http://127.0.0.1:9");
                 assert_eq!(token, "secret");
             }
-            License::Open => panic!("expected a required license"),
+            License::Open | License::Desktop { .. } => panic!("expected a required license"),
         }
     }
 
@@ -318,6 +455,89 @@ mod tests {
                 .allow()
                 .unwrap_err(),
             UNAUTHENTICATED
+        );
+    }
+
+    #[test]
+    fn a_desktop_profile_list_distinguishes_signed_out_and_a_working_profile() {
+        assert_eq!(
+            interpret_desktop(401, r#"{"error":"unauthorized"}"#).unwrap_err(),
+            UNAUTHENTICATED
+        );
+        assert_eq!(
+            interpret_desktop(200, r#"{"profiles":[{"permissions":[]}]}"#).unwrap_err(),
+            UNLICENSED
+        );
+        assert_eq!(
+            interpret_desktop(200, r#"{"profiles":[]}"#).unwrap_err(),
+            UNLICENSED
+        );
+        assert!(
+            interpret_desktop(200, r#"{"profiles":[{"permissions":["profile.view"]}]}"#).is_ok()
+        );
+    }
+
+    #[test]
+    fn a_desktop_session_refreshes_once_after_401_and_then_allows() {
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let addr = server.server_addr().to_ip().unwrap();
+        let served = std::thread::spawn(move || {
+            let mut seen = Vec::new();
+            for _ in 0..3 {
+                let mut request = server.recv().unwrap();
+                let authorization = request
+                    .headers()
+                    .iter()
+                    .find(|header| header.field.equiv("Authorization"))
+                    .map(|header| header.value.as_str().to_string())
+                    .unwrap_or_default();
+                let mut incoming = String::new();
+                std::io::Read::read_to_string(request.as_reader(), &mut incoming).unwrap();
+                let url = request.url().to_string();
+                let (status, body) = if url == "/api/tax-profiles"
+                    && authorization == "Bearer old-access"
+                {
+                    (401, r#"{"error":"unauthorized"}"#.to_string())
+                } else if url == "/oauth/token" && incoming.contains("refresh_token=old-refresh") {
+                    (
+                        200,
+                        r#"{"access_token":"new-access","refresh_token":"new-refresh","expires_in":900}"#
+                            .to_string(),
+                    )
+                } else if url == "/api/tax-profiles" && authorization == "Bearer new-access" {
+                    (
+                        200,
+                        r#"{"profiles":[{"permissions":["profile.view"]}]}"#.to_string(),
+                    )
+                } else {
+                    (500, format!("unexpected {url} {authorization} {incoming}"))
+                };
+                seen.push(url);
+                request
+                    .respond(tiny_http::Response::from_string(body).with_status_code(status))
+                    .unwrap();
+            }
+            seen
+        });
+        let mut license =
+            License::desktop(format!("http://{addr}"), "old-access", "old-refresh", false);
+        assert!(license.allow().is_ok());
+        match license {
+            License::Desktop {
+                access, refresh, ..
+            } => {
+                assert_eq!(access, "new-access");
+                assert_eq!(refresh, "new-refresh");
+            }
+            other => panic!("expected a desktop license, got {other:?}"),
+        }
+        assert_eq!(
+            served.join().unwrap(),
+            vec![
+                "/api/tax-profiles".to_string(),
+                "/oauth/token".to_string(),
+                "/api/tax-profiles".to_string(),
+            ]
         );
     }
 }
