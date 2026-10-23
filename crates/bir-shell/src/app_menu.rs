@@ -385,6 +385,11 @@ impl Render for DesktopMenuFrame {
                         cx.notify();
                     }),
                 )
+                // Linux drags and zooms from the menu row. A press
+                // on a title must not also move or maximize.
+                .when(cfg!(target_os = "linux"), |this| {
+                    this.on_click(|_, _, cx| cx.stop_propagation())
+                })
                 .when(opened, |this| {
                     let Some(popup) = popup.clone() else {
                         return this;
@@ -400,9 +405,8 @@ impl Render for DesktopMenuFrame {
         #[cfg(target_os = "linux")]
         let menu_bar = {
             let palette = &gpui_base::Theme::global(cx).tokens.colors;
-            menu_bar
-                .child(crate::linux_csd::drag_spacer(window, cx))
-                .child(crate::linux_csd::caption_buttons(
+            menu_bar.child(crate::linux_csd::drag_spacer()).child(
+                crate::linux_csd::caption_buttons(
                     window,
                     crate::linux_csd::CaptionColors {
                         foreground: colors.foreground,
@@ -411,8 +415,11 @@ impl Render for DesktopMenuFrame {
                         destructive_foreground: palette.destructive_foreground,
                     },
                     |_window, cx| hide_or_quit(cx),
-                ))
+                ),
+            )
         };
+        #[cfg(target_os = "linux")]
+        let menu_bar = crate::linux_csd::arm_drag("app-menu-drag", menu_bar, window, cx);
         let frame = div()
             .relative()
             .size_full()

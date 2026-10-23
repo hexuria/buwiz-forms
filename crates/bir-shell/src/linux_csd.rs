@@ -208,19 +208,15 @@ struct DragLatch {
     armed: bool,
 }
 
-/// Empty space that drags the window and toggles maximize on double-click.
-///
-/// A right-click opens the compositor's window menu when it offered one.
-/// Server-side decorations still accept the drag: the window manager's title
-/// bar is above this row, and moving from the gap does not add a second bar.
+/// Empty stretch in the menu row. The row itself is the drag target, so this
+/// only has to fill the gap; a percentage height collapses under `items_center`.
 #[cfg(target_os = "linux")]
-pub(crate) fn drag_spacer(window: &mut Window, cx: &mut App) -> impl IntoElement {
-    with_drag(
-        "menu-drag-region",
-        div().id("menu-drag-region").h_full().flex_1().min_w(px(0.)),
-        window,
-        cx,
-    )
+pub(crate) fn drag_spacer() -> impl IntoElement {
+    div()
+        .id("menu-drag-region")
+        .h(px(30.))
+        .flex_1()
+        .min_w(px(0.))
 }
 
 /// The same drag gesture on a bar that already has an id, such as print preview.
