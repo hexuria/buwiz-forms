@@ -4,7 +4,6 @@
 // dialog. No separators in the title bar or the panels: spacing groups.
 
 import { div } from "gpui-kit";
-import process from "process";
 import {
   tokens,
   SIZE,
@@ -64,7 +63,9 @@ function captionButtons(cx) {
         "caption-close",
         "x",
         "Close",
-        () => process.exit(0),
+        // Hide to the menu-bar tray. Quit is the application menu (Cmd/Ctrl+Q),
+        // which stops the submission worker and releases the database lock.
+        () => window.dispatch_action("hide-to-tray"),
         true,
         "close",
       ),

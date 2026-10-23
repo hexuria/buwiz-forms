@@ -92,14 +92,14 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 
 /// Stop the submission worker and release the owner lock.
 ///
-/// Quit and an update install call this. The worker finishes the tick it is
-/// on, drops its database handle, and this thread checkpoints and closes. A
-/// second call does nothing. Safe when the database was never opened.
+/// Quit (the menu, Cmd/Ctrl+Q, `process.exit`) and an update install call
+/// this. The worker finishes the tick it is on, drops its database handle,
+/// and this thread checkpoints and closes. A second call does nothing. Safe
+/// when the database was never opened.
 ///
-/// The same sequence is what application menus use to quit. An update install
-/// calls it before starting the new process, because the owner lock is a
-/// process-wide flock and the replacement cannot open the database until
-/// this process has dropped it.
+/// An update install calls it before starting the new process, because the
+/// owner lock is a process-wide flock and the replacement cannot open the
+/// database until this process has dropped it.
 pub(crate) fn shutdown_for_quit() {
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
@@ -152,6 +152,17 @@ fn release_database() {
             },
         }
     });
+}
+
+/// The stored global-show chord, if the database is already open and a key
+/// is saved. Does not open the database: a missing handle means "not set".
+pub(crate) fn stored_global_hotkey() -> Option<String> {
+    let handle = DATABASE.with(|slot| slot.borrow().clone())?;
+    let db = handle.lock().ok()?;
+    db.get_setting("global_hotkey_key")
+        .ok()
+        .flatten()
+        .filter(|value| !value.is_empty())
 }
 
 /// Whether [`shutdown_for_quit`] dropped the owner lock. An update refuses to
