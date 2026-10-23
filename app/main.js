@@ -17,6 +17,7 @@ import {
   nextThemePreference,
   parseThemePreference,
   storedThemePreference,
+  themePreferenceFromEnv,
   THEME_PREF_KEY,
 } from "./shell/theme.js";
 import { tokens, SIZE, BREAK, RADIUS, Toast, DigitEntry } from "./shell/ui.js";
@@ -37,6 +38,7 @@ import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/
 import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
+import { renderAccountGate } from "./shell/gate.js";
 import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
 import { SecurityActions } from "./shell/security.js";
 import { AccountActions } from "./shell/account.js";
@@ -63,6 +65,30 @@ class BirApp extends View {
   init(_props, cx) {
     this.invalidate = _props.invalidate;
     this.store = new Store();
+    this.booted = false;
+    this.cloudLocked = true;
+    this.gateBusy = false;
+    this.gateError = null;
+    this.gateDetail = "";
+    this.gatePhase = "welcome";
+    this.focusRoot = cx.focus_handle();
+    this.serverUrl = InputState.new({});
+    let gate = { unlocked: false, server_url: "" };
+    try {
+      gate = this.store.call("cloud_account_gate");
+    } catch (error) {
+      this.gateError = errorText(error);
+    }
+    this.serverUrl.set_value(gate.server_url || "");
+    const forced = themePreferenceFromEnv(process.env.BIR_SHELL_START);
+    applyThemePreference(cx, forced || "system");
+    if (gate.unlocked) this.boot(cx);
+  }
+
+  /** The filing UI. Reached only after the Buwiz account gate is open. */
+  boot(cx) {
+    this.booted = true;
+    this.cloudLocked = false;
     this.info = this.store.systemInfo();
     this.isMac = this.info.os === "macos";
 
@@ -121,7 +147,6 @@ class BirApp extends View {
     this.formUi = new FormPageActions(this);
 
     this.initAuth();
-    this.focusRoot = cx.focus_handle();
     // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
     // (also "palette=<query>", "edit=<profile section>", and on a form
     // "choose=<key>~<value>|...", "select=<key>", "more=<part>:<item>",
@@ -136,13 +161,17 @@ class BirApp extends View {
     // (started by this shell's host at launch, on the same database
     // connection) records new submissions and BIR confirmations there, and
     // polling picks them up as a toast plus an unread dot on the bell.
-    cx.timer.every(30000, (cx) => this.pollEvents(cx));
+    cx.timer.every(30000, (cx) => {
+      if (this.cloudLocked) return;
+      this.pollEvents(cx);
+    });
 
     // The host checks for a release on its own thread. Polling is how the
     // prompt appears: the host does not push into the script.
     this.updateStatus = null;
     this.updateInstallArmed = false;
     const watchUpdate = (cx) => {
+      if (this.cloudLocked) return;
       if (pollUpdateStatus(this)) cx.notify();
       const delay = Number(process.env.BIR_UPDATE_INSTALL_AFTER_SECS || "");
       if (
@@ -172,6 +201,7 @@ class BirApp extends View {
     this.wasNarrow = null;
     this.viewportSettled = false;
     cx.timer.every(200, (cx) => {
+      if (this.cloudLocked) return;
       if (this.view === "form") this.formUi.refreshLayout();
       const vp = window.viewport_size();
       const key = `${Math.round(vp.width)}x${Math.round(vp.height)}`;
@@ -218,6 +248,44 @@ class BirApp extends View {
       { keystroke: this.isMac ? "cmd-z" : "ctrl-z", action: "undo-last", context: "!Input" },
       { keystroke: "escape", action: "dismiss" },
     ]);
+  }
+
+  /** Device approval finished. Open the database UI, once. */
+  finishUnlock(cx) {
+    try {
+      this.store.call("cloud_account_session_opened");
+    } catch (error) {
+      this.gateError = errorText(error);
+      this.gateBusy = false;
+      this.cloudLocked = true;
+      cx.notify();
+      return;
+    }
+    this.cloudLocked = false;
+    this.gateBusy = false;
+    this.gatePhase = "welcome";
+    this.gateDetail = "";
+    this.gateError = null;
+    if (!this.booted) this.boot(cx);
+    else {
+      this.store.bump();
+      cx.notify();
+    }
+  }
+
+  /** Sign-out. The host has already dropped the refresh token. */
+  lockCloud(cx) {
+    try {
+      this.store.call("cloud_account_session_closed");
+    } catch (_error) {
+      /* the host already locked the process */
+    }
+    this.cloudLocked = true;
+    this.gateBusy = false;
+    this.gatePhase = "welcome";
+    this.gateDetail = "";
+    this.gateError = null;
+    cx.notify();
   }
 
   runStartRoute(route, cx) {
@@ -1437,6 +1505,7 @@ class BirApp extends View {
   }
 
   paint(cx) {
+    if (this.cloudLocked || !this.booted) return renderAccountGate(cx, this);
     const t = tokens(cx);
     // First launch and sign-in take the whole window: nothing that names a
     // taxpayer is drawn behind them. First launch's "Just me" types its
@@ -1512,6 +1581,10 @@ class BirApp extends View {
       .on_action("toggle-right-panel", (_e, cx) => this.toggleRightPanel(cx))
       .on_action("open-settings", (_e, cx) => this.go("settings", cx))
       .on_action("lock-app", (_e, cx) => this.lockApp(cx))
+      .on_action("cloud-sign-out", (_e, cx) => {
+        if (this.account) this.account.signOut(cx);
+        else this.lockCloud(cx);
+      })
       .on_action("go-back", (_e, cx) => this.goBack(cx))
       .on_action("go-forward", (_e, cx) => this.goForward(cx))
       .on_action("dismiss", (_e, cx) => this.dismiss(cx))

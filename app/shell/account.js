@@ -79,6 +79,7 @@ export class AccountActions {
         acx.notify();
         this.status = await this.app.store.call("cloud_account_finish_sign_in");
         this.error = null;
+        if (this.app.finishUnlock) this.app.finishUnlock(acx);
       } catch (error) {
         this.error = errorText(error);
         try {
@@ -101,6 +102,7 @@ export class AccountActions {
       try {
         this.status = await this.app.store.call("cloud_account_sign_out");
         this.error = null;
+        if (this.app.lockCloud) this.app.lockCloud(acx);
       } catch (error) {
         this.error = errorText(error);
       }

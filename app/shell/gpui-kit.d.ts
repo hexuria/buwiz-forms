@@ -27894,12 +27894,23 @@ declare module "bir" {
       verification_uri_complete: string;
       browser_opened: boolean;
   }
+  export interface CloudAccountGate {
+      unlocked: boolean;
+      offline: boolean;
+      server_url: string;
+      email: string | null;
+      detail: string;
+  }
   export function cloud_account_status(): CloudAccountStatus;
+  export function cloud_account_gate(): CloudAccountGate;
   export function cloud_account_set_server_url(url: string): CloudAccountStatus;
   export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
+  export function cloud_account_begin_sign_up(): Promise<CloudSignInStart>;
   export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
   export function cloud_account_refresh(): Promise<CloudAccountStatus>;
   export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
+  export function cloud_account_session_opened(): null;
+  export function cloud_account_session_closed(): null;
 
   export type BranchFieldName = "rdo_code" | "registered_address" | "zip_code" | "phone" | "email";
   export interface BranchFacts {
