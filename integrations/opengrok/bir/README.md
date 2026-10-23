@@ -80,16 +80,19 @@ export BIR_MCP_TOKENS=~/.config/bir-mcp-tokens.json
 
 ```sh
 export BIR_MCP_TOKENS=~/.config/bir-mcp-tokens.json  # see above
-export BIR_MCP_HTTP_TOKEN="$(openssl rand -hex 32)"  # bearer token OpenGrok will send
 target/release/bir-mcp --http 127.0.0.1:8765
 # bir-mcp: serving MCP at http://127.0.0.1:8765/mcp
+# bir-mcp: OAuth metadata at http://127.0.0.1:8765/.well-known/oauth-protected-resource/mcp
 ```
 
 - Only loopback addresses are accepted (`127.0.0.0/8`, `[::1]`); anything
   else is refused at startup.
-- `BIR_MCP_HTTP_TOKEN` is required in `--http` mode; it refuses to start
-  without it. Every request must carry `Authorization: Bearer <token>`
-  (compared in constant time), otherwise `401`.
+- `--http` is an OAuth 2.1 protected resource. There is no shared bearer
+  secret. A request with no token, or a token buwiz-server minted for a
+  different resource, gets `401` and
+  `WWW-Authenticate: Bearer resource_metadata="…"`. The client registers
+  with buwiz-server, signs in in the browser, and sends the access token
+  whose audience is this MCP URL.
 - A request whose `Origin` header is present and not a loopback origin gets
   `403` (the MCP spec's DNS-rebinding guard).
 - `POST /mcp` only: one JSON-RPC message per request, `Content-Type:
@@ -151,17 +154,13 @@ cp -R integrations/opengrok/bir/plugin.json integrations/opengrok/bir/mcp.json \
 chmod 600 "$PLUGIN/mcp.json"
 ```
 
-Then edit the **copy** at `$PLUGIN/mcp.json`:
+Then edit the **copy** at `$PLUGIN/mcp.json` and set the port in `url` to
+the one `bir-mcp --http` listens on.
 
-- set the port in `url` to the one `bir-mcp --http` listens on;
-- replace `REPLACE_WITH_BIR_MCP_HTTP_TOKEN` with the value of
-  `BIR_MCP_HTTP_TOKEN`.
-
-Write the token literally in that untracked copy. A `${NAME}` placeholder in
-an operator plugin's headers is filled only from a connected account's token
-(`<CONNECTOR>_TOKEN`); there is none for BIR, so an unresolved placeholder
-makes OpenGrok drop the server instead of sending it. Never put the real token
-into the tracked `mcp.json`.
+The server does not take a shared secret in that file. The client has to
+complete buwiz-server's authorization-code + PKCE flow and send the access
+token it was given for this MCP URL. A token pasted into `headers` works
+only until it expires, and a token minted for another resource is refused.
 
 Restart OpenGrok (operator plugins are read once at boot). The tools appear as
 `bir.bir-mcp.<tool>`. Turn the `bir` plugin on for the Bot (its tool ceiling;
@@ -186,9 +185,12 @@ A manual check of the HTTP transport (with `GPUI_AGENT_RUNTIME_DIR` pointing
 at an empty directory, no BIR app is listed, so nothing is reached):
 
 ```sh
-GPUI_AGENT_RUNTIME_DIR="$(mktemp -d)" BIR_MCP_HTTP_TOKEN=test \
+GPUI_AGENT_RUNTIME_DIR="$(mktemp -d)" \
   target/release/bir-mcp --http 127.0.0.1:8765 &
-H=(-H 'Authorization: Bearer test' -H 'Content-Type: application/json'
+# Discover the authorization server, then send the access token it issued
+# for http://127.0.0.1:8765/mcp. A request without that token is 401.
+curl -s http://127.0.0.1:8765/.well-known/oauth-protected-resource/mcp
+H=(-H 'Authorization: Bearer ACCESS_TOKEN' -H 'Content-Type: application/json'
    -H 'Accept: application/json, text/event-stream')
 curl -s "${H[@]}" http://127.0.0.1:8765/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"manual","version":"0"}}}'

@@ -106,6 +106,12 @@ impl<H: BirHost> Server<H> {
         &self.host
     }
 
+    /// Replace the gate. `bir-mcp --http` does this once per request, after
+    /// the bearer token has been checked, and before the JSON-RPC dispatch.
+    pub fn set_license(&mut self, license: License) {
+        self.license = license;
+    }
+
     pub fn selected(&self) -> Option<&Selection> {
         self.selected.as_ref()
     }

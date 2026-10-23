@@ -7,6 +7,8 @@
 //!   `{origin}/api/tax-profiles` with that user access token, and refreshes
 //!   that token once on HTTP 401. A rejected refresh clears the shared store.
 //!   A network failure leaves the store in place.
+//! * [`License::Settled`] — `bir-mcp --http` already checked this request's
+//!   bearer token. The verdict is the same allow-or-refuse as the other gates.
 //!
 //! buwiz-server answers 401 for a bad token and lists a profile with empty
 //! `permissions` when the pass no longer covers it. This module turns those
@@ -52,6 +54,8 @@ pub enum License {
         refresh: String,
         persist: bool,
     },
+    /// This HTTP request's token was already checked.
+    Settled(Result<(), String>),
 }
 
 impl License {
@@ -98,16 +102,26 @@ impl License {
         }
     }
 
+    /// A bearer token `bir-mcp --http` already checked for this one request.
+    pub fn settled(result: Result<(), String>) -> Self {
+        Self::Settled(result)
+    }
+
     /// `Ok` when this tool may run. The error string is the tool result text.
     /// A desktop session may replace its access token after one refresh.
     pub fn allow(&mut self) -> Result<(), String> {
+        if let Self::Settled(result) = self {
+            return result.clone();
+        }
         if matches!(self, Self::Desktop { .. }) {
             return self.allow_desktop();
         }
         match self {
             Self::Open => Ok(()),
             Self::Required { base, token } => check(base, token),
-            Self::Desktop { .. } => unreachable!("desktop sessions are handled above"),
+            Self::Desktop { .. } | Self::Settled(_) => {
+                unreachable!("desktop sessions and settled verdicts are handled above")
+            }
         }
     }
 
@@ -302,7 +316,7 @@ pub fn interpret_desktop(status: u16, body: &str) -> Result<(), String> {
     }
 }
 
-fn profiles_have_access(profiles: &[Value]) -> bool {
+pub(crate) fn profiles_have_access(profiles: &[Value]) -> bool {
     profiles.iter().any(|profile| {
         profile
             .get("permissions")
@@ -354,7 +368,9 @@ mod tests {
                 assert_eq!(base, "http://127.0.0.1:9");
                 assert_eq!(token, "secret");
             }
-            License::Open | License::Desktop { .. } => panic!("expected a required license"),
+            License::Open | License::Desktop { .. } | License::Settled(_) => {
+                panic!("expected a required license")
+            }
         }
     }
 

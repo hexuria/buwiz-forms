@@ -59,10 +59,21 @@ The refresh token is not shown in Settings and is not written to the page.
   because a keyring build without a real backend can report success and then
   forget the secret when the process exits.
 
-`bir-mcp` reads this same account for its tool gate and refreshes it in
-place. `bir-mcp login` runs this device flow and writes this store. It does
-not keep a second keychain. `BUWIZ_ACCESS_TOKEN` still selects an agent token
-instead of this account.
+`bir-mcp` on stdio reads this same account for its tool gate and refreshes
+it in place. `bir-mcp login` runs this device flow and writes this store. It
+does not keep a second keychain. `BUWIZ_ACCESS_TOKEN` still selects an agent
+token instead of this account.
+
+`bir-mcp --http` does not read this account. It is an OAuth protected
+resource. `GET /.well-known/oauth-protected-resource` names the account
+origin as the authorization server (`https://account.buwiz.com` in a release
+build, `http://localhost:3008` in a debug build, with the same
+`BUWIZ_ACCOUNT_URL` / `BUWIZ_SERVER_URL` / `option_env!` precedence). A
+request without a bearer token for that MCP URL gets 401 and
+`WWW-Authenticate: Bearer resource_metadata=…`. The token is checked at the
+authorization server's introspection endpoint, and a token minted for
+another resource is refused. A tool still runs only when that account can
+see a taxpayer profile with a working pass.
 
 ## Offline
 

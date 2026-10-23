@@ -4,9 +4,10 @@
 //! Environment: `BIR_MCP_TOKENS` (0600 JSON file of per-app agent tokens),
 //! `GPUI_AGENT_TOKEN` (fallback agent token for any app),
 //! `GPUI_AGENT_RUNTIME_DIR` (upstream discovery directory override),
-//! `BIR_MCP_HTTP_TOKEN` (bearer token, required with `--http`),
-//! `BUWIZ_ACCESS_TOKEN` (optional agent token; when set, every tool checks
+//! `BUWIZ_ACCESS_TOKEN` (optional agent token; when set, every stdio tool checks
 //! that token instead of the desktop account stored by the Buwiz app).
+//! `--http` does not use that account: each request carries an OAuth bearer
+//! token issued by buwiz-server for this process's MCP URL.
 use bir_mcp::client::AgentBirHost;
 use bir_mcp::http;
 use bir_mcp::license::License;
@@ -21,7 +22,7 @@ Usage: bir-mcp                       speak MCP (JSON-RPC 2.0, one message per li
        bir-mcp logout                sign out and remove the stored session
        bir-mcp status                show whether this computer is signed in
        bir-mcp --http 127.0.0.1:PORT serve MCP Streamable HTTP at http://127.0.0.1:PORT/mcp
-                                     (loopback addresses only; needs BIR_MCP_HTTP_TOKEN)
+                                     (loopback only; OAuth protected resource)
        bir-mcp --version
        bir-mcp --help
 
@@ -30,19 +31,26 @@ running BIR app, bir_connect selects one. Nothing is selected at startup.
 
 The Buwiz server address comes from the build, the same way the Buwiz app
 resolves it. A debug build uses http://localhost:3008. `bir-mcp login` runs
-the app's device flow and writes the app's saved account. Tools run only
+the app's device flow and writes the app's saved account. Stdio tools run only
 after that account is signed in, or when BUWIZ_ACCESS_TOKEN is set to a
 buwiz-server agent token.
+
+`--http` is a separate door. It serves OAuth protected-resource metadata and
+accepts only a bearer token buwiz-server minted for that MCP URL. A token for
+another resource is refused. Tools still run only when that account can see a
+taxpayer profile with a working pass.
 
 Environment:
   BIR_MCP_TOKENS          JSON file {\"<connect id or pid>\": \"<agent token>\"}; must be mode 0600
   GPUI_AGENT_TOKEN        fallback agent token for any app without an entry in BIR_MCP_TOKENS
   GPUI_AGENT_RUNTIME_DIR  gpui-agent discovery directory (default: gpui-agent's per-user runtime dir)
-  BIR_MCP_HTTP_TOKEN      with --http: every request must send `Authorization: Bearer <this>`
-  BUWIZ_ACCESS_TOKEN      optional agent access token. When set, every tool checks
-                          that token with buwiz-server instead of the desktop session.
-  BUWIZ_MCP_URL           origin for that agent-token check. When unset, the build's
-                          server address is used.";
+  BUWIZ_ACCESS_TOKEN      stdio only. When set, every tool checks that token with
+                          buwiz-server instead of the desktop session.
+  BUWIZ_MCP_URL           origin for that stdio agent-token check. When unset, the
+                          build's server address is used.
+  BUWIZ_ACCOUNT_URL       authorization server for --http. Overrides the build.
+  BUWIZ_SERVER_URL        API origin. Used for --http only when the account URL
+                          was not configured.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -191,26 +199,38 @@ fn serve_stdio() -> ExitCode {
 }
 
 fn serve_http(addr: &str) -> ExitCode {
-    let started = http::token_from_env().and_then(|token| Ok((token, http::bind(addr)?)));
-    let (token, listener) = match started {
-        Ok(started) => started,
+    let listener = match http::bind(addr) {
+        Ok(listener) => listener,
         Err(error) => {
             eprintln!("bir-mcp: {error}");
             return ExitCode::from(2);
         }
     };
-    let bound = listener
-        .server_addr()
-        .to_ip()
-        .map_or_else(|| addr.to_string(), |a| a.to_string());
-    eprintln!("bir-mcp: serving MCP at http://{bound}{}", http::MCP_PATH);
-    let mut server = match licensed_server() {
-        Ok(server) => server,
+    let issuer = match bir_mcp::oauth::configured_authorization_server() {
+        Ok(issuer) => issuer,
         Err(error) => {
             eprintln!("bir-mcp: {error}");
             return ExitCode::from(2);
         }
     };
-    http::serve_http(&mut server, &listener, &token);
+    let Some(address) = listener.server_addr().to_ip() else {
+        eprintln!("bir-mcp: the listener has no socket address");
+        return ExitCode::from(2);
+    };
+    let resource = bir_mcp::oauth::Resource::from_bind(address, &issuer);
+    eprintln!("bir-mcp: serving MCP at {}", resource.mcp);
+    eprintln!("bir-mcp: OAuth metadata at {}", resource.metadata);
+    eprintln!(
+        "bir-mcp: authorization server {}",
+        resource.authorization_server
+    );
+    // Stdio is the desktop account. HTTP starts closed and admits each
+    // request from its own bearer token.
+    let mut server = Server::with_license(
+        AgentBirHost::from_env(),
+        License::settled(Err(bir_mcp::license::UNAUTHENTICATED.to_string())),
+    );
+    let auth = bir_mcp::oauth::Introspection::new(resource.authorization_server.clone());
+    http::serve_http(&mut server, &listener, &auth, &resource);
     ExitCode::SUCCESS
 }
