@@ -27709,11 +27709,22 @@ interface ImportMeta {
 
 declare module "bir" {
 
+  export interface HotkeyPreset {
+      value: string;
+      label: string;
+  }
   export interface SystemInfo {
       os: string;
       arch: string;
       app_version: string;
       database_path: string;
+      data_dir: string;
+      logs_dir: string;
+      /** Null when no global show chord is stored. */
+      global_hotkey: string | null;
+      hotkey_presets: HotkeyPreset[];
+      log_retention_days: number;
+      log_retention_choices: number[];
       runtime: string;
   }
   export interface ProfileSummary {
@@ -27737,6 +27748,32 @@ declare module "bir" {
       is_deprecated: boolean;
   }
   export function system_info(): SystemInfo;
+  /** Empty string clears the chord. An unknown key is refused. */
+  export function set_global_hotkey(combo: string): null;
+  /** Days of daily log files to keep. Out of range is refused. */
+  export function set_log_retention(days: number): null;
+
+  export interface UpdateStatus {
+      /** idle, checking, downloading, ready, failed, up_to_date, available, or installing. */
+      phase: string;
+      /** The release that was found, or null. */
+      version: string | null;
+      /** A sentence for a failure or "already current", or null. */
+      message: string | null;
+      /** Whether a newer release downloads without asking. */
+      auto_download: boolean;
+      /** The version compiled into this binary. */
+      current_version: string;
+  }
+  export function update_status(): UpdateStatus;
+  /** Replace this install with the verified download and relaunch. */
+  export function install_update(): null;
+  /** Hide the update prompt until the next check. */
+  export function dismiss_update(): null;
+  /** Look for a release now, and download it even when auto-download is off. */
+  export function check_for_updates(): null;
+  /** `auto_update_download`. Off is `0`; anything else leaves downloading on. */
+  export function set_auto_update_download(enabled: boolean): null;
   export function list_profiles(): ProfileSummary[];
   export function forms_catalog(): FormCatalogEntry[];
   export function get_setting(key: string): string | null;

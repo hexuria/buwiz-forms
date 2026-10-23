@@ -197,16 +197,16 @@ function logsTab(cx, app, width) {
   return page.child(box);
 }
 
-export function renderCronTasksPage(cx, app, width) {
+/** Jobs and today's log, without a page title. Settings › Jobs draws this. */
+export function renderJobsBody(cx, app, width) {
   const tab = app.cronTab || "jobs";
   return div()
     .flex()
     .flex_col()
     .child(
-      PageHeader(cx, {
-        title: "Background tasks",
-        lede: "Queued filings, scheduled jobs and today's log.",
-        actions: [
+      div()
+        .mb(SPACE[4])
+        .child(
           Segmented(
             cx,
             "jobs-tabs",
@@ -218,8 +218,20 @@ export function renderCronTasksPage(cx, app, width) {
             (v, cx) => app.setCronTab(v, cx),
             { label: "Background tasks view" },
           ),
-        ],
+        ),
+    )
+    .child(tab === "logs" ? logsTab(cx, app, width) : jobsTab(cx, app, width));
+}
+
+export function renderCronTasksPage(cx, app, width) {
+  return div()
+    .flex()
+    .flex_col()
+    .child(
+      PageHeader(cx, {
+        title: "Background tasks",
+        lede: "Queued filings, scheduled jobs and today's log.",
       }),
     )
-    .child(div().mt(28).child(tab === "logs" ? logsTab(cx, app, width) : jobsTab(cx, app, width)));
+    .child(div().mt(28).child(renderJobsBody(cx, app, width)));
 }
