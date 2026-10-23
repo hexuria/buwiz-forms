@@ -6,7 +6,12 @@
 //! This module speaks that contract. It does not file returns and it does
 //! not read taxpayer records. A network failure leaves any saved session in
 //! place so the app can keep preparing returns on this computer.
+//!
+//! The saved account is also what `bir-mcp` reads. There is one keychain
+//! entry and one private file. `bir-mcp` does not keep a second sign-in.
 
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
@@ -23,6 +28,14 @@ pub const DEV_SERVER_URL: &str = "http://localhost:3008";
 pub const DESKTOP_CLIENT_ID: &str = "buwiz-desktop";
 pub const ENV_SERVER_URL: &str = "BUWIZ_SERVER_URL";
 pub const ENV_ACCOUNT_URL: &str = "BUWIZ_ACCOUNT_URL";
+/// OS keychain service for the desktop refresh token. `bir-mcp` uses this
+/// same entry.
+pub const KEYRING_SERVICE: &str = "com.buwiz.bir";
+/// OS keychain account for [`KEYRING_SERVICE`].
+pub const KEYRING_ACCOUNT: &str = "desktop-refresh";
+/// Overrides the private account file. The default sits next to the database.
+pub const ENV_ACCOUNT_FILE: &str = "BUWIZ_CLOUD_ACCOUNT_FILE";
+const ACCOUNT_FILE_NAME: &str = "buwiz-cloud-account.json";
 
 const USER_AGENT: &str = "buwiz-desktop";
 
@@ -708,6 +721,106 @@ pub fn open_browser(url: &str) -> Result<(), String> {
     open::that(url).map_err(|error| error.to_string())
 }
 
+/// Load the desktop account. The keychain wins when it holds a complete
+/// record. Otherwise the private file is used. `Ok(None)` means signed out.
+pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
+    if let Some(raw) = keyring_load()
+        && let Ok(stored) = StoredAccount::decode(&raw)
+    {
+        return Ok(Some(stored));
+    }
+    let path = account_file_path();
+    if !path.exists() {
+        return Ok(None);
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        CloudError::Unexpected(format!("could not read the saved Buwiz account ({error})"))
+    })?;
+    StoredAccount::decode(&raw).map(Some)
+}
+
+/// Write the desktop account to the keychain and the private file.
+/// The file is always written: a keyring build without a real backend can
+/// report success and then forget the secret when the process exits.
+pub fn save_stored_account(stored: &StoredAccount) -> Result<(), CloudError> {
+    let raw = stored.encode()?;
+    let _ = keyring_save(&raw);
+    write_secret_file(&raw)
+}
+
+/// Remove the keychain entry and the private file.
+pub fn clear_stored_account() {
+    keyring_delete();
+    let _ = std::fs::remove_file(account_file_path());
+}
+
+fn account_file_path() -> PathBuf {
+    if let Some(path) = std::env::var_os(ENV_ACCOUNT_FILE) {
+        return PathBuf::from(path);
+    }
+    let database = crate::db::app_database_path();
+    let directory = database
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    directory.join(ACCOUNT_FILE_NAME)
+}
+
+fn write_secret_file(raw: &str) -> Result<(), CloudError> {
+    let path = account_file_path();
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
+        })?;
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .map_err(|error| {
+            CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
+        })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = file.set_permissions(std::fs::Permissions::from_mode(0o600));
+    }
+    file.write_all(raw.as_bytes()).map_err(|error| {
+        CloudError::Unexpected(format!("could not store the Buwiz account ({error})"))
+    })?;
+    Ok(())
+}
+
+fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
+    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
+}
+
+fn keyring_load() -> Option<String> {
+    let entry = keyring_entry().ok()?;
+    match entry.get_password() {
+        Ok(value) if !value.trim().is_empty() => Some(value),
+        _ => None,
+    }
+}
+
+fn keyring_save(raw: &str) -> bool {
+    keyring_entry()
+        .and_then(|entry| entry.set_password(raw))
+        .is_ok()
+}
+
+fn keyring_delete() {
+    if let Ok(entry) = keyring_entry() {
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => {}
+            Err(error) => tracing::debug!("Buwiz keychain entry not deleted: {error}"),
+        }
+    }
+}
+
 pub struct BlockingHttp {
     client: reqwest::blocking::Client,
 }
@@ -1337,5 +1450,32 @@ mod tests {
             create,
             "http://localhost:3008/signup?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"
         );
+    }
+
+    #[test]
+    fn the_private_file_round_trips_when_the_keychain_has_no_account() {
+        let previous = keyring_load();
+        keyring_delete();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(ACCOUNT_FILE_NAME);
+        temp_env::with_var(ENV_ACCOUNT_FILE, Some(path.to_str().unwrap()), || {
+            let stored = StoredAccount::from_secrets(&secrets());
+            save_stored_account(&stored).unwrap();
+            let loaded = load_stored_account().unwrap().expect("saved account");
+            assert_eq!(loaded.refresh_token, "refresh-secret");
+            assert_eq!(loaded.email.as_deref(), Some("filer@example.test"));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+                assert_eq!(mode, 0o600);
+            }
+            clear_stored_account();
+            assert!(load_stored_account().unwrap().is_none());
+            assert!(!path.exists());
+        });
+        if let Some(raw) = previous {
+            let _ = keyring_save(&raw);
+        }
     }
 }

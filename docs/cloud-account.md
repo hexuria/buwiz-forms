@@ -59,6 +59,11 @@ The refresh token is not shown in Settings and is not written to the page.
   because a keyring build without a real backend can report success and then
   forget the secret when the process exits.
 
+`bir-mcp` reads this same account for its tool gate and refreshes it in
+place. `bir-mcp login` runs this device flow and writes this store. It does
+not keep a second keychain. `BUWIZ_ACCESS_TOKEN` still selects an agent token
+instead of this account.
+
 ## Offline
 
 Local taxpayer setup, drafts, and dry-run filing do not call these functions.

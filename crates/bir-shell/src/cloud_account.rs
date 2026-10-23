@@ -5,9 +5,6 @@
 //! a mode-0600 file beside the database — the same fallback the database key
 //! uses when the keychain is missing. The page cannot read either store.
 
-use std::fs;
-use std::io::Write;
-use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -15,15 +12,12 @@ use bir_core::cloud_account::{
     self, AccountBrowser, AccountSecrets, AccountStatus, BlockingHttp, CloudError, DeviceChallenge,
     ENV_SERVER_URL, GateDecision, RefreshOutcome, SessionUpdate, StoredAccount,
 };
-use bir_core::db;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
 
 use crate::bir_module::with_account_database;
 
 /// Old Settings field. Startup deletes it. Nothing reads it.
 const OBSOLETE_SERVER_URL_SETTING: &str = "buwiz_server_url";
-const KEYRING_SERVICE: &str = "com.buwiz.bir";
-const KEYRING_ACCOUNT: &str = "desktop-refresh";
 
 pub const DECLARATIONS: &str = r#"
 export interface CloudAccountStatus {
@@ -394,95 +388,15 @@ fn clear_pending() {
 }
 
 fn load_stored() -> Result<Option<StoredAccount>, HostError> {
-    if let Some(raw) = keyring_load()
-        && let Ok(stored) = StoredAccount::decode(&raw)
-    {
-        return Ok(Some(stored));
-    }
-    let path = secret_path()?;
-    if !path.exists() {
-        return Ok(None);
-    }
-    let raw = fs::read_to_string(&path).map_err(|error| {
-        HostError::new(format!("could not read the saved Buwiz account ({error})"))
-    })?;
-    StoredAccount::decode(&raw).map(Some).map_err(host_error)
+    cloud_account::load_stored_account().map_err(host_error)
 }
 
 fn save_stored(stored: &StoredAccount) -> Result<(), HostError> {
-    let raw = stored.encode().map_err(host_error)?;
-    // The keychain is preferred. The private file is always written too: a
-    // keyring build without a real backend reports success and then forgets
-    // the secret when the process exits.
-    let _ = keyring_save(&raw);
-    write_secret_file(&raw)
+    cloud_account::save_stored_account(stored).map_err(host_error)
 }
 
 fn clear_stored() {
-    keyring_delete();
-    if let Ok(path) = secret_path() {
-        let _ = fs::remove_file(path);
-    }
-}
-
-fn secret_path() -> Result<PathBuf, HostError> {
-    if let Some(path) = std::env::var_os("BUWIZ_CLOUD_ACCOUNT_FILE") {
-        return Ok(PathBuf::from(path));
-    }
-    let database = db::app_database_path();
-    let directory = database
-        .parent()
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    Ok(directory.join("buwiz-cloud-account.json"))
-}
-
-fn write_secret_file(raw: &str) -> Result<(), HostError> {
-    let path = secret_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| HostError::new(error.to_string()))?;
-    }
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&path)
-        .map_err(|error| HostError::new(format!("could not store the Buwiz account ({error})")))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = file.set_permissions(fs::Permissions::from_mode(0o600));
-    }
-    file.write_all(raw.as_bytes())
-        .map_err(|error| HostError::new(format!("could not store the Buwiz account ({error})")))?;
-    Ok(())
-}
-
-fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
-}
-
-fn keyring_load() -> Option<String> {
-    let entry = keyring_entry().ok()?;
-    match entry.get_password() {
-        Ok(value) if !value.trim().is_empty() => Some(value),
-        _ => None,
-    }
-}
-
-fn keyring_save(raw: &str) -> bool {
-    keyring_entry()
-        .and_then(|entry| entry.set_password(raw))
-        .is_ok()
-}
-
-fn keyring_delete() {
-    if let Ok(entry) = keyring_entry() {
-        match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => {}
-            Err(error) => tracing::debug!("Buwiz keychain entry not deleted: {error}"),
-        }
-    }
+    cloud_account::clear_stored_account();
 }
 
 #[cfg(test)]

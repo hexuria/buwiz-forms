@@ -17,8 +17,12 @@ path = "src/main.rs"
 serde_json = { workspace = true }
 # Workspace pin shared with bir-desktop's `agent` feature.
 gpui-agent = { workspace = true }
+# Blocking client for the buwiz-server license check. rustls, no OpenSSL.
+reqwest = { workspace = true }
 # `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
 tiny_http = { version = "0.12", default-features = false }
+# Desktop device flow and the account store shared with the Buwiz app.
+bir-core = { path = "../bir-core" }
 
 [dev-dependencies]
 tempfile = "3"
