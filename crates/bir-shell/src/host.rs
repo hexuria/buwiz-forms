@@ -108,6 +108,9 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
         let components =
             gpui_shell::components::components().expect("component catalog must build");
         init_with_components(cx, &components);
+        // The account gate decides the menu and whether the filing database
+        // opens. A locked launch paints only the welcome screen.
+        crate::cloud_account::prepare_launch();
         crate::app_menu::install(cx);
 
         // Debug builds get eval + unfrozen prototypes for console work;
@@ -121,13 +124,13 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
         }
         set_capabilities(capabilities());
         export_module(bir_module::module()).expect("bir module must export");
-        // Open the database now, which starts the submission worker on
-        // it: queued returns send while the shell runs, with no painted
-        // `bir` or `bir-headless` beside it.
-        bir_module::open_database_at_launch();
-        // Help → Check for Updates… is an item on the application menu.
-        // The feed check starts once the database can answer auto-download.
-        crate::updater::start();
+        // Open the database only after the account gate says the session is
+        // good. That start is also what runs the submission worker. A locked
+        // launch waits until sign-in calls `cloud_account_session_opened`.
+        if crate::account_gate::is_unlocked() {
+            bir_module::open_database_at_launch();
+            crate::updater::start();
+        }
 
         on_exit_request(|request, _window, _cx| {
             let code = request.code();

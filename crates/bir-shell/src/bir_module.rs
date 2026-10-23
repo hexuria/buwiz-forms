@@ -28,11 +28,15 @@ thread_local! {
 /// internally during an IMAP fetch, so `check_inbox_now` clones this Arc,
 /// drops its guard, then polls.
 ///
-/// The first open also starts the submission worker on this same handle,
-/// and the handle is never replaced afterwards (a database import reopens
-/// the file *inside* it), so the worker always sees the database the page
-/// sees.
-pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+/// The handle is never replaced afterwards (a database import reopens the
+/// file *inside* it). [`open_database_at_launch`] starts the submission
+/// worker on it once the account gate is open, so the worker sees the same
+/// database as the page.
+///
+/// Open or reuse the process database. Does not check the account gate and
+/// does not start the submission worker. Cloud-account settings use this
+/// while the filing UI is still locked.
+fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     DATABASE.with(|slot| {
         let mut slot = slot.borrow_mut();
         match slot.as_ref() {
@@ -40,7 +44,6 @@ pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Databa
                 let (database, _path, _recovered) =
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
                 let handle = std::sync::Arc::new(std::sync::Mutex::new(database));
-                start_submission_worker(handle.clone());
                 *slot = Some(handle);
             }
             Some(handle) if RELEASED.get() => {
@@ -55,6 +58,14 @@ pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Databa
         }
         Ok(slot.as_ref().expect("database opened").clone())
     })
+}
+
+/// The shared handle behind [`with_database`]. Refuses while the Buwiz
+/// account gate is locked. The first unlocked open is what
+/// [`open_database_at_launch`] uses to start the submission worker.
+pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+    crate::account_gate::ensure_unlocked()?;
+    open_database_slot()
 }
 
 static SUBMISSION_WORKER: std::sync::OnceLock<()> = std::sync::OnceLock::new();
@@ -178,8 +189,12 @@ pub(crate) fn owner_lock_released() -> bool {
 /// (in the shipping binary) re-checks that every six hours. Tests do not
 /// start the sleeper thread: it would keep the test process alive.
 pub(crate) fn open_database_at_launch() {
-    match database_handle() {
+    if !crate::account_gate::is_unlocked() {
+        return;
+    }
+    match open_database_slot() {
         Ok(handle) => {
+            start_submission_worker(handle.clone());
             if let Ok(guard) = handle.lock() {
                 let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), &guard);
             }
@@ -223,7 +238,16 @@ pub(crate) fn wake_submission_worker() {
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
-    let handle = database_handle()?;
+    crate::account_gate::ensure_unlocked()?;
+    with_account_database(f)
+}
+
+/// Database access for the Buwiz account itself: the server URL and nothing
+/// that names a taxpayer. Allowed while the filing UI is locked.
+pub(crate) fn with_account_database<R>(
+    f: impl FnOnce(&Database) -> Result<R, HostError>,
+) -> Result<R, HostError> {
+    let handle = open_database_slot()?;
     let guard = handle
         .lock()
         .map_err(|_| HostError::new("database lock poisoned"))?;
@@ -2243,6 +2267,8 @@ fn list_deadlines() -> HostResult {
 /// The TCP thread never touches the window. It posts work; the GPUI timer
 /// runs the host op and pushes a command here; the script polls this.
 fn agent_take() -> HostResult {
+    // Queued UI commands are tools. A locked gate must not apply them.
+    crate::account_gate::ensure_unlocked()?;
     #[cfg(feature = "agent")]
     let command = crate::agent::pop_command();
     #[cfg(not(feature = "agent"))]
@@ -2312,11 +2338,13 @@ pub fn module() -> HostModule {
         .function("job_log_tail", |_| job_log_tail())
         .function("record_screen_log", record_screen_log)
         .function("agent_take", |_| agent_take());
+    let module = crate::cloud_account::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}",
+        crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
@@ -2545,6 +2573,21 @@ mod tests {
     use gpui_shell::HostArguments;
 
     const TIN: &str = "12345678800000";
+
+    #[test]
+    fn locked_state_refuses_data_verbs() {
+        crate::account_gate::force_locked(|| {
+            let error = list_profiles().expect_err("profiles are filing data");
+            assert_eq!(error.message(), crate::account_gate::LOCKED_MESSAGE);
+            let error = auth_state().expect_err("auth state names taxpayers");
+            assert_eq!(error.message(), crate::account_gate::LOCKED_MESSAGE);
+            let error = with_database(|_| Ok(())).expect_err("database is locked");
+            assert_eq!(error.message(), crate::account_gate::LOCKED_MESSAGE);
+            let error = agent_take().expect_err("agent commands are tools");
+            assert_eq!(error.message(), crate::account_gate::LOCKED_MESSAGE);
+            assert!(system_info().is_ok());
+        });
+    }
 
     fn setup() {
         use_ephemeral_database();

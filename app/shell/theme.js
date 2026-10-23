@@ -13,6 +13,19 @@ export const THEME_PREF_KEY = "theme_preference";
 
 /** @typedef {"system" | "dark" | "light"} ThemePreference */
 
+/**
+ * `BIR_SHELL_START=theme=dark` (or `light`) before the database is open.
+ * The account gate uses this so a screenshot can pick a theme without a session.
+ */
+export function themePreferenceFromEnv(raw) {
+  const start = raw == null ? "" : String(raw);
+  for (const part of start.split(";")) {
+    const [key, value = ""] = part.split("=");
+    if (key.trim() === "theme" && value.trim()) return parseThemePreference(value);
+  }
+  return null;
+}
+
 /** Parse the painted app's stored value ("System"/"Dark"/"Light" or lowercase). */
 export function parseThemePreference(raw) {
   const v = (raw == null ? "" : String(raw)).trim().toLowerCase();

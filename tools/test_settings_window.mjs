@@ -42,6 +42,12 @@ const rows = (view, id) => host(view.find((section) => section.id === id).rows);
 }
 
 {
+  const view = settingsView("buwiz", true);
+  assert.deepEqual(ids(view), ["account"]);
+  assert.deepEqual(rows(view, "account"), ["buwiz"]);
+}
+
+{
   const view = settingsView("HOTKEY", true);
   assert.deepEqual(ids(view), ["computer"]);
   assert.deepEqual(rows(view, "computer"), ["hotkey"]);

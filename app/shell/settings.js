@@ -29,6 +29,7 @@ import {
 } from "./ui.js";
 import { SecurityCard } from "./security.js";
 import { SetupCard } from "./setup_change.js";
+import { AccountCard } from "./account.js";
 import { profileExportCard } from "./taxpayer.js";
 import { renderJobsBody } from "./cron_tasks.js";
 import {
@@ -286,6 +287,9 @@ function generalCards(cx, app, rows) {
 
 function accountCards(cx, app, rows) {
   const blocks = [];
+  if (rows.includes("buwiz")) {
+    blocks.push(labeled(cx, "Buwiz", AccountCard(cx, app)));
+  }
   const summary = accountSummary({
     isAdmin: app.isAdmin(),
     isHelpdesk: app.isHelpdesk(),
