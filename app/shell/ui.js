@@ -1112,7 +1112,7 @@ export function SettingRow(cx, id, title, hint, control) {
 /** A bordered card that stacks SettingRows with hairlines between them. */
 export function Card(cx, id, rows) {
   const t = tokens(cx);
-  const card = div().id(id).flex().flex_col().px(SPACE[4]).py(SPACE[1]).rounded(RADIUS.card).border(1).border_color(t.border);
+  const card = div().id(id).flex().flex_col().px(SPACE[4]).py(SPACE[1]).rounded(RADIUS.card).border(1).border_color(t.border).bg(t.surface);
   rows.forEach((row, i) => {
     if (i > 0) row.border_t(1).border_color(t.border);
     card.child(row);

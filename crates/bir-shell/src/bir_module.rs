@@ -292,7 +292,49 @@ pub(crate) fn to_json(value: &HostValue) -> serde_json::Value {
     }
 }
 
+/// Hotkey, log retention, and the paths Settings shows. A database that is
+/// not open yet answers the defaults; this must not fail the boot read.
+fn computer_snapshot() -> (Option<String>, u32) {
+    let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) else {
+        return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
+    };
+    let Ok(db) = handle.lock() else {
+        return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
+    };
+    let hotkey = db
+        .get_setting("global_hotkey_key")
+        .ok()
+        .flatten()
+        .filter(|value| !value.trim().is_empty());
+    (hotkey, bir_core::log_files::retention_days(&db))
+}
+
+/// Chords the Settings picker offers. The same combo language as
+/// [`crate::hotkey::build_hotkey`]: explicit modifiers, not a bare key.
+fn hotkey_presets() -> Vec<HostValue> {
+    let (stored_prefix, label_prefix) = if cfg!(target_os = "macos") {
+        ("control+alt", "Ctrl+Option")
+    } else {
+        ("super+shift", "Super+Shift")
+    };
+    ["E", "B", "H", "F12"]
+        .into_iter()
+        .map(|key| {
+            HostValue::from(
+                HostObject::new()
+                    .field("value", format!("{stored_prefix}+{key}"))
+                    .field("label", format!("{label_prefix}+{key}")),
+            )
+        })
+        .collect()
+}
+
 fn system_info() -> HostResult {
+    let (hotkey, retention) = computer_snapshot();
+    let choices = bir_core::log_files::RETENTION_CHOICES
+        .iter()
+        .map(|days| HostValue::from(i64::from(*days)))
+        .collect::<Vec<_>>();
     Ok(HostObject::new()
         .field("os", std::env::consts::OS)
         .field("arch", std::env::consts::ARCH)
@@ -301,8 +343,61 @@ fn system_info() -> HostResult {
             "database_path",
             db::app_database_path().display().to_string(),
         )
+        .field(
+            "data_dir",
+            bir_core::platform::data_dir().display().to_string(),
+        )
+        .field(
+            "logs_dir",
+            bir_core::log_files::log_dir().display().to_string(),
+        )
+        .field(
+            "global_hotkey",
+            hotkey.map_or(HostValue::Null, HostValue::Str),
+        )
+        .field("hotkey_presets", HostValue::Array(hotkey_presets()))
+        .field("log_retention_days", i64::from(retention))
+        .field("log_retention_choices", HostValue::Array(choices))
         .field("runtime", "gpui-shell")
         .into())
+}
+
+/// Store the global show chord the tray already polls, or clear it.
+/// An unknown key is refused and the stored chord is left as it was.
+fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let combo = arguments.string(0)?.trim().to_string();
+    if !combo.is_empty() && crate::hotkey::build_hotkey(&combo).is_none() {
+        return Err(HostError::new(
+            "That shortcut is not one this computer can register. Use a letter, digit, or F-key with modifiers, like super+shift+E.",
+        ));
+    }
+    with_database(|db| {
+        db.set_setting("global_hotkey_key", &combo)
+            .map(|_| HostValue::Null)
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+}
+
+/// How many days of `ebirforms.*.log` to keep. Out of range is refused.
+fn set_log_retention(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let days = arguments.integer(0)?;
+    if !(i64::from(bir_core::log_files::MIN_RETENTION_DAYS)
+        ..=i64::from(bir_core::log_files::MAX_RETENTION_DAYS))
+        .contains(&days)
+    {
+        return Err(HostError::new(format!(
+            "Log retention must be between {} and {} days.",
+            bir_core::log_files::MIN_RETENTION_DAYS,
+            bir_core::log_files::MAX_RETENTION_DAYS
+        )));
+    }
+    with_database(|db| {
+        db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())
+            .map(|_| HostValue::Null)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), db);
+        Ok(HostValue::Null)
+    })
 }
 
 fn update_status() -> HostResult {
@@ -2147,6 +2242,8 @@ fn list_deadlines() -> HostResult {
 pub fn module() -> HostModule {
     let module = HostModule::new("bir")
         .function("system_info", |_| system_info())
+        .function("set_global_hotkey", set_global_hotkey)
+        .function("set_log_retention", set_log_retention)
         .function("update_status", |_| update_status())
         .function("install_update", |_| install_update())
         .function("dismiss_update", |_| dismiss_update())
@@ -2214,11 +2311,22 @@ pub fn module() -> HostModule {
 /// screen-form files append their own (`declarations` replaces, so `module`
 /// concatenates them).
 const BASE_DECLARATIONS: &str = r#"
+export interface HotkeyPreset {
+    value: string;
+    label: string;
+}
 export interface SystemInfo {
     os: string;
     arch: string;
     app_version: string;
     database_path: string;
+    data_dir: string;
+    logs_dir: string;
+    /** Null when no global show chord is stored. */
+    global_hotkey: string | null;
+    hotkey_presets: HotkeyPreset[];
+    log_retention_days: number;
+    log_retention_choices: number[];
     runtime: string;
 }
 export interface ProfileSummary {
@@ -2242,6 +2350,10 @@ export interface FormCatalogEntry {
     is_deprecated: boolean;
 }
 export function system_info(): SystemInfo;
+/** Empty string clears the chord. An unknown key is refused. */
+export function set_global_hotkey(combo: string): null;
+/** Days of daily log files to keep. Out of range is refused. */
+export function set_log_retention(days: number): null;
 
 export interface UpdateStatus {
     /** idle, checking, downloading, ready, failed, up_to_date, available, or installing. */
@@ -2651,6 +2763,61 @@ mod tests {
 
     fn s(value: &str) -> HostValue {
         HostValue::Str(value.into())
+    }
+
+    #[test]
+    fn global_hotkey_round_trip_rejects_an_unknown_key() {
+        setup();
+        let info = to_json(&system_info().unwrap());
+        assert!(info["global_hotkey"].is_null());
+        assert!(
+            info["logs_dir"].as_str().unwrap().ends_with("logs"),
+            "{}",
+            info["logs_dir"]
+        );
+        // Linux is ~/.taxman-ebir. macOS is the App Group container, Windows
+        // is %LOCALAPPDATA%\Taxman\eBIRForms. The field must be that path.
+        assert_eq!(
+            info["data_dir"].as_str().unwrap(),
+            bir_core::platform::data_dir().display().to_string()
+        );
+        assert!(info["hotkey_presets"].as_array().unwrap().len() >= 4);
+
+        set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
+        assert_eq!(
+            to_json(&system_info().unwrap())["global_hotkey"],
+            "control+alt+E"
+        );
+
+        let refused = set_global_hotkey(&args(vec![s("control+notakey")])).unwrap_err();
+        assert!(refused.message().contains("not one"));
+        assert_eq!(
+            to_json(&system_info().unwrap())["global_hotkey"],
+            "control+alt+E",
+            "a refused chord leaves the stored one"
+        );
+
+        set_global_hotkey(&args(vec![s("  ")])).unwrap();
+        assert!(to_json(&system_info().unwrap())["global_hotkey"].is_null());
+    }
+
+    #[test]
+    fn log_retention_round_trip_refuses_out_of_range() {
+        setup();
+        set_log_retention(&args(vec![30_i64.into()])).unwrap();
+        assert_eq!(to_json(&system_info().unwrap())["log_retention_days"], 30);
+
+        let refused = set_log_retention(&args(vec![0_i64.into()])).unwrap_err();
+        assert!(refused.message().contains("between"));
+        assert_eq!(
+            to_json(&system_info().unwrap())["log_retention_days"],
+            30,
+            "a refused value leaves the stored one"
+        );
+
+        let refused = set_log_retention(&args(vec![400_i64.into()])).unwrap_err();
+        assert!(refused.message().contains("between"));
+        assert_eq!(to_json(&system_info().unwrap())["log_retention_days"], 30);
     }
 
     fn add_branch() {

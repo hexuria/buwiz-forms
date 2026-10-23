@@ -1035,7 +1035,7 @@ function profileTab(cx, app, width) {
     ),
     section("inbox", "Confirmation inbox", inboxMeta, inboxBody(cx, app, inner), false),
   ]);
-  const out = div().flex().flex_col().child(group).child(exportCard(cx, app, t));
+  const out = div().flex().flex_col().child(group);
   if (ui.canRemove()) out.child(removeCard(cx, app, t));
   return out;
 }
@@ -1100,11 +1100,6 @@ function inboxBody(cx, app, inner) {
       }),
     });
   }
-  cells.push({
-    el: Field(cx, "BIR receipt tracking", {
-      input: Switch(cx, "tp-inbox-tracking", s.tracking_enabled, (v, cx) => ui.inboxToggleTracking(v, cx), "Automated BIR receipt tracking"),
-    }),
-  });
   if (s.last_check_at) {
     cells.push({
       el: Field(cx, "Last check", {
@@ -1140,19 +1135,6 @@ function inboxBody(cx, app, inner) {
   }
 
   const actions = div().flex().flex_row().flex_wrap().items_center().gap(SPACE[2]).mt(SPACE[3]);
-  if (method === "GoogleOAuth") {
-    actions.child(
-      AppButton(cx, "tp-inbox-connect", s.oauth_connected ? "Re-authorize" : "Connect Google account", {
-        variant: "primary",
-        size: "sm",
-        icon: "key-round",
-        onClick: (_e, cx) => ui.inboxConnect(cx),
-      }),
-    );
-    if (s.oauth_connected) {
-      actions.child(AppButton(cx, "tp-inbox-disconnect", "Disconnect", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.inboxDisconnect(cx) }));
-    }
-  }
   if (editing) {
     actions.child(AppButton(cx, "tp-inbox-cancel", "Cancel", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.cancelInboxEdit(cx) }));
     if (method === "AppPassword") {
@@ -1176,6 +1158,16 @@ function inboxBody(cx, app, inner) {
     }),
   );
   body.child(actions);
+  body.child(
+    Text(
+      cx,
+      "meta",
+      "Connect, disconnect, and receipt tracking for this inbox are in Settings, under Account.",
+      "fg3",
+    )
+      .mt(SPACE[2])
+      .whitespace_normal(),
+  );
 
   if (ui.inboxMsg) {
     body.child(
@@ -1207,30 +1199,25 @@ function inboxBody(cx, app, inner) {
  * to the host's export_profile verb; the cells are cleared by exportProfile
  * after every attempt, and the save dialog itself is the host's.
  */
-function exportCard(cx, app, tp) {
+/** Profile export, drawn in Settings › Import / Export. The save dialog is the host's. */
+export function profileExportCard(cx, app, tp) {
   const ui = app.taxpayerUi;
   const hasPin = Boolean(app.taxpayerCreds(tp.tin_root).has_pin);
-  return div()
-    .flex()
-    .flex_col()
-    .child(SectionTitle(cx, "Export"))
-    .child(
-      Card(cx, "tp-export", [
-        SettingRow(
-          cx,
-          "tp-export",
-          "Export this profile",
-          hasPin ? "The archive leaves out credentials; the profile PIN gates saving it" : "Saves a credential-free archive of every branch and return",
-          div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(SPACE[2])
-            .when(hasPin, (el) => el.child(PinCells(cx, ui.exportOtp, "tp-export-pin")))
-            .child(AppButton(cx, "tp-export-btn", "Export", { size: "sm", icon: "download", onClick: (_e, cx) => ui.exportProfile(cx) })),
-        ),
-      ]),
-    );
+  return Card(cx, "tp-export", [
+    SettingRow(
+      cx,
+      "tp-export",
+      "Export this profile",
+      hasPin ? "The archive leaves out credentials; the profile PIN gates saving it" : "Saves a credential-free archive of every branch and return",
+      div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(SPACE[2])
+        .when(hasPin, (el) => el.child(PinCells(cx, ui.exportOtp, "tp-export-pin")))
+        .child(AppButton(cx, "tp-export-btn", "Export", { size: "sm", icon: "download", onClick: (_e, cx) => ui.exportProfile(cx) })),
+    ),
+  ]);
 }
 
 /**
