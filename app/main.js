@@ -141,6 +141,11 @@ class BirApp extends View {
     // polling picks them up as a toast plus an unread dot on the bell.
     cx.timer.every(30000, (cx) => this.pollEvents(cx));
 
+    // The agent host queues screen changes from the GPUI timer. This poll
+    // applies them in order so a fill shows up in the open form. A build
+    // without the agent feature answers null.
+    cx.timer.every(50, (cx) => this.applyAgent(cx));
+
     // The host checks for a release on its own thread. Polling is how the
     // prompt appears: the host does not push into the script.
     this.updateStatus = null;
@@ -350,6 +355,68 @@ class BirApp extends View {
       return;
     }
     if (key === "chgdone") return sc.done(cx);
+  }
+
+  /**
+   * Apply one command the agent host queued (`bir.agent_take`). One per tick
+   * so `open` starts loading before `choose` paints the filled boxes.
+   */
+  applyAgent(cx) {
+    let raw = null;
+    try {
+      raw = this.store.call("agent_take");
+    } catch (_e) {
+      return;
+    }
+    if (raw == null || raw === "") return;
+    let cmd;
+    try {
+      cmd = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch (_e) {
+      return;
+    }
+    if (!cmd || typeof cmd !== "object") return;
+    if (cmd.op === "refresh") {
+      this.store.bump();
+      if (cmd.tin_root) this.selectTaxpayer(String(cmd.tin_root), cx, { quiet: true });
+      cx.notify();
+    } else if (cmd.op === "go" && cmd.view) {
+      this.go(String(cmd.view), cx);
+    } else if (cmd.op === "open" && cmd.tin && cmd.code) {
+      this.openForm(
+        {
+          tin: String(cmd.tin),
+          code: String(cmd.code),
+          year: Number(cmd.year),
+          period: Number(cmd.period || 0),
+        },
+        cx,
+      );
+    } else if (cmd.op === "choose" && cmd.edits) {
+      this.afterFormLoads(cx, (cx) => {
+        const ui = this.formUi;
+        const s = ui && ui.state;
+        if (!s) return;
+        // Row redraws follow `s.values`, not the input widget. Write both,
+        // let the page commit the draft, then write again: a fill the page
+        // accepts replaces `s.values`, and a box it leaves unchanged still
+        // has to show what the agent wrote.
+        const edits = {};
+        for (const [k, v] of Object.entries(cmd.edits)) edits[k] = String(v);
+        const paint = () => {
+          for (const [k, v] of Object.entries(edits)) {
+            s.values[k] = v;
+            const input = s.inputs && s.inputs.get(k);
+            if (input && input.value() !== v) input.set_value(v);
+          }
+          ui.refreshRows();
+          ui.notify(cx);
+        };
+        paint();
+        ui.choose(edits, cx);
+        paint();
+      });
+    }
   }
 
   /**

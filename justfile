@@ -97,8 +97,11 @@ shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features gpui-fast
+    cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features agent
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
+    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --all-targets -- -D warnings
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml
+    cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
 
 # Run code formatting, linting, and type checking
 [unix]

@@ -2238,6 +2238,21 @@ fn list_deadlines() -> HostResult {
     })
 }
 
+/// Next command the agent host queued for the script, or null.
+///
+/// The TCP thread never touches the window. It posts work; the GPUI timer
+/// runs the host op and pushes a command here; the script polls this.
+fn agent_take() -> HostResult {
+    #[cfg(feature = "agent")]
+    let command = crate::agent::pop_command();
+    #[cfg(not(feature = "agent"))]
+    let command: Option<serde_json::Value> = None;
+    match command {
+        Some(value) => Ok(HostValue::Str(value.to_string())),
+        None => Ok(HostValue::Null),
+    }
+}
+
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
     let module = HostModule::new("bir")
@@ -2295,7 +2310,8 @@ pub fn module() -> HostModule {
         .function("archive_background_job", archive_background_job)
         .function("purge_archived_jobs", |_| purge_archived_jobs())
         .function("job_log_tail", |_| job_log_tail())
-        .function("record_screen_log", record_screen_log);
+        .function("record_screen_log", record_screen_log)
+        .function("agent_take", |_| agent_take());
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
@@ -2517,6 +2533,8 @@ export interface JobLogTail {
 export function job_log_tail(): JobLogTail;
 /** A screen failure (`error` / `warn` / `info` / `debug`) for the Logs tab and the daily log file. Secrets are redacted. */
 export function record_screen_log(level: string, message: string): null;
+/** Next UI command from the gpui-agent host, or null when none is waiting. */
+export function agent_take(): string | null;
 "#;
 
 #[cfg(test)]
