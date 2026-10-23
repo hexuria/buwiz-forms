@@ -288,7 +288,7 @@ fn restore_saved_session() -> bool {
         Err(CloudError::InvalidGrant) => RefreshOutcome::Revoked,
         Err(_) => RefreshOutcome::Offline,
     };
-    match cloud_account::gate_after_refresh(previous_refresh, now, outcome) {
+    match cloud_account::gate_after_refresh(outcome) {
         GateDecision::Open { .. } => true,
         GateDecision::Closed {
             clear_secrets: true,

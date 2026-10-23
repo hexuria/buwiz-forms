@@ -17,10 +17,6 @@ pub const DEFAULT_SERVER_URL: &str = "https://api.buwiz.com";
 pub const DESKTOP_CLIENT_ID: &str = "buwiz-desktop";
 pub const ENV_SERVER_URL: &str = "BUWIZ_SERVER_URL";
 
-/// How long a saved refresh may keep filing open when the server cannot be
-/// reached. One constant so the grace cannot drift between the shell and tests.
-pub const OFFLINE_GRACE_SECONDS: i64 = 7 * 24 * 60 * 60;
-
 const USER_AGENT: &str = "buwiz-desktop";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,7 +220,8 @@ pub struct StoredAccount {
     #[serde(default)]
     pub offline: bool,
     /// Unix time of the last refresh the server accepted. `0` means this
-    /// install has not recorded one, so an outage does not open the app.
+    /// install has not recorded one. An unreachable server still opens the
+    /// app; only sign-out or an explicit rejection closes it.
     #[serde(default)]
     pub last_refresh_unix: i64,
 }
@@ -282,30 +279,17 @@ impl StoredAccount {
     }
 }
 
-/// A saved refresh is inside the grace window, including the last second.
-pub fn offline_grace_allows(last_refresh_unix: i64, now_unix: i64) -> bool {
-    last_refresh_unix > 0 && now_unix.saturating_sub(last_refresh_unix) <= OFFLINE_GRACE_SECONDS
-}
-
-pub fn gate_after_refresh(
-    last_refresh_unix: i64,
-    now_unix: i64,
-    outcome: RefreshOutcome,
-) -> GateDecision {
+/// What to do with a saved session after one refresh attempt.
+///
+/// An unreachable server stays open. The gate returns only when the person
+/// signs out, or when the server is reachable and rejects the token.
+pub fn gate_after_refresh(outcome: RefreshOutcome) -> GateDecision {
     match outcome {
         RefreshOutcome::Online => GateDecision::Open { offline: false },
         RefreshOutcome::Revoked => GateDecision::Closed {
             clear_secrets: true,
         },
-        RefreshOutcome::Offline => {
-            if offline_grace_allows(last_refresh_unix, now_unix) {
-                GateDecision::Open { offline: true }
-            } else {
-                GateDecision::Closed {
-                    clear_secrets: false,
-                }
-            }
-        }
+        RefreshOutcome::Offline => GateDecision::Open { offline: true },
     }
 }
 
@@ -1116,53 +1100,17 @@ mod tests {
     }
 
     #[test]
-    fn offline_grace_is_seven_days() {
-        let day = 24 * 60 * 60;
-        assert_eq!(OFFLINE_GRACE_SECONDS, 7 * day);
-        let start = 1_700_000_000;
-        assert!(offline_grace_allows(start, start));
-        assert!(offline_grace_allows(start, start + OFFLINE_GRACE_SECONDS));
-        assert!(!offline_grace_allows(
-            start,
-            start + OFFLINE_GRACE_SECONDS + 1
-        ));
-        assert!(!offline_grace_allows(0, start));
-        assert!(!offline_grace_allows(0, 0));
-    }
-
-    #[test]
-    fn gate_opens_online_keeps_a_grace_outage_and_drops_a_revoked_token() {
-        let start = 1_700_000_000;
+    fn unreachable_server_stays_unlocked_and_a_revoked_token_closes() {
         assert_eq!(
-            gate_after_refresh(start, start + 10, RefreshOutcome::Online),
+            gate_after_refresh(RefreshOutcome::Online),
             GateDecision::Open { offline: false }
         );
         assert_eq!(
-            gate_after_refresh(
-                start,
-                start + OFFLINE_GRACE_SECONDS,
-                RefreshOutcome::Offline
-            ),
+            gate_after_refresh(RefreshOutcome::Offline),
             GateDecision::Open { offline: true }
         );
         assert_eq!(
-            gate_after_refresh(
-                start,
-                start + OFFLINE_GRACE_SECONDS + 1,
-                RefreshOutcome::Offline
-            ),
-            GateDecision::Closed {
-                clear_secrets: false
-            }
-        );
-        assert_eq!(
-            gate_after_refresh(0, start, RefreshOutcome::Offline),
-            GateDecision::Closed {
-                clear_secrets: false
-            }
-        );
-        assert_eq!(
-            gate_after_refresh(start, start + 10, RefreshOutcome::Revoked),
+            gate_after_refresh(RefreshOutcome::Revoked),
             GateDecision::Closed {
                 clear_secrets: true
             }

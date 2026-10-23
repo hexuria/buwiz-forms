@@ -50,4 +50,7 @@ The refresh token is not shown in Settings and is not written to the page.
 ## Offline
 
 Local taxpayer setup, drafts, and dry-run filing do not call these functions.
-A failed refresh leaves the last session in place and marks it offline.
+After the first successful sign-in, an unreachable server leaves the session
+in place and the app stays open. The gate returns only when the person signs
+out, or when the server is reachable and says the refresh token is revoked
+or invalid.
