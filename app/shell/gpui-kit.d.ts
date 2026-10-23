@@ -1436,7 +1436,7 @@ declare module "gpui-kit" {
     /** Sets the width. */
     w<Self extends Element>(this: Self, value: Length): Self;
 
-    // The 3146 no-argument style methods, generated from GPUI's reflection
+    // The 3148 no-argument style methods, generated from GPUI's reflection
     // table. A name here is a name the runtime dispatches, and the
     // documentation is GPUI's own.
     /**
@@ -2917,6 +2917,10 @@ declare module "gpui-kit" {
      * [Docs](https://tailwindcss.com/docs/cursor)
      */
     cursor_w_resize<Self extends Element>(this: Self): Self;
+    /** Draws a debug border around this element. */
+    debug<Self extends Element>(this: Self): Self;
+    /** Draws a debug border on all conforming elements below this element. */
+    debug_below<Self extends Element>(this: Self): Self;
     debug_blue<Self extends Element>(this: Self): Self;
     debug_green<Self extends Element>(this: Self): Self;
     debug_pink<Self extends Element>(this: Self): Self;
@@ -27705,11 +27709,22 @@ interface ImportMeta {
 
 declare module "bir" {
 
+  export interface HotkeyPreset {
+      value: string;
+      label: string;
+  }
   export interface SystemInfo {
       os: string;
       arch: string;
       app_version: string;
       database_path: string;
+      data_dir: string;
+      logs_dir: string;
+      /** Null when no global show chord is stored. */
+      global_hotkey: string | null;
+      hotkey_presets: HotkeyPreset[];
+      log_retention_days: number;
+      log_retention_choices: number[];
       runtime: string;
   }
   export interface ProfileSummary {
@@ -27733,6 +27748,32 @@ declare module "bir" {
       is_deprecated: boolean;
   }
   export function system_info(): SystemInfo;
+  /** Empty string clears the chord. An unknown key is refused. */
+  export function set_global_hotkey(combo: string): null;
+  /** Days of daily log files to keep. Out of range is refused. */
+  export function set_log_retention(days: number): null;
+
+  export interface UpdateStatus {
+      /** idle, checking, downloading, ready, failed, up_to_date, available, or installing. */
+      phase: string;
+      /** The release that was found, or null. */
+      version: string | null;
+      /** A sentence for a failure or "already current", or null. */
+      message: string | null;
+      /** Whether a newer release downloads without asking. */
+      auto_download: boolean;
+      /** The version compiled into this binary. */
+      current_version: string;
+  }
+  export function update_status(): UpdateStatus;
+  /** Replace this install with the verified download and relaunch. */
+  export function install_update(): null;
+  /** Hide the update prompt until the next check. */
+  export function dismiss_update(): null;
+  /** Look for a release now, and download it even when auto-download is off. */
+  export function check_for_updates(): null;
+  /** `auto_update_download`. Off is `0`; anything else leaves downloading on. */
+  export function set_auto_update_download(enabled: boolean): null;
   export function list_profiles(): ProfileSummary[];
   export function forms_catalog(): FormCatalogEntry[];
   export function get_setting(key: string): string | null;
@@ -28192,6 +28233,8 @@ declare module "bir" {
   export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
   /** Print preview of a saved draft (opens the filled official sheet in the in-app preview window). */
   export function screen_form_print(form_code: string, draft: object): { path: string };
+  /** Print preview of a Form library sample as the page holds it, staged edits included and its held boxes blank. Nothing is saved and no period is needed; the preview then follows `screen_form_preview_sync`. */
+  export function screen_form_print_sample(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): { path: string };
   /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
   export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
   /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
