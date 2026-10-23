@@ -8,6 +8,7 @@
 //! See `docs/plans/gpui-shell-migration.md` (tracking issue #135) for the
 //! slice plan.
 
+mod account_gate;
 mod app_menu;
 mod auth_limiter;
 mod bir_module;
