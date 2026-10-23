@@ -194,7 +194,7 @@ pkgdesc='Philippine BIR tax return filing application'
 arch=('x86_64')
 url='https://github.com/hexuria/buwiz-forms'
 license=('MIT')
-depends=('gtk3' 'webkit2gtk-4.1' 'vulkan-icd-loader' 'libxkbcommon' 'libxkbcommon-x11' 'wayland' 'fontconfig' 'freetype2' 'dbus' 'noto-fonts')
+depends=('gtk3' 'webkit2gtk-4.1' 'vulkan-icd-loader' 'libxkbcommon' 'libxkbcommon-x11' 'wayland' 'fontconfig' 'freetype2' 'dbus' 'noto-fonts' 'libayatana-appindicator')
 options=('!strip' '!debug')
 source=('${archive_name}')
 sha256sums=('${archive_sha256}')
@@ -233,9 +233,12 @@ PKGBUILD
         -v "$arch_build:/work" archlinux:base-devel \
         bash -euc '
             trap "chown -R $HOST_UID:$HOST_GID /work" EXIT
+            # makepkg --syncdeps runs as builder and sudo has no password here.
+            # Every depends() entry has to be installed as root first, or
+            # pacman stops with "a terminal is required to read the password".
             pacman -Syu --noconfirm --needed base-devel gtk3 webkit2gtk-4.1 \
                 vulkan-icd-loader libxkbcommon libxkbcommon-x11 wayland \
-                fontconfig freetype2 noto-fonts
+                fontconfig freetype2 noto-fonts dbus libayatana-appindicator
             useradd --create-home --uid 1000 builder
             chown -R builder:builder /work
             su builder -c "cd /work && makepkg --syncdeps --noconfirm --clean --cleanbuild"
