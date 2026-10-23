@@ -1,13 +1,13 @@
 //! Linux client-side window decorations.
 //!
-//! The shell asks gpui for [`WindowDecorations::Client`]. gpui forwards that
-//! to xdg-decoration on Wayland and to `_MOTIF_WM_HINTS` plus
+//! The shell asks gpui for client decorations. gpui forwards that to
+//! xdg-decoration on Wayland and to `_MOTIF_WM_HINTS` plus
 //! `_GTK_FRAME_EXTENTS` on X11, then reports what the compositor actually
-//! granted through [`Window::window_decorations`].
+//! granted through `Window::window_decorations`.
 //!
 //! Linux does not turn `window_control_area` hitboxes into actions: both the
 //! Wayland and X11 backends leave `on_hit_test_window_control` empty. Move,
-//! resize, minimize, and zoom are explicit calls. [`window_border`] draws the
+//! resize, minimize, and zoom are explicit calls. `window_border` draws the
 //! resize bands and sets the client inset the compositor uses to keep those
 //! bands outside the window geometry. Caption clicks call `minimize_window`
 //! and `zoom_window` (`zoom_window` toggles maximized and restored).
@@ -17,11 +17,16 @@
 //! The window manager's title bar is the only one, and this module draws no
 //! second set of buttons.
 
+use gpui_kit::{Decorations, WindowControls};
+
+#[cfg(target_os = "linux")]
 use gpui_base::InteractiveElementExt as _;
-use gpui_component::{Icon, IconName, Sizable as _};
+#[cfg(target_os = "linux")]
+use gpui_component::{Icon, Sizable as _};
+#[cfg(target_os = "linux")]
 use gpui_kit::{
-    App, Decorations, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement, Styled,
-    Window, WindowControlArea, WindowControls, div, prelude::*, px,
+    App, Hsla, InteractiveElement, IntoElement, MouseButton, ParentElement, Styled, Window,
+    WindowControlArea, div, prelude::*, px,
 };
 
 /// Width of one caption button. Matches the shell chrome's `captionButton`.
@@ -69,15 +74,31 @@ pub(crate) fn zoom_button_id(maximized: bool) -> &'static str {
     }
 }
 
-fn zoom_icon(maximized: bool) -> IconName {
-    if maximized {
-        IconName::WindowRestore
-    } else {
-        IconName::WindowMaximize
-    }
+// Drawing, dragging, and the client border are Linux-only. The module itself
+// is also built for tests on other platforms so the decoration policy can be
+// checked there; these items have no callers outside Linux, so they stay out
+// of those builds instead of being allowed as dead code.
+/// Shell caption glyphs. These are the same stroke icons as the rest of the
+/// chrome (`app/icons`). They are embedded so the buttons do not depend on the
+/// script asset directory, which does not contain the component icon catalog.
+#[cfg(target_os = "linux")]
+const MINIMIZE_SVG: &[u8] = include_bytes!("../../../app/icons/minus.svg");
+#[cfg(target_os = "linux")]
+const MAXIMIZE_SVG: &[u8] = include_bytes!("../../../app/icons/square.svg");
+#[cfg(target_os = "linux")]
+const CLOSE_SVG: &[u8] = include_bytes!("../../../app/icons/x.svg");
+/// Two overlapping squares: the restore glyph. The chrome has no separate file
+/// for this one.
+#[cfg(target_os = "linux")]
+const RESTORE_SVG: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="7" y="7" rx="2"/><path d="M17 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg>"#;
+
+#[cfg(target_os = "linux")]
+fn zoom_icon(maximized: bool) -> &'static [u8] {
+    if maximized { RESTORE_SVG } else { MAXIMIZE_SVG }
 }
 
 /// Colors for the caption buttons. Close uses the destructive pair on hover.
+#[cfg(target_os = "linux")]
 #[derive(Clone, Copy)]
 pub(crate) struct CaptionColors {
     pub foreground: Hsla,
@@ -90,6 +111,7 @@ pub(crate) struct CaptionColors {
 ///
 /// `on_close` is the main window's hide-to-tray, or `Window::remove_window`
 /// for an auxiliary window such as print preview.
+#[cfg(target_os = "linux")]
 pub(crate) fn caption_buttons(
     window: &Window,
     colors: CaptionColors,
@@ -108,7 +130,7 @@ pub(crate) fn caption_buttons(
     if policy.minimize {
         row = row.child(caption_button(
             "caption-minimize",
-            IconName::WindowMinimize,
+            MINIMIZE_SVG,
             false,
             colors,
             |window, _| window.minimize_window(),
@@ -127,7 +149,7 @@ pub(crate) fn caption_buttons(
     if policy.close {
         row = row.child(caption_button(
             "caption-close",
-            IconName::WindowClose,
+            CLOSE_SVG,
             true,
             colors,
             on_close,
@@ -136,9 +158,10 @@ pub(crate) fn caption_buttons(
     row
 }
 
+#[cfg(target_os = "linux")]
 fn caption_button(
     id: &'static str,
-    icon: IconName,
+    icon: &'static [u8],
     close: bool,
     colors: CaptionColors,
     on_click: impl Fn(&mut Window, &mut App) + 'static,
@@ -177,9 +200,10 @@ fn caption_button(
             cx.stop_propagation();
             on_click(window, cx);
         })
-        .child(Icon::new(icon).small().text_color(foreground))
+        .child(Icon::default().data(icon).small().text_color(foreground))
 }
 
+#[cfg(target_os = "linux")]
 struct DragLatch {
     armed: bool,
 }
@@ -189,6 +213,7 @@ struct DragLatch {
 /// A right-click opens the compositor's window menu when it offered one.
 /// Server-side decorations still accept the drag: the window manager's title
 /// bar is above this row, and moving from the gap does not add a second bar.
+#[cfg(target_os = "linux")]
 pub(crate) fn drag_spacer(window: &mut Window, cx: &mut App) -> impl IntoElement {
     with_drag(
         "menu-drag-region",
@@ -199,6 +224,7 @@ pub(crate) fn drag_spacer(window: &mut Window, cx: &mut App) -> impl IntoElement
 }
 
 /// The same drag gesture on a bar that already has an id, such as print preview.
+#[cfg(target_os = "linux")]
 pub(crate) fn arm_drag(
     key: &'static str,
     el: gpui_kit::Stateful<gpui_kit::Div>,
@@ -208,6 +234,7 @@ pub(crate) fn arm_drag(
     with_drag(key, el, window, cx)
 }
 
+#[cfg(target_os = "linux")]
 fn with_drag(
     key: &'static str,
     el: gpui_kit::Stateful<gpui_kit::Div>,
@@ -257,12 +284,14 @@ fn with_drag(
 
 /// Resize edges and the shadow inset. Under server-side decorations
 /// `window_border` renders the child unchanged.
+#[cfg(target_os = "linux")]
 pub(crate) fn wrap_client_border(child: impl IntoElement) -> impl IntoElement {
     gpui_component::window_border().child(child)
 }
 
 /// Re-render `view` when the compositor changes decoration mode, so caption
 /// buttons disappear instead of doubling a server title bar.
+#[cfg(target_os = "linux")]
 pub(crate) fn watch_decorations<T: 'static>(
     view: &gpui_kit::Entity<T>,
     window: &mut Window,
