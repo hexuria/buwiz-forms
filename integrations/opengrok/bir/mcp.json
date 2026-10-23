@@ -3,10 +3,7 @@
   "mcpServers": {
     "bir-mcp": {
       "type": "streamable-http",
-      "url": "http://127.0.0.1:8765/mcp",
-      "headers": {
-        "Authorization": "Bearer REPLACE_WITH_BIR_MCP_HTTP_TOKEN"
-      }
+      "url": "http://127.0.0.1:8765/mcp"
     }
   }
 }

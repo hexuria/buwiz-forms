@@ -30,19 +30,26 @@
 //!   the dispatcher's JSON-RPC method-not-found error, which rmcp classifies as
 //!   a legacy server and falls back to `initialize` (`service/client.rs:801-820`).
 //!
-//! Guards, in order: path, `Origin` (DNS-rebinding guard from the MCP spec:
-//! present and not loopback is 403), bearer token (401), method, content type
-//! (`application/json` only, which also keeps a browser's no-preflight
-//! "simple" POST out), body size. The token is never logged.
+//! Guards, in order: protected-resource metadata (no token), path, `Origin`
+//! (DNS-rebinding guard from the MCP spec: present and not loopback is 403),
+//! bearer token (401 with `WWW-Authenticate: Bearer resource_metadata=…`),
+//! method, content type (`application/json` only, which also keeps a browser's
+//! no-preflight "simple" POST out), body size. The token is never logged.
+//!
+//! The bearer token is an OAuth access token from buwiz-server, checked by
+//! [`crate::oauth::Introspection`]. It is not a shared secret.
+use crate::license::{License, UNAUTHENTICATED};
+use crate::oauth::{self, AdmitError, Introspection, Resource};
 use crate::server::{BirHost, Server};
 use serde_json::Value;
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 
-/// Environment variable holding the bearer token `--http` mode requires.
-pub const TOKEN_ENV: &str = "BIR_MCP_HTTP_TOKEN";
 /// The one path MCP is served on.
 pub const MCP_PATH: &str = "/mcp";
+/// RFC 9728 protected-resource metadata, origin form and path-appended form.
+pub const METADATA_PATH: &str = "/.well-known/oauth-protected-resource";
+pub const METADATA_MCP_PATH: &str = "/.well-known/oauth-protected-resource/mcp";
 /// Largest request body accepted. A tool call carries a handful of boxes.
 pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
@@ -59,16 +66,6 @@ pub fn loopback_addr(addr: &str) -> Result<SocketAddr, String> {
         ));
     }
     Ok(parsed)
-}
-
-/// The bearer token from [`TOKEN_ENV`]; unset or blank is an error.
-pub fn token_from_env() -> Result<String, String> {
-    match std::env::var(TOKEN_ENV) {
-        Ok(token) if !token.trim().is_empty() => Ok(token),
-        _ => Err(format!(
-            "--http requires {TOKEN_ENV} to be set to a non-empty bearer token"
-        )),
-    }
 }
 
 /// Bind the listener. Checks the address is loopback first.
@@ -117,14 +114,19 @@ impl Reply {
 }
 
 /// Answer one HTTP request. `headers` are `(name, value)` pairs as received.
+///
+/// A failed check leaves the server's license closed, so a later tool call
+/// cannot reuse a previous request's grant. Requests are handled one at a time.
 pub fn respond<H: BirHost>(
     server: &mut Server<H>,
-    token: &str,
+    auth: &Introspection,
+    resource: &Resource,
     method: &str,
     url: &str,
     headers: &[(String, String)],
     body: &[u8],
 ) -> Reply {
+    server.set_license(License::settled(Err(UNAUTHENTICATED.to_string())));
     let header = |name: &str| {
         headers
             .iter()
@@ -133,6 +135,14 @@ pub fn respond<H: BirHost>(
     };
 
     let path = url.split(['?', '#']).next().unwrap_or_default();
+    if path == METADATA_PATH || path == METADATA_MCP_PATH {
+        if method != "GET" {
+            return Reply::text(405, "method not allowed").with_header("Allow", "GET");
+        }
+        return Reply::json(200, &resource.document())
+            .with_header("Access-Control-Allow-Origin", "*")
+            .with_header("Cache-Control", "no-store");
+    }
     if path != MCP_PATH {
         return Reply::text(404, "not found: MCP is served at /mcp");
     }
@@ -141,10 +151,30 @@ pub fn respond<H: BirHost>(
     {
         return Reply::text(403, "forbidden: Origin is not a loopback origin");
     }
-    if !bearer_matches(header("authorization"), token) {
-        return Reply::text(401, "unauthorized: a valid bearer token is required")
-            .with_header("WWW-Authenticate", "Bearer realm=\"bir-mcp\"");
-    }
+    let presented = bearer_token(header("authorization"));
+    let profiles = match presented.as_deref() {
+        None => {
+            return unauthorized(resource, None, None);
+        }
+        Some(token) => match auth.admit(token, &resource.mcp) {
+            Ok(profiles) => profiles,
+            Err(AdmitError::Invalid) => {
+                return unauthorized(resource, Some("invalid_token"), None);
+            }
+            Err(AdmitError::Audience) => {
+                return unauthorized(
+                    resource,
+                    Some("invalid_token"),
+                    Some("audience does not match this resource"),
+                );
+            }
+            Err(AdmitError::Unavailable) => {
+                return Reply::text(503, "the authorization server could not be reached")
+                    .with_header("Cache-Control", "no-store");
+            }
+        },
+    };
+    server.set_license(License::settled(oauth::entitlement(&profiles)));
     if method != "POST" {
         // GET: no standalone SSE stream. DELETE: no sessions. See the module note.
         return Reply::text(405, "method not allowed").with_header("Allow", "POST");
@@ -192,9 +222,24 @@ pub fn respond<H: BirHost>(
     }
 }
 
+fn unauthorized(resource: &Resource, error: Option<&str>, description: Option<&str>) -> Reply {
+    Reply::text(
+        401,
+        "unauthorized: a bearer token for this resource is required",
+    )
+    .with_header("WWW-Authenticate", &resource.challenge(error, description))
+    .with_header("Access-Control-Allow-Origin", "*")
+    .with_header("Cache-Control", "no-store")
+}
+
 /// Serve until the listener is unblocked or fails. Requests are handled one
 /// at a time: the host drives one BIR form anyway.
-pub fn serve_http<H: BirHost>(server: &mut Server<H>, listener: &tiny_http::Server, token: &str) {
+pub fn serve_http<H: BirHost>(
+    server: &mut Server<H>,
+    listener: &tiny_http::Server,
+    auth: &Introspection,
+    resource: &Resource,
+) {
     for mut request in listener.incoming_requests() {
         let method = request.method().as_str().to_ascii_uppercase();
         let url = request.url().to_string();
@@ -214,7 +259,7 @@ pub fn serve_http<H: BirHost>(server: &mut Server<H>, listener: &tiny_http::Serv
             .take(MAX_BODY_BYTES as u64 + 1)
             .read_to_end(&mut body);
         let reply = match read {
-            Ok(_) => respond(server, token, &method, &url, &headers, &body),
+            Ok(_) => respond(server, auth, resource, &method, &url, &headers, &body),
             Err(_) => Reply::text(400, "bad request: body could not be read"),
         };
         let mut response =
@@ -236,20 +281,16 @@ fn is_client_response(message: &Value) -> bool {
     })
 }
 
-/// `Authorization: Bearer <token>`, compared in constant time.
-fn bearer_matches(header: Option<&str>, expected: &str) -> bool {
-    let Some(value) = header else {
-        return false;
-    };
-    let value = value.trim();
-    let Some((scheme, provided)) = value.split_once(' ') else {
-        return false;
-    };
-    scheme.eq_ignore_ascii_case("bearer")
-        && constant_time_eq(provided.trim().as_bytes(), expected.as_bytes())
+/// The token of an `Authorization: Bearer <token>` value.
+fn bearer_token(header: Option<&str>) -> Option<String> {
+    let value = header?.trim();
+    let (scheme, provided) = value.split_once(' ')?;
+    let provided = provided.trim();
+    (scheme.eq_ignore_ascii_case("bearer") && !provided.is_empty()).then(|| provided.to_string())
 }
 
 /// Time depends only on `expected`'s length, never on where a guess differs.
+#[cfg(test)]
 fn constant_time_eq(provided: &[u8], expected: &[u8]) -> bool {
     let mut diff = provided.len() ^ expected.len();
     for (i, byte) in expected.iter().enumerate() {
@@ -291,6 +332,7 @@ fn is_loopback_origin(origin: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::oauth::{self, Introspection};
     use crate::server::AppRecord;
     use crate::tools::HostCall;
     use serde_json::json;
@@ -299,6 +341,8 @@ mod tests {
     use std::sync::Arc;
 
     const TOKEN: &str = "test-token-not-a-secret";
+    const OTHER_AUDIENCE: &str = "other-audience-token";
+    const EMPTY_PASS: &str = "empty-pass-token";
 
     /// Stands in for BIR. Never reaches a real app; no app is running.
     struct MockHost;
@@ -327,25 +371,72 @@ mod tests {
     }
 
     /// A listener on an ephemeral loopback port, served on a thread.
+    /// The authorization server is a stub on another loopback port.
     struct Running {
         listener: Arc<tiny_http::Server>,
+        auth_listener: Arc<tiny_http::Server>,
         addr: SocketAddr,
+        resource: oauth::Resource,
         thread: Option<std::thread::JoinHandle<()>>,
+        auth_thread: Option<std::thread::JoinHandle<()>>,
     }
 
     impl Running {
         fn start() -> Self {
             let listener = Arc::new(bind("127.0.0.1:0").unwrap());
             let addr = listener.server_addr().to_ip().unwrap();
+            let auth_listener = Arc::new(tiny_http::Server::http("127.0.0.1:0").unwrap());
+            let auth_addr = auth_listener.server_addr().to_ip().unwrap();
+            let resource = oauth::Resource::from_bind(addr, &format!("http://{auth_addr}"));
+            let expected_audience = resource.mcp.clone();
+            let serving_auth = Arc::clone(&auth_listener);
+            let auth_thread = std::thread::spawn(move || {
+                for mut request in serving_auth.incoming_requests() {
+                    let mut body = String::new();
+                    let _ = request.as_reader().read_to_string(&mut body);
+                    let token = form_value(&body, "token");
+                    let reply = if token.as_deref() == Some(TOKEN)
+                        || token.as_deref() == Some(EMPTY_PASS)
+                    {
+                        let permissions = if token.as_deref() == Some(EMPTY_PASS) {
+                            json!([])
+                        } else {
+                            json!(["profile.view"])
+                        };
+                        json!({
+                            "active": true,
+                            "aud": expected_audience,
+                            "profiles": [{"profile_id": "p1", "permissions": permissions}]
+                        })
+                        .to_string()
+                    } else if token.as_deref() == Some(OTHER_AUDIENCE) {
+                        json!({
+                            "active": true,
+                            "aud": "http://127.0.0.1:9/mcp",
+                            "profiles": [{"profile_id": "p1", "permissions": ["profile.view"]}]
+                        })
+                        .to_string()
+                    } else {
+                        json!({"active": false}).to_string()
+                    };
+                    let _ = request
+                        .respond(tiny_http::Response::from_string(reply).with_status_code(200));
+                }
+            });
             let serving = Arc::clone(&listener);
+            let auth = Introspection::new(resource.authorization_server.clone());
+            let bound = resource.clone();
             let thread = std::thread::spawn(move || {
                 let mut server = Server::new(MockHost);
-                serve_http(&mut server, &serving, TOKEN);
+                serve_http(&mut server, &serving, &auth, &bound);
             });
             Self {
                 listener,
+                auth_listener,
                 addr,
+                resource,
                 thread: Some(thread),
+                auth_thread: Some(auth_thread),
             }
         }
 
@@ -388,10 +479,24 @@ mod tests {
         }
     }
 
+    fn form_value(body: &str, key: &str) -> Option<String> {
+        for pair in body.split('&') {
+            let (name, value) = pair.split_once('=')?;
+            if name == key {
+                return Some(value.replace('+', " "));
+            }
+        }
+        None
+    }
+
     impl Drop for Running {
         fn drop(&mut self) {
             self.listener.unblock();
+            self.auth_listener.unblock();
             if let Some(thread) = self.thread.take() {
+                thread.join().unwrap();
+            }
+            if let Some(thread) = self.auth_thread.take() {
                 thread.join().unwrap();
             }
         }
@@ -514,14 +619,76 @@ mod tests {
             }
             let (status, head, body) = running.send("POST", MCP_PATH, &headers, &body);
             assert_eq!(status, 401, "{auth:?}");
-            assert!(head.contains("WWW-Authenticate"), "{head}");
+            assert!(
+                head.contains(&format!(
+                    "resource_metadata=\"{}\"",
+                    running.resource.metadata
+                )),
+                "{head}"
+            );
             assert!(!body.contains(TOKEN));
+            assert!(!head.contains(TOKEN));
         }
         // Scheme is case-insensitive.
         let lower = format!("bearer {TOKEN}");
         let (status, _, _) =
             running.send("POST", MCP_PATH, &[json, ("Authorization", &lower)], &body);
         assert_eq!(status, 200);
+
+        let other = format!("Bearer {OTHER_AUDIENCE}");
+        let (status, head, _) = running.send(
+            "POST",
+            MCP_PATH,
+            &[json, ("Authorization", other.as_str())],
+            &body,
+        );
+        assert_eq!(status, 401);
+        assert!(
+            head.contains("audience does not match this resource"),
+            "{head}"
+        );
+
+        let (status, head, body) = running.send("GET", METADATA_MCP_PATH, &[], "");
+        assert_eq!(status, 200, "{head}");
+        assert!(
+            head.to_ascii_lowercase()
+                .contains("access-control-allow-origin: *"),
+            "{head}"
+        );
+        let document: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(document["resource"], running.resource.mcp);
+        assert_eq!(
+            document["authorization_servers"][0],
+            running.resource.authorization_server
+        );
+        let (status, _, body) = running.send("GET", METADATA_PATH, &[], "");
+        assert_eq!(status, 200);
+        let origin_document: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(origin_document, document);
+    }
+
+    #[test]
+    fn a_token_with_no_working_pass_refuses_the_tool() {
+        let running = Running::start();
+        let bearer = format!("Bearer {EMPTY_PASS}");
+        let call = json!({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                          "params": {"name": "bir_status", "arguments": {}}});
+        let (status, _, body) = running.send(
+            "POST",
+            MCP_PATH,
+            &[
+                ("Authorization", bearer.as_str()),
+                ("Content-Type", "application/json"),
+            ],
+            &call.to_string(),
+        );
+        assert_eq!(status, 200, "{body}");
+        let reply: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(reply["result"]["isError"], true, "{reply}");
+        assert_eq!(
+            reply["result"]["content"][0]["text"],
+            crate::license::UNLICENSED
+        );
     }
 
     #[test]
