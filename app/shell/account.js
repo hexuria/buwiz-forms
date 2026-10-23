@@ -1,10 +1,15 @@
 // Settings › Account: the Buwiz cloud account. Separate from the PIN that
 // unlocks this computer. Filing keeps working when the server is unreachable.
 
-import { div } from "gpui-kit";
-import { InputState } from "gpui-base";
-import { SPACE, AppButton, Card, SettingRow, TextField } from "./ui.js";
+import { SPACE, AppButton, Card, SettingRow, Text } from "./ui.js";
 import { errorText } from "./store.js";
+
+function serverHint(source) {
+  if (source === "env") return "From BUWIZ_SERVER_URL for this run.";
+  if (source === "build") return "Set when this app was built.";
+  if (source === "invalid") return "That address was rejected.";
+  return "Chosen for this build.";
+}
 
 export class AccountActions {
   constructor(app) {
@@ -25,7 +30,6 @@ export class AccountActions {
       };
       this.error = errorText(error);
     }
-    this.url = InputState.new({ value: this.status.server_url || "" });
   }
 
   /** Refresh a saved sign-in once, when Settings opens. */
@@ -47,17 +51,6 @@ export class AccountActions {
       }
       acx.notify();
     });
-  }
-
-  saveUrl(cx) {
-    this.error = null;
-    try {
-      this.status = this.app.store.call("cloud_account_set_server_url", this.url.value());
-      this.url.set_value(this.status.server_url || "");
-    } catch (error) {
-      this.error = errorText(error);
-    }
-    cx.notify();
   }
 
   signIn(cx) {
@@ -129,25 +122,15 @@ export function AccountCard(cx, app) {
         variant: "primary",
         onClick: (_e, cx) => account.signIn(cx),
       });
-  const server = div()
-    .flex()
-    .flex_row()
-    .items_center()
-    .gap(SPACE[2])
-    .child(TextField(cx, account.url, { id: "settings-account-url", width: 280, label: "Buwiz server" }))
-    .child(
-      AppButton(cx, "settings-account-url-save", "Save", {
-        size: "sm",
-        onClick: (_e, cx) => account.saveUrl(cx),
-      }),
-    );
   return Card(cx, "settings-account", [
     SettingRow(
       cx,
       "settings-account-server",
       "Server",
-      "Production API unless you change it. An environment value is used until you save one here.",
-      server,
+      serverHint(status.server_url_source),
+      Text(cx, "meta", status.server_url || "Not configured", "fg2")
+        .id("settings-account-server-value")
+        .whitespace_nowrap(),
     ),
     SettingRow(cx, "settings-account-who", who, hint, button),
   ]);

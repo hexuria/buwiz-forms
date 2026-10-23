@@ -12,27 +12,66 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::{Value, json};
 
-/// Production API. Settings and `BUWIZ_SERVER_URL` override it.
-pub const DEFAULT_SERVER_URL: &str = "https://api.buwiz.com";
+/// Production API. A debug build uses [`DEV_SERVER_URL`] when neither the
+/// compile-time nor the runtime `BUWIZ_SERVER_URL` is set. Not a secret.
+pub const PRODUCTION_SERVER_URL: &str = "https://api.buwiz.com";
+/// Browser origin for account pages in a release build. The API stays on
+/// [`PRODUCTION_SERVER_URL`]. Not a secret.
+pub const PRODUCTION_ACCOUNT_URL: &str = "https://account.buwiz.com";
+/// API and account origin for a debug build when no URL was configured.
+pub const DEV_SERVER_URL: &str = "http://localhost:3008";
 pub const DESKTOP_CLIENT_ID: &str = "buwiz-desktop";
 pub const ENV_SERVER_URL: &str = "BUWIZ_SERVER_URL";
+pub const ENV_ACCOUNT_URL: &str = "BUWIZ_ACCOUNT_URL";
 
 const USER_AGENT: &str = "buwiz-desktop";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UrlSource {
-    Settings,
+    /// Process environment, for a dev or test run.
     Environment,
+    /// `option_env!` baked in when this binary was compiled.
+    Build,
+    /// Debug or release fallback. No URL was configured.
     Default,
 }
 
 impl UrlSource {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Settings => "settings",
             Self::Environment => "env",
+            Self::Build => "build",
             Self::Default => "default",
         }
+    }
+}
+
+/// Which fallback a binary uses when no URL was configured.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BuildProfile {
+    Debug,
+    Release,
+}
+
+pub fn active_build_profile() -> BuildProfile {
+    if cfg!(debug_assertions) {
+        BuildProfile::Debug
+    } else {
+        BuildProfile::Release
+    }
+}
+
+pub fn profile_server_url(profile: BuildProfile) -> &'static str {
+    match profile {
+        BuildProfile::Debug => DEV_SERVER_URL,
+        BuildProfile::Release => PRODUCTION_SERVER_URL,
+    }
+}
+
+pub fn profile_account_url(profile: BuildProfile) -> &'static str {
+    match profile {
+        BuildProfile::Debug => DEV_SERVER_URL,
+        BuildProfile::Release => PRODUCTION_ACCOUNT_URL,
     }
 }
 
@@ -55,7 +94,7 @@ pub enum ServerUrlError {
 impl std::fmt::Display for ServerUrlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Empty => write!(f, "Enter the Buwiz server address."),
+            Self::Empty => write!(f, "The Buwiz server address is empty."),
             Self::UnsupportedScheme => {
                 write!(f, "The server address must start with https:// or http://.")
             }
@@ -293,9 +332,11 @@ pub fn gate_after_refresh(outcome: RefreshOutcome) -> GateDecision {
     }
 }
 
-/// Browser URL for this device code. `next` is the approval page, so signup
-/// and sign-in both land back on the same device flow.
-pub fn account_browser_url(server_url: &str, entry: AccountBrowser, user_code: &str) -> String {
+/// Browser URL for this device code. `account_origin` is the account site
+/// (`https://account.buwiz.com` in a release build), not necessarily the API.
+/// `next` is the approval page, so signup and sign-in both land back on the
+/// same device flow.
+pub fn account_browser_url(account_origin: &str, entry: AccountBrowser, user_code: &str) -> String {
     let next = format!("/device?user_code={user_code}");
     let page = match entry {
         AccountBrowser::SignIn => "login",
@@ -303,7 +344,7 @@ pub fn account_browser_url(server_url: &str, entry: AccountBrowser, user_code: &
     };
     format!(
         "{}/{page}?next={}",
-        server_url.trim_end_matches('/'),
+        account_origin.trim_end_matches('/'),
         urlencoding::encode(&next)
     )
 }
@@ -315,24 +356,66 @@ pub fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
+/// API origin. `runtime` is the process environment (`BUWIZ_SERVER_URL`).
+/// `compiled` is `option_env!("BUWIZ_SERVER_URL")`. A runtime value wins.
+/// Neither is a secret, and neither is something the person at the keyboard types.
 pub fn resolve_server_url(
-    settings: Option<&str>,
-    env_value: Option<&str>,
+    runtime: Option<&str>,
+    compiled: Option<&str>,
+    profile: BuildProfile,
 ) -> Result<ResolvedServer, ServerUrlError> {
-    if let Some(value) = nonempty(settings) {
-        return Ok(ResolvedServer {
-            url: normalize_server_url(value)?,
-            source: UrlSource::Settings,
-        });
-    }
-    if let Some(value) = nonempty(env_value) {
+    resolve_origin(runtime, compiled, profile_server_url(profile))
+}
+
+/// Account-site origin. Same precedence as [`resolve_server_url`], with
+/// `BUWIZ_ACCOUNT_URL`. Release builds open `https://account.buwiz.com`.
+pub fn resolve_account_url(
+    runtime: Option<&str>,
+    compiled: Option<&str>,
+    profile: BuildProfile,
+) -> Result<ResolvedServer, ServerUrlError> {
+    resolve_origin(runtime, compiled, profile_account_url(profile))
+}
+
+/// The API origin for this process.
+pub fn configured_server() -> Result<ResolvedServer, ServerUrlError> {
+    let runtime = std::env::var(ENV_SERVER_URL).ok();
+    resolve_server_url(
+        runtime.as_deref(),
+        option_env!("BUWIZ_SERVER_URL"),
+        active_build_profile(),
+    )
+}
+
+/// Where the browser opens login and signup.
+pub fn configured_account() -> Result<ResolvedServer, ServerUrlError> {
+    let runtime = std::env::var(ENV_ACCOUNT_URL).ok();
+    resolve_account_url(
+        runtime.as_deref(),
+        option_env!("BUWIZ_ACCOUNT_URL"),
+        active_build_profile(),
+    )
+}
+
+fn resolve_origin(
+    runtime: Option<&str>,
+    compiled: Option<&str>,
+    fallback: &str,
+) -> Result<ResolvedServer, ServerUrlError> {
+    if let Some(value) = nonempty(runtime) {
         return Ok(ResolvedServer {
             url: normalize_server_url(value)?,
             source: UrlSource::Environment,
         });
     }
+    if let Some(value) = nonempty(compiled) {
+        return Ok(ResolvedServer {
+            url: normalize_server_url(value)?,
+            source: UrlSource::Build,
+        });
+    }
     Ok(ResolvedServer {
-        url: DEFAULT_SERVER_URL.to_owned(),
+        url: fallback.to_owned(),
         source: UrlSource::Default,
     })
 }
@@ -880,26 +963,49 @@ mod tests {
 
     #[test]
     fn server_url_precedence_and_rejection() {
-        let resolved = resolve_server_url(None, None).unwrap();
-        assert_eq!(resolved.url, DEFAULT_SERVER_URL);
-        assert_eq!(resolved.source, UrlSource::Default);
+        let release = resolve_server_url(None, None, BuildProfile::Release).unwrap();
+        assert_eq!(release.url, PRODUCTION_SERVER_URL);
+        assert_eq!(release.source, UrlSource::Default);
 
-        let from_env = resolve_server_url(None, Some(" http://localhost:3008/ ")).unwrap();
+        let debug = resolve_server_url(None, None, BuildProfile::Debug).unwrap();
+        assert_eq!(debug.url, DEV_SERVER_URL);
+        assert_eq!(debug.source, UrlSource::Default);
+
+        let blanks = resolve_server_url(Some("  "), Some(""), BuildProfile::Release).unwrap();
+        assert_eq!(blanks.url, PRODUCTION_SERVER_URL);
+        assert_eq!(blanks.source, UrlSource::Default);
+
+        let from_build = resolve_server_url(
+            None,
+            Some(" https://staging.example.test/ "),
+            BuildProfile::Release,
+        )
+        .unwrap();
+        assert_eq!(from_build.url, "https://staging.example.test");
+        assert_eq!(from_build.source, UrlSource::Build);
+
+        let from_env = resolve_server_url(
+            Some(" http://localhost:3008/ "),
+            Some("https://staging.example.test"),
+            BuildProfile::Release,
+        )
+        .unwrap();
         assert_eq!(from_env.url, "http://localhost:3008");
         assert_eq!(from_env.source, UrlSource::Environment);
 
-        let from_settings = resolve_server_url(
-            Some("https://api.example.test"),
-            Some("http://localhost:3008"),
-        )
-        .unwrap();
-        assert_eq!(from_settings.url, "https://api.example.test");
-        assert_eq!(from_settings.source, UrlSource::Settings);
-
+        assert_eq!(
+            profile_server_url(BuildProfile::Release),
+            PRODUCTION_SERVER_URL
+        );
+        assert_eq!(profile_server_url(BuildProfile::Debug), DEV_SERVER_URL);
         assert_eq!(
             normalize_server_url("http://[::1]:3008").unwrap(),
             "http://[::1]:3008"
         );
+        assert!(matches!(
+            normalize_server_url(""),
+            Err(ServerUrlError::Empty)
+        ));
         assert!(matches!(
             normalize_server_url("javascript:alert(1)"),
             Err(ServerUrlError::UnsupportedScheme)
@@ -916,6 +1022,98 @@ mod tests {
             normalize_server_url("https://api.buwiz.com/?q=1"),
             Err(ServerUrlError::HasQuery)
         ));
+        assert!(matches!(
+            resolve_server_url(None, Some("javascript:alert(1)"), BuildProfile::Release),
+            Err(ServerUrlError::UnsupportedScheme)
+        ));
+        assert!(matches!(
+            resolve_server_url(
+                Some("https://api.buwiz.com/tax-profiles"),
+                Some("https://staging.example.test"),
+                BuildProfile::Debug,
+            ),
+            Err(ServerUrlError::HasPath)
+        ));
+    }
+
+    #[test]
+    fn account_origin_is_separate_from_the_api_and_follows_the_same_precedence() {
+        let release = resolve_account_url(None, None, BuildProfile::Release).unwrap();
+        assert_eq!(release.url, PRODUCTION_ACCOUNT_URL);
+        assert_eq!(release.source, UrlSource::Default);
+        assert_ne!(release.url, PRODUCTION_SERVER_URL);
+
+        let debug = resolve_account_url(None, None, BuildProfile::Debug).unwrap();
+        assert_eq!(debug.url, DEV_SERVER_URL);
+        assert_eq!(debug.source, UrlSource::Default);
+
+        let from_build = resolve_account_url(
+            None,
+            Some("https://accounts.example.test"),
+            BuildProfile::Release,
+        )
+        .unwrap();
+        assert_eq!(from_build.url, "https://accounts.example.test");
+        assert_eq!(from_build.source, UrlSource::Build);
+
+        let from_env = resolve_account_url(
+            Some(" http://127.0.0.1:3008/ "),
+            Some("https://accounts.example.test"),
+            BuildProfile::Release,
+        )
+        .unwrap();
+        assert_eq!(from_env.url, "http://127.0.0.1:3008");
+        assert_eq!(from_env.source, UrlSource::Environment);
+
+        let sign_in = account_browser_url(&release.url, AccountBrowser::SignIn, "ABCD-EFGH");
+        assert_eq!(
+            sign_in,
+            "https://account.buwiz.com/login?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"
+        );
+        assert!(!sign_in.contains("api.buwiz.com"));
+        assert!(matches!(
+            resolve_account_url(Some("javascript:alert(1)"), None, BuildProfile::Release),
+            Err(ServerUrlError::UnsupportedScheme)
+        ));
+    }
+
+    #[test]
+    fn configured_origins_follow_runtime_then_compile_time_then_profile() {
+        let profile = active_build_profile();
+        let server_runtime = std::env::var(ENV_SERVER_URL).ok();
+        let server = configured_server().unwrap();
+        assert_eq!(
+            server,
+            resolve_server_url(
+                server_runtime.as_deref(),
+                option_env!("BUWIZ_SERVER_URL"),
+                profile,
+            )
+            .unwrap()
+        );
+        let account_runtime = std::env::var(ENV_ACCOUNT_URL).ok();
+        let account = configured_account().unwrap();
+        assert_eq!(
+            account,
+            resolve_account_url(
+                account_runtime.as_deref(),
+                option_env!("BUWIZ_ACCOUNT_URL"),
+                profile,
+            )
+            .unwrap()
+        );
+        if nonempty(server_runtime.as_deref()).is_none()
+            && nonempty(option_env!("BUWIZ_SERVER_URL")).is_none()
+        {
+            assert_eq!(server.url, profile_server_url(profile));
+            assert_eq!(server.source, UrlSource::Default);
+        }
+        if nonempty(account_runtime.as_deref()).is_none()
+            && nonempty(option_env!("BUWIZ_ACCOUNT_URL")).is_none()
+        {
+            assert_eq!(account.url, profile_account_url(profile));
+            assert_eq!(account.source, UrlSource::Default);
+        }
     }
 
     #[test]
@@ -1061,7 +1259,8 @@ mod tests {
 
     #[test]
     fn status_hides_tokens_and_a_session_for_a_different_server() {
-        let resolved = resolve_server_url(Some("http://localhost:3008"), None).unwrap();
+        let resolved =
+            resolve_server_url(Some("http://localhost:3008"), None, BuildProfile::Release).unwrap();
         let status = status_from(&resolved, Some(&secrets()));
         let json = serde_json::to_string(&status).unwrap();
         assert!(status.signed_in);
@@ -1070,7 +1269,8 @@ mod tests {
         assert!(!json.contains("refresh-secret"));
         assert!(!json.contains("access_token"));
 
-        let other = resolve_server_url(Some("https://api.buwiz.com"), None).unwrap();
+        let other =
+            resolve_server_url(Some("https://api.buwiz.com"), None, BuildProfile::Debug).unwrap();
         let hidden = status_from(&other, Some(&secrets()));
         assert!(!hidden.signed_in);
         assert!(hidden.email.is_none());

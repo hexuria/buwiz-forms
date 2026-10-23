@@ -72,14 +72,12 @@ class BirApp extends View {
     this.gateDetail = "";
     this.gatePhase = "welcome";
     this.focusRoot = cx.focus_handle();
-    this.serverUrl = InputState.new({});
-    let gate = { unlocked: false, server_url: "" };
+    let gate = { unlocked: false };
     try {
       gate = this.store.call("cloud_account_gate");
     } catch (error) {
       this.gateError = errorText(error);
     }
-    this.serverUrl.set_value(gate.server_url || "");
     const forced = themePreferenceFromEnv(process.env.BIR_SHELL_START);
     applyThemePreference(cx, forced || "system");
     if (gate.unlocked) this.boot(cx);

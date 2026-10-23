@@ -20,7 +20,8 @@ use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, H
 
 use crate::bir_module::with_account_database;
 
-const SETTING_KEY: &str = "buwiz_server_url";
+/// Old Settings field. Startup deletes it. Nothing reads it.
+const OBSOLETE_SERVER_URL_SETTING: &str = "buwiz_server_url";
 const KEYRING_SERVICE: &str = "com.buwiz.bir";
 const KEYRING_ACCOUNT: &str = "desktop-refresh";
 
@@ -49,7 +50,6 @@ export interface CloudAccountGate {
 }
 export function cloud_account_status(): CloudAccountStatus;
 export function cloud_account_gate(): CloudAccountGate;
-export function cloud_account_set_server_url(url: string): CloudAccountStatus;
 export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
 export function cloud_account_begin_sign_up(): Promise<CloudSignInStart>;
 export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
@@ -65,7 +65,6 @@ pub fn register(module: HostModule) -> HostModule {
     module
         .function("cloud_account_status", |_| status_now())
         .function("cloud_account_gate", |_| gate_value())
-        .function("cloud_account_set_server_url", set_server_url)
         .async_function("cloud_account_begin_sign_in", begin_sign_in)
         .async_function("cloud_account_begin_sign_up", begin_sign_up)
         .async_function("cloud_account_finish_sign_in", finish_sign_in)
@@ -79,6 +78,7 @@ pub fn register(module: HostModule) -> HostModule {
 /// Call this before the menu bar is built and before the database worker starts.
 pub(crate) fn prepare_launch() {
     bir_core::background_cron::set_submission_paused(true);
+    forget_saved_server_url();
     if crate::account_gate::auth_bypass_enabled() {
         crate::account_gate::set_unlocked(true);
         return;
@@ -91,7 +91,7 @@ fn status_now() -> HostResult {
         Ok(resolved) => resolved,
         Err(error) => {
             return Ok(status_value(&AccountStatus {
-                server_url: saved_server_url().unwrap_or_default(),
+                server_url: rejected_origin_text(ENV_SERVER_URL, option_env!("BUWIZ_SERVER_URL")),
                 server_url_source: "invalid".into(),
                 signed_in: false,
                 email: None,
@@ -112,23 +112,6 @@ fn status_now() -> HostResult {
     )))
 }
 
-fn set_server_url(arguments: &HostArguments) -> HostResult {
-    let raw = arguments.string(0)?.trim().to_owned();
-    let normalized = cloud_account::normalize_server_url(&raw).map_err(host_error)?;
-    let previous = saved_server_url();
-    with_account_database(|database| {
-        database
-            .set_setting(SETTING_KEY, &normalized)
-            .map_err(host_error)?;
-        Ok(())
-    })?;
-    if previous.as_deref() != Some(normalized.as_str()) {
-        clear_pending();
-        clear_stored();
-    }
-    status_now()
-}
-
 fn begin_sign_in(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
@@ -146,12 +129,12 @@ fn begin_browser(
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-start", move || {
         let resolved = resolve()?;
+        let account = cloud_account::configured_account().map_err(host_error)?;
         let mut http = BlockingHttp::new();
         let challenge =
             cloud_account::start_device(&mut http, &resolved.url, cloud_account::unix_now())
                 .map_err(host_error)?;
-        let url =
-            cloud_account::account_browser_url(&challenge.server_url, entry, &challenge.user_code);
+        let url = cloud_account::account_browser_url(&account.url, entry, &challenge.user_code);
         let browser_opened = cloud_account::open_browser(&url).is_ok();
         let started = HostObject::new()
             .field("user_code", challenge.user_code.clone())
@@ -350,20 +333,31 @@ fn spawn_account(
 }
 
 fn resolve() -> Result<cloud_account::ResolvedServer, HostError> {
-    let settings = saved_server_url();
-    let env_value = std::env::var(ENV_SERVER_URL).ok();
-    cloud_account::resolve_server_url(settings.as_deref(), env_value.as_deref()).map_err(host_error)
+    cloud_account::configured_server().map_err(host_error)
 }
 
-fn saved_server_url() -> Option<String> {
-    with_account_database(|database| {
+fn forget_saved_server_url() {
+    if let Err(error) = with_account_database(|database| {
         database
-            .get_setting(SETTING_KEY)
+            .delete_setting(OBSOLETE_SERVER_URL_SETTING)
             .map_err(|error| HostError::new(error.to_string()))
-    })
-    .ok()
-    .flatten()
-    .filter(|value| !value.trim().is_empty())
+    }) {
+        tracing::warn!("could not drop the saved Buwiz server address: {error}");
+    }
+}
+
+fn rejected_origin_text(runtime_name: &str, compiled: Option<&str>) -> String {
+    std::env::var(runtime_name)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            compiled
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        })
+        .unwrap_or_default()
 }
 
 fn status_value(status: &AccountStatus) -> HostValue {
@@ -488,5 +482,107 @@ fn keyring_delete() {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(error) => tracing::debug!("Buwiz keychain entry not deleted: {error}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bir_module::{use_ephemeral_database, with_account_database};
+
+    #[test]
+    fn the_page_cannot_set_a_server_url_and_a_saved_one_is_ignored() {
+        assert!(
+            !DECLARATIONS.contains("cloud_account_set_server_url"),
+            "the host must not offer a server-url setter"
+        );
+        assert!(DECLARATIONS.contains("cloud_account_status"));
+        use_ephemeral_database();
+        with_account_database(|database| {
+            database
+                .set_setting(OBSOLETE_SERVER_URL_SETTING, "https://saved.example.test")
+                .map_err(|error| HostError::new(error.to_string()))?;
+            let stored = database
+                .get_setting(OBSOLETE_SERVER_URL_SETTING)
+                .map_err(|error| HostError::new(error.to_string()))?;
+            assert_eq!(stored.as_deref(), Some("https://saved.example.test"));
+            Ok(())
+        })
+        .unwrap();
+        let resolved = resolve().expect("the build's server resolves");
+        assert_ne!(
+            resolved.url, "https://saved.example.test",
+            "buwiz_server_url is not read"
+        );
+    }
+
+    /// Startup deletes `buwiz_server_url`. The child uses a scratch database
+    /// (`BIR_DATABASE_PATH`), `EBIR_TEST_ENV=1`, and `BIR_SFTP_DRY_RUN=1`.
+    #[test]
+    fn prepare_launch_deletes_a_saved_server_url() {
+        const SCRATCH: &str = "BIR_SHELL_FORGET_SERVER_URL_SCRATCH";
+        if std::env::var_os(SCRATCH).is_some() {
+            delete_saved_server_url_on_startup();
+            return;
+        }
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let scratch = std::env::temp_dir().join(format!(
+            "bir-shell-forget-server-url-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&scratch).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "cloud_account::tests::prepare_launch_deletes_a_saved_server_url",
+                "--nocapture",
+            ])
+            .current_dir(&scratch)
+            .env(SCRATCH, &scratch)
+            .env("BIR_DATABASE_PATH", scratch.join("bir_data.db"))
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_AUTH_BYPASS", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .env_remove("BUWIZ_SERVER_URL")
+            .env_remove("BUWIZ_ACCOUNT_URL")
+            .status()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&scratch);
+        assert!(status.success(), "startup did not drop buwiz_server_url");
+    }
+
+    fn delete_saved_server_url_on_startup() {
+        with_account_database(|database| {
+            database
+                .set_setting(OBSOLETE_SERVER_URL_SETTING, "https://saved.example.test")
+                .map_err(|error| HostError::new(error.to_string()))?;
+            Ok(())
+        })
+        .unwrap();
+        let resolved = resolve().expect("the build's server resolves");
+        assert_ne!(resolved.url, "https://saved.example.test");
+        assert_ne!(resolved.source, cloud_account::UrlSource::Environment);
+        if option_env!("BUWIZ_SERVER_URL")
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+        {
+            assert_eq!(
+                resolved.url,
+                cloud_account::profile_server_url(cloud_account::active_build_profile())
+            );
+            assert_eq!(resolved.source, cloud_account::UrlSource::Default);
+        }
+        prepare_launch();
+        let left = with_account_database(|database| {
+            database
+                .get_setting(OBSOLETE_SERVER_URL_SETTING)
+                .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap();
+        assert_eq!(left, None);
     }
 }

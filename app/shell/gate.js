@@ -3,7 +3,7 @@
 // this screen is only how a person gets there.
 
 import { div } from "gpui-kit";
-import { tokens, SPACE, RADIUS, Text, AppButton, TextField } from "./ui.js";
+import { tokens, SPACE, RADIUS, Text, AppButton } from "./ui.js";
 import { errorText } from "./store.js";
 
 const CARD_W = 400;
@@ -50,7 +50,6 @@ export function renderAccountGate(cx, app) {
                 .text_center()
                 .whitespace_normal(),
             )
-            .child(TextField(cx, app.serverUrl, { id: "gate-server", label: "Buwiz server" }))
             .child(
               AppButton(cx, "gate-sign-in", busy ? "Waiting…" : "Sign in", {
                 variant: "primary",
@@ -79,8 +78,6 @@ export function startAccountFlow(app, kind, cx) {
   const verb = kind === "create" ? "cloud_account_begin_sign_up" : "cloud_account_begin_sign_in";
   cx.spawn(async (acx) => {
     try {
-      const url = app.serverUrl && app.serverUrl.value ? app.serverUrl.value().trim() : "";
-      if (url) app.store.call("cloud_account_set_server_url", url);
       const started = await app.store.call(verb);
       const code = started.user_code ? ` Code ${started.user_code}.` : "";
       app.gatePhase = "waiting";

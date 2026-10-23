@@ -7,14 +7,25 @@ returns does not wait on the server. With `EBIR_TEST_ENV=1` and
 
 ## Server address
 
-The address is an origin (`https://api.buwiz.com`), with no path, query, or
-password. Precedence:
+The person using the app never types the server address. Settings → Account
+shows the API origin and does not edit it. An older `buwiz_server_url`
+setting is deleted on startup and is not read.
 
-1. The saved setting `buwiz_server_url` (Settings → Account → Server → Save).
-2. The environment variable `BUWIZ_SERVER_URL`.
-3. `https://api.buwiz.com`.
+The address is an origin, with no path, query, or password. Precedence, for
+the API and for the account site separately:
 
-Saving a different address drops the saved tokens.
+1. The process environment: `BUWIZ_SERVER_URL` for the API,
+   `BUWIZ_ACCOUNT_URL` for the browser pages. For a dev or test run.
+2. The same names compiled into the binary (`option_env!` at build time).
+   Neither value is a secret.
+3. The build's own default:
+   - Release: API `https://api.buwiz.com`, account pages
+     `https://account.buwiz.com`.
+   - Debug: both `http://localhost:3008`.
+
+Sign-in opens the account origin (`/login` or `/signup`), then the device
+page. Token calls stay on the API origin. A different address from a saved
+session drops that session.
 
 ## Sign in
 
@@ -22,9 +33,10 @@ The app uses the server's existing device flow for the public client
 `buwiz-desktop`. It does not ask for the account password.
 
 1. `POST /auth/device/start` with `{"client_id":"buwiz-desktop"}`.
-2. The system browser opens `verification_uri_complete` (`/login/device`).
-   After the password step the server continues on `/device`, which the
-   sign-in page accepts as a return path.
+2. The system browser opens the account origin at `/login` or `/signup`,
+   with `next` set to `/device?user_code=…`. After the password step the
+   server continues on `/device`, which the sign-in page accepts as a
+   return path. Token requests stay on the API origin.
 3. `POST /auth/device/poll` until the browser approval returns tokens.
 4. `GET /me` records the email.
 5. Later, `POST /oauth/token` with `grant_type=refresh_token` renews the

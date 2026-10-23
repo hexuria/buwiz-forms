@@ -27940,7 +27940,6 @@ declare module "bir" {
   }
   export function cloud_account_status(): CloudAccountStatus;
   export function cloud_account_gate(): CloudAccountGate;
-  export function cloud_account_set_server_url(url: string): CloudAccountStatus;
   export function cloud_account_begin_sign_in(): Promise<CloudSignInStart>;
   export function cloud_account_begin_sign_up(): Promise<CloudSignInStart>;
   export function cloud_account_finish_sign_in(): Promise<CloudAccountStatus>;
