@@ -6,12 +6,12 @@
 //! `GPUI_AGENT_RUNTIME_DIR` (upstream discovery directory override),
 //! `BIR_MCP_HTTP_TOKEN` (bearer token, required with `--http`),
 //! `BUWIZ_ACCESS_TOKEN` (optional agent token; when set, every tool checks
-//! that token instead of the desktop session stored by `bir-mcp login`).
+//! that token instead of the desktop account stored by the Buwiz app).
 use bir_mcp::client::AgentBirHost;
 use bir_mcp::http;
 use bir_mcp::license::License;
 use bir_mcp::server::{Server, serve};
-use bir_mcp::signin::{self, KeyringStore, LoginHooks};
+use bir_mcp::signin::{self, DesktopStore, LoginHooks};
 use std::process::ExitCode;
 
 const USAGE: &str = "bir-mcp: draft-only MCP server for all 43 BIR forms (the user clicks Submit in BIR).
@@ -28,10 +28,11 @@ Usage: bir-mcp                       speak MCP (JSON-RPC 2.0, one message per li
 Tools work on one BIR app at a time, chosen by the user: bir_list_apps lists every
 running BIR app, bir_connect selects one. Nothing is selected at startup.
 
-The Buwiz server address comes from the build. A debug build uses
-http://localhost:3008. `bir-mcp login` opens that server's device page; the
-session is stored in the OS keychain. Tools run only after that sign-in, or
-when BUWIZ_ACCESS_TOKEN is set to a buwiz-server agent token.
+The Buwiz server address comes from the build, the same way the Buwiz app
+resolves it. A debug build uses http://localhost:3008. `bir-mcp login` runs
+the app's device flow and writes the app's saved account. Tools run only
+after that account is signed in, or when BUWIZ_ACCESS_TOKEN is set to a
+buwiz-server agent token.
 
 Environment:
   BIR_MCP_TOKENS          JSON file {\"<connect id or pid>\": \"<agent token>\"}; must be mode 0600
@@ -81,8 +82,9 @@ fn licensed_server() -> Result<Server<AgentBirHost>, String> {
             env_nonempty("BUWIZ_MCP_URL").unwrap_or_else(|| signin::builtin_origin().to_string());
         License::required(base, token)
     } else {
-        let origin = signin::builtin_origin();
-        let Some(session) = signin::ensure_fresh(origin, &KeyringStore, signin::unix_now())? else {
+        let (origin, _) = signin::configured_origins()?;
+        let Some(session) = signin::ensure_fresh(&origin, &DesktopStore, signin::unix_now())?
+        else {
             return Err(bir_mcp::license::UNAUTHENTICATED.to_string());
         };
         License::desktop(origin, session.access_token, session.refresh_token, true)
@@ -98,9 +100,17 @@ fn env_nonempty(name: &str) -> Option<String> {
 }
 
 fn run_login() -> ExitCode {
+    let (api, account) = match signin::configured_origins() {
+        Ok(origins) => origins,
+        Err(error) => {
+            eprintln!("bir-mcp: {error}");
+            return ExitCode::from(2);
+        }
+    };
     match signin::login(
-        signin::builtin_origin(),
-        &KeyringStore,
+        &api,
+        &account,
+        &DesktopStore,
         LoginHooks {
             open_browser: signin::open_system_browser,
             now: signin::unix_now,
@@ -120,7 +130,14 @@ fn run_login() -> ExitCode {
 }
 
 fn run_logout() -> ExitCode {
-    match signin::logout(signin::builtin_origin(), &KeyringStore) {
+    let origin = match signin::configured_origins() {
+        Ok((api, _)) => api,
+        Err(error) => {
+            eprintln!("bir-mcp: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    match signin::logout(&origin, &DesktopStore) {
         Ok(line) => {
             println!("{line}");
             ExitCode::SUCCESS
@@ -133,7 +150,14 @@ fn run_logout() -> ExitCode {
 }
 
 fn run_status() -> ExitCode {
-    match signin::status(signin::builtin_origin(), &KeyringStore, signin::unix_now()) {
+    let origin = match signin::configured_origins() {
+        Ok((api, _)) => api,
+        Err(error) => {
+            eprintln!("bir-mcp: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    match signin::status(&origin, &DesktopStore, signin::unix_now()) {
         Ok(line) => {
             println!("{line}");
             ExitCode::SUCCESS

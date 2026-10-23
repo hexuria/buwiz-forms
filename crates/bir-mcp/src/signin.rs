@@ -1,27 +1,28 @@
 //! Desktop sign-in for `bir-mcp login`.
 //!
-//! The same OAuth device flow the Buwiz desktop app uses: this process asks
-//! buwiz-server for a device code, the user approves it in the browser, and
-//! the access and refresh tokens are stored in the OS keychain. The public
-//! client id is `buwiz-desktop`. There is no client secret.
+//! This is the same device flow and the same saved account the Buwiz app
+//! uses (`bir_core::cloud_account`). The public client id is `buwiz-desktop`.
+//! There is no client secret, and there is no second keychain.
 //!
 //! The origin comes from the build. A debug build talks to the local
 //! buwiz-server. Tests pass an origin in and an in-memory store, so they
 //! never touch the keychain or a real server.
 
 use crate::license::{UNAUTHENTICATED, UNLICENSED, interpret_desktop};
-use serde_json::{Value, json};
-use std::process::Command;
+use bir_core::cloud_account::{
+    self, AccountBrowser, BlockingHttp, CloudError, StoredAccount, TokenSet,
+};
+use serde_json::Value;
 #[cfg(test)]
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Public OAuth client id. Not a secret.
-pub const CLIENT_ID: &str = "buwiz-desktop";
+/// Public OAuth client id. Not a secret. Same value the desktop app sends.
+pub const CLIENT_ID: &str = cloud_account::DESKTOP_CLIENT_ID;
 
-const SERVICE: &str = "com.buwiz.bir-mcp";
-const ACCOUNT: &str = "desktop-session";
 const REFRESH_SKEW_SECS: i64 = 60;
+
+const SIGNED_OUT: &str = "Not signed in. Sign in from the Buwiz app, or run `bir-mcp login`.";
 
 /// Origin baked into this build. Debug builds use the local buwiz-server.
 pub fn builtin_origin() -> &'static str {
@@ -32,10 +33,18 @@ pub fn builtin_origin() -> &'static str {
 /// one; this function does not contact either host.
 pub fn origin_for(debug: bool) -> &'static str {
     if debug {
-        "http://localhost:3008"
+        cloud_account::DEV_SERVER_URL
     } else {
-        "https://api.buwiz.com"
+        cloud_account::PRODUCTION_SERVER_URL
     }
+}
+
+/// API origin and account-page origin, using the desktop app's precedence
+/// (`BUWIZ_SERVER_URL` / `BUWIZ_ACCOUNT_URL`, then the build default).
+pub fn configured_origins() -> Result<(String, String), String> {
+    let server = cloud_account::configured_server().map_err(|error| error.to_string())?;
+    let account = cloud_account::configured_account().map_err(|error| error.to_string())?;
+    Ok((server.url, account.url))
 }
 
 pub fn unix_now() -> i64 {
@@ -53,61 +62,34 @@ pub struct Session {
     pub access_token: String,
     pub refresh_token: String,
     pub expires_at: i64,
+    pub server_url: String,
+    pub user_id: String,
+    pub email: Option<String>,
 }
 
 impl Session {
-    fn to_json(&self) -> String {
-        json!({
-            "access_token": self.access_token,
-            "refresh_token": self.refresh_token,
-            "expires_at": self.expires_at,
-        })
-        .to_string()
+    fn from_stored(stored: &StoredAccount) -> Self {
+        Self {
+            access_token: stored.access_token.clone(),
+            refresh_token: stored.refresh_token.clone(),
+            expires_at: stored.access_expires_at_unix,
+            server_url: stored.server_url.clone(),
+            user_id: stored.user_id.clone(),
+            email: stored.email.clone(),
+        }
     }
 
-    fn parse(raw: &str) -> Option<Self> {
-        let value: Value = serde_json::from_str(raw).ok()?;
-        let access_token = value.get("access_token")?.as_str()?.trim().to_string();
-        let refresh_token = value.get("refresh_token")?.as_str()?.trim().to_string();
-        let expires_at = value.get("expires_at")?.as_i64()?;
-        if access_token.is_empty() || refresh_token.is_empty() {
-            return None;
+    fn to_stored(&self) -> StoredAccount {
+        StoredAccount {
+            server_url: self.server_url.clone(),
+            access_token: self.access_token.clone(),
+            refresh_token: self.refresh_token.clone(),
+            access_expires_at_unix: self.expires_at,
+            user_id: self.user_id.clone(),
+            email: self.email.clone(),
+            offline: false,
+            last_refresh_unix: unix_now(),
         }
-        Some(Self {
-            access_token,
-            refresh_token,
-            expires_at,
-        })
-    }
-
-    pub(crate) fn from_token_body(body: &str, now: i64) -> Result<Self, String> {
-        let value: Value = serde_json::from_str(body)
-            .map_err(|_| "buwiz-server returned a sign-in bir-mcp could not read".to_string())?;
-        let access_token = value
-            .get("access_token")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        let refresh_token = value
-            .get("refresh_token")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        if access_token.is_empty() || refresh_token.is_empty() {
-            return Err("buwiz-server returned a sign-in bir-mcp could not store".to_string());
-        }
-        let expires_in = value
-            .get("expires_in")
-            .and_then(Value::as_i64)
-            .unwrap_or(900)
-            .max(0);
-        Ok(Self {
-            access_token,
-            refresh_token,
-            expires_at: now.saturating_add(expires_in),
-        })
     }
 }
 
@@ -117,46 +99,69 @@ pub trait SessionStore {
     fn clear(&self) -> Result<(), String>;
 }
 
-/// OS keychain entry `com.buwiz.bir-mcp` / `desktop-session`.
-pub struct KeyringStore;
+/// The account store the Buwiz app writes: keychain `com.buwiz.bir` /
+/// `desktop-refresh`, and `buwiz-cloud-account.json` beside the database.
+pub struct DesktopStore;
 
-impl SessionStore for KeyringStore {
+impl SessionStore for DesktopStore {
     fn load(&self) -> Result<Option<Session>, String> {
-        let entry = keyring_entry()?;
-        match entry.get_password() {
-            Ok(raw) => match Session::parse(&raw) {
-                Some(session) => Ok(Some(session)),
-                None => {
-                    let _ = entry.delete_credential();
-                    Ok(None)
-                }
-            },
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(error) => Err(format!(
-                "could not read the Buwiz sign-in from the keychain: {error}"
-            )),
+        match cloud_account::load_stored_account() {
+            Ok(Some(stored)) => Ok(Some(Session::from_stored(&stored))),
+            Ok(None) => Ok(None),
+            Err(error) => Err(error.to_string()),
         }
     }
 
     fn save(&self, session: &Session) -> Result<(), String> {
-        keyring_entry()?
-            .set_password(&session.to_json())
-            .map_err(|error| format!("could not store the Buwiz sign-in in the keychain: {error}"))
+        let mut stored = match cloud_account::load_stored_account() {
+            Ok(Some(stored)) => stored,
+            Ok(None) => session.to_stored(),
+            Err(error) => return Err(error.to_string()),
+        };
+        if !session.server_url.is_empty() {
+            stored.server_url = session.server_url.clone();
+        }
+        stored.access_token = session.access_token.clone();
+        stored.refresh_token = session.refresh_token.clone();
+        stored.access_expires_at_unix = session.expires_at;
+        if !session.user_id.is_empty() {
+            stored.user_id = session.user_id.clone();
+        }
+        if session.email.is_some() {
+            stored.email = session.email.clone();
+        }
+        stored.offline = false;
+        stored.last_refresh_unix = unix_now();
+        cloud_account::save_stored_account(&stored).map_err(|error| error.to_string())
     }
 
     fn clear(&self) -> Result<(), String> {
-        match keyring_entry()?.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(format!(
-                "could not remove the Buwiz sign-in from the keychain: {error}"
-            )),
-        }
+        cloud_account::clear_stored_account();
+        Ok(())
     }
 }
 
-fn keyring_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(SERVICE, ACCOUNT)
-        .map_err(|error| format!("could not open the sign-in keychain: {error}"))
+/// Write a refreshed access token back to the desktop account.
+/// An existing user id and email stay when the refresh response has none.
+pub fn persist_refresh(
+    origin: &str,
+    access: &str,
+    refresh: &str,
+    expires_at: i64,
+) -> Result<(), String> {
+    DesktopStore.save(&Session {
+        access_token: access.to_string(),
+        refresh_token: refresh.to_string(),
+        expires_at,
+        server_url: trim_origin(origin),
+        user_id: String::new(),
+        email: None,
+    })
+}
+
+/// Drop the desktop account from the keychain and the private file.
+pub fn clear_desktop_session() {
+    cloud_account::clear_stored_account();
 }
 
 #[cfg(test)]
@@ -190,10 +195,14 @@ pub struct LoginHooks<F, N, S, E> {
     pub emit: E,
 }
 
-/// Run the device flow. The returned lines are safe to print: they contain
-/// the user code and the device page, and they do not contain tokens.
+/// Run the desktop device flow. The returned lines are safe to print: they
+/// contain the user code and the device page, and they do not contain tokens.
+///
+/// `api_origin` is where token calls go. `account_origin` is the browser
+/// origin. A debug build uses the same host for both.
 pub fn login<F, N, S, E>(
-    origin: &str,
+    api_origin: &str,
+    account_origin: &str,
     store: &impl SessionStore,
     mut hooks: LoginHooks<F, N, S, E>,
 ) -> Result<Vec<String>, String>
@@ -203,27 +212,31 @@ where
     S: FnMut(Duration),
     E: FnMut(&str),
 {
-    let origin = trim_origin(origin);
-    let http = http_client()?;
-    let started = start_device(&http, &origin)?;
+    let api_origin = trim_origin(api_origin);
+    let account_origin = trim_origin(account_origin);
+    let mut http = BlockingHttp::new();
+    let started_at = (hooks.now)();
+    let challenge =
+        cloud_account::start_device(&mut http, &api_origin, started_at).map_err(login_error)?;
+    let page = cloud_account::account_browser_url(
+        &account_origin,
+        AccountBrowser::SignIn,
+        &challenge.user_code,
+    );
     let mut lines = Vec::new();
-    let say = |hooks: &mut LoginHooks<F, N, S, E>, lines: &mut Vec<String>, line: String| {
-        (hooks.emit)(&line);
-        lines.push(line);
-    };
-    say(
+    emit_line(
         &mut hooks,
         &mut lines,
         "Sign in with Buwiz in your browser.".to_string(),
     );
-    say(
+    emit_line(
         &mut hooks,
         &mut lines,
-        format!("Code: {}", started.user_code),
+        format!("Code: {}", challenge.user_code),
     );
-    say(&mut hooks, &mut lines, started.page.clone());
-    if let Err(error) = (hooks.open_browser)(&started.page) {
-        say(
+    emit_line(&mut hooks, &mut lines, page.clone());
+    if let Err(error) = (hooks.open_browser)(&page) {
+        emit_line(
             &mut hooks,
             &mut lines,
             format!(
@@ -231,187 +244,119 @@ where
             ),
         );
     }
-    say(
+    emit_line(
         &mut hooks,
         &mut lines,
         "Waiting for approval...".to_string(),
     );
-    let session = poll_until_approved(&http, &origin, &started, &mut hooks)?;
-    store.save(&session)?;
-    say(&mut hooks, &mut lines, "Signed in.".to_string());
+    let tokens = {
+        let LoginHooks { now, sleep, .. } = &mut hooks;
+        cloud_account::poll_until(&mut http, &challenge, now, sleep).map_err(login_error)?
+    };
+    if tokens.refresh_token.is_empty() {
+        return Err("The server did not return a refresh token. Sign in again.".to_string());
+    }
+    let (user_id, email) =
+        cloud_account::load_profile(&mut http, &api_origin, &tokens.access_token)
+            .map_err(login_error)?;
+    let now = (hooks.now)();
+    store.save(&session_from_tokens(
+        &api_origin,
+        tokens,
+        now,
+        user_id,
+        email,
+    ))?;
+    emit_line(&mut hooks, &mut lines, "Signed in.".to_string());
     Ok(lines)
 }
 
-struct DeviceStart {
-    device_code: String,
-    user_code: String,
-    page: String,
-    interval: i64,
-    expires_in: i64,
-}
-
-fn start_device(http: &reqwest::blocking::Client, origin: &str) -> Result<DeviceStart, String> {
-    let (status, body) = post_form(
-        http,
-        &format!("{origin}/oauth/device/code"),
-        &form(&[("client_id", CLIENT_ID)]),
-    )?;
-    if status != 200 {
-        return Err(format!(
-            "buwiz-server answered HTTP {status} while starting sign-in"
-        ));
-    }
-    let value: Value = serde_json::from_str(&body)
-        .map_err(|_| "buwiz-server returned a device reply bir-mcp could not read".to_string())?;
-    let device_code = value
-        .get("device_code")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    let user_code = value
-        .get("user_code")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    if device_code.is_empty() || user_code.is_empty() {
-        return Err("buwiz-server did not return a device code".to_string());
-    }
-    let page = value
-        .get("verification_uri_complete")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|page| !page.is_empty())
-        .map(str::to_string)
-        .or_else(|| {
-            let uri = value.get("verification_uri")?.as_str()?.trim();
-            if uri.is_empty() {
-                None
-            } else {
-                Some(format!("{uri}?user_code={}", form_encode(&user_code)))
-            }
-        })
-        .ok_or_else(|| "buwiz-server did not return a device page".to_string())?;
-    let interval = value
-        .get("interval")
-        .and_then(Value::as_i64)
-        .filter(|seconds| *seconds >= 0)
-        .unwrap_or(5);
-    let expires_in = value
-        .get("expires_in")
-        .and_then(Value::as_i64)
-        .filter(|seconds| *seconds > 0)
-        .unwrap_or(900);
-    Ok(DeviceStart {
-        device_code,
-        user_code,
-        page,
-        interval,
-        expires_in,
-    })
-}
-
-fn poll_until_approved<F, N, S, E>(
-    http: &reqwest::blocking::Client,
-    origin: &str,
-    started: &DeviceStart,
-    hooks: &mut LoginHooks<F, N, S, E>,
-) -> Result<Session, String>
+fn emit_line<F, N, S, E>(hooks: &mut LoginHooks<F, N, S, E>, lines: &mut Vec<String>, line: String)
 where
-    F: FnMut(&str) -> Result<(), String>,
-    N: FnMut() -> i64,
-    S: FnMut(Duration),
     E: FnMut(&str),
 {
-    let mut interval = started.interval;
-    let mut waited = 0i64;
-    let budget = started.expires_in;
-    loop {
-        if waited >= budget {
-            return Err("This sign-in code expired. Run `bir-mcp login` again.".to_string());
-        }
-        match poll_once(http, origin, &started.device_code, (hooks.now)())? {
-            Poll::Ready(session) => return Ok(session),
-            Poll::Pending => {
-                (hooks.sleep)(Duration::from_secs(interval as u64));
-                waited += interval.max(1);
-            }
-            Poll::SlowDown => {
-                interval = (interval + 5).min(60);
-                (hooks.sleep)(Duration::from_secs(interval as u64));
-                waited += interval.max(1);
-            }
-        }
-    }
+    (hooks.emit)(&line);
+    lines.push(line);
 }
 
-enum Poll {
-    Ready(Session),
-    Pending,
-    SlowDown,
-}
-
-fn poll_once(
-    http: &reqwest::blocking::Client,
-    origin: &str,
-    device_code: &str,
+fn session_from_tokens(
+    api_origin: &str,
+    tokens: TokenSet,
     now: i64,
-) -> Result<Poll, String> {
-    let (status, body) = post_form(
-        http,
-        &format!("{origin}/oauth/token"),
-        &form(&[
-            ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ("device_code", device_code),
-            ("client_id", CLIENT_ID),
-        ]),
-    )?;
-    if status == 200 {
-        return Ok(Poll::Ready(Session::from_token_body(&body, now)?));
+    user_id: String,
+    email: Option<String>,
+) -> Session {
+    Session {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: now.saturating_add(tokens.expires_in.max(1)),
+        server_url: api_origin.to_string(),
+        user_id,
+        email,
     }
-    let code = oauth_error_code(&body);
-    if status == 400 {
-        return match code.as_deref() {
-            Some("authorization_pending") => Ok(Poll::Pending),
-            Some("slow_down") => Ok(Poll::SlowDown),
-            Some("expired_token") => {
-                Err("This sign-in code expired. Run `bir-mcp login` again.".to_string())
-            }
-            Some("access_denied") => {
-                Err("Buwiz did not approve this computer. Run `bir-mcp login` again.".to_string())
-            }
-            Some(other) => Err(format!(
-                "Buwiz did not complete sign-in ({other}). Run `bir-mcp login` again."
-            )),
-            None => Err("Buwiz did not complete sign-in. Run `bir-mcp login` again.".to_string()),
-        };
+}
+
+fn login_error(error: CloudError) -> String {
+    match error {
+        CloudError::TimedOut => "This sign-in code expired. Run `bir-mcp login` again.".to_string(),
+        CloudError::Server { description }
+            if description == "expired_token"
+                || description.to_ascii_lowercase().contains("expired") =>
+        {
+            "This sign-in code expired. Run `bir-mcp login` again.".to_string()
+        }
+        CloudError::Server { description }
+            if description == "access_denied"
+                || description.to_ascii_lowercase().contains("denied") =>
+        {
+            "Buwiz did not approve this computer. Run `bir-mcp login` again.".to_string()
+        }
+        CloudError::InvalidGrant => {
+            "Buwiz did not approve this computer. Run `bir-mcp login` again.".to_string()
+        }
+        other => format!("{other} Run `bir-mcp login` again."),
     }
-    Err(format!(
-        "buwiz-server answered HTTP {status} during sign-in"
-    ))
+}
+
+/// Why a refresh did not produce a new access token.
+#[derive(Debug)]
+pub(crate) enum RefreshError {
+    /// The server rejected the refresh token. The caller deletes the account.
+    Rejected,
+    /// The account is still stored. The tool cannot run until the server answers.
+    Other(String),
 }
 
 /// Exchange a desktop refresh token. The caller stores the new session.
-pub(crate) fn exchange_refresh(origin: &str, refresh: &str, now: i64) -> Result<Session, String> {
+pub(crate) fn exchange_refresh(
+    origin: &str,
+    refresh: &str,
+    now: i64,
+) -> Result<Session, RefreshError> {
     let origin = trim_origin(origin);
-    let http = http_client()?;
-    let (status, body) = post_form(
-        &http,
-        &format!("{origin}/oauth/token"),
-        &form(&[("grant_type", "refresh_token"), ("refresh_token", refresh)]),
-    )?;
-    if status != 200 {
-        return Err(format!(
-            "buwiz-server answered HTTP {status} while refreshing sign-in"
-        ));
+    let mut http = BlockingHttp::new();
+    match cloud_account::refresh_tokens(&mut http, &origin, refresh) {
+        Ok(tokens) => Ok(Session {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            expires_at: now.saturating_add(tokens.expires_in.max(1)),
+            server_url: origin,
+            user_id: String::new(),
+            email: None,
+        }),
+        Err(CloudError::InvalidGrant) => Err(RefreshError::Rejected),
+        Err(CloudError::Network(message)) => Err(RefreshError::Other(format!(
+            "could not reach buwiz-server at {origin} to refresh sign-in: {message}"
+        ))),
+        Err(error) => Err(RefreshError::Other(format!(
+            "could not refresh the Buwiz sign-in: {error}"
+        ))),
     }
-    Session::from_token_body(&body, now)
 }
 
 /// Load the stored session, refreshing when it expires within a minute.
-/// `Ok(None)` means this computer is signed out. A failed refresh clears the
-/// store and returns the sign-in sentence.
+/// `Ok(None)` means this computer is signed out. A rejected refresh clears
+/// the store. A network failure leaves the store in place.
 pub fn ensure_fresh(
     origin: &str,
     store: &impl SessionStore,
@@ -420,30 +365,41 @@ pub fn ensure_fresh(
     let Some(session) = store.load()? else {
         return Ok(None);
     };
+    let origin = trim_origin(origin);
+    if !session.server_url.is_empty() && session.server_url != origin {
+        store.clear()?;
+        return Ok(None);
+    }
     if session.expires_at.saturating_sub(now) > REFRESH_SKEW_SECS {
         return Ok(Some(session));
     }
-    match exchange_refresh(origin, &session.refresh_token, now) {
-        Ok(fresh) => {
+    match exchange_refresh(&origin, &session.refresh_token, now) {
+        Ok(mut fresh) => {
+            fresh.user_id = session.user_id;
+            fresh.email = session.email;
+            if fresh.server_url.is_empty() {
+                fresh.server_url = origin;
+            }
             store.save(&fresh)?;
             Ok(Some(fresh))
         }
-        Err(_) => {
+        Err(RefreshError::Rejected) => {
             store.clear()?;
             Err(UNAUTHENTICATED.to_string())
         }
+        Err(RefreshError::Other(message)) => Err(message),
     }
 }
 
 pub fn status(origin: &str, store: &impl SessionStore, now: i64) -> Result<String, String> {
     let Some(session) = ensure_fresh(origin, store, now)? else {
-        return Ok("Not signed in. Run `bir-mcp login`.".to_string());
+        return Ok(SIGNED_OUT.to_string());
     };
     let origin = trim_origin(origin);
     let http = http_client()?;
     let (status, body) = account_body(&http, &origin, store, session, now)?;
     if status == 401 {
-        return Ok("Not signed in. Run `bir-mcp login`.".to_string());
+        return Ok(SIGNED_OUT.to_string());
     }
     if status != 200 {
         return Err(format!(
@@ -479,48 +435,19 @@ pub fn status(origin: &str, store: &impl SessionStore, now: i64) -> Result<Strin
 
 pub fn logout(origin: &str, store: &impl SessionStore) -> Result<String, String> {
     if let Some(session) = store.load()? {
-        let origin = trim_origin(origin);
-        if let Ok(http) = http_client() {
-            let _ = post_bearer_empty(
-                &http,
-                &format!("{origin}/api/auth/logout"),
-                &session.access_token,
-            );
+        let mut http = BlockingHttp::new();
+        let mut secrets = session.to_stored().to_secrets();
+        if secrets.server_url.is_empty() {
+            secrets.server_url = trim_origin(origin);
         }
+        cloud_account::revoke_session(&mut http, &secrets);
     }
     store.clear()?;
     Ok("Signed out.".to_string())
 }
 
 pub fn open_system_browser(url: &str) -> Result<(), String> {
-    browser_command(url)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("could not open a browser: {error}"))
-}
-
-fn browser_command(url: &str) -> Command {
-    #[cfg(target_os = "macos")]
-    {
-        let mut command = Command::new("open");
-        command.arg(url);
-        return command;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let mut command = Command::new("cmd");
-        command.args(["/C", "start", "", url]);
-        return command;
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let mut command = Command::new("xdg-open");
-        command.arg(url);
-        command
-    }
+    cloud_account::open_browser(url)
 }
 
 fn account_body(
@@ -536,10 +463,11 @@ fn account_body(
     }
     let fresh = match exchange_refresh(origin, &session.refresh_token, now) {
         Ok(fresh) => fresh,
-        Err(_) => {
+        Err(RefreshError::Rejected) => {
             store.clear()?;
             return Ok((401, String::new()));
         }
+        Err(RefreshError::Other(message)) => return Err(message),
     };
     store.save(&fresh)?;
     let (status, body) = get_bearer(http, &format!("{origin}/me"), &fresh.access_token)?;
@@ -557,21 +485,6 @@ fn http_client() -> Result<reqwest::blocking::Client, String> {
         .map_err(|error| format!("could not prepare the Buwiz sign-in request: {error}"))
 }
 
-fn post_form(
-    http: &reqwest::blocking::Client,
-    url: &str,
-    body: &str,
-) -> Result<(u16, String), String> {
-    let response = http
-        .post(url)
-        .header("content-type", "application/x-www-form-urlencoded")
-        .header("accept", "application/json")
-        .body(body.to_string())
-        .send()
-        .map_err(|error| format!("could not reach buwiz-server at {url}: {error}"))?;
-    read_response(response)
-}
-
 fn get_bearer(
     http: &reqwest::blocking::Client,
     url: &str,
@@ -583,60 +496,11 @@ fn get_bearer(
         .header("accept", "application/json")
         .send()
         .map_err(|error| format!("could not reach buwiz-server at {url}: {error}"))?;
-    read_response(response)
-}
-
-fn post_bearer_empty(
-    http: &reqwest::blocking::Client,
-    url: &str,
-    token: &str,
-) -> Result<(u16, String), String> {
-    let response = http
-        .post(url)
-        .header("authorization", format!("Bearer {token}"))
-        .header("accept", "application/json")
-        .body("")
-        .send()
-        .map_err(|error| format!("could not reach buwiz-server at {url}: {error}"))?;
-    read_response(response)
-}
-
-fn read_response(response: reqwest::blocking::Response) -> Result<(u16, String), String> {
     let status = response.status().as_u16();
     let body = response.text().map_err(|error| {
         format!("buwiz-server closed the sign-in request before a body arrived: {error}")
     })?;
     Ok((status, body))
-}
-
-fn form(pairs: &[(&str, &str)]) -> String {
-    pairs
-        .iter()
-        .map(|(key, value)| format!("{key}={}", form_encode(value)))
-        .collect::<Vec<_>>()
-        .join("&")
-}
-
-fn form_encode(value: &str) -> String {
-    let mut out = String::with_capacity(value.len());
-    for byte in value.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(byte as char);
-            }
-            _ => out.push_str(&format!("%{byte:02X}")),
-        }
-    }
-    out
-}
-
-fn oauth_error_code(body: &str) -> Option<String> {
-    let value: Value = serde_json::from_str(body).ok()?;
-    let code = value.get("error")?.as_str()?.trim();
-    if code.is_empty() || !code.chars().all(|ch| ch.is_ascii_lowercase() || ch == '_') {
-        return None;
-    }
-    Some(code.to_string())
 }
 
 fn trim_origin(origin: &str) -> String {
@@ -646,12 +510,13 @@ fn trim_origin(origin: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     struct Script {
         device_status: u16,
         device_body: String,
         polls: Mutex<Vec<(u16, String)>>,
-        seen: Mutex<Vec<(String, String)>>,
+        refreshes: Mutex<Vec<(u16, String)>>,
     }
 
     fn serve(script: Script) -> String {
@@ -665,20 +530,22 @@ mod tests {
                 };
                 let mut incoming = String::new();
                 std::io::Read::read_to_string(request.as_reader(), &mut incoming).unwrap();
-                script
-                    .seen
-                    .lock()
-                    .expect("seen")
-                    .push((request.url().to_string(), incoming.clone()));
-                let (status, body) = if request.url() == "/oauth/device/code" {
+                let (status, body) = if request.url() == "/auth/device/start" {
                     (script.device_status, script.device_body.clone())
-                } else if request.url() == "/oauth/token" {
+                } else if request.url() == "/auth/device/poll" {
                     script
                         .polls
                         .lock()
                         .expect("polls")
                         .pop()
                         .unwrap_or((500, "missing poll".to_string()))
+                } else if request.url() == "/oauth/token" {
+                    script
+                        .refreshes
+                        .lock()
+                        .expect("refreshes")
+                        .pop()
+                        .unwrap_or((500, "missing refresh".to_string()))
                 } else if request.url() == "/me" {
                     (
                         200,
@@ -705,8 +572,8 @@ mod tests {
         json!({
             "device_code": "device-secret",
             "user_code": "ABCD-EFGH",
-            "verification_uri": "http://localhost:3008/login/device",
-            "verification_uri_complete": "http://localhost:3008/login/device?user_code=ABCD-EFGH",
+            "verification_uri": "http://localhost:3008/device",
+            "verification_uri_complete": "http://localhost:3008/device?user_code=ABCD-EFGH",
             "expires_in": 30,
             "interval": interval,
         })
@@ -723,32 +590,64 @@ mod tests {
         .to_string()
     }
 
+    fn script(
+        device_body: String,
+        polls: Vec<(u16, String)>,
+        refreshes: Vec<(u16, String)>,
+    ) -> Script {
+        Script {
+            device_status: 200,
+            device_body,
+            polls: Mutex::new(polls),
+            refreshes: Mutex::new(refreshes),
+        }
+    }
+
+    fn bare(access_token: &str, refresh_token: &str, expires_at: i64) -> Session {
+        Session {
+            access_token: access_token.to_string(),
+            refresh_token: refresh_token.to_string(),
+            expires_at,
+            server_url: String::new(),
+            user_id: String::new(),
+            email: None,
+        }
+    }
+
     #[test]
     fn origins_come_from_the_build_and_are_not_contacted_here() {
-        assert_eq!(origin_for(true), "http://localhost:3008");
-        assert_eq!(origin_for(false), "https://api.buwiz.com");
+        assert_eq!(origin_for(true), cloud_account::DEV_SERVER_URL);
+        assert_eq!(origin_for(false), cloud_account::PRODUCTION_SERVER_URL);
         assert_eq!(CLIENT_ID, "buwiz-desktop");
+        assert_eq!(
+            cloud_account::account_browser_url(
+                "http://localhost:3008",
+                AccountBrowser::SignIn,
+                "ABCD-EFGH"
+            ),
+            "http://localhost:3008/login?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"
+        );
     }
 
     #[test]
     fn login_stores_the_session_after_the_user_approves_and_hides_tokens() {
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(vec![
+        let origin = serve(script(
+            device_body(0),
+            vec![
                 (200, token_body("access-secret", "refresh-secret")),
                 (
                     400,
                     r#"{"error":"authorization_pending","error_description":"wait"}"#.to_string(),
                 ),
-            ]),
-            seen: Mutex::new(Vec::new()),
-        });
+            ],
+            Vec::new(),
+        ));
         let opened = Mutex::new(Vec::new());
         let slept = Mutex::new(Vec::new());
         let store = MemoryStore::default();
         let lines = login(
             &origin,
+            "http://localhost:3008",
             &store,
             LoginHooks {
                 open_browser: |url: &str| {
@@ -766,7 +665,7 @@ mod tests {
         let visible = lines.join("\n");
         assert!(visible.contains("ABCD-EFGH"), "{visible}");
         assert!(
-            visible.contains("http://localhost:3008/login/device?user_code=ABCD-EFGH"),
+            visible.contains("http://localhost:3008/login?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"),
             "{visible}"
         );
         assert!(visible.contains("Signed in."), "{visible}");
@@ -775,26 +674,29 @@ mod tests {
         assert!(!visible.contains("device-secret"), "{visible}");
         assert_eq!(
             opened.lock().unwrap().as_slice(),
-            ["http://localhost:3008/login/device?user_code=ABCD-EFGH"]
+            ["http://localhost:3008/login?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"]
         );
-        assert_eq!(slept.lock().unwrap().as_slice(), [0]);
+        assert_eq!(slept.lock().unwrap().as_slice(), [1]);
         let saved = store.load().unwrap().unwrap();
         assert_eq!(saved.access_token, "access-secret");
         assert_eq!(saved.refresh_token, "refresh-secret");
         assert_eq!(saved.expires_at, 1_700_000_000 + 900);
+        assert_eq!(saved.server_url, origin);
+        assert_eq!(saved.user_id, "u");
+        assert_eq!(saved.email.as_deref(), Some("owner@example.test"));
     }
 
     #[test]
     fn a_closed_browser_still_waits_for_approval() {
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(vec![(200, token_body("access-secret", "refresh-secret"))]),
-            seen: Mutex::new(Vec::new()),
-        });
+        let origin = serve(script(
+            device_body(0),
+            vec![(200, token_body("access-secret", "refresh-secret"))],
+            Vec::new(),
+        ));
         let store = MemoryStore::default();
         let lines = login(
             &origin,
+            "http://localhost:3008",
             &store,
             LoginHooks {
                 open_browser: |_url: &str| Err("no display".to_string()),
@@ -812,19 +714,19 @@ mod tests {
 
     #[test]
     fn slow_down_waits_longer_and_a_denial_stores_nothing() {
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(vec![
+        let origin = serve(script(
+            device_body(5),
+            vec![
                 (200, token_body("access-secret", "refresh-secret")),
                 (400, r#"{"error":"slow_down"}"#.to_string()),
-            ]),
-            seen: Mutex::new(Vec::new()),
-        });
+            ],
+            Vec::new(),
+        ));
         let slept = Mutex::new(Vec::new());
         let store = MemoryStore::default();
         login(
             &origin,
+            "http://localhost:3008",
             &store,
             LoginHooks {
                 open_browser: |_url: &str| Ok(()),
@@ -836,17 +738,17 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(slept.lock().unwrap().as_slice(), [5]);
+        assert_eq!(slept.lock().unwrap().as_slice(), [10]);
 
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(vec![(400, r#"{"error":"access_denied"}"#.to_string())]),
-            seen: Mutex::new(Vec::new()),
-        });
+        let origin = serve(script(
+            device_body(0),
+            vec![(400, r#"{"error":"access_denied"}"#.to_string())],
+            Vec::new(),
+        ));
         let store = MemoryStore::default();
         let error = login(
             &origin,
+            "http://localhost:3008",
             &store,
             LoginHooks {
                 open_browser: |_url: &str| Ok(()),
@@ -862,76 +764,64 @@ mod tests {
 
     #[test]
     fn refresh_replaces_the_stored_access_token_and_a_failure_clears_it() {
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(vec![(200, token_body("new-access", "new-refresh"))]),
-            seen: Mutex::new(Vec::new()),
-        });
+        let origin = serve(script(
+            device_body(0),
+            Vec::new(),
+            vec![(200, token_body("new-access", "new-refresh"))],
+        ));
         let store = MemoryStore::default();
-        store
-            .save(&Session {
-                access_token: "old-access".to_string(),
-                refresh_token: "old-refresh".to_string(),
-                expires_at: 50,
-            })
-            .unwrap();
+        store.save(&bare("old-access", "old-refresh", 50)).unwrap();
         let fresh = ensure_fresh(&origin, &store, 10).unwrap().unwrap();
         assert_eq!(fresh.access_token, "new-access");
         assert_eq!(fresh.refresh_token, "new-refresh");
         assert_eq!(store.load().unwrap().unwrap().access_token, "new-access");
 
         let store = MemoryStore::default();
-        store
-            .save(&Session {
-                access_token: "still-good".to_string(),
-                refresh_token: "keep".to_string(),
-                expires_at: 10_000,
-            })
-            .unwrap();
+        store.save(&bare("still-good", "keep", 10_000)).unwrap();
         let kept = ensure_fresh("http://127.0.0.1:9", &store, 10)
             .unwrap()
             .unwrap();
         assert_eq!(kept.access_token, "still-good");
 
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(vec![(400, r#"{"error":"invalid_grant"}"#.to_string())]),
-            seen: Mutex::new(Vec::new()),
-        });
+        let origin = serve(script(
+            device_body(0),
+            Vec::new(),
+            vec![(400, r#"{"error":"invalid_grant"}"#.to_string())],
+        ));
         let store = MemoryStore::default();
-        store
-            .save(&Session {
-                access_token: "old-access".to_string(),
-                refresh_token: "old-refresh".to_string(),
-                expires_at: 10,
-            })
-            .unwrap();
+        store.save(&bare("old-access", "old-refresh", 10)).unwrap();
         let error = ensure_fresh(&origin, &store, 10).unwrap_err();
         assert_eq!(error, UNAUTHENTICATED);
         assert!(store.load().unwrap().is_none());
     }
 
     #[test]
-    fn status_names_the_account_and_logout_clears_the_store() {
-        let origin = serve(Script {
-            device_status: 200,
-            device_body: device_body(0),
-            polls: Mutex::new(Vec::new()),
-            seen: Mutex::new(Vec::new()),
-        });
+    fn a_session_for_a_different_server_is_dropped() {
         let store = MemoryStore::default();
-        assert_eq!(
-            status(&origin, &store, 10).unwrap(),
-            "Not signed in. Run `bir-mcp login`."
-        );
+        let mut session = bare("access-secret", "refresh-secret", 10_000);
+        session.server_url = "https://api.buwiz.com".to_string();
+        store.save(&session).unwrap();
+        let fresh = ensure_fresh("http://localhost:3008", &store, 10).unwrap();
+        assert!(fresh.is_none());
+        assert!(store.load().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_refresh_the_server_never_answers_keeps_the_account() {
+        let store = MemoryStore::default();
+        store.save(&bare("old-access", "old-refresh", 10)).unwrap();
+        let error = ensure_fresh("http://127.0.0.1:1", &store, 10).unwrap_err();
+        assert!(error.contains("could not reach buwiz-server"), "{error}");
+        assert_eq!(store.load().unwrap().unwrap().refresh_token, "old-refresh");
+    }
+
+    #[test]
+    fn status_names_the_account_and_logout_clears_the_store() {
+        let origin = serve(script(device_body(0), Vec::new(), Vec::new()));
+        let store = MemoryStore::default();
+        assert_eq!(status(&origin, &store, 10).unwrap(), SIGNED_OUT);
         store
-            .save(&Session {
-                access_token: "access-secret".to_string(),
-                refresh_token: "refresh-secret".to_string(),
-                expires_at: 10_000,
-            })
+            .save(&bare("access-secret", "refresh-secret", 10_000))
             .unwrap();
         let line = status(&origin, &store, 10).unwrap();
         assert_eq!(
@@ -942,16 +832,5 @@ mod tests {
         assert_eq!(logout(&origin, &store).unwrap(), "Signed out.");
         assert!(store.load().unwrap().is_none());
         assert_eq!(logout(&origin, &store).unwrap(), "Signed out.");
-    }
-
-    #[test]
-    fn browser_command_uses_the_platform_opener() {
-        let command = browser_command("http://localhost:3008/login/device?user_code=ABCD");
-        #[cfg(target_os = "linux")]
-        assert_eq!(command.get_program(), "xdg-open");
-        #[cfg(target_os = "macos")]
-        assert_eq!(command.get_program(), "open");
-        #[cfg(target_os = "windows")]
-        assert_eq!(command.get_program(), "cmd");
     }
 }

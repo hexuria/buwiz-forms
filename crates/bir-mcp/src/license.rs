@@ -3,9 +3,10 @@
 //! * [`License::Open`] — library default (`Server::new`). No network call.
 //! * [`License::Required`] — `BUWIZ_ACCESS_TOKEN` is set. Each tool POSTs
 //!   `{origin}/mcp` `list_tax_profiles` with that agent token.
-//! * [`License::Desktop`] — a session from `bir-mcp login`. Each tool GETs
-//!   `{origin}/api/tax-profiles` with the user access token, and refreshes
-//!   that token once on HTTP 401.
+//! * [`License::Desktop`] — the account the Buwiz app stored. Each tool GETs
+//!   `{origin}/api/tax-profiles` with that user access token, and refreshes
+//!   that token once on HTTP 401. A rejected refresh clears the shared store.
+//!   A network failure leaves the store in place.
 //!
 //! buwiz-server answers 401 for a bad token and lists a profile with empty
 //! `permissions` when the pass no longer covers it. This module turns those
@@ -20,14 +21,14 @@
 //! [`License::from_parts`] stays the agent-token constructor: an empty URL
 //! leaves the gate open. The `bir-mcp` binary does not use that open path.
 
-use crate::signin::SessionStore;
 use serde_json::{Value, json};
 use std::time::Duration;
 
 /// Shown when the token is missing or buwiz-server answers 401.
-pub const UNAUTHENTICATED: &str = "Buwiz sign-in required. Run `bir-mcp login` and approve this \
-computer on the device page, or set BUWIZ_ACCESS_TOKEN to a live buwiz-server agent token. \
-bir-mcp will not drive BIR until that sign-in is accepted.";
+pub const UNAUTHENTICATED: &str = "Buwiz sign-in required. Sign in from the Buwiz app, or run \
+`bir-mcp login`, and approve this computer on the device page. Both save the same account. \
+Or set BUWIZ_ACCESS_TOKEN to a live buwiz-server agent token. bir-mcp will not drive BIR \
+until that sign-in is accepted.";
 
 /// Shown when the token is live but no connected taxpayer has a working pass.
 pub const UNLICENSED: &str = "Buwiz access required. This token is signed in, but no connected \
@@ -44,7 +45,7 @@ pub enum License {
     /// Every tool checks this origin with this agent token first.
     Required { base: String, token: String },
     /// Every tool checks this origin with the desktop user access token.
-    /// `persist` writes a refreshed pair back to the OS keychain.
+    /// `persist` writes a refreshed pair back to the shared desktop account.
     Desktop {
         base: String,
         access: String,
@@ -80,8 +81,9 @@ impl License {
         Ok(Self::required(url, token.to_string()))
     }
 
-    /// Desktop session from `bir-mcp login`. `persist` stores a refreshed
-    /// pair in the OS keychain. Tests leave it false.
+    /// Desktop account shared with the Buwiz app. `persist` stores a refreshed
+    /// pair in that account. Tests leave it false so they never touch the
+    /// keychain or the private file.
     pub fn desktop(
         base: impl Into<String>,
         access: impl Into<String>,
@@ -132,12 +134,13 @@ impl License {
         let session =
             match crate::signin::exchange_refresh(base, refresh, crate::signin::unix_now()) {
                 Ok(session) => session,
-                Err(_) => {
+                Err(crate::signin::RefreshError::Rejected) => {
                     if persist {
-                        let _ = SessionStore::clear(&crate::signin::KeyringStore);
+                        crate::signin::clear_desktop_session();
                     }
                     return Err(UNAUTHENTICATED.to_string());
                 }
+                Err(crate::signin::RefreshError::Other(message)) => return Err(message),
             };
         if let Self::Desktop {
             access, refresh, ..
@@ -147,11 +150,16 @@ impl License {
             *refresh = session.refresh_token.clone();
         }
         if persist {
-            let _ = SessionStore::save(&crate::signin::KeyringStore, &session);
+            crate::signin::persist_refresh(
+                base,
+                &session.access_token,
+                &session.refresh_token,
+                session.expires_at,
+            )?;
         }
         match check_desktop(base, &session.access_token) {
             Err(message) if message == UNAUTHENTICATED && persist => {
-                let _ = SessionStore::clear(&crate::signin::KeyringStore);
+                crate::signin::clear_desktop_session();
                 Err(message)
             }
             other => other,

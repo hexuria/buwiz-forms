@@ -21,17 +21,8 @@ gpui-agent = { workspace = true }
 reqwest = { workspace = true }
 # `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
 tiny_http = { version = "0.12", default-features = false }
-
-# Desktop session from `bir-mcp login`. keyring 3.x stores nothing unless a
-# backend feature is selected, same as bir-core.
-[target.'cfg(target_os = "macos")'.dependencies]
-keyring = { workspace = true, features = ["apple-native"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-keyring = { workspace = true, features = ["windows-native"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] }
+# Desktop device flow and the account store shared with the Buwiz app.
+bir-core = { path = "../bir-core" }
 
 [dev-dependencies]
 tempfile = "3"
