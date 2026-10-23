@@ -60,7 +60,11 @@ anyrender = "0.14"
 anyrender_vello_cpu = { version = "0.18", features = ["multithreading"] }
 peniko = "0.6"
 base64 = "0.22"
-image = { version = "0.25", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png"] }
+# Same tray and global-hotkey crates as painted `bir`. The gtk feature is
+# what tray-icon uses on Linux; it is inert on macOS and Windows.
+tray-icon = { version = "0.24.0", default-features = false, features = ["gtk"] }
+global-hotkey = "0.8"
 smallvec = "1"
 
 bir-core = { path = "../bir-core" }
@@ -107,9 +111,20 @@ robius-authentication = { version = "0.1.1", features = ["async"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3.2", features = ["NSArray", "NSURL", "NSString", "NSGeometry", "NSKeyValueCoding", "NSDictionary"] }
-objc2-app-kit = { version = "0.3.2", features = ["NSSharingService", "NSView", "NSResponder", "NSPrintInfo", "NSPrintOperation", "NSWindow", "NSGraphics"] }
+objc2-app-kit = { version = "0.3.2", features = ["NSSharingService", "NSView", "NSResponder", "NSPrintInfo", "NSPrintOperation", "NSWindow", "NSGraphics", "NSApplication", "NSRunningApplication"] }
 objc2-web-kit = { version = "0.3.2", features = ["WKWebView", "objc2-app-kit"] }
 objc2-pdf-kit = { version = "0.3.2", features = ["PDFDocument", "PDFPage", "objc2-app-kit"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# tray-icon's menu panics on Linux unless GTK is initialized first.
+gtk = "0.18.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 # Debug builds optimize the packages every frame runs through, so `just run`
 # feels like the release app. This crate is its own workspace root, so the
@@ -177,7 +192,7 @@ name = "ebirforms"
 maintainer = "Goldcoders Corp <support@goldcoders.dev>"
 priority = "optional"
 section = "utils"
-depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6"
+depends = "$auto, libgtk-3-0, libwebkit2gtk-4.1-0, libvulkan1, libxkbcommon0, libwayland-client0, fontconfig, libfreetype6, libayatana-appindicator3-1"
 extended-description = """eBIRForms Desktop — Philippine BIR tax return filing application.
 Supports form preparation, validation, submission via SFTP, email confirmation
 tracking, and PDF generation for BIR Form 2551Q and related forms."""
@@ -195,7 +210,7 @@ assets = [
 [package.metadata.generate-rpm]
 name = "ebirforms"
 auto-req = "auto"
-requires = { "libvulkan.so.1()(64bit)" = "", "libwebkit2gtk-4.1.so.0()(64bit)" = "" }
+requires = { "libvulkan.so.1()(64bit)" = "", "libwebkit2gtk-4.1.so.0()(64bit)" = "", "libayatana-appindicator3.so.1()(64bit)" = "" }
 assets = [
     { source = "target/release/bir", dest = "/usr/bin/ebirforms", mode = "755" },
     { source = "../../app/**/*", dest = "/usr/share/ebirforms/app/", mode = "644" },

@@ -110,7 +110,7 @@ pkgs_apt() {
         libwayland-dev libwayland-client0 libasound2-dev libudev-dev
         libvulkan-dev libfontconfig1-dev libfreetype-dev libssl-dev
         libpolkit-gobject-1-dev libgtk-3-dev libxdo-dev
-        mesa-vulkan-drivers libappindicator3-dev librsvg2-dev
+        mesa-vulkan-drivers libappindicator3-dev libayatana-appindicator3-dev librsvg2-dev
         patchelf xvfb fonts-noto-core fonts-noto-color-emoji
         $(pick_pkg libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev)
     "
@@ -123,7 +123,7 @@ pkgs_dnf() {
         wayland-devel alsa-lib-devel systemd-devel vulkan-devel
         fontconfig-devel freetype-devel openssl-devel polkit-devel
         gtk3-devel libxdo-devel mesa-vulkan-drivers
-        libappindicator-gtk3-devel librsvg2-devel patchelf
+        libappindicator-gtk3-devel libayatana-appindicator-gtk3-devel librsvg2-devel patchelf
         xorg-x11-server-Xvfb google-noto-sans-fonts
         google-noto-emoji-color-fonts
         $(pick_pkg webkit2gtk4.1-devel webkit2gtk4.0-devel)
@@ -136,7 +136,7 @@ pkgs_pacman() {
         libx11 libxcb libxkbcommon libxkbcommon-x11 wayland
         alsa-lib systemd-libs vulkan-headers vulkan-icd-loader
         fontconfig freetype2 openssl polkit gtk3 xdotool
-        mesa vulkan-swrast libappindicator-gtk3 librsvg patchelf
+        mesa vulkan-swrast libappindicator-gtk3 libayatana-appindicator librsvg patchelf
         xorg-server-xvfb noto-fonts noto-fonts-emoji
         $(pick_pkg webkit2gtk-4.1 webkit2gtk)
     "
@@ -149,7 +149,7 @@ pkgs_zypper() {
         wayland-devel alsa-devel libudev-devel vulkan-devel libvulkan1
         fontconfig-devel freetype2-devel libopenssl-devel polkit-devel
         gtk3-devel libxdo-devel Mesa
-        libappindicator3-devel librsvg-devel patchelf xorg-x11-Xvfb
+        libappindicator3-devel libayatana-appindicator3-devel librsvg-devel patchelf xorg-x11-Xvfb
         $(pick_pkg noto-sans-fonts) $(pick_pkg google-noto-coloremoji-fonts)
         $(pick_pkg webkit2gtk4-devel webkit2gtk3-devel)
     "
