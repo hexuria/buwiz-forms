@@ -11,6 +11,15 @@ submission queue sends returns to BIR in the background, and a dry-run mode
 lets you test the whole flow without sending anything. Profiles, TINs and
 drafts stay in an encrypted SQLite database on your own machine.
 
+Settings → Account can sign in to [buwiz-server](https://github.com/hexuria/buwiz-server)
+with the device flow (the password stays in the browser). Release builds use
+`https://api.buwiz.com` and open account pages on `https://account.buwiz.com`.
+Debug builds use `http://localhost:3008`. A build can bake in
+`BUWIZ_SERVER_URL` and `BUWIZ_ACCOUNT_URL`. A running process can still
+override those with the same variable names. The app does not ask for the
+address. It still prepares and files returns when that server is
+unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
+
 ## Platform status
 
 | Platform | Status | Details |

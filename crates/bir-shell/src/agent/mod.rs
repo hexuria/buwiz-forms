@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use gpui_agent::discovery::{self, PublishedHost};
-use gpui_agent::mailbox::AgentMailbox;
+use gpui_agent::mailbox::{AgentMailbox, MailboxRequest};
 use gpui_agent::protocol::PlatformKind;
 use gpui_agent::security::from_env;
 use gpui_agent::server::spawn_mailbox_named;
@@ -127,6 +127,20 @@ fn maybe_start() -> Option<Started> {
     }
 }
 
+/// Answer the whole batch with the sign-in error when the account gate is
+/// locked, and do no host work. `Some` is the batch to run.
+fn admit(batch: Vec<MailboxRequest>) -> Option<Vec<MailboxRequest>> {
+    if let Err(error) = crate::account_gate::ensure_unlocked() {
+        let message = error.to_string();
+        for posted in batch {
+            let id = posted.request.id.clone();
+            posted.reply(gpui_agent::Response::err(id, message.clone()));
+        }
+        return None;
+    }
+    Some(batch)
+}
+
 fn install_queue(queue: session::UiQueue) {
     *UI_COMMANDS.lock().expect("agent ui queue") = Some(queue);
 }
@@ -151,6 +165,13 @@ fn drain(
     if batch.is_empty() {
         return false;
     }
+    // Every gpui-agent / bir-mcp tool hits this drain. The account gate is
+    // checked on each batch, including after a cached database, so signing
+    // out locks the tools again. The test bypass is the gate's own: both
+    // EBIR_TEST_ENV=1 and BIR_AUTH_BYPASS=1, and only in debug builds.
+    let Some(batch) = admit(batch) else {
+        return false;
+    };
     if session.borrow().needs_db() {
         match crate::bir_module::database_handle() {
             Ok(handle) => session.borrow_mut().set_db(handle),
@@ -317,6 +338,34 @@ mod tests {
         assert!(tree.find("Home").is_some());
         assert_eq!(tree.find_all("nav-home").len(), 1);
         assert!(tree_from_debug(None).find("nav-home").is_none());
+    }
+
+    #[test]
+    fn a_locked_account_refuses_every_posted_tool() {
+        use std::time::Duration;
+
+        use gpui_agent::protocol::{Op, Request};
+
+        let mailbox = AgentMailbox::new();
+        let hello = mailbox.push(Request::new("hello", Op::Hello));
+        let invoke = mailbox.push(Request::new(
+            "list",
+            Op::Invoke {
+                name: "profile.list".into(),
+                args: serde_json::json!({}),
+            },
+        ));
+        crate::account_gate::force_locked(|| {
+            assert!(admit(mailbox.take()).is_none());
+        });
+        for response in [hello, invoke] {
+            let response = response.recv_timeout(Duration::from_millis(200)).unwrap();
+            assert!(!response.ok);
+            assert_eq!(
+                response.error.as_deref(),
+                Some(crate::account_gate::LOCKED_MESSAGE)
+            );
+        }
     }
 
     #[test]

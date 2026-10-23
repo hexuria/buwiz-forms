@@ -10,6 +10,7 @@ fi
 mkdir -p "$ROOT/tmp/pr141-review"
 exec env \
   EBIR_TEST_ENV=1 \
+  BIR_AUTH_BYPASS=1 \
   EBIR_RELAXED_VALIDATION=1 \
   BIR_SFTP_DRY_RUN=1 \
   BIR_DATABASE_PATH="${BIR_DEMO_DATABASE_PATH:-$ROOT/tmp/pr141-review/manual.db}" \

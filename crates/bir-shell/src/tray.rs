@@ -327,12 +327,20 @@ impl HotkeyWatch {
     }
 
     fn poll(&mut self, cx: &mut App) {
+        let locked = !crate::account_gate::is_unlocked();
         if self.manager.is_some() {
             while let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
-                if event.state == global_hotkey::HotKeyState::Pressed {
+                if event.state == global_hotkey::HotKeyState::Pressed && !locked {
                     toggle(cx);
                 }
             }
+        }
+        if locked {
+            if let (Some(manager), Some(old)) = (self.manager.as_ref(), self.registered.take()) {
+                let _ = manager.unregister(old);
+            }
+            self.combo = None;
+            return;
         }
 
         self.tick = self.tick.wrapping_add(1);

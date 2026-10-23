@@ -8,12 +8,14 @@
 //! See `docs/plans/gpui-shell-migration.md` (tracking issue #135) for the
 //! slice plan.
 
+mod account_gate;
 #[cfg(feature = "agent")]
 mod agent;
 mod app_menu;
 mod auth_limiter;
 mod bir_module;
 mod blitz_render;
+mod cloud_account;
 mod dashboard_module;
 mod host;
 mod hotkey;

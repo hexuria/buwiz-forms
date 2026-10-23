@@ -748,6 +748,10 @@ jobs:
       run: cargo install just --version 1.45.0 --locked
 
     - name: Check bir-shell workspace
+      env:
+        # Debug-only account-gate bypass. Release builds ignore both.
+        EBIR_TEST_ENV: "1"
+        BIR_AUTH_BYPASS: "1"
       run: just shell-check
 
   # A failed run on main - nightly, or the push a merge makes - opens (or

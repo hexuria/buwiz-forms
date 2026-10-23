@@ -100,7 +100,7 @@ shell-check: shell-ui-test
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features agent
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --all-targets -- -D warnings
-    cargo test --locked --manifest-path crates/bir-shell/Cargo.toml
+    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } }}
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
 
 # Run code formatting, linting, and type checking

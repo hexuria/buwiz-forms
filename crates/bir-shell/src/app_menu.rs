@@ -51,6 +51,7 @@ gpui::actions!(
         OpenSupportEmail,
         OpenCompanyWebsite,
         CheckForUpdates,
+        SignOut,
     ]
 );
 
@@ -110,10 +111,18 @@ pub fn install(cx: &mut App) {
 }
 
 fn publish_menus(cx: &mut App) {
-    let menus = app_menus(current_platform());
+    let menus = app_menus(current_platform(), crate::account_gate::is_unlocked());
     gpui_component::GlobalState::global_mut(cx)
         .set_app_menus(menus.into_iter().map(Menu::owned).collect());
-    cx.set_menus(app_menus(current_platform()));
+    cx.set_menus(app_menus(
+        current_platform(),
+        crate::account_gate::is_unlocked(),
+    ));
+}
+
+/// Rebuild the menu bar after sign-in or sign-out.
+pub(crate) fn refresh(cx: &mut App) {
+    publish_menus(cx);
 }
 
 /// Close hides. The tray poll starts with the window. On macOS the menu is
@@ -479,11 +488,12 @@ pub fn hide_or_quit(cx: &mut App) {
 
 fn register_actions(cx: &mut App) {
     cx.on_action(|_: &AboutApplication, cx| show_about(cx))
-        .on_action(|_: &OpenSettings, cx| dispatch_script("open-settings", cx))
-        .on_action(|_: &NewReturn, cx| dispatch_script("new-return", cx))
-        .on_action(|_: &ToggleSidebar, cx| dispatch_script("toggle-sidebar", cx))
-        .on_action(|_: &ToggleTheme, cx| dispatch_script("toggle-theme", cx))
-        .on_action(|_: &OpenCommandPalette, cx| dispatch_script("open-palette", cx))
+        .on_action(|_: &OpenSettings, cx| dispatch_if_unlocked("open-settings", cx))
+        .on_action(|_: &NewReturn, cx| dispatch_if_unlocked("new-return", cx))
+        .on_action(|_: &ToggleSidebar, cx| dispatch_if_unlocked("toggle-sidebar", cx))
+        .on_action(|_: &ToggleTheme, cx| dispatch_if_unlocked("toggle-theme", cx))
+        .on_action(|_: &OpenCommandPalette, cx| dispatch_if_unlocked("open-palette", cx))
+        .on_action(|_: &SignOut, cx| dispatch_if_unlocked("cloud-sign-out", cx))
         .on_action(|_: &HideToTray, cx| hide_or_quit(cx))
         .on_action(|_: &CloseWindow, cx| hide_or_quit(cx))
         .on_action(|_: &HideOthers, cx| cx.hide_other_apps())
@@ -501,7 +511,11 @@ fn register_actions(cx: &mut App) {
         })
         .on_action(|_: &OpenSupportEmail, cx| cx.open_url(SUPPORT_URL))
         .on_action(|_: &OpenCompanyWebsite, cx| cx.open_url(WEBSITE_URL))
-        .on_action(|_: &CheckForUpdates, _cx| crate::updater::check_now())
+        .on_action(|_: &CheckForUpdates, _cx| {
+            if crate::account_gate::is_unlocked() {
+                crate::updater::check_now();
+            }
+        })
         .on_action(|action: &ShellAction, cx| {
             // The caption close button dispatches this. Every other script
             // action still belongs to the view that named it.
@@ -511,6 +525,12 @@ fn register_actions(cx: &mut App) {
                 cx.propagate();
             }
         });
+}
+
+fn dispatch_if_unlocked(id: &'static str, cx: &mut App) {
+    if crate::account_gate::is_unlocked() {
+        dispatch_script(id, cx);
+    }
 }
 
 fn dispatch_script(id: &'static str, cx: &mut App) {
@@ -631,36 +651,50 @@ fn bind_global_keys(cx: &mut App) {
     cx.bind_keys([KeyBinding::new("f11", ToggleFullScreen, None)]);
 }
 
-pub(crate) fn app_menus(platform: MenuPlatform) -> Vec<Menu> {
+pub(crate) fn app_menus(platform: MenuPlatform, unlocked: bool) -> Vec<Menu> {
     let mut menus = Vec::new();
     if platform == MenuPlatform::Macos {
-        menus.push(macos_app_menu());
+        menus.push(macos_app_menu(unlocked));
     }
-    menus.push(file_menu(platform));
-    menus.push(edit_menu(platform == MenuPlatform::Linux));
-    menus.push(view_menu(platform));
-    menus.push(window_menu(platform == MenuPlatform::Macos));
-    menus.push(help_menu(platform != MenuPlatform::Macos));
+    if unlocked || platform != MenuPlatform::Macos {
+        menus.push(file_menu(platform, unlocked));
+    }
+    menus.push(edit_menu(unlocked && platform == MenuPlatform::Linux));
+    if unlocked {
+        menus.push(view_menu(platform));
+        menus.push(window_menu(platform == MenuPlatform::Macos));
+        menus.push(help_menu(platform != MenuPlatform::Macos, true));
+    } else if platform != MenuPlatform::Macos {
+        menus.push(help_menu(true, false));
+    }
     menus
 }
 
-fn macos_app_menu() -> Menu {
-    Menu::new("eBIRForms").items([
+fn macos_app_menu(unlocked: bool) -> Menu {
+    let mut items = vec![
         MenuItem::action("About eBIRForms", AboutApplication),
         MenuItem::separator(),
-        MenuItem::action("Settings…", OpenSettings),
-        MenuItem::separator(),
-        MenuItem::os_submenu("Services", SystemMenuType::Services),
-        MenuItem::separator(),
-        MenuItem::action("Hide eBIRForms", HideToTray),
-        MenuItem::action("Hide Others", HideOthers),
-        MenuItem::action("Show All", ShowAllApplications),
-        MenuItem::separator(),
-        MenuItem::action("Quit eBIRForms", QuitApplication),
-    ])
+    ];
+    if unlocked {
+        items.push(MenuItem::action("Settings…", OpenSettings));
+        items.push(MenuItem::separator());
+        items.push(MenuItem::os_submenu("Services", SystemMenuType::Services));
+        items.push(MenuItem::separator());
+        items.push(MenuItem::action("Hide eBIRForms", HideToTray));
+        items.push(MenuItem::action("Hide Others", HideOthers));
+        items.push(MenuItem::action("Show All", ShowAllApplications));
+        items.push(MenuItem::separator());
+        items.push(MenuItem::action("Sign Out", SignOut));
+        items.push(MenuItem::separator());
+    }
+    items.push(MenuItem::action("Quit eBIRForms", QuitApplication));
+    Menu::new("eBIRForms").items(items)
 }
 
-fn file_menu(platform: MenuPlatform) -> Menu {
+fn file_menu(platform: MenuPlatform, unlocked: bool) -> Menu {
+    if !unlocked {
+        return Menu::new("File").items([MenuItem::action("Quit eBIRForms", QuitApplication)]);
+    }
     let mut items = vec![MenuItem::action("New Return…", NewReturn)];
     match platform {
         MenuPlatform::Macos => {
@@ -670,6 +704,7 @@ fn file_menu(platform: MenuPlatform) -> Menu {
         MenuPlatform::Windows => {
             items.push(MenuItem::separator());
             items.push(MenuItem::action("Settings…", OpenSettings));
+            items.push(MenuItem::action("Sign Out", SignOut));
             items.push(MenuItem::separator());
             items.push(MenuItem::action("Hide eBIRForms", HideToTray));
             items.push(MenuItem::separator());
@@ -680,6 +715,7 @@ fn file_menu(platform: MenuPlatform) -> Menu {
             items.push(MenuItem::action("Close Window", CloseWindow));
             items.push(MenuItem::action("Hide eBIRForms", HideToTray));
             items.push(MenuItem::separator());
+            items.push(MenuItem::action("Sign Out", SignOut));
             items.push(MenuItem::action("Quit eBIRForms", QuitApplication));
         }
     }
@@ -737,11 +773,16 @@ fn window_menu(bring_all: bool) -> Menu {
     Menu::new("Window").items(items)
 }
 
-fn help_menu(include_about: bool) -> Menu {
+fn help_menu(include_about: bool, unlocked: bool) -> Menu {
     let mut items = Vec::new();
     if include_about {
         items.push(MenuItem::action("About eBIRForms", AboutApplication));
-        items.push(MenuItem::separator());
+        if unlocked {
+            items.push(MenuItem::separator());
+        }
+    }
+    if !unlocked {
+        return Menu::new("Help").items(items);
     }
     items.push(MenuItem::action("Check for Updates…", CheckForUpdates));
     items.push(MenuItem::action("Contact Support…", OpenSupportEmail));
@@ -804,7 +845,7 @@ mod tests {
 
     #[test]
     fn macos_menus_match_the_app_store_list() {
-        let menus = app_menus(MenuPlatform::Macos);
+        let menus = app_menus(MenuPlatform::Macos, true);
         let names: Vec<_> = menus.iter().map(|menu| menu.name.to_string()).collect();
         assert_eq!(
             names,
@@ -823,6 +864,8 @@ mod tests {
                 "Hide Others",
                 "Show All",
                 "-",
+                "Sign Out",
+                "-",
                 "Quit eBIRForms",
             ]
         );
@@ -831,6 +874,7 @@ mod tests {
         assert!(is_action::<HideToTray>(named(app, "Hide eBIRForms")));
         assert!(is_action::<OpenSettings>(named(app, "Settings…")));
         assert!(is_action::<AboutApplication>(named(app, "About eBIRForms")));
+        assert!(is_action::<SignOut>(named(app, "Sign Out")));
 
         let file = menu(&menus, "File");
         assert_eq!(titles(file), ["New Return…", "-", "Close Window"]);
@@ -845,7 +889,7 @@ mod tests {
 
     #[test]
     fn edit_items_use_the_text_actions_and_native_selectors() {
-        let menus = app_menus(MenuPlatform::Macos);
+        let menus = app_menus(MenuPlatform::Macos, true);
         let edit = menu(&menus, "Edit");
         let expected = [
             ("Undo", OsAction::Undo),
@@ -865,7 +909,7 @@ mod tests {
 
     #[test]
     fn linux_puts_settings_in_edit_and_quit_in_file() {
-        let menus = app_menus(MenuPlatform::Linux);
+        let menus = app_menus(MenuPlatform::Linux, true);
         let names: Vec<_> = menus.iter().map(|menu| menu.name.to_string()).collect();
         assert_eq!(names, ["File", "Edit", "View", "Window", "Help"]);
         let file = menu(&menus, "File");
@@ -877,12 +921,14 @@ mod tests {
                 "Close Window",
                 "Hide eBIRForms",
                 "-",
+                "Sign Out",
                 "Quit eBIRForms",
             ]
         );
         assert!(is_action::<CloseWindow>(named(file, "Close Window")));
         assert!(is_action::<QuitApplication>(named(file, "Quit eBIRForms")));
         assert!(is_action::<HideToTray>(named(file, "Hide eBIRForms")));
+        assert!(is_action::<SignOut>(named(file, "Sign Out")));
         assert!(is_action::<OpenSettings>(named(
             menu(&menus, "Edit"),
             "Settings…"
@@ -901,7 +947,7 @@ mod tests {
 
     #[test]
     fn windows_puts_settings_in_file() {
-        let menus = app_menus(MenuPlatform::Windows);
+        let menus = app_menus(MenuPlatform::Windows, true);
         let file = menu(&menus, "File");
         assert!(titles(file).contains(&"Settings…".to_string()));
         assert!(is_action::<OpenSettings>(named(file, "Settings…")));
@@ -923,10 +969,50 @@ mod tests {
     }
 
     #[test]
+    fn locked_menus_keep_about_and_quit_and_drop_filing_commands() {
+        for platform in [
+            MenuPlatform::Macos,
+            MenuPlatform::Linux,
+            MenuPlatform::Windows,
+        ] {
+            let menus = app_menus(platform, false);
+            let flat: Vec<String> = menus.iter().flat_map(titles).collect();
+            assert!(
+                flat.iter().any(|title| title.contains("About")),
+                "{platform:?} {flat:?}"
+            );
+            assert!(
+                flat.iter().any(|title| title.contains("Quit")),
+                "{platform:?} {flat:?}"
+            );
+            for banned in [
+                "Settings…",
+                "New Return…",
+                "Sign Out",
+                "Command Palette…",
+                "Check for Updates…",
+                "Toggle Sidebar",
+            ] {
+                assert!(
+                    !flat.iter().any(|title| title == banned),
+                    "{platform:?} still has {banned}"
+                );
+            }
+        }
+        let mac = app_menus(MenuPlatform::Macos, false);
+        assert_eq!(
+            titles(menu(&mac, "eBIRForms")),
+            ["About eBIRForms", "-", "Quit eBIRForms"]
+        );
+        assert!(mac.iter().all(|item| item.name.as_ref() != "File"));
+        assert!(titles(menu(&mac, "Edit")).contains(&"Paste".to_string()));
+    }
+
+    #[test]
     fn help_links_are_the_ones_the_painted_app_already_had() {
         assert!(SUPPORT_URL.starts_with("mailto:support@goldcoders.dev"));
         assert_eq!(WEBSITE_URL, "https://goldcoders.dev");
-        let menus = app_menus(MenuPlatform::Macos);
+        let menus = app_menus(MenuPlatform::Macos, true);
         let help = menu(&menus, "Help");
         assert_eq!(
             titles(help),

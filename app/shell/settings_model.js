@@ -26,6 +26,7 @@ export const SETTINGS_ROWS = {
     { id: "updates", search: "download updates automatically release install" },
   ],
   account: [
+    { id: "buwiz", search: "buwiz server cloud sign in sign out device" },
     { id: "identity", search: "account name email tin profile sign out add account taxpayer" },
     { id: "google", search: "google gmail connect disconnect oauth inbox tracking mail" },
     { id: "security", search: "pin authenticator recovery key security" },
