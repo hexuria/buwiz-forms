@@ -105,14 +105,13 @@ fn run_login() -> ExitCode {
             open_browser: signin::open_system_browser,
             now: signin::unix_now,
             sleep: std::thread::sleep,
+            emit: |line: &str| {
+                println!("{line}");
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+            },
         },
     ) {
-        Ok(lines) => {
-            for line in lines {
-                println!("{line}");
-            }
-            ExitCode::SUCCESS
-        }
+        Ok(_lines) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("bir-mcp: {error}");
             ExitCode::from(2)

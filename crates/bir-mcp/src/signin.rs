@@ -182,41 +182,63 @@ impl SessionStore for MemoryStore {
     }
 }
 
-pub struct LoginHooks<F, N, S> {
+pub struct LoginHooks<F, N, S, E> {
     pub open_browser: F,
     pub now: N,
     pub sleep: S,
+    /// Called with each user-visible line as it happens, before the poll ends.
+    pub emit: E,
 }
 
 /// Run the device flow. The returned lines are safe to print: they contain
 /// the user code and the device page, and they do not contain tokens.
-pub fn login<F, N, S>(
+pub fn login<F, N, S, E>(
     origin: &str,
     store: &impl SessionStore,
-    mut hooks: LoginHooks<F, N, S>,
+    mut hooks: LoginHooks<F, N, S, E>,
 ) -> Result<Vec<String>, String>
 where
     F: FnMut(&str) -> Result<(), String>,
     N: FnMut() -> i64,
     S: FnMut(Duration),
+    E: FnMut(&str),
 {
     let origin = trim_origin(origin);
     let http = http_client()?;
     let started = start_device(&http, &origin)?;
-    let mut lines = vec![
+    let mut lines = Vec::new();
+    let say = |hooks: &mut LoginHooks<F, N, S, E>, lines: &mut Vec<String>, line: String| {
+        (hooks.emit)(&line);
+        lines.push(line);
+    };
+    say(
+        &mut hooks,
+        &mut lines,
         "Sign in with Buwiz in your browser.".to_string(),
+    );
+    say(
+        &mut hooks,
+        &mut lines,
         format!("Code: {}", started.user_code),
-        started.page.clone(),
-    ];
+    );
+    say(&mut hooks, &mut lines, started.page.clone());
     if let Err(error) = (hooks.open_browser)(&started.page) {
-        lines.push(format!(
-            "The browser did not open ({error}). Visit the page above and approve this computer."
-        ));
+        say(
+            &mut hooks,
+            &mut lines,
+            format!(
+                "The browser did not open ({error}). Visit the page above and approve this computer."
+            ),
+        );
     }
-    lines.push("Waiting for approval...".to_string());
+    say(
+        &mut hooks,
+        &mut lines,
+        "Waiting for approval...".to_string(),
+    );
     let session = poll_until_approved(&http, &origin, &started, &mut hooks)?;
     store.save(&session)?;
-    lines.push("Signed in.".to_string());
+    say(&mut hooks, &mut lines, "Signed in.".to_string());
     Ok(lines)
 }
 
@@ -290,16 +312,17 @@ fn start_device(http: &reqwest::blocking::Client, origin: &str) -> Result<Device
     })
 }
 
-fn poll_until_approved<F, N, S>(
+fn poll_until_approved<F, N, S, E>(
     http: &reqwest::blocking::Client,
     origin: &str,
     started: &DeviceStart,
-    hooks: &mut LoginHooks<F, N, S>,
+    hooks: &mut LoginHooks<F, N, S, E>,
 ) -> Result<Session, String>
 where
     F: FnMut(&str) -> Result<(), String>,
     N: FnMut() -> i64,
     S: FnMut(Duration),
+    E: FnMut(&str),
 {
     let mut interval = started.interval;
     let mut waited = 0i64;
@@ -736,6 +759,7 @@ mod tests {
                 sleep: |duration: Duration| {
                     slept.lock().expect("slept").push(duration.as_secs());
                 },
+                emit: |_: &str| {},
             },
         )
         .unwrap();
@@ -776,6 +800,7 @@ mod tests {
                 open_browser: |_url: &str| Err("no display".to_string()),
                 now: || 10,
                 sleep: |_duration| {},
+                emit: |_: &str| {},
             },
         )
         .unwrap();
@@ -807,6 +832,7 @@ mod tests {
                 sleep: |duration: Duration| {
                     slept.lock().unwrap().push(duration.as_secs());
                 },
+                emit: |_: &str| {},
             },
         )
         .unwrap();
@@ -826,6 +852,7 @@ mod tests {
                 open_browser: |_url: &str| Ok(()),
                 now: || 10,
                 sleep: |_duration| {},
+                emit: |_: &str| {},
             },
         )
         .unwrap_err();
