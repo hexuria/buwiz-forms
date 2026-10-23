@@ -17,6 +17,10 @@ pub const DEFAULT_SERVER_URL: &str = "https://api.buwiz.com";
 pub const DESKTOP_CLIENT_ID: &str = "buwiz-desktop";
 pub const ENV_SERVER_URL: &str = "BUWIZ_SERVER_URL";
 
+/// How long a saved refresh may keep filing open when the server cannot be
+/// reached. One constant so the grace cannot drift between the shell and tests.
+pub const OFFLINE_GRACE_SECONDS: i64 = 7 * 24 * 60 * 60;
+
 const USER_AGENT: &str = "buwiz-desktop";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,6 +184,34 @@ pub enum SessionUpdate {
     SignedOut,
 }
 
+/// What the shell should do with the filing UI after a refresh attempt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RefreshOutcome {
+    Online,
+    Offline,
+    Revoked,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GateDecision {
+    Open {
+        offline: bool,
+    },
+    /// `clear_secrets` is set when the server rejected the refresh token.
+    /// A network failure keeps the token so the next launch can try again.
+    Closed {
+        clear_secrets: bool,
+    },
+}
+
+/// Which browser page the desktop opens for a device code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccountBrowser {
+    SignIn,
+    /// The server's signup path. `/signup` redirects to the real form.
+    CreateAccount,
+}
+
 /// Saved session. Serialized only into the private token store.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct StoredAccount {
@@ -191,6 +223,10 @@ pub struct StoredAccount {
     pub email: Option<String>,
     #[serde(default)]
     pub offline: bool,
+    /// Unix time of the last refresh the server accepted. `0` means this
+    /// install has not recorded one, so an outage does not open the app.
+    #[serde(default)]
+    pub last_refresh_unix: i64,
 }
 
 impl std::fmt::Debug for StoredAccount {
@@ -221,6 +257,7 @@ impl StoredAccount {
             user_id: secrets.user_id.clone(),
             email: secrets.email.clone(),
             offline: secrets.offline,
+            last_refresh_unix: 0,
         }
     }
 
@@ -243,6 +280,48 @@ impl StoredAccount {
         }
         Ok(stored)
     }
+}
+
+/// A saved refresh is inside the grace window, including the last second.
+pub fn offline_grace_allows(last_refresh_unix: i64, now_unix: i64) -> bool {
+    last_refresh_unix > 0 && now_unix.saturating_sub(last_refresh_unix) <= OFFLINE_GRACE_SECONDS
+}
+
+pub fn gate_after_refresh(
+    last_refresh_unix: i64,
+    now_unix: i64,
+    outcome: RefreshOutcome,
+) -> GateDecision {
+    match outcome {
+        RefreshOutcome::Online => GateDecision::Open { offline: false },
+        RefreshOutcome::Revoked => GateDecision::Closed {
+            clear_secrets: true,
+        },
+        RefreshOutcome::Offline => {
+            if offline_grace_allows(last_refresh_unix, now_unix) {
+                GateDecision::Open { offline: true }
+            } else {
+                GateDecision::Closed {
+                    clear_secrets: false,
+                }
+            }
+        }
+    }
+}
+
+/// Browser URL for this device code. `next` is the approval page, so signup
+/// and sign-in both land back on the same device flow.
+pub fn account_browser_url(server_url: &str, entry: AccountBrowser, user_code: &str) -> String {
+    let next = format!("/device?user_code={user_code}");
+    let page = match entry {
+        AccountBrowser::SignIn => "login",
+        AccountBrowser::CreateAccount => "signup",
+    };
+    format!(
+        "{}/{page}?next={}",
+        server_url.trim_end_matches('/'),
+        urlencoding::encode(&next)
+    )
 }
 
 pub fn unix_now() -> i64 {
@@ -1027,6 +1106,88 @@ mod tests {
         assert!(!encoded.contains("debug"));
         let decoded = StoredAccount::decode(&encoded).unwrap();
         assert_eq!(decoded.refresh_token, "refresh-secret");
+        assert_eq!(decoded.last_refresh_unix, 0);
         assert!(StoredAccount::decode(r#"{"server_url":"http://localhost:3008"}"#).is_err());
+        let legacy = StoredAccount::decode(
+            r#"{"server_url":"http://localhost:3008","access_token":"a","refresh_token":"r","access_expires_at_unix":1,"user_id":"u","email":null,"offline":false}"#,
+        )
+        .unwrap();
+        assert_eq!(legacy.last_refresh_unix, 0);
+    }
+
+    #[test]
+    fn offline_grace_is_seven_days() {
+        let day = 24 * 60 * 60;
+        assert_eq!(OFFLINE_GRACE_SECONDS, 7 * day);
+        let start = 1_700_000_000;
+        assert!(offline_grace_allows(start, start));
+        assert!(offline_grace_allows(start, start + OFFLINE_GRACE_SECONDS));
+        assert!(!offline_grace_allows(
+            start,
+            start + OFFLINE_GRACE_SECONDS + 1
+        ));
+        assert!(!offline_grace_allows(0, start));
+        assert!(!offline_grace_allows(0, 0));
+    }
+
+    #[test]
+    fn gate_opens_online_keeps_a_grace_outage_and_drops_a_revoked_token() {
+        let start = 1_700_000_000;
+        assert_eq!(
+            gate_after_refresh(start, start + 10, RefreshOutcome::Online),
+            GateDecision::Open { offline: false }
+        );
+        assert_eq!(
+            gate_after_refresh(
+                start,
+                start + OFFLINE_GRACE_SECONDS,
+                RefreshOutcome::Offline
+            ),
+            GateDecision::Open { offline: true }
+        );
+        assert_eq!(
+            gate_after_refresh(
+                start,
+                start + OFFLINE_GRACE_SECONDS + 1,
+                RefreshOutcome::Offline
+            ),
+            GateDecision::Closed {
+                clear_secrets: false
+            }
+        );
+        assert_eq!(
+            gate_after_refresh(0, start, RefreshOutcome::Offline),
+            GateDecision::Closed {
+                clear_secrets: false
+            }
+        );
+        assert_eq!(
+            gate_after_refresh(start, start + 10, RefreshOutcome::Revoked),
+            GateDecision::Closed {
+                clear_secrets: true
+            }
+        );
+    }
+
+    #[test]
+    fn create_account_opens_signup_with_the_device_page_as_next() {
+        let sign_in = account_browser_url(
+            "http://localhost:3008/",
+            AccountBrowser::SignIn,
+            "ABCD-EFGH",
+        );
+        let create = account_browser_url(
+            "http://localhost:3008",
+            AccountBrowser::CreateAccount,
+            "ABCD-EFGH",
+        );
+        assert_eq!(
+            sign_in,
+            "http://localhost:3008/login?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"
+        );
+        assert_eq!(
+            create,
+            "http://localhost:3008/signup?next=%2Fdevice%3Fuser_code%3DABCD-EFGH"
+        );
     }
 }

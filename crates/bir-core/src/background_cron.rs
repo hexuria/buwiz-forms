@@ -20,6 +20,10 @@ static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
 /// Set by [`request_shutdown`]. The cron loop finishes the tick it is already
 /// on, then returns, so the submission worker can drop the database.
 static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+/// The shell holds this until a Buwiz account is signed in. Default false so
+/// bir-core and bir-desktop cron tests keep filing. The shell sets it true
+/// before the worker starts.
+static SUBMISSION_PAUSED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WakeDispatchStatus {
@@ -47,6 +51,23 @@ pub fn request_shutdown() {
 /// Whether [`request_shutdown`] has been asked for in this process.
 pub fn shutdown_requested() -> bool {
     SHUTDOWN.load(Ordering::SeqCst)
+}
+
+/// Skip queue ticks while the desktop account gate is locked.
+///
+/// Unlike [`request_shutdown`], this can be cleared. A later sign-in in the
+/// same process files again.
+pub fn set_submission_paused(paused: bool) {
+    SUBMISSION_PAUSED.store(paused, Ordering::SeqCst);
+    if !paused {
+        // Quiet when the worker has not started yet. Launch unpauses before
+        // the thread exists; the first tick runs as soon as it does.
+        let _ = wake_with_status();
+    }
+}
+
+pub fn submission_paused() -> bool {
+    SUBMISSION_PAUSED.load(Ordering::SeqCst)
 }
 
 pub fn wake() {
@@ -82,6 +103,13 @@ pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     loop {
         if shutdown_requested() {
             break;
+        }
+        if submission_paused() {
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
+                _ = rx.recv() => {}
+            }
+            continue;
         }
         // We run a tick, then wait for either 60 seconds or a wake signal.
         run_queue_tick(db.clone()).await;
