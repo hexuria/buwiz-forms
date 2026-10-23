@@ -89,6 +89,8 @@ class BirApp extends View {
     this.cloudLocked = false;
     this.info = this.store.systemInfo();
     this.isMac = this.info.os === "macos";
+    // Linux caption buttons live on the in-window menu row, not this bar.
+    this.isLinux = this.info.os === "linux";
 
     this.themePref = parseThemePreference(this.store.setting(THEME_PREF_KEY));
     applyThemePreference(cx, this.themePref);

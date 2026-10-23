@@ -9,8 +9,8 @@ use std::rc::Rc;
 // GPUI comes through the Kit so the `gpui-fast` feature switches this host
 // along with gpui-shell and the components (one engine in the build).
 use gpui_kit::{
-    App, Bounds, Pixels, Size, TitlebarOptions, Window, WindowBounds, WindowDecorations,
-    WindowOptions, point, px, size,
+    App, Bounds, Pixels, Size, TitlebarOptions, Window, WindowBackgroundAppearance, WindowBounds,
+    WindowDecorations, WindowOptions, point, px, size,
 };
 use gpui_shell::{
     AppAssets, Capabilities, ShellRuntime, export_module, init_with_components, on_exit_request,
@@ -155,6 +155,19 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Linux client decorations paint a shadow in the inset, so the surface has
+/// to be transparent there. Other platforms keep the opaque default.
+pub(crate) fn window_background() -> WindowBackgroundAppearance {
+    #[cfg(target_os = "linux")]
+    {
+        WindowBackgroundAppearance::Transparent
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        WindowBackgroundAppearance::Opaque
+    }
+}
+
 fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
@@ -164,15 +177,19 @@ fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
         ))),
         app_id: Some("com.buwiz.bir".to_owned()),
         // The redesign draws its own 40 px title bar (DESIGN_SYSTEM.md "Shell
-        // layout"): the system bar is hidden, the macOS traffic lights sit
-        // vertically centred in it (12 px lights at y 14), and Linux gets
-        // client-side decorations so the same bar is drawn there.
+        // layout"): the system bar is hidden and the macOS traffic lights sit
+        // vertically centred in it (12 px lights at y 14). Linux asks for
+        // client-side decorations. The menu row draws minimize, zoom, and
+        // close when the compositor grants them (`linux_csd`); a compositor
+        // that forces a server title bar is left as the only title bar.
+        // A transparent surface lets the Linux shadow inset composite.
         titlebar: Some(TitlebarOptions {
             title: Some("eBIRForms".into()),
             appears_transparent: true,
             traffic_light_position: Some(point(px(14.0), px(14.0))),
         }),
         window_decorations: Some(WindowDecorations::Client),
+        window_background: window_background(),
         window_min_size: Some(size(px(420.0), px(480.0))),
         ..Default::default()
     };
