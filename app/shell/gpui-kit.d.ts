@@ -27915,6 +27915,8 @@ declare module "bir" {
   export function job_log_tail(): JobLogTail;
   /** A screen failure (`error` / `warn` / `info` / `debug`) for the Logs tab and the daily log file. Secrets are redacted. */
   export function record_screen_log(level: string, message: string): null;
+  /** Next UI command from the gpui-agent host, or null when none is waiting. */
+  export function agent_take(): string | null;
 
   export interface CloudAccountStatus {
       server_url: string;

@@ -9,6 +9,8 @@
 //! slice plan.
 
 mod account_gate;
+#[cfg(feature = "agent")]
+mod agent;
 mod app_menu;
 mod auth_limiter;
 mod bir_module;

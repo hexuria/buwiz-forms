@@ -183,8 +183,12 @@ fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
         if std::env::var_os("BIR_SHELL_METRICS").is_some() {
             log_runtime_metrics(window, cx, runtime.clone());
         }
-        let shell = runtime.load(&root, window, cx);
-        crate::app_menu::attach_window(shell, window, cx)
+        let shell_root = runtime.load(&root, window, cx);
+        #[cfg(feature = "agent")]
+        crate::agent::start(window, cx, shell_root.clone());
+        // The menu frame is the window root on Linux and Windows. The agent
+        // keeps the script root, which is what the menu frame wraps.
+        crate::app_menu::attach_window(shell_root, window, cx)
     })
     .expect("main window must open");
 }

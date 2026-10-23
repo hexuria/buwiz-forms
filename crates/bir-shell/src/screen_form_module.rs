@@ -1589,7 +1589,7 @@ const NO_LONGER_STORED: &str =
 /// The draft each painted page opens for `(profile, year, period)`: the
 /// stored one, else a new one from the profile. `fresh` (a Form library
 /// sample) always builds the new one and reads no stored return.
-fn load_draft(
+pub(crate) fn load_draft(
     db: &Database,
     kind: AgentFormKind,
     profile: &TaxpayerProfile,
