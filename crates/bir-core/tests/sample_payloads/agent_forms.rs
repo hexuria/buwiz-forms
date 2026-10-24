@@ -96,6 +96,7 @@ fn derived(kind: AgentFormKind, seeds: &[Value]) -> AgentFormDef {
     let rows = probe::supplement_row_families(kind, seeds, &boxes);
     boxes.extend(rows);
     probe::apply_labels(&mut boxes, captions());
+    probe::supplement_app_radios(kind, &mut boxes);
     probe::derive(kind, seeds, &profile_values(), boxes)
 }
 

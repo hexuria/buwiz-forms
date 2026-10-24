@@ -67,12 +67,20 @@ pub(super) const NO_INVENTORY: &[(&str, &str)] = &[
 
 /// Boxes that answer an official name group they are not drawn in:
 /// `(form, key, group name, reason)`.
-pub(super) const JOINED: &[(&str, &str, &str, &str)] = &[(
-    "2200S",
-    "frm2200S:chkPymntManner_3",
-    "frm2200S:chkPymntManner",
-    "item 17 is the manner's third answer (PR 11, decision P4-16); the official page draws it as its own tick box",
-)];
+pub(super) const JOINED: &[(&str, &str, &str, &str)] = &[
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_3",
+        "frm2200S:chkPymntManner",
+        "item 17 is the manner's third answer (PR 11, decision P4-16); the official page draws it as its own tick box",
+    ),
+    (
+        "2551Q",
+        "frm2551Qv2018:taxRateNA",
+        "frm2551Qv2018:taxRate",
+        "Item 13 Not applicable is this app's third answer beside Graduated and 8%; the official page draws only taxRate1 and taxRate2, and Not applicable is not an upload key",
+    ),
+];
 
 /// The agent definition's groups that no official name group gives:
 /// `(form, definition group id, reason)`. Their members are the

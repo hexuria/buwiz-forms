@@ -555,6 +555,54 @@ const PRINTED_NOT_IN_CORPUS: &[(&str, &str, &str, &str)] = &[
     ),
 ];
 
+/// Radios this app draws that the official page does not, so `fields.json`
+/// has no row. The field map still writes them, and the probe binds them
+/// beside the official radios that set the same draft fields.
+///
+/// 2551Q Item 13 Not applicable (`frm2551Qv2018:taxRateNA`) is the third
+/// answer beside Graduated and 8%. `Form2551QDraft`'s field map writes it
+/// from `item_13_election == not_applicable`. It is not an upload key
+/// (`to_bir_field_map` stays taxRate1 and taxRate2).
+pub fn supplement_app_radios(kind: AgentFormKind, boxes: &mut Vec<BoxDef>) {
+    if kind != AgentFormKind::Form2551Q {
+        return;
+    }
+    let key = "frm2551Qv2018:taxRateNA";
+    if boxes.iter().any(|entry| entry.key == key) {
+        return;
+    }
+    let radio = BoxDef {
+        key: key.to_string(),
+        label: "13 Not applicable".to_string(),
+        item: "13".to_string(),
+        kind: "radio".to_string(),
+        computed: false,
+        required: "optional".to_string(),
+        options: vec![
+            BoxOption {
+                value: "true".to_string(),
+                label: String::new(),
+            },
+            BoxOption {
+                value: "false".to_string(),
+                label: String::new(),
+            },
+        ],
+        layout_only: false,
+        group: None,
+        radio_group: false,
+        members: Vec::new(),
+        choice: String::new(),
+        choice_value: String::new(),
+        family: None,
+    };
+    let at = boxes
+        .iter()
+        .position(|entry| entry.key == "frm2551Qv2018:taxRate2")
+        .map_or(boxes.len(), |index| index + 1);
+    boxes.insert(at, radio);
+}
+
 /// Text boxes the form's own page upper-cases when another field is typed,
 /// so the probe sees them change with that field and would call them a
 /// combination: 1701MS's `capital(this, event)` on Part V items 7 and 9
