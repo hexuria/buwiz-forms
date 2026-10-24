@@ -1579,10 +1579,21 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
+                db.confirm_initial_profile_year(&tin, i32::from(year))
+                    .map_err(|error| HostError::new(error.to_string()))?;
                 let mut draft = db
                     .get_2551q_draft(&tin, year, q)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
+                if let Some(profile) = db
+                    .get_profile_by_tin(&tin)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                {
+                    // A stored resolution error clears once a confirmed version
+                    // covers the quarter. The transition still runs the page's
+                    // Validate (`filing_errors`).
+                    let _ = draft.reconcile_with_effective_profile(&profile);
+                }
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
                         errors
@@ -2262,6 +2273,169 @@ fn list_deadlines() -> HostResult {
     })
 }
 
+/// Pick up route-3 filings the account server is holding for this computer.
+///
+/// Each row is gated by the standing send OK and by [`crate::agent::send_draft`],
+/// which runs the page's Validate before queueing. The server never contacts BIR.
+#[cfg(not(feature = "agent"))]
+fn pull_device_filings() -> HostResult {
+    Ok(HostValue::Null)
+}
+
+#[cfg(feature = "agent")]
+fn pull_device_filings() -> HostResult {
+    pull_device_filings_agent()
+}
+
+#[cfg(feature = "agent")]
+fn pull_device_filings_agent() -> HostResult {
+    let Some((origin, token)) = crate::cloud_account::device_poll_auth() else {
+        return Ok(HostValue::Null);
+    };
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|error| HostError::new(error.to_string()))?;
+    let url = format!("{}/api/device-filings", origin.trim_end_matches('/'));
+    let response = match client
+        .get(&url)
+        .header("authorization", format!("Bearer {token}"))
+        .send()
+    {
+        Ok(response) if response.status().is_success() => response,
+        _ => return Ok(HostValue::Null),
+    };
+    let text = response.text().unwrap_or_default();
+    let body: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+    let Some(filings) = body.get("filings").and_then(|value| value.as_array()) else {
+        return Ok(HostValue::Null);
+    };
+    let mut message: Option<String> = None;
+    for filing in filings {
+        let id = filing
+            .get("id")
+            .and_then(|value| value.as_str())
+            .unwrap_or("");
+        if id.is_empty() {
+            continue;
+        }
+        let outcome = with_database(|db| accept_device_filing(db, filing).map_err(HostError::new))?;
+        let status = outcome
+            .get("status")
+            .and_then(|value| value.as_str())
+            .unwrap_or("failed");
+        // A missing grant leaves the server row queued. Invalid and picked
+        // are reported so the assistant can read them.
+        if status != "approval_required" {
+            let report = if status == "queued" { "picked" } else { status };
+            let payload = serde_json::json!({
+                "status": report,
+                "error_summary": outcome.get("message").and_then(|value| value.as_str()).unwrap_or(""),
+                "field_errors": outcome.get("field_errors").cloned().unwrap_or(serde_json::json!([])),
+            });
+            let _ = client
+                .post(format!("{url}/{id}"))
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .body(payload.to_string())
+                .send();
+        }
+        if status == "queued" {
+            wake_submission_worker();
+            message = Some(
+                outcome
+                    .get("message")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("Picked up a queued filing.")
+                    .to_string(),
+            );
+        } else if status == "approval_required" {
+            message = Some(
+                "A filing is waiting. Grant a standing OK on the taxpayer page before it can upload."
+                    .to_string(),
+            );
+        } else if status == "invalid" {
+            message = Some(
+                outcome
+                    .get("message")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("A queued filing failed validation.")
+                    .to_string(),
+            );
+        }
+    }
+    match message {
+        Some(message) => serialize(&serde_json::json!({"message": message, "icon": "send"})),
+        None => Ok(HostValue::Null),
+    }
+}
+
+#[cfg(feature = "agent")]
+fn accept_device_filing(
+    db: &bir_core::db::Database,
+    filing: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    use bir_core::forms::agent::{self, AgentFormKind};
+    let code = filing
+        .get("form_code")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let kind = AgentFormKind::from_code(code).ok_or_else(|| format!("unknown form `{code}`"))?;
+    let tin = filing
+        .get("tin")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let year = filing
+        .get("tax_year")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(0) as u16;
+    let period = filing
+        .get("period")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(0) as u8;
+    if !db
+        .has_send_grant(&tin, kind.form_code())
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(serde_json::json!({
+            "ok": false,
+            "status": "approval_required",
+            "pending": true,
+            "queued": false,
+            "filed": false,
+            "form": kind.form_code(),
+            "message": "A filing is waiting for a standing OK.",
+        }));
+    }
+    let profile = db
+        .get_profile_by_tin(&tin)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("no taxpayer profile for {tin}"))?;
+    let mut draft =
+        crate::screen_form_module::load_draft(db, kind, &profile, year, period, false, None)?;
+    if let Some(fields) = filing.get("fields").and_then(|value| value.as_object()) {
+        let mut fill_errors = Vec::new();
+        for (key, value) in fields {
+            if let Err(message) = agent::fill(kind, &mut draft, key, value, None) {
+                fill_errors.push(serde_json::json!({"field": key, "message": message}));
+            }
+        }
+        if !fill_errors.is_empty() {
+            return Ok(serde_json::json!({
+                "ok": false,
+                "status": "invalid",
+                "queued": false,
+                "filed": false,
+                "form": kind.form_code(),
+                "field_errors": fill_errors,
+                "message": "A box could not be filled. Nothing was queued.",
+            }));
+        }
+    }
+    crate::agent::send_draft(db, kind, &mut draft)
+}
+
 /// The script is on the main window (`open`) or back on the gate, first
 /// launch, or the sign-in screen. Rebuilds the menu bar to match.
 fn shell_set_chrome(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -2347,6 +2521,7 @@ pub fn module() -> HostModule {
         .function("job_log_tail", |_| job_log_tail())
         .function("record_screen_log", record_screen_log)
         .function("agent_take", |_| agent_take())
+        .function("pull_device_filings", |_| pull_device_filings())
         .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
     let module = crate::tax_profile_module::register(module);
@@ -2573,6 +2748,8 @@ export function job_log_tail(): JobLogTail;
 export function record_screen_log(level: string, message: string): null;
 /** Next UI command from the gpui-agent host, or null when none is waiting. */
 export function agent_take(): string | null;
+/** Pick up filings an assistant queued on the account server. Null when there is nothing to say. */
+export function pull_device_filings(): { message: string; icon: string } | null;
 /** True once the main window is up. False through the gate, first launch, and sign-in. */
 export function shell_set_chrome(open: boolean): null;
 "#;

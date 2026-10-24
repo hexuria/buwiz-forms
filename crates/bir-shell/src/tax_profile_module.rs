@@ -156,6 +156,11 @@ export function connect_inbox_oauth(tin: string): Promise<InboxState>;
 export function test_inbox_connection(tin: string): Promise<InboxVerifyResult>;
 /** Runs the cron-side fetch→confirm poll for this inbox once, updating its job row. */
 export function check_inbox_now(tin: string): Promise<InboxCheckResult>;
+/** Standing OK for an assistant to file one form for this branch. The Queue button does not use it. */
+export interface SendGrant { tin: string; form: string; granted_at: string; }
+export function list_send_grants(tin: string): SendGrant[];
+export function grant_send(tin: string, form: string): SendGrant;
+export function revoke_send(tin: string, form: string): void;
 "#;
 
 pub fn register(module: HostModule) -> HostModule {
@@ -188,6 +193,9 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("connect_inbox_oauth", connect_inbox_oauth)
         .async_function("test_inbox_connection", test_inbox_connection)
         .async_function("check_inbox_now", check_inbox_now)
+        .function("list_send_grants", list_send_grants)
+        .function("grant_send", grant_send)
+        .function("revoke_send", revoke_send)
 }
 
 // ---------- reference lists ----------
@@ -401,6 +409,53 @@ fn get_taxpayer(arguments: &HostArguments) -> HostResult {
             .map_err(host_error)?
             .as_ref()
             .map_or(HostValue::Null, taxpayer_record))
+    })
+}
+
+fn list_send_grants(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    with_database(|db| {
+        let grants = db
+            .list_send_grants()
+            .map_err(|error| HostError::new(error.to_string()))?;
+        let digits: String = tin.chars().filter(|c| c.is_ascii_digit()).collect();
+        let matched: Vec<serde_json::Value> = grants
+            .into_iter()
+            .filter(|grant| grant.tin == digits)
+            .map(|grant| {
+                serde_json::json!({
+                    "tin": grant.tin,
+                    "form": grant.form,
+                    "granted_at": grant.granted_at,
+                })
+            })
+            .collect();
+        crate::bir_module::serialize(&matched)
+    })
+}
+
+fn grant_send(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form = arguments.string(1)?.to_owned();
+    with_database(|db| {
+        let grant = db
+            .grant_send(&tin, &form)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        crate::bir_module::serialize(&serde_json::json!({
+            "tin": grant.tin,
+            "form": grant.form,
+            "granted_at": grant.granted_at,
+        }))
+    })
+}
+
+fn revoke_send(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let form = arguments.string(1)?.to_owned();
+    with_database(|db| {
+        db.revoke_send(&tin, &form)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        Ok(HostValue::Null)
     })
 }
 

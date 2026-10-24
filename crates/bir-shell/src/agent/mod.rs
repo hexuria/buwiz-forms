@@ -7,6 +7,8 @@
 
 mod session;
 
+pub(crate) use session::send_draft;
+
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;

@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use super::form_1601c::Form1601CDraft;
-use super::form_2551q::{Form2551QDraft, Form2551QEntries};
+use super::form_2551q::Form2551QDraft;
 use super::queueable::{QueueableForm, QueueableKind};
 use super::{FilingPeriod, FilingStatus, FormValidator};
 
@@ -238,13 +238,27 @@ impl Seam for Form2551QDraft {
         self.recompute(None);
     }
     fn seam_validate(&self) -> Vec<(String, String)> {
-        let mut errors = FormValidator::validate(self);
-        let entry_errors = self.entry_errors(&Form2551QEntries::from_draft(self), &errors);
-        errors.extend(entry_errors);
-        errors
+        // The page's Validate. Queue and the pre-upload revalidate call this
+        // same list (`filing_errors`), so the assistant is not checked by a
+        // second copy of the rules.
+        self.filing_errors()
     }
     fn seam_field_map(&self) -> BTreeMap<String, String> {
-        self.to_bir_field_map()
+        let mut map = self.to_bir_field_map();
+        // Display only. Not an official upload key: `to_bir_field_map` stays
+        // the two radios the XML writer knows.
+        map.insert(
+            "frm2551Qv2018:taxRateNA".to_string(),
+            if matches!(
+                self.item_13_election,
+                crate::forms::form_2551q::Item13Election::NotApplicable
+            ) {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            },
+        );
+        map
     }
     fn seam_identity(&self) -> DraftIdentity {
         DraftIdentity {

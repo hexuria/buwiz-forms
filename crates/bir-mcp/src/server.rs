@@ -493,6 +493,16 @@ mod tests {
                     "errors": 1,
                     "field_errors": [{"field": "tin", "message": "TIN is required"}]
                 })),
+                // The shell's form.send is the grant and validation gate.
+                // This stand-in returns that gate's refusal so the tool test
+                // can see bir_form_send pass it through unchanged.
+                HostCall::Invoke("form.send") => Ok(json!({
+                    "ok": false,
+                    "status": "approval_required",
+                    "pending": true,
+                    "queued": false,
+                    "filed": false
+                })),
                 HostCall::Invoke(_) => Ok(json!({"ok": true})),
             }
         }
@@ -597,6 +607,7 @@ mod tests {
                 "bir_form_fill",
                 "bir_form_needs_you",
                 "bir_form_validate",
+                "bir_form_send",
                 "bir_form_preview",
                 "bir_form_card",
                 "bir_form_review",
@@ -658,6 +669,20 @@ mod tests {
                 .calls
                 .iter()
                 .all(|(id, _, _)| id == "bir-demo")
+        );
+    }
+
+    #[test]
+    fn bir_form_send_invokes_form_send_and_returns_its_gate() {
+        let mut server = connected(FakeHost::single(), "bir-demo");
+        let reply = server.handle(call(1, "bir_form_send", json!({}))).unwrap();
+        let body = payload(&reply);
+        assert_eq!(body["result"]["status"], "approval_required");
+        assert_eq!(body["result"]["queued"], false);
+        assert_eq!(body["result"]["pending"], true);
+        assert_eq!(
+            server.host().host_calls(),
+            vec![(HostCall::Invoke("form.send"), json!({}))]
         );
     }
 

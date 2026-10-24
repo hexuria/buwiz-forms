@@ -1015,6 +1015,50 @@ function profileTab(cx, app, width) {
       body,
     });
 
+  function agentFilingMeta(app, b) {
+    const grants = app.store.sendGrants(b.tin);
+    if (!grants.length) return "Assistant must ask before filing";
+    return grants.map((g) => g.form).join(", ");
+  }
+  function agentFilingBody(cx, app, b) {
+    const year = app.year();
+    const filed = year ? app.store.yearlyForms(b.tin, year) : [];
+    const forms = filed.length ? filed : ["2551Q"];
+    const granted = new Set(app.store.sendGrants(b.tin).map((g) => g.form));
+    const body = div().flex().flex_col().gap_y(SPACE[3]);
+    body.child(
+      Text(
+        cx,
+        "meta",
+        "A standing OK lets an assistant file that form for this branch without asking each time. The Queue button does not need it. You can turn it off here.",
+        "fg2",
+      ),
+    );
+    for (const code of forms) {
+      const on = granted.has(code);
+      body.child(
+        div()
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(SPACE[3])
+          .child(
+            Switch(cx, `tp-agent-${code}`, on, (next, cx) => {
+              try {
+                if (next) app.store.write("grant_send", b.tin, code);
+                else app.store.write("revoke_send", b.tin, code);
+                app.toast(next ? `Assistant may file ${code}.` : `Assistant may no longer file ${code}.`, cx);
+              } catch (e) {
+                app.toast(message(e), cx, "triangle-alert");
+              }
+            }, `Allow the assistant to file ${code}`),
+          )
+          .child(Text(cx, "control", code)),
+      );
+    }
+    return body;
+  }
+
   const ib = app.store.inboxState(b.tin);
   const inboxMeta = ib
     ? ib.tracking_enabled
@@ -1034,6 +1078,7 @@ function profileTab(cx, app, width) {
       true,
     ),
     section("inbox", "Confirmation inbox", inboxMeta, inboxBody(cx, app, inner), false),
+    section("agent", "Agent filing", agentFilingMeta(app, b), agentFilingBody(cx, app, b), false),
   ]);
   const out = div().flex().flex_col().child(group);
   if (ui.canRemove()) out.child(removeCard(cx, app, t));

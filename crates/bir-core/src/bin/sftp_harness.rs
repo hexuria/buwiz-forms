@@ -7,9 +7,10 @@
 //!
 //! Live PUT is **authorized lab only**. A complete `BIR_SFTP_*` set (plus a
 //! host-key pin or `BIR_SFTP_ACCEPT_ANY_HOST_KEY=1`) targets that lab host; an
-//! incomplete set is a config error and never falls through. The production
-//! dispatcher (`ebf2.bir.gov.ph`) is reached only with `BIR_SFTP_LIVE=1` and
-//! no override set. Dummy TIN is not production-safe. Leave `--live-put`
+//! incomplete set is a config error and never falls through. A release build
+//! reaches the production dispatcher when no dry-run flag is set. A debug
+//! build reaches it only with `BIR_SFTP_LIVE=1` and no override set. Dummy
+//! TIN is not production-safe. Leave `--live-put`
 //! BLOCKED unless the maintainer authorized that lab endpoint.
 
 use bir_core::naming::{Tin, iaf_filename};

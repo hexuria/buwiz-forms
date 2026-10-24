@@ -174,12 +174,15 @@ function makeApp({ hasPin, exportResult, exportError }) {
     isAdmin: () => false,
     adminRoot: () => "",
     toast: (msg, _cx, icon) => toasts.push({ msg, icon }),
+    year: () => 2026,
     yearForms: () => [],
     templates: () => [],
     go: () => {},
     startNewReturn: () => {},
     store: {
       inboxState: () => ({ auth_method: "GoogleOAuth", oauth_connected: false, tracking_enabled: false, last_check_at: null }),
+      sendGrants: () => [],
+      yearlyForms: () => [],
       write: (name, ...args) => {
         calls.push([name, ...args]);
         if (exportError) throw exportError;

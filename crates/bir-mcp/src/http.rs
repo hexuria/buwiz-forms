@@ -550,6 +550,10 @@ mod tests {
         assert_eq!(over_http, over_stdio);
         let names = tool_names(&over_http);
         assert_eq!(names.len(), crate::tools::TOOLS.len());
+        assert!(
+            names.iter().any(|name| name == "bir_form_send"),
+            "stdio and --http both list bir_form_send: {names:?}"
+        );
         for name in &names {
             for banned in ["submit", "queue", "file", "pay"] {
                 // `bir_form_*` contains "form", not "file"; check whole words.
@@ -584,6 +588,18 @@ mod tests {
         assert_eq!(
             reply["result"]["content"][0]["text"],
             crate::server::NOT_SELECTED
+        );
+
+        let send = json!({"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                          "params": {"name": "bir_form_send", "arguments": {}}});
+        let (status, _, body) = running.post(&send, &[]);
+        assert_eq!(status, 200);
+        let reply: Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(reply["result"]["isError"], true, "{reply}");
+        assert_eq!(
+            reply["result"]["content"][0]["text"],
+            crate::server::NOT_SELECTED,
+            "bir_form_send is a real tool; it waits for a selected app, then form.send"
         );
 
         let submit = json!({"jsonrpc": "2.0", "id": 4, "method": "tools/call",

@@ -1157,7 +1157,8 @@ impl Form2551QDraft {
             self.status
         );
         self.recompute(None);
-        let errors = <Self as super::FormValidator>::validate(self);
+        // Same checks as the page's Validate (`agent::validate` → `filing_errors`).
+        let errors = self.filing_errors();
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -1312,7 +1313,8 @@ impl Form2551QDraft {
         self.recompute_internal(self.expected_sales_for_penalties, true);
         let refreshed_values = FilingCalculationSnapshot::from(&*self);
         let refreshed_fingerprint = self.submission_fingerprint();
-        let mut errors = <Self as super::FormValidator>::validate(self);
+        // The page's Validate, then the queue-drift checks below.
+        let mut errors = self.filing_errors();
         if reviewed_values != refreshed_values {
             errors.push((
                 "calculated_values".to_string(),
@@ -1644,6 +1646,15 @@ impl Form2551QDraft {
                 )),
             }
         }
+        errors
+    }
+
+    /// The page's Validate: [`FormValidator::validate`] plus the page's entry
+    /// checks. `bir-mcp`'s `form.validate`, the shell page, Queue, and the
+    /// pre-upload revalidate all use this list. There is no third checker.
+    pub fn filing_errors(&self) -> Vec<(String, String)> {
+        let mut errors = <Self as super::FormValidator>::validate(self);
+        errors.extend(self.entry_errors(&Form2551QEntries::from_draft(self), &errors));
         errors
     }
 }

@@ -1153,11 +1153,12 @@ pub mod item_13 {
     use crate::forms::agent::AgentFormKind;
     use crate::forms::form_2551q::Form2551QDraft;
 
-    /// The Item 13 group box and its two radios.
-    pub const KEYS: [&str; 3] = [
+    /// The Item 13 group box and its radios, including Not applicable.
+    pub const KEYS: [&str; 4] = [
         "frm2551Qv2018:taxRate",
         "frm2551Qv2018:taxRate1",
         "frm2551Qv2018:taxRate2",
+        "frm2551Qv2018:taxRateNA",
     ];
 
     /// The start of every Item 13 lock reason (the filer's words).

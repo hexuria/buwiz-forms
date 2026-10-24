@@ -8920,6 +8920,162 @@
    "shown": "true"
   }
  },
+ "2551Q frm2551Qv2018:taxRate1 blank (group)": {
+  "after": {
+   "fields": {
+    "/item_13_election": "graduated"
+   },
+   "rejected": {
+    "frm2551Qv2018:taxRate": "`frm2551Qv2018:taxRate` must be one of 1, 2, NA (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "graduated"
+   },
+   "rejected": {
+    "frm2551Qv2018:taxRate": "`frm2551Qv2018:taxRate` must be one of 1, 2, NA (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2551Q frm2551Qv2018:taxRate1 false": {
+  "after": {
+   "fields": {
+    "/item_13_election": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2551Q frm2551Qv2018:taxRate1 tick": {
+  "after": {
+   "fields": {
+    "/item_13_election": "graduated"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "graduated"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2551Q frm2551Qv2018:taxRate2 blank (group)": {
+  "after": {
+   "fields": {
+    "/item_13_election": "eight_percent"
+   },
+   "rejected": {
+    "frm2551Qv2018:taxRate": "`frm2551Qv2018:taxRate` must be one of 1, 2, NA (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "eight_percent"
+   },
+   "rejected": {
+    "frm2551Qv2018:taxRate": "`frm2551Qv2018:taxRate` must be one of 1, 2, NA (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2551Q frm2551Qv2018:taxRate2 false": {
+  "after": {
+   "fields": {
+    "/item_13_election": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2551Q frm2551Qv2018:taxRate2 tick": {
+  "after": {
+   "fields": {
+    "/item_13_election": "eight_percent"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "eight_percent"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
+ "2551Q frm2551Qv2018:taxRateNA blank (group)": {
+  "after": {
+   "fields": {
+    "/item_13_election": "not_applicable"
+   },
+   "rejected": {
+    "frm2551Qv2018:taxRate": "`frm2551Qv2018:taxRate` must be one of 1, 2, NA (got ``)"
+   },
+   "shown": null
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "not_applicable"
+   },
+   "rejected": {
+    "frm2551Qv2018:taxRate": "`frm2551Qv2018:taxRate` must be one of 1, 2, NA (got ``)"
+   },
+   "shown": null
+  }
+ },
+ "2551Q frm2551Qv2018:taxRateNA false": {
+  "after": {
+   "fields": {
+    "/item_13_election": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "unanswered"
+   },
+   "rejected": {},
+   "shown": "false"
+  }
+ },
+ "2551Q frm2551Qv2018:taxRateNA tick": {
+  "after": {
+   "fields": {
+    "/item_13_election": "not_applicable"
+   },
+   "rejected": {},
+   "shown": "true"
+  },
+  "before": {
+   "fields": {
+    "/item_13_election": "not_applicable"
+   },
+   "rejected": {},
+   "shown": "true"
+  }
+ },
  "2552 frm2552:rdoPg1I11TransactionLSE blank (group)": {
   "after": {
    "fields": {

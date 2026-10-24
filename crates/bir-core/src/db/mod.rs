@@ -445,6 +445,29 @@ pub fn open_serve_database() -> Result<(Database, PathBuf), DbError> {
     Ok((db.with_owner_lock(lock), path))
 }
 
+/// Setting key for [`Database::list_send_grants`].
+pub const SEND_GRANTS_KEY: &str = "agent.send_grants";
+
+/// One standing OK for an assistant to file `form` for `tin`.
+/// The Queue button does not read this. An assistant send does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SendGrant {
+    pub tin: String,
+    pub form: String,
+    pub granted_at: String,
+}
+
+fn grant_tin(tin: &str) -> String {
+    tin.chars().filter(|c| c.is_ascii_digit()).collect()
+}
+
+fn grant_form(form: &str) -> String {
+    form.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_uppercase()
+}
+
 impl Database {
     fn with_owner_lock(mut self, lock: File) -> Self {
         self._owner_lock = Some(lock);
@@ -928,6 +951,74 @@ impl Database {
             params![key, value],
         )?;
         Ok(())
+    }
+
+    /// Standing send grants, oldest first.
+    pub fn list_send_grants(&self) -> Result<Vec<SendGrant>, DbError> {
+        let Some(stored) = self.get_setting(SEND_GRANTS_KEY)? else {
+            return Ok(Vec::new());
+        };
+        if stored.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        serde_json::from_str(&stored).map_err(|error| {
+            DbError::Other(format!("agent.send_grants is not a JSON array: {error}"))
+        })
+    }
+
+    fn write_send_grants(&self, grants: &[SendGrant]) -> Result<(), DbError> {
+        let stored = serde_json::to_string(grants)?;
+        self.set_setting(SEND_GRANTS_KEY, &stored)
+    }
+
+    /// Record a standing OK. A repeat grant for the same taxpayer and form
+    /// keeps the original time.
+    pub fn grant_send(&self, tin: &str, form: &str) -> Result<SendGrant, DbError> {
+        let tin = grant_tin(tin);
+        let form = grant_form(form);
+        if tin.len() != 14 {
+            return Err(DbError::Other("a send grant needs the 14-digit TIN".into()));
+        }
+        if form.is_empty() {
+            return Err(DbError::Other("a send grant needs a form code".into()));
+        }
+        let mut grants = self.list_send_grants()?;
+        if let Some(existing) = grants
+            .iter()
+            .find(|grant| grant.tin == tin && grant.form == form)
+        {
+            return Ok(existing.clone());
+        }
+        let grant = SendGrant {
+            tin,
+            form,
+            granted_at: chrono::Utc::now().to_rfc3339(),
+        };
+        grants.push(grant.clone());
+        self.write_send_grants(&grants)?;
+        Ok(grant)
+    }
+
+    /// Remove one standing OK. Missing grants are fine.
+    pub fn revoke_send(&self, tin: &str, form: &str) -> Result<(), DbError> {
+        let tin = grant_tin(tin);
+        let form = grant_form(form);
+        let grants = self.list_send_grants()?;
+        let kept: Vec<SendGrant> = grants
+            .into_iter()
+            .filter(|grant| !(grant.tin == tin && grant.form == form))
+            .collect();
+        self.write_send_grants(&kept)
+    }
+
+    /// Whether the assistant may file `form` for `tin` without asking again.
+    pub fn has_send_grant(&self, tin: &str, form: &str) -> Result<bool, DbError> {
+        let tin = grant_tin(tin);
+        let form = grant_form(form);
+        Ok(self
+            .list_send_grants()?
+            .iter()
+            .any(|grant| grant.tin == tin && grant.form == form))
     }
 
     /// Set a global setting only if it is not set yet, atomically; whether
