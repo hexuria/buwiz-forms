@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use chrono::Datelike as _;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
 
@@ -972,12 +973,20 @@ impl Database {
             ],
         )?;
         let taxpayer = load_taxpayer(&tx, &root)?.expect("inserted above");
+        let head_tin = format!("{root}00000");
         tx.execute(
             "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
             params![
-                format!("{root}00000"),
+                &head_tin,
                 new_profile_json(&taxpayer, &root, "00000", &new.head_office)?
             ],
+        )?;
+        // The new row has no profile version. Confirm the current calendar
+        // year so a return for that year can resolve a profile (Queue).
+        super::profiles::confirm_initial_profile_year_on(
+            &tx,
+            &head_tin,
+            chrono::Local::now().date_naive().year(),
         )?;
         tx.commit()?;
         self.get_taxpayer(&root)?

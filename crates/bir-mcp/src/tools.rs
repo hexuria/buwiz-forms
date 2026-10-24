@@ -170,6 +170,13 @@ pub static TOOLS: &[Tool] = &[
         build_args: no_args,
     },
     Tool {
+        name: "bir_form_send",
+        action: Action::Host(HostCall::Invoke("form.send")),
+        description: "Queue the open form for upload from this computer, after the same validation as bir_form_validate. Requires a standing OK for this taxpayer and form, granted in the app. Without that OK the result is approval_required and pending, and nothing is queued. An invalid form is not queued: field_errors are the page's Validate errors. A dry-run build queues without contacting BIR.",
+        schema: empty_schema,
+        build_args: no_args,
+    },
+    Tool {
         name: "bir_form_preview",
         action: Action::Host(HostCall::Invoke("form.preview")),
         description: "Render the open draft on BIR's official printed sheet, filled, as a local HTML file (offline; no PDF is made). In the BIR desktop app it also opens in the browser the way the page's Print preview does; headless, only `path` comes back. Show the user the path so they can look before anything is filed. It changes nothing.",
@@ -466,7 +473,7 @@ mod tests {
 
     /// Op names this adapter may ever reach. Changing this list is a
     /// deliberate, reviewed act.
-    const ALLOWED_OPS: [&str; 15] = [
+    const ALLOWED_OPS: [&str; 16] = [
         "hello",
         "app.info",
         "profile.list",
@@ -477,6 +484,7 @@ mod tests {
         "form.fill",
         "form.needs_you",
         "form.validate",
+        "form.send",
         "form.preview",
         "form.card",
         "form.review_in_app",
@@ -537,6 +545,11 @@ mod tests {
     }
 
     fn banned(name: &str) -> Option<String> {
+        // The one send the user can grant. Every other send/file/queue name
+        // stays banned, including form.file and form.queue.
+        if name == "bir_form_send" || name == "form.send" {
+            return None;
+        }
         let lower = name.to_ascii_lowercase();
         if let Some(hit) = ["submit", "queue", "pay", "paid", "filing"]
             .into_iter()

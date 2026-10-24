@@ -417,7 +417,7 @@ impl DevModeView {
         };
         let mut rows = vec![self.row(
             "Submission",
-            "Where queued returns go. Live BIR is not offered here: it still needs BIR_SFTP_LIVE=1 at launch.",
+            "Where queued returns go. Live BIR is not offered here. A release build sends unless dry-run or test mode is on.",
             note,
             control,
             cx,

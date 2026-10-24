@@ -358,6 +358,9 @@ fn schema() -> &'static [Value] {
             }
             hide_repeated_occurrences(form);
             retype_by_binding(form, &code);
+            if code == "2551Q" {
+                inject_2551q_not_applicable(form);
+            }
             mark_radio_groups(form, &code);
             rows_dst_pt_vat::mark_calendar_tables(form, &code);
             rows_income_q::mark_one_date(form, &code);
@@ -500,6 +503,53 @@ fn page_type(
             }
         }
         _ => kept,
+    }
+}
+
+/// The official 2551Q page has two Item 13 radios. The desktop also offers
+/// "Not applicable" (`Item13Election::NotApplicable`). Inject that third
+/// radio into the on-screen schema so the page can record it. The upload
+/// map is unchanged.
+fn inject_2551q_not_applicable(form: &mut Value) {
+    let Some(parts) = form["parts"].as_array_mut() else {
+        return;
+    };
+    for part in parts {
+        let Some(items) = part["items"].as_array_mut() else {
+            continue;
+        };
+        for item in items {
+            let Some(fields) = item["f"].as_array_mut() else {
+                continue;
+            };
+            if !fields
+                .iter()
+                .any(|field| field["k"] == "frm2551Qv2018:taxRate1")
+            {
+                continue;
+            }
+            for field in fields.iter_mut() {
+                match field["k"].as_str() {
+                    Some("frm2551Qv2018:taxRate1") => {
+                        field["l"] = Value::from("Graduated income tax rate");
+                    }
+                    Some("frm2551Qv2018:taxRate2") => {
+                        field["l"] = Value::from("8% income tax rate");
+                    }
+                    _ => {}
+                }
+            }
+            if !fields
+                .iter()
+                .any(|field| field["k"] == "frm2551Qv2018:taxRateNA")
+            {
+                fields.push(json!({
+                    "l": "Not applicable",
+                    "t": "radio",
+                    "k": "frm2551Qv2018:taxRateNA",
+                }));
+            }
+        }
     }
 }
 
@@ -4961,14 +5011,24 @@ fn official_radio_groups(package: &str) -> Option<&'static BTreeMap<String, Vec<
 
 /// Boxes that answer an official radio name group they are not drawn in,
 /// with evidence: `(form code, key, group name, evidence)`.
-pub(crate) const JOINED_RADIO_GROUPS: &[(&str, &str, &str, &str)] = &[(
-    "2200S",
-    "frm2200S:chkPymntManner_3",
-    "frm2200S:chkPymntManner",
-    "item 17 Other Similar Schemes is the third answer of the manner of payment beside items 15 \
+pub(crate) const JOINED_RADIO_GROUPS: &[(&str, &str, &str, &str)] = &[
+    (
+        "2200S",
+        "frm2200S:chkPymntManner_3",
+        "frm2200S:chkPymntManner",
+        "item 17 Other Similar Schemes is the third answer of the manner of payment beside items 15 \
      and 16 (PR 11; decision P4-16: unticking the manner leaves it unanswered); the official \
      page draws it as a tick box of its own name (chkPymntMannerOther)",
-)];
+    ),
+    (
+        "2551Q",
+        "frm2551Qv2018:taxRateNA",
+        "frm2551Qv2018:taxRate",
+        "Item 13 Not applicable is the third answer beside Graduated and 8%. The official HTML \
+     draws only taxRate1 and taxRate2; Not applicable is this app's explicit election \
+     (Item13Election::NotApplicable) and is not an official upload key",
+    ),
+];
 
 /// Boxes the page shows ticked for a wider answer than their binding's
 /// tick writes: `(form, key)`. Only these — 1701's and 1701A's tax-rate

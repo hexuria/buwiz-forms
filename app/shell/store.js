@@ -185,6 +185,10 @@ export class Store {
   starterPacks(tin) {
     return tin ? this.read(`packs:${tin}`, "starter_packs", [tin], []) : [];
   }
+  /** Standing send OKs for one branch: `{ tin, form, granted_at }`. */
+  sendGrants(tin) {
+    return tin ? this.read(`grants:${tin}`, "list_send_grants", [tin], []) : [];
+  }
   /** Confirmation-inbox state for one branch profile (P2-5). */
   inboxState(tin) {
     return tin

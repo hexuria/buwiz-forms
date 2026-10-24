@@ -8,6 +8,50 @@ use crate::profile::{
     TaxProfileVersionStatus, TaxpayerProfile,
 };
 
+/// See [`Database::confirm_initial_profile_year`]. `conn` may be an open
+/// transaction on the profiles connection.
+pub(super) fn confirm_initial_profile_year_on(
+    conn: &Connection,
+    tin: &str,
+    year: i32,
+) -> Result<bool, DbError> {
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT data_json FROM profiles WHERE tin = ?1",
+            params![tin],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(json) = json else {
+        return Ok(false);
+    };
+    let mut profile: TaxpayerProfile = serde_json::from_str(&json)?;
+    profile.normalize_profile_version_review_statuses();
+    if !profile.confirmed_profile_versions().is_empty() {
+        return Ok(false);
+    }
+    let healable = profile.profile_versions.is_empty()
+        || (profile.profile_versions.len() == 1
+            && profile.profile_versions[0].source == TaxProfileVersionSource::MigrationBackfill
+            && profile.profile_versions[0].status != TaxProfileVersionStatus::Confirmed);
+    if !healable {
+        return Ok(false);
+    }
+    if profile.business_start_date.is_none() {
+        let start = chrono::NaiveDate::from_ymd_opt(year, 1, 1)
+            .ok_or_else(|| DbError::Other(format!("{year} is not a calendar year")))?;
+        profile.business_start_date = Some(start);
+    }
+    profile.profile_versions.clear();
+    profile.ensure_profile_version_ledger();
+    let stored = serde_json::to_string(&profile)?;
+    conn.execute(
+        "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
+        params![stored, tin],
+    )?;
+    Ok(true)
+}
+
 fn reconciliation_calendar_year(local_date: chrono::NaiveDate) -> u16 {
     use chrono::Datelike as _;
 
@@ -644,6 +688,20 @@ impl Database {
         }
 
         Ok(profiles)
+    }
+
+    /// Give a profile its first confirmed year when nothing is confirmed yet.
+    ///
+    /// A taxpayer created in the app stores no profile version and no business
+    /// start, so Queue cannot resolve a period ("no confirmed taxpayer-profile
+    /// version covers …"). This writes the one-time migration backfill
+    /// directly into `profiles.data_json`: January 1 of `year` when the
+    /// business start is unset, then one Confirmed version from that date.
+    /// An existing business start is kept. A ledger that already has a
+    /// confirmed version, or anything other than empty / one unconfirmed
+    /// migration backfill, is left alone. Returns whether a version was written.
+    pub fn confirm_initial_profile_year(&self, tin: &str, year: i32) -> Result<bool, DbError> {
+        confirm_initial_profile_year_on(&self.conn, tin, year)
     }
 
     /// Get a single profile by its TIN.

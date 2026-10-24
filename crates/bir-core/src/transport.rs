@@ -183,11 +183,44 @@ pub fn is_sftp_dry_run() -> bool {
     }
 }
 
-fn sftp_dry_run_requested() -> bool {
-    env_flag_enabled("BIR_SFTP_DRY_RUN") || env_flag_disabled("BIR_SFTP_LIVE")
+/// Inputs for [`dry_run_from_inputs`]. Kept separate so a release build's
+/// default can be tested from a debug test binary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SftpDryRunInputs {
+    pub test_env: bool,
+    pub dry_run: bool,
+    pub live_disabled: bool,
+    pub live_enabled: bool,
+    pub lab_host: bool,
+    pub debug: bool,
 }
 
-/// Production dispatcher is opt-in. Unset `BIR_SFTP_LIVE` refuses it.
+/// Dry run when a test/dry flag forces it, including over a lab host.
+/// An explicit live ack or a lab host stays live. With no flags, a debug
+/// build is dry and a release build proceeds to the dispatcher.
+pub(crate) fn dry_run_from_inputs(inputs: SftpDryRunInputs) -> bool {
+    if inputs.test_env || inputs.dry_run || inputs.live_disabled {
+        return true;
+    }
+    if inputs.live_enabled || inputs.lab_host {
+        return false;
+    }
+    inputs.debug
+}
+
+fn sftp_dry_run_requested() -> bool {
+    dry_run_from_inputs(SftpDryRunInputs {
+        test_env: env_flag_enabled("EBIR_TEST_ENV"),
+        dry_run: env_flag_enabled("BIR_SFTP_DRY_RUN"),
+        live_disabled: env_flag_disabled("BIR_SFTP_LIVE"),
+        live_enabled: env_flag_enabled("BIR_SFTP_LIVE"),
+        lab_host: env_nonempty("BIR_SFTP_HOST").is_some(),
+        debug: cfg!(debug_assertions),
+    })
+}
+
+/// `BIR_SFTP_LIVE=1` was set. Release builds no longer require this ack.
+#[cfg_attr(not(test), allow(dead_code))]
 fn dispatcher_live_ack_requested() -> bool {
     env_flag_enabled("BIR_SFTP_LIVE")
 }
@@ -315,12 +348,8 @@ pub async fn resolve_sftp_endpoint(
             source: SftpEndpointSource::Env,
         });
     }
-    if !dispatcher_live_ack_requested() {
-        return Err(TransportError::Config(
-            "refusing production tinDispatcherSFTP.php without BIR_SFTP_LIVE=1 (set BIR_SFTP_DRY_RUN=1, complete BIR_SFTP_* for a lab host, or BIR_SFTP_LIVE=1)"
-                .into(),
-        ));
-    }
+    // Debug with no flags already returned DryRun above. A release build
+    // with no flags, and any build with `BIR_SFTP_LIVE=1`, uses the dispatcher.
     let endpoint = fetch_sftp_endpoint(tin, form_type).await?;
     info!(
         source = "dispatcher",
@@ -911,7 +940,8 @@ mod tests {
         assert_eq!(name.split('-').next().unwrap().len(), 14);
     }
 
-    const SFTP_ENV_KEYS: [&str; 10] = [
+    const SFTP_ENV_KEYS: [&str; 11] = [
+        "EBIR_TEST_ENV",
         "BIR_SFTP_DRY_RUN",
         "BIR_SFTP_LIVE",
         "BIR_SFTP_HOST",
@@ -1025,19 +1055,56 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dispatcher_without_live_ack_is_config_error() {
+    async fn dispatcher_without_live_ack_is_dry_run_in_debug() {
+        // This test binary is a debug build. Empty env is a dry run.
+        // A release build with the same empty env is live (see
+        // `release_default_without_flags_is_live`).
         isolated_sftp_env_async([], async {
-            let err = resolve_sftp_endpoint("1601Cv2018", "000000000")
+            let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
                 .await
-                .unwrap_err();
-            match err {
-                TransportError::Config(message) => {
-                    assert!(message.contains("BIR_SFTP_LIVE=1"), "{message}");
-                }
-                other => panic!("expected config refuse, got {other:?}"),
-            }
+                .unwrap();
+            assert_eq!(target.source(), SftpEndpointSource::DryRun);
         })
         .await;
+    }
+
+    #[test]
+    fn release_default_without_flags_is_live() {
+        let none = SftpDryRunInputs {
+            test_env: false,
+            dry_run: false,
+            live_disabled: false,
+            live_enabled: false,
+            lab_host: false,
+            debug: false,
+        };
+        assert!(!dry_run_from_inputs(none));
+        assert!(dry_run_from_inputs(SftpDryRunInputs {
+            debug: true,
+            ..none
+        }));
+        assert!(dry_run_from_inputs(SftpDryRunInputs {
+            test_env: true,
+            lab_host: true,
+            debug: false,
+            ..none
+        }));
+        assert!(!dry_run_from_inputs(SftpDryRunInputs {
+            lab_host: true,
+            debug: true,
+            ..none
+        }));
+        assert!(!dry_run_from_inputs(SftpDryRunInputs {
+            live_enabled: true,
+            debug: true,
+            ..none
+        }));
+        assert!(dry_run_from_inputs(SftpDryRunInputs {
+            live_disabled: true,
+            live_enabled: true,
+            debug: false,
+            ..none
+        }));
     }
 
     #[test]
@@ -1094,6 +1161,26 @@ mod tests {
                 .unwrap();
             assert_eq!(target.source(), SftpEndpointSource::DryRun);
         })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn test_env_forces_dry_run_over_a_lab_host() {
+        isolated_sftp_env_async(
+            [
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_SFTP_HOST", Some("127.0.0.1")),
+                ("BIR_SFTP_USERNAME", Some("lab")),
+                ("BIR_SFTP_PASSWORD", Some("secret")),
+                ("BIR_SFTP_ACCEPT_ANY_HOST_KEY", Some("1")),
+            ],
+            async {
+                let target = resolve_sftp_endpoint("1601Cv2018", "000000000")
+                    .await
+                    .unwrap();
+                assert_eq!(target.source(), SftpEndpointSource::DryRun);
+            },
+        )
         .await;
     }
 

@@ -3133,13 +3133,13 @@ function formContent(cx, app, width) {
     actions.push(AppButton(cx, "fp-back-to-amendment", "Back to the amendment", { size: "sm", onClick: (_e, cx) => ui.backToAmendment(cx) }));
   } else if (s.sample) {
     if (s.editable) actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
+    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", variant: s.agentReview ? "primary" : undefined, disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
     actions.push(AppButton(cx, "fp-save", "Save", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
   } else if (s.status === "Queued") {
     actions.push(AppButton(cx, "fp-cancel-queue", "Cancel queue", { size: "sm", onClick: (_e, cx) => ui.cancelQueue(cx) }));
   } else if (s.editable) {
     actions.push(s.checkButton.entity);
-    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
+    actions.push(AppButton(cx, "fp-queue", "Queue", { size: "sm", icon: "send", variant: s.agentReview ? "primary" : undefined, disabled: s.loading, onClick: (_e, cx) => ui.queue(cx) }));
     actions.push(AppButton(cx, "fp-save", "Save draft", { variant: "primary", size: "sm", disabled: s.loading, onClick: (_e, cx) => ui.save(cx) }));
   }
 
@@ -3201,6 +3201,7 @@ function formContent(cx, app, width) {
   bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
   bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
   if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
+  if (s.agentReview) bar.child(Chip(cx, "Prepared by the assistant — review, then Queue", "accent"));
   bar.child(div().flex_1());
   // Guided mode walks the fields a template marks, so it shows only when this
   // branch's template for the form marks some.

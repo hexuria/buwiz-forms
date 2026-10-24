@@ -597,6 +597,7 @@ mod tests {
                 "bir_form_fill",
                 "bir_form_needs_you",
                 "bir_form_validate",
+                "bir_form_send",
                 "bir_form_preview",
                 "bir_form_card",
                 "bir_form_review",

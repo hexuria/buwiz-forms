@@ -10,8 +10,9 @@
 //! loads the saved values once at startup ([`load_saved`]) and again whenever
 //! the panel changes one ([`save`]); they live in a small process-wide map.
 //!
-//! "Live BIR" is never a panel option. Live sending still needs
-//! `BIR_SFTP_LIVE=1` at launch, exactly as before.
+//! "Live BIR" is never a panel option. A release build sends to BIR unless
+//! `EBIR_TEST_ENV`, `BIR_SFTP_DRY_RUN`, or `BIR_SFTP_LIVE=0` forces a dry run.
+//! A debug build stays a dry run unless `BIR_SFTP_LIVE=1` or a lab host is set.
 
 use std::collections::HashMap;
 use std::sync::RwLock;

@@ -387,6 +387,16 @@ fn clear_pending() {
     *pending_lock() = None;
 }
 
+/// Server origin and the user access token, when this computer is signed in.
+/// The device-filing poll uses it. Tokens are not logged.
+pub(crate) fn device_poll_auth() -> Option<(String, String)> {
+    let stored = load_stored().ok().flatten()?;
+    if stored.offline || stored.access_token.is_empty() || stored.server_url.is_empty() {
+        return None;
+    }
+    Some((stored.server_url, stored.access_token))
+}
+
 fn load_stored() -> Result<Option<StoredAccount>, HostError> {
     cloud_account::load_stored_account().map_err(host_error)
 }

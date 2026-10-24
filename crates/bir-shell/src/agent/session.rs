@@ -5,8 +5,12 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use bir_core::db::Database;
+use bir_core::filing_queue::QueueAuthSource;
 use bir_core::forms::agent::{self, AgentFormKind, Binding, CardBox, FromProfile};
-use bir_core::forms::{FilingStatus, FormSetSource, PerYearFormsSet};
+use bir_core::forms::queueable::QueueableForm;
+use bir_core::forms::{
+    FilingStatus, Form1601CDraft, Form2551QDraft, FormSetSource, PerYearFormsSet,
+};
 use bir_core::profile::TaxpayerProfile;
 use bir_core::profile::TaxpayerType;
 use bir_core::tax_profile::{
@@ -116,6 +120,9 @@ impl Session {
             "form.fill" => self.form_fill(args),
             "form.needs_you" => self.form_needs_you(),
             "filing.validate" | "form.validate" => self.form_validate(),
+            "form.context" => self.form_context(),
+            "form.review_in_app" => self.form_review_in_app(),
+            "form.send" => self.form_send(),
             "form.save_draft" => self.form_save_draft(),
             "form.dismiss" => self.form_dismiss(),
             "form.file" | "form.submit_external" | "filing.file" => Err(format!(
@@ -699,6 +706,214 @@ impl Session {
         })))
     }
 
+    fn form_context(&mut self) -> Result<DispatchResult, String> {
+        let open = self
+            .open
+            .as_ref()
+            .ok_or("open a form first (bir_form_open)")?;
+        let kind = open.kind;
+        let tin = open.tin.clone();
+        let year = open.year;
+        let period = open.period;
+        let db = self.lock_db()?;
+        let profile = load_profile(&db, &tin)?;
+        let bounds = filing_bounds(kind, &open.draft);
+        let overlaps = |version: &bir_core::profile::TaxProfileVersion| match bounds {
+            None => true,
+            Some((start, end)) => {
+                version.effective_from.is_none_or(|from| from <= end)
+                    && version.effective_until.is_none_or(|until| until >= start)
+            }
+        };
+        let period_versions: Vec<_> = profile
+            .profile_versions
+            .iter()
+            .filter(|version| overlaps(version))
+            .collect();
+        let trade_name = period_versions
+            .iter()
+            .find(|version| version.status == bir_core::profile::TaxProfileVersionStatus::Confirmed)
+            .or(period_versions.first())
+            .and_then(|version| version.cor.trade_name.clone());
+        let cor_versions: Vec<Value> = profile
+            .profile_versions
+            .iter()
+            .map(|version| {
+                json!({
+                    "label": version.label,
+                    "status": version.status,
+                    "source": version.source,
+                    "effective_from": version.effective_from,
+                    "effective_until": version.effective_until,
+                    "covers_period": overlaps(version),
+                    "cor": version.cor,
+                    "registered_tax_types": version.registered_tax_types,
+                })
+            })
+            .collect();
+        let elections: Vec<Value> = profile
+            .tax_elections
+            .iter()
+            .map(|election| {
+                json!({
+                    "taxable_year": election.taxable_year,
+                    "election": election.election,
+                    "elected_at": election.elected_at,
+                    "source_form": election.source_form,
+                })
+            })
+            .collect();
+        let drafts = db
+            .list_draft_summaries_all_years(&tin)
+            .map_err(|error| error.to_string())?;
+        let past_returns: Vec<Value> = drafts
+            .into_iter()
+            .map(|summary| {
+                json!({
+                    "kind": "saved_return",
+                    "form": summary.form_code,
+                    "year": summary.taxable_year,
+                    "quarter": summary.quarter,
+                    "month": summary.month,
+                    "status": format!("{:?}", summary.status),
+                    "updated_at": summary.updated_at,
+                })
+            })
+            .collect();
+        let submissions = db
+            .list_submissions_for_tin(&tin)
+            .map_err(|error| error.to_string())?;
+        let filed: Vec<Value> = submissions
+            .into_iter()
+            .map(|submission| {
+                json!({
+                    "kind": "submission",
+                    "form": submission.form_type,
+                    "period": submission.period,
+                    "status": submission.status,
+                    "submitted_at": submission.submitted_at,
+                    "filename": submission.filename,
+                })
+            })
+            .collect();
+        drop(db);
+        Ok(DispatchResult::json(json!({
+            "form": kind.form_code(),
+            "period": {
+                "year": year,
+                "period": period,
+                "start": bounds.map(|(start, _)| start),
+                "end": bounds.map(|(_, end)| end),
+            },
+            "profile": {
+                "tin": profile.tin.full(),
+                "registered_name": profile.full_name,
+                "trade_name": trade_name,
+                "registered_address": profile.registered_address,
+                "zip_code": profile.zip_code,
+                "rdo_code": profile.rdo_code,
+                "line_of_business": profile.line_of_business,
+                "taxpayer_type": profile.taxpayer_type,
+                "tax_classification": profile.tax_classification,
+                "is_vat_registered": profile.is_vat_registered,
+                "eopt_tier": profile.eopt_tier,
+                "business_start_date": profile.business_start_date,
+                "contact_number": profile.phone,
+                "email": profile.email,
+                "cor_versions": cor_versions,
+            },
+            "elections": elections,
+            "past_returns": past_returns,
+            "submissions": filed,
+            "documents": period_versions.iter().flat_map(|version| {
+                version.evidence.iter().map(move |document| json!({
+                    "profile_version": version.label,
+                    "file_name": document.file_name,
+                    "document_type": document.document_type,
+                    "uploaded_at": document.uploaded_at,
+                    "extracted_form_codes": document.extracted_form_codes,
+                }))
+            }).collect::<Vec<_>>(),
+        })))
+    }
+
+    fn form_review_in_app(&mut self) -> Result<DispatchResult, String> {
+        let open = self
+            .open
+            .as_ref()
+            .ok_or("open a form first (bir_form_open)")?;
+        let kind = open.kind;
+        let year = open.year;
+        let period = open.period;
+        let tin = open.tin.clone();
+        let mut draft = open.draft.clone();
+        if agent::identity(kind, &draft)?.status != FilingStatus::Draft {
+            return Err("this return is no longer a draft; there is nothing to hand over".into());
+        }
+        let errors = agent::validate(kind, &mut draft)?;
+        if !errors.is_empty() {
+            if let Some(open) = self.open.as_mut() {
+                open.draft = draft;
+            }
+            return Err(format!(
+                "fix the {} validation error(s) first (bir_form_validate); review is only for a return that validates",
+                errors.len()
+            ));
+        }
+        let db = self.lock_db()?;
+        agent::save_draft(kind, &db, &mut draft)?;
+        drop(db);
+        if let Some(open) = self.open.as_mut() {
+            open.draft = draft;
+        }
+        self.commands.push(json!({
+            "op": "open",
+            "tin": tin,
+            "code": kind.form_code(),
+            "year": year,
+            "period": period,
+        }));
+        self.commands.push(json!({
+            "op": "review",
+            "form": kind.form_code(),
+            "message": AGENT_REVIEW_MESSAGE,
+        }));
+        Ok(DispatchResult::json(json!({
+            "form": kind.form_code(),
+            "status": "Draft",
+            "saved": true,
+            "validated": true,
+            "queued": false,
+            "filed": false,
+            "message": AGENT_REVIEW_MESSAGE,
+        })))
+    }
+
+    /// Queue the open draft for upload from this computer.
+    ///
+    /// The gate is [`agent::validate`]: the same checks the page's Validate
+    /// runs (`form.validate` / `bir_form_validate`). An invalid draft is not
+    /// queued, and those field errors come back to the assistant. A missing
+    /// standing OK returns `approval_required` without queueing.
+    fn form_send(&mut self) -> Result<DispatchResult, String> {
+        let open = self
+            .open
+            .as_ref()
+            .ok_or("open a form first (bir_form_open)")?;
+        let kind = open.kind;
+        let mut draft = open.draft.clone();
+        let db = self.lock_db()?;
+        let outcome = send_draft(&db, kind, &mut draft)?;
+        drop(db);
+        if let Some(open) = self.open.as_mut() {
+            open.draft = draft;
+        }
+        if outcome.get("queued").and_then(Value::as_bool) == Some(true) {
+            crate::bir_module::wake_submission_worker();
+        }
+        Ok(DispatchResult::json(outcome))
+    }
+
     fn form_dismiss(&mut self) -> Result<DispatchResult, String> {
         let Some(open) = self.open.take() else {
             return Err("no form is open to dismiss".into());
@@ -1089,6 +1304,141 @@ fn parse_due(raw: &str) -> Option<chrono::NaiveDate> {
     chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()
 }
 
+const AGENT_REVIEW_MESSAGE: &str =
+    "Prepared by the assistant. Review every box, then click Queue yourself.";
+
+fn filing_bounds(
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Option<(chrono::NaiveDate, chrono::NaiveDate)> {
+    if kind == AgentFormKind::Form2551Q {
+        return serde_json::from_value::<Form2551QDraft>(draft.clone())
+            .ok()
+            .and_then(|typed| typed.filing_period_bounds());
+    }
+    None
+}
+
+/// Queue `draft` after the page's Validate has already passed.
+fn queue_validated(kind: AgentFormKind, db: &Database, draft: &mut Value) -> Result<i64, String> {
+    let join = |errors: Vec<(String, String)>| {
+        errors
+            .iter()
+            .map(|(field, message)| format!("{field}: {message}"))
+            .collect::<Vec<_>>()
+            .join("; ")
+    };
+    match kind {
+        AgentFormKind::Form2551Q => {
+            let mut typed: Form2551QDraft =
+                serde_json::from_value(draft.clone()).map_err(|error| error.to_string())?;
+            typed.transition_to_queued().map_err(join)?;
+            typed.set_queue_auth_source(QueueAuthSource::AgentConfirm);
+            let id = db
+                .save_queued_2551q_draft_and_election(&typed)
+                .map_err(|error| error.to_string())?;
+            *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
+            Ok(id)
+        }
+        AgentFormKind::Form1601C => {
+            let mut typed: Form1601CDraft =
+                serde_json::from_value(draft.clone()).map_err(|error| error.to_string())?;
+            typed.transition_to_queued().map_err(join)?;
+            typed.set_queue_auth_source(QueueAuthSource::AgentConfirm);
+            let id = db
+                .save_queued_1601c_draft(&typed)
+                .map_err(|error| error.to_string())?;
+            *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
+            Ok(id)
+        }
+        AgentFormKind::Queueable(queueable) => {
+            bir_core::with_queueable_kind!(queueable, F => {
+                let mut typed: F =
+                    serde_json::from_value(draft.clone()).map_err(|error| error.to_string())?;
+                typed.queue(QueueAuthSource::AgentConfirm).map_err(join)?;
+                let id = db
+                    .save_queued_queueable(&typed)
+                    .map_err(|error| error.to_string())?;
+                *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
+                Ok(id)
+            })
+        }
+    }
+}
+
+/// Shared send for `form.send` and a route-3 pickup.
+///
+/// Calls [`agent::validate`] (the page's Validate) before any queue write.
+/// Errors from that call are the `field_errors` returned to the assistant.
+pub(crate) fn send_draft(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &mut Value,
+) -> Result<Value, String> {
+    let identity = agent::identity(kind, draft)?;
+    let code = kind.form_code().to_string();
+    if !db
+        .has_send_grant(&identity.tin, &code)
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(json!({
+            "ok": false,
+            "status": "approval_required",
+            "pending": true,
+            "queued": false,
+            "filed": false,
+            "form": code,
+            "message": "This send needs a standing OK for this taxpayer and form. Grant it on the taxpayer page. Nothing was queued.",
+        }));
+    }
+    if identity.status != FilingStatus::Draft {
+        return Err(format!("this return is {:?}, not a Draft", identity.status));
+    }
+    if kind == AgentFormKind::Form2551Q {
+        db.confirm_initial_profile_year(&identity.tin, i32::from(identity.taxable_year))
+            .map_err(|error| error.to_string())?;
+        if let Some(profile) = db
+            .get_profile_by_tin(&identity.tin)
+            .map_err(|error| error.to_string())?
+            && let Ok(mut typed) = serde_json::from_value::<Form2551QDraft>(draft.clone())
+        {
+            let _ = typed.reconcile_with_effective_profile(&profile);
+            *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
+        }
+    }
+    let errors = agent::validate(kind, draft)?;
+    if !errors.is_empty() {
+        if agent::identity(kind, draft)?.status == FilingStatus::Draft {
+            let _ = agent::save_draft(kind, db, draft);
+        }
+        return Ok(json!({
+            "ok": false,
+            "status": "invalid",
+            "queued": false,
+            "filed": false,
+            "form": code,
+            "field_errors": field_errors(&errors),
+            "message": "Validation failed. Nothing was queued.",
+        }));
+    }
+    let id = queue_validated(kind, db, draft)?;
+    let dry = bir_core::transport::is_sftp_dry_run();
+    Ok(json!({
+        "ok": true,
+        "status": "queued",
+        "queued": true,
+        "filed": false,
+        "dry_run": dry,
+        "form": code,
+        "id": id,
+        "message": if dry {
+            "Queued. This build is a dry run: nothing is sent to BIR."
+        } else {
+            "Queued for upload from this computer."
+        },
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1312,5 +1662,52 @@ mod tests {
         assert!(error.contains("requires a selected profile"), "{error}");
         let bad = call(&mut session, "dues.list", json!({"filter": "soon"})).unwrap_err();
         assert!(bad.contains("unknown dues filter"), "{bad}");
+    }
+
+    #[test]
+    fn send_without_a_grant_asks_and_an_invalid_draft_is_not_queued() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let context = call(&mut session, "form.context", json!({})).unwrap();
+        assert_eq!(context["form"], "2551Q");
+        assert!(context["profile"]["pin_hash"].is_null());
+        let refused = call(&mut session, "form.send", json!({})).unwrap();
+        assert_eq!(refused["status"], "approval_required");
+        assert_eq!(refused["pending"], true);
+        assert_eq!(refused["queued"], false);
+        session.lock_db().unwrap().grant_send(TIN, "2551Q").unwrap();
+        let blocked = call(&mut session, "form.send", json!({})).unwrap();
+        assert_eq!(blocked["ok"], false);
+        assert_eq!(blocked["status"], "invalid");
+        assert_eq!(blocked["queued"], false);
+        assert_eq!(blocked["filed"], false);
+        let same = call(&mut session, "form.validate", json!({})).unwrap();
+        assert_eq!(blocked["field_errors"], same["field_errors"]);
+        let still = session.lock_db().unwrap();
+        let draft = still.get_2551q_draft(TIN, 2026, 1).unwrap().expect("saved");
+        assert!(matches!(draft.status, FilingStatus::Draft));
+    }
+
+    #[test]
+    fn context_and_review_are_known_invokes() {
+        let mut session = session();
+        save_scratch(&mut session);
+        let unknown = call(&mut session, "form.context", json!({})).unwrap_err();
+        assert!(unknown.contains("open a form"), "{unknown}");
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let review = call(&mut session, "form.review_in_app", json!({})).unwrap_err();
+        assert!(review.contains("validation error"), "{review}");
+        assert!(review.contains("bir_form_validate"), "{review}");
     }
 }

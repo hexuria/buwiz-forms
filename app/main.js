@@ -175,6 +175,20 @@ class BirApp extends View {
     // without the agent feature answers null.
     cx.timer.every(50, (cx) => this.applyAgent(cx));
 
+    // Route 3: an assistant queued a filing on the account server. This
+    // computer uploads it (or bir-headless, when the window is closed).
+    // The server never sends to BIR. A missing grant leaves the row waiting.
+    cx.timer.every(5000, (cx) => {
+      if (this.cloudLocked) return;
+      let note = null;
+      try {
+        note = this.store.call("pull_device_filings");
+      } catch (_e) {
+        return;
+      }
+      if (note && note.message) this.toast(note.message, cx, note.icon || "send");
+    });
+
     // The host checks for a release on its own thread. Polling is how the
     // prompt appears: the host does not push into the script.
     this.updateStatus = null;
@@ -461,6 +475,14 @@ class BirApp extends View {
         },
         cx,
       );
+    } else if (cmd.op === "review") {
+      const message = cmd.message || "Prepared by the assistant. Review every box, then click Queue yourself.";
+      this.afterFormLoads(cx, (cx) => {
+        const s = this.formUi && this.formUi.state;
+        if (s) s.agentReview = message;
+        this.toast(message, cx);
+        cx.notify();
+      });
     } else if (cmd.op === "choose" && cmd.edits) {
       this.afterFormLoads(cx, (cx) => {
         const ui = this.formUi;
