@@ -33,6 +33,7 @@ use gpui_shell::gpui::{
 };
 #[cfg(not(target_os = "macos"))]
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 gpui::actions!(
     bir_shell,
@@ -114,14 +115,37 @@ pub fn install(cx: &mut App) {
     }
 }
 
+/// Filing commands (settings, new return, sign-out, sidebar, theme, help
+/// links) stay out of the menu until the script is on the main window.
+/// The cloud account being unlocked is not enough: first-run setup and the
+/// sign-in screen are still in front. The menu row itself, and the window
+/// controls, stay either way.
+static SHELL_CHROME: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn filing_commands_visible(cloud_unlocked: bool, chrome_open: bool) -> bool {
+    cloud_unlocked && chrome_open
+}
+
+pub(crate) fn shell_chrome_open() -> bool {
+    SHELL_CHROME.load(Ordering::SeqCst)
+}
+
+pub(crate) fn set_shell_chrome_open(open: bool) {
+    SHELL_CHROME.store(open, Ordering::SeqCst);
+}
+
+fn menus_now() -> Vec<Menu> {
+    app_menus(
+        current_platform(),
+        filing_commands_visible(crate::account_gate::is_unlocked(), shell_chrome_open()),
+    )
+}
+
 fn publish_menus(cx: &mut App) {
-    let menus = app_menus(current_platform(), crate::account_gate::is_unlocked());
+    let menus = menus_now();
     gpui_component::GlobalState::global_mut(cx)
         .set_app_menus(menus.into_iter().map(Menu::owned).collect());
-    cx.set_menus(app_menus(
-        current_platform(),
-        crate::account_gate::is_unlocked(),
-    ));
+    cx.set_menus(menus_now());
 }
 
 /// Rebuild the menu bar after sign-in or sign-out.
@@ -552,7 +576,7 @@ fn register_actions(cx: &mut App) {
         .on_action(|_: &OpenSupportEmail, cx| cx.open_url(SUPPORT_URL))
         .on_action(|_: &OpenCompanyWebsite, cx| cx.open_url(WEBSITE_URL))
         .on_action(|_: &CheckForUpdates, _cx| {
-            if crate::account_gate::is_unlocked() {
+            if filing_commands_visible(crate::account_gate::is_unlocked(), shell_chrome_open()) {
                 crate::updater::check_now();
             }
         })
@@ -568,7 +592,7 @@ fn register_actions(cx: &mut App) {
 }
 
 fn dispatch_if_unlocked(id: &'static str, cx: &mut App) {
-    if crate::account_gate::is_unlocked() {
+    if filing_commands_visible(crate::account_gate::is_unlocked(), shell_chrome_open()) {
         dispatch_script(id, cx);
     }
 }
@@ -1006,6 +1030,16 @@ mod tests {
             "Check for Updates…"
         )));
         assert!(titles(menu(&menus, "View")).contains(&"Enter Full Screen".to_string()));
+    }
+
+    /// The cloud account and the main window are separate. Onboarding and
+    /// the sign-in screen pass `chrome_open: false` and get the locked menus.
+    #[test]
+    fn filing_commands_wait_for_the_main_window() {
+        assert!(!filing_commands_visible(false, false));
+        assert!(!filing_commands_visible(false, true));
+        assert!(!filing_commands_visible(true, false));
+        assert!(filing_commands_visible(true, true));
     }
 
     #[test]

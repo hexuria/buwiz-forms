@@ -2436,6 +2436,15 @@ fn accept_device_filing(
     crate::agent::send_draft(db, kind, &mut draft)
 }
 
+/// The script is on the main window (`open`) or back on the gate, first
+/// launch, or the sign-in screen. Rebuilds the menu bar to match.
+fn shell_set_chrome(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let open = arguments.boolean(0)?;
+    crate::app_menu::set_shell_chrome_open(open);
+    let _ = gpui_shell::with_current_app(crate::app_menu::refresh);
+    Ok(HostValue::Null)
+}
+
 /// Next command the agent host queued for the script, or null.
 ///
 /// The TCP thread never touches the window. It posts work; the GPUI timer
@@ -2512,7 +2521,8 @@ pub fn module() -> HostModule {
         .function("job_log_tail", |_| job_log_tail())
         .function("record_screen_log", record_screen_log)
         .function("agent_take", |_| agent_take())
-        .function("pull_device_filings", |_| pull_device_filings());
+        .function("pull_device_filings", |_| pull_device_filings())
+        .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
@@ -2740,6 +2750,8 @@ export function record_screen_log(level: string, message: string): null;
 export function agent_take(): string | null;
 /** Pick up filings an assistant queued on the account server. Null when there is nothing to say. */
 export function pull_device_filings(): { message: string; icon: string } | null;
+/** True once the main window is up. False through the gate, first launch, and sign-in. */
+export function shell_set_chrome(open: boolean): null;
 "#;
 
 #[cfg(test)]
