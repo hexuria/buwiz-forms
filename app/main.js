@@ -738,9 +738,9 @@ class BirApp extends View {
   }
 
   openPalette(cx) {
-    if (!this.shellChromeOpen()) return;
     // An open removal question is answered Cancel first, as Esc does.
     if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
+    if (!this.shellChromeOpen()) return;
     // The palette replaces any stored-return offer on screen.
     this.existingOffer = null;
     this.overlay = "palette";
@@ -788,9 +788,9 @@ class BirApp extends View {
 
   /** The title-bar / sidebar "+": the start-a-return dialog for the branch's year. */
   startNewReturn(cx, code) {
-    if (!this.shellChromeOpen()) return;
     // An open removal question is answered Cancel first, as Esc does.
     if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
+    if (!this.shellChromeOpen()) return;
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
     const b = this.branch();
     if (!this.years().length) {
