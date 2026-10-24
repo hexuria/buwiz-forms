@@ -2277,15 +2277,14 @@ fn list_deadlines() -> HostResult {
 ///
 /// Each row is gated by the standing send OK and by [`crate::agent::send_draft`],
 /// which runs the page's Validate before queueing. The server never contacts BIR.
+#[cfg(not(feature = "agent"))]
 fn pull_device_filings() -> HostResult {
-    #[cfg(not(feature = "agent"))]
-    {
-        return Ok(HostValue::Null);
-    }
-    #[cfg(feature = "agent")]
-    {
-        pull_device_filings_agent()
-    }
+    Ok(HostValue::Null)
+}
+
+#[cfg(feature = "agent")]
+fn pull_device_filings() -> HostResult {
+    pull_device_filings_agent()
 }
 
 #[cfg(feature = "agent")]

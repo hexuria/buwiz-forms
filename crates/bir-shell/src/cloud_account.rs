@@ -389,6 +389,7 @@ fn clear_pending() {
 
 /// Server origin and the user access token, when this computer is signed in.
 /// The device-filing poll uses it. Tokens are not logged.
+#[cfg(feature = "agent")]
 pub(crate) fn device_poll_auth() -> Option<(String, String)> {
     let stored = load_stored().ok().flatten()?;
     if stored.offline || stored.access_token.is_empty() || stored.server_url.is_empty() {
