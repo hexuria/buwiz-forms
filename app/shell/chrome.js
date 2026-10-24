@@ -2,6 +2,10 @@
 // the 248 px sidebar with the account menu, the 320 px right panel (tax
 // profile or notifications), the command palette and the start-a-return
 // dialog. No separators in the title bar or the panels: spacing groups.
+//
+// Windows draws minimize, maximize, and close on this title bar. Linux draws
+// them on the menu row instead (one row with the menus). macOS uses the
+// system traffic lights.
 
 import { div } from "gpui-kit";
 import {
@@ -154,7 +158,9 @@ export function renderTitleBar(cx, app, L) {
         onClick: (_e, cx) => app.toggleRightPanel(cx),
       }),
     );
-  if (!app.isMac) right.child(captionButtons(cx));
+  // Linux caption buttons are on the menu row. Drawing them here too would
+  // stack a second set next to the sidebar icons.
+  if (!app.isMac && !app.isLinux) right.child(captionButtons(cx));
 
   return div()
     .id("title-bar")
@@ -190,7 +196,7 @@ export function renderBareTitleBar(cx, app) {
         onClick: (_e, cx) => app.cycleTheme(cx),
       }),
     );
-  if (!app.isMac) right.child(captionButtons(cx));
+  if (!app.isMac && !app.isLinux) right.child(captionButtons(cx));
   return div()
     .id("title-bar")
     .flex()

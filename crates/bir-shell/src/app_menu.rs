@@ -7,6 +7,10 @@
 //! `AppMenuBar` is not used, because its titles follow gpui-component's
 //! light theme and disappear on the shell's dark window.
 //!
+//! On Linux that bar is also the client-side title row: the empty space
+//! drags the window, a double-click toggles maximize, and minimize, zoom,
+//! and close sit at the right end. `linux_csd` owns that policy.
+//!
 //! Cmd+Q / Ctrl+Q quits: the submission worker stops and the database lock is
 //! released. Cmd+H / Ctrl+H hides to the menu-bar status item. That used to
 //! be what Cmd+Q did in the painted app; it is not `cx.hide()` (which keeps
@@ -147,13 +151,16 @@ pub(crate) fn attach_window(
     cx: &mut App,
 ) -> Entity<DesktopMenuFrame> {
     arm_window(window, cx);
-    cx.new(|_| DesktopMenuFrame {
+    let frame = cx.new(|_| DesktopMenuFrame {
         root,
         open: None,
         popup: None,
         dismiss: None,
         about: false,
-    })
+    });
+    #[cfg(target_os = "linux")]
+    crate::linux_csd::watch_decorations(&frame, window, cx);
+    frame
 }
 
 fn arm_window(window: &mut Window, cx: &mut App) {
@@ -322,76 +329,103 @@ impl Render for DesktopMenuFrame {
         let hover = colors.hover;
         let active = colors.active;
 
-        div()
+        let menu_bar = div()
+            .id("app-menu-bar")
+            .w_full()
+            .h(px(30.0))
+            .min_h(px(30.0))
+            .flex_none()
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .gap_1()
+            .bg(colors.background)
+            .border_b_1()
+            .border_color(colors.border);
+        // Windows keeps the original padding. Linux leaves the right edge
+        // flush so the caption buttons sit on the window edge.
+        #[cfg(target_os = "linux")]
+        let menu_bar = menu_bar.pl_1();
+        #[cfg(not(target_os = "linux"))]
+        let menu_bar = menu_bar.px_1();
+        let menu_bar = menu_bar.children(menus.into_iter().enumerate().map(|(ix, menu)| {
+            let opened = open == Some(ix);
+            let title_fg = foreground;
+            let title_hover = hover;
+            let title_active = active;
+            div()
+                .id(("app-menu-title", ix))
+                .relative()
+                .h(px(24.0))
+                .px(px(8.0))
+                .flex()
+                .items_center()
+                .rounded(px(4.0))
+                .text_size(px(13.0))
+                .text_color(title_fg)
+                .when(opened, |this| this.bg(title_active).text_color(title_fg))
+                .hover(move |style| style.bg(title_hover).text_color(title_fg))
+                .child(menu.name.clone())
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    if *hovered && this.open.is_some() && this.open != Some(ix) {
+                        this.open_menu(ix);
+                        cx.notify();
+                    }
+                }))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    window.listener_for(&cx.entity(), move |this, _, window, cx| {
+                        window.prevent_default();
+                        cx.stop_propagation();
+                        if this.open == Some(ix) {
+                            this.close_menu();
+                        } else {
+                            this.open_menu(ix);
+                        }
+                        cx.notify();
+                    }),
+                )
+                // Linux drags and zooms from the menu row. A press
+                // on a title must not also move or maximize.
+                .when(cfg!(target_os = "linux"), |this| {
+                    this.on_click(|_, _, cx| cx.stop_propagation())
+                })
+                .when(opened, |this| {
+                    let Some(popup) = popup.clone() else {
+                        return this;
+                    };
+                    this.child(deferred(
+                        anchored()
+                            .anchor(Anchor::TopLeft)
+                            .snap_to_window_with_margin(px(8.))
+                            .child(div().occlude().top(px(4.)).child(popup)),
+                    ))
+                })
+        }));
+        #[cfg(target_os = "linux")]
+        let menu_bar = {
+            let palette = &gpui_base::Theme::global(cx).tokens.colors;
+            menu_bar.child(crate::linux_csd::drag_spacer()).child(
+                crate::linux_csd::caption_buttons(
+                    window,
+                    crate::linux_csd::CaptionColors {
+                        foreground: colors.foreground,
+                        hover: colors.hover,
+                        destructive: palette.destructive,
+                        destructive_foreground: palette.destructive_foreground,
+                    },
+                    |_window, cx| hide_or_quit(cx),
+                ),
+            )
+        };
+        #[cfg(target_os = "linux")]
+        let menu_bar = crate::linux_csd::arm_drag("app-menu-drag", menu_bar, window, cx);
+        let frame = div()
             .relative()
             .size_full()
             .flex()
             .flex_col()
-            .child(
-                div()
-                    .id("app-menu-bar")
-                    .w_full()
-                    .h(px(30.0))
-                    .min_h(px(30.0))
-                    .flex_none()
-                    .flex_shrink_0()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .px_1()
-                    .bg(colors.background)
-                    .border_b_1()
-                    .border_color(colors.border)
-                    .children(menus.into_iter().enumerate().map(|(ix, menu)| {
-                        let opened = open == Some(ix);
-                        let title_fg = foreground;
-                        let title_hover = hover;
-                        let title_active = active;
-                        div()
-                            .id(("app-menu-title", ix))
-                            .relative()
-                            .h(px(24.0))
-                            .px(px(8.0))
-                            .flex()
-                            .items_center()
-                            .rounded(px(4.0))
-                            .text_size(px(13.0))
-                            .text_color(title_fg)
-                            .when(opened, |this| this.bg(title_active).text_color(title_fg))
-                            .hover(move |style| style.bg(title_hover).text_color(title_fg))
-                            .child(menu.name.clone())
-                            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                                if *hovered && this.open.is_some() && this.open != Some(ix) {
-                                    this.open_menu(ix);
-                                    cx.notify();
-                                }
-                            }))
-                            .on_mouse_down(
-                                MouseButton::Left,
-                                window.listener_for(&cx.entity(), move |this, _, window, cx| {
-                                    window.prevent_default();
-                                    cx.stop_propagation();
-                                    if this.open == Some(ix) {
-                                        this.close_menu();
-                                    } else {
-                                        this.open_menu(ix);
-                                    }
-                                    cx.notify();
-                                }),
-                            )
-                            .when(opened, |this| {
-                                let Some(popup) = popup.clone() else {
-                                    return this;
-                                };
-                                this.child(deferred(
-                                    anchored()
-                                        .anchor(Anchor::TopLeft)
-                                        .snap_to_window_with_margin(px(8.))
-                                        .child(div().occlude().top(px(4.)).child(popup)),
-                                ))
-                            })
-                    })),
-            )
+            .child(menu_bar)
             .child(
                 div()
                     .flex_1()
@@ -399,7 +433,13 @@ impl Render for DesktopMenuFrame {
                     .min_h(px(0.0))
                     .child(self.root.clone()),
             )
-            .when(about, |this| this.child(about_overlay(colors, cx)))
+            .when(about, |this| this.child(about_overlay(colors, cx)));
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_csd::wrap_client_border(frame)
+        }
+        #[cfg(not(target_os = "linux"))]
+        frame
     }
 }
 

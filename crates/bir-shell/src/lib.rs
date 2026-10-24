@@ -19,6 +19,8 @@ mod cloud_account;
 mod dashboard_module;
 mod host;
 mod hotkey;
+#[cfg(any(test, target_os = "linux"))]
+mod linux_csd;
 mod logging;
 mod packaged;
 pub mod print_preview_window;

@@ -12,6 +12,7 @@ use std::time::Duration;
 use std::sync::Arc;
 use std::time::Instant;
 
+use gpui_base::InteractiveElementExt as _;
 use gpui_kit as gpui;
 
 use gpui::{
@@ -625,7 +626,7 @@ impl Render for PreviewView {
                     ),
             );
         }
-        div()
+        let root = div()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                 let k = &e.keystroke;
@@ -651,7 +652,13 @@ impl Render for PreviewView {
                         .flex_none(),
                 ),
             )
-            .child(pages)
+            .child(pages);
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux_csd::wrap_client_border(root)
+        }
+        #[cfg(not(target_os = "linux"))]
+        root
     }
 }
 
@@ -695,6 +702,7 @@ fn open(r: Request, cx: &mut App) {
             traffic_light_position: Some(point(px(14.0), px(14.0))),
         }),
         window_decorations: Some(WindowDecorations::Client),
+        window_background: crate::host::window_background(),
         ..Default::default()
     };
     let _ = cx.open_window(options, move |window, cx| {
@@ -735,6 +743,9 @@ fn open(r: Request, cx: &mut App) {
             let bar_title: SharedString = r.title.clone().into();
             let bar = cx.new(|cx| {
                 cx.observe_global::<gpui_base::Theme>(|_: &mut TitleBar, cx| cx.notify())
+                    .detach();
+                #[cfg(target_os = "linux")]
+                cx.observe_window_appearance(window, |_: &mut TitleBar, _, cx| cx.notify())
                     .detach();
                 TitleBar {
                     title: bar_title,
@@ -923,13 +934,16 @@ const ZOOM_W: f32 = 52.0;
 const BUTTONS_W: f32 = 12.0 + 26.0 + ZOOM_W + 26.0 + 8.0 + SHARE_W + PRINT_W + 30.0 + 8.0;
 
 impl Render for TitleBar {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use gpui::svg;
         let colors = gpui_base::Theme::global(cx).tokens.colors;
         let owner = self.owner.clone();
         let act = move |f: fn(&mut PreviewView, &mut Window, &mut Context<PreviewView>)| {
             let owner = owner.clone();
             move |_: &gpui::MouseDownEvent, window: &mut Window, cx: &mut App| {
+                // A drag handler on the bar must not see presses on these buttons.
+                cx.stop_propagation();
+                window.prevent_default();
                 let _ = owner.update(cx, |v, cx| f(v, window, cx));
             }
         };
@@ -951,6 +965,9 @@ impl Render for TitleBar {
                 .text_size(px(12.0))
                 .cursor_pointer()
                 .hover(move |s| s.bg(colors.accent).text_color(colors.accent_foreground))
+                .on_double_click(|_, _, cx| {
+                    cx.stop_propagation();
+                })
         };
         let icon = |path: &'static str| {
             svg()
@@ -991,7 +1008,20 @@ impl Render for TitleBar {
             .child("Share")
             .on_mouse_down(MouseButton::Left, act(|v, w, cx| v.share(w, cx)));
         let zoom_btn = |id: &'static str, label: SharedString| button(id, 26.0).child(label);
-        div()
+        // Linux client decorations add caption buttons on this bar. The title's
+        // right inset grows by the same amount so it stays clear of them.
+        #[cfg(target_os = "linux")]
+        let caption_pad = crate::linux_csd::caption_width(crate::linux_csd::caption_policy(
+            window.window_decorations(),
+            window.window_controls(),
+        ));
+        #[cfg(not(target_os = "linux"))]
+        let caption_pad = {
+            let _ = window;
+            0.0
+        };
+        let bar = div()
+            .id("preview-title-bar")
             .relative()
             .size_full()
             .bg(colors.surface)
@@ -1001,10 +1031,11 @@ impl Render for TitleBar {
             .child(
                 // Symmetric insets = button group width, so the title stays
                 // centred on the bar and never slides under the buttons.
+                // Linux caption buttons add to the right inset only.
                 div()
                     .absolute()
                     .left(px(BUTTONS_W))
-                    .right(px(BUTTONS_W))
+                    .right(px(BUTTONS_W + caption_pad))
                     .top(px(0.0))
                     .h(px(TITLE_BAR_H))
                     .flex()
@@ -1022,10 +1053,10 @@ impl Render for TitleBar {
                             .child(self.title.clone()),
                     ),
             )
-            .child(
-                div()
+            .child({
+                let controls = div()
                     .absolute()
-                    .right(px(12.0))
+                    .right(px(if caption_pad > 0.0 { 0.0 } else { 12.0 }))
                     .top(px(0.0))
                     .h(px(TITLE_BAR_H))
                     .flex()
@@ -1046,8 +1077,27 @@ impl Render for TitleBar {
                     )
                     .child(div().w(px(8.0)).flex_none())
                     .child(share)
-                    .child(print),
-            )
+                    .child(print);
+                #[cfg(target_os = "linux")]
+                let controls = if caption_pad > 0.0 {
+                    controls.child(crate::linux_csd::caption_buttons(
+                        window,
+                        crate::linux_csd::CaptionColors {
+                            foreground: colors.foreground,
+                            hover: colors.secondary,
+                            destructive: colors.destructive,
+                            destructive_foreground: colors.destructive_foreground,
+                        },
+                        |window, _| window.remove_window(),
+                    ))
+                } else {
+                    controls
+                };
+                controls
+            });
+        #[cfg(target_os = "linux")]
+        let bar = crate::linux_csd::arm_drag("preview-title-drag", bar, window, cx);
+        bar
     }
 }
 
