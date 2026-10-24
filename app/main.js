@@ -27,7 +27,9 @@ import {
   renderRightPanel,
   renderPalette,
   renderNewReturn,
+  renderLockedFrame,
 } from "./shell/chrome.js";
+import { shellChromeVisible } from "./shell/chrome_gate.js";
 import { renderHome } from "./shell/home.js";
 import { recentEntry } from "./shell/recent.js";
 import { renderLibrary } from "./shell/library.js";
@@ -52,6 +54,32 @@ const SELECTION_KEY = "redesign.selection";
 const READ_KEY = "redesign.read_notifications";
 const PREFS_KEY = "redesign.prefs";
 
+/** First launch, "Just me": the new-taxpayer form with no filing chrome. */
+function renderPendingTaxpayer(cx, app) {
+  const vp = window.viewport_size();
+  const padX = vp.width < BREAK.narrowContent ? 16 : 32;
+  const column = Math.max(200, Math.min(SIZE.contentMax, vp.width) - padX * 2);
+  const body = div()
+    .id("setup-taxpayer")
+    .flex()
+    .flex_1()
+    .min_h(0)
+    .overflow_y_scroll()
+    .overflow_x_hidden()
+    .child(
+      div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .w_full()
+        .px(padX)
+        .pt(28)
+        .pb(56)
+        .child(div().flex().flex_col().w_full().max_w(column).min_w(0).child(renderNewTaxpayer(cx, app, column))),
+    );
+  return renderLockedFrame(cx, app, body);
+}
+
 // The retained app handle lets a form row request changes to shared chrome
 // without treating the row's own event context as the application's context.
 export default class BirRoot extends View {
@@ -72,6 +100,15 @@ class BirApp extends View {
     this.gateDetail = "";
     this.gatePhase = "welcome";
     this.focusRoot = cx.focus_handle();
+    this.platformKnown = false;
+    this.isMac = false;
+    this.isLinux = false;
+    try {
+      const info = this.store.call("system_info");
+      this.isMac = info.os === "macos";
+      this.isLinux = info.os === "linux";
+      this.platformKnown = info.os === "macos" || info.os === "linux" || info.os === "windows";
+    } catch (_e) {}
     let gate = { unlocked: false };
     try {
       gate = this.store.call("cloud_account_gate");
@@ -91,6 +128,7 @@ class BirApp extends View {
     this.isMac = this.info.os === "macos";
     // Linux caption buttons live on the in-window menu row, not this bar.
     this.isLinux = this.info.os === "linux";
+    this.platformKnown = true;
 
     this.themePref = parseThemePreference(this.store.setting(THEME_PREF_KEY));
     applyThemePreference(cx, this.themePref);
@@ -199,6 +237,7 @@ class BirApp extends View {
     // Key bindings travel the focus path; give the root the keyboard at
     // launch so shortcuts work before anything else is clicked.
     cx.timer.after(50, () => this.focusRoot.focus());
+    this.syncShellChrome();
 
     // gpui-shell re-runs `render` only when script state changes, and gives
     // scripts no resize event. Widths taken from the window would stay at the
@@ -278,6 +317,7 @@ class BirApp extends View {
     if (!this.booted) this.boot(cx);
     else {
       this.store.bump();
+      this.syncShellChrome();
       cx.notify();
     }
   }
@@ -294,6 +334,7 @@ class BirApp extends View {
     this.gatePhase = "welcome";
     this.gateDetail = "";
     this.gateError = null;
+    this.syncShellChrome();
     cx.notify();
   }
 
@@ -674,6 +715,7 @@ class BirApp extends View {
   }
 
   toggleSidebar(cx) {
+    if (!this.shellChromeOpen()) return;
     this.sidebarOpen = !this.sidebarOpen;
     if (this.sidebarOpen && this.narrow()) this.panel = null;
     this.accountMenu = false;
@@ -682,6 +724,7 @@ class BirApp extends View {
 
   /** A panel closes from its own trigger (the pill or the bell) and Esc. */
   togglePanel(which, cx) {
+    if (!this.shellChromeOpen()) return;
     this.panel = this.panel === which ? null : which;
     if (this.panel) this.lastPanel = this.panel;
     if (this.panel && this.narrow()) this.sidebarOpen = false;
@@ -695,6 +738,7 @@ class BirApp extends View {
   }
 
   openPalette(cx) {
+    if (!this.shellChromeOpen()) return;
     // An open removal question is answered Cancel first, as Esc does.
     if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
     // The palette replaces any stored-return offer on screen.
@@ -744,6 +788,7 @@ class BirApp extends View {
 
   /** The title-bar / sidebar "+": the start-a-return dialog for the branch's year. */
   startNewReturn(cx, code) {
+    if (!this.shellChromeOpen()) return;
     // An open removal question is answered Cancel first, as Esc does.
     if (this.formUi?.askingRemoval?.()) this.formUi.cancelRemoval(cx);
     if (this.isFresh()) return this.toast(this.freshHint(), cx);
@@ -836,7 +881,7 @@ class BirApp extends View {
   }
 
   openSettings(cx) {
-    if (this.cloudLocked) return;
+    if (!this.shellChromeOpen()) return;
     if (this.view !== "settings") this.go("settings", cx);
   }
 
@@ -1182,6 +1227,35 @@ class BirApp extends View {
     return !this.authState().mode;
   }
 
+  /**
+   * Toolbar, sidebar, taxpayer picker and filing menus. False on the cloud
+   * gate, first launch (including the first taxpayer), and the sign-in screen.
+   */
+  shellChromeOpen() {
+    if (!this.booted || this.cloudLocked) return false;
+    const mode = this.authState().mode;
+    return shellChromeVisible({
+      booted: true,
+      cloudLocked: false,
+      appLocked: Boolean(this.appLocked),
+      mode: mode || null,
+      setupPending: this.setupPending || null,
+      setupStep: this.setup.step,
+    });
+  }
+
+  /** Tell the host so the menu bar matches the window. No-op when unchanged. */
+  syncShellChrome() {
+    const open = this.shellChromeOpen();
+    if (this.shellChromeSent === open) return;
+    this.shellChromeSent = open;
+    try {
+      this.store.call("shell_set_chrome", open);
+    } catch (_e) {
+      this.shellChromeSent = null;
+    }
+  }
+
   isHelpdesk() {
     return this.authState().mode === "helpdesk";
   }
@@ -1362,6 +1436,7 @@ class BirApp extends View {
     this.signIn.tin.set("");
     this.store.bump();
     this.applyScope();
+    this.syncShellChrome();
     if (session.kind === "taxpayer") {
       this.selRoot = session.root;
       const t = this.taxpayers()[0];
@@ -1409,11 +1484,13 @@ class BirApp extends View {
     this.store.bump();
     this.applyScope();
     this.appLocked = true;
+    this.syncShellChrome();
     if (message) this.toast(message, cx, "log-out");
     cx.notify();
   }
 
   lockApp(cx) {
+    if (!this.shellChromeOpen()) return;
     this.endSession(cx);
   }
 
@@ -1440,6 +1517,7 @@ class BirApp extends View {
       } catch (e) {
         return this.toast(String(e), cx, "triangle-alert");
       }
+      this.syncShellChrome();
       return cx.notify();
     }
     // No taxpayer yet: type it first; Create finishes the setup.
@@ -1457,8 +1535,9 @@ class BirApp extends View {
   /** Called once the first taxpayer exists, when first launch chose "solo". */
   finishSoloSetup(root) {
     if (this.setupPending !== "solo") return;
-    this.setupPending = null;
     this.store.write("setup_solo", root);
+    this.setupPending = null;
+    this.syncShellChrome();
   }
 
   /** "I help other taxpayers": choose the admin PIN, then show the recovery key once. */
@@ -1476,6 +1555,7 @@ class BirApp extends View {
       this.setup.key = this.store.write("setup_helpdesk", pin).recovery_key;
       this.setup.step = "helpdesk-key";
       this.authError = null;
+      this.syncShellChrome();
     } catch (e) {
       this.authError = String(e);
     }
@@ -1641,14 +1721,15 @@ class BirApp extends View {
   }
 
   paint(cx) {
-    if (this.cloudLocked || !this.booted) return renderAccountGate(cx, this);
+    if (this.cloudLocked || !this.booted) return renderLockedFrame(cx, this, renderAccountGate(cx, this));
     const t = tokens(cx);
-    // First launch and sign-in take the whole window: nothing that names a
-    // taxpayer is drawn behind them. First launch's "Just me" types its
-    // taxpayer on the normal New taxpayer page; a help desk's recovery key
-    // stays on screen after the mode is saved, until it was written down.
-    if ((this.needsSetup() && this.setupPending !== "solo") || this.setup.step === "helpdesk-key") {
-      return renderUpdatePrompt(cx, this, renderSetup(cx, this));
+    // First launch and sign-in take the whole window. "Just me" types its
+    // taxpayer here too, without the toolbar or the sidebar: those open a
+    // profile that does not exist yet. A help desk's recovery key stays up
+    // after the mode is saved, until it was written down.
+    if (this.needsSetup() || this.setup.step === "helpdesk-key") {
+      const page = this.setupPending === "solo" ? renderPendingTaxpayer(cx, this) : renderSetup(cx, this);
+      return renderUpdatePrompt(cx, this, page);
     }
     if (this.appLocked) return renderUpdatePrompt(cx, this, renderSignIn(cx, this));
     const L = this.layout();

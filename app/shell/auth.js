@@ -1,5 +1,7 @@
 // First launch and sign-in. Both take the whole window: nothing about any
-// taxpayer (sidebar, panel, title-bar pill, search) is drawn behind them.
+// taxpayer (sidebar, panel, title-bar pill, search, notifications, theme,
+// account switcher) is drawn behind them. The menu row and the window
+// controls stay; they do not open a profile.
 //
 // First launch asks who uses this computer. "Just me or my business" makes
 // the owner's own taxpayer the admin account; "I help other taxpayers" (an
@@ -13,45 +15,37 @@
 
 import { div } from "gpui-kit";
 import { tokens, SPACE, RADIUS, Text, Icon, AppButton, PinCells, DigitCells, TextField, Code } from "./ui.js";
-import { renderBareTitleBar } from "./chrome.js";
+import { renderLockedFrame } from "./chrome.js";
 
 const CARD_W = 400;
 
 function screen(cx, app, children) {
   const t = tokens(cx);
-  return div()
-    .id("auth-screen")
-    .flex()
-    .flex_col()
-    .size_full()
-    .bg(t.bg)
-    .text_color(t.fg)
-    .track_focus(app.focusRoot)
-    .on_action("toggle-theme", (_e, cx) => app.cycleTheme(cx))
-    .child(renderBareTitleBar(cx, app))
-    .child(
-      div()
-        .flex()
-        .flex_1()
-        .min_h(0)
-        .items_center()
-        .justify_center()
-        .child(
-          div()
-            .id("auth-card")
-            .flex()
-            .flex_col()
-            .gap(SPACE[4])
-            .w(CARD_W)
-            .p(SPACE[8])
-            .rounded(RADIUS.dialog)
-            .border(1)
-            .border_color(t.border)
-            .bg(t.surface)
-            .shadow_lg()
-            .children(children.filter(Boolean)),
-        ),
-    );
+  return renderLockedFrame(
+    cx,
+    app,
+    div()
+      .flex()
+      .flex_1()
+      .min_h(0)
+      .items_center()
+      .justify_center()
+      .child(
+        div()
+          .id("auth-card")
+          .flex()
+          .flex_col()
+          .gap(SPACE[4])
+          .w(CARD_W)
+          .p(SPACE[8])
+          .rounded(RADIUS.dialog)
+          .border(1)
+          .border_color(t.border)
+          .bg(t.surface)
+          .shadow_lg()
+          .children(children.filter(Boolean)),
+      ),
+  );
 }
 
 function heading(cx, title, line, icon = "lock") {
