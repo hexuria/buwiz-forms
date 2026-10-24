@@ -2262,6 +2262,15 @@ fn list_deadlines() -> HostResult {
     })
 }
 
+/// The script is on the main window (`open`) or back on the gate, first
+/// launch, or the sign-in screen. Rebuilds the menu bar to match.
+fn shell_set_chrome(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let open = arguments.boolean(0)?;
+    crate::app_menu::set_shell_chrome_open(open);
+    let _ = gpui_shell::with_current_app(crate::app_menu::refresh);
+    Ok(HostValue::Null)
+}
+
 /// Next command the agent host queued for the script, or null.
 ///
 /// The TCP thread never touches the window. It posts work; the GPUI timer
@@ -2337,7 +2346,8 @@ pub fn module() -> HostModule {
         .function("purge_archived_jobs", |_| purge_archived_jobs())
         .function("job_log_tail", |_| job_log_tail())
         .function("record_screen_log", record_screen_log)
-        .function("agent_take", |_| agent_take());
+        .function("agent_take", |_| agent_take())
+        .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
@@ -2563,6 +2573,8 @@ export function job_log_tail(): JobLogTail;
 export function record_screen_log(level: string, message: string): null;
 /** Next UI command from the gpui-agent host, or null when none is waiting. */
 export function agent_take(): string | null;
+/** True once the main window is up. False through the gate, first launch, and sign-in. */
+export function shell_set_chrome(open: boolean): null;
 "#;
 
 #[cfg(test)]

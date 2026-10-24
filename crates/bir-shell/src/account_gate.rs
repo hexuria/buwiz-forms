@@ -49,6 +49,10 @@ pub fn is_unlocked() -> bool {
 
 pub fn set_unlocked(unlocked: bool) {
     UNLOCKED.store(unlocked, Ordering::SeqCst);
+    // Signing out leaves the gate. Filing menus must not survive into it.
+    if !unlocked {
+        crate::app_menu::set_shell_chrome_open(false);
+    }
     // The worker may already be running from an earlier sign-in in this
     // process. Pausing it stops the next filing tick without the one-way
     // shutdown flag, so a later sign-in can file again.

@@ -179,24 +179,18 @@ export function renderTitleBar(cx, app, L) {
 }
 
 /**
- * The title bar of the sign-in and lock screens: a drag area, the theme
- * button and (off macOS) the caption buttons. Nothing names a taxpayer.
+ * Sign-in, first launch, and the account gate: a drag strip, and on Windows
+ * the caption buttons. The theme control and anything that opens a profile,
+ * account, or settings stay off until the main window. Linux draws its
+ * caption buttons on the menu row, so this is not a second bar there.
+ * Returns null on Linux.
  */
 export function renderBareTitleBar(cx, app) {
-  const right = div()
-    .flex()
-    .flex_row()
-    .items_center()
-    .gap(SPACE[1])
-    .h_full()
-    .when(app.isMac, (el) => el.pr(10))
-    .child(
-      IconButton(cx, "tb-theme", themeIcon(app.themePref), {
-        tooltip: `Theme: ${app.themePref} (click to change)`,
-        onClick: (_e, cx) => app.cycleTheme(cx),
-      }),
-    );
-  if (!app.isMac && !app.isLinux) right.child(captionButtons(cx));
+  // Linux captions live on the menu row. An unknown platform draws nothing
+  // rather than a second set of buttons over that row.
+  if (app.isLinux || !app.platformKnown) return null;
+  const right = div().flex().flex_row().items_center().h_full().when(app.isMac, (el) => el.pr(10));
+  if (!app.isMac) right.child(captionButtons(cx));
   return div()
     .id("title-bar")
     .flex()
@@ -208,6 +202,22 @@ export function renderBareTitleBar(cx, app) {
     .h(SIZE.titleBar)
     .window_control_area("drag")
     .child(right);
+}
+
+/** Full-window frame whose only chrome is the drag strip and window controls. */
+export function renderLockedFrame(cx, app, body) {
+  const t = tokens(cx);
+  const bar = renderBareTitleBar(cx, app);
+  const root = div()
+    .id("auth-screen")
+    .flex()
+    .flex_col()
+    .size_full()
+    .bg(t.bg)
+    .text_color(t.fg)
+    .track_focus(app.focusRoot);
+  if (bar) root.child(bar);
+  return root.child(body);
 }
 
 // ---------------------------------------------------------------- sidebar
