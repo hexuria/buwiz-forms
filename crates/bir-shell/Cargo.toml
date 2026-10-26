@@ -21,6 +21,14 @@ path = "src/lib.rs"
 name = "bir-shell"
 path = "src/main.rs"
 
+# Windowless MCP server for Rox mini apps: owns the database and the
+# submission worker, and serves MCP over stdio or loopback HTTP. See
+# `src/mini_app/mod.rs`.
+[[bin]]
+name = "bir-mini-app"
+path = "src/bin/bir-mini-app.rs"
+required-features = ["agent"]
+
 [features]
 # GPUI Fast (https://gpui-kit.com/docs/installation/#optional-gpui-fast-backend):
 # its retained rendering and layout engine in place of upstream GPUI, across
@@ -31,8 +39,9 @@ gpui-fast = ["gpui-kit/gpui-fast", "gpui-shell/gpui-fast", "gpui-component/gpui-
 # gpui-agent control plane. Off in a normal build. When compiled in, the
 # listener still starts only if `GPUI_AGENT=1` (and a release build also
 # needs `GPUI_AGENT_ALLOW_RELEASE=1`). Same protocol rev as bir-desktop and
-# bir-mcp.
-agent = ["dep:gpui-agent"]
+# bir-mcp. It also builds `bir-mini-app`, which reuses bir-mcp's tool table,
+# license gate and HTTP door as a library.
+agent = ["dep:gpui-agent", "dep:bir-mcp"]
 
 [dependencies]
 # gpui-shell is published only via the monorepo git (the crates.io `gpui-shell`
@@ -75,6 +84,10 @@ smallvec = "1"
 bir-core = { path = "../bir-core" }
 bir-print = { path = "../bir-print" }
 gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3", optional = true }
+# Tool descriptions, the Buwiz license gate and the loopback HTTP door for
+# `bir-mini-app`. Pulls only bir-core, gpui-agent (same rev), reqwest and
+# tiny_http: no bir-desktop, so no second gpui-kit.
+bir-mcp = { path = "../bir-mcp", optional = true }
 
 anyhow = "1"
 chrono = "0.4"
@@ -91,7 +104,7 @@ serde_json = "1"
 tracing = "0.1"
 # The submission worker (`bir_core::background_cron`) runs on its own Tokio
 # runtime, as in painted `bir` and `bir-headless`.
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = ["rt-multi-thread", "signal"] }
 # Bridges the OS sign-in prompt (run on its own thread) into a host future.
 futures = "0.3"
 

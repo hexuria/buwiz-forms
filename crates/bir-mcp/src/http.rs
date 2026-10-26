@@ -42,6 +42,31 @@ use crate::license::{License, UNAUTHENTICATED};
 use crate::oauth::{self, AdmitError, Introspection, Resource};
 use crate::server::{BirHost, Server};
 use serde_json::Value;
+
+/// The JSON-RPC dispatcher behind the HTTP door. [`Server`] is the one
+/// `bir-mcp` serves; `bir-mini-app` serves its in-process dispatcher through
+/// the same guards.
+pub trait McpHandler {
+    /// Replace the tool gate. Called before every request with a closed gate,
+    /// then with the verdict for this request's bearer token.
+    fn set_license(&mut self, license: License);
+    fn handle(&mut self, message: Value) -> Option<Value>;
+    fn handle_line(&mut self, line: &str) -> Option<String>;
+}
+
+impl<H: BirHost> McpHandler for Server<H> {
+    fn set_license(&mut self, license: License) {
+        Server::set_license(self, license);
+    }
+
+    fn handle(&mut self, message: Value) -> Option<Value> {
+        Server::handle(self, message)
+    }
+
+    fn handle_line(&mut self, line: &str) -> Option<String> {
+        Server::handle_line(self, line)
+    }
+}
 use std::io::Read;
 use std::net::{IpAddr, SocketAddr};
 
@@ -117,8 +142,8 @@ impl Reply {
 ///
 /// A failed check leaves the server's license closed, so a later tool call
 /// cannot reuse a previous request's grant. Requests are handled one at a time.
-pub fn respond<H: BirHost>(
-    server: &mut Server<H>,
+pub fn respond<S: McpHandler>(
+    server: &mut S,
     auth: &Introspection,
     resource: &Resource,
     method: &str,
@@ -234,8 +259,8 @@ fn unauthorized(resource: &Resource, error: Option<&str>, description: Option<&s
 
 /// Serve until the listener is unblocked or fails. Requests are handled one
 /// at a time: the host drives one BIR form anyway.
-pub fn serve_http<H: BirHost>(
-    server: &mut Server<H>,
+pub fn serve_http<S: McpHandler>(
+    server: &mut S,
     listener: &tiny_http::Server,
     auth: &Introspection,
     resource: &Resource,

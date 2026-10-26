@@ -90,8 +90,24 @@ pub struct InstallOptions {
 /// Install the process subscriber and the panic hook. A second call is a no-op
 /// and reports whether the first call succeeded.
 pub fn install(options: InstallOptions) -> bool {
+    install_with_console(options, Console::Stdout)
+}
+
+/// [`install`], with the console copy on stderr: for a process whose stdout
+/// carries a protocol (`bir-mini-app mcp` speaks MCP there).
+pub fn install_stderr(options: InstallOptions) -> bool {
+    install_with_console(options, Console::Stderr)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Console {
+    Stdout,
+    Stderr,
+}
+
+fn install_with_console(options: InstallOptions, console: Console) -> bool {
     static INSTALLED: OnceLock<bool> = OnceLock::new();
-    *INSTALLED.get_or_init(|| match subscriber(options).try_init() {
+    *INSTALLED.get_or_init(|| match subscriber(options, console).try_init() {
         Ok(()) => {
             install_panic_hook();
             tracing::info!(
@@ -111,10 +127,10 @@ pub fn install(options: InstallOptions) -> bool {
 ///
 /// Tests use this so one case does not capture every later test in the process.
 pub fn with_thread_subscriber<T>(options: InstallOptions, body: impl FnOnce() -> T) -> T {
-    tracing::subscriber::with_default(subscriber(options), body)
+    tracing::subscriber::with_default(subscriber(options, Console::Stdout), body)
 }
 
-fn subscriber(options: InstallOptions) -> impl tracing::Subscriber + Send + Sync {
+fn subscriber(options: InstallOptions, console: Console) -> impl tracing::Subscriber + Send + Sync {
     let _ = dotenvy::dotenv();
     let env_filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new(options.default_filter))
@@ -127,14 +143,25 @@ fn subscriber(options: InstallOptions) -> impl tracing::Subscriber + Send + Sync
             .with_file(options.developer_mode)
             .with_line_number(options.developer_mode)
     });
-    let stdout_layer = tracing_subscriber::fmt::layer()
-        .with_writer(RedactingMake::new(std::io::stdout))
-        .with_target(true)
-        .with_file(options.developer_mode)
-        .with_line_number(options.developer_mode);
+    let stdout_layer = (console == Console::Stdout).then(|| {
+        tracing_subscriber::fmt::layer()
+            .with_writer(RedactingMake::new(std::io::stdout))
+            .with_target(true)
+            .with_file(options.developer_mode)
+            .with_line_number(options.developer_mode)
+    });
+    let stderr_layer = (console == Console::Stderr).then(|| {
+        tracing_subscriber::fmt::layer()
+            .with_writer(RedactingMake::new(std::io::stderr))
+            .with_ansi(false)
+            .with_target(true)
+            .with_file(options.developer_mode)
+            .with_line_number(options.developer_mode)
+    });
     Registry::default()
         .with(env_filter)
         .with(stdout_layer)
+        .with(stderr_layer)
         .with(file_layer)
 }
 

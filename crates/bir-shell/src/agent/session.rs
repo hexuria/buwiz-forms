@@ -56,6 +56,9 @@ struct OpenForm {
 }
 
 pub(crate) struct Session {
+    /// `app` in `hello` and `app.info`, and the `mode` beside it.
+    app: &'static str,
+    mode: &'static str,
     db: Option<Arc<Mutex<Database>>>,
     commands: UiQueue,
     selected_tin: Option<String>,
@@ -66,7 +69,15 @@ pub(crate) struct Session {
 
 impl Session {
     pub(crate) fn new(commands: UiQueue) -> Self {
+        Self::named(commands, APP, "desktop")
+    }
+
+    /// A session that answers as another host: `bir-mini-app` is `headless`
+    /// and has no window to apply the queued screen commands.
+    pub(crate) fn named(commands: UiQueue, app: &'static str, mode: &'static str) -> Self {
         Self {
+            app,
+            mode,
             db: None,
             commands,
             selected_tin: None,
@@ -168,8 +179,8 @@ impl Session {
             })
             .collect();
         Ok(DispatchResult::json(json!({
-            "app": APP,
-            "mode": "desktop",
+            "app": self.app,
+            "mode": self.mode,
             "database": database_kind(),
             "profiles": profiles,
         })))
@@ -978,7 +989,7 @@ impl AgentHost for Session {
     fn hello(&self) -> HelloInfo {
         HelloInfo {
             protocol: PROTOCOL_VERSION,
-            app: APP.into(),
+            app: self.app.into(),
             platform: PlatformKind::Desktop,
             os: gpui_agent::protocol::host_os(),
             ready: true,

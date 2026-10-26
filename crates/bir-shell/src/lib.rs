@@ -22,6 +22,8 @@ mod hotkey;
 #[cfg(any(test, target_os = "linux"))]
 mod linux_csd;
 mod logging;
+#[cfg(feature = "agent")]
+pub mod mini_app;
 mod packaged;
 pub mod print_preview_window;
 pub mod print_sheet;

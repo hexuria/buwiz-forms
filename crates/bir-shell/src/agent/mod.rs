@@ -7,7 +7,7 @@
 
 mod session;
 
-pub(crate) use session::send_draft;
+pub(crate) use session::{Session, UiQueue, send_draft};
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -26,7 +26,6 @@ use gpui_agent::{authorize_request, handle_request, virtual_unavailable};
 use gpui_kit::{App, Entity, Window};
 use gpui_shell::{ScriptView, ShellRoot};
 use serde_json::Value;
-use session::Session;
 
 /// `app` in this host's discovery record and `hello`.
 pub const APP: &str = "bir-shell";
