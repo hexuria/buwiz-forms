@@ -1399,7 +1399,9 @@ pub(crate) fn send_draft(
             "queued": false,
             "filed": false,
             "form": code,
-            "message": "This send needs a standing OK for this taxpayer and form. Grant it on the taxpayer page. Nothing was queued.",
+            "message": format!(
+                "Needs you: press Submit in the Forms app, or grant the assistant permission to submit {code} for this taxpayer (the toggle in the Forms app, or the taxpayer page in BIR). Nothing was queued."
+            ),
         }));
     }
     if identity.status != FilingStatus::Draft {
@@ -1692,6 +1694,22 @@ mod tests {
         assert_eq!(refused["status"], "approval_required");
         assert_eq!(refused["pending"], true);
         assert_eq!(refused["queued"], false);
+        let message = refused["message"].as_str().unwrap();
+        assert!(
+            message.starts_with("Needs you: press Submit in the Forms app, or grant the assistant permission to submit 2551Q"),
+            "{message}"
+        );
+        // A grant for another form, or revoked, still refuses.
+        session.lock_db().unwrap().grant_send(TIN, "1601C").unwrap();
+        session.lock_db().unwrap().grant_send(TIN, "2551Q").unwrap();
+        session
+            .lock_db()
+            .unwrap()
+            .revoke_send(TIN, "2551Q")
+            .unwrap();
+        let still_refused = call(&mut session, "form.send", json!({})).unwrap();
+        assert_eq!(still_refused["status"], "approval_required");
+        assert_eq!(still_refused["queued"], false);
         session.lock_db().unwrap().grant_send(TIN, "2551Q").unwrap();
         let blocked = call(&mut session, "form.send", json!({})).unwrap();
         assert_eq!(blocked["ok"], false);

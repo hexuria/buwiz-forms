@@ -65,6 +65,7 @@ pub mod print_map;
 pub mod queueable;
 pub mod registry;
 pub mod support_level;
+pub mod taxform;
 
 pub use atc::{ATC_TABLE_2551Q, AtcEntry, AtcRateResolution, find_atc, resolve_2551q_atc_rate};
 pub use form_1601c::Form1601CDraft;

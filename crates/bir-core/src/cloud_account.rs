@@ -745,13 +745,94 @@ pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
 pub fn save_stored_account(stored: &StoredAccount) -> Result<(), CloudError> {
     let raw = stored.encode()?;
     let _ = keyring_save(&raw);
-    write_secret_file(&raw)
+    write_secret_file(&raw)?;
+    // A saved account is a live sign-in: forget why the last one ended.
+    let _ = std::fs::remove_file(ended_file_path());
+    Ok(())
 }
 
 /// Remove the keychain entry and the private file.
 pub fn clear_stored_account() {
     keyring_delete();
     let _ = std::fs::remove_file(account_file_path());
+}
+
+/// How long [`lock_refresh`] waits for another process's refresh.
+const REFRESH_LOCK_WAIT: Duration = Duration::from_secs(15);
+
+/// An exclusive hold on the saved account for one refresh, across every BIR
+/// process on this computer (the app, `bir-mini-app`, `bir-mcp`). Buwiz
+/// rotates refresh tokens and revokes the whole sign-in when one is used
+/// twice, so two processes must never refresh the same token: take this,
+/// re-read the saved account, and refresh only if it is still stale. Released
+/// when dropped (the OS also releases it when the process exits).
+pub struct RefreshLock {
+    _file: std::fs::File,
+}
+
+/// Take [`RefreshLock`]: an exclusive lock on `buwiz-cloud-account.lock`
+/// beside the account file, waiting up to 15 seconds for another process.
+pub fn lock_refresh() -> Result<RefreshLock, CloudError> {
+    let path = account_file_path().with_extension("lock");
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|error| {
+            CloudError::Unexpected(format!("could not lock the Buwiz account ({error})"))
+        })?;
+    let deadline = std::time::Instant::now() + REFRESH_LOCK_WAIT;
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(RefreshLock { _file: file }),
+            Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(std::fs::TryLockError::WouldBlock) => {
+                return Err(CloudError::Unexpected(
+                    "another BIR app on this computer is still refreshing the Buwiz sign-in; try again in a moment"
+                        .into(),
+                ));
+            }
+            Err(std::fs::TryLockError::Error(error)) => {
+                return Err(CloudError::Unexpected(format!(
+                    "could not lock the Buwiz account ({error})"
+                )));
+            }
+        }
+    }
+}
+
+/// Remember why the saved sign-in ended (Buwiz rejected its refresh), so
+/// every BIR process can say so at once instead of retrying. Cleared when
+/// an account is saved again.
+pub fn record_sign_in_ended(reason: &str) {
+    let path = ended_file_path();
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&path, reason);
+}
+
+/// Why the last saved sign-in ended, when it was rejected and nobody has
+/// signed in since.
+pub fn sign_in_ended() -> Option<String> {
+    std::fs::read_to_string(ended_file_path())
+        .ok()
+        .map(|reason| reason.trim().to_string())
+        .filter(|reason| !reason.is_empty())
+}
+
+fn ended_file_path() -> PathBuf {
+    account_file_path().with_extension("ended")
 }
 
 fn account_file_path() -> PathBuf {
@@ -827,14 +908,25 @@ pub struct BlockingHttp {
 
 impl BlockingHttp {
     pub fn new() -> Self {
+        Self::with_timeout(Duration::from_secs(20))
+    }
+
+    /// A client that gives up after `timeout` overall (and a third of it, at
+    /// most 3 seconds, to connect): what a token refresh uses, so a server
+    /// that never answers costs seconds, not every check's 20.
+    pub fn with_timeout(timeout: Duration) -> Self {
         let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(20))
+            .timeout(timeout)
+            .connect_timeout((timeout / 3).min(Duration::from_secs(3)))
             .user_agent(USER_AGENT)
             .build()
             .unwrap_or_else(|_| reqwest::blocking::Client::new());
         Self { client }
     }
 }
+
+/// How long a token refresh may take before it counts as unreachable.
+pub const REFRESH_TIMEOUT: Duration = Duration::from_secs(8);
 
 impl Default for BlockingHttp {
     fn default() -> Self {
@@ -886,6 +978,10 @@ fn interpret_token_response(
 ) -> Result<Poll, CloudError> {
     let value = match serde_json::from_str::<Value>(body) {
         Ok(value) => value,
+        // A plain-text rejection of the token itself.
+        Err(_) if (400..600).contains(&status) && names_a_rejected_token(body) => {
+            return Err(CloudError::InvalidGrant);
+        }
         Err(_) if !(200..300).contains(&status) => {
             return Err(CloudError::Server {
                 description: format!("the Buwiz server returned HTTP {status}"),
@@ -897,7 +993,12 @@ fn interpret_token_response(
             ));
         }
     };
-    let error = value.get("error").and_then(Value::as_str).unwrap_or("");
+    // OAuth's `{"error": "invalid_grant"}`, or buwiz-server's own
+    // `{"error": {"code": "invalid_token", "message": ...}}`.
+    let error = value
+        .get("error")
+        .and_then(|error| error.as_str().or_else(|| error.get("code").and_then(Value::as_str)))
+        .unwrap_or("");
     if allow_pending && error == "authorization_pending" {
         return Ok(Poll::Pending);
     }
@@ -934,6 +1035,14 @@ fn interpret_token_response(
         refresh_token,
         expires_in,
     }))
+}
+
+/// Whether a non-JSON error body says the token was rejected.
+fn names_a_rejected_token(body: &str) -> bool {
+    let body = body.to_ascii_lowercase();
+    ["invalid_grant", "invalid_token", "token is invalid"]
+        .iter()
+        .any(|needle| body.contains(needle))
 }
 
 fn expect_json(status: u16, body: &str) -> Result<Value, CloudError> {
@@ -1352,6 +1461,52 @@ mod tests {
             refresh_session(&mut denied, &current, 1_000).unwrap(),
             SessionUpdate::SignedOut
         ));
+    }
+
+    #[test]
+    fn buwiz_servers_own_token_errors_are_a_rejected_sign_in() {
+        // buwiz-server's error body, at any 4xx or 5xx status, and a
+        // plain-text rejection: each is "sign in again", never a retry.
+        for (status, body) in [
+            (400, r#"{"error":{"code":"invalid_token","message":"access token is invalid"}}"#),
+            (500, r#"{"error":{"code":"invalid_grant","message":"refresh token revoked"}}"#),
+            (502, "token is invalid"),
+        ] {
+            assert_eq!(
+                interpret_token_response(status, body, false).err(),
+                Some(CloudError::InvalidGrant),
+                "{status} {body}"
+            );
+        }
+        assert!(matches!(
+            interpret_token_response(503, "upstream unavailable", false),
+            Err(CloudError::Server { .. })
+        ));
+    }
+
+    #[test]
+    fn the_refresh_lock_is_exclusive_and_the_ended_sign_in_is_remembered() {
+        // The account file is a scratch path; the keychain is never touched.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(ACCOUNT_FILE_NAME);
+        temp_env::with_var(ENV_ACCOUNT_FILE, Some(path.to_str().unwrap()), || {
+            let held = lock_refresh().unwrap();
+            let lock = std::fs::OpenOptions::new()
+                .write(true)
+                .open(path.with_extension("lock"))
+                .unwrap();
+            assert!(matches!(lock.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
+            drop(held);
+            assert!(lock.try_lock().is_ok());
+            lock.unlock().unwrap();
+
+            record_sign_in_ended("Buwiz rejected the saved sign-in.");
+            assert_eq!(
+                sign_in_ended().as_deref(),
+                Some("Buwiz rejected the saved sign-in.")
+            );
+            assert!(path.with_extension("ended").exists());
+        });
     }
 
     #[test]

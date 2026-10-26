@@ -3066,6 +3066,43 @@ impl Database {
         Ok(summaries)
     }
 
+    /// Every stored return of `form_code` for `tin`, newest first, each with
+    /// its stored key (the period column [`Self::draft_period_column`]
+    /// reads: a month, a quarter, a transaction's `MMDD`, an entry number).
+    pub fn list_form_returns(
+        &self,
+        tin: &str,
+        form_code: &str,
+    ) -> Result<Vec<(FormDraftSummary, Option<i64>)>, DbError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, tin, form_code, taxable_year, quarter, period_key, status, updated_at
+             FROM form_drafts WHERE tin = ?1 AND form_code = ?2
+             ORDER BY updated_at DESC, id DESC",
+        )?;
+        let rows = stmt.query_map(params![tin, form_code], |row| {
+            Ok((draft_summary_from_row(row)?, row.get::<_, Option<i64>>(4)?))
+        })?;
+        let mut returns = Vec::new();
+        for row in rows {
+            returns.push(row?);
+        }
+        Ok(returns)
+    }
+
+    /// The returns of [`Self::list_form_returns`] not yet submitted: still
+    /// Draft, never queued or filed. Newest first.
+    pub fn unsubmitted_drafts(
+        &self,
+        tin: &str,
+        form_code: &str,
+    ) -> Result<Vec<(FormDraftSummary, Option<i64>)>, DbError> {
+        Ok(self
+            .list_form_returns(tin, form_code)?
+            .into_iter()
+            .filter(|(summary, _)| summary.status == FilingStatus::Draft)
+            .collect())
+    }
+
     /// The stored key of the saved return `draft_id`: its period column (a
     /// month, a quarter, a transaction's `MMDD`), what opens exactly that
     /// return. `None` when the row is gone or keeps no column.
@@ -3079,6 +3116,22 @@ impl Database {
             )
             .optional()?
             .flatten())
+    }
+
+    /// The stored JSON of the saved return `draft_id`, whatever its form:
+    /// what reads a return's filing marks (`submitted_at`, `confirmed_at`,
+    /// `submission_filename`) without its type. `None` when the row is gone
+    /// or its JSON does not parse.
+    pub fn draft_data_json(&self, draft_id: i64) -> Result<Option<serde_json::Value>, DbError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT data_json FROM form_drafts WHERE id = ?1",
+                params![draft_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .and_then(|json| serde_json::from_str(&json).ok()))
     }
 
     /// The trigger date the saved as-needed return `draft_id` holds and its
@@ -3389,6 +3442,40 @@ mod tests {
         let filed = db.list_all_filed_submissions().unwrap();
         assert_eq!(filed.len(), 1);
         assert_eq!(filed[0].status, FilingStatus::Confirmed);
+    }
+
+    /// A form's returns list newest first with their keys; the unsubmitted
+    /// ones are the drafts still in Draft.
+    #[test]
+    fn unsubmitted_drafts_leave_out_queued_returns_and_other_forms() {
+        let db = test_db();
+        let profile = test_profile();
+        let january = Form1601CDraft::new_from_profile(&profile, 2026, 1);
+        db.save_1601c_draft(&january).expect("january");
+        let february = Form1601CDraft::new_from_profile(&profile, 2026, 2);
+        db.save_1601c_draft(&february).expect("february");
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET status = 'Queued' WHERE quarter = 2",
+                [],
+            )
+            .expect("queue february");
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET updated_at = '2000-01-01' WHERE quarter = 1",
+                [],
+            )
+            .expect("age january");
+        let tin = january.tin.clone();
+        let all = db.list_form_returns(&tin, "1601C").unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].0.month, Some(2), "newest first");
+        assert_eq!(all[0].1, Some(2));
+        let open = db.unsubmitted_drafts(&tin, "1601C").unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].0.month, Some(1));
+        assert_eq!(open[0].0.status, FilingStatus::Draft);
+        assert!(db.unsubmitted_drafts(&tin, "2551Q").unwrap().is_empty());
     }
 
     /// The Calendar reads a filed return's own total amount payable to decide

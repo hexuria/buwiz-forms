@@ -32,6 +32,13 @@ pub const UNAUTHENTICATED: &str = "Buwiz sign-in required. Sign in from the Buwi
 Or set BUWIZ_ACCESS_TOKEN to a live buwiz-server agent token. bir-mcp will not drive BIR \
 until that sign-in is accepted.";
 
+/// Shown when Buwiz rejected the saved sign-in's refresh: it is over and
+/// only signing in again brings it back. Usually another BIR app on this
+/// computer refreshed the same sign-in first.
+pub const SIGN_IN_AGAIN: &str = "Sign in again: Buwiz ended this computer's sign-in (its refresh \
+was rejected, which happens when two BIR apps refresh the same sign-in). Sign in from the Buwiz \
+app or BIR's sign-in app, or run `bir-mcp login`. bir-mcp will not drive BIR until then.";
+
 /// Shown when the token is live but no connected taxpayer has a working pass.
 pub const UNLICENSED: &str = "Buwiz access required. This token is signed in, but no connected \
 taxpayer has a working pass. bir-mcp will not open or fill a return until that access is in place.";
@@ -145,31 +152,32 @@ impl License {
     }
 
     fn retry_desktop(&mut self, base: &str, refresh: &str, persist: bool) -> Result<(), String> {
-        let session =
-            match crate::signin::exchange_refresh(base, refresh, crate::signin::unix_now()) {
-                Ok(session) => session,
-                Err(crate::signin::RefreshError::Rejected) => {
-                    if persist {
-                        crate::signin::clear_desktop_session();
-                    }
-                    return Err(UNAUTHENTICATED.to_string());
-                }
-                Err(crate::signin::RefreshError::Other(message)) => return Err(message),
-            };
+        // The shared account refreshes under its lock, and not at all when
+        // another process already rotated `refresh`.
+        let outcome = if persist {
+            crate::signin::refresh_stored(
+                base,
+                &crate::signin::DesktopStore,
+                refresh,
+                crate::signin::unix_now(),
+            )
+        } else {
+            crate::signin::exchange_refresh(base, refresh, crate::signin::unix_now())
+        };
+        let session = match outcome {
+            Ok(session) => session,
+            Err(crate::signin::RefreshError::Rejected) if persist => {
+                return Err(SIGN_IN_AGAIN.to_string());
+            }
+            Err(crate::signin::RefreshError::Rejected) => return Err(UNAUTHENTICATED.to_string()),
+            Err(crate::signin::RefreshError::Other(message)) => return Err(message),
+        };
         if let Self::Desktop {
             access, refresh, ..
         } = self
         {
             *access = session.access_token.clone();
             *refresh = session.refresh_token.clone();
-        }
-        if persist {
-            crate::signin::persist_refresh(
-                base,
-                &session.access_token,
-                &session.refresh_token,
-                session.expires_at,
-            )?;
         }
         match check_desktop(base, &session.access_token) {
             Err(message) if message == UNAUTHENTICATED && persist => {

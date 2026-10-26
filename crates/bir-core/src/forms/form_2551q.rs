@@ -284,6 +284,14 @@ pub struct Form2551QDraft {
     /// (`penalty_overrides/{surcharge,interest,compromise}`).
     #[serde(default)]
     pub penalty_overrides: PenaltyOverrides,
+    /// The deadline the Calendar resolves for this quarter (weekends, the
+    /// stored deadline overrides and the profile's own applied), recorded by
+    /// [`Self::apply_penalty_profile`] while the return is a Draft, so its
+    /// penalties run from the date the Calendar shows. `None` (a fiscal
+    /// quarter, which the Calendar has no row for, or a draft no profile was
+    /// applied to) falls back to [`Self::filing_deadline`]'s own date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub penalty_due_date: Option<NaiveDate>,
     #[serde(default)]
     pub total_amount_payable: f64,
     #[serde(default)]
@@ -459,6 +467,7 @@ impl Form2551QDraft {
             compromise: 0.0,
             total_penalties: 0.0,
             penalty_overrides: PenaltyOverrides::default(),
+            penalty_due_date: None,
             total_amount_payable: 0.0,
             overpayment_disposition: OverpaymentDisposition::None,
             status: FilingStatus::Draft,
@@ -907,7 +916,7 @@ impl Form2551QDraft {
         self.adopt_legacy_manual_penalties();
         if self.auto_compute_penalties && refresh_auto_penalties {
             if let Some(deadline) = self.filing_deadline() {
-                let today = chrono::Local::now().date_naive();
+                let today = super::penalty_items::today();
 
                 let config = PenaltyConfig::default_rules();
 
@@ -1104,12 +1113,55 @@ impl Form2551QDraft {
         Some((period_start, period_end))
     }
 
-    /// Filing deadline for the selected fiscal quarter.
+    /// Resolve the deadline penalties run from as the Calendar resolves it
+    /// for this quarter: `global_overrides` (the stored deadline overrides,
+    /// shipped holidays included) and the profile's own, applied the way
+    /// every other form's [`super::penalty_items::PenaltyItems::apply_profile`]
+    /// applies them, so a deadline moved for everyone moves this return's
+    /// penalties too. A fiscal quarter has no Calendar row and keeps its own
+    /// date. A return that has left Draft keeps the date it was reviewed with.
+    pub fn apply_penalty_profile(
+        &mut self,
+        profile: &TaxpayerProfile,
+        global_overrides: &[crate::calendar_rules::DeadlineOverride],
+    ) {
+        if !matches!(self.status, FilingStatus::Draft) {
+            return;
+        }
+        self.penalty_due_date = (self.year_end_month == 12 && (1..=4).contains(&self.quarter))
+            .then(|| {
+                let overrides = crate::forms::event_trigger::calendar_overrides(
+                    global_overrides,
+                    profile,
+                    "2551Q",
+                    Some(self.taxable_year),
+                );
+                super::penalty_items::resolve_due_date(
+                    "2551Q",
+                    &crate::calendar_rules::DeadlinePeriod::Quarterly {
+                        taxable_year: i32::from(self.taxable_year),
+                        quarter: self.quarter,
+                    },
+                    &overrides,
+                )
+            })
+            .flatten();
+    }
+
+    /// The deadline penalties run from: the Calendar's
+    /// ([`Self::apply_penalty_profile`]), else this quarter's own.
     ///
-    /// `taxable_year` is the year in which the selected taxable year ends. A
-    /// fiscal year ending in June 2026 therefore places Q1/Q2 in calendar 2025
-    /// and Q3/Q4 in calendar 2026.
+    /// Its own is the 25th day after the quarter closes, moved to the next
+    /// working day when it falls on a weekend or an official holiday, as the
+    /// Calendar moves it (`penalty_items::next_business_day`): Q3 2026's
+    /// Sunday, Oct 25, is due Monday, Oct 26, and filing then carries no
+    /// penalty. `taxable_year` is the year in which the selected taxable
+    /// year ends. A fiscal year ending in June 2026 therefore places Q1/Q2
+    /// in calendar 2025 and Q3/Q4 in calendar 2026.
     fn filing_deadline(&self) -> Option<chrono::NaiveDate> {
+        if let Some(due) = self.penalty_due_date {
+            return Some(due);
+        }
         if !(1..=12).contains(&self.year_end_month) || !(1..=4).contains(&self.quarter) {
             return None;
         }
@@ -1128,6 +1180,7 @@ impl Form2551QDraft {
         };
 
         chrono::NaiveDate::from_ymd_opt(deadline_year, deadline_month, 25)
+            .map(super::penalty_items::next_business_day)
     }
 
     pub fn default_submission_filename(&self) -> String {
@@ -2461,6 +2514,73 @@ mod tests {
         TaxpayerType,
     };
 
+    /// A deadline on a weekend moves to the next working day, as the
+    /// Calendar's does: Q3 2026's Oct 25 is a Sunday, so the return is due
+    /// (and penalty-free) on Monday, Oct 26; Q2 2026's Jul 25 is a Saturday.
+    #[test]
+    fn a_weekend_deadline_moves_to_the_next_working_day() {
+        let day = |m, d| chrono::NaiveDate::from_ymd_opt(2026, m, d);
+        let q3 = Form2551QDraft::new_from_profile(&test_profile(), 2026, 3);
+        assert_eq!(q3.filing_deadline(), day(10, 26));
+        let q2 = Form2551QDraft::new_from_profile(&test_profile(), 2026, 2);
+        assert_eq!(q2.filing_deadline(), day(7, 27));
+        let q1 = Form2551QDraft::new_from_profile(&test_profile(), 2026, 1);
+        assert_eq!(q1.filing_deadline(), day(4, 27));
+    }
+
+    /// Penalties run from the deadline the Calendar resolves, global
+    /// deadline overrides included: Q3 2026 is due Monday, Oct 26 (Oct 25
+    /// is a Sunday), and an override that moves it to Nov 3 makes a return
+    /// paid on Nov 3 penalty-free and one paid on Nov 4 late. A queued
+    /// return keeps the date it was reviewed with.
+    #[test]
+    fn penalties_run_from_the_calendars_deadline_with_its_overrides() {
+        use crate::forms::penalty_items::with_clock;
+        let day = |m, d| chrono::NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+        let penalties_on = |draft: &Form2551QDraft, on: NaiveDate| {
+            let mut copy = draft.clone();
+            with_clock(on, || copy.recompute(None));
+            copy.total_penalties
+        };
+        let mut draft = make_draft(500_000.0, 0.0, 2026, 3);
+        draft.apply_penalty_profile(&test_profile(), &[]);
+        assert_eq!(draft.penalty_due_date, Some(day(10, 26)));
+        assert_eq!(penalties_on(&draft, day(10, 26)), 0.0, "paid on the deadline");
+        assert!(penalties_on(&draft, day(10, 27)) > 0.0, "a day late");
+
+        let moved = crate::calendar_rules::DeadlineOverride {
+            id: "override-test".into(),
+            title: "2551Q Q3 2026 deadline".into(),
+            source_reference: "Set by the user".into(),
+            affected_form_codes: vec!["2551Q".into()],
+            original_deadline: day(10, 25),
+            adjusted_deadline: day(11, 3),
+            affected_regions: Vec::new(),
+            affected_taxpayer_types: Vec::new(),
+            effective_from: None,
+            effective_until: None,
+            expires_at: None,
+        };
+        draft.apply_penalty_profile(&test_profile(), std::slice::from_ref(&moved));
+        assert_eq!(draft.penalty_due_date, Some(day(11, 3)));
+        assert_eq!(penalties_on(&draft, day(11, 3)), 0.0, "paid on the moved deadline");
+        assert!(penalties_on(&draft, day(11, 4)) > 0.0, "a day after it");
+
+        // A fiscal quarter has no Calendar row: its own date.
+        let mut fiscal = draft.clone();
+        fiscal.tax_period_basis = TaxPeriodBasis::Fiscal;
+        fiscal.year_end_month = 6;
+        fiscal.apply_penalty_profile(&test_profile(), std::slice::from_ref(&moved));
+        assert_eq!(fiscal.penalty_due_date, None);
+        assert_eq!(fiscal.filing_deadline(), Some(day(4, 27)), "Q3 of a June year ends in March");
+
+        // Past Draft, the reviewed date stays.
+        let mut queued = draft.clone();
+        queued.status = FilingStatus::Queued;
+        queued.apply_penalty_profile(&test_profile(), &[]);
+        assert_eq!(queued.penalty_due_date, Some(day(11, 3)));
+    }
+
     fn test_profile() -> TaxpayerProfile {
         TaxpayerProfile {
             id: None,
@@ -3117,15 +3237,17 @@ mod tests {
         draft.year_end_month = 6;
 
         assert_eq!(draft.period_code(), "062026Q1");
+        // Oct 25, 2025 is a Saturday: due the Monday after
         assert_eq!(
             draft.filing_deadline(),
-            chrono::NaiveDate::from_ymd_opt(2025, 10, 25)
+            chrono::NaiveDate::from_ymd_opt(2025, 10, 27)
         );
 
         draft.quarter = 4;
+        // Jul 25, 2026 is a Saturday too
         assert_eq!(
             draft.filing_deadline(),
-            chrono::NaiveDate::from_ymd_opt(2026, 7, 25)
+            chrono::NaiveDate::from_ymd_opt(2026, 7, 27)
         );
     }
 

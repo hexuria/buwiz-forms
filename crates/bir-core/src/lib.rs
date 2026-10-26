@@ -22,6 +22,7 @@ pub mod calendar_rules;
 pub mod cloud_account;
 pub mod crypto;
 pub mod db;
+pub mod deadline_overrides;
 pub mod dev_mode;
 pub mod email;
 pub mod email_fetcher; // legacy — kept for backward compat, delegates to `email`

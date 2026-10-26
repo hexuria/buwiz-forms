@@ -14,7 +14,8 @@
 //! `as_needed_forms` for Home's "As needed" list.
 
 use bir_core::calendar_rules::{
-    BusinessDayCalendar, DeadlineOverride, DeadlinePeriod, DeadlineResolver, event_due_rule,
+    BusinessDayCalendar, DeadlineOverride, DeadlinePeriod, DeadlineResolver, DeadlineStatus,
+    ResolvedTaxDeadline, event_due_rule,
 };
 use bir_core::db::Database;
 use bir_core::forms::{FilingStatus, FormDraftSummary};
@@ -46,8 +47,44 @@ export interface DeadlineRow {
     draft_id: number | null;
     /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
     return_key: number | null;
+    /** The rule's own date, before weekends, holidays and deadline overrides moved it. */
+    original_due_date: string;
+    /** Why `due_date` differs from `original_due_date`: "moved" is a deadline override (a person's or BIR's). */
+    deadline_status: "normal" | "weekend" | "holiday" | "non_working" | "moved";
+    /** The source a moved deadline cites (the reason given), else null. */
+    moved_reason: string | null;
+    /** The period as a deadline override names it ("2026-Q3", "2026-09", "2025"); null for an as-needed row. */
+    period_key: string | null;
 }
 export function deadlines_between(from: string, to: string): DeadlineRow[];
+export interface DeadlineOverrideEntry {
+    id: string;
+    /** "holiday": an official holiday the app ships; "moved": a deadline a person (or BIR) moved. */
+    kind: "holiday" | "moved";
+    title: string;
+    reason: string;
+    forms: string[];
+    original_deadline: string;
+    new_deadline: string;
+    /** The deadlines it moves (none listed for a holiday). */
+    periods: { form: string; period: string; label: string }[];
+}
+export interface DeadlineOverrideList {
+    year: number | null;
+    overrides: DeadlineOverrideEntry[];
+    damaged: number;
+    unreadable: boolean;
+}
+/** Every stored deadline override; they apply to every taxpayer. `args`: `{year?}`. */
+export function deadline_overrides(args: { year?: number }): DeadlineOverrideList;
+/** Move one form's deadline for one period, for every taxpayer (`bir_deadline_override_set`). */
+export function deadline_override_set(args: { form: string; period?: string; original_deadline?: string; new_deadline: string; reason?: string }): {
+    form: string; period: string; label: string; rule_deadline: string; was: string | null; due: string | null; replaced: boolean; override: DeadlineOverrideEntry; applies_to: string;
+};
+/** Put a deadline back: `{id}`, or `{form, period}` / `{form, original_deadline}` (`bir_deadline_override_remove`). */
+export function deadline_override_remove(args: { id?: string; form?: string; period?: string; original_deadline?: string }): {
+    form?: string; period?: string; label?: string; due?: string | null; removed: DeadlineOverrideEntry[];
+};
 export interface AsNeededReturn {
     draft_id: number;
     period: number;
@@ -98,6 +135,9 @@ pub fn register(module: HostModule) -> HostModule {
         .function("deadlines_between", deadlines_between)
         .function("as_needed_forms", as_needed_forms)
         .function("list_returns", list_returns)
+        .function("deadline_overrides", deadline_overrides)
+        .function("deadline_override_set", deadline_override_set)
+        .function("deadline_override_remove", deadline_override_remove)
 }
 
 const MONTHS: [&str; 12] = [
@@ -133,6 +173,57 @@ fn period_label(period: &DeadlinePeriod) -> (u8, String) {
         } => (*quarter, format!("Q{quarter} {taxable_year}")),
         DeadlinePeriod::Annual { taxable_year } => (0, format!("TY {taxable_year}")),
         DeadlinePeriod::EventBased => (0, "As needed".to_string()),
+    }
+}
+
+/// What moved a deadline off its rule's date, as `DeadlineRow` names it.
+fn deadline_status(status: &DeadlineStatus) -> &'static str {
+    match status {
+        DeadlineStatus::WeekendAdjusted => "weekend",
+        DeadlineStatus::HolidayAdjusted => "holiday",
+        DeadlineStatus::NonWorkingDayAdjusted => "non_working",
+        DeadlineStatus::Extended => "moved",
+        DeadlineStatus::Normal | DeadlineStatus::EventBased => "normal",
+    }
+}
+
+/// The original date, status and override source of a dated row.
+fn deadline_fields(row: &mut serde_json::Map<String, Value>, deadline: &ResolvedTaxDeadline) {
+    row.insert(
+        "original_due_date".into(),
+        json!(
+            deadline
+                .original_deadline_date()
+                .map(|date| date.format("%Y-%m-%d").to_string())
+        ),
+    );
+    row.insert(
+        "deadline_status".into(),
+        json!(deadline_status(&deadline.status)),
+    );
+    row.insert(
+        "moved_reason".into(),
+        json!(
+            (deadline.status == DeadlineStatus::Extended)
+                .then(|| deadline.source_reference.clone())
+                .flatten()
+        ),
+    );
+}
+
+/// `period` as a deadline override names it (`2026-Q3`, `2026-09`, `2025`).
+fn period_key(period: &DeadlinePeriod) -> Option<String> {
+    match period {
+        DeadlinePeriod::Monthly {
+            taxable_year,
+            month,
+        } => Some(format!("{taxable_year}-{month:02}")),
+        DeadlinePeriod::Quarterly {
+            taxable_year,
+            quarter,
+        } => Some(format!("{taxable_year}-Q{quarter}")),
+        DeadlinePeriod::Annual { taxable_year } => Some(taxable_year.to_string()),
+        DeadlinePeriod::EventBased => None,
     }
 }
 
@@ -306,6 +397,8 @@ fn deadline_rows(db: &Database, from: NaiveDate, to: NaiveDate) -> Result<Vec<Va
                     None => None,
                 };
                 row.insert("return_key".into(), json!(key));
+                deadline_fields(&mut row, &deadline);
+                row.insert("period_key".into(), json!(period_key(&deadline.period)));
                 rows.push(Value::Object(row));
             }
         }
@@ -369,6 +462,8 @@ fn as_needed_rows(
             "return_key".into(),
             json!(db.draft_period_column(summary.id).map_err(error)?),
         );
+        deadline_fields(&mut row, deadline);
+        row.insert("period_key".into(), Value::Null);
         rows.push(Value::Object(row));
     }
     Ok(rows)
@@ -431,6 +526,44 @@ fn as_needed_forms(arguments: &gpui_shell::HostArguments) -> HostResult {
     let year =
         u16::try_from(year).map_err(|_| HostError::new(format!("a tax year, got {year}")))?;
     with_database(|db| serialize(&as_needed_form_rows(db, year)?))
+}
+
+/// The one object argument of the deadline override functions (none: `{}`).
+fn object_argument(
+    arguments: &gpui_shell::HostArguments,
+) -> Result<serde_json::Map<String, Value>, HostError> {
+    if arguments.is_empty() {
+        return Ok(serde_json::Map::new());
+    }
+    match crate::bir_module::to_json(arguments.value(0)?) {
+        Value::Object(map) => Ok(map),
+        Value::Null => Ok(serde_json::Map::new()),
+        other => Err(HostError::new(format!("expected an object argument, got {other}"))),
+    }
+}
+
+/// `bir_core::deadline_overrides::list`: the overrides apply to every taxpayer.
+fn deadline_overrides(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let args = object_argument(arguments)?;
+    with_database(|db| {
+        serialize(&bir_core::deadline_overrides::list(db, &args).map_err(HostError::new)?)
+    })
+}
+
+fn deadline_override_set(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let args = object_argument(arguments)?;
+    let today = chrono::Local::now().date_naive();
+    with_database(|db| {
+        serialize(&bir_core::deadline_overrides::set(db, &args, today).map_err(HostError::new)?)
+    })
+}
+
+fn deadline_override_remove(arguments: &gpui_shell::HostArguments) -> HostResult {
+    let args = object_argument(arguments)?;
+    let today = chrono::Local::now().date_naive();
+    with_database(|db| {
+        serialize(&bir_core::deadline_overrides::remove(db, &args, today).map_err(HostError::new)?)
+    })
 }
 
 fn deadlines_between(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -579,6 +712,46 @@ mod tests {
         let mut sorted = dates.clone();
         sorted.sort_unstable();
         assert_eq!(dates, sorted, "rows come oldest deadline first");
+    }
+
+    /// The Calendar page's override actions: a moved deadline shows as
+    /// moved, with the rule's date and the reason, and restoring it puts
+    /// the rule's date back. 1601C September 2026 (Oct 10, a Saturday) is
+    /// due Oct 12.
+    #[test]
+    fn a_moved_deadline_shows_as_moved_until_restored() {
+        setup();
+        let object = |value: Value| HostArguments::new([crate::bir_module::json(value)]);
+        let september = || {
+            to_json(&deadlines_between(&args(&["2026-10-01", "2026-10-31"])).unwrap())
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["period"] == 9)
+                .cloned()
+        };
+        let row = september().unwrap();
+        assert_eq!(row["due_date"], "2026-10-12");
+        assert_eq!(row["original_due_date"], "2026-10-10");
+        assert_eq!(row["deadline_status"], "weekend");
+        assert_eq!(row["period_key"], "2026-09");
+        let moved = to_json(
+            &deadline_override_set(&object(json!({
+                "form": "1601C", "period": "2026-09", "new_deadline": "2026-10-20", "reason": "RMC 5-2026"
+            })))
+            .unwrap(),
+        );
+        assert_eq!(moved["due"], "2026-10-20");
+        let row = september().unwrap();
+        assert_eq!(row["due_date"], "2026-10-20");
+        assert_eq!(row["deadline_status"], "moved");
+        assert_eq!(row["moved_reason"], "RMC 5-2026");
+        let listed = to_json(&deadline_overrides(&object(json!({"year": 2026}))).unwrap());
+        assert_eq!(listed["overrides"][0]["periods"][0]["period"], "2026-09");
+        assert_eq!(to_json(&deadline_overrides(&args(&[])).unwrap())["overrides"].as_array().unwrap().len(), 1);
+        deadline_override_remove(&object(json!({"form": "1601C", "period": "2026-09"}))).unwrap();
+        assert_eq!(september().unwrap()["due_date"], "2026-10-12");
+        assert!(deadline_override_remove(&object(json!({"form": "1601C", "period": "2026-09"}))).is_err());
     }
 
     #[test]

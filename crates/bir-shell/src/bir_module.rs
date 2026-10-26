@@ -1593,6 +1593,8 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     // covers the quarter. The transition still runs the page's
                     // Validate (`filing_errors`).
                     let _ = draft.reconcile_with_effective_profile(&profile);
+                    // Queued with the penalties of the Calendar's deadline now.
+                    draft.apply_penalty_profile(&profile, &db.get_deadline_overrides());
                 }
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
@@ -1613,6 +1615,13 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     .get_1601c_draft(&tin, year, month)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+                // Queued with the penalties of the Calendar's deadline now.
+                if let Some(profile) = db
+                    .get_profile_by_tin(&tin)
+                    .map_err(|error| HostError::new(error.to_string()))?
+                {
+                    draft.apply_penalty_profile(&profile, &db.get_deadline_overrides());
+                }
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
                         errors

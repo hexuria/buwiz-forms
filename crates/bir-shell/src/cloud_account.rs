@@ -55,6 +55,10 @@ export function cloud_account_session_closed(): null;
 
 static PENDING: Mutex<Option<DeviceChallenge>> = Mutex::new(None);
 
+/// Why the saved sign-in is gone after Buwiz rejected its refresh.
+const SIGN_IN_ENDED: &str = "Sign in again: Buwiz ended this computer's sign-in (its refresh was \
+rejected, which happens when two BIR apps refresh the same sign-in).";
+
 pub fn register(module: HostModule) -> HostModule {
     module
         .function("cloud_account_status", |_| status_now())
@@ -180,6 +184,9 @@ fn refresh_account(
     _arguments: &HostArguments,
 ) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
     spawn_account("buwiz-account-refresh", || {
+        // Held across the refresh, and the account read under it: another
+        // BIR process may have just rotated the refresh token.
+        let _lock = cloud_account::lock_refresh().map_err(host_error)?;
         let Some(stored) = load_stored()? else {
             return status_now();
         };
@@ -188,7 +195,7 @@ fn refresh_account(
             clear_stored();
             return status_now();
         }
-        let mut http = BlockingHttp::new();
+        let mut http = BlockingHttp::with_timeout(cloud_account::REFRESH_TIMEOUT);
         let now = cloud_account::unix_now();
         match cloud_account::refresh_session(&mut http, &stored.to_secrets(), now)
             .map_err(host_error)?
@@ -201,6 +208,7 @@ fn refresh_account(
             }
             SessionUpdate::SignedOut => {
                 clear_stored();
+                cloud_account::record_sign_in_ended(SIGN_IN_ENDED);
                 crate::account_gate::set_unlocked(false);
             }
         }
@@ -238,9 +246,19 @@ fn session_closed() -> HostResult {
 }
 
 fn restore_saved_session() -> bool {
+    // Another BIR process refreshing the same account holds this lock; read
+    // the account after it, so a token it rotated is never used again.
+    let lock = cloud_account::lock_refresh();
     let Ok(Some(stored)) = load_stored() else {
         return false;
     };
+    if lock.is_err() {
+        // Still busy elsewhere: keep the saved session without refreshing.
+        return matches!(
+            cloud_account::gate_after_refresh(RefreshOutcome::Offline),
+            GateDecision::Open { .. }
+        );
+    }
     let Ok(resolved) = resolve() else {
         return false;
     };
@@ -248,7 +266,7 @@ fn restore_saved_session() -> bool {
         return false;
     }
     let now = cloud_account::unix_now();
-    let mut http = BlockingHttp::new();
+    let mut http = BlockingHttp::with_timeout(cloud_account::REFRESH_TIMEOUT);
     let previous_refresh = stored.last_refresh_unix;
     let outcome = match cloud_account::refresh_session(&mut http, &stored.to_secrets(), now) {
         Ok(SessionUpdate::Online(secrets)) => {
@@ -271,6 +289,7 @@ fn restore_saved_session() -> bool {
             clear_secrets: true,
         } => {
             clear_stored();
+            cloud_account::record_sign_in_ended(SIGN_IN_ENDED);
             false
         }
         GateDecision::Closed {

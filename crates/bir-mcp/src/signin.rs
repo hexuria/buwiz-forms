@@ -8,14 +8,13 @@
 //! buwiz-server. Tests pass an origin in and an in-memory store, so they
 //! never touch the keychain or a real server.
 
-use crate::license::{UNAUTHENTICATED, UNLICENSED, interpret_desktop};
+use crate::license::{SIGN_IN_AGAIN, UNAUTHENTICATED, UNLICENSED, interpret_desktop};
 use bir_core::cloud_account::{
     self, AccountBrowser, BlockingHttp, CloudError, StoredAccount, TokenSet,
 };
 use serde_json::Value;
-#[cfg(test)]
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// Public OAuth client id. Not a secret. Same value the desktop app sends.
 pub const CLIENT_ID: &str = cloud_account::DESKTOP_CLIENT_ID;
@@ -97,6 +96,17 @@ pub trait SessionStore {
     fn load(&self) -> Result<Option<Session>, String>;
     fn save(&self, session: &Session) -> Result<(), String>;
     fn clear(&self) -> Result<(), String>;
+    /// Hold the store for one refresh against every other process that
+    /// refreshes it. A store only this process sees needs none.
+    fn lock(&self) -> Result<Option<cloud_account::RefreshLock>, String> {
+        Ok(None)
+    }
+    /// Remember that Buwiz rejected the stored sign-in, and why.
+    fn note_ended(&self, _reason: &str) {}
+    /// Why the last stored sign-in ended, until someone signs in again.
+    fn ended(&self) -> Option<String> {
+        None
+    }
 }
 
 /// The account store the Buwiz app writes: keychain `com.buwiz.bir` /
@@ -139,6 +149,20 @@ impl SessionStore for DesktopStore {
         cloud_account::clear_stored_account();
         Ok(())
     }
+
+    fn lock(&self) -> Result<Option<cloud_account::RefreshLock>, String> {
+        cloud_account::lock_refresh()
+            .map(Some)
+            .map_err(|error| error.to_string())
+    }
+
+    fn note_ended(&self, reason: &str) {
+        cloud_account::record_sign_in_ended(reason);
+    }
+
+    fn ended(&self) -> Option<String> {
+        cloud_account::sign_in_ended()
+    }
 }
 
 /// Write a refreshed access token back to the desktop account.
@@ -168,6 +192,7 @@ pub fn clear_desktop_session() {
 #[derive(Default)]
 struct MemoryStore {
     inner: Mutex<Option<Session>>,
+    ended: Mutex<Option<String>>,
 }
 
 #[cfg(test)]
@@ -184,6 +209,14 @@ impl SessionStore for MemoryStore {
     fn clear(&self) -> Result<(), String> {
         *self.inner.lock().expect("session store") = None;
         Ok(())
+    }
+
+    fn note_ended(&self, reason: &str) {
+        *self.ended.lock().expect("session store") = Some(reason.to_string());
+    }
+
+    fn ended(&self) -> Option<String> {
+        self.ended.lock().expect("session store").clone()
     }
 }
 
@@ -327,36 +360,123 @@ pub(crate) enum RefreshError {
     Other(String),
 }
 
+/// A refresh that could not reach buwiz-server, remembered so the checks
+/// after it answer at once instead of each waiting for the network again.
+struct Unreachable {
+    origin: String,
+    refresh: String,
+    until: Instant,
+    failures: u32,
+    message: String,
+}
+
+/// The remembered failures, one per (origin, refresh token).
+static UNREACHABLE: Mutex<Vec<Unreachable>> = Mutex::new(Vec::new());
+
+/// How long a failed refresh is remembered: 15 s, doubling per failure in a
+/// row, at most 5 minutes.
+fn unreachable_backoff(failures: u32) -> Duration {
+    Duration::from_secs((15u64 << failures.saturating_sub(1).min(5)).min(300))
+}
+
+/// The remembered failure for this token, while it lasts.
+fn still_unreachable(origin: &str, refresh: &str) -> Option<String> {
+    let remembered = UNREACHABLE.lock().ok()?;
+    remembered
+        .iter()
+        .find(|entry| entry.origin == origin && entry.refresh == refresh)
+        .filter(|entry| Instant::now() < entry.until)
+        .map(|entry| entry.message.clone())
+}
+
+fn note_unreachable(origin: &str, refresh: &str, message: &str) {
+    let Ok(mut remembered) = UNREACHABLE.lock() else {
+        return;
+    };
+    let failures = remembered
+        .iter()
+        .find(|entry| entry.origin == origin && entry.refresh == refresh)
+        .map_or(1, |entry| entry.failures + 1);
+    remembered.retain(|entry| !(entry.origin == origin && entry.refresh == refresh));
+    // A rotated token is never tried again: keep only the latest few.
+    if remembered.len() >= 8 {
+        remembered.remove(0);
+    }
+    remembered.push(Unreachable {
+        origin: origin.to_string(),
+        refresh: refresh.to_string(),
+        until: Instant::now() + unreachable_backoff(failures),
+        failures,
+        message: message.to_string(),
+    });
+}
+
+fn forget_unreachable(origin: &str, refresh: &str) {
+    if let Ok(mut remembered) = UNREACHABLE.lock() {
+        remembered.retain(|entry| !(entry.origin == origin && entry.refresh == refresh));
+    }
+}
+
 /// Exchange a desktop refresh token. The caller stores the new session.
+/// The request gives up after [`cloud_account::REFRESH_TIMEOUT`]; after a
+/// failure to reach the server the same token is not tried again for a
+/// while (15 s, doubling, at most 5 minutes) and the same error comes back
+/// at once.
 pub(crate) fn exchange_refresh(
     origin: &str,
     refresh: &str,
     now: i64,
 ) -> Result<Session, RefreshError> {
     let origin = trim_origin(origin);
-    let mut http = BlockingHttp::new();
+    if let Some(message) = still_unreachable(&origin, refresh) {
+        return Err(RefreshError::Other(message));
+    }
+    let mut http = BlockingHttp::with_timeout(cloud_account::REFRESH_TIMEOUT);
     match cloud_account::refresh_tokens(&mut http, &origin, refresh) {
-        Ok(tokens) => Ok(Session {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            expires_at: now.saturating_add(tokens.expires_in.max(1)),
-            server_url: origin,
-            user_id: String::new(),
-            email: None,
-        }),
-        Err(CloudError::InvalidGrant) => Err(RefreshError::Rejected),
-        Err(CloudError::Network(message)) => Err(RefreshError::Other(format!(
-            "could not reach buwiz-server at {origin} to refresh sign-in: {message}"
-        ))),
+        Ok(tokens) => {
+            forget_unreachable(&origin, refresh);
+            Ok(Session {
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                expires_at: now.saturating_add(tokens.expires_in.max(1)),
+                server_url: origin,
+                user_id: String::new(),
+                email: None,
+            })
+        }
+        Err(CloudError::InvalidGrant) => {
+            forget_unreachable(&origin, refresh);
+            Err(RefreshError::Rejected)
+        }
+        Err(CloudError::Network(message)) => {
+            let message =
+                format!("could not reach buwiz-server at {origin} to refresh sign-in: {message}");
+            note_unreachable(&origin, refresh, &message);
+            Err(RefreshError::Other(message))
+        }
         Err(error) => Err(RefreshError::Other(format!(
             "could not refresh the Buwiz sign-in: {error}"
         ))),
     }
 }
 
+/// Buwiz rejected the stored refresh token: clear the store, remember why,
+/// and answer "sign in again".
+fn rejected(store: &impl SessionStore) -> Result<String, String> {
+    store.clear()?;
+    store.note_ended(SIGN_IN_AGAIN);
+    Ok(SIGN_IN_AGAIN.to_string())
+}
+
 /// Load the stored session, refreshing when it expires within a minute.
 /// `Ok(None)` means this computer is signed out. A rejected refresh clears
-/// the store. A network failure leaves the store in place.
+/// the store and answers [`SIGN_IN_AGAIN`]. A network failure leaves the
+/// store in place.
+///
+/// The refresh holds the store's lock ([`SessionStore::lock`]) and re-reads
+/// the session under it: another process (the Buwiz app, another
+/// `bir-mini-app`, `bir-mcp`) may have refreshed it meanwhile, and Buwiz
+/// revokes the whole sign-in when one rotated refresh token is used twice.
 pub fn ensure_fresh(
     origin: &str,
     store: &impl SessionStore,
@@ -373,6 +493,18 @@ pub fn ensure_fresh(
     if session.expires_at.saturating_sub(now) > REFRESH_SKEW_SECS {
         return Ok(Some(session));
     }
+    // A token that just failed to reach the server answers at once,
+    // without waiting for the lock either.
+    if let Some(message) = still_unreachable(&origin, &session.refresh_token) {
+        return Err(message);
+    }
+    let _lock = store.lock()?;
+    let Some(session) = store.load()? else {
+        return Ok(None);
+    };
+    if session.expires_at.saturating_sub(now) > REFRESH_SKEW_SECS {
+        return Ok(Some(session));
+    }
     match exchange_refresh(&origin, &session.refresh_token, now) {
         Ok(mut fresh) => {
             fresh.user_id = session.user_id;
@@ -383,11 +515,57 @@ pub fn ensure_fresh(
             store.save(&fresh)?;
             Ok(Some(fresh))
         }
-        Err(RefreshError::Rejected) => {
-            store.clear()?;
-            Err(UNAUTHENTICATED.to_string())
-        }
+        Err(RefreshError::Rejected) => Err(rejected(store)?),
         Err(RefreshError::Other(message)) => Err(message),
+    }
+}
+
+/// The server refused an access token made from `used_refresh`: refresh
+/// once, under the store's lock. When the stored refresh token is no longer
+/// `used_refresh`, another process already rotated it, so its session is the
+/// answer and nothing is refreshed (refreshing the old token again would end
+/// the sign-in).
+pub(crate) fn refresh_stored(
+    origin: &str,
+    store: &impl SessionStore,
+    used_refresh: &str,
+    now: i64,
+) -> Result<Session, RefreshError> {
+    let origin = trim_origin(origin);
+    let _lock = store.lock().map_err(RefreshError::Other)?;
+    let stored = store.load().map_err(RefreshError::Other)?;
+    if let Some(stored) = &stored
+        && stored.refresh_token != used_refresh
+        && !stored.refresh_token.is_empty()
+    {
+        return Ok(stored.clone());
+    }
+    match exchange_refresh(&origin, used_refresh, now) {
+        Ok(mut fresh) => {
+            if let Some(stored) = stored {
+                fresh.user_id = stored.user_id;
+                fresh.email = stored.email;
+            }
+            store.save(&fresh).map_err(RefreshError::Other)?;
+            Ok(fresh)
+        }
+        Err(RefreshError::Rejected) => {
+            let _ = rejected(store);
+            Err(RefreshError::Rejected)
+        }
+        Err(other) => Err(other),
+    }
+}
+
+/// Whether this computer holds a live Buwiz sign-in, for a status line:
+/// `Ok(())`, or why not (signed out, the sign-in ended, or the refresh
+/// failing). Refreshes a stale session the way [`ensure_fresh`] does.
+pub fn signed_in(origin: &str, store: &impl SessionStore, now: i64) -> Result<(), String> {
+    match ensure_fresh(origin, store, now)? {
+        Some(_) => Ok(()),
+        None => Err(store
+            .ended()
+            .unwrap_or_else(|| UNAUTHENTICATED.to_string())),
     }
 }
 
@@ -461,15 +639,11 @@ fn account_body(
     if status != 401 {
         return Ok((status, body));
     }
-    let fresh = match exchange_refresh(origin, &session.refresh_token, now) {
+    let fresh = match refresh_stored(origin, store, &session.refresh_token, now) {
         Ok(fresh) => fresh,
-        Err(RefreshError::Rejected) => {
-            store.clear()?;
-            return Ok((401, String::new()));
-        }
+        Err(RefreshError::Rejected) => return Ok((401, String::new())),
         Err(RefreshError::Other(message)) => return Err(message),
     };
-    store.save(&fresh)?;
     let (status, body) = get_bearer(http, &format!("{origin}/me"), &fresh.access_token)?;
     if status == 401 {
         store.clear()?;
@@ -791,8 +965,36 @@ mod tests {
         let store = MemoryStore::default();
         store.save(&bare("old-access", "old-refresh", 10)).unwrap();
         let error = ensure_fresh(&origin, &store, 10).unwrap_err();
-        assert_eq!(error, UNAUTHENTICATED);
+        assert_eq!(error, SIGN_IN_AGAIN);
         assert!(store.load().unwrap().is_none());
+        // Remembered: the next check says why at once, with no network.
+        assert_eq!(signed_in(&origin, &store, 10).unwrap_err(), SIGN_IN_AGAIN);
+    }
+
+    #[test]
+    fn a_failed_refresh_is_remembered_so_the_next_check_does_not_wait() {
+        let store = MemoryStore::default();
+        store.save(&bare("old-access", "refresh-unreachable", 10)).unwrap();
+        let first = ensure_fresh("http://127.0.0.1:1", &store, 10).unwrap_err();
+        assert!(first.contains("could not reach buwiz-server"), "{first}");
+        let started = Instant::now();
+        let again = ensure_fresh("http://127.0.0.1:1", &store, 10).unwrap_err();
+        assert_eq!(again, first);
+        assert!(started.elapsed() < Duration::from_millis(50));
+        assert_eq!(unreachable_backoff(1), Duration::from_secs(15));
+        assert_eq!(unreachable_backoff(3), Duration::from_secs(60));
+        assert_eq!(unreachable_backoff(30), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn a_token_another_process_already_rotated_is_not_refreshed_again() {
+        // No server at all: refreshing would fail, so success proves the
+        // stored (already rotated) session was used.
+        let store = MemoryStore::default();
+        store.save(&bare("their-access", "their-refresh", 10_000)).unwrap();
+        let fresh = refresh_stored("http://127.0.0.1:1", &store, "my-old-refresh", 10).unwrap();
+        assert_eq!(fresh.access_token, "their-access");
+        assert_eq!(fresh.refresh_token, "their-refresh");
     }
 
     #[test]

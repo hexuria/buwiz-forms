@@ -846,6 +846,42 @@ impl DeadlineResolver {
         as_needed_index().codes.contains(&form_code)
     }
 
+    /// The official rule `form_code` (canonical) is filed under, and the
+    /// form number that rule names it by.
+    fn rule_of(form_code: &str) -> Option<(&'static OfficialRule, &'static str)> {
+        Self::rules().iter().find_map(|rule| {
+            rule.form_nos
+                .iter()
+                .find(|no| canonical_form_code(no) == form_code)
+                .map(|no| (rule, *no))
+        })
+    }
+
+    /// How often `form_code` (canonical) is filed, from its official rule.
+    /// `None` for a form with no calendar rule (e.g. the retired 2550M).
+    pub fn frequency_of(form_code: &str) -> Option<Frequency> {
+        Self::rule_of(form_code).map(|(rule, _)| rule.frequency.clone())
+    }
+
+    /// The latest period of `form_code` (canonical) that has closed by
+    /// `today` (its last day is before `today`): the return to file now.
+    /// Read off the form's own calendar rule, so a form without a fourth
+    /// quarter (1701Q, filed for Q1 to Q3) gets its Q3 in January. `None`
+    /// for an as-needed form or one with no calendar rule.
+    pub fn last_closed_period(form_code: &str, today: NaiveDate) -> Option<DeadlinePeriod> {
+        let (rule, form_no) = Self::rule_of(form_code)?;
+        if rule.is_as_needed() {
+            return None;
+        }
+        // On January 1 the previous year's annual return is the latest
+        // closed one, so two years back is as far as it can be.
+        ((today.year() - 2)..=today.year())
+            .flat_map(|year| (rule.generator)(year, &[form_no], rule.description, rule.form_name))
+            .filter(|deadline| deadline.period_end.is_some_and(|end| end < today))
+            .max_by_key(|deadline| deadline.period_end)
+            .map(|deadline| deadline.period)
+    }
+
     /// The dated deadline of one as-needed return whose trigger date is
     /// `trigger`: due per `rule`, moved to the next working day (weekends,
     /// then `overrides` for that date) when the rule rolls. `working` is the
@@ -1953,5 +1989,76 @@ mod tests {
         );
         assert_eq!(q1.status, DeadlineStatus::Extended);
         assert_eq!(q1.source_reference.as_deref(), Some("BIR test advisory"));
+    }
+
+    /// The return to file now is the latest closed period, read off each
+    /// form's own rule, across month, quarter and year boundaries.
+    #[test]
+    fn last_closed_period_follows_each_rule_across_year_ends() {
+        let closed =
+            |code: &str, today: NaiveDate| DeadlineResolver::last_closed_period(code, today);
+        assert_eq!(
+            closed("1601C", ymd(2026, 10, 26)),
+            Some(DeadlinePeriod::Monthly {
+                taxable_year: 2026,
+                month: 9
+            })
+        );
+        assert_eq!(
+            closed("1601C", ymd(2026, 1, 1)),
+            Some(DeadlinePeriod::Monthly {
+                taxable_year: 2025,
+                month: 12
+            })
+        );
+        assert_eq!(
+            closed("2551Q", ymd(2026, 10, 1)),
+            Some(DeadlinePeriod::Quarterly {
+                taxable_year: 2026,
+                quarter: 3
+            })
+        );
+        // The last day of a quarter has not closed it yet.
+        assert_eq!(
+            closed("2551Q", ymd(2026, 9, 30)),
+            Some(DeadlinePeriod::Quarterly {
+                taxable_year: 2026,
+                quarter: 2
+            })
+        );
+        assert_eq!(
+            closed("2551Q", ymd(2027, 1, 5)),
+            Some(DeadlinePeriod::Quarterly {
+                taxable_year: 2026,
+                quarter: 4
+            })
+        );
+        // 1701Q has no fourth quarter: the annual 1701 covers it.
+        assert_eq!(
+            closed("1701Q", ymd(2027, 1, 5)),
+            Some(DeadlinePeriod::Quarterly {
+                taxable_year: 2026,
+                quarter: 3
+            })
+        );
+        assert_eq!(
+            closed("1701", ymd(2026, 1, 1)),
+            Some(DeadlinePeriod::Annual { taxable_year: 2025 })
+        );
+        assert_eq!(
+            closed("1701", ymd(2026, 12, 31)),
+            Some(DeadlinePeriod::Annual { taxable_year: 2025 })
+        );
+        assert_eq!(closed("2200A", ymd(2026, 10, 26)), None, "as needed");
+        assert_eq!(closed("2550M", ymd(2026, 10, 26)), None, "no calendar rule");
+        assert_eq!(
+            DeadlineResolver::frequency_of("2551Q"),
+            Some(Frequency::Quarterly)
+        );
+        assert_eq!(
+            DeadlineResolver::frequency_of("0605"),
+            Some(Frequency::AsNeeded)
+        );
+        assert_eq!(DeadlineResolver::frequency_of("2550M"), None);
     }
 }

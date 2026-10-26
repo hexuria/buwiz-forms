@@ -352,16 +352,23 @@ pub fn compute(kind: AgentFormKind, draft: &mut Value) -> Result<(), String> {
 /// does (`QueueableForm::apply_penalty_profile`): each item's due date as
 /// the Calendar resolves it (global plus profile deadline overrides,
 /// decision P5-9) and the profile's EOPT class. Only a Draft is touched.
-/// A form without penalty items — and 1601C and 2551Q, which keep their
-/// own penalty state — is unchanged.
+/// 1601C and 2551Q resolve theirs through their own `apply_penalty_profile`
+/// (2551Q keeps its own engine call, but runs it from this due date). A
+/// form without penalty items is unchanged.
 pub fn apply_penalty_profile(
     kind: AgentFormKind,
     draft: &mut Value,
     profile: &crate::profile::TaxpayerProfile,
     global_overrides: &[crate::calendar_rules::DeadlineOverride],
 ) -> Result<(), String> {
-    let AgentFormKind::Queueable(queueable) = kind else {
-        return Ok(());
+    let queueable = match kind {
+        AgentFormKind::Form1601C => {
+            return apply_penalty_profile_1601c(kind, draft, profile, global_overrides);
+        }
+        AgentFormKind::Form2551Q => {
+            return apply_penalty_profile_2551q(kind, draft, profile, global_overrides);
+        }
+        AgentFormKind::Queueable(queueable) => queueable,
     };
     crate::with_queueable_kind!(queueable, F => {
         let mut typed: F = parse(kind, draft)?;
@@ -371,6 +378,36 @@ pub fn apply_penalty_profile(
         }
         Ok(())
     })
+}
+
+#[inline(never)]
+fn apply_penalty_profile_1601c(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    profile: &crate::profile::TaxpayerProfile,
+    global_overrides: &[crate::calendar_rules::DeadlineOverride],
+) -> Result<(), String> {
+    let mut typed: Form1601CDraft = parse(kind, draft)?;
+    if typed.status == FilingStatus::Draft {
+        typed.apply_penalty_profile(profile, global_overrides);
+        *draft = to_json(&typed)?;
+    }
+    Ok(())
+}
+
+#[inline(never)]
+fn apply_penalty_profile_2551q(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    profile: &crate::profile::TaxpayerProfile,
+    global_overrides: &[crate::calendar_rules::DeadlineOverride],
+) -> Result<(), String> {
+    let mut typed: Form2551QDraft = parse(kind, draft)?;
+    if typed.status == FilingStatus::Draft {
+        typed.apply_penalty_profile(profile, global_overrides);
+        *draft = to_json(&typed)?;
+    }
+    Ok(())
 }
 
 /// Bring a stored draft to the current model before any box is written, so
@@ -2427,14 +2464,42 @@ mod tests {
         .unwrap();
         assert_eq!(as_json, filed_json, "a filed return is never rewritten");
 
-        // A form with its own penalty state (1601C) and a non-queueable
-        // kind are left alone.
-        for code in ["1601C", "2551Q"] {
-            let other = AgentFormKind::from_code(code).unwrap();
-            let mut json = serde_json::json!({"anything": true});
-            apply_penalty_profile(other, &mut json, &profile, &[]).unwrap();
-            assert_eq!(json, serde_json::json!({"anything": true}), "{code}");
-        }
+        // 1601C and 2551Q resolve theirs too, overrides included: 2551Q Q3
+        // 2026 (Oct 25, a Sunday) is due Oct 26, or Nov 3 once moved; 1601C
+        // September 2026 (Oct 10, a Saturday) is due Oct 12, or Oct 20.
+        let day = |m, d| chrono::NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+        let moved = |code: &str, from, to| crate::calendar_rules::DeadlineOverride {
+            affected_form_codes: vec![code.into()],
+            original_deadline: from,
+            adjusted_deadline: to,
+            ..override_.clone()
+        };
+        let q3 = AgentFormKind::from_code("2551Q").unwrap();
+        let mut json =
+            serde_json::to_value(Form2551QDraft::new_from_profile(&profile, 2026, 3)).unwrap();
+        apply_penalty_profile(q3, &mut json, &profile, &[]).unwrap();
+        assert_eq!(json["penalty_due_date"], "2026-10-26");
+        let q3_moved = moved("2551Q", day(10, 25), day(11, 3));
+        apply_penalty_profile(q3, &mut json, &profile, std::slice::from_ref(&q3_moved)).unwrap();
+        assert_eq!(json["penalty_due_date"], "2026-11-03");
+        let mut filed: Form2551QDraft = serde_json::from_value(json).unwrap();
+        filed.status = FilingStatus::Submitted;
+        let filed_json = serde_json::to_value(&filed).unwrap();
+        let mut as_json = filed_json.clone();
+        apply_penalty_profile(q3, &mut as_json, &profile, &[]).unwrap();
+        assert_eq!(as_json, filed_json, "a filed 2551Q is never rewritten");
+
+        let september = AgentFormKind::from_code("1601C").unwrap();
+        let mut json =
+            serde_json::to_value(Form1601CDraft::new_from_profile(&profile, 2026, 9)).unwrap();
+        apply_penalty_profile(september, &mut json, &profile, &[]).unwrap();
+        let typed: Form1601CDraft = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(typed.penalty_due_date(), Some(day(10, 12)));
+        let september_moved = moved("1601C", day(10, 10), day(10, 20));
+        apply_penalty_profile(september, &mut json, &profile, std::slice::from_ref(&september_moved))
+            .unwrap();
+        let typed: Form1601CDraft = serde_json::from_value(json).unwrap();
+        assert_eq!(typed.penalty_due_date(), Some(day(10, 20)));
     }
 
     #[test]

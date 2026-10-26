@@ -1671,6 +1671,17 @@ pub(crate) fn load_draft(
                         profile, year, month,
                     ),
                 };
+                // Penalties run from the Calendar's deadline, the stored
+                // overrides applied, as every other form's (`finish`); a
+                // moved deadline recomputes them.
+                let mut draft = draft;
+                if draft.status == FilingStatus::Draft {
+                    let before = draft.penalty.penalty_due_date;
+                    draft.apply_penalty_profile(profile, &db.get_deadline_overrides());
+                    if draft.penalty.penalty_due_date != before {
+                        draft.compute();
+                    }
+                }
                 serde_json::to_value(draft).map_err(|error| error.to_string())
             });
         }
@@ -1692,6 +1703,16 @@ pub(crate) fn load_draft(
                 if let Some(db) = store {
                     agent::draft_locks::item_13::refresh(db, &mut draft)
                         .map_err(|error| read_error("2551Q", error))?;
+                }
+                // Its penalties run from the Calendar's deadline for the
+                // quarter, the stored overrides applied (Q3 2026: Oct 26); a
+                // moved deadline recomputes them.
+                if draft.status == FilingStatus::Draft {
+                    let before = draft.penalty_due_date;
+                    draft.apply_penalty_profile(profile, &db.get_deadline_overrides());
+                    if draft.penalty_due_date != before {
+                        draft.recompute(None);
+                    }
                 }
                 serde_json::to_value(draft).map_err(|error| error.to_string())
             });

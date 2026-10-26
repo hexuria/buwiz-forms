@@ -6,6 +6,7 @@
 //! tool, and `tools_list_has_no_submit_queue_file_or_pay_tool` keeps it that way.
 //! `bir_form_review` only brings a validated draft up in BIR with its Submit
 //! button highlighted; the user's own click is what files it.
+use bir_core::forms::taxform::{self, TaxformArgs};
 use serde_json::{Map, Value, json};
 
 /// What a tool reaches on a BIR host.
@@ -130,7 +131,7 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_form_open",
         action: Action::Host(HostCall::Invoke("form.open")),
-        description: "Open a draft return in BIR for one taxpayer and period, exactly as the form's page in BIR opens it (prefilled from the taxpayer profile; the saved draft if there is one). Any of BIR's 43 forms, by code (e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT). `period`: month 1-12 for monthly forms, quarter 1-4 for quarterly forms, 0 (or omitted) for annual returns, the return number for as-needed forms (0605, 1707). Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first.",
+        description: "Open a draft return in BIR for one taxpayer and period, exactly as the form's page in BIR opens it (prefilled from the taxpayer profile; the saved draft if there is one). Any of BIR's 43 forms, by code (e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT). `period`: month 1-12 for monthly forms, quarter 1-4 for quarterly forms, 0 (or omitted) for annual returns, the return number for as-needed forms (0605, 1707); or a period as text (`2026-Q3`, `Q3 2026`, `2026-01`, `jan 2026`, `2025`). `code` also takes a return token's value as the user wrote it (`000000000/2551Q-2026-Q3`, with or without `@bir:taxform:` before it): its TIN and period then need no `tin`, `year` or `period`. With no year and no period, the return to file now opens (the last closed month or quarter, the previous year, today for an as-needed form). Only one form can be open at a time: if BIR answers \"form already open\", do NOT retry; ask the user to save the open draft (bir_form_save_draft) or dismiss it (bir_form_dismiss) first.",
         schema: open_schema,
         build_args: open_args,
     },
@@ -172,7 +173,7 @@ pub static TOOLS: &[Tool] = &[
     Tool {
         name: "bir_form_send",
         action: Action::Host(HostCall::Invoke("form.send")),
-        description: "Queue the open form for upload from this computer, after the same validation as bir_form_validate. Requires a standing OK for this taxpayer and form, granted in the app. Without that OK the result is approval_required and pending, and nothing is queued. An invalid form is not queued: field_errors are the page's Validate errors. A dry-run build queues without contacting BIR.",
+        description: "Queue the open form for upload from this computer, after the same validation as bir_form_validate. Requires a standing OK for this taxpayer and form, which only the user grants (in the Forms app or on the taxpayer page). Without that OK the result is approval_required and pending, nothing is queued, and the user either presses Submit in the Forms app themselves or grants the assistant permission: tell them so. An invalid form is not queued: field_errors are the page's Validate errors. A dry-run build queues without contacting BIR.",
         schema: empty_schema,
         build_args: no_args,
     },
@@ -269,26 +270,26 @@ fn open_schema() -> Value {
         "properties": {
             "code": {
                 "type": "string",
-                "description": "BIR form code, e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT (any of the 43 forms BIR has)."
+                "description": "BIR form code, e.g. 1601C, 2551Q, 2550Q, 0619E, 1701, 1702RT (any of the 43 forms BIR has), or a return token's value such as 000000000/2551Q-2026-Q3 (TIN, form and period)."
             },
             "year": {
                 "type": "integer",
                 "minimum": 2000,
                 "maximum": 2100,
-                "description": "Taxable year, e.g. 2026."
+                "description": "Taxable year, e.g. 2026. Not needed when `code` or `period` names the period."
             },
             "period": {
-                "type": "integer",
+                "type": ["integer", "string"],
                 "minimum": 0,
                 "maximum": 999,
-                "description": "Monthly forms: month 1-12. Quarterly forms: quarter 1-4. Annual returns: 0 (or omit). As-needed forms: the return number (1 for the first)."
+                "description": "Monthly forms: month 1-12. Quarterly forms: quarter 1-4. Annual returns: 0 (or omit). As-needed forms: the return number (1 for the first). Or a period as text: 2026-Q3, Q3 2026, 2026-01, jan 2026, 2025."
             },
             "tin": {
                 "type": "string",
-                "description": "Taxpayer TIN exactly as returned by bir_profiles_list."
+                "description": "Taxpayer TIN exactly as returned by bir_profiles_list. Not needed when `code` is a token value naming the TIN."
             }
         },
-        "required": ["code", "year", "tin"],
+        "required": ["code"],
         "additionalProperties": false
     })
 }
@@ -409,29 +410,110 @@ fn form_code(raw: &str) -> Option<String> {
 
 fn open_args(args: &Map<String, Value>) -> Result<Value, String> {
     reject_unknown(args, &["code", "year", "period", "tin"])?;
-    let raw = args
-        .get("code")
-        .and_then(Value::as_str)
-        .ok_or("`code` is required (a BIR form code such as 1601C or 2550Q)")?;
-    let code = form_code(raw)
-        .ok_or_else(|| format!("`{raw}` is not a BIR form code (e.g. 1601C, 2550Q)"))?;
-    let year = integer(args, "year")?;
+    let raw = args.get("code").and_then(Value::as_str).ok_or(
+        "`code` is required (a BIR form code such as 1601C or 2550Q, or a return token such as 000000000/2551Q-2026-Q3)",
+    )?;
+    let today = taxform::today();
+    // A plain code as before; otherwise a token value naming the TIN and
+    // the period too (`000000000/2551Q-2026-Q3`).
+    let (code, named) = match form_code(raw) {
+        Some(code) => (code, TaxformArgs::default()),
+        None => {
+            let named = taxform::parse(raw, today);
+            match named.form {
+                Some(code) if named.unknown.is_empty() => (code.to_string(), named),
+                _ => {
+                    return Err(format!(
+                        "`{raw}` is not a BIR form code (e.g. 1601C, 2550Q)"
+                    ));
+                }
+            }
+        }
+    };
+    // A number up to 999 is the page's period; `2025` is a year.
+    let text_period = match args.get("period") {
+        Some(Value::String(text)) if text.trim().parse::<u64>().map_or(true, |n| n > 999) => {
+            let read = taxform::parse(text, today);
+            match read.period {
+                Some(period) if read.unknown.is_empty() && read.form.is_none() => Some(period),
+                _ => {
+                    return Err(format!(
+                        "`period` `{text}` is not a period (e.g. 2026-Q3, jan 2026, 2025)"
+                    ));
+                }
+            }
+        }
+        _ => None,
+    };
+    let numbered = match args.get("period") {
+        None | Some(Value::Null) => None,
+        Some(_) if text_period.is_some() => None,
+        Some(_) => Some(integer(args, "period")?),
+    };
+    let year_arg = match args.get("year") {
+        None | Some(Value::Null) => None,
+        Some(_) => Some(integer(args, "year")?),
+    };
+    // The named period, read as this form files it (a month of a
+    // quarterly form is its quarter).
+    let period = match text_period.or(named.period) {
+        Some(period) => Some(
+            period
+                .for_form(&code, today)
+                .map_err(|why| format!("`{raw}`: {why}"))?,
+        ),
+        None if year_arg.is_none() && numbered.is_none() => taxform::period_to_file(&code, today),
+        None => None,
+    };
+    let (year, period) = match (period, year_arg, numbered) {
+        (Some(period), year, None) => {
+            let (named_year, number) = period.open_args();
+            if let Some(year) = year.filter(|year| *year != u64::from(named_year)) {
+                return Err(format!(
+                    "`year` {year} and the period {} disagree",
+                    period.label()
+                ));
+            }
+            (u64::from(named_year), u64::from(number))
+        }
+        (_, Some(year), number) => (year, number.unwrap_or(0)),
+        (_, None, _) => {
+            return Err("`year` is required (or name the period, e.g. 2026-Q3)".into());
+        }
+    };
     if !(2000..=2100).contains(&year) {
         return Err(format!("`year` {year} is out of range"));
     }
-    let period = match args.get("period") {
-        None | Some(Value::Null) => 0,
-        Some(_) => integer(args, "period")?,
-    };
     if period > 999 {
         return Err(format!("`period` {period} is out of range"));
     }
-    let tin = args
+    let tin_arg = args
         .get("tin")
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|tin| !tin.is_empty())
-        .ok_or("`tin` is required: pick the taxpayer with bir_profiles_list")?;
+        .filter(|tin| !tin.is_empty());
+    // A token's 9-digit TIN is the head office.
+    let named_tin = named.tin.map(|tin| {
+        if tin.len() == 9 {
+            format!("{tin}00000")
+        } else {
+            tin
+        }
+    });
+    let tin = match (tin_arg, named_tin) {
+        (Some(tin), Some(named)) => {
+            let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
+            if !named.starts_with(&digits) {
+                return Err(format!("`tin` {tin} is not the TIN `{raw}` names"));
+            }
+            tin.to_string()
+        }
+        (Some(tin), None) => tin.to_string(),
+        (None, Some(named)) => named,
+        (None, None) => {
+            return Err("`tin` is required: pick the taxpayer with bir_profiles_list".into());
+        }
+    };
     Ok(json!({ "code": code, "year": year, "period": period, "tin": tin }))
 }
 
@@ -615,6 +697,88 @@ mod tests {
         ] {
             assert!(open.host_args(&obj(bad.clone())).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn open_args_take_a_return_token_and_a_period_as_text() {
+        let open = find("bir_form_open").unwrap();
+        let expected = json!({"code": "2551Q", "year": 2026, "period": 3, "tin": "00000000000000"});
+        for code in [
+            "000000000/2551Q-2026-Q3",
+            "@bir:taxform:000000000/2551Q-2026-Q3",
+        ] {
+            assert_eq!(
+                open.host_args(&obj(json!({ "code": code }))).unwrap(),
+                expected,
+                "{code}"
+            );
+        }
+        // The TIN may also be given, if it is the token's.
+        assert_eq!(
+            open.host_args(&obj(
+                json!({"code": "000000000/2551Q-2026-Q3", "tin": "00000000000000"})
+            ))
+            .unwrap(),
+            expected
+        );
+        assert!(
+            open.host_args(&obj(
+                json!({"code": "000000000/2551Q-2026-Q3", "tin": "111111111"})
+            ))
+            .is_err()
+        );
+        assert!(
+            open.host_args(&obj(
+                json!({"code": "000000000/2551Q-2026-Q3", "year": 2025})
+            ))
+            .is_err()
+        );
+        // A period as text, read as the form files it.
+        assert_eq!(
+            open.host_args(&obj(
+                json!({"code": "2551Q", "period": "Q3 2026", "tin": "1"})
+            ))
+            .unwrap(),
+            json!({"code": "2551Q", "year": 2026, "period": 3, "tin": "1"})
+        );
+        assert_eq!(
+            open.host_args(&obj(
+                json!({"code": "1601-C", "period": "jan 2026", "tin": "1"})
+            ))
+            .unwrap(),
+            json!({"code": "1601C", "year": 2026, "period": 1, "tin": "1"})
+        );
+        assert_eq!(
+            open.host_args(&obj(json!({"code": "1701", "period": "2025", "tin": "1"})))
+                .unwrap(),
+            json!({"code": "1701", "year": 2025, "period": 0, "tin": "1"})
+        );
+        // Numbers stay numbers, numeric strings included.
+        assert_eq!(
+            open.host_args(&obj(
+                json!({"code": "2551Q", "year": 2026, "period": "2", "tin": "1"})
+            ))
+            .unwrap()["period"],
+            2
+        );
+        assert!(
+            open.host_args(&obj(
+                json!({"code": "1601C", "period": "Q3 2026", "tin": "1"})
+            ))
+            .is_err(),
+            "a quarter of a monthly form"
+        );
+        assert!(
+            open.host_args(&obj(json!({"code": "2551Q", "period": "soon", "tin": "1"})))
+                .is_err()
+        );
+        // Neither year nor period: the return to file now.
+        let now = open
+            .host_args(&obj(json!({"code": "2551Q", "tin": "1"})))
+            .unwrap();
+        assert!(
+            now["year"].as_u64().is_some() && (1..=4).contains(&now["period"].as_u64().unwrap())
+        );
     }
 
     #[test]

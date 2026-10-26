@@ -14,10 +14,12 @@
 //! what vary.
 //!
 //! Every agent seed must resolve to a form this covers: the one
-//! exception is 2551Q, whose penalties come from its own engine call on the
-//! wall clock with a private deadline (form_2551q.rs `recompute`), not from
-//! the penalty-items model or its calendar, so it cannot be pinned here; a
-//! test checks that its source never reads the typed-date calendar.
+//! exception is 2551Q, whose penalties come from its own engine call
+//! (form_2551q.rs `recompute`), not from the penalty-items model, so it
+//! cannot be pinned here. Its due date is the Calendar's, as every other
+//! calendar form's (`apply_penalty_profile` → `penalty_items::
+//! resolve_due_date` with the stored and profile overrides); a test checks
+//! its source for that.
 
 use bir_core::forms::penalty_items::PenaltyItems;
 use bir_core::forms::queueable::{QueueableForm, QueueableKind};
@@ -166,16 +168,26 @@ fn record_penalty_golden() {
     );
 }
 
-/// 2551Q, the one seed the golden cannot pin, never reads the calendar
-/// PR 13 changed. The guard is textual: it catches a direct use of the
-/// calendar's names in form_2551q.rs, but not one reached through another
-/// module or a renamed import, nor a change in what its own engine call
-/// computes.
+/// 2551Q, the one seed the golden cannot pin, never takes a typed due
+/// date. Its penalties run from the deadline the Calendar resolves for the
+/// quarter, the stored (global) and profile deadline overrides applied,
+/// through the same `penalty_items::resolve_due_date` and
+/// `event_trigger::calendar_overrides` every other calendar form's
+/// `apply_profile` uses (2026-10-26: Q3 2026's Sunday, Oct 25, charged
+/// penalties on returns paid on Monday, Oct 26, the real deadline). A
+/// fiscal quarter, which the Calendar has no row for, keeps its own 25th
+/// after the quarter, moved off weekends and official holidays with
+/// `next_business_day`. form_2551q's `a_weekend_deadline_moves_to_the_next_working_day`
+/// and `penalties_run_from_the_calendars_deadline_with_its_overrides` pin
+/// the dates. The guard is textual: it catches a typed due date or a
+/// dropped Calendar resolution in form_2551q.rs, but not one reached
+/// through another module.
 #[test]
 fn form_2551q_penalties_do_not_read_the_typed_date_calendar() {
     let source = include_str!("../../src/forms/form_2551q.rs");
-    for name in ["next_business_day", "deadline_calendar", "typed_due_date"] {
-        assert!(!source.contains(name), "{name}");
+    assert!(!source.contains("typed_due_date"), "typed_due_date");
+    for name in ["penalty_items::resolve_due_date", "event_trigger::calendar_overrides"] {
+        assert!(source.contains(name), "{name}");
     }
 }
 
