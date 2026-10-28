@@ -92,3 +92,35 @@ test("the manifest grants each app what its source uses, and no more tools than 
     for (const target of source.matchAll(/rox\s*\.open\(\{\s*app:\s*"([a-z-]+)"/g)) assert.ok(p.open.apps.includes(target[1]), `${entry.id} opens ${target[1]}`);
   }
 });
+
+/** register.tsx's step-decision block, run as plain JavaScript. */
+function registerDecisions() {
+  const { source } = apps.find((a) => a.id === "register");
+  const block = /\/\/ step-decision:begin([\s\S]*?)\/\/ step-decision:end/.exec(source);
+  assert.ok(block, "register.tsx keeps its step-decision block");
+  return new Function(`${block[1]}; return { stepAfterSignIn, accountState };`)();
+}
+
+test("register: a signed-in, set-up computer lands on Signed in, never on the new-taxpayer form", () => {
+  const { stepAfterSignIn } = registerDecisions();
+  for (const mode of ["solo", "helpdesk"]) {
+    assert.equal(stepAfterSignIn(mode, true, 3), "signed-in");
+    assert.equal(stepAfterSignIn(mode, true, 1), "signed-in");
+    assert.equal(stepAfterSignIn(mode, true, 0), "taxpayer", "no taxpayer yet: the form");
+    assert.equal(stepAfterSignIn(mode, false, 3), "account");
+  }
+  assert.equal(stepAfterSignIn(null, true, 0), "setup", "first launch");
+  assert.equal(stepAfterSignIn(null, true, 2), "setup");
+  assert.equal(stepAfterSignIn(null, false, 0), "account");
+});
+
+test("register: the account page names the sign-in state plainly", () => {
+  const { accountState } = registerDecisions();
+  const status = { server_url: "http://127.0.0.1:3008", offline: false, detail: "Not signed in." };
+  assert.deepEqual(accountState(status, null), { kind: "never", host: "127.0.0.1:3008" });
+  assert.equal(accountState(status, "could not reach buwiz-server at http://127.0.0.1:3008 to refresh sign-in: error sending request").kind, "offline");
+  assert.equal(accountState({ ...status, offline: true }, null).kind, "offline");
+  assert.equal(accountState(status, "Sign in again: Buwiz ended this computer's sign-in").kind, "expired");
+  assert.equal(accountState(status, "The code expired before it was approved.").kind, "expired");
+  assert.equal(accountState(status, "something else").kind, "error");
+});
