@@ -2032,12 +2032,7 @@ pub(crate) fn open_print_preview(
     receipt: Option<&bir_print::frozen_html::ReceiptPage>,
     profile_name: Option<String>,
 ) -> HostResult {
-    let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
-        .map_err(HostError::new)?;
-    // A4 layout + static markup (no scripts, values as text): prints one A4
-    // page per form page from any engine; `print-overrides/<slug>.css` on top.
-    let html =
-        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
+    let (html, title) = print_preview_page(slug, form_code, fields, receipt, profile_name)?;
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
@@ -2047,14 +2042,33 @@ pub(crate) fn open_print_preview(
     std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
     // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
     // one window per form, re-opening refreshes it in place.
-    let title = match profile_name.filter(|n| !n.trim().is_empty()) {
-        Some(name) => format!("BIR Form {form_code} \u{2014} {name}"),
-        None => format!("BIR Form {form_code}"),
-    };
     crate::print_preview_window::request_keyed(path.clone(), title, form_code.to_string());
     Ok(HostObject::new()
         .field("path", path.display().to_string())
         .into())
+}
+
+/// `slug`'s frozen sheet filled with `fields` as the preview shows it, and
+/// the preview's title ("BIR Form 2551Q — <taxpayer>"). Opens and writes
+/// nothing.
+pub(crate) fn print_preview_page(
+    slug: &str,
+    form_code: &str,
+    fields: &std::collections::BTreeMap<String, String>,
+    receipt: Option<&bir_print::frozen_html::ReceiptPage>,
+    profile_name: Option<String>,
+) -> Result<(String, String), HostError> {
+    let html = bir_print::frozen_html::filled_document_with_receipt(slug, fields, receipt)
+        .map_err(HostError::new)?;
+    // A4 layout + static markup (no scripts, values as text): prints one A4
+    // page per form page from any engine; `print-overrides/<slug>.css` on top.
+    let html =
+        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &html, true));
+    let title = match profile_name.filter(|n| !n.trim().is_empty()) {
+        Some(name) => format!("BIR Form {form_code} \u{2014} {name}"),
+        None => format!("BIR Form {form_code}"),
+    };
+    Ok((html, title))
 }
 
 /// Launch the platform's default HTML viewer on `path` — detached, so the

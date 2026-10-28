@@ -72,6 +72,7 @@ for (const app of apps) {
 function toolsCalled(source) {
   const out = new Set();
   for (const m of source.matchAll(/\brox\s*\.call\(\s*"([a-z0-9_]+)"/g)) out.add(m[1]);
+  for (const m of source.matchAll(/\brox\s*\.preview\(\{\s*tool:\s*"([a-z0-9_]+)"/g)) out.add(m[1]);
   for (const m of source.matchAll(/\btool(?:<.*?>)?\(\s*"([a-z0-9_]+)"/g)) out.add(m[1]);
   for (const m of source.matchAll(/\bbir(?:<.*?>)?\(\s*"([a-z0-9_]+)"/g)) out.add(`bir_app_${m[1]}`);
   return out;
@@ -105,6 +106,7 @@ test("the manifest grants each app what its source uses, and no more tools than 
     if (uses("attach")) assert.ok(p.attach?.length, `${entry.id} uses rox.attach`);
     if (uses("pickFile")) assert.ok(p.pick_file, `${entry.id} uses rox.pickFile`);
     if (uses("copy")) assert.equal(p.copy, true, `${entry.id} uses rox.copy`);
+    assert.equal(Boolean(p.preview), uses("preview"), `${entry.id}: permissions.preview when, and only when, it uses rox.preview`);
     for (const target of source.matchAll(/rox\s*\.open\(\{\s*app:\s*"([a-z-]+)"/g)) assert.ok(p.open.apps.includes(target[1]), `${entry.id} opens ${target[1]}`);
   }
 });

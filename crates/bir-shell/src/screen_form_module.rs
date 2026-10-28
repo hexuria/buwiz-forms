@@ -6083,6 +6083,40 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
     })
 }
 
+/// Rox's print preview (`bir_app_print_preview`): the page and title that
+/// `screen_form_print` (a return as saved) or `screen_form_print_sample`
+/// (a Form library sample with its staged edits, held boxes blank) shows,
+/// made in memory: no window opens and no file is written.
+pub(crate) fn print_preview_page(arguments: &HostArguments) -> Result<(String, String), HostError> {
+    let code = arguments.string(0)?.to_owned();
+    let kind = kind_of(&code)?;
+    let slug = crate::bir_module::print_slug_for(kind.form_code())
+        .ok_or_else(|| host_error(format!("Form {code} has no print sheet")))?;
+    let mut draft = draft_argument(arguments, 1)?;
+    let (draft, sample) = if take_sample_mark(&mut draft.clone()).is_some() {
+        draft_with_staged_edits(kind, arguments)?
+    } else {
+        take_amendment_mark(&mut draft);
+        (draft, None)
+    };
+    let identity = agent::identity(kind, &draft).map_err(host_error)?;
+    with_database(|db| {
+        let (fields, receipt) = page_print_map(db, kind, &draft, sample.as_ref())?;
+        let profile = db
+            .get_profile_by_tin(&identity.tin)
+            .ok()
+            .flatten()
+            .map(|p| p.full_name.clone());
+        crate::bir_module::print_preview_page(
+            slug,
+            kind.form_code(),
+            &fields,
+            receipt.as_ref(),
+            profile,
+        )
+    })
+}
+
 /// Live sync form -> preview: apply the page's staged edits to a copy of the
 /// draft, fill the frozen sheet in memory, staticize it, and hand it to the
 /// open preview window for this form (which re-renders only changed sheets).

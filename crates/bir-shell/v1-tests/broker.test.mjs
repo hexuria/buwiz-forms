@@ -40,6 +40,9 @@ after(async () => {
   if (dir && !process.env.BIR_V1_KEEP) rmSync(dir, { recursive: true, force: true });
 });
 
+/** `value` with every number made an integer: what a signed call can carry (JCS here takes safe integers only). */
+const integral = (value) => JSON.parse(JSON.stringify(value, (_, v) => (typeof v === "number" ? Math.round(v) : v)));
+
 /** Nothing in `value` names the test TIN, in any form. */
 function noTin(value, what) {
   const text = JSON.stringify(value);
@@ -95,13 +98,15 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
   const inspected = await plugins.inspect(spec);
   const review = inspected.review;
   await t.test("the install review lists every app's permissions and the routines' reads", () => {
-    assert.ok(review.lines.includes("BIR 2.3.3 by Goldcoders"), review.lines.join("\n"));
+    assert.ok(review.lines.includes("BIR 2.4.0 by Goldcoders"), review.lines.join("\n"));
     const lines = (id) => review.apps.find((a) => a.id === id).lines;
     assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
     assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
     assert.ok(lines("forms").includes("Can attach: Taxpayer, Return"));
     assert.ok(lines("forms").includes("Can read files: .pdf, .png, .jpg, .jpeg, .gif, .webp, .heic up to 25 MB"));
     assert.ok(lines("tax-profile").includes("Copy to clipboard"));
+    assert.ok(lines("forms").includes("Show print previews (static pages, no scripts)"));
+    assert.ok(!lines("tax-profile").some((l) => l.startsWith("Show print previews")));
     assert.deepEqual(lines("deadlines"), ["Can call 1 BIR tool: bir_calendar_get", "Can open: BIR Forms, BIR Calendar"]);
     assert.deepEqual(review.apps.find((a) => a.id === "deadlines").inline, { width: 480, height: 320 });
     assert.deepEqual(review.routines, [
@@ -127,8 +132,8 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     await sessions.open(req);
     return { ...req, ks };
   }
-  const envelope = (o, tool, args = {}, signer = o.ks.seed) => {
-    const env = { v: 1, typ: "rox-call", plugin: BIR, app: o.app, open_id: o.open_id, tool, args, ts: Date.now(), nonce: random128() };
+  const envelope = (o, tool, args = {}, signer = o.ks.seed, over = {}) => {
+    const env = { v: 1, typ: "rox-call", plugin: BIR, app: o.app, open_id: o.open_id, tool, args, ts: Date.now(), nonce: random128(), ...over };
     return { envelope: env, sig: sign(signer, signedBytes(env)) };
   };
   const call = async (o, tool, args) => resultData((await sessions.call(envelope(o, tool, args))).result);
@@ -184,6 +189,40 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     assert.equal(await codeOf(sessions.call(envelope(forms, "bir_app_list_tax_years", { args: ["98765432100000"], ticket }))), "tool_error");
     // and an app never names a TIN to BIR's own tools
     assert.equal(await codeOf(sessions.call(envelope(card, "bir_calendar_get", { tin: ROOT }))), "tool_error");
+  });
+
+  await t.test("rox.preview: Forms' print preview comes back as an HTML document, past 1 MiB only as a preview", async () => {
+    const forms = await open("forms");
+    const preview = (o, args) => sessions.call(envelope(o, "bir_app_print_preview", args, o.ks.seed, { purpose: "preview" }));
+    const sample = (code) => call(forms, "bir_app_screen_form_sample", { args: [TIN, code], ticket });
+    const doc = (r) => r.result.content.find((c) => c.type === "resource").resource;
+    // a saved return, by id: BIR reads it (its amounts are not integers, so it is never signed)
+    const opened = (await call(forms, "bir_app_screen_form_open", { args: [TIN, "2551Q", 2026, 3], ticket })).result;
+    assert.ok(opened.draft, "2551Q Q3 2026 opens");
+    const saved = (await call(forms, "bir_app_screen_form_save", { args: ["2551Q", integral(opened.draft)], ticket })).result;
+    const r = await preview(forms, { ticket, form: "2551Q", draft_id: saved.id });
+    assert.equal(doc(r).mimeType, "text/html");
+    assert.match(doc(r).text, /<html/i);
+    assert.ok(!/<script/i.test(doc(r).text), "the page is static");
+    assert.equal(r.result.structuredContent.title, "BIR Form 2551Q \u2014 Dela Cruz Jane");
+    // the largest sheet is over the bridge's 1 MiB: a preview only
+    const annualOpened = (await call(forms, "bir_app_screen_form_open", { args: [TIN, "1701", 2025, 0], ticket })).result;
+    const annual = (await call(forms, "bir_app_screen_form_save", { args: ["1701", integral(annualOpened.draft)], ticket })).result;
+    const big = { ticket, form: "1701", draft_id: annual.id };
+    assert.ok(Buffer.byteLength(doc(await preview(forms, big)).text) > 1024 * 1024, "1701's sheet is over 1 MiB");
+    assert.equal(await codeOf(sessions.call(envelope(forms, "bir_app_print_preview", big))), "result_too_large");
+    // held to the ticket: no ticket, a forged one, or nothing to print
+    assert.equal(await codeOf(preview(forms, { form: "2551Q", draft_id: saved.id })), "tool_error");
+    assert.equal(await codeOf(preview(forms, { ticket: `tkt_${"0".repeat(26)}`, form: "2551Q", draft_id: saved.id })), "tool_error");
+    assert.equal(await codeOf(preview(forms, { ticket, form: "2551Q" })), "tool_error");
+    // a Form library sample previews from the page's draft, sent as JSON text (its amounts are not integers)
+    const sampled = (await sample("2551Q")).result;
+    assert.throws(() => envelope(forms, "bir_app_print_preview", { draft: sampled.draft }), /integers/, "a draft's amounts cannot be signed as numbers");
+    const fromPage = await preview(forms, { ticket, form: "2551Q", draft_json: JSON.stringify(sampled.draft), edits: {} });
+    assert.match(doc(fromPage).text, /<html/i);
+    // another app has neither the tool nor the permission
+    const profile = await open("tax-profile");
+    assert.equal(await codeOf(preview(profile, { ticket, form: "2551Q", draft_id: saved.id })), "permission_denied");
   });
 
   await t.test("the broker's gates: undeclared, switched off, forged, replayed", async () => {
