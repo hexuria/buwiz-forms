@@ -2913,7 +2913,7 @@ fn on_large_stack<T: Send + 'static>(
 
 /// Whether `draft` is a sent return that is paid: its status says so, or a
 /// payment is recorded for it (bir_record_payment, bir_mark_paid).
-fn sent_and_paid(db: &bir_core::db::Database, form_code: &str, kind: AgentFormKind, draft: &Value) -> bool {
+fn sent_and_paid(db: &bir_core::db::Database, kind: AgentFormKind, draft: &Value) -> bool {
     let Ok(identity) = agent::identity(kind, draft) else { return false };
     let year = identity.taxable_year;
     let period = match identity.period {
@@ -2925,7 +2925,7 @@ fn sent_and_paid(db: &bir_core::db::Database, form_code: &str, kind: AgentFormKi
     match identity.status {
         FilingStatus::Draft | FilingStatus::Queued => false,
         FilingStatus::Paid => true,
-        _ => crate::mini_app::payments::recorded_for(db, &identity.tin, form_code, &period),
+        _ => crate::mini_app::payments::recorded_for(db, &identity.tin, kind.form_code(), &period),
     }
 }
 
@@ -2937,6 +2937,7 @@ fn evaluate_here(
     kind: AgentFormKind,
     draft: &mut Value,
     checked: &BTreeSet<String>,
+    paid: bool,
 ) -> Result<(Value, Value, FilingStatus), String> {
     let status = agent::identity(kind, draft)?.status;
     let mut errors = if status == FilingStatus::Draft {
@@ -2950,6 +2951,11 @@ fn evaluate_here(
     // The same for 1604F and 1604C (D6, rows_1604.rs).
     rows_1604::printed_item_numbers(kind, &mut errors);
     let mut errors = errors_json(kind, &errors);
+    // A paid return's penalties are settled ([`sent_and_paid`]): what it was
+    // filed and paid with stays, and today's date does not make them stale.
+    if paid && let Value::Array(list) = &mut errors {
+        list.retain(|error| !error["message"].as_str().is_some_and(|message| message.contains("is stale or inconsistent")));
+    }
     // A page notice beside the form's own messages (PR 4: a stored 2553 row
     // whose entry is not the one the sheet prints there).
     if let Value::Array(list) = &mut errors {
@@ -3159,7 +3165,7 @@ fn open_screen_form(
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
     // for another year and period (what tells which boxes follow the period).
-    let (draft, from_profile, build, filed_original, followed, notes, checked, consumed) =
+    let (draft, from_profile, build, filed_original, followed, notes, checked, paid, consumed) =
         with_database(|db| {
             let profile = db
                 .get_profile_by_tin(&tin)
@@ -3272,6 +3278,7 @@ fn open_screen_form(
             };
             // The 1604E rows the filer marked checked (D5).
             let checked = rows_1604::checked_rows(db, kind, &draft);
+            let paid = sent_and_paid(db, kind, &draft);
             Ok((
                 draft,
                 from_profile,
@@ -3280,12 +3287,13 @@ fn open_screen_form(
                 followed,
                 notes,
                 checked,
+                paid,
                 consumed,
             ))
         })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
-            opened_json(kind, year, period, draft, from_profile, build, checked)
+            opened_json(kind, year, period, draft, from_profile, build, checked, paid)
         })
         .and_then(|result| result)
         .map_err(host_error)?;
@@ -3429,6 +3437,7 @@ fn opened_json(
     from_profile: Value,
     sample: Option<SampleBuild>,
     checked: BTreeSet<String>,
+    paid: bool,
 ) -> Result<Value, String> {
     let code = kind.form_code();
     // What a stored 1702RT draft held in items 40, 41, 42 and 57 before
@@ -3436,7 +3445,7 @@ fn opened_json(
     // gross; pre-2020 1702RT computed like BIR); `finish` marks
     // it), for the notices below.
     let stored_pre_2020 = rows_annual_corporate::take_pre_2020_held(&mut draft);
-    let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &checked)?;
+    let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &checked, paid)?;
     if let Value::Array(list) = &mut errors {
         list.extend(rows_annual_corporate::rt_pre_2020_notices(
             stored_pre_2020,
@@ -3741,6 +3750,7 @@ fn screen_form_sample_period(
                         from_profile,
                         Some(build),
                         BTreeSet::new(),
+                        false,
                     )
                 })
                 .and_then(|result| result)
@@ -5366,16 +5376,11 @@ fn screen_form_validate(
     let amendment = take_amendment_mark(&mut draft);
     // Read here, on the host's thread: the evaluation runs on its own.
     let rows_checked = with_database(|db| Ok(rows_1604::checked_rows(db, kind, &draft)))?;
-    let paid = sample.is_none() && with_database(|db| Ok(sent_and_paid(db, &form_code, kind, &draft)))?;
+    let paid = sample.is_none() && with_database(|db| Ok(sent_and_paid(db, kind, &draft)))?;
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
-            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &rows_checked)?;
-            // A paid return's penalties are settled: what it was filed and
-            // paid with stays, and today's date does not make them "stale".
-            if paid && let Value::Array(list) = &mut errors {
-                list.retain(|error| !error["message"].as_str().is_some_and(|message| message.contains("is stale or inconsistent")));
-            }
+            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &rows_checked, paid)?;
             if let Some(mark) = &sample {
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
@@ -5870,6 +5875,7 @@ fn screen_form_amend(
                 from_profile,
                 None,
                 BTreeSet::new(),
+                false,
             )
         })
         .and_then(|result| result)
@@ -5938,6 +5944,7 @@ fn screen_form_filed_original(
                 from_profile,
                 None,
                 BTreeSet::new(),
+                false,
             )
         })
         .and_then(|result| result)
@@ -6794,6 +6801,10 @@ mod tests {
         .unwrap();
         let checked = with_clock(day(10, 29), || validate(&filed));
         assert!(!stale(&checked), "{}", checked["errors"]);
+        // and opening it (the page's first look) says the same
+        let opened = with_clock(day(10, 29), || open("2551Q", 1));
+        assert_eq!(opened["status"], "Submitted");
+        assert!(!stale(&opened), "{}", opened["errors"]);
         // a draft is not "paid" by a payment: it still recomputes
         assert!(!stale(&with_clock(day(10, 29), || validate(&on_time))));
     }

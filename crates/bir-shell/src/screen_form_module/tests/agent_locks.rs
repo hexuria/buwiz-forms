@@ -494,6 +494,7 @@ fn page_and_core_locks(
             profile_draft,
             None,
             BTreeSet::new(),
+            false,
         )
     })
     .and_then(|result| result)
