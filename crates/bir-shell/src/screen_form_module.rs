@@ -2911,6 +2911,24 @@ fn on_large_stack<T: Send + 'static>(
         .map_err(|_| "validation stopped unexpectedly".to_string())
 }
 
+/// Whether `draft` is a sent return that is paid: its status says so, or a
+/// payment is recorded for it (bir_record_payment, bir_mark_paid).
+fn sent_and_paid(db: &bir_core::db::Database, form_code: &str, kind: AgentFormKind, draft: &Value) -> bool {
+    let Ok(identity) = agent::identity(kind, draft) else { return false };
+    let year = identity.taxable_year;
+    let period = match identity.period {
+        FilingPeriod::Monthly(month) => format!("{year}-{month:02}"),
+        FilingPeriod::Quarterly(quarter) => format!("{year}-Q{quarter}"),
+        FilingPeriod::Annual => year.to_string(),
+        FilingPeriod::OpenEnded(_) => return identity.status == FilingStatus::Paid,
+    };
+    match identity.status {
+        FilingStatus::Draft | FilingStatus::Queued => false,
+        FilingStatus::Paid => true,
+        _ => crate::mini_app::payments::recorded_for(db, &identity.tin, form_code, &period),
+    }
+}
+
 /// Recompute and validate an editable draft in place; a filed return is
 /// validated on a copy so it keeps the values it was filed with. `checked`:
 /// the 1604E rows whose D5 notice the filer marked checked
@@ -5341,16 +5359,23 @@ fn plan_choice_edits(
 fn screen_form_validate(
     arguments: &HostArguments,
 ) -> Result<impl Future<Output = HostResult> + Send + use<>, HostError> {
-    let kind = kind_of(arguments.string(0)?)?;
+    let form_code = arguments.string(0)?.to_string();
+    let kind = kind_of(&form_code)?;
     let mut draft = draft_argument(arguments, 1)?;
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
     // Read here, on the host's thread: the evaluation runs on its own.
     let rows_checked = with_database(|db| Ok(rows_1604::checked_rows(db, kind, &draft)))?;
+    let paid = sample.is_none() && with_database(|db| Ok(sent_and_paid(db, &form_code, kind, &draft)))?;
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
             let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &rows_checked)?;
+            // A paid return's penalties are settled: what it was filed and
+            // paid with stays, and today's date does not make them "stale".
+            if paid && let Value::Array(list) = &mut errors {
+                list.retain(|error| !error["message"].as_str().is_some_and(|message| message.contains("is stale or inconsistent")));
+            }
             if let Some(mark) = &sample {
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
@@ -6740,6 +6765,37 @@ mod tests {
             }
         }
         assert!(checked > 0);
+    }
+
+    /// A sent 2551Q's automatic penalties grow until it is paid ("stale",
+    /// recompute), and stop once a payment is recorded: a paid return keeps
+    /// the penalties it was filed and paid with.
+    #[test]
+    fn a_paid_return_keeps_its_penalties() {
+        use bir_core::forms::penalty_items::with_clock;
+        setup();
+        let day = |m, d| chrono::NaiveDate::from_ymd_opt(2026, m, d).unwrap();
+        let mut draft = open("2551Q", 1)["draft"].clone();
+        draft["schedule_1"] = json!([{"atc": "PT010", "atc_description": "Persons exempt from VAT", "taxable_amount": 20998.0, "tax_rate": 0.03, "tax_due": 629.94}]);
+        let validate = |draft: &Value| call_async("screen_form_validate", vec!["2551Q".into(), json(draft.clone())]).unwrap();
+        let stale = |checked: &Value| checked["errors"].to_string().contains("is stale");
+        // computed and sent on the 20th, before Q1's April 25 deadline
+        let on_time = with_clock(day(4, 20), || validate(&draft))["draft"].clone();
+        let id = with_clock(day(4, 20), || store_filed("2551Q", &on_time, "Submitted"));
+        let (_, raw) = raw_row(id);
+        let filed: Value = serde_json::from_str(&raw).unwrap();
+        // unpaid in October: the penalties have grown
+        assert!(stale(&with_clock(day(10, 29), || validate(&filed))), "an unpaid return's penalties grow");
+        // paid: they stay as filed
+        with_database(|db| {
+            crate::mini_app::payments::mark_paid(db, &serde_json::from_value(json!({"tin": TIN, "form": "2551Q", "period": "2026-Q1"})).unwrap(), day(10, 29), &std::env::temp_dir())
+                .map_err(HostError::new)
+        })
+        .unwrap();
+        let checked = with_clock(day(10, 29), || validate(&filed));
+        assert!(!stale(&checked), "{}", checked["errors"]);
+        // a draft is not "paid" by a payment: it still recomputes
+        assert!(!stale(&with_clock(day(10, 29), || validate(&on_time))));
     }
 
     /// Round 5, item 11: the screen's worker thread computes on the pinned
