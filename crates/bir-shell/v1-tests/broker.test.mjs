@@ -99,7 +99,7 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     const lines = (id) => review.apps.find((a) => a.id === id).lines;
     assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
     assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
-    assert.ok(lines("forms").includes("Can attach: Taxpayer, Return:"));
+    assert.ok(lines("forms").includes("Can attach: Taxpayer, Return"));
     assert.ok(lines("forms").includes("Can read files: .pdf, .png, .jpg, .jpeg, .gif, .webp, .heic up to 25 MB"));
     assert.ok(lines("tax-profile").includes("Copy to clipboard"));
     assert.deepEqual(lines("deadlines"), ["Can call 1 BIR tool: bir_calendar_get", "Can open: BIR Forms, BIR Calendar"]);
