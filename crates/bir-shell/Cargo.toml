@@ -92,6 +92,13 @@ bir-mcp = { path = "../bir-mcp", optional = true }
 anyhow = "1"
 chrono = "0.4"
 hex = "0.4"
+# Rox Mini App Protocol v1 (`src/mini_app/v1/`): session certificates are
+# ed25519 under the plugin key Rox provisions; tickets are 130 random bits.
+# Both are already in the lockfile (russh, ssh-key, llrt_crypto).
+ed25519-dalek = { version = "3", default-features = false }
+getrandom = "0.3"
+# Tokens and formatted TINs in tool results the model reads become tickets.
+regex = "1"
 # OS keychain for the Buwiz refresh token. Without a backend feature, keyring
 # 3.x keeps secrets in memory on Linux, so name Secret Service explicitly.
 keyring = { version = "3.6.3", features = ["sync-secret-service", "crypto-rust"] }
