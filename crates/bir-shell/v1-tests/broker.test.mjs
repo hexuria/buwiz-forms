@@ -97,8 +97,8 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
   // ── install: the review, provision, verification ─────────────────────
   const inspected = await plugins.inspect(spec);
   const review = inspected.review;
-  await t.test("the install review lists every app's permissions and the routines' reads", () => {
-    assert.ok(review.lines.includes("BIR 2.5.0 by Goldcoders"), review.lines.join("\n"));
+  await t.test("the install review lists every app's permissions and the routines' reads and writes", () => {
+    assert.ok(review.lines.includes("BIR 2.6.0 by Goldcoders"), review.lines.join("\n"));
     const lines = (id) => review.apps.find((a) => a.id === id).lines;
     assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
     assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
@@ -111,7 +111,9 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     assert.deepEqual(review.apps.find((a) => a.id === "deadlines").inline, { width: 480, height: 320 });
     assert.deepEqual(review.routines, [
       "Routine 'BIR filing confirmations' reads via dev.goldcoders.google-workspace: gws_search_mail, gws_read_mail",
+      "Routine 'BIR filing confirmations' may change BIR data without asking: bir_confirm_filing",
       "Routine 'BIR payments (MyEG and banks)' reads via dev.goldcoders.google-workspace: gws_search_mail, gws_read_mail",
+      "Routine 'BIR payments (MyEG and banks)' may change BIR data without asking: bir_record_payment",
     ]);
     for (const app of review.apps) assert.ok(!app.lines.join(" ").includes("bir_call"));
   });
