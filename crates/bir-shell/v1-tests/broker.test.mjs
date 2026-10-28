@@ -217,7 +217,17 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     const served = plugins.runtime(BIR).tools.filter((x) => !x.name.startsWith("rox."));
     const marked = served.filter((x) => x._meta?.["rox/audience"]?.[0] === "app");
     assert.equal(names.length, served.length - marked.length);
-    assert.equal(names.length, 30, `the model sees ${names.length} BIR tools`);
+    assert.equal(names.length, 32, `the model sees ${names.length} BIR tools`);
+    // a taxpayer's forms and returns, by ticket, for the model
+    for (const tool of ["bir_profile_forms", "bir_returns_list"]) {
+      assert.ok(names.includes(tool), `${tool} is on the model's surface`);
+      const forged = await v1AgentCall(plugins, null, tool, { ticket: `tkt_${"0".repeat(26)}` });
+      assert.equal(forged.is_error, true, `${tool} refuses a ticket BIR did not issue`);
+      const got = await v1AgentCall(plugins, null, tool, { ticket, year: 2026 });
+      assert.equal(got.is_error, false, got.content);
+      assert.match(got.content, /Dela Cruz Jane/);
+      noTin(got.content, tool);
+    }
     console.log(`  agent surface: ${names.length} BIR tools (${marked.length} app-only kept off)`);
     const appCall = await v1AgentCall(plugins, null, "bir_app_list_taxpayers", {});
     assert.equal(appCall.is_error, true, "a model call to an app-only tool is refused");
