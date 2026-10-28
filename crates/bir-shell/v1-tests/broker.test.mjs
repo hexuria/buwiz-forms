@@ -95,7 +95,7 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
   const inspected = await plugins.inspect(spec);
   const review = inspected.review;
   await t.test("the install review lists every app's permissions and the routines' reads", () => {
-    assert.ok(review.lines.includes("BIR 2.3.0 by Goldcoders"), review.lines.join("\n"));
+    assert.ok(review.lines.includes("BIR 2.3.1 by Goldcoders"), review.lines.join("\n"));
     const lines = (id) => review.apps.find((a) => a.id === id).lines;
     assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
     assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
