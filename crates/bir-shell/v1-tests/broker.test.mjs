@@ -1,0 +1,248 @@
+// BIR as a Rox Mini App Protocol v1 plugin, under the real v1 broker.
+//
+// Imports Rox's broker modules (`server/v1/` of the grok-shell checkout in
+// ROX_BROKER_DIR) and does what Rox does: a publisher key and trust file of
+// this run, BIR's manifest signed with it (`print-v1-manifest`, then the
+// broker's signManifest), inspect and install with a file keystore and an
+// in-memory db, then session opens and signed bridge calls from a fake Rox.
+// BIR runs on a scratch database (BIR_DATABASE_PATH under a temp dir, test
+// key, auth bypass of a debug build, dry-run filing) with HOME pointed at
+// the temp dir, so it never touches the owner's data, Keychain or ports.
+//
+//   ROX_BROKER_DIR=<grok-shell checkout> BIR_MINI_APP_BIN=<target>/debug/bir-mini-app \
+//     node --test crates/bir-shell/v1-tests/broker.test.mjs
+//
+// The test taxpayer is made up (TIN 123-456-788, "Dela Cruz Jane").
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { after, test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const BROKER = process.env.ROX_BROKER_DIR;
+const BIN = process.env.BIR_MINI_APP_BIN;
+const skip = (!BROKER || !BIN) && "set ROX_BROKER_DIR and BIR_MINI_APP_BIN";
+const APPS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "mini-apps");
+const BIR = "dev.goldcoders.bir";
+const ROOT = "123456788";
+const TIN = `${ROOT}00000`;
+const TICKET = /^tkt_[0-9A-HJKMNP-TV-Z]{26}$/;
+
+const load = (path) => import(pathToFileURL(join(BROKER, path)).href);
+
+let dir;
+const stops = [];
+after(async () => {
+  for (const stop of stops) await stop().catch(() => {});
+  if (dir && !process.env.BIR_V1_KEEP) rmSync(dir, { recursive: true, force: true });
+});
+
+/** Nothing in `value` names the test TIN, in any form. */
+function noTin(value, what) {
+  const text = JSON.stringify(value);
+  assert.ok(!text.includes(ROOT) && !text.includes("123-456-788"), `${what} names the TIN: ${text.slice(0, 300)}`);
+}
+
+test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
+  const { generate, random128, sign } = await load("server/v1/ed.mjs");
+  const { signedBytes } = await load("server/v1/jcs.mjs");
+  const { keystore } = await load("server/v1/keystore.mjs");
+  const { permsDigest } = await load("server/v1/manifest.mjs");
+  const { createPlugins, resultData } = await load("server/v1/plugins.mjs");
+  const { createSessions } = await load("server/v1/sessions.mjs");
+  const { signManifest, fingerprintOf } = await load("server/v1/sign-manifest.mjs");
+  const { loadTrust } = await load("server/v1/trust.mjs");
+  const { v1Tools, v1AgentCall } = await load("server/v1/agent.mjs");
+
+  dir = mkdtempSync(join(process.env.BIR_V1_SCRATCH || tmpdir(), "bir-v1-"));
+  mkdirSync(join(dir, "home"), { recursive: true });
+
+  // A publisher key of this run under the manifest's key id, trusted by a
+  // trust file of this run only.
+  const publisher = generate();
+  const trustFile = join(dir, "trust.json");
+  writeFileSync(trustFile, JSON.stringify({
+    v: 1,
+    publishers: { "gc-2026-01": { publisher: "dev.goldcoders", alg: "ed25519", public_key: publisher.pub } },
+    approved_plugins: [{ id: BIR, publisher_key_id: "gc-2026-01" }],
+  }));
+  const env = {
+    HOME: join(dir, "home"),
+    BIR_DATABASE_PATH: join(dir, "bir.db"),
+    BIR_MINI_APPS_DIR: APPS_DIR,
+    EBIR_TEST_ENV: "1",
+    BIR_AUTH_BYPASS: "1",
+    BIR_SFTP_DRY_RUN: "1",
+  };
+  const unsigned = JSON.parse(execFileSync(BIN, ["print-v1-manifest"], { env: { PATH: process.env.PATH, ...env } }).toString());
+  const manifestFile = join(dir, "manifest.json");
+  writeFileSync(manifestFile, JSON.stringify(signManifest(unsigned, publisher.seed), null, 2));
+  const spec = { command: BIN, args: ["mcp"], env: { ...env, BIR_V1_MANIFEST: manifestFile } };
+
+  const plugins = createPlugins({
+    db: new DatabaseSync(":memory:"),
+    keys: keystore(`file:${join(dir, "keys")}`),
+    logDir: join(dir, "logs"),
+    trust: () => loadTrust(trustFile),
+  });
+  const sessions = createSessions(plugins);
+  stops.push(() => plugins.stopAll());
+
+  // ── install: the review, provision, verification ─────────────────────
+  const inspected = await plugins.inspect(spec);
+  const review = inspected.review;
+  await t.test("the install review lists every app's permissions and the routines' reads", () => {
+    assert.ok(review.lines.includes("BIR 2.0.0 by Goldcoders"), review.lines.join("\n"));
+    const lines = (id) => review.apps.find((a) => a.id === id).lines;
+    assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
+    assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
+    assert.ok(lines("forms").includes("Can attach: Taxpayer, Return:"));
+    assert.ok(lines("forms").includes("Can read files: .pdf, .png, .jpg, .jpeg, .gif, .webp, .heic up to 25 MB"));
+    assert.ok(lines("tax-profile").includes("Copy to clipboard"));
+    assert.deepEqual(lines("deadlines"), ["Can call 1 BIR tool: bir_calendar_get", "Can open: BIR Forms, BIR Calendar"]);
+    assert.deepEqual(review.apps.find((a) => a.id === "deadlines").inline, { width: 480, height: 320 });
+    assert.deepEqual(review.routines, [
+      "Routine 'BIR filing confirmations' reads via dev.goldcoders.google-workspace: gws_search_mail, gws_read_mail",
+      "Routine 'BIR payments (MyEG and banks)' reads via dev.goldcoders.google-workspace: gws_search_mail, gws_read_mail",
+    ]);
+    for (const app of review.apps) assert.ok(!app.lines.join(" ").includes("bir_call"));
+  });
+  const installed = await plugins.install({ ...spec, manifest_sha256: inspected.manifest_sha256 });
+  assert.equal(installed.ok, true);
+  assert.equal(plugins.runtime(BIR).state, "running", "provisioned and verified");
+  const manifest = plugins.manifestOf(plugins.rowOf(BIR));
+  // the plugin key as the file keystore holds it, to look for in the logs
+  const seed = readFileSync(join(dir, "keys", `${BIR}.key`), "utf8").trim();
+
+  // ── a fake Rox: session keys and signed envelopes (4.4, 8.1) ─────────
+  async function open(app) {
+    const ks = generate();
+    const req = {
+      plugin: BIR, app, open_id: random128(), ks_pub: ks.pub,
+      perms_sha256: permsDigest(manifest.apps.find((a) => a.id === app).permissions), not_after: Date.now() + 3600_000,
+    };
+    await sessions.open(req);
+    return { ...req, ks };
+  }
+  const envelope = (o, tool, args = {}, signer = o.ks.seed) => {
+    const env = { v: 1, typ: "rox-call", plugin: BIR, app: o.app, open_id: o.open_id, tool, args, ts: Date.now(), nonce: random128() };
+    return { envelope: env, sig: sign(signer, signedBytes(env)) };
+  };
+  const call = async (o, tool, args) => resultData((await sessions.call(envelope(o, tool, args))).result);
+  const codeOf = (p) => p.then(() => "resolved", (e) => e.code || String(e));
+
+  // the test taxpayer, created the way the sign-in app creates one
+  const register = await open("register");
+  const created = await call(register, "bir_app_create_taxpayer", {
+    args: [{ tin_root: ROOT, name: "Dela Cruz Jane", taxpayer_type: "Individual", head_office: { rdo_code: "040" } }],
+  });
+  assert.match(created.result.ticket, TICKET);
+
+  let ticket;
+  await t.test("resolve: a typed TIN becomes a token with a ticket, and no TIN comes back", async () => {
+    const token = await sessions.resolve({ plugin: BIR, kind: "scope", name: "taxprofile", value: ROOT, complete: false });
+    assert.equal(token.result, "token");
+    assert.match(token.ticket, TICKET);
+    assert.equal(token.token, `@bir:taxprofile:${token.ticket}`);
+    assert.equal(token.title, "Dela Cruz Jane");
+    noTin(token, "the token");
+    ticket = token.ticket;
+    const opened = await sessions.resolve({ plugin: BIR, kind: "command", name: "taxform", value: `${ROOT}/2551Q-2026-Q3`, complete: false });
+    assert.equal(opened.result, "open");
+    assert.equal(opened.app, "forms");
+    assert.match(opened.ticket, TICKET);
+    noTin(opened, "the open");
+    const choices = await sessions.resolve({ plugin: BIR, kind: "scope", name: "taxprofile", value: "Dela", complete: true });
+    assert.equal(choices.result, "choices");
+    assert.equal(choices.choices[0].value, ticket);
+  });
+
+  await t.test("the ticket's title is the name, and nothing else", async () => {
+    assert.deepEqual(await sessions.ticketTitle({ plugin: BIR, ticket }), { ok: true, valid: true, title: "Dela Cruz Jane" });
+    assert.deepEqual(await sessions.ticketTitle({ plugin: BIR, ticket: `tkt_${"0".repeat(26)}` }), { ok: true, valid: false });
+  });
+
+  await t.test("every app opens and a signed call from its permissions succeeds", async () => {
+    const forms = await open("forms");
+    const subject = await call(forms, "bir_ticket_subject", { ticket });
+    assert.equal(subject.result.tin, TIN, "the app learns its ticket's TIN from BIR");
+    const years = await call(forms, "bir_app_list_tax_years", { args: [TIN], ticket });
+    assert.ok(Array.isArray(years.result));
+    const profile = await open("tax-profile");
+    assert.equal((await call(profile, "bir_app_get_taxpayer", { args: [ROOT], ticket })).result.name, "Dela Cruz Jane");
+    const calendar = await open("calendar");
+    assert.ok((await call(calendar, "bir_app_deadline_overrides", { args: [{ year: 2026 }] })).result);
+    const card = await open("deadlines");
+    const dues = await call(card, "bir_calendar_get", { tin: ticket });
+    noTin(dues, "the deadline card's data");
+    assert.ok(Array.isArray(dues.result.events));
+    assert.ok((await call(register, "bir_app_list_rdos", { args: [] })).result.length > 0);
+    // the scope is the ticket: another taxpayer is out of reach
+    assert.equal(await codeOf(sessions.call(envelope(forms, "bir_app_list_tax_years", { args: ["98765432100000"], ticket }))), "tool_error");
+    // and an app never names a TIN to BIR's own tools
+    assert.equal(await codeOf(sessions.call(envelope(card, "bir_calendar_get", { tin: ROOT }))), "tool_error");
+  });
+
+  await t.test("the broker's gates: undeclared, switched off, forged, replayed", async () => {
+    const card = await open("deadlines");
+    assert.equal(await codeOf(sessions.call(envelope(card, "bir_profiles_list", {}))), "permission_denied");
+    assert.equal(await codeOf(sessions.call(envelope(card, "bir_app_list_taxpayers", {}))), "permission_denied");
+    plugins.setTool(BIR, "bir_calendar_get", true);
+    assert.equal(await codeOf(sessions.call(envelope(card, "bir_calendar_get", {}))), "disabled");
+    plugins.setTool(BIR, "bir_calendar_get", false);
+    assert.equal(await codeOf(sessions.call(envelope(card, "bir_calendar_get", {}, generate().seed))), "bad_signature");
+    const once = envelope(card, "bir_calendar_get", {});
+    assert.equal((await sessions.call(once)).ok, true);
+    assert.equal(await codeOf(sessions.call(once)), "replayed");
+  });
+
+  await t.test("app sources load and match their signed fingerprints", async () => {
+    for (const app of manifest.apps) {
+      const { source, fingerprint } = await sessions.appSource({ plugin: BIR, app: app.id });
+      assert.equal(fingerprint, app.fingerprint);
+      assert.equal(fingerprintOf(Buffer.from(source, "utf8")), app.fingerprint);
+    }
+  });
+
+  await t.test("the agent sees bir_ tools, no rox.* and no bir_call, and reads tickets not TINs", async () => {
+    const names = v1Tools(plugins).map((x) => x.name);
+    assert.ok(names.includes("bir_profiles_list") && names.includes("bir_app_open"));
+    assert.ok(!names.some((n) => n.startsWith("rox.")) && !names.includes("bir_call"));
+    const listed = await v1AgentCall(plugins, null, "bir_profiles_list", {});
+    assert.equal(listed.is_error, false, listed.content);
+    noTin(listed.content, "bir_profiles_list for the agent");
+    assert.match(listed.content, /tkt_/);
+    const refused = await v1AgentCall(plugins, null, "bir_ticket_subject", { ticket });
+    assert.equal(refused.is_error, true, "app-only tools refuse the agent");
+  });
+
+  await t.test("the plugin key and the TIN never reach a log, and the signed manifest is this build's", () => {
+    const files = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(join(d, e.name)) : [join(d, e.name)]));
+    const logs = files(dir).filter((f) => f.endsWith(".log"));
+    assert.ok(logs.some((f) => f.endsWith(`${BIR}.log`)), "the broker logged BIR's stderr");
+    for (const f of logs) {
+      const text = readFileSync(f, "utf8");
+      assert.ok(!text.includes(seed), `${f} holds the plugin key`);
+      assert.ok(!text.includes(ROOT), `${f} names the TIN`);
+      assert.ok(!text.includes("not this build's manifest"), `${f}: the signed manifest is stale`);
+    }
+  });
+
+  await t.test("uninstall removes BIR's tickets", async () => {
+    assert.deepEqual(await plugins.uninstall(BIR), { ok: true });
+    // a fresh spawn, provisioned by hand: the old ticket no longer resolves
+    const { Client } = await load("node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js");
+    const { StdioClientTransport } = await load("node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js");
+    const client = new Client({ name: "test", version: "1" });
+    await client.connect(new StdioClientTransport({ ...spec, env: { PATH: process.env.PATH, ...spec.env }, stderr: "pipe" }));
+    stops.push(() => client.close());
+    const k = generate();
+    await client.callTool({ name: "rox.provision", arguments: { protocol: "1.0.0", plugin: BIR, key: { alg: "ed25519", seed: k.seed }, pub: k.pub } });
+    const r = await client.callTool({ name: "rox.ticket.resolve", arguments: { ticket } });
+    assert.deepEqual(r.structuredContent, { valid: false });
+    await client.close();
+  });
+});
