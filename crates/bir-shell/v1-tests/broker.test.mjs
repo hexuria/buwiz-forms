@@ -212,12 +212,12 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     assert.ok(names.includes("bir_profiles_list") && names.includes("bir_app_open"));
     assert.ok(!names.some((n) => n.startsWith("rox.")) && !names.includes("bir_call"));
     // 10.1: the apps' bir_app_* tools (rox/audience ["app"]) stay off the model's surface
-    const appOnly = names.filter((n) => n.startsWith("bir_app_") && n !== "bir_app_open");
+    const appOnly = names.filter((n) => (n.startsWith("bir_app_") && n !== "bir_app_open") || n.startsWith("bir_ticket_"));
     assert.deepEqual(appOnly, [], "app-only tools reach the model");
     const served = plugins.runtime(BIR).tools.filter((x) => !x.name.startsWith("rox."));
     const marked = served.filter((x) => x._meta?.["rox/audience"]?.[0] === "app");
     assert.equal(names.length, served.length - marked.length);
-    assert.ok(names.length >= 28 && names.length <= 34, `the model sees ${names.length} BIR tools`);
+    assert.equal(names.length, 30, `the model sees ${names.length} BIR tools`);
     console.log(`  agent surface: ${names.length} BIR tools (${marked.length} app-only kept off)`);
     const appCall = await v1AgentCall(plugins, null, "bir_app_list_taxpayers", {});
     assert.equal(appCall.is_error, true, "a model call to an app-only tool is refused");
