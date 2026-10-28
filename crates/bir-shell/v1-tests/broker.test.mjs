@@ -95,7 +95,7 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
   const inspected = await plugins.inspect(spec);
   const review = inspected.review;
   await t.test("the install review lists every app's permissions and the routines' reads", () => {
-    assert.ok(review.lines.includes("BIR 2.1.0 by Goldcoders"), review.lines.join("\n"));
+    assert.ok(review.lines.includes("BIR 2.2.0 by Goldcoders"), review.lines.join("\n"));
     const lines = (id) => review.apps.find((a) => a.id === id).lines;
     assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
     assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
@@ -217,7 +217,7 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     const served = plugins.runtime(BIR).tools.filter((x) => !x.name.startsWith("rox."));
     const marked = served.filter((x) => x._meta?.["rox/audience"]?.[0] === "app");
     assert.equal(names.length, served.length - marked.length);
-    assert.equal(names.length, 32, `the model sees ${names.length} BIR tools`);
+    assert.equal(names.length, 37, `the model sees ${names.length} BIR tools`);
     // a taxpayer's forms and returns, by ticket, for the model
     for (const tool of ["bir_profile_forms", "bir_returns_list"]) {
       assert.ok(names.includes(tool), `${tool} is on the model's surface`);
@@ -229,6 +229,17 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
       noTin(got.content, tool);
     }
     console.log(`  agent surface: ${names.length} BIR tools (${marked.length} app-only kept off)`);
+    // 9.8: an answer carries its inline card, which the broker accepts
+    const job = {};
+    const forms = await v1AgentCall(plugins, job, "bir_profile_forms", { ticket, year: 2026 });
+    assert.equal(forms.is_error, false, forms.content);
+    const card = job.linkTurn?.links?.[0]?.card;
+    assert.ok(card, "the answer's card reached the job");
+    assert.equal(card.app, "card-forms");
+    assert.equal(card.placement, "inline");
+    assert.equal(card.props.card, "forms");
+    noTin(card, "the card");
+    assert.ok(Buffer.byteLength(JSON.stringify(card.props)) <= 8192);
     const appCall = await v1AgentCall(plugins, null, "bir_app_list_taxpayers", {});
     assert.equal(appCall.is_error, true, "a model call to an app-only tool is refused");
     const listed = await v1AgentCall(plugins, null, "bir_profiles_list", {});

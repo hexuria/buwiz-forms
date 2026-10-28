@@ -36,9 +36,22 @@ function specifiers(source) {
   return out;
 }
 
-test("there are the five v1 apps", () => {
-  assert.deepEqual(apps.map((a) => a.id).sort(), ["calendar", "deadlines", "forms", "register", "tax-profile"]);
+const CARD_APPS = ["card-dates", "card-forms", "card-help", "card-money", "card-people"];
+const KIT = readFileSync(join(APPS_DIR, "card-kit.tsx.in"), "utf8").trimEnd();
+/** An app's own code: a card app's kit block left out (it is checked once, below). */
+const own = (source) => source.replace(/\/\/ card-kit:begin[\s\S]*?\/\/ card-kit:end/, "");
+
+test("there are the v1 apps", () => {
+  assert.deepEqual(apps.map((a) => a.id).sort(), [...CARD_APPS, "calendar", "deadlines", "forms", "register", "tax-profile"].sort());
 });
+
+for (const id of CARD_APPS)
+  test(`${id}: carries the card kit verbatim and answers rox.props.card`, () => {
+    const { source } = apps.find((a) => a.id === id);
+    assert.ok(source.includes(KIT), `${id}: run scripts/sync-card-kit.mjs`);
+    assert.ok(!source.includes("@@CARD-KIT@@"));
+    assert.match(own(source), /P\.card/);
+  });
 
 for (const app of apps) {
   test(`${app.id}: imports only nsh, nsh/base and rox, and has a default export`, () => {
@@ -78,12 +91,15 @@ test("the manifest grants each app what its source uses, and no more tools than 
   }
   assert.deepEqual(manifest.apps.map((a) => a.id).sort(), apps.map((a) => a.id).sort());
   for (const entry of manifest.apps) {
-    const { source } = apps.find((a) => a.id === entry.id);
+    const source = own(apps.find((a) => a.id === entry.id).source);
     const p = entry.permissions || {};
     const granted = new Set(p.tools || []);
     const called = toolsCalled(source);
     for (const t of called) assert.ok(granted.has(t), `${entry.id} calls ${t}, which its permissions leave out`);
-    for (const t of granted) assert.ok(called.has(t), `${entry.id} is granted ${t} but never calls it`);
+    // A card app's Refresh calls the tool that answered (props.tool), by name
+    // at run time: its grants are those answers' tools.
+    if (!CARD_APPS.includes(entry.id))
+      for (const t of granted) assert.ok(called.has(t), `${entry.id} is granted ${t} but never calls it`);
     const uses = (m) => new RegExp(`\\brox\\s*\\.${m}\\(`).test(source);
     if (uses("open")) assert.ok(p.open?.apps?.length, `${entry.id} uses rox.open`);
     if (uses("attach")) assert.ok(p.attach?.length, `${entry.id} uses rox.attach`);

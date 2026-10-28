@@ -661,11 +661,15 @@ impl Session {
         let errors = agent::validate(kind, &mut draft)?;
         let map = agent::field_map(kind, &draft)?;
         let needs = agent::needs_you(kind, &map, &errors);
+        // Whose return, so an answer card can open it (the TIN reaches
+        // Rox as a ticket).
+        let tin = agent::identity(kind, &draft).map(|identity| identity.tin).unwrap_or_default();
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
         }
         Ok(DispatchResult::json(json!({
             "form": kind.form_code(),
+            "tin": tin,
             "ok": errors.is_empty(),
             "boxes": needs.boxes.iter().map(|card| card_json(card, sources.get(&card.key))).collect::<Vec<_>>(),
             "other_errors": field_errors(&needs.other_errors),
@@ -1399,6 +1403,7 @@ pub(crate) fn send_draft(
             "queued": false,
             "filed": false,
             "form": code,
+            "tin": identity.tin,
             "message": format!(
                 "Needs you: press Submit in the Forms app, or grant the assistant permission to submit {code} for this taxpayer (the toggle in the Forms app, or the taxpayer page in BIR). Nothing was queued."
             ),
