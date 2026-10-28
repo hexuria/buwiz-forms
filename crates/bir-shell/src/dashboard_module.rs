@@ -1330,16 +1330,23 @@ mod tests {
             .iter()
             .find(|r| r["frequency"] != "As needed")
             .unwrap();
+        // The deadline override fields (deadline_status, moved_reason,
+        // original_due_date, period_key) came with the calendar's moved
+        // deadlines; the Calendar mini app reads them.
         let row_fields = [
             "branch_code",
             "branch_count",
             "branch_name",
+            "deadline_status",
             "draft_id",
             "due_date",
             "form_code",
             "form_name",
             "frequency",
+            "moved_reason",
+            "original_due_date",
             "period",
+            "period_key",
             "period_label",
             "return_key",
             "status",
