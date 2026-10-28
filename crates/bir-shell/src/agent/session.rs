@@ -1040,13 +1040,13 @@ enum TinQuery {
     },
 }
 
-fn load_profile(db: &Database, tin: &str) -> Result<TaxpayerProfile, String> {
+pub(crate) fn load_profile(db: &Database, tin: &str) -> Result<TaxpayerProfile, String> {
     db.get_profile_by_tin(tin)
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("no taxpayer profile for {tin}"))
 }
 
-fn profile_context(
+pub(crate) fn profile_context(
     db: &Database,
     kind: AgentFormKind,
     profile: &TaxpayerProfile,

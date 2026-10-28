@@ -36,7 +36,7 @@ function specifiers(source) {
   return out;
 }
 
-const CARD_APPS = ["card-dates", "card-forms", "card-help", "card-money", "card-people"];
+const CARD_APPS = ["card-calc", "card-dates", "card-forms", "card-help", "card-money", "card-people", "card-quick", "card-return"];
 const KIT = readFileSync(join(APPS_DIR, "card-kit.tsx.in"), "utf8").trimEnd();
 /** An app's own code: a card app's kit block left out (it is checked once, below). */
 const own = (source) => source.replace(/\/\/ card-kit:begin[\s\S]*?\/\/ card-kit:end/, "");

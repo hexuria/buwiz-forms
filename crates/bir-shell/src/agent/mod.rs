@@ -7,7 +7,7 @@
 
 mod session;
 
-pub(crate) use session::{Session, UiQueue, send_draft};
+pub(crate) use session::{Session, UiQueue, load_profile, profile_context, send_draft};
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
