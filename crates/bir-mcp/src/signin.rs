@@ -652,7 +652,7 @@ fn account_body(
 }
 
 fn http_client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
+    bir_core::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
         .timeout(Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
         .build()

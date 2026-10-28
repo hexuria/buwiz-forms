@@ -434,6 +434,36 @@ mod tests {
     use super::*;
     use crate::bir_module::{use_ephemeral_database, with_account_database};
 
+    /// buwiz-server on 127.0.0.1 only, BIR configured with `localhost`
+    /// (which macOS resolves to ::1 first): the account's client reaches it.
+    #[test]
+    fn the_account_client_reaches_localhost_on_ipv4_only() {
+        use bir_core::cloud_account::{BlockingHttp, Http, HttpRequest};
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 2048];
+            let _ = stream.read(&mut request);
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: 11\r\nconnection: close\r\n\r\n{\"ok\":true}")
+                .unwrap();
+        });
+        let response = BlockingHttp::with_timeout(std::time::Duration::from_secs(5))
+            .exchange(&HttpRequest {
+                method: "GET",
+                url: format!("http://localhost:{port}/me"),
+                content_type: "application/json",
+                bearer: None,
+                body: String::new(),
+            })
+            .unwrap_or_else(|_| panic!("http://localhost:{port} did not reach 127.0.0.1"));
+        assert_eq!(response.status, 200);
+        assert_eq!(response.body, r#"{"ok":true}"#);
+        server.join().unwrap();
+    }
+
     #[test]
     fn the_page_cannot_set_a_server_url_and_a_saved_one_is_ignored() {
         assert!(

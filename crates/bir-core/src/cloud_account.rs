@@ -875,7 +875,14 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
     Ok(())
 }
 
+/// The OS keychain entry of the account, except in a test environment
+/// (`EBIR_TEST_ENV`, as the database key): a test process, on a scratch
+/// database, keeps its account in the private file beside that database
+/// and never reads or writes the keychain of whoever runs it.
 fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
+    if std::env::var_os("EBIR_TEST_ENV").is_some() {
+        return Err(keyring::Error::NoEntry);
+    }
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
 }
 
@@ -915,7 +922,7 @@ impl BlockingHttp {
     /// most 3 seconds, to connect): what a token refresh uses, so a server
     /// that never answers costs seconds, not every check's 20.
     pub fn with_timeout(timeout: Duration) -> Self {
-        let client = reqwest::blocking::Client::builder()
+        let client = crate::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
             .timeout(timeout)
             .connect_timeout((timeout / 3).min(Duration::from_secs(3)))
             .user_agent(USER_AGENT)

@@ -194,7 +194,7 @@ fn check(base: &str, token: &str) -> Result<(), String> {
     if token.is_empty() {
         return Err(UNAUTHENTICATED.to_string());
     }
-    let client = reqwest::blocking::Client::builder()
+    let client = bir_core::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
         .timeout(Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::none())
         .build()
@@ -282,7 +282,7 @@ fn check_desktop(base: &str, token: &str) -> Result<(), String> {
     if token.is_empty() {
         return Err(UNAUTHENTICATED.to_string());
     }
-    let client = reqwest::blocking::Client::builder()
+    let client = bir_core::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
         .timeout(Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::none())
         .build()

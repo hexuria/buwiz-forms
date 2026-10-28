@@ -41,6 +41,7 @@ mod keychain;
 pub mod legacy_migration;
 pub mod log_files;
 pub mod logging;
+pub mod loopback;
 pub mod naming;
 pub mod news_fetcher;
 pub mod notification;

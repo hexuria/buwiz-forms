@@ -729,7 +729,7 @@ fn lock_state() -> std::sync::MutexGuard<'static, State> {
 }
 
 fn http_client() -> Result<reqwest::blocking::Client, String> {
-    reqwest::blocking::Client::builder()
+    bir_core::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(15 * 60))
         .redirect(reqwest::redirect::Policy::limited(10))

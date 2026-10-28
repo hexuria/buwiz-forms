@@ -2301,7 +2301,7 @@ fn pull_device_filings_agent() -> HostResult {
     let Some((origin, token)) = crate::cloud_account::device_poll_auth() else {
         return Ok(HostValue::Null);
     };
-    let client = reqwest::blocking::Client::builder()
+    let client = bir_core::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
         .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|error| HostError::new(error.to_string()))?;
