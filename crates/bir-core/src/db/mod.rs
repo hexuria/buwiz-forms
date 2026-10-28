@@ -241,6 +241,44 @@ const MASTER_KEY_SERVICE: &str = "com.ebir.rust";
 #[cfg(all(target_os = "macos", not(test)))]
 const MASTER_KEY_ACCOUNT: &str = "sqlcipher_master_key";
 
+/// The master key from the environment, for installs that keep it out of
+/// the keychain: `BIR_DB_KEY` (64 hex digits) or `BIR_DB_KEY_FILE` (a file
+/// holding them). `None` when neither is set. A set but unusable value is an
+/// error, never a fall back to the keychain: a run meant to skip the keychain
+/// must not stop on a keychain prompt.
+fn env_master_key(var: impl Fn(&str) -> Option<String>) -> Option<Result<String, DbError>> {
+    let set = |name: &str| var(name).filter(|value| !value.is_empty());
+    let (text, from) = match set("BIR_DB_KEY") {
+        Some(key) => (key, "BIR_DB_KEY"),
+        None => match std::fs::read_to_string(set("BIR_DB_KEY_FILE")?) {
+            Ok(text) => (text, "BIR_DB_KEY_FILE"),
+            Err(error) => {
+                return Some(Err(DbError::Other(format!(
+                    "BIR_DB_KEY_FILE is unreadable: {error}"
+                ))));
+            }
+        },
+    };
+    let key = text.trim();
+    if key.len() == 64 && key.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Some(Ok(key.to_owned()))
+    } else {
+        Some(Err(DbError::Other(format!(
+            "{from} must hold the 64 hex digit database key"
+        ))))
+    }
+}
+
+/// [`env_master_key`] read from the process environment, logging its source.
+#[cfg(not(test))]
+fn process_env_master_key() -> Option<Result<String, DbError>> {
+    let key = env_master_key(|name| std::env::var(name).ok())?;
+    if key.is_ok() {
+        info!("Loaded SQLCipher master key from the environment");
+    }
+    Some(key)
+}
+
 /// Whether a failed keychain read means the master key is genuinely absent.
 ///
 /// This single predicate is what stands between a first run and destroying an
@@ -633,6 +671,9 @@ impl Database {
                     "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 );
             }
+            if let Some(key) = process_env_master_key() {
+                return key;
+            }
 
             // Platform dispatch: macOS uses Security.framework (off the main
             // thread) with a `security` CLI fallback; Linux/Windows use the
@@ -655,6 +696,9 @@ impl Database {
                 return Ok(
                     "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 );
+            }
+            if let Some(key) = process_env_master_key() {
+                return key;
             }
 
             #[cfg(target_os = "macos")]
@@ -1445,6 +1489,26 @@ mod tests {
     use crate::profile::TaxpayerProfile;
     use std::io::Write;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn the_environment_supplies_the_database_key() {
+        let key = "ab".repeat(32);
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("db.key");
+        std::fs::write(&path, format!("{key}\n")).expect("key file");
+        let path = path.to_string_lossy().into_owned();
+        let only = |name: &'static str, value: String| {
+            move |asked: &str| (asked == name).then(|| value.clone())
+        };
+
+        assert!(env_master_key(|_| None).is_none());
+        assert!(env_master_key(only("BIR_DB_KEY", String::new())).is_none());
+        assert_eq!(env_master_key(only("BIR_DB_KEY", key.clone())).unwrap().unwrap(), key);
+        assert_eq!(env_master_key(only("BIR_DB_KEY_FILE", path)).unwrap().unwrap(), key);
+        assert!(env_master_key(only("BIR_DB_KEY", "abc".into())).unwrap().is_err());
+        let missing = "/nonexistent/db.key".to_string();
+        assert!(env_master_key(only("BIR_DB_KEY_FILE", missing)).unwrap().is_err());
+    }
 
     // A mock keyring can be tricky in CI, so we might encounter issues depending on the runner.
     // Assuming macOS with user session or a mock environment.
