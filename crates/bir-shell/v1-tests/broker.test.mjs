@@ -205,6 +205,9 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     assert.match(doc(r).text, /<html/i);
     assert.ok(!/<script/i.test(doc(r).text), "the page is static");
     assert.equal(r.result.structuredContent.title, "BIR Form 2551Q \u2014 Dela Cruz Jane");
+    // as Forms asks for a 2551Q: by its quarter (kept by period, its draft has no id)
+    const byQuarter = await preview(forms, { ticket, form: "2551Q", year: 2026, quarter: 3 });
+    assert.equal(doc(byQuarter).text, doc(r).text);
     // the largest sheet is over the bridge's 1 MiB: a preview only
     const annualOpened = (await call(forms, "bir_app_screen_form_open", { args: [TIN, "1701", 2025, 0], ticket })).result;
     const annual = (await call(forms, "bir_app_screen_form_save", { args: ["1701", integral(annualOpened.draft)], ticket })).result;
@@ -256,7 +259,7 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     const served = plugins.runtime(BIR).tools.filter((x) => !x.name.startsWith("rox."));
     const marked = served.filter((x) => x._meta?.["rox/audience"]?.[0] === "app");
     assert.equal(names.length, served.length - marked.length);
-    assert.equal(names.length, 44, `the model sees ${names.length} BIR tools`);
+    assert.equal(names.length, 45, `the model sees ${names.length} BIR tools`);
     // a taxpayer's forms and returns, by ticket, for the model
     for (const tool of ["bir_profile_forms", "bir_returns_list"]) {
       assert.ok(names.includes(tool), `${tool} is on the model's surface`);

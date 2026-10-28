@@ -108,6 +108,7 @@ test("the manifest grants each app what its source uses, and no more tools than 
     if (uses("copy")) assert.equal(p.copy, true, `${entry.id} uses rox.copy`);
     assert.equal(Boolean(p.preview), uses("preview"), `${entry.id}: permissions.preview when, and only when, it uses rox.preview`);
     for (const target of source.matchAll(/rox\s*\.open\(\{\s*app:\s*"([a-z-]+)"/g)) assert.ok(p.open.apps.includes(target[1]), `${entry.id} opens ${target[1]}`);
+    if (/\brox\s*\.open\(\{\s*url:/.test(source)) assert.ok(p.open?.external?.length, `${entry.id} opens URLs`);
   }
 });
 
