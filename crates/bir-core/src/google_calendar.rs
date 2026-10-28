@@ -1048,15 +1048,24 @@ fn rollback_result_label<T>(result: &Result<T, anyhow::Error>) -> String {
 }
 
 fn save_credentials(credentials: &GoogleCalendarCredential) -> Result<(), anyhow::Error> {
+    if crate::keychain_disabled() {
+        anyhow::bail!("BIR_NO_KEYCHAIN is set: Google Calendar credentials are not saved");
+    }
     let serialized = serde_json::to_string(credentials)?;
     keychain_set(&serialized)
 }
 
 fn load_credentials() -> Result<GoogleCalendarCredential, anyhow::Error> {
+    if crate::keychain_disabled() {
+        anyhow::bail!("Google Calendar account is not connected");
+    }
     Ok(serde_json::from_str(&keychain_get()?)?)
 }
 
 fn delete_credentials() -> Result<(), anyhow::Error> {
+    if crate::keychain_disabled() {
+        return Ok(());
+    }
     keychain_delete()
 }
 

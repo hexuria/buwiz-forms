@@ -674,6 +674,12 @@ impl Database {
             if let Some(key) = process_env_master_key() {
                 return key;
             }
+            if crate::keychain_disabled() {
+                return Err(DbError::Other(
+                    "BIR_NO_KEYCHAIN is set: give the database key in BIR_DB_KEY or BIR_DB_KEY_FILE"
+                        .into(),
+                ));
+            }
 
             // Platform dispatch: macOS uses Security.framework (off the main
             // thread) with a `security` CLI fallback; Linux/Windows use the
@@ -699,6 +705,12 @@ impl Database {
             }
             if let Some(key) = process_env_master_key() {
                 return key;
+            }
+            if crate::keychain_disabled() {
+                return Err(DbError::Other(
+                    "BIR_NO_KEYCHAIN is set: give the database key in BIR_DB_KEY or BIR_DB_KEY_FILE"
+                        .into(),
+                ));
             }
 
             #[cfg(target_os = "macos")]

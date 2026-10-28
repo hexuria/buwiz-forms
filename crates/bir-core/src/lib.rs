@@ -38,6 +38,14 @@ pub mod ipc;
 pub mod job_display;
 #[cfg(target_os = "macos")]
 mod keychain;
+
+/// `BIR_NO_KEYCHAIN=1`: this process never reads or writes the OS keychain,
+/// for unattended runs where a keychain prompt would stall them. The
+/// database key then comes from `BIR_DB_KEY` / `BIR_DB_KEY_FILE`, the Buwiz
+/// account from its private file, and Google Calendar reads as not connected.
+pub fn keychain_disabled() -> bool {
+    std::env::var_os("BIR_NO_KEYCHAIN").is_some_and(|value| !value.is_empty() && value != "0")
+}
 pub mod legacy_migration;
 pub mod log_files;
 pub mod logging;

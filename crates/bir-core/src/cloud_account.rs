@@ -721,22 +721,39 @@ pub fn open_browser(url: &str) -> Result<(), String> {
     open::that(url).map_err(|error| error.to_string())
 }
 
-/// Load the desktop account. The keychain wins when it holds a complete
-/// record. Otherwise the private file is used. `Ok(None)` means signed out.
+/// Load the desktop account: the newer of the keychain record and the
+/// private file. A process run with `BIR_NO_KEYCHAIN` refreshes into the file
+/// only, so the keychain copy can hold a refresh token Buwiz has already
+/// rotated; using it would revoke the sign-in. `Ok(None)` means signed out.
 pub fn load_stored_account() -> Result<Option<StoredAccount>, CloudError> {
-    if let Some(raw) = keyring_load()
-        && let Ok(stored) = StoredAccount::decode(&raw)
-    {
-        return Ok(Some(stored));
-    }
+    let keychain = keyring_load().and_then(|raw| StoredAccount::decode(&raw).ok());
     let path = account_file_path();
-    if !path.exists() {
-        return Ok(None);
+    let file = if path.exists() {
+        let raw = std::fs::read_to_string(&path).map_err(|error| {
+            CloudError::Unexpected(format!("could not read the saved Buwiz account ({error})"))
+        })?;
+        match StoredAccount::decode(&raw) {
+            Ok(stored) => Some(stored),
+            Err(error) if keychain.is_none() => return Err(error),
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+    Ok(newer_account(keychain, file))
+}
+
+/// The record refreshed last; the keychain one on a tie.
+fn newer_account(
+    keychain: Option<StoredAccount>,
+    file: Option<StoredAccount>,
+) -> Option<StoredAccount> {
+    let age = |a: &StoredAccount| (a.last_refresh_unix, a.access_expires_at_unix);
+    match (keychain, file) {
+        (Some(keychain), Some(file)) if age(&file) > age(&keychain) => Some(file),
+        (Some(keychain), _) => Some(keychain),
+        (None, file) => file,
     }
-    let raw = std::fs::read_to_string(&path).map_err(|error| {
-        CloudError::Unexpected(format!("could not read the saved Buwiz account ({error})"))
-    })?;
-    StoredAccount::decode(&raw).map(Some)
 }
 
 /// Write the desktop account to the keychain and the private file.
@@ -880,7 +897,7 @@ fn write_secret_file(raw: &str) -> Result<(), CloudError> {
 /// database, keeps its account in the private file beside that database
 /// and never reads or writes the keychain of whoever runs it.
 fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
-    if std::env::var_os("EBIR_TEST_ENV").is_some() {
+    if std::env::var_os("EBIR_TEST_ENV").is_some() || crate::keychain_disabled() {
         return Err(keyring::Error::NoEntry);
     }
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
@@ -1135,6 +1152,27 @@ fn standard_b64(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn the_newer_saved_account_wins() {
+        let account = |refreshed: i64, token: &str| StoredAccount {
+            server_url: "http://127.0.0.1:3008".into(),
+            access_token: format!("access-{token}"),
+            refresh_token: token.into(),
+            access_expires_at_unix: refreshed + 3600,
+            user_id: "u1".into(),
+            email: None,
+            offline: false,
+            last_refresh_unix: refreshed,
+        };
+        let pick = |keychain, file| newer_account(keychain, file).map(|a: StoredAccount| a.refresh_token);
+
+        assert_eq!(pick(Some(account(100, "old")), Some(account(200, "new"))).as_deref(), Some("new"));
+        assert_eq!(pick(Some(account(200, "new")), Some(account(100, "old"))).as_deref(), Some("new"));
+        assert_eq!(pick(Some(account(100, "keychain")), Some(account(100, "file"))).as_deref(), Some("keychain"));
+        assert_eq!(pick(None, Some(account(100, "file"))).as_deref(), Some("file"));
+        assert_eq!(pick(None, None), None);
+    }
 
     struct Scripted {
         steps: Vec<Result<HttpResponse, CloudError>>,
