@@ -12,6 +12,11 @@
 //   ROX_BROKER_DIR=<rox>/server BIR_MINI_APP_BIN=<target>/debug/bir-mini-app \
 //     node --test crates/bir-shell/v1-tests/broker.test.mjs
 //
+// With ROX_BROKER_CMD=<rox-broker> as well, rox-broker hosts BIR: its
+// `helper` owns the process and the sessions, and the broker modules reach
+// it over the line (v1/line-host.mjs, rox's Rust broker plan 3.7). The
+// test is the same either way.
+//
 // The test taxpayer is made up (TIN 123-456-788, "Dela Cruz Jane").
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -23,6 +28,7 @@ import { after, test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const BROKER = process.env.ROX_BROKER_DIR;
+const RUST = process.env.ROX_BROKER_CMD;
 const BIN = process.env.BIR_MINI_APP_BIN;
 const skip = (!BROKER || !BIN) && "set ROX_BROKER_DIR and BIR_MINI_APP_BIN";
 const APPS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "mini-apps");
@@ -87,13 +93,20 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
   writeFileSync(manifestFile, JSON.stringify(signManifest(unsigned, publisher.seed), null, 2));
   const spec = { command: BIN, args: ["mcp"], env: { ...env, BIR_V1_MANIFEST: manifestFile } };
 
-  const plugins = createPlugins({
-    db: new DatabaseSync(":memory:"),
-    keys: keystore(`file:${join(dir, "keys")}`),
-    logDir: join(dir, "logs"),
-    trust: () => loadTrust(trustFile),
-  });
-  const sessions = createSessions(plugins);
+  const { plugins, sessions } = RUST
+    ? (await load("server/v1/line-host.mjs")).lineHost({
+      cmd: RUST, db: join(dir, "app.db"), logDir: join(dir, "logs"), trustFile, keystore: `file:${join(dir, "keys")}`,
+    })
+    : (() => {
+      const p = createPlugins({
+        db: new DatabaseSync(":memory:"),
+        keys: keystore(`file:${join(dir, "keys")}`),
+        logDir: join(dir, "logs"),
+        trust: () => loadTrust(trustFile),
+      });
+
+      return { plugins: p, sessions: createSessions(p) };
+    })();
   stops.push(() => plugins.stopAll());
 
   // ── install: the review, provision, verification ─────────────────────
@@ -238,9 +251,9 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     const card = await open("deadlines");
     assert.equal(await codeOf(sessions.call(envelope(card, "bir_profiles_list", {}))), "permission_denied");
     assert.equal(await codeOf(sessions.call(envelope(card, "bir_app_list_taxpayers", {}))), "permission_denied");
-    plugins.setTool(BIR, "bir_calendar_get", true);
+    await plugins.setTool(BIR, "bir_calendar_get", true);
     assert.equal(await codeOf(sessions.call(envelope(card, "bir_calendar_get", {}))), "disabled");
-    plugins.setTool(BIR, "bir_calendar_get", false);
+    await plugins.setTool(BIR, "bir_calendar_get", false);
     assert.equal(await codeOf(sessions.call(envelope(card, "bir_calendar_get", {}, generate().seed))), "bad_signature");
     const once = envelope(card, "bir_calendar_get", {});
     assert.equal((await sessions.call(once)).ok, true);
