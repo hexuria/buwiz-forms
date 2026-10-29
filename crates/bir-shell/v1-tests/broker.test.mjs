@@ -1,7 +1,7 @@
 // BIR as a Rox Mini App Protocol v1 plugin, under the real v1 broker.
 //
-// Imports Rox's broker modules (`server/v1/` of the grok-shell checkout in
-// ROX_BROKER_DIR) and does what Rox does: a publisher key and trust file of
+// Imports Rox's broker modules (`v1/` of rox/server's src/, or of a
+// grok-shell checkout's server/, in ROX_BROKER_DIR) and does what Rox does: a publisher key and trust file of
 // this run, BIR's manifest signed with it (`print-v1-manifest`, then the
 // broker's signManifest), inspect and install with a file keystore and an
 // in-memory db, then session opens and signed bridge calls from a fake Rox.
@@ -9,13 +9,13 @@
 // key, auth bypass of a debug build, dry-run filing) with HOME pointed at
 // the temp dir, so it never touches the owner's data, Keychain or ports.
 //
-//   ROX_BROKER_DIR=<grok-shell checkout> BIR_MINI_APP_BIN=<target>/debug/bir-mini-app \
+//   ROX_BROKER_DIR=<rox>/server BIR_MINI_APP_BIN=<target>/debug/bir-mini-app \
 //     node --test crates/bir-shell/v1-tests/broker.test.mjs
 //
 // The test taxpayer is made up (TIN 123-456-788, "Dela Cruz Jane").
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -31,7 +31,9 @@ const ROOT = "123456788";
 const TIN = `${ROOT}00000`;
 const TICKET = /^tkt_[0-9A-HJKMNP-TV-Z]{26}$/;
 
-const load = (path) => import(pathToFileURL(join(BROKER, path)).href);
+// The broker's code: src/ in rox/server, server/ in a grok-shell checkout.
+const CODE = BROKER && existsSync(join(BROKER, "src", "v1")) ? "src" : "server";
+const load = (path) => import(pathToFileURL(join(BROKER, path.replace(/^server\//, `${CODE}/`))).href);
 
 let dir;
 const stops = [];
@@ -98,7 +100,7 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
   const inspected = await plugins.inspect(spec);
   const review = inspected.review;
   await t.test("the install review lists every app's permissions and the routines' reads and writes", () => {
-    assert.ok(review.lines.includes("BIR 2.6.1 by Goldcoders"), review.lines.join("\n"));
+    assert.ok(review.lines.some((l) => /^BIR \d+\.\d+\.\d+ by Goldcoders$/.test(l)), review.lines.join("\n"));
     const lines = (id) => review.apps.find((a) => a.id === id).lines;
     assert.match(lines("forms")[0], /^Can call \d+ BIR tools: bir_ticket_subject, /);
     assert.ok(lines("forms").includes("Can open: BIR Tax Profile"));
@@ -112,8 +114,10 @@ test("BIR v1 under the Rox broker", { skip, timeout: 120_000 }, async (t) => {
     assert.deepEqual(review.routines, [
       "Routine 'BIR filing confirmations' reads via dev.goldcoders.google-workspace: gws_search_mail, gws_read_mail",
       "Routine 'BIR filing confirmations' may change BIR data without asking: bir_confirm_filing",
+      "Routine 'BIR filing confirmations' runs per chat with its own settings: taxpayers, forms",
       "Routine 'BIR payments (MyEG and banks)' reads via dev.goldcoders.google-workspace: gws_search_mail, gws_read_mail",
       "Routine 'BIR payments (MyEG and banks)' may change BIR data without asking: bir_record_payment",
+      "Routine 'BIR payments (MyEG and banks)' runs per chat with its own settings: taxpayers, forms",
     ]);
     for (const app of review.apps) assert.ok(!app.lines.join(" ").includes("bir_call"));
   });
