@@ -11,6 +11,7 @@
 //! | `BIR_SHELL_JANK_LOG=<path>` | where the jank log goes (default `~/Library/Logs/eBIRForms/jank.log` on macOS, `%LOCALAPPDATA%\eBIRForms\Logs\jank.log` on Windows, `$XDG_STATE_HOME/ebirforms/jank.log` on Linux); setting it turns the log on |
 //! | `BIR_SHELL_TRACE=1` | every frame, not only the slow ones, with its script renders and materializations, in the jank log |
 //! | `BIR_SHELL_SCROLL_BENCH=<pt per frame>` | the scroll bench (below); also the jank log |
+//! | `BIR_SHELL_TYPE_BENCH=<x>,<y>,<keys>` | the typing bench (below); also the jank log |
 //!
 //! # Jank log
 //!
@@ -54,6 +55,17 @@
 //! the longest gap, frames per second and materializations per second.
 //! `scripts/bench-shell-scroll.sh` builds, seeds, runs and reads it.
 //!
+//! # Typing bench
+//!
+//! `BIR_SHELL_TYPE_BENCH=<x>,<y>,<keys>` waits for the page to settle,
+//! clicks the window point `x,y` (logical pixels; a text box), then types
+//! `keys` through GPUI's own keystroke path (`Window::dispatch_keystroke`),
+//! one every `BIR_SHELL_TYPE_INTERVAL_MS` (default 150); `|` in `keys` is
+//! Tab. It writes, between `---- typing bench ----` and `==== typing end
+//! ====`: each key's latency from dispatch to the end of the next present,
+//! the frames while typing (and the debounced fill/validate after it), and
+//! the named host calls with their counts and times.
+//!
 //! GPUI clamps a scroll offset at layout, so a wheel event past the end of
 //! the form still re-renders the page: a distance longer than the form
 //! keeps measuring the per-event cost at the bottom.
@@ -69,8 +81,9 @@ use std::time::{Duration, Instant};
 use gpui_kit::profiler::{FrameEvent, FrameTiming, FrameTimingCollector};
 use gpui_kit::{
     AnyView, App, AppContext as _, Context, DispatchPhase, Entity, IntoElement, KeyDownEvent,
-    Modifiers, MouseDownEvent, MouseMoveEvent, ParentElement, PlatformInput, Render, ScrollDelta,
-    ScrollWheelEvent, Styled, TouchPhase, Window, WindowId, canvas, div, hsla, point, px,
+    Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement,
+    PlatformInput, Render, ScrollDelta, ScrollWheelEvent, Styled, TouchPhase, Window, WindowId,
+    canvas, div, hsla, point, px,
 };
 use gpui_shell::{HostArguments, HostResult, RuntimeMetrics, ShellRoot, ShellRuntime};
 
@@ -81,6 +94,16 @@ pub(crate) struct Config {
     trace: bool,
     jank_log: PathBuf,
     bench: Option<BenchConfig>,
+    typing: Option<TypeConfig>,
+}
+
+#[derive(Clone, Debug)]
+struct TypeConfig {
+    x: f32,
+    y: f32,
+    keys: String,
+    interval: Duration,
+    wait: Duration,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -114,12 +137,32 @@ pub(crate) fn config() -> Option<Config> {
         distance: number("BIR_SHELL_BENCH_DISTANCE").unwrap_or(12000.0),
         wait: Duration::from_millis(number("BIR_SHELL_BENCH_WAIT_MS").unwrap_or(6000.0) as u64),
     });
-    let on = fps || trace || bench.is_some() || log_override.is_some() || flag("BIR_SHELL_JANK");
+    let typing = std::env::var("BIR_SHELL_TYPE_BENCH").ok().and_then(|raw| {
+        let mut parts = raw.splitn(3, ',');
+        let x = parts.next()?.trim().parse().ok()?;
+        let y = parts.next()?.trim().parse().ok()?;
+        Some(TypeConfig {
+            x,
+            y,
+            keys: parts.next()?.to_string(),
+            interval: Duration::from_millis(
+                number("BIR_SHELL_TYPE_INTERVAL_MS").unwrap_or(150.0) as u64
+            ),
+            wait: Duration::from_millis(number("BIR_SHELL_BENCH_WAIT_MS").unwrap_or(6000.0) as u64),
+        })
+    });
+    let on = fps
+        || trace
+        || bench.is_some()
+        || typing.is_some()
+        || log_override.is_some()
+        || flag("BIR_SHELL_JANK");
     on.then(|| Config {
         fps,
         trace,
         jank_log: log_override.unwrap_or_else(default_log_path),
         bench,
+        typing,
     })
 }
 
@@ -320,6 +363,15 @@ fn clock() -> String {
     )
 }
 
+/// The typing bench while it runs.
+#[derive(Default)]
+struct TypingRun {
+    /// Keys dispatched whose frame has not been presented yet.
+    pending: VecDeque<Instant>,
+    latencies: Vec<f64>,
+    frames: Vec<Frame>,
+}
+
 /// The scroll bench while it runs.
 struct BenchRun {
     started: Instant,
@@ -351,6 +403,7 @@ struct Probe {
     panel: Vec<String>,
     log: JankLog,
     bench: Option<BenchRun>,
+    typing: Option<TypingRun>,
     /// The last frame that did any work, for the bench's settle check.
     last_busy: Instant,
 }
@@ -471,6 +524,17 @@ impl Probe {
         if let Some(bench) = self.bench.as_mut() {
             bench.materializations += frame.views_built;
             bench.frames.push(frame.clone());
+        }
+        if let Some(typing) = self.typing.as_mut() {
+            if let Some(end) = frame.end {
+                while typing.pending.front().is_some_and(|key| *key <= end) {
+                    let key = typing.pending.pop_front().unwrap_or(end);
+                    typing
+                        .latencies
+                        .push(end.duration_since(key).as_secs_f64() * 1000.0);
+                }
+            }
+            typing.frames.push(frame.clone());
         }
         self.recent.push_back(frame);
     }
@@ -615,6 +679,169 @@ impl Probe {
     }
 }
 
+impl Probe {
+    fn typing_summary(&mut self) {
+        let Some(run) = self.typing.take() else {
+            return;
+        };
+        let frames = &run.frames;
+        let (lat_p95, lat_worst) = percentile(run.latencies.iter().copied());
+        let lat_mean = run.latencies.iter().sum::<f64>() / run.latencies.len().max(1) as f64;
+        let (p95, worst) = percentile(frames.iter().map(|f| f.work));
+        let over = frames.iter().filter(|f| f.work > f.budget).count();
+        let total: f64 = frames.iter().map(|f| f.work + f.before).sum();
+        let renders: u64 = frames.iter().map(|f| f.renders).sum();
+        let views: u64 = frames.iter().map(|f| f.views_built).sum();
+        let script: f64 = frames.iter().map(|f| f.script).sum();
+        let build: f64 = frames.iter().map(|f| f.build).sum();
+        let layout: f64 = frames.iter().map(|f| f.layout + f.views).sum();
+        let paint: f64 = frames.iter().map(|f| f.paint).sum();
+        let mut calls: Vec<(&'static str, u32, f64, f64)> = Vec::new();
+        for frame in frames {
+            for (name, ms) in &frame.named {
+                match calls.iter_mut().find(|c| c.0 == *name) {
+                    Some(c) => {
+                        c.1 += 1;
+                        c.2 += ms;
+                        c.3 = c.3.max(*ms);
+                    }
+                    None => calls.push((name, 1, *ms, *ms)),
+                }
+            }
+        }
+        let calls: Vec<String> = calls
+            .iter()
+            .map(|(name, n, total, worst)| format!("{name} x{n} total {total:.1} worst {worst:.1}"))
+            .collect();
+        let lines = [
+            format!(
+                "typing: {} keys, key->present mean {lat_mean:.1} ms, p95 {lat_p95:.1} ms, worst {lat_worst:.1} ms",
+                run.latencies.len()
+            ),
+            format!(
+                "typing: {} frames, {over} over budget, frame p95 {p95:.1} ms, worst {worst:.1} ms, main thread {total:.0} ms",
+                frames.len()
+            ),
+            format!(
+                "typing: script {script:.1} ms ({renders} renders), build {build:.1} ms ({views} views), layout {layout:.1} ms, paint {paint:.1} ms"
+            ),
+            format!(
+                "typing: host {}",
+                if calls.is_empty() {
+                    "-".to_string()
+                } else {
+                    calls.join(", ")
+                }
+            ),
+            "==== typing end ====".to_string(),
+        ];
+        for line in lines {
+            self.log.write(&line);
+        }
+    }
+}
+
+/// Clicks the configured point, then types the keys, one per interval.
+async fn run_typing_bench(
+    config: TypeConfig,
+    probe: Rc<RefCell<Probe>>,
+    cx: &mut gpui_kit::AsyncWindowContext,
+) {
+    // Settle as the scroll bench does.
+    loop {
+        cx.background_executor()
+            .timer(Duration::from_millis(250))
+            .await;
+        let p = probe.borrow();
+        let waited = p.opened.elapsed();
+        if waited >= config.wait
+            && (p.last_busy.elapsed() >= Duration::from_millis(1000)
+                || waited >= config.wait + Duration::from_secs(10))
+        {
+            break;
+        }
+    }
+    let at = point(px(config.x), px(config.y));
+    let clicked = cx.update(|window, cx| {
+        let size = window.viewport_size();
+        probe.borrow_mut().log.write(&format!(
+            "typing bench window {:.0}x{:.0}",
+            f32::from(size.width),
+            f32::from(size.height)
+        ));
+        for input in [
+            PlatformInput::MouseMove(MouseMoveEvent {
+                position: at,
+                pressed_button: None,
+                modifiers: Modifiers::default(),
+            }),
+            PlatformInput::MouseDown(MouseDownEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+                first_mouse: false,
+            }),
+            PlatformInput::MouseUp(MouseUpEvent {
+                button: MouseButton::Left,
+                position: at,
+                modifiers: Modifiers::default(),
+                click_count: 1,
+            }),
+        ] {
+            window.dispatch_event(input, cx);
+        }
+    });
+    if clicked.is_err() {
+        return;
+    }
+    cx.background_executor()
+        .timer(Duration::from_millis(500))
+        .await;
+    {
+        let mut p = probe.borrow_mut();
+        p.collect();
+        let line = format!(
+            "---- typing bench at {:.0},{:.0}: {:?} every {} ms ----",
+            config.x,
+            config.y,
+            config.keys,
+            config.interval.as_millis()
+        );
+        p.log.write(&line);
+        p.typing = Some(TypingRun::default());
+    }
+    for key in config.keys.chars() {
+        let name = if key == '|' {
+            "tab".to_string()
+        } else {
+            key.to_string()
+        };
+        let Ok(keystroke) = gpui_kit::Keystroke::parse(&name) else {
+            continue;
+        };
+        if let Some(run) = probe.borrow_mut().typing.as_mut() {
+            run.pending.push_back(Instant::now());
+        }
+        if cx
+            .update(|window, cx| {
+                window.dispatch_keystroke(keystroke, cx);
+            })
+            .is_err()
+        {
+            return;
+        }
+        cx.background_executor().timer(config.interval).await;
+    }
+    // The debounced fill (300 ms) and the validation after it.
+    cx.background_executor()
+        .timer(Duration::from_millis(2000))
+        .await;
+    let mut p = probe.borrow_mut();
+    p.collect();
+    p.typing_summary();
+}
+
 /// p95 and worst of the values.
 fn percentile(values: impl Iterator<Item = f64>) -> (f64, f64) {
     let mut values: Vec<f64> = values.collect();
@@ -740,6 +967,7 @@ pub(crate) fn wrap<V: Render + 'static>(
         config.bench.map(|b| b.speed)
     ));
     let bench = config.bench;
+    let typing = config.typing.clone();
     let last_metrics = runtime.read_metrics();
     let probe = Rc::new(RefCell::new(Probe {
         config,
@@ -756,12 +984,21 @@ pub(crate) fn wrap<V: Render + 'static>(
         panel: vec!["frame monitor: waiting for frames".into()],
         log,
         bench: None,
+        typing: None,
         last_busy: Instant::now(),
     }));
     let frame = cx.new(|_| PerfFrame {
         inner,
         probe: probe.clone(),
     });
+    if let Some(typing) = typing {
+        let probe = probe.clone();
+        window
+            .spawn(cx, async move |cx| {
+                run_typing_bench(typing, probe, cx).await
+            })
+            .detach();
+    }
     let weak = frame.downgrade();
     window
         .spawn(cx, async move |cx| {
@@ -848,9 +1085,13 @@ fn start_scroll_bench(config: BenchConfig, probe: Rc<RefCell<Probe>>, window: &m
     {
         let mut p = probe.borrow_mut();
         p.collect();
+        let size = window.viewport_size();
         p.log.write(&format!(
-            "---- scroll bench {:.0}pt/frame, {:.0}pt down and back ----",
-            config.speed, config.distance
+            "---- scroll bench {:.0}pt/frame, {:.0}pt down and back, window {:.0}x{:.0} ----",
+            config.speed,
+            config.distance,
+            f32::from(size.width),
+            f32::from(size.height)
         ));
         p.bench = Some(BenchRun {
             started: Instant::now(),
