@@ -9,6 +9,7 @@
 #   scripts/bench-shell-scroll.sh                 # 12 parts, 40 pt/frame
 #   PARTS="1 4 12" SPEEDS="40 160" scripts/bench-shell-scroll.sh
 #   BIN=path/to/bir-shell scripts/bench-shell-scroll.sh   # skip the build
+#   SIZE=1440x900 (default) is the window size under test
 #
 # Everything is isolated: a throwaway HOME, database and key, never the
 # keychain or the real data. The window goes to AeroSpace workspace
@@ -22,6 +23,7 @@ PARTS="${PARTS:-12}"
 SPEEDS="${SPEEDS:-40}"
 FORM="${FORM:-1702RT/2025/0}"
 WORKSPACE="${BIR_WORKSPACE:-2}"
+SIZE="${SIZE:-1440x900}"
 OUT="${OUT:-target/bench-shell-scroll}"
 MANIFEST=crates/bir-shell/Cargo.toml
 KEY=0000000000000000000000000000000000000000000000000000000000000000
@@ -59,6 +61,7 @@ for parts in $PARTS; do
         # First launch: help desk mode with a throwaway PIN, then the form.
         route="setup=helpdesk;setuppin=1357;keydone;wait=2000;tp=000123453;form=$FORM;parts=0-$last"
         isolated BIR_SHELL_START="$route" BIR_SHELL_SCROLL_BENCH="$speed" BIR_SHELL_JANK_LOG="$log" \
+            BIR_SHELL_WINDOW_SIZE="$SIZE" \
             ${BIR_SHELL_FPS:+BIR_SHELL_FPS=$BIR_SHELL_FPS} "$TMP/bin/bir-shell" >"$TMP/app.out" 2>&1 &
         pid=$!
         moved=0
@@ -67,6 +70,9 @@ for parts in $PARTS; do
                 id=$(aerospace list-windows --all --format '%{window-id}|%{app-pid}' 2>/dev/null | awk -F'|' -v p="$pid" '$2==p{print $1; exit}')
                 if [ -n "$id" ]; then
                     aerospace move-node-to-workspace --window-id "$id" "$WORKSPACE" >/dev/null 2>&1 || true
+                    # Floating, so tiling cannot change the size under test
+                    # (BIR_SHELL_WINDOW_SIZE re-applies it for a few seconds).
+                    aerospace layout floating --window-id "$id" >/dev/null 2>&1 || true
                     moved=1
                 fi
             fi
@@ -77,6 +83,6 @@ for parts in $PARTS; do
         kill "$pid" 2>/dev/null || true
         wait "$pid" 2>/dev/null || true
         echo "== $FORM, $parts part(s) open, $speed pt/frame ($log)"
-        grep -E 'bench:|frame gaps:|bench end' "$log" | cut -c14- || echo "   no summary: the bench did not finish"
+        grep -E 'scroll bench|bench:|frame gaps:|bench end' "$log" | cut -c14- || echo "   no summary: the bench did not finish"
     done
 done
