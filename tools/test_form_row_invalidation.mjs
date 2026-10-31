@@ -43,7 +43,7 @@ function mount(e){if(e?.view && e.dirty&&!e.released){e.dirty=false;const old=ow
 const InputState={new({value=""}={}){let text=value;return {value:()=>text,set_value:v=>{text=v;},on(){},release(){return true;}};}};
 const contextVM=vm.createContext({console,Map,Set,JSON,window:{viewport_size:()=>({width:1400,height:900})}});
 function mock(name,exports){const m=new vm.SyntheticModule(Object.keys(exports),function(){for(const [k,v]of Object.entries(exports))this.setExport(k,v);},{context:contextVM,identifier:name});return m;}
-const kit=mock("gpui-kit",{div:element,svg:element,View});
+const kit=mock("gpui-kit",{div:element,svg:element,View,list:(_id,n,_key,render)=>{const el=element();for(let i=0;i<n;i++)el.child(render(i));return el;}});
 const base=mock("gpui-base",{InputState,CalendarState:{},Popup:{new:element}});
 const components=mock("gpui-component",{Spinner:{new:element}});
 const uiExports={tokens:()=>new Proxy({},{get:()=>"#000"}),SPACE:[0,4,8,12,16,20,24],RADIUS:{},SIZE:{validationLine:18},BREAK:{formNav:760}};

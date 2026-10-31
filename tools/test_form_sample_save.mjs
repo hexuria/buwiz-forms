@@ -61,7 +61,7 @@ uiExports.TextField = (_cx, state, opts = {}) => { fields.set(opts.id, state); r
 uiExports.Overlay = (_cx, id, card, onDismiss) => { dismissers.set(id, onDismiss); return element().child(card); };
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM, identifier: "form_page.js" });
 await mod.link((s) => ({
-  "gpui-kit": mock("gpui-kit", { div: element, svg: element, View }),
+  "gpui-kit": mock("gpui-kit", { div: element, svg: element, View, list: (_id, n, _key, render) => { const el = element(); for (let i = 0; i < n; i++) el.child(render(i)); return el; } }),
   "gpui-base": mock("gpui-base", { InputState, CalendarState: {}, Popup: { new: element } }),
   "gpui-component": mock("gpui-component", { Spinner: { new: element } }),
   "./ui.js": mock("./ui.js", uiExports),
