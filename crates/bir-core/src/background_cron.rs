@@ -24,6 +24,16 @@ static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 /// bir-core and bir-desktop cron tests keep filing. The shell sets it true
 /// before the worker starts.
 static SUBMISSION_PAUSED: AtomicBool = AtomicBool::new(false);
+/// Whether this process's worker holds its database's worker lease (always
+/// true for an in-memory database once the worker runs).
+static HOLDS_WORKER_LEASE: AtomicBool = AtomicBool::new(false);
+
+/// Whether this process runs the background jobs right now: its worker
+/// holds the database's worker lease. False before the worker starts, while
+/// another BIR app holds the lease, while paused, and after it stopped.
+pub fn holds_worker_lease() -> bool {
+    HOLDS_WORKER_LEASE.load(Ordering::SeqCst)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WakeDispatchStatus {
@@ -94,37 +104,130 @@ pub(crate) fn wake_with_status() -> WakeDispatchStatus {
     }
 }
 
+/// Which part this process plays in running the background jobs for its
+/// database file (see [`crate::db::WorkerLease`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkerRole {
+    /// Opened the database; has not tried for the lease yet.
+    Idle,
+    /// Holds the lease: runs the filing queue, cron and calendar sync.
+    Holder,
+    /// Another process holds it; this one only reads and writes data.
+    Follower,
+}
+
+/// Run the background jobs (queued filings, their retries, inbox polls,
+/// scheduled jobs, calendar sync) until [`request_shutdown`].
+///
+/// Several processes can have one database file open (bir-shell,
+/// bir-mini-app, painted bir, bir-headless). Only the one holding the
+/// file's worker lease runs the jobs: the first process to start its worker
+/// takes it and keeps it until it quits; the others are followers and try
+/// again every [`crate::db::WORKER_LEASE_RETRY`] (or on a local wake), so
+/// one of them takes over when the holder quits. bir-mini-app and
+/// bir-headless use this same rule, so they hold the lease only when they
+/// started first. An in-memory database has no file and always runs.
 pub async fn start_cron_jobs(db: Arc<Mutex<Database>>) {
     info!("Background cron engine started");
 
     let (tx, mut rx) = mpsc::channel(1);
     let _ = WAKE_TX.set(tx);
 
+    let lease_path = db
+        .lock()
+        .ok()
+        .and_then(|guard| guard.path().map(std::path::Path::to_path_buf));
+    let mut lease: Option<crate::db::WorkerLease> = None;
+    let mut role = WorkerRole::Idle;
+
     loop {
         if shutdown_requested() {
             break;
         }
         if submission_paused() {
+            // Paused (signed out): let another process run the jobs.
+            if lease.take().is_some() {
+                info!("worker lease released while filing is paused");
+                role = WorkerRole::Idle;
+            }
+            HOLDS_WORKER_LEASE.store(false, Ordering::SeqCst);
             tokio::select! {
                 _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
                 _ = rx.recv() => {}
             }
             continue;
         }
+        if let Some(path) = &lease_path
+            && lease.is_none()
+        {
+            match crate::db::WorkerLease::try_acquire(path) {
+                Ok(Some(taken)) => {
+                    lease = Some(taken);
+                    info!(
+                        previous = ?role,
+                        "worker lease taken: this process runs the filing queue, cron and calendar sync"
+                    );
+                    role = WorkerRole::Holder;
+                }
+                Ok(None) | Err(_) => {
+                    if role != WorkerRole::Follower {
+                        info!(
+                            "worker lease held by another BIR app: this process is a follower and retries every {}s",
+                            crate::db::WORKER_LEASE_RETRY.as_secs()
+                        );
+                        role = WorkerRole::Follower;
+                    }
+                    tokio::select! {
+                        _ = tokio::time::sleep(crate::db::WORKER_LEASE_RETRY) => {}
+                        _ = rx.recv() => {}
+                    }
+                    continue;
+                }
+            }
+        }
+        HOLDS_WORKER_LEASE.store(true, Ordering::SeqCst);
         // We run a tick, then wait for either 60 seconds or a wake signal.
         run_queue_tick(db.clone()).await;
         if shutdown_requested() {
             break;
         }
 
+        // Another process's writes (a return queued in bir-mini-app while
+        // this one holds the lease) cannot wake this loop; a moved
+        // `data_version` runs the next tick early instead.
+        let seen = external_data_version(&db);
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {}
             _ = rx.recv() => {
                 info!("Queue explicitly woken up by a wake signal.");
             }
+            _ = external_write(&db, seen) => {
+                info!("Queue woken up by another process's write.");
+            }
         }
     }
+    drop(lease);
+    HOLDS_WORKER_LEASE.store(false, Ordering::SeqCst);
     info!("Background cron engine stopped");
+}
+
+/// `data_version` of the shared connection, without waiting on its lock.
+fn external_data_version(db: &Arc<Mutex<Database>>) -> Option<i32> {
+    db.try_lock().ok().and_then(|guard| guard.data_version())
+}
+
+/// Resolves once another connection has committed since `seen` (checked
+/// every five seconds). Never resolves when the version cannot be read.
+async fn external_write(db: &Arc<Mutex<Database>>, seen: Option<i32>) {
+    let Some(seen) = seen else {
+        return std::future::pending().await;
+    };
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        if external_data_version(db).is_some_and(|now| now != seen) {
+            return;
+        }
+    }
 }
 
 /// Runs a single iteration of the background job queue.

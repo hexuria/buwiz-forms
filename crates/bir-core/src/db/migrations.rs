@@ -12,8 +12,63 @@ const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
 const NO_LONGER_VALID_MIGRATION_SUGGESTION_REASON: &str =
     "No longer suggested by the confirmed effective profile; review required";
 
+/// The schema version this build migrates to.
+#[cfg(test)]
+pub(crate) fn current_version() -> i32 {
+    CURRENT_MIGRATION_VERSION
+}
+
+/// Whether the file is older than this build (its migrations have not run).
+pub(crate) fn needs_migration(conn: &Connection) -> Result<bool, DbError> {
+    let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    Ok(version < CURRENT_MIGRATION_VERSION)
+}
+
+/// Bring the schema up to date in one `BEGIN EXCLUSIVE` transaction.
+///
+/// The version is read inside it, so when two processes open a new file
+/// together the second one finds the first one's work done and only runs
+/// the idempotent heals. A failure rolls everything back.
 pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch("BEGIN EXCLUSIVE")?;
+    match apply_migrations(conn) {
+        Ok(()) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(())
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK");
+            Err(error)
+        }
+    }
+}
+
+/// Files whose schema was built from nothing, for
+/// `migrations_run_once_under_concurrency`.
+#[cfg(test)]
+static FRESH_MIGRATIONS: std::sync::Mutex<Vec<std::path::PathBuf>> =
+    std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+pub(crate) fn fresh_migrations_of(path: &std::path::Path) -> usize {
+    FRESH_MIGRATIONS
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|recorded| recorded.as_path() == path)
+        .count()
+}
+
+fn apply_migrations(conn: &Connection) -> Result<(), DbError> {
     let mut version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+
+    #[cfg(test)]
+    if version == 0
+        && let Some(file) = conn.path().filter(|file| !file.is_empty())
+        && let Ok(file) = std::fs::canonicalize(file)
+    {
+        FRESH_MIGRATIONS.lock().unwrap().push(file);
+    }
 
     if version == 0 {
         // Check if this is an existing unversioned database (legacy)
@@ -3792,7 +3847,8 @@ mod tests {
 
         let db = crate::db::Database {
             conn,
-            _owner_lock: None,
+            path: None,
+            _open_lock: None,
         };
         let taxpayers = db.list_taxpayers().unwrap();
         let summary: Vec<_> = taxpayers
