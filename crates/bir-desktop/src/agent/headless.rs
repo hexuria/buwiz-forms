@@ -4,8 +4,12 @@
 //! `shutdown` / `logs`, `from_env` + `spawn_host`, no GPU window. Opens
 //! [`bir_core::db::default_database_path`] (or `BIR_DATABASE_PATH` in CI), not
 //! `Database::open_ephemeral()`. Starts the same in-process SFTP submission cron as painted `bir`.
-//! There is no protocol `Op::Yield`. Exclusivity is TCP bind + live-DB owner
-//! lock. `serve --wait` (also `bir-headless --wait`) polls until both are free.
+//! There is no protocol `Op::Yield`. Exclusivity is the TCP bind only: the
+//! database is shared with painted bir, bir-shell and bir-mini-app (SQLite
+//! WAL), and the background jobs run in whichever process holds the file's
+//! worker lease (the first to start; this daemon follows when a desktop app
+//! was first). `serve --wait` (also `bir-headless --wait`) polls until the
+//! bind is free.
 //! `serve --detach` backgrounds the daemon (Docker `-d`); `logs --follow`
 //! attaches to the logfile.
 
@@ -35,8 +39,8 @@ use crate::agent::headless_daemon;
 #[derive(Parser, Debug)]
 #[command(name = "bir-headless")]
 struct Cli {
-    /// Poll until bind and the live-DB owner lock are free, then serve.
-    /// Without this flag, a busy bind or lock exits immediately.
+    /// Poll until the bind is free (and the database opens), then serve.
+    /// Without this flag, a busy bind exits immediately.
     #[arg(long, global = true)]
     wait: bool,
     /// Background `serve` (Docker `-d`). Print pid + log path and exit.
@@ -110,14 +114,15 @@ fn run_cli() -> Result<(), ExitCode> {
 
 /// Open the live (or `BIR_DATABASE_PATH`) SQLCipher database. Never ephemeral.
 ///
-/// Uses [`db::open_serve_database`] (`Database::open` + exclusive owner lock),
-/// not `open_or_recreate`: a daemon must not quarantine a taxpayer DB.
+/// Uses [`db::open_serve_database`] (`Database::open`, shared with the other
+/// BIR apps), not `open_or_recreate`: a daemon must not quarantine a
+/// taxpayer DB.
 pub fn open_serve_database() -> Result<(Database, std::path::PathBuf), String> {
     db::open_serve_database().map_err(format_serve_open_error)
 }
 
 fn format_serve_open_error(error: db::DbError) -> String {
-    if matches!(error, db::DbError::LiveDatabaseInUse(_)) {
+    if matches!(error, db::DbError::MaintenanceBusy(_)) {
         error.to_string()
     } else {
         format!(
@@ -135,18 +140,18 @@ pub fn bind_failure_message(addr: SocketAddr, error: &std::io::Error) -> String 
             "gpui-agent bind {addr} is in use. Quit painted `bir` (in-process mailbox) \
              or this `bir-headless` instance, or set GPUI_AGENT_ADDR. Two AgentHosts \
              must not share a bind (GUI embed vs headless). \
-             `bir-headless serve --wait` polls until the port and live-DB lock are free."
+             `bir-headless serve --wait` polls until the port is free."
         )
     } else {
         format!("gpui-agent failed to bind {addr}: {error}")
     }
 }
 
-/// Why `serve` cannot start yet. No protocol `Op::Yield`.
+/// Why `serve` cannot start yet. No protocol `Op::Yield`. Another process
+/// with the database open is not a blocker: the file is shared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServeBlocker {
     BindInUse,
-    DatabaseInUse,
 }
 
 /// Occupy `addr` without `listen`.
@@ -186,28 +191,13 @@ impl PortProbe {
     }
 }
 
-/// Probe bind then the live-DB sidecar lock. Does not keep either.
+/// Probe the bind. Does not keep it.
 pub fn serve_blocker(addr: SocketAddr) -> Result<Option<ServeBlocker>, String> {
     match PortProbe::bind(addr) {
-        Ok(_) => {}
-        Err(error) if error.kind() == ErrorKind::AddrInUse => {
-            return Ok(Some(ServeBlocker::BindInUse));
-        }
-        Err(error) => return Err(format!("gpui-agent failed to bind {addr}: {error}")),
+        Ok(_) => Ok(None),
+        Err(error) if error.kind() == ErrorKind::AddrInUse => Ok(Some(ServeBlocker::BindInUse)),
+        Err(error) => Err(format!("gpui-agent failed to bind {addr}: {error}")),
     }
-    match db::try_acquire_live_owner_lock(&db::app_database_path()) {
-        Ok(lock) => drop(lock),
-        Err(db::DbError::LiveDatabaseInUse(_)) => {
-            return Ok(Some(ServeBlocker::DatabaseInUse));
-        }
-        Err(error) => {
-            return Err(format!(
-                "failed to probe live DB lock {}: {error}",
-                db::app_database_path().display()
-            ));
-        }
-    }
-    Ok(None)
 }
 
 /// If `wait` is false, the first blocker is an error. If true, poll until clear.
@@ -223,9 +213,6 @@ pub fn wait_until_unblocked(addr: SocketAddr, wait: bool) -> Result<(), String> 
                         ServeBlocker::BindInUse => {
                             eprintln!("waiting for bind {addr} …")
                         }
-                        ServeBlocker::DatabaseInUse => {
-                            eprintln!("waiting for live DB owner lock …")
-                        }
                     }
                     last = Some(blocker);
                     last_print = Instant::now();
@@ -237,9 +224,6 @@ pub fn wait_until_unblocked(addr: SocketAddr, wait: bool) -> Result<(), String> 
                     addr,
                     &std::io::Error::from(ErrorKind::AddrInUse),
                 ));
-            }
-            Some(ServeBlocker::DatabaseInUse) => {
-                return Err(db::DbError::LiveDatabaseInUse(db::app_database_path()).to_string());
             }
         }
     }
@@ -301,7 +285,7 @@ fn detach_serve(wait: bool) -> Result<(), ExitCode> {
         }
         if let Err(error) = wait_until_unblocked(config.addr, false) {
             eprintln!("{error}");
-            return Err(ExitCode::from(if error.contains("already open") {
+            return Err(ExitCode::from(if error.contains("is busy") {
                 1
             } else {
                 2
@@ -389,8 +373,8 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         // leave the next listener unable to accept.
         let (opened, path) = match open_serve_database() {
             Ok(opened) => opened,
-            Err(error) if wait && error.contains("already open") => {
-                eprintln!("waiting for live DB owner lock …");
+            Err(error) if wait && error.contains("is busy") => {
+                eprintln!("waiting for the database (another BIR app is setting it up) …");
                 thread::sleep(Duration::from_millis(200));
                 continue;
             }
@@ -488,12 +472,12 @@ fn serve(wait: bool) -> Result<(), ExitCode> {
         }
         eprintln!("delivery: semantic only (virtual_unavailable — no GPUI event pipeline)");
         eprintln!(
-            "database: {} (default_database_path unless BIR_DATABASE_PATH; exclusive owner lock; not ephemeral)",
+            "database: {} (default_database_path unless BIR_DATABASE_PATH; shared with other BIR apps; not ephemeral)",
             path.display()
         );
         eprintln!(
             "BIR: no GPU · screenshot_unavailable · form.print errors · in-process SFTP cron. \
-             Single bind + single live-DB owner. `serve --wait` resumes after GUI quit. \
+             Single bind; the database is shared and the cron runs in the worker-lease holder. \
              No Op::Yield. launchd KeepAlive is optional."
         );
 
@@ -730,11 +714,15 @@ mod tests {
                     .filter_map(|entry| entry.ok())
                     .any(|entry| entry.file_name().to_string_lossy().contains("corrupt"));
                 assert!(!corrupt, "headless must not open_or_recreate/quarantine");
-                let second = match open_serve_database() {
-                    Ok(_) => panic!("exclusive live owner"),
-                    Err(message) => message,
-                };
-                assert!(second.contains("already open"), "{second}");
+                let (second, _) = open_serve_database()
+                    .expect("a second process shares the live file, no exclusive owner");
+                second
+                    .set_setting("second", "writes")
+                    .expect("second writes");
+                assert_eq!(
+                    db.get_setting("second").expect("read"),
+                    Some("writes".into())
+                );
             },
         );
     }
@@ -761,14 +749,10 @@ mod tests {
 
     #[test]
     fn wait_until_unblocked_binds_after_port_released() {
-        // `serve_blocker` also probes the live-DB owner lock at
-        // `app_database_path()`, which is process-global. The sibling tests
-        // below point `BIR_DATABASE_PATH` at their own temp files and hold that
-        // lock for a moment; without a path of its own this test read theirs
-        // mid-flight, waited on their lock, and timed out — and on a developer
-        // machine with no `BIR_DATABASE_PATH` it probed the real database.
-        // `temp_env` serialises env-touching tests through one mutex, so
-        // running inside it also keeps the siblings from overlapping this one.
+        // Point `BIR_DATABASE_PATH` at a temp file so nothing here can reach
+        // the real database. `temp_env` serialises env-touching tests through
+        // one mutex, so running inside it also keeps the siblings from
+        // overlapping this one.
         let directory = tempfile::tempdir().expect("temp dir");
         let path = directory.path().join("port_only.db");
         let path_s = path.to_str().expect("utf8 path").to_string();
@@ -796,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    fn wait_until_unblocked_opens_after_owner_lock_released() {
+    fn wait_until_unblocked_does_not_wait_for_a_database_open_elsewhere() {
         let directory = tempfile::tempdir().expect("temp dir");
         let path = directory.path().join("wait_lock.db");
         let path_s = path.to_str().expect("utf8 path");
@@ -806,21 +790,26 @@ mod tests {
                 ("BIR_DATABASE_PATH", Some(path_s)),
             ],
             || {
-                let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
+                // Painted bir (or bir-shell) has the file open, and an older
+                // build still holds its life-long owner lock.
+                let other = Database::open(&path).expect("another app has the file open");
+                let legacy = std::fs::OpenOptions::new()
+                    .create(true)
+                    .truncate(false)
+                    .write(true)
+                    .open(directory.path().join("wait_lock.db.owner.lock"))
+                    .expect("legacy owner lock file");
+                legacy.try_lock().expect("older build's owner lock");
                 let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-                let refused = wait_until_unblocked(addr, false).expect_err("busy lock");
-                assert!(refused.contains("already open"), "{refused}");
-                let (tx, rx) = std::sync::mpsc::channel();
-                let waiter = thread::spawn(move || {
-                    tx.send(wait_until_unblocked(addr, true)).ok();
-                });
-                thread::sleep(Duration::from_millis(250));
-                drop(lock);
-                let result = rx
-                    .recv_timeout(Duration::from_secs(5))
-                    .expect("waiter finished after lock release");
-                assert!(result.is_ok(), "{result:?}");
-                waiter.join().expect("waiter thread");
+                wait_until_unblocked(addr, false).expect("only the bind can block serve");
+                let (serving, _) = open_serve_database().expect("serve opens the shared file");
+                other
+                    .set_setting("from-gui", "1")
+                    .expect("the other app writes");
+                assert_eq!(
+                    serving.get_setting("from-gui").expect("read"),
+                    Some("1".into())
+                );
             },
         );
     }
@@ -905,7 +894,9 @@ mod tests {
                 ("GPUI_AGENT_CONNECT_ID", Some("bir-headless-wait-test")),
             ],
             || {
-                let lock = db::try_acquire_live_owner_lock(&path).expect("hold owner lock");
+                // Another BIR app has the database open the whole time: only
+                // the port holds serve back.
+                let other = Database::open(&path).expect("another app has the file open");
                 let server = thread::spawn(|| serve(true));
                 thread::sleep(Duration::from_millis(300));
                 // Do not TCP-connect while `holder` (or a listening probe)
@@ -923,7 +914,6 @@ mod tests {
                     !server.is_finished(),
                     "serve --wait exited while the placeholder still held the port"
                 );
-                drop(lock);
                 // Abort the placeholder listen socket. A graceful close on
                 // Windows can leave the next listener bound but deaf.
                 let _ = socket2::SockRef::from(&holder).set_linger(Some(Duration::from_secs(0)));
@@ -980,6 +970,7 @@ mod tests {
                 );
                 let joined = server.join().expect("serve thread");
                 assert!(joined.is_ok(), "{joined:?}");
+                drop(other);
             },
         );
     }

@@ -214,12 +214,6 @@ pub fn run_gui() {
                         Ok(opened) => opened,
                         Err(error) => {
                             eprintln!("{error}");
-                            if matches!(error, bir_core::db::DbError::LiveDatabaseInUse(_)) {
-                                eprintln!(
-                                    "Shut bir-headless first (`bir-headless shutdown`), then open painted bir. \
-                                     Reopen is offline verification of the shared DB, not live sync."
-                                );
-                            }
                             std::process::exit(1);
                         }
                     };
@@ -387,7 +381,7 @@ pub fn run_gui() {
                 } else {
                     window.on_window_should_close(cx, |_, _cx| {
                         // macOS/Windows: closing the window hides, it does not quit.
-                        // Bind + live-DB owner lock stay held until a real quit
+                        // The agent bind and the worker lease stay held until a real quit
                         // (request_application_quit): tray Quit, `gpui-agent
                         // shutdown`, or on macOS Cmd+Q / the menu's Quit unless
                         // "Cmd+Q hides to menu bar" is on. Alt+F4 (Windows) hides.

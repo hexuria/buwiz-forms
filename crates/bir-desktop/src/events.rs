@@ -147,16 +147,14 @@ pub fn start_macos_notification_listener(cx: &mut gpui::Context<crate::app::AppS
 /// Spawns a background task that periodically checks the SQLite `data_version`
 /// to detect if an external process (like `bir_daemon`) modified the database.
 ///
-/// On macOS: This serves as a fallback safety net alongside the instant notification listener.
-///           The interval is increased to 5s since notifications handle the fast path.
-/// On other platforms: This is the primary detection mechanism (1s interval).
+/// Every 1s on every platform: the distributed notification on macOS only
+/// comes from a background worker's tick, while other BIR apps sharing the
+/// file (bir-shell, bir-mini-app, bir-headless) save without posting it, and
+/// their saves should show here within about a second.
 pub fn start_db_watcher(db: Arc<Mutex<Database>>, cx: &mut gpui::Context<crate::app::AppState>) {
     let bus = cx.global::<GlobalEventBus>().0.clone();
 
-    #[cfg(target_os = "macos")]
-    let poll_interval_ms = 5000; // 5s fallback on macOS (notifications handle the fast path)
-    #[cfg(not(target_os = "macos"))]
-    let poll_interval_ms = 1000; // 1s on Linux/Windows (primary mechanism)
+    let poll_interval_ms = 1000;
 
     cx.spawn(async move |_app_state, cx| {
         let mut last_version: Option<i32> = None;
