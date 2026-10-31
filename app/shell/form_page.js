@@ -678,6 +678,22 @@ export class FormPageActions {
     }
   }
 
+  /**
+   * One retained row, refreshed alone: what a hover moving from one row to
+   * another changes (only those two rows read `hoverItem`).
+   */
+  refreshRow(id) {
+    const s = this.state;
+    const row = id && s?.rowViews?.get(id);
+    if (!row || !s.openParts.has(row.props.pi)) return;
+    const props = { ...row.props, width: this.rowWidth() };
+    const snapshot = this.rowSnapshot(props);
+    if (snapshot === row.snapshot) return;
+    row.props = props;
+    row.snapshot = snapshot;
+    row.entity.set_props(props);
+  }
+
   refreshLayout() {
     if (this.state && this.state.rowLayoutWidth !== this.rowWidth()) this.refreshRows();
   }
@@ -2826,8 +2842,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
       el.on_hover((hovered, cx) => {
         const next = hovered ? id : s.hoverItem === id ? null : s.hoverItem;
         if (next === s.hoverItem) return;
+        const was = s.hoverItem;
         s.hoverItem = next;
-        ui.refreshRows();
+        ui.refreshRow(was);
+        ui.refreshRow(next);
         cx.notify();
       }),
     )
