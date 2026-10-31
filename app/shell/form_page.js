@@ -356,8 +356,9 @@ export class FormPageActions {
       guided: false,
     };
     if (!schema) return;
+    const s0 = this.state;
     this.state.checkButton = {
-      entity: cx.new(FormCheckButton, viewProps({ ui: this, state: this.state })),
+      entity: cx.new(FormCheckButton, viewProps(() => ({ ui: this, state: s0 }))),
       checking: false,
     };
     cx.spawn(async (acx) => {
@@ -576,11 +577,9 @@ export class FormPageActions {
         }
         if (!s.rowViews.has(id)) {
           const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
-          s.rowViews.set(id, {
-            props,
-            snapshot: this.rowSnapshot(props),
-            entity: cx.new(FormItemView, viewProps(props)),
-          });
+          const row = { props, snapshot: this.rowSnapshot(props) };
+          row.entity = cx.new(FormItemView, viewProps(() => row.props));
+          s.rowViews.set(id, row);
         }
       });
       this.refreshRows();
@@ -751,23 +750,32 @@ export class FormPageActions {
   makeSlots(cx) {
     const s = this.state;
     if (!s?.schema || s.slots || !cx?.new) return;
-    const props = (extra) => viewProps({ ui: this, state: s, gen: 0, ...extra });
+    const props = (extra) => viewProps(() => ({ ui: this, state: s, ...extra }));
     s.slots = {
-      gen: 0,
       head: cx.new(FormHeadView, props({})),
       parts: s.schema.parts.map((_p, pi) => cx.new(FormPartHeadView, props({ pi }))),
       folds: s.schema.parts.map((_p, pi) => cx.new(FormFoldView, props({ pi }))),
+      sigs: [],
     };
   }
 
-  /** Mark every slot for a fresh render (cheap: only the ones on screen render). */
+  /**
+   * Mark the slots for a fresh render: the head always (it reads much of the
+   * page), a part's header and fold when what they show changed.
+   */
   refreshSlots() {
     const s = this.state;
     if (!s?.slots) return;
-    const gen = ++s.slots.gen;
-    s.slots.head.set_props(viewProps({ ui: this, state: s, gen }));
-    s.slots.parts.forEach((slot, pi) => slot.set_props(viewProps({ ui: this, state: s, gen, pi })));
-    s.slots.folds.forEach((slot, pi) => slot.set_props(viewProps({ ui: this, state: s, gen, pi })));
+    s.slots.head.set_props(REDRAW);
+    s.schema.parts.forEach((p, pi) => {
+      const tucked = this.tuckedItems(pi);
+      const flagged = tucked.map((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors?.[`${pi}:${ii}`] || "");
+      const sig = JSON.stringify([s.openParts.has(pi), s.profileOpen.has(pi), s.profile.size, s.editable, tucked, flagged, s.editFocus.has(`fold-${pi}`)]);
+      if (s.slots.sigs[pi] === sig) return;
+      s.slots.sigs[pi] = sig;
+      s.slots.parts[pi].set_props(REDRAW);
+      s.slots.folds[pi].set_props(REDRAW);
+    });
   }
 
   /**
@@ -798,7 +806,7 @@ export class FormPageActions {
       if (snapshot === row.snapshot) continue;
       row.props = props;
       row.snapshot = snapshot;
-      row.entity.set_props(viewProps(props));
+      row.entity.set_props(REDRAW);
     }
   }
 
@@ -815,7 +823,7 @@ export class FormPageActions {
     if (snapshot === row.snapshot) return;
     row.props = props;
     row.snapshot = snapshot;
-    row.entity.set_props(viewProps(props));
+    row.entity.set_props(REDRAW);
   }
 
   refreshLayout() {
@@ -828,7 +836,7 @@ export class FormPageActions {
     const check = this.state.checkButton;
     if (check && check.checking !== this.state.checking) {
       check.checking = this.state.checking;
-      check.entity.set_props(viewProps({ ui: this, state: this.state }));
+      check.entity.set_props(REDRAW);
     }
     const snapshot = this.chromeSnapshot();
     if (snapshot === this.state.chromeSnapshot) return;
@@ -2750,19 +2758,20 @@ function datePicker(cx, ui, id, date, row = id) {
 }
 
 /**
- * A retained view's props, read through a function. Before each set_props,
- * gpui-shell checkpoints everything reachable from a view that has `update`
- * (so a throwing update can be rolled back); props that hold the page state
- * made that walk cover the whole application, several milliseconds per call
- * and per changed row on every fill. A function's captures are not walked.
+ * A retained view's props, read through `get()` when it renders, so the
+ * page changes them in place and `set_props(REDRAW)` only marks the view for
+ * a fresh render. The views have no `update`: before calling one, gpui-shell
+ * checkpoints everything reachable from the view (so a throwing update can
+ * be rolled back), and props holding the page state made that walk cover the
+ * whole application on every changed row of every fill.
  */
-function viewProps(props) {
-  return { get: () => props };
+function viewProps(read) {
+  return { get: read };
 }
+const REDRAW = {};
 
 class FormCheckButton extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
     const { ui, state: s } = this.props.get();
     if (s !== ui.state) return div();
@@ -2778,7 +2787,6 @@ class FormCheckButton extends View {
 /** The page's head (title, actions, taxpayer bar, notes): the lazy list's first item. */
 class FormHeadView extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
     const { ui, state } = this.props.get();
     if (state !== ui.state) return div();
@@ -2790,7 +2798,6 @@ class FormHeadView extends View {
 /** A part card's header in the lazy list. */
 class FormPartHeadView extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
     const { ui, state, pi } = this.props.get();
     if (state !== ui.state) return div();
@@ -2801,7 +2808,6 @@ class FormPartHeadView extends View {
 /** A part's "From tax profile" fold in the lazy list. */
 class FormFoldView extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
     const { ui, state, pi } = this.props.get();
     if (state !== ui.state) return div();
@@ -2813,7 +2819,6 @@ class FormFoldView extends View {
 
 class FormItemView extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
     const { ui, state, it, pi, ii, width } = this.props.get();
     if (state !== ui.state) return div();
