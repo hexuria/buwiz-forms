@@ -3,7 +3,9 @@
 //! The welcome screen is not the lock. Host verbs that touch taxpayer data
 //! call [`ensure_unlocked`] and refuse while the Buwiz account is signed out.
 //! A debug test bypass exists so `cargo test` and the demo launcher can open
-//! a scratch database; release builds compile that check out.
+//! a scratch database; release builds compile that check out (a release
+//! built with the measurement-only `bench` feature keeps it, for
+//! `scripts/bench-shell-scroll.sh`).
 
 use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,22 +22,22 @@ pub const LOCKED_MESSAGE: &str = "Sign in to Buwiz before using this computer.";
 
 /// Both flags are required. Either one alone does nothing, so a test database
 /// (`EBIR_TEST_ENV=1`) does not silently skip the account gate.
-#[cfg(any(debug_assertions, test))]
+#[cfg(any(debug_assertions, test, feature = "bench"))]
 pub fn bypass_from_flags(test_env: bool, auth_bypass: bool) -> bool {
     test_env && auth_bypass
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "bench"))]
 fn env_flag(name: &str) -> bool {
     std::env::var(name).ok().as_deref() == Some("1")
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "bench"))]
 pub fn auth_bypass_enabled() -> bool {
     bypass_from_flags(env_flag("EBIR_TEST_ENV"), env_flag("BIR_AUTH_BYPASS"))
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(not(any(debug_assertions, feature = "bench")))]
 pub fn auth_bypass_enabled() -> bool {
     false
 }

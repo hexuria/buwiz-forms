@@ -218,7 +218,7 @@ class BirApp extends View {
     // Development aid: BIR_SHELL_START="tp=123456788;theme=dark;view=library"
     // (also "palette=<query>", "edit=<profile section>", and on a form
     // "choose=<key>~<value>|...", "select=<key>", "more=<part>:<item>",
-    // "save", "items=<a>-<b>", "solo=<part>", and the sign-in steps listed
+    // "save", "items=<a>-<b>", "solo=<part>", "parts=all|<a>-<b>", "wait=<ms>", and the sign-in steps listed
     // at runAccessStep; none bypasses a PIN)
     // or "...;form=2551Q/2026/3" opens a screen at launch, so a screen can be
     // checked headlessly (one launch, one screenshot). Unset in normal use.
@@ -415,8 +415,16 @@ class BirApp extends View {
   }
 
   runStartRoute(route, cx) {
-    for (const step of route.split(";")) {
+    const steps = route.split(";");
+    for (const [at, step] of steps.entries()) {
       const [key, value = ""] = step.split("=");
+      // "wait=<ms>": the steps after it run that much later (after the
+      // launch's own session start has settled the page).
+      if (key === "wait") {
+        const rest = steps.slice(at + 1).join(";");
+        if (rest) cx.timer.after(Number(value) || 0, (cx) => this.runStartRoute(rest, cx));
+        break;
+      }
       if (key === "tp") this.selectTaxpayer(value, cx, { quiet: true });
       else if (key === "branch") this.selectBranch(value, cx);
       else if (key === "theme") this.setThemePreference(value, cx);
@@ -465,6 +473,20 @@ class BirApp extends View {
       else if (key === "items") {
         const [from, to] = value.split("-").map(Number);
         this.formUi.devItems = { from, to: to ?? from };
+      } else if (key === "parts") {
+        // "parts=all" or "parts=<a>-<b>": open those parts together, as
+        // clicking each header does (long-form performance runs).
+        this.afterFormLoads(cx, (cx) => {
+          const ui = this.formUi;
+          const n = ui.state.schema.parts.length;
+          const [from, to] = value === "all" ? [0, n - 1] : value.split("-").map(Number);
+          for (let i = from; i <= Math.min(to ?? from, n - 1); i++) {
+            ui.ensureInputs(i, cx);
+            ui.state.openParts.add(i);
+          }
+          ui.refreshRows();
+          cx.notify();
+        });
       } else if (key === "solo") {
         this.formUi.devSolo = Number(value);
         this.formUi.jumpTo(Number(value), cx);
