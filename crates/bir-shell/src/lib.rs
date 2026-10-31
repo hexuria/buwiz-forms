@@ -25,6 +25,7 @@ mod logging;
 #[cfg(feature = "agent")]
 pub mod mini_app;
 mod packaged;
+mod payment_records;
 pub mod print_preview_window;
 pub mod print_sheet;
 mod screen_form_module;

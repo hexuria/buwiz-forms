@@ -2925,7 +2925,7 @@ fn sent_and_paid(db: &bir_core::db::Database, kind: AgentFormKind, draft: &Value
     match identity.status {
         FilingStatus::Draft | FilingStatus::Queued => false,
         FilingStatus::Paid => true,
-        _ => crate::mini_app::payments::recorded_for(db, &identity.tin, kind.form_code(), &period),
+        _ => crate::payment_records::recorded_for(db, &identity.tin, kind.form_code(), &period),
     }
 }
 
@@ -3429,6 +3429,7 @@ fn notes_always(kind: AgentFormKind, draft: &Value) -> Vec<String> {
 }
 
 /// What `screen_form_open`, `screen_form_sample` and a rebuilt sample answer.
+#[allow(clippy::too_many_arguments)]
 fn opened_json(
     kind: AgentFormKind,
     year: u16,
@@ -6119,6 +6120,7 @@ fn screen_form_print_sample(arguments: &HostArguments) -> HostResult {
 /// `screen_form_print` (a return as saved) or `screen_form_print_sample`
 /// (a Form library sample with its staged edits, held boxes blank) shows,
 /// made in memory: no window opens and no file is written.
+#[cfg(feature = "agent")]
 pub(crate) fn print_preview_page(arguments: &HostArguments) -> Result<(String, String), HostError> {
     let code = arguments.string(0)?.to_owned();
     let kind = kind_of(&code)?;
@@ -6794,9 +6796,18 @@ mod tests {
         // unpaid in October: the penalties have grown
         assert!(stale(&with_clock(day(10, 29), || validate(&filed))), "an unpaid return's penalties grow");
         // paid: they stay as filed
+        // The mini app records payments (agent builds); every build reads them.
+        #[cfg(feature = "agent")]
         with_database(|db| {
             crate::mini_app::payments::mark_paid(db, &serde_json::from_value(json!({"tin": TIN, "form": "2551Q", "period": "2026-Q1"})).unwrap(), day(10, 29), &std::env::temp_dir())
                 .map_err(HostError::new)
+        })
+        .unwrap();
+        #[cfg(not(feature = "agent"))]
+        with_database(|db| {
+            let marked = json!([{"tin": TIN, "form": "2551Q", "period": "2026-Q1"}]).to_string();
+            db.set_setting(crate::payment_records::PAYMENTS_KEY, &marked)
+                .map_err(|error| HostError::new(error.to_string()))
         })
         .unwrap();
         let checked = with_clock(day(10, 29), || validate(&filed));
