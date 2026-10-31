@@ -45,7 +45,7 @@ cp "$BIN" "$TMP/bin/bir-shell"
 ln -s "$(pwd)/app" "$TMP/bin/app"
 
 isolated() {
-    env -i PATH=/usr/bin:/bin HOME="$TMP/home" USER="${USER:-bench}" TMPDIR="$TMP" \
+    exec env -i PATH=/usr/bin:/bin HOME="$TMP/home" USER="${USER:-bench}" TMPDIR="$TMP" \
         BIR_DATABASE_PATH="$TMP/run.db" BIR_DB_KEY=$KEY BIR_NO_KEYCHAIN=1 \
         BIR_LOG_DIR="$TMP/logs" EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 "$@"
 }
@@ -54,15 +54,16 @@ for parts in $PARTS; do
     for speed in $SPEEDS; do
         rm -rf "$TMP/home" "$TMP/logs" "$TMP"/run.db*
         mkdir -p "$TMP/home" "$TMP/logs"
-        isolated "$SEED" >/dev/null
+        (isolated "$SEED" >/dev/null)
         log="$OUT/jank-${parts}parts-${speed}pt.log"
         : >"$log"
         last=$((parts - 1))
         # First launch: help desk mode with a throwaway PIN, then the form.
         route="setup=helpdesk;setuppin=1357;keydone;wait=2000;tp=000123453;form=$FORM;parts=0-$last"
-        isolated BIR_SHELL_START="$route" BIR_SHELL_SCROLL_BENCH="$speed" BIR_SHELL_JANK_LOG="$log" \
+        # `isolated` execs, so $! is the app itself.
+        (isolated BIR_SHELL_START="$route" BIR_SHELL_SCROLL_BENCH="$speed" BIR_SHELL_JANK_LOG="$log" \
             BIR_SHELL_WINDOW_SIZE="$SIZE" \
-            ${BIR_SHELL_FPS:+BIR_SHELL_FPS=$BIR_SHELL_FPS} "$TMP/bin/bir-shell" >"$TMP/app.out" 2>&1 &
+            ${BIR_SHELL_FPS:+BIR_SHELL_FPS=$BIR_SHELL_FPS} "$TMP/bin/bir-shell" >"$TMP/app.out" 2>&1) &
         pid=$!
         moved=0
         for _ in $(seq 1 180); do
