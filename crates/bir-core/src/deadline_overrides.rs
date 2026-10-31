@@ -211,7 +211,7 @@ fn periods_moved(entry: &DeadlineOverride) -> Vec<Value> {
     for code in &entry.affected_form_codes {
         for taxable_year in (year - 1)..=year {
             for deadline in
-                DeadlineResolver::deadlines_for_forms(&[code.clone()], taxable_year, &[])
+                DeadlineResolver::deadlines_for_forms(std::slice::from_ref(code), taxable_year, &[])
             {
                 if !moves(entry, &deadline) {
                     continue;
