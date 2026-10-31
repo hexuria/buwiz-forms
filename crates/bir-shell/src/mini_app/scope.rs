@@ -179,6 +179,7 @@ pub(crate) static RULES: &[(&str, Rule)] = &[
     ("pull_device_filings", Rule::Refuse),
     ("agent_enabled", Rule::Refuse),
     ("data_change_token", Rule::Refuse),
+    ("external_change", Rule::Refuse),
     ("shell_set_chrome", Rule::Refuse),
     ("create_template_from_return", Rule::Refuse),
 ];

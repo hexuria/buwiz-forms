@@ -5,8 +5,8 @@
 //! newer semver is downloaded for this platform and checked against both the
 //! manifest's sha256 and the release's checksum file. The page then offers
 //! Install now / Later. Install replaces the running app and relaunches it
-//! only after the database owner lock has been dropped: a second process
-//! cannot open the encrypted database while this one still holds it.
+//! only after this process has stopped its submission worker (freeing the
+//! worker lease) and closed the database.
 //!
 //! The running bundle is the one that gets replaced. A copy launched from a
 //! scratch path updates that copy; an install in `/Applications` updates that
@@ -496,11 +496,11 @@ pub fn install_ready_update() {
             return;
         }
     };
-    // The new process must be able to take the owner lock. Drop it before
-    // the rename-and-exec, while this thread still owns the handle.
+    // Stop the worker (freeing its lease) and close the database before the
+    // rename-and-exec, while this thread still owns the handle.
     crate::bir_module::shutdown_for_quit();
-    if !crate::bir_module::owner_lock_released() {
-        tracing::error!("database owner lock is still held; the update was not applied");
+    if !crate::bir_module::database_released() {
+        tracing::error!("the database is still open; the update was not applied");
         std::process::exit(1);
     }
     if let Err(error) = commit_install(prepared) {
