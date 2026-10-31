@@ -539,6 +539,14 @@ impl Database {
             .ok()
     }
 
+    /// Rows inserted, updated or deleted through this connection since it
+    /// opened (SQLite `total_changes()`). The submission worker and the app
+    /// share one connection, so a change in this number between two looks
+    /// means someone wrote; an unchanged number means nobody did.
+    pub fn total_changes(&self) -> u64 {
+        self.conn.total_changes()
+    }
+
     /// Opens the database, quarantining an unreadable existing file and
     /// recreating it when the on-disk contents are not a usable SQLCipher DB.
     pub fn open_or_recreate<P: AsRef<Path>>(path: P) -> Result<(Self, Option<PathBuf>), DbError> {
