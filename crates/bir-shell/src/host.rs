@@ -9,12 +9,12 @@ use std::rc::Rc;
 // GPUI comes through the Kit so the `gpui-fast` feature switches this host
 // along with gpui-shell and the components (one engine in the build).
 use gpui_kit::{
-    App, Bounds, Pixels, Size, TitlebarOptions, Window, WindowBackgroundAppearance, WindowBounds,
-    WindowDecorations, WindowOptions, point, px, size,
+    App, Bounds, Entity, Pixels, Render, Size, TitlebarOptions, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowDecorations, WindowOptions, point, px, size,
 };
 use gpui_shell::{
-    AppAssets, Capabilities, ShellRuntime, export_module, init_with_components, on_exit_request,
-    resolve_app_root, set_bundle_id, set_capabilities, set_development_mode,
+    AppAssets, Capabilities, ShellRoot, ShellRuntime, export_module, init_with_components,
+    on_exit_request, resolve_app_root, set_bundle_id, set_capabilities, set_development_mode,
 };
 
 use crate::bir_module;
@@ -198,21 +198,46 @@ fn open_main_window(cx: &mut App, runtime: Rc<ShellRuntime>, root: PathBuf) {
         window_min_size: Some(size(px(420.0), px(480.0))),
         ..Default::default()
     };
-    cx.open_window(options, move |window: &mut Window, cx: &mut App| {
-        if let Some(size) = requested_window_size() {
-            hold_window_size(window, cx, size);
-        }
-        if std::env::var_os("BIR_SHELL_METRICS").is_some() {
-            log_runtime_metrics(window, cx, runtime.clone());
-        }
-        let shell_root = runtime.load(&root, window, cx);
-        #[cfg(feature = "agent")]
-        crate::agent::start(window, cx, shell_root.clone());
-        // The menu frame is the window root on Linux and Windows. The agent
-        // keeps the script root, which is what the menu frame wraps.
-        crate::app_menu::attach_window(shell_root, window, cx)
-    })
-    .expect("main window must open");
+    // The performance tooling (`BIR_SHELL_FPS`, `BIR_SHELL_JANK`,
+    // `BIR_SHELL_TRACE`, `BIR_SHELL_SCROLL_BENCH`; see `perf.rs`) opens the
+    // window under its own root; a normal launch opens it exactly as before.
+    if let Some(perf) = crate::perf::config() {
+        cx.open_window(options, move |window: &mut Window, cx: &mut App| {
+            let (window_root, shell_root) = mount_main_window(&runtime, &root, window, cx);
+            crate::perf::wrap(perf, window_root, &shell_root, runtime, window, cx)
+        })
+        .expect("main window must open");
+    } else {
+        cx.open_window(options, move |window: &mut Window, cx: &mut App| {
+            mount_main_window(&runtime, &root, window, cx).0
+        })
+        .expect("main window must open");
+    }
+}
+
+/// Loads the script into the new main window. Answers the window's root and
+/// the script root inside it.
+fn mount_main_window(
+    runtime: &Rc<ShellRuntime>,
+    root: &std::path::Path,
+    window: &mut Window,
+    cx: &mut App,
+) -> (Entity<impl Render + use<>>, Entity<ShellRoot>) {
+    if let Some(size) = requested_window_size() {
+        hold_window_size(window, cx, size);
+    }
+    if std::env::var_os("BIR_SHELL_METRICS").is_some() {
+        log_runtime_metrics(window, cx, runtime.clone());
+    }
+    let shell_root = runtime.load(root, window, cx);
+    #[cfg(feature = "agent")]
+    crate::agent::start(window, cx, shell_root.clone());
+    // The menu frame is the window root on Linux and Windows. The agent
+    // keeps the script root, which is what the menu frame wraps.
+    (
+        crate::app_menu::attach_window(shell_root.clone(), window, cx),
+        shell_root,
+    )
 }
 
 /// Development aid: `BIR_SHELL_METRICS=1` logs what the script runtime spent

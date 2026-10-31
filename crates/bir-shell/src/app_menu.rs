@@ -669,8 +669,14 @@ fn show_about(cx: &mut App) {
     }
     #[cfg(not(target_os = "macos"))]
     with_window(cx, |window, cx| {
-        let Some(Some(root)) = window.root::<DesktopMenuFrame>() else {
-            return;
+        let root = match window.root::<DesktopMenuFrame>() {
+            Some(Some(root)) => root,
+            // Under the frame monitor (`BIR_SHELL_FPS`) the menu frame sits
+            // inside its root.
+            _ => match window.root::<crate::perf::PerfFrame<DesktopMenuFrame>>() {
+                Some(Some(perf)) => perf.read(cx).inner().clone(),
+                _ => return,
+            },
         };
         root.update(cx, |frame, cx| {
             frame.about = true;
