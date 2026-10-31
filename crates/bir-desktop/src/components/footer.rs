@@ -19,18 +19,12 @@ pub fn render_footer<T>(cx: &mut Context<T>) -> impl IntoElement {
             flex_wrap
             gap_2
             items_center
-            justify_between
+            justify_end
             bg={cx.theme().background}
             border_t_1
             border_color={cx.theme().border}
         >
-            <div flex_shrink_0 flex flex_row items_center gap_4>
-                // Bagong Pilipinas Logo
-                <img src="svg/bagong-pilipinas.svg" w_12 h_12 object_fit={ObjectFit::Contain} />
-                // BIR Logo
-                <img src="images/bir-new-logo.png" w_12 h_12 object_fit={ObjectFit::Contain} />
-            </div>
-            // Wraps below the seals on narrow windows; text may shrink and wrap.
+            // No government seals: this app is not the BIR's. Text may shrink and wrap.
             <div flex flex_row items_center gap_2 min_w_0 max_w_full>
                 <div flex_1 min_w_0 text_xs text_color={cx.theme().muted_foreground}>
                     {"© 2026 Goldcoders Corp. goldcoders.dev"}
