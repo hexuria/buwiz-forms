@@ -21,6 +21,10 @@ thread_local! {
     /// The handle holds an in-memory placeholder because [`reset_database`]
     /// let go of the live file; the next call reopens the file into it.
     static RELEASED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// [`stored_global_hotkey`] as last read or written: `None` until read.
+    /// The tray asks on the UI thread, which must not wait on the database
+    /// lock the submission worker may be holding.
+    static GLOBAL_HOTKEY: RefCell<Option<Option<String>>> = const { RefCell::new(None) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
@@ -53,6 +57,7 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
                     .lock()
                     .map_err(|_| HostError::new("database lock poisoned"))? = database;
                 RELEASED.set(false);
+                forget_global_hotkey();
             }
             Some(_) => {}
         }
@@ -167,13 +172,28 @@ fn release_database() {
 
 /// The stored global-show chord, if the database is already open and a key
 /// is saved. Does not open the database: a missing handle means "not set".
+/// Read from the database once, then from memory: [`set_global_hotkey`]
+/// writes through, and a reopened database forgets it.
 pub(crate) fn stored_global_hotkey() -> Option<String> {
+    if let Some(known) = GLOBAL_HOTKEY.with(|cached| cached.borrow().clone()) {
+        return known;
+    }
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
-    let db = handle.lock().ok()?;
-    db.get_setting("global_hotkey_key")
-        .ok()
-        .flatten()
-        .filter(|value| !value.is_empty())
+    let stored = {
+        let db = handle.lock().ok()?;
+        db.get_setting("global_hotkey_key").ok()?
+    };
+    let combo = stored.filter(|value| !value.trim().is_empty());
+    remember_global_hotkey(combo.clone());
+    combo
+}
+
+fn remember_global_hotkey(combo: Option<String>) {
+    GLOBAL_HOTKEY.with(|cached| *cached.borrow_mut() = Some(combo));
+}
+
+fn forget_global_hotkey() {
+    GLOBAL_HOTKEY.with(|cached| *cached.borrow_mut() = None);
 }
 
 /// Whether [`shutdown_for_quit`] dropped the owner lock. An update refuses to
@@ -265,6 +285,7 @@ pub(crate) fn use_ephemeral_database() {
         )));
     });
     RELEASED.set(false);
+    forget_global_hotkey();
 }
 
 /// `serde_json::Value` → `HostValue`. bir-core serializes cleanly; the
@@ -325,12 +346,9 @@ fn computer_snapshot() -> (Option<String>, u32) {
     let Ok(db) = handle.lock() else {
         return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
     };
-    let hotkey = db
-        .get_setting("global_hotkey_key")
-        .ok()
-        .flatten()
-        .filter(|value| !value.trim().is_empty());
-    (hotkey, bir_core::log_files::retention_days(&db))
+    let retention = bir_core::log_files::retention_days(&db);
+    drop(db);
+    (stored_global_hotkey(), retention)
 }
 
 /// Chords the Settings picker offers. The same combo language as
@@ -397,9 +415,10 @@ fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
     }
     with_database(|db| {
         db.set_setting("global_hotkey_key", &combo)
-            .map(|_| HostValue::Null)
             .map_err(|error| HostError::new(error.to_string()))
-    })
+    })?;
+    remember_global_hotkey(Some(combo).filter(|combo| !combo.is_empty()));
+    Ok(HostValue::Null)
 }
 
 /// How many days of `ebirforms.*.log` to keep. Out of range is refused.
@@ -2121,6 +2140,7 @@ fn reset_database() -> Result<(), HostError> {
             .lock()
             .map_err(|_| HostError::new("database lock poisoned"))? = placeholder;
         RELEASED.set(true);
+        forget_global_hotkey();
         Ok(())
     })
 }
@@ -3061,6 +3081,8 @@ mod tests {
             to_json(&system_info().unwrap())["global_hotkey"],
             "control+alt+E"
         );
+        // The tray's read (cached after the first one) sees the new chord.
+        assert_eq!(stored_global_hotkey().as_deref(), Some("control+alt+E"));
 
         let refused = set_global_hotkey(&args(vec![s("control+notakey")])).unwrap_err();
         assert!(refused.message().contains("not one"));
@@ -3072,6 +3094,7 @@ mod tests {
 
         set_global_hotkey(&args(vec![s("  ")])).unwrap();
         assert!(to_json(&system_info().unwrap())["global_hotkey"].is_null());
+        assert_eq!(stored_global_hotkey(), None);
     }
 
     #[test]
