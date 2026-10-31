@@ -42,6 +42,11 @@ gpui-fast = ["gpui-kit/gpui-fast", "gpui-shell/gpui-fast", "gpui-component/gpui-
 # bir-mcp. It also builds `bir-mini-app`, which reuses bir-mcp's tool table,
 # license gate and HTTP door as a library.
 agent = ["dep:gpui-agent", "dep:bir-mcp"]
+# Measurement builds only (scripts/bench-shell-scroll.sh): a release build
+# honours the test bypass (both EBIR_TEST_ENV=1 and BIR_AUTH_BYPASS=1, as a
+# debug build does), so a bench opens a throwaway database without signing
+# in. Off in every shipped build.
+bench = []
 
 [dependencies]
 # gpui-shell is published only via the monorepo git (the crates.io `gpui-shell`
