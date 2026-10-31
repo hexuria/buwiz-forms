@@ -235,22 +235,43 @@ class BirApp extends View {
     });
 
     // The agent host queues screen changes from the GPUI timer. This poll
-    // applies them in order so a fill shows up in the open form. A build
-    // without the agent feature answers null.
-    cx.timer.every(50, (cx) => this.applyAgent(cx));
+    // applies them in order so a fill shows up in the open form. It runs
+    // only while the gpui-agent listener is up (`bir.agent_enabled`, asked
+    // on the first tick, after the host has started it); otherwise it stops.
+    let agentChecked = false;
+    const agentPoll = cx.timer.every(50, (cx) => {
+      if (!agentChecked) {
+        agentChecked = true;
+        let on = false;
+        try {
+          on = Boolean(this.store.call("agent_enabled"));
+        } catch (_e) {}
+        if (!on) {
+          agentPoll.cancel();
+          return;
+        }
+      }
+      this.applyAgent(cx);
+    });
 
     // Route 3: an assistant queued a filing on the account server. This
     // computer uploads it (or bir-headless, when the window is closed).
     // The server never sends to BIR. A missing grant leaves the row waiting.
-    cx.timer.every(5000, (cx) => {
-      if (this.cloudLocked) return;
-      let note = null;
-      try {
-        note = this.store.call("pull_device_filings");
-      } catch (_e) {
-        return;
-      }
-      if (note && note.message) this.toast(note.message, cx, note.icon || "send");
+    // The host does the request on its own thread; one poll at a time.
+    let devicePollBusy = false;
+    cx.timer.every(60000, (cx) => {
+      if (this.cloudLocked || devicePollBusy) return;
+      devicePollBusy = true;
+      cx.spawn(async (acx) => {
+        let note = null;
+        try {
+          note = await this.store.call("pull_device_filings");
+        } catch (_e) {
+          note = null;
+        }
+        devicePollBusy = false;
+        if (note && note.message) this.toast(note.message, acx, note.icon || "send");
+      });
     });
 
     // The host checks for a release on its own thread. Polling is how the
@@ -1014,6 +1035,14 @@ class BirApp extends View {
    * and announce events that appeared since the last look.
    */
   pollEvents(cx) {
+    // Nothing was written since the last look (by this app, the submission
+    // worker, or another process): keep every cached read and do not redraw.
+    let token = null;
+    try {
+      token = this.store.call("data_change_token");
+    } catch (_e) {}
+    if (token != null && token === this.lastChangeToken) return;
+    this.lastChangeToken = token;
     this.store.forgetWhere((key) => /^(returns:|deadlines|forms:|jobs$)/.test(key));
     const fresh = this.notifications().filter((n) => !this.knownEvents.has(n.id));
     for (const n of fresh) this.knownEvents.add(n.id);

@@ -27917,8 +27917,12 @@ declare module "bir" {
   export function record_screen_log(level: string, message: string): null;
   /** Next UI command from the gpui-agent host, or null when none is waiting. */
   export function agent_take(): string | null;
-  /** Pick up filings an assistant queued on the account server. Null when there is nothing to say. */
-  export function pull_device_filings(): { message: string; icon: string } | null;
+  /** True while the gpui-agent listener is up; `agent_take` is worth polling only then. */
+  export function agent_enabled(): boolean;
+  /** Opaque; equal values mean the database has not changed in between. */
+  export function data_change_token(): string;
+  /** Pick up filings an assistant queued on the account server (off the UI thread). Null when there is nothing to say. */
+  export function pull_device_filings(): Promise<{ message: string; icon: string } | null>;
   /** True once the main window is up. False through the gate, first launch, and sign-in. */
   export function shell_set_chrome(open: boolean): null;
 
@@ -27939,6 +27943,8 @@ declare module "bir" {
   }
   export interface CloudAccountGate {
       unlocked: boolean;
+      /** The saved sign-in is still being checked after launch; see `cloud_account_restored`. */
+      restoring: boolean;
       offline: boolean;
       server_url: string;
       email: string | null;
@@ -27953,6 +27959,8 @@ declare module "bir" {
   export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
   export function cloud_account_session_opened(): null;
   export function cloud_account_session_closed(): null;
+  /** Resolves once the launch check of the saved sign-in has finished (at once when none is running). */
+  export function cloud_account_restored(): Promise<null>;
 
   export type BranchFieldName = "rdo_code" | "registered_address" | "zip_code" | "phone" | "email";
   export interface BranchFacts {
@@ -28307,8 +28315,44 @@ declare module "bir" {
       draft_id: number | null;
       /** The saved return's stored key (`screen_form_open`'s `key`), null when none is saved. */
       return_key: number | null;
+      /** The rule's own date, before weekends, holidays and deadline overrides moved it. */
+      original_due_date: string;
+      /** Why `due_date` differs from `original_due_date`: "moved" is a deadline override (a person's or BIR's). */
+      deadline_status: "normal" | "weekend" | "holiday" | "non_working" | "moved";
+      /** The source a moved deadline cites (the reason given), else null. */
+      moved_reason: string | null;
+      /** The period as a deadline override names it ("2026-Q3", "2026-09", "2025"); null for an as-needed row. */
+      period_key: string | null;
   }
   export function deadlines_between(from: string, to: string): DeadlineRow[];
+  export interface DeadlineOverrideEntry {
+      id: string;
+      /** "holiday": an official holiday the app ships; "moved": a deadline a person (or BIR) moved. */
+      kind: "holiday" | "moved";
+      title: string;
+      reason: string;
+      forms: string[];
+      original_deadline: string;
+      new_deadline: string;
+      /** The deadlines it moves (none listed for a holiday). */
+      periods: { form: string; period: string; label: string }[];
+  }
+  export interface DeadlineOverrideList {
+      year: number | null;
+      overrides: DeadlineOverrideEntry[];
+      damaged: number;
+      unreadable: boolean;
+  }
+  /** Every stored deadline override; they apply to every taxpayer. `args`: `{year?}`. */
+  export function deadline_overrides(args: { year?: number }): DeadlineOverrideList;
+  /** Move one form's deadline for one period, for every taxpayer (`bir_deadline_override_set`). */
+  export function deadline_override_set(args: { form: string; period?: string; original_deadline?: string; new_deadline: string; reason?: string }): {
+      form: string; period: string; label: string; rule_deadline: string; was: string | null; due: string | null; replaced: boolean; override: DeadlineOverrideEntry; applies_to: string;
+  };
+  /** Put a deadline back: `{id}`, or `{form, period}` / `{form, original_deadline}` (`bir_deadline_override_remove`). */
+  export function deadline_override_remove(args: { id?: string; form?: string; period?: string; original_deadline?: string }): {
+      form?: string; period?: string; label?: string; due?: string | null; removed: DeadlineOverrideEntry[];
+  };
   export interface AsNeededReturn {
       draft_id: number;
       period: number;

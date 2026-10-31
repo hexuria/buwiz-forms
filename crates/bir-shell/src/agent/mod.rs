@@ -41,6 +41,11 @@ pub(crate) fn pop_command() -> Option<Value> {
         .and_then(session::UiQueue::pop)
 }
 
+/// Whether the listener started, so `bir.agent_take` can have commands.
+pub(crate) fn listening() -> bool {
+    UI_COMMANDS.lock().expect("agent ui queue").is_some()
+}
+
 /// Start the listener when `GPUI_AGENT=1`, and drain it on `window`.
 pub(crate) fn start(window: &mut Window, cx: &mut App, root: Entity<ShellRoot>) {
     let Some(started) = maybe_start() else {

@@ -2320,21 +2320,48 @@ fn list_deadlines() -> HostResult {
 ///
 /// Each row is gated by the standing send OK and by [`crate::agent::send_draft`],
 /// which runs the page's Validate before queueing. The server never contacts BIR.
+///
+/// The request (up to its 8 s timeout) and the queueing run on their own
+/// thread with the shared database handle, never on the UI thread.
 #[cfg(not(feature = "agent"))]
-fn pull_device_filings() -> HostResult {
-    Ok(HostValue::Null)
+fn pull_device_filings(
+    _arguments: &gpui_shell::HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    Ok(async { Ok(HostValue::Null) })
 }
 
 #[cfg(feature = "agent")]
-fn pull_device_filings() -> HostResult {
-    pull_device_filings_agent()
+fn pull_device_filings(
+    _arguments: &gpui_shell::HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+    match crate::cloud_account::device_poll_auth() {
+        None => {
+            let _ = sender.send(Ok(HostValue::Null));
+        }
+        Some((origin, token)) => {
+            let db = database_handle()?;
+            std::thread::Builder::new()
+                .name("buwiz-device-filings".into())
+                .spawn(move || {
+                    let _ = sender.send(pull_device_filings_agent(&db, &origin, &token));
+                })
+                .map_err(db_error)?;
+        }
+    }
+    Ok(async move {
+        receiver
+            .await
+            .unwrap_or_else(|_| Err(HostError::new("The device-filing thread stopped.")))
+    })
 }
 
 #[cfg(feature = "agent")]
-fn pull_device_filings_agent() -> HostResult {
-    let Some((origin, token)) = crate::cloud_account::device_poll_auth() else {
-        return Ok(HostValue::Null);
-    };
+fn pull_device_filings_agent(
+    db: &std::sync::Mutex<Database>,
+    origin: &str,
+    token: &str,
+) -> HostResult {
     let client = bir_core::loopback::localhost_ipv4_first(reqwest::blocking::Client::builder())
         .timeout(std::time::Duration::from_secs(8))
         .build()
@@ -2362,7 +2389,13 @@ fn pull_device_filings_agent() -> HostResult {
         if id.is_empty() {
             continue;
         }
-        let outcome = with_database(|db| accept_device_filing(db, filing).map_err(HostError::new))?;
+        crate::account_gate::ensure_unlocked()?;
+        let outcome = {
+            let db = db
+                .lock()
+                .map_err(|_| HostError::new("database lock poisoned"))?;
+            accept_device_filing(&db, filing).map_err(HostError::new)?
+        };
         let status = outcome
             .get("status")
             .and_then(|value| value.as_str())
@@ -2505,6 +2538,28 @@ fn agent_take() -> HostResult {
     }
 }
 
+/// Whether the gpui-agent listener is up, so the script polls
+/// [`agent_take`]. False in a build without the agent feature.
+fn agent_enabled() -> bool {
+    #[cfg(feature = "agent")]
+    return crate::agent::listening();
+    #[cfg(not(feature = "agent"))]
+    false
+}
+
+/// Changes as of now: rows this process's connection has written (the page
+/// and the submission worker share it) and SQLite's `data_version`, which
+/// moves when another connection commits. Equal tokens mean nothing changed.
+fn data_change_token() -> HostResult {
+    with_database(|db| {
+        Ok(HostValue::Str(format!(
+            "{}:{}",
+            db.total_changes(),
+            db.data_version().unwrap_or(0)
+        )))
+    })
+}
+
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
     let module = HostModule::new("bir")
@@ -2564,7 +2619,9 @@ pub fn module() -> HostModule {
         .function("job_log_tail", |_| job_log_tail())
         .function("record_screen_log", record_screen_log)
         .function("agent_take", |_| agent_take())
-        .function("pull_device_filings", |_| pull_device_filings())
+        .function("agent_enabled", |_| Ok(HostValue::Bool(agent_enabled())))
+        .function("data_change_token", |_| data_change_token())
+        .async_function("pull_device_filings", pull_device_filings)
         .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
     let module = crate::tax_profile_module::register(module);
@@ -2791,8 +2848,12 @@ export function job_log_tail(): JobLogTail;
 export function record_screen_log(level: string, message: string): null;
 /** Next UI command from the gpui-agent host, or null when none is waiting. */
 export function agent_take(): string | null;
-/** Pick up filings an assistant queued on the account server. Null when there is nothing to say. */
-export function pull_device_filings(): { message: string; icon: string } | null;
+/** True while the gpui-agent listener is up; `agent_take` is worth polling only then. */
+export function agent_enabled(): boolean;
+/** Opaque; equal values mean the database has not changed in between. */
+export function data_change_token(): string;
+/** Pick up filings an assistant queued on the account server (off the UI thread). Null when there is nothing to say. */
+export function pull_device_filings(): Promise<{ message: string; icon: string } | null>;
 /** True once the main window is up. False through the gate, first launch, and sign-in. */
 export function shell_set_chrome(open: boolean): null;
 "#;
