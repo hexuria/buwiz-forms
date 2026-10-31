@@ -563,9 +563,7 @@ pub(crate) fn refresh_stored(
 pub fn signed_in(origin: &str, store: &impl SessionStore, now: i64) -> Result<(), String> {
     match ensure_fresh(origin, store, now)? {
         Some(_) => Ok(()),
-        None => Err(store
-            .ended()
-            .unwrap_or_else(|| UNAUTHENTICATED.to_string())),
+        None => Err(store.ended().unwrap_or_else(|| UNAUTHENTICATED.to_string())),
     }
 }
 
@@ -974,7 +972,9 @@ mod tests {
     #[test]
     fn a_failed_refresh_is_remembered_so_the_next_check_does_not_wait() {
         let store = MemoryStore::default();
-        store.save(&bare("old-access", "refresh-unreachable", 10)).unwrap();
+        store
+            .save(&bare("old-access", "refresh-unreachable", 10))
+            .unwrap();
         let first = ensure_fresh("http://127.0.0.1:1", &store, 10).unwrap_err();
         assert!(first.contains("could not reach buwiz-server"), "{first}");
         let started = Instant::now();
@@ -991,7 +991,9 @@ mod tests {
         // No server at all: refreshing would fail, so success proves the
         // stored (already rotated) session was used.
         let store = MemoryStore::default();
-        store.save(&bare("their-access", "their-refresh", 10_000)).unwrap();
+        store
+            .save(&bare("their-access", "their-refresh", 10_000))
+            .unwrap();
         let fresh = refresh_stored("http://127.0.0.1:1", &store, "my-old-refresh", 10).unwrap();
         assert_eq!(fresh.access_token, "their-access");
         assert_eq!(fresh.refresh_token, "their-refresh");

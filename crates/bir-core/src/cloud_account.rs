@@ -1021,7 +1021,11 @@ fn interpret_token_response(
     // `{"error": {"code": "invalid_token", "message": ...}}`.
     let error = value
         .get("error")
-        .and_then(|error| error.as_str().or_else(|| error.get("code").and_then(Value::as_str)))
+        .and_then(|error| {
+            error
+                .as_str()
+                .or_else(|| error.get("code").and_then(Value::as_str))
+        })
         .unwrap_or("");
     if allow_pending && error == "authorization_pending" {
         return Ok(Poll::Pending);
@@ -1165,12 +1169,25 @@ mod tests {
             offline: false,
             last_refresh_unix: refreshed,
         };
-        let pick = |keychain, file| newer_account(keychain, file).map(|a: StoredAccount| a.refresh_token);
+        let pick =
+            |keychain, file| newer_account(keychain, file).map(|a: StoredAccount| a.refresh_token);
 
-        assert_eq!(pick(Some(account(100, "old")), Some(account(200, "new"))).as_deref(), Some("new"));
-        assert_eq!(pick(Some(account(200, "new")), Some(account(100, "old"))).as_deref(), Some("new"));
-        assert_eq!(pick(Some(account(100, "keychain")), Some(account(100, "file"))).as_deref(), Some("keychain"));
-        assert_eq!(pick(None, Some(account(100, "file"))).as_deref(), Some("file"));
+        assert_eq!(
+            pick(Some(account(100, "old")), Some(account(200, "new"))).as_deref(),
+            Some("new")
+        );
+        assert_eq!(
+            pick(Some(account(200, "new")), Some(account(100, "old"))).as_deref(),
+            Some("new")
+        );
+        assert_eq!(
+            pick(Some(account(100, "keychain")), Some(account(100, "file"))).as_deref(),
+            Some("keychain")
+        );
+        assert_eq!(
+            pick(None, Some(account(100, "file"))).as_deref(),
+            Some("file")
+        );
         assert_eq!(pick(None, None), None);
     }
 
@@ -1513,8 +1530,14 @@ mod tests {
         // buwiz-server's error body, at any 4xx or 5xx status, and a
         // plain-text rejection: each is "sign in again", never a retry.
         for (status, body) in [
-            (400, r#"{"error":{"code":"invalid_token","message":"access token is invalid"}}"#),
-            (500, r#"{"error":{"code":"invalid_grant","message":"refresh token revoked"}}"#),
+            (
+                400,
+                r#"{"error":{"code":"invalid_token","message":"access token is invalid"}}"#,
+            ),
+            (
+                500,
+                r#"{"error":{"code":"invalid_grant","message":"refresh token revoked"}}"#,
+            ),
             (502, "token is invalid"),
         ] {
             assert_eq!(
@@ -1540,7 +1563,10 @@ mod tests {
                 .write(true)
                 .open(path.with_extension("lock"))
                 .unwrap();
-            assert!(matches!(lock.try_lock(), Err(std::fs::TryLockError::WouldBlock)));
+            assert!(matches!(
+                lock.try_lock(),
+                Err(std::fs::TryLockError::WouldBlock)
+            ));
             drop(held);
             assert!(lock.try_lock().is_ok());
             lock.unlock().unwrap();

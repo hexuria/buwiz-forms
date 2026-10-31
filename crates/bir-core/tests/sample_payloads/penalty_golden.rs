@@ -186,7 +186,10 @@ fn record_penalty_golden() {
 fn form_2551q_penalties_do_not_read_the_typed_date_calendar() {
     let source = include_str!("../../src/forms/form_2551q.rs");
     assert!(!source.contains("typed_due_date"), "typed_due_date");
-    for name in ["penalty_items::resolve_due_date", "event_trigger::calendar_overrides"] {
+    for name in [
+        "penalty_items::resolve_due_date",
+        "event_trigger::calendar_overrides",
+    ] {
         assert!(source.contains(name), "{name}");
     }
 }
