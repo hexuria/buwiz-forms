@@ -6,7 +6,8 @@
 //! uses when the keychain is missing. The page cannot read either store.
 
 use std::sync::Mutex;
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use bir_core::cloud_account::{
     self, AccountBrowser, AccountSecrets, AccountStatus, BlockingHttp, CloudError, DeviceChallenge,
@@ -37,6 +38,8 @@ export interface CloudSignInStart {
 }
 export interface CloudAccountGate {
     unlocked: boolean;
+    /** The saved sign-in is still being checked after launch; see `cloud_account_restored`. */
+    restoring: boolean;
     offline: boolean;
     server_url: string;
     email: string | null;
@@ -51,9 +54,25 @@ export function cloud_account_refresh(): Promise<CloudAccountStatus>;
 export function cloud_account_sign_out(): Promise<CloudAccountStatus>;
 export function cloud_account_session_opened(): null;
 export function cloud_account_session_closed(): null;
+/** Resolves once the launch check of the saved sign-in has finished (at once when none is running). */
+export function cloud_account_restored(): Promise<null>;
 "#;
 
 static PENDING: Mutex<Option<DeviceChallenge>> = Mutex::new(None);
+
+/// The saved account as this process last read or wrote it, and when. The
+/// gate, Settings and the device-filing poll ask for it on the UI thread,
+/// and the read behind it is the OS keychain plus a file. Every save and
+/// clear here writes through; a read older than [`STORED_TTL`] goes back to
+/// the store, so a token another BIR process rotated is picked up. Refresh,
+/// restore and sign-out always read the store itself.
+static STORED: Mutex<Option<(Instant, Option<StoredAccount>)>> = Mutex::new(None);
+const STORED_TTL: Duration = Duration::from_secs(300);
+
+/// The launch check of the saved sign-in is running on its own thread.
+static RESTORING: AtomicBool = AtomicBool::new(false);
+/// `cloud_account_restored` calls waiting for that check.
+static RESTORE_WAITERS: Mutex<Vec<futures::channel::oneshot::Sender<()>>> = Mutex::new(Vec::new());
 
 /// Why the saved sign-in is gone after Buwiz rejected its refresh.
 const SIGN_IN_ENDED: &str = "Sign in again: Buwiz ended this computer's sign-in (its refresh was \
@@ -70,18 +89,96 @@ pub fn register(module: HostModule) -> HostModule {
         .async_function("cloud_account_sign_out", sign_out)
         .function("cloud_account_session_opened", |_| session_opened())
         .function("cloud_account_session_closed", |_| session_closed())
+        .async_function("cloud_account_restored", restored)
 }
 
 /// Pause filing, then open the UI only when a saved session still qualifies.
 /// Call this before the menu bar is built and before the database worker starts.
+/// Windowless (`bir-mini-app`): the check runs here, on the calling thread.
+#[cfg(any(feature = "agent", test))]
 pub(crate) fn prepare_launch() {
+    if begin_launch() {
+        crate::account_gate::set_unlocked(restore_saved_session());
+        RESTORING.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Pause filing and lock the gate. True when a saved session still has to
+/// be checked: the window host runs that with [`restore_in_background`] so
+/// the window opens first; the test bypass has already unlocked. From a
+/// true answer on, the gate reports `restoring` (the page reads it while
+/// the window opens, before the check has started).
+pub(crate) fn begin_launch() -> bool {
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     if crate::account_gate::auth_bypass_enabled() {
         crate::account_gate::set_unlocked(true);
+        return false;
+    }
+    crate::account_gate::set_unlocked(false);
+    RESTORING.store(true, Ordering::SeqCst);
+    true
+}
+
+/// Check the saved session (a token refresh, up to the refresh lock's wait
+/// plus the request timeout) on its own thread, then apply the answer on the
+/// UI thread exactly as a launch that had waited for it: open the gate, the
+/// database (which starts the submission worker), the updater and the menu.
+pub(crate) fn restore_in_background(cx: &mut gpui_kit::App) {
+    let (sender, receiver) = futures::channel::oneshot::channel::<bool>();
+    let spawned = std::thread::Builder::new()
+        .name("buwiz-account-restore".into())
+        .spawn(move || {
+            let _ = sender.send(restore_saved_session());
+        });
+    if let Err(error) = spawned {
+        tracing::error!("saved sign-in not checked: {error}");
+        finish_restore(false, cx);
         return;
     }
-    crate::account_gate::set_unlocked(restore_saved_session());
+    cx.spawn(async move |cx| {
+        let unlocked = receiver.await.unwrap_or(false);
+        cx.update(|cx| finish_restore(unlocked, cx));
+    })
+    .detach();
+}
+
+fn finish_restore(unlocked: bool, cx: &mut gpui_kit::App) {
+    if unlocked && !crate::account_gate::is_unlocked() {
+        crate::account_gate::set_unlocked(true);
+        crate::bir_module::open_database_at_launch();
+        crate::updater::start();
+        crate::app_menu::refresh(cx);
+    }
+    RESTORING.store(false, Ordering::SeqCst);
+    for waiter in restore_waiters().drain(..) {
+        let _ = waiter.send(());
+    }
+}
+
+fn restore_waiters() -> std::sync::MutexGuard<'static, Vec<futures::channel::oneshot::Sender<()>>> {
+    RESTORE_WAITERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// `cloud_account_restored`: settles when the launch check has been applied.
+fn restored(
+    _arguments: &HostArguments,
+) -> Result<impl std::future::Future<Output = HostResult> + Send + use<>, HostError> {
+    let (sender, receiver) = futures::channel::oneshot::channel::<()>();
+    {
+        let mut waiters = restore_waiters();
+        if RESTORING.load(Ordering::SeqCst) {
+            waiters.push(sender);
+        } else {
+            let _ = sender.send(());
+        }
+    }
+    Ok(async move {
+        let _ = receiver.await;
+        Ok(HostValue::Null)
+    })
 }
 
 fn status_now() -> HostResult {
@@ -99,7 +196,7 @@ fn status_now() -> HostResult {
             }));
         }
     };
-    let stored = load_stored().ok().flatten();
+    let stored = load_stored_cached().ok().flatten();
     let secrets = stored
         .as_ref()
         .filter(|stored| stored.server_url == resolved.url)
@@ -314,12 +411,13 @@ fn gate_value() -> HostResult {
         .err()
         .map(|error| error.to_string())
         .unwrap_or_default();
-    let stored = load_stored().ok().flatten();
+    let stored = load_stored_cached().ok().flatten();
     let unlocked = crate::account_gate::is_unlocked();
     let offline = unlocked && stored.as_ref().is_some_and(|item| item.offline);
     let email = stored.as_ref().and_then(|item| item.email.as_deref());
     Ok(HostObject::new()
         .field("unlocked", unlocked)
+        .field("restoring", RESTORING.load(Ordering::SeqCst))
         .field("offline", offline)
         .field("server_url", server_url)
         .field("email", optional_text(email))
@@ -410,23 +508,48 @@ fn clear_pending() {
 /// The device-filing poll uses it. Tokens are not logged.
 #[cfg(feature = "agent")]
 pub(crate) fn device_poll_auth() -> Option<(String, String)> {
-    let stored = load_stored().ok().flatten()?;
+    let stored = load_stored_cached().ok().flatten()?;
     if stored.offline || stored.access_token.is_empty() || stored.server_url.is_empty() {
         return None;
     }
     Some((stored.server_url, stored.access_token))
 }
 
+/// The saved account read from the keychain and file, which also refreshes
+/// [`STORED`]. Use under the refresh lock and wherever a rotated token matters.
 fn load_stored() -> Result<Option<StoredAccount>, HostError> {
-    cloud_account::load_stored_account().map_err(host_error)
+    let stored = cloud_account::load_stored_account().map_err(host_error)?;
+    remember_stored(stored.clone());
+    Ok(stored)
+}
+
+/// [`STORED`] when it is younger than [`STORED_TTL`], else [`load_stored`].
+fn load_stored_cached() -> Result<Option<StoredAccount>, HostError> {
+    if let Some((read_at, stored)) = stored_cache().as_ref()
+        && read_at.elapsed() < STORED_TTL
+    {
+        return Ok(stored.clone());
+    }
+    load_stored()
 }
 
 fn save_stored(stored: &StoredAccount) -> Result<(), HostError> {
-    cloud_account::save_stored_account(stored).map_err(host_error)
+    cloud_account::save_stored_account(stored).map_err(host_error)?;
+    remember_stored(Some(stored.clone()));
+    Ok(())
 }
 
 fn clear_stored() {
     cloud_account::clear_stored_account();
+    remember_stored(None);
+}
+
+fn remember_stored(stored: Option<StoredAccount>) {
+    *stored_cache() = Some((Instant::now(), stored));
+}
+
+fn stored_cache() -> std::sync::MutexGuard<'static, Option<(Instant, Option<StoredAccount>)>> {
+    STORED.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]

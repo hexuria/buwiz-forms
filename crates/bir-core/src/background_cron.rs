@@ -135,7 +135,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
 
     // Ensure we don't hold the DB lock across async network calls.
     // First, fetch profiles that have background cron enabled.
-    let (profiles, global_cron_enabled) = {
+    let (profiles, global_cron_enabled, changes_before) = {
         let db_guard = match db.lock() {
             Ok(guard) => guard,
             Err(e) => {
@@ -155,7 +155,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
             .unwrap_or(Some("true".to_string()))
             .map(|s| s == "true")
             .unwrap_or(true);
-        (p, c)
+        (p, c, db_guard.total_changes())
     };
 
     let test_enabled = profiles.iter().any(|p| p.test_notification_enabled);
@@ -188,10 +188,22 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
 
     process_google_calendar_sync(db.clone()).await;
 
-    // Signal the desktop app that the database was modified.
+    // Signal the desktop app that the database was modified, and only then:
+    // a tick that wrote nothing must not make every open view reload.
     // On macOS: instant via NSDistributedNotificationCenter.
     // On Linux/Windows: no-op (desktop uses PRAGMA data_version polling).
-    crate::ipc::post_db_changed();
+    if tick_changed_rows(&db, changes_before) {
+        crate::ipc::post_db_changed();
+    }
+}
+
+/// Whether the shared connection wrote anything since `changes_before` (its
+/// `total_changes()` when the tick started). A lock that cannot be taken
+/// counts as a change, so a real change is never missed.
+fn tick_changed_rows(db: &Arc<Mutex<Database>>, changes_before: u64) -> bool {
+    db.lock()
+        .map(|guard| guard.total_changes() != changes_before)
+        .unwrap_or(true)
 }
 
 async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
@@ -2615,6 +2627,22 @@ mod tests {
 
         // Just run the tick on an empty database. Should not panic.
         run_queue_tick(db.clone()).await;
+    }
+
+    /// An idle tick writes nothing, so it does not tell the desktop app to
+    /// reload every view; a write on the shared connection does.
+    #[tokio::test]
+    async fn an_idle_tick_writes_nothing_and_a_write_counts_as_a_change() {
+        let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
+        let before = db.lock().unwrap().total_changes();
+        run_queue_tick(db.clone()).await;
+        assert!(!tick_changed_rows(&db, before), "an idle tick changed rows");
+
+        db.lock()
+            .unwrap()
+            .set_setting("background_cron_test_marker", "1")
+            .unwrap();
+        assert!(tick_changed_rows(&db, before), "a write was not seen");
     }
 
     #[test]

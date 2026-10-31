@@ -37,8 +37,9 @@ use super::confirm::{check_keys, text, watched_branches};
 use super::watch::Watch;
 use super::resolve::{self, Branch};
 
-/// Settings key of every recorded payment (a JSON list).
-const PAYMENTS_KEY: &str = "mini_app.payments";
+/// Settings key of every recorded payment (a JSON list). Every build reads
+/// it (`crate::payment_records`); only this module writes it.
+use crate::payment_records::PAYMENTS_KEY;
 /// How far back a payment search looks.
 const SEARCH_DAYS: i64 = 30;
 /// Receipt files bir keeps as proof.
@@ -154,19 +155,6 @@ fn load(db: &Database) -> Result<Vec<Payment>, String> {
         return Ok(Vec::new());
     };
     serde_json::from_str(&stored).map_err(|error| format!("the stored payments are unreadable: {error}"))
-}
-
-/// Whether a payment is recorded for the return `tin` (9 or 14 digits)
-/// files as `form` for `period` (its canonical text, `2026-Q3`).
-pub(crate) fn recorded_for(db: &Database, tin: &str, form: &str, period: &str) -> bool {
-    let branch = |tin: &str| {
-        let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
-        if digits.len() == 9 { format!("{digits}00000") } else { digits }
-    };
-    let tin = branch(tin);
-    load(db).is_ok_and(|payments| {
-        payments.iter().any(|payment| branch(&payment.tin) == tin && payment.form.eq_ignore_ascii_case(form) && payment.period == period)
-    })
 }
 
 /// `bir_card_remove_payment {tin, form, period, id}`: payment `id` taken off
@@ -1750,7 +1738,7 @@ mod tests {
         assert!(remove(&db, &args(other), today(), &receipts).is_err());
         let gone = remove(&db, &args(json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3", "id": id})), today(), &receipts).unwrap();
         assert_eq!(gone["removed"], true);
-        assert!(!recorded_for(&db, TIN, "2551Q", "2026-Q3"));
+        assert!(!crate::payment_records::recorded_for(&db, TIN, "2551Q", "2026-Q3"));
         // recorded again, as the routine would after a remove
         assert_eq!(record(&db, &call, today(), &receipts).unwrap()["already"], false);
         let none = list(&db, &args(json!({"tin": ROOT, "form": "1601C"})), today()).unwrap();
