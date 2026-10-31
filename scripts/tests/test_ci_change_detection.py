@@ -154,7 +154,7 @@ class CiChangeDetectionTests(unittest.TestCase):
             )
             return outputs, summary_path.read_text(encoding="utf-8")
 
-    ALL_SYSTEMS = ("macos-14", "ubuntu-22.04", "windows-latest")
+    ALL_SYSTEMS = ("macos-15", "ubuntu-22.04", "windows-latest")
 
     def assert_decisions(
         self,
@@ -482,7 +482,7 @@ class CiChangeDetectionTests(unittest.TestCase):
             json.loads(outputs["check_matrix"]),
             {
                 "include": [
-                    {"os": "macos-14", "target": "aarch64-apple-darwin"},
+                    {"os": "macos-15", "target": "aarch64-apple-darwin"},
                     {"os": "ubuntu-22.04", "target": "x86_64-unknown-linux-gnu"},
                     {"os": "windows-latest", "target": "x86_64-pc-windows-msvc"},
                 ]

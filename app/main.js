@@ -234,6 +234,21 @@ class BirApp extends View {
       this.pollEvents(cx);
     });
 
+    // Other BIR apps (the mini app in Rox, bir-headless) may share this
+    // database. `external_change` is a cheap host-side look at SQLite's
+    // data_version that never waits on the database; when another process
+    // wrote, every cached read is dropped once, as after a local save.
+    cx.timer.every(1000, (cx) => {
+      if (this.cloudLocked) return;
+      let changed = false;
+      try {
+        changed = Boolean(this.store.call("external_change"));
+      } catch (_e) {}
+      if (!changed) return;
+      this.store.bump();
+      this.pollEvents(cx);
+    });
+
     // The agent host queues screen changes from the GPUI timer. This poll
     // applies them in order so a fill shows up in the open form. It runs
     // only while the gpui-agent listener is up (`bir.agent_enabled`, asked

@@ -181,33 +181,37 @@ the port is taken, start the painted app with another `GPUI_AGENT_ADDR` and
 point the CLI at it — the bridge logs `gpui-agent failed to bind` and keeps
 running without an agent otherwise.
 
-**One owner at a time** of the TCP bind **and** the live SQLCipher file.
-Painted `bir` and `bir-headless serve` both take an exclusive sidecar lock
-(`bir_data.db.owner.lock`) around `default_database_path()` (or
-`BIR_DATABASE_PATH` in CI). A second AgentHost on the same live DB is refused
-(`LiveDatabaseInUse`). There is no silent two-writer bridge.
+**One owner at a time** of the TCP bind; the live SQLCipher file is shared.
+Painted `bir`, `bir-headless serve`, bir-shell and bir-mini-app can all have
+`default_database_path()` (or `BIR_DATABASE_PATH` in CI) open at once (SQLite
+WAL, 5 s busy timeout). Sidecar locks next to it: `bir_data.db.maintenance.lock`
+(seconds, while the file or key is created, migrations run, or an unreadable
+file is moved aside), `bir_data.db.worker.lock` (the process running the
+background jobs: the first to start keeps it until it quits) and
+`bir_data.db.open.lock` (shared by every open connection, so nothing moves the
+file aside while another process uses it). The old life-long
+`bir_data.db.owner.lock` is gone.
 
 ### Who should own the port
 
 - **Day-to-day Mac:** the painted app is the host **when it is open**.
 - **Headless:** when the GUI is closed, and on Linux/box VMs with no GUI.
 
-Do **not** run GUI and headless concurrently as writers. After headless work,
-`bir-headless shutdown` (or kill) then open painted `bir`. If the maintainer later
-wants GUI updates while the daemon runs, that is a protocol client — not this
-slice.
+GUI and headless may run together on one database; each sees the other's
+writes within about a second (the GUI's `data_version` watcher). Only one of
+them can own the agent port.
 
 ### `--wait` handoff
 
 There is **no** protocol `Op::Yield`. Handoff is process ownership, not a
 semantic yield.
 
-- `bir-headless serve --wait` (also `bir-headless --wait`) waits for bind
-  **and** the live-DB owner lock. While the GUI holds them, headless prints
-  `waiting for bind 127.0.0.1:17421 …` or `waiting for live DB owner lock …`.
+- `bir-headless serve --wait` (also `bir-headless --wait`) waits for the bind.
+  While the GUI holds it, headless prints `waiting for bind 127.0.0.1:17421 …`.
   After GUI quit, headless binds and serves.
-- **Without `--wait`**, a busy bind fails immediately (exit 2) and a busy
-  live-DB lock fails immediately (`LiveDatabaseInUse`, exit 1).
+- **Without `--wait`**, a busy bind fails immediately (exit 2). An open
+  database never blocks; one another process has been setting up for over
+  30 s fails with `MaintenanceBusy` (exit 1).
 - `bir-headless serve --detach` (also `bir-headless --detach`) applies the
   same rules, then backgrounds the child. A second `--detach` while a live
   pid or bind/lock is held **fails immediately** (exit 2). `--detach --wait`
@@ -908,9 +912,8 @@ If `bir-headless serve` prints bind-in-use: another AgentHost already owns
 `17421` — quit GUI or the other daemon, or set `GPUI_AGENT_ADDR`. Use
 `serve --wait` if you want this process to resume when the owner quits.
 
-If it prints `already open` / `LiveDatabaseInUse`: painted `bir` still has the
-app-group file. Quit the GUI, or pass `--wait` (headless does not auto-yield
-via a protocol op).
+If it prints `is busy` / `MaintenanceBusy`: another BIR app has been creating
+or migrating the file for over 30 seconds. Try again, or pass `--wait`.
 
 ```bash
 export GPUI_AGENT_ADDR=127.0.0.1:17421

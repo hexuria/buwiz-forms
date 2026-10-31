@@ -25,6 +25,8 @@ thread_local! {
     /// The tray asks on the UI thread, which must not wait on the database
     /// lock the submission worker may be holding.
     static GLOBAL_HOTKEY: RefCell<Option<Option<String>>> = const { RefCell::new(None) };
+    /// The connection's `data_version` at the last [`external_change`] look.
+    static SEEN_DATA_VERSION: std::cell::Cell<Option<i32>> = const { std::cell::Cell::new(None) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
@@ -76,14 +78,18 @@ pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Databa
 static SUBMISSION_WORKER: std::sync::OnceLock<()> = std::sync::OnceLock::new();
 static WORKER_THREAD: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(None);
-static OWNER_LOCK_RELEASED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static DATABASE_RELEASED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — once per process, on its own
 /// thread and Tokio runtime, exactly as painted `bir` and `bir-headless`
-/// do. It shares `db`, the one owner-locked connection, rather than opening
+/// do. It shares `db`, this process's one connection, rather than opening
 /// a second. `BIR_SFTP_DRY_RUN` is read by the worker's transport, unchanged.
+///
+/// Other BIR apps may have the same file open. The worker runs the jobs only
+/// while it holds the file's worker lease: the first app to start its worker
+/// keeps it until it quits, the others follow and take over then (see
+/// `bir_core::background_cron::start_cron_jobs`).
 fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     if SUBMISSION_WORKER.set(()).is_err() {
         return;
@@ -106,16 +112,16 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
     }
 }
 
-/// Stop the submission worker and release the owner lock.
+/// Stop the submission worker (releasing its worker lease) and close the
+/// database.
 ///
 /// Quit (the menu, Cmd/Ctrl+Q, `process.exit`) and an update install call
 /// this. The worker finishes the tick it is on, drops its database handle,
 /// and this thread checkpoints and closes. A second call does nothing. Safe
 /// when the database was never opened.
 ///
-/// An update install calls it before starting the new process, because the
-/// owner lock is a process-wide flock and the replacement cannot open the
-/// database until this process has dropped it.
+/// An update install calls it before starting the new process, so the
+/// replacement finds the worker lease free and the WAL checkpointed.
 pub(crate) fn shutdown_for_quit() {
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
@@ -139,7 +145,7 @@ pub(crate) fn shutdown_for_quit() {
 fn release_database() {
     DATABASE.with(|slot| {
         let Some(handle) = slot.borrow_mut().take() else {
-            OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
+            DATABASE_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
             return;
         };
         match std::sync::Arc::try_unwrap(handle) {
@@ -151,10 +157,8 @@ fn release_database() {
                 if let Err(error) = db.close() {
                     tracing::warn!("database close failed: {error}");
                 }
-                // `close` drops the owner lock on both success and a failed
-                // checkpoint: the fields were moved out, so the guard drops
-                // when this function returns.
-                OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
+                // `close` lets go of the file on both success and failure.
+                DATABASE_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
             }
             Err(handle) => match handle.try_lock() {
                 Ok(db) => {
@@ -163,7 +167,7 @@ fn release_database() {
                     }
                 }
                 Err(_) => tracing::warn!(
-                    "database still in use at quit; the owner lock releases when the process exits"
+                    "database still in use at quit; the OS closes it when the process exits"
                 ),
             },
         }
@@ -196,11 +200,11 @@ fn forget_global_hotkey() {
     GLOBAL_HOTKEY.with(|cached| *cached.borrow_mut() = None);
 }
 
-/// Whether [`shutdown_for_quit`] dropped the owner lock. An update refuses to
-/// relaunch when this is still false: the new process would lose the race
-/// for the encrypted database.
-pub(crate) fn owner_lock_released() -> bool {
-    OWNER_LOCK_RELEASED.load(std::sync::atomic::Ordering::SeqCst)
+/// Whether [`shutdown_for_quit`] closed the database. An update refuses to
+/// relaunch when this is still false: the old process would still be
+/// using the file (and maybe the worker lease) under the new one.
+pub(crate) fn database_released() -> bool {
+    DATABASE_RELEASED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// Open the database when the shell launches; `host::run` calls this.
@@ -253,8 +257,8 @@ pub(crate) fn wake_submission_worker() {
     bir_core::background_cron::wake();
 }
 
-/// One connection for the process — the same owner-lock discipline as painted
-/// `bir` (a second app instance cannot take it while we hold it).
+/// One connection for the process. Other BIR apps may have the same file
+/// open; SQLite's WAL mode and busy timeout let both read and write.
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
@@ -2124,11 +2128,10 @@ fn open_in_system_browser(path: &std::path::Path) -> Result<(), HostError> {
 }
 
 /// Close the live connection — used before a database-replace import so the
-/// next `with_database` reopens the freshly extracted file (and re-acquires
-/// the owner lock the closed connection was holding). The submission worker
-/// shares the handle, so the connection is swapped for an in-memory
+/// next `with_database` reopens the freshly extracted file. The submission
+/// worker shares the handle, so the connection is swapped for an in-memory
 /// placeholder inside it rather than the handle being dropped: dropping it
-/// would leave the worker holding the old file and its owner lock.
+/// would leave the worker holding the old file.
 fn reset_database() -> Result<(), HostError> {
     DATABASE.with(|slot| {
         let slot = slot.borrow();
@@ -2191,7 +2194,7 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
     if is_db {
         // Painted flow (import_export.rs): safety-backup the live file, then
         // extract the archive over it. Drop the cached connection first — it
-        // holds the owner lock and an open handle on the file being replaced.
+        // holds an open handle on the file being replaced.
         let db_path = db::app_database_path();
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2210,6 +2213,14 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
             );
         }
         reset_database()?;
+        // Another BIR app (the mini app in Rox, bir-headless) with the file
+        // open would keep writing to the database this replaces.
+        if db::database_in_use_elsewhere(&db_path) {
+            return Err(HostError::new(
+                "Another BIR app has the database open. Quit it (for example the BIR mini app \
+                 in Rox, or bir-headless), then restore the backup again.",
+            ));
+        }
         return match bir_core::import::extract_database_zip(path, &db_path) {
             Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
             Err(error) => Err(HostError::new(error.to_string())),
@@ -2560,6 +2571,38 @@ fn data_change_token() -> HostResult {
     })
 }
 
+/// Whether another process wrote to the database since the last call.
+///
+/// SQLite's `data_version` on this process's connection moves only when
+/// another connection commits (this app's own writes and its submission
+/// worker share the connection and leave it alone), so the page can poll
+/// this every second and reload only on a real outside change. It never
+/// waits: while the submission worker holds the connection it answers false
+/// and the next look catches up. A change also drops this process's caches
+/// of stored values (the global hotkey, the saved account).
+fn external_change() -> HostResult {
+    if !crate::account_gate::is_unlocked() {
+        return Ok(HostValue::Bool(false));
+    }
+    let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) else {
+        return Ok(HostValue::Bool(false));
+    };
+    let Ok(guard) = handle.try_lock() else {
+        return Ok(HostValue::Bool(false));
+    };
+    let Some(now) = guard.data_version() else {
+        return Ok(HostValue::Bool(false));
+    };
+    drop(guard);
+    let before = SEEN_DATA_VERSION.replace(Some(now));
+    let changed = before.is_some_and(|before| before != now);
+    if changed {
+        forget_global_hotkey();
+        crate::cloud_account::forget_stored_cache();
+    }
+    Ok(HostValue::Bool(changed))
+}
+
 /// The module the app's JavaScript imports as `"bir"`.
 pub fn module() -> HostModule {
     let module = HostModule::new("bir")
@@ -2621,6 +2664,7 @@ pub fn module() -> HostModule {
         .function("agent_take", |_| agent_take())
         .function("agent_enabled", |_| Ok(HostValue::Bool(agent_enabled())))
         .function("data_change_token", |_| data_change_token())
+        .function("external_change", |_| external_change())
         .async_function("pull_device_filings", pull_device_filings)
         .function("shell_set_chrome", shell_set_chrome);
     let module = crate::cloud_account::register(module);
@@ -2852,6 +2896,8 @@ export function agent_take(): string | null;
 export function agent_enabled(): boolean;
 /** Opaque; equal values mean the database has not changed in between. */
 export function data_change_token(): string;
+/** True when another BIR app wrote to the database since the last call (cheap; poll every second). */
+export function external_change(): boolean;
 /** Pick up filings an assistant queued on the account server (off the UI thread). Null when there is nothing to say. */
 export function pull_device_filings(): Promise<{ message: string; icon: string } | null>;
 /** True once the main window is up. False through the gate, first launch, and sign-in. */

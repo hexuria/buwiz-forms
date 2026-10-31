@@ -35,8 +35,14 @@ mod profiles;
 mod providers;
 mod queueable;
 mod receipts;
+mod sharing;
 pub use queueable::{AmendmentBase, ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
+pub use sharing::{
+    MAINTENANCE_LOCK_WAIT, WORKER_LEASE_RETRY, WorkerLease, database_in_use_elsewhere,
+    is_busy_or_locked, maintenance_lock_path, open_lock_path, with_maintenance_lock,
+    worker_lock_path,
+};
 mod submissions;
 mod taxpayers;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
@@ -45,7 +51,7 @@ pub use submissions::SubmissionSummary;
 pub use taxpayers::{BulkCopyReport, MissingFormPolicy, TemplateConflictPolicy};
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::info;
@@ -300,7 +306,7 @@ pub(crate) fn keychain_miss_is_genuine(exit_code: Option<i32>) -> bool {
 
 #[derive(thiserror::Error, Debug)]
 pub enum DbError {
-    #[error("Database error: {0}")]
+    #[error("{}", sqlite_error_text(.0))]
     Sqlite(#[from] rusqlite::Error),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
@@ -319,12 +325,15 @@ pub enum DbError {
     /// save-009: Amended Return = No while a filed original exists.
     #[error("{}", crate::forms::queueable::AMENDED_RETURN_ALERT)]
     AmendedReturnRequired,
+    /// Another process held the database's maintenance lock (creating,
+    /// migrating or repairing the file) for longer than
+    /// [`MAINTENANCE_LOCK_WAIT`].
     #[error(
-        "live database {} is already open (painted bir or bir-headless). \
-         Single live-DB owner: quit the other process. There is no protocol Op::Yield.",
+        "The database {} is busy: another BIR app has been setting it up for over 30 seconds. \
+         Try again in a moment.",
         .0.display()
     )]
-    LiveDatabaseInUse(PathBuf),
+    MaintenanceBusy(PathBuf),
     /// Exporting a profile whose taxpayer has a PIN, without it. The text is
     /// the refusal a caller surfaces as-is.
     #[error("This profile's PIN is required to export it.")]
@@ -341,9 +350,30 @@ pub enum DbError {
 
 pub struct Database {
     pub(crate) conn: Connection,
-    /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.
-    /// `None` for ephemeral fixtures and `Database::open` test helpers.
-    _owner_lock: Option<File>,
+    /// The file this connection opened; `None` in memory. The background
+    /// worker takes its lease next to it.
+    path: Option<PathBuf>,
+    /// Shared lock on `<db>.open.lock` while this connection is open, so no
+    /// other process moves the file aside under it. `None` in memory.
+    _open_lock: Option<File>,
+}
+
+/// The text of a SQLite error. A write that still found the file locked
+/// after the busy timeout says so plainly: it is another BIR app saving, and
+/// trying again works.
+fn sqlite_error_text(error: &rusqlite::Error) -> String {
+    match error {
+        rusqlite::Error::SqliteFailure(failure, _)
+            if matches!(
+                failure.code,
+                ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
+            ) =>
+        {
+            "The database is busy: another BIR app is saving to it. Try again in a moment."
+                .to_string()
+        }
+        other => format!("Database error: {other}"),
+    }
 }
 
 /// The filing period a Tax Form Library selection (`FileForm { form_code,
@@ -388,89 +418,21 @@ pub fn prepare_app_database_file(path: &Path) {
     }
 }
 
-/// Sidecar lock next to the SQLCipher file (`bir_data.db.owner.lock`).
-pub fn live_owner_lock_path(db_path: &Path) -> PathBuf {
-    let mut raw = db_path.as_os_str().to_os_string();
-    raw.push(".owner.lock");
-    PathBuf::from(raw)
-}
-
-/// Exclusive non-blocking lock so painted `bir` and `bir-headless` cannot
-/// both own the live file. There is no protocol `Op::Yield`.
-pub fn try_acquire_live_owner_lock(db_path: &Path) -> Result<File, DbError> {
-    let lock_path = live_owner_lock_path(db_path);
-    if let Some(parent) = lock_path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let file = open_live_owner_lock_file(&lock_path, db_path)?;
-    acquire_exclusive_owner_lock(&file, db_path)?;
-    Ok(file)
-}
-
-fn open_live_owner_lock_file(lock_path: &Path, db_path: &Path) -> Result<File, DbError> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        match OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .share_mode(0)
-            .open(lock_path)
-        {
-            Ok(file) => Ok(file),
-            Err(error)
-                if error.kind() == std::io::ErrorKind::PermissionDenied
-                    || error.raw_os_error() == Some(32) =>
-            {
-                Err(DbError::LiveDatabaseInUse(db_path.to_path_buf()))
-            }
-            Err(error) => Err(DbError::Io(error)),
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = db_path;
-        Ok(OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(lock_path)?)
-    }
-}
-
-fn acquire_exclusive_owner_lock(file: &File, db_path: &Path) -> Result<(), DbError> {
-    #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-        if rc != 0 {
-            return Err(DbError::LiveDatabaseInUse(db_path.to_path_buf()));
-        }
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = (file, db_path);
-        Ok(())
-    }
-}
-
 /// Open the live SQLCipher database (keychain / file-fallback key), not an
 /// ephemeral in-memory fixture. Painted `bir` uses [`Database::open_or_recreate`].
+///
+/// Other processes may have the same file open at the same time (bir-shell,
+/// bir-mini-app, painted bir, bir-headless): see [`sharing`].
 pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbError> {
     let path = app_database_path();
     prepare_app_database_file(&path);
-    let lock = try_acquire_live_owner_lock(&path)?;
     let (db, recovered) = Database::open_or_recreate(&path)?;
     // D8a: the shipped holiday lists, on first run and for every new year
     // an update ships. Never fatal: the app runs without them.
     if let Err(error) = db.seed_official_holidays() {
         tracing::warn!(%error, "official holidays not seeded");
     }
-    Ok((db.with_owner_lock(lock), path, recovered))
+    Ok((db, path, recovered))
 }
 
 /// Open the live SQLCipher file without quarantining. `bir-headless serve`
@@ -478,9 +440,8 @@ pub fn open_live_database() -> Result<(Database, PathBuf, Option<PathBuf>), DbEr
 pub fn open_serve_database() -> Result<(Database, PathBuf), DbError> {
     let path = app_database_path();
     prepare_app_database_file(&path);
-    let lock = try_acquire_live_owner_lock(&path)?;
     let db = Database::open(&path)?;
-    Ok((db.with_owner_lock(lock), path))
+    Ok((db, path))
 }
 
 /// Setting key for [`Database::list_send_grants`].
@@ -507,11 +468,6 @@ fn grant_form(form: &str) -> String {
 }
 
 impl Database {
-    fn with_owner_lock(mut self, lock: File) -> Self {
-        self._owner_lock = Some(lock);
-        self
-    }
-
     /// Unencrypted in-memory SQLite for isolated tests and the agent host fixture.
     ///
     /// Does not open the live app-group database path and does not touch the OS
@@ -521,7 +477,8 @@ impl Database {
         migrations::migrate_database(&conn)?;
         Ok(Self {
             conn,
-            _owner_lock: None,
+            path: None,
+            _open_lock: None,
         })
     }
 
@@ -533,6 +490,9 @@ impl Database {
     /// Returns the current SQLite `data_version`, which increments whenever another connection
     /// commits a write to the WAL. Used by the db-watcher in `bir-desktop` to detect external
     /// database changes without requiring direct access to the raw `conn` field.
+    ///
+    /// Other processes' commits move it too, so comparing two reads tells
+    /// whether anyone else wrote in between.
     pub fn data_version(&self) -> Option<i32> {
         self.conn
             .query_row("PRAGMA data_version;", [], |row| row.get(0))
@@ -547,28 +507,82 @@ impl Database {
         self.conn.total_changes()
     }
 
+    /// The file this connection opened (`None` in memory).
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
+    }
+
     /// Opens the database, quarantining an unreadable existing file and
     /// recreating it when the on-disk contents are not a usable SQLCipher DB.
+    ///
+    /// Only "not a database" (wrong key, garbage) leads there, never a busy
+    /// or locked file. The decision is taken again under the maintenance
+    /// lock after re-opening (another process may have just created or
+    /// repaired the file), and a file another process has open is never
+    /// moved aside.
     pub fn open_or_recreate<P: AsRef<Path>>(path: P) -> Result<(Self, Option<PathBuf>), DbError> {
         let path = path.as_ref();
 
         match Self::open(path) {
             Ok(db) => Ok((db, None)),
             Err(err) if path.exists() && Self::should_recreate_after_open_error(&err) => {
-                let backup_path = Self::quarantine_database_file(path)?;
-                Self::cleanup_old_backups(path, 3);
-                let db = Self::open(path)?;
-                Ok((db, Some(backup_path)))
+                with_maintenance_lock(path, || match Self::open(path) {
+                    Ok(db) => Ok((db, None)),
+                    Err(err) if path.exists() && Self::should_recreate_after_open_error(&err) => {
+                        let Some(sole_use) = sharing::sole_use(path) else {
+                            tracing::error!(
+                                %err,
+                                "database unreadable here but open in another BIR app; not moving it aside"
+                            );
+                            return Err(DbError::Other(format!(
+                                "The database {} cannot be read with this app's key, and it is \
+                                 open in another BIR app. Quit the other BIR apps and try again.",
+                                path.display()
+                            )));
+                        };
+                        let backup_path = Self::quarantine_database_file(path)?;
+                        drop(sole_use);
+                        Self::cleanup_old_backups(path, 3);
+                        let db = Self::open(path)?;
+                        Ok((db, Some(backup_path)))
+                    }
+                    Err(err) => Err(err),
+                })
             }
             Err(err) => Err(err),
         }
     }
 
     /// Opens the database and initializes SQLCipher using the OS keychain.
+    ///
+    /// Safe while other processes have the file open: creating the file or
+    /// the key and running migrations happen under the maintenance lock, and
+    /// an open that finds the file busy is tried again.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, DbError> {
-        let conn = Connection::open(path)?;
+        let path = path.as_ref();
+        sharing::retry_when_busy(|| {
+            let creating = std::fs::metadata(path)
+                .map(|m| m.len() == 0)
+                .unwrap_or(true);
+            if creating {
+                with_maintenance_lock(path, || Self::open_shared(path))
+            } else {
+                Self::open_shared(path)
+            }
+        })
+    }
 
-        let key_hex = Self::get_or_create_master_key()?;
+    fn open_shared(path: &Path) -> Result<Self, DbError> {
+        let key_hex = sharing::master_key_once(
+            path,
+            Self::get_existing_master_key,
+            Self::get_or_create_master_key,
+        )?;
+
+        // Shared before the file is opened: a repair holding it exclusively
+        // finishes moving the old file aside first.
+        let open_lock = sharing::hold_open_lock(path);
+        let conn = Connection::open(path)?;
 
         // Initialize SQLCipher transparent encryption
         conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", key_hex))?;
@@ -594,8 +608,14 @@ impl Database {
             })?;
         }
 
-        // Apply database schema migrations
-        migrations::migrate_database(&conn)?;
+        // Apply database schema migrations: once, under the maintenance
+        // lock, when this build is newer than the file; the idempotent heals
+        // run on every open, inside one exclusive transaction.
+        if migrations::needs_migration(&conn)? {
+            with_maintenance_lock(path, || migrations::migrate_database(&conn))?;
+        } else {
+            migrations::migrate_database(&conn)?;
+        }
 
         // Sync legacy announcements to bir_notices table
         let _ = conn.execute_batch("
@@ -615,7 +635,8 @@ impl Database {
 
         Ok(Self {
             conn,
-            _owner_lock: None,
+            path: Some(path.to_path_buf()),
+            _open_lock: open_lock,
         })
     }
 
@@ -654,7 +675,8 @@ impl Database {
 
         Ok(Self {
             conn,
-            _owner_lock: None,
+            path: Some(path.to_path_buf()),
+            _open_lock: None,
         })
     }
 
@@ -929,12 +951,21 @@ impl Database {
         Ok(())
     }
 
-    /// Consume self and close cleanly after a WAL checkpoint.
+    /// Consume self and close cleanly.
+    ///
+    /// The checkpoint is PASSIVE: it copies what it can without waiting for
+    /// other processes' readers or writers, and a busy file is not an error
+    /// (the last connection to close, or SQLite's auto-checkpoint, finishes
+    /// the job).
     pub fn close(self) -> Result<(), DbError> {
-        let Database { conn, _owner_lock } = self;
-        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let Database {
+            conn, _open_lock, ..
+        } = self;
+        if let Err(error) = conn.execute_batch("PRAGMA wal_checkpoint(PASSIVE);") {
+            tracing::warn!(%error, "passive WAL checkpoint at close skipped");
+        }
         let result = conn.close().map_err(|(_, e)| DbError::Sqlite(e));
-        drop(_owner_lock);
+        drop(_open_lock);
         result
     }
 
@@ -1523,11 +1554,29 @@ mod tests {
 
         assert!(env_master_key(|_| None).is_none());
         assert!(env_master_key(only("BIR_DB_KEY", String::new())).is_none());
-        assert_eq!(env_master_key(only("BIR_DB_KEY", key.clone())).unwrap().unwrap(), key);
-        assert_eq!(env_master_key(only("BIR_DB_KEY_FILE", path)).unwrap().unwrap(), key);
-        assert!(env_master_key(only("BIR_DB_KEY", "abc".into())).unwrap().is_err());
+        assert_eq!(
+            env_master_key(only("BIR_DB_KEY", key.clone()))
+                .unwrap()
+                .unwrap(),
+            key
+        );
+        assert_eq!(
+            env_master_key(only("BIR_DB_KEY_FILE", path))
+                .unwrap()
+                .unwrap(),
+            key
+        );
+        assert!(
+            env_master_key(only("BIR_DB_KEY", "abc".into()))
+                .unwrap()
+                .is_err()
+        );
         let missing = "/nonexistent/db.key".to_string();
-        assert!(env_master_key(only("BIR_DB_KEY_FILE", missing)).unwrap().is_err());
+        assert!(
+            env_master_key(only("BIR_DB_KEY_FILE", missing))
+                .unwrap()
+                .is_err()
+        );
     }
 
     // A mock keyring can be tricky in CI, so we might encounter issues depending on the runner.
@@ -2196,29 +2245,30 @@ mod tests {
     }
 
     #[test]
-    fn second_open_live_database_is_refused_until_first_drops() {
+    fn a_second_live_open_shares_the_database_with_the_first() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let db_path = directory.path().join("owned.db");
         temp_env::with_var("BIR_DATABASE_PATH", Some(db_path.as_os_str()), || {
-            let (first, opened, _) = open_live_database().expect("first live owner");
+            let (first, opened, _) = open_live_database().expect("first live open");
             assert_eq!(opened, db_path);
-            let error = match open_live_database() {
-                Ok(_) => panic!("second live owner must fail"),
-                Err(error) => error,
-            };
-            assert!(matches!(error, DbError::LiveDatabaseInUse(_)), "{error}");
-            let serve_error = match open_serve_database() {
-                Ok(_) => panic!("serve while GUI holds lock must fail"),
-                Err(error) => error,
-            };
+            let (second, _, recovered) =
+                open_live_database().expect("a second app opens the same file");
+            assert!(recovered.is_none());
+            let (serve, _) = open_serve_database().expect("bir-headless opens it too");
+            first.set_setting("from-first", "1").expect("first writes");
+            second
+                .set_setting("from-second", "2")
+                .expect("second writes");
+            serve.set_setting("from-serve", "3").expect("serve writes");
+            for db in [&first, &second, &serve] {
+                assert_eq!(db.get_setting("from-first").unwrap(), Some("1".into()));
+                assert_eq!(db.get_setting("from-second").unwrap(), Some("2".into()));
+                assert_eq!(db.get_setting("from-serve").unwrap(), Some("3".into()));
+            }
             assert!(
-                matches!(serve_error, DbError::LiveDatabaseInUse(_)),
-                "{serve_error}"
+                !directory.path().join("owned.db.owner.lock").exists(),
+                "no life-long owner lock is taken any more"
             );
-            drop(first);
-            let (second, _, _) = open_live_database().expect("owner after drop");
-            drop(second);
-            open_serve_database().expect("serve after GUI drop");
         });
     }
 

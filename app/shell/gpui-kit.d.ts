@@ -27921,6 +27921,8 @@ declare module "bir" {
   export function agent_enabled(): boolean;
   /** Opaque; equal values mean the database has not changed in between. */
   export function data_change_token(): string;
+  /** True when another BIR app wrote to the database since the last call (cheap; poll every second). */
+  export function external_change(): boolean;
   /** Pick up filings an assistant queued on the account server (off the UI thread). Null when there is nothing to say. */
   export function pull_device_filings(): Promise<{ message: string; icon: string } | null>;
   /** True once the main window is up. False through the gate, first launch, and sign-in. */

@@ -2496,8 +2496,13 @@ mod tests {
         let typed: Form1601CDraft = serde_json::from_value(json.clone()).unwrap();
         assert_eq!(typed.penalty_due_date(), Some(day(10, 12)));
         let september_moved = moved("1601C", day(10, 10), day(10, 20));
-        apply_penalty_profile(september, &mut json, &profile, std::slice::from_ref(&september_moved))
-            .unwrap();
+        apply_penalty_profile(
+            september,
+            &mut json,
+            &profile,
+            std::slice::from_ref(&september_moved),
+        )
+        .unwrap();
         let typed: Form1601CDraft = serde_json::from_value(json).unwrap();
         assert_eq!(typed.penalty_due_date(), Some(day(10, 20)));
     }

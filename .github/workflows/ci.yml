@@ -198,7 +198,7 @@ jobs:
     # pass. Dependencies were already shared between the two.
     #
     # No `--target` either. Every leg of this matrix names its own host triple
-    # (macos-14/aarch64-apple-darwin, ubuntu-22.04/x86_64-unknown-linux-gnu,
+    # (macos-15/aarch64-apple-darwin, ubuntu-22.04/x86_64-unknown-linux-gnu,
     # windows-latest/x86_64-pc-windows-msvc) and no RUSTFLAGS are set anywhere,
     # so passing it was semantically identical to a host build while costing
     # real resources: it forced artifacts into target/<triple>/, rebuilt the
@@ -421,10 +421,10 @@ jobs:
           done <<<"$changed"
         fi
 
-        all_systems='{"include":[{"os":"macos-14","target":"aarch64-apple-darwin"},{"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"},{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
+        all_systems='{"include":[{"os":"macos-15","target":"aarch64-apple-darwin"},{"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"},{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
         windows_only='{"include":[{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
         if [[ "$app" == true ]]; then
-          check=true; check_matrix="$all_systems"; systems="macos-14, ubuntu-22.04, windows-latest"
+          check=true; check_matrix="$all_systems"; systems="macos-15, ubuntu-22.04, windows-latest"
           check_reason="$app_reason"; scripts=false
         elif [[ "$windows_pkg" == true ]]; then
           check=true; check_matrix="$windows_only"; systems="windows-latest"
@@ -508,7 +508,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-22.04, macos-14, windows-latest ]
+        os: [ ubuntu-22.04, macos-15, windows-latest ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -536,7 +536,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-14, ubuntu-22.04, windows-latest ]
+        os: [ macos-15, ubuntu-22.04, windows-latest ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v4
@@ -626,7 +626,7 @@ jobs:
 
   # The one required status for the validation-rules audits. A skipped matrix
   # job reports no per-OS check names, so requiring "validation-rules-v1
-  # (macos-14)" etc. would leave every PR that skips them waiting forever.
+  # (macos-15)" etc. would leave every PR that skips them waiting forever.
   # Passes when the audits ran green or were skipped; fails if either one
   # failed or was cancelled.
   validation-rules:

@@ -2545,7 +2545,11 @@ mod tests {
         let mut draft = make_draft(500_000.0, 0.0, 2026, 3);
         draft.apply_penalty_profile(&test_profile(), &[]);
         assert_eq!(draft.penalty_due_date, Some(day(10, 26)));
-        assert_eq!(penalties_on(&draft, day(10, 26)), 0.0, "paid on the deadline");
+        assert_eq!(
+            penalties_on(&draft, day(10, 26)),
+            0.0,
+            "paid on the deadline"
+        );
         assert!(penalties_on(&draft, day(10, 27)) > 0.0, "a day late");
 
         let moved = crate::calendar_rules::DeadlineOverride {
@@ -2563,7 +2567,11 @@ mod tests {
         };
         draft.apply_penalty_profile(&test_profile(), std::slice::from_ref(&moved));
         assert_eq!(draft.penalty_due_date, Some(day(11, 3)));
-        assert_eq!(penalties_on(&draft, day(11, 3)), 0.0, "paid on the moved deadline");
+        assert_eq!(
+            penalties_on(&draft, day(11, 3)),
+            0.0,
+            "paid on the moved deadline"
+        );
         assert!(penalties_on(&draft, day(11, 4)) > 0.0, "a day after it");
 
         // A fiscal quarter has no Calendar row: its own date.
@@ -2572,7 +2580,11 @@ mod tests {
         fiscal.year_end_month = 6;
         fiscal.apply_penalty_profile(&test_profile(), std::slice::from_ref(&moved));
         assert_eq!(fiscal.penalty_due_date, None);
-        assert_eq!(fiscal.filing_deadline(), Some(day(4, 27)), "Q3 of a June year ends in March");
+        assert_eq!(
+            fiscal.filing_deadline(),
+            Some(day(4, 27)),
+            "Q3 of a June year ends in March"
+        );
 
         // Past Draft, the reviewed date stays.
         let mut queued = draft.clone();

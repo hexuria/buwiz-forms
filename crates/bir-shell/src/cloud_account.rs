@@ -544,12 +544,20 @@ fn clear_stored() {
     remember_stored(None);
 }
 
+/// Drop [`STORED`] so the next read goes back to the store: another BIR
+/// process wrote to the shared database and may have rotated the sign-in.
+pub(crate) fn forget_stored_cache() {
+    *stored_cache() = None;
+}
+
 fn remember_stored(stored: Option<StoredAccount>) {
     *stored_cache() = Some((Instant::now(), stored));
 }
 
 fn stored_cache() -> std::sync::MutexGuard<'static, Option<(Instant, Option<StoredAccount>)>> {
-    STORED.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    STORED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[cfg(test)]

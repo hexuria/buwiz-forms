@@ -235,7 +235,7 @@ impl AppState {
     ///
     /// macOS quits by default through the guarded `request_application_quit`,
     /// exactly like tray Quit (drops the tray icon, releases the agent bind
-    /// and the live-DB owner lock; unsaved Profile compliance changes keep the
+    /// and the worker lease; unsaved Profile compliance changes keep the
     /// window open). With the "Cmd+Q hides to menu bar" setting on it instead
     /// hides to the menu bar and the background cron keeps polling; the real
     /// quit is then tray Quit or the agent's `shutdown`. Linux always quits;

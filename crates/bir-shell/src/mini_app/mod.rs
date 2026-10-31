@@ -1,7 +1,11 @@
 //! `bir-mini-app`: BIR with no window, as an MCP server for Rox.
 //!
-//! It owns the live database and the submission worker the way bir-shell
-//! does (same account gate, same single-owner lock), and answers MCP itself:
+//! It opens the live database and starts the submission worker the way
+//! bir-shell does (same account gate), and answers MCP itself. Other BIR
+//! apps may have the same database open at the same time; the submission
+//! worker runs the jobs only when this process holds the file's worker lease,
+//! which it gets only by starting before them (it normally follows the
+//! desktop app):
 //!
 //! - `bir-mini-app mcp` speaks MCP on stdin/stdout. Rox spawns it as the v1
 //!   plugin `dev.goldcoders.bir` ([`v1`]): it answers nothing before
@@ -151,20 +155,19 @@ fn run(transport: Transport) -> ExitCode {
     code
 }
 
-/// Open the database file now, signed in or not, so a second owner fails at
-/// start with the database's own "already open" sentence rather than on the
-/// first tool call. The account functions use this same handle.
+/// Open the database file now, signed in or not, so a file that cannot be
+/// opened fails at start rather than on the first tool call. The account
+/// functions use this same handle.
 ///
-/// Rox respawns this process back to back (an install reviews one spawn,
-/// then starts another), and the previous process may still hold the
-/// owner lock for a moment after it was told to stop: wait up to two
-/// seconds for it before giving up.
+/// Another BIR app may be creating or migrating the file at that moment:
+/// the open waits for it, and a file still busy after that is tried again
+/// for up to two more seconds before giving up.
 fn claim_database() -> Result<(), String> {
     let mut tries = 0;
     loop {
         match crate::bir_module::with_account_database(|_| Ok(())) {
             Ok(()) => return Ok(()),
-            Err(error) if tries < 20 && error.message().contains("Single live-DB owner") => {
+            Err(error) if tries < 20 && error.message().contains("is busy") => {
                 tries += 1;
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
