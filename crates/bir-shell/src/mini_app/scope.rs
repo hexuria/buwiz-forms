@@ -65,6 +65,7 @@ pub(crate) static RULES: &[(&str, Rule)] = &[
     ("cloud_account_sign_out", Rule::Free),
     ("cloud_account_session_opened", Rule::Free),
     ("cloud_account_session_closed", Rule::Free),
+    ("cloud_account_restored", Rule::Free),
     // Lists across taxpayers.
     ("list_taxpayers", Rule::Rows("tin_root")),
     ("list_profiles", Rule::Rows("tin")),

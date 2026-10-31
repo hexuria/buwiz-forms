@@ -109,8 +109,10 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
             gpui_shell::components::components().expect("component catalog must build");
         init_with_components(cx, &components);
         // The account gate decides the menu and whether the filing database
-        // opens. A locked launch paints only the welcome screen.
-        crate::cloud_account::prepare_launch();
+        // opens. A locked launch paints only the welcome screen. Checking a
+        // saved sign-in is a network refresh, so it runs after the window
+        // opens (`restore_in_background` below) and unlocks from there.
+        let restore_session = crate::cloud_account::begin_launch();
         crate::app_menu::install(cx);
 
         // Debug builds get eval + unfrozen prototypes for console work;
@@ -149,6 +151,9 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
         runtime.set_editor_files(true);
 
         open_main_window(cx, runtime, root);
+        if restore_session {
+            crate::cloud_account::restore_in_background(cx);
+        }
         crate::print_preview_window::start(cx);
         cx.activate(true);
     });

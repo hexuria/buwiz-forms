@@ -118,6 +118,32 @@ class BirApp extends View {
     const forced = themePreferenceFromEnv(process.env.BIR_SHELL_START);
     applyThemePreference(cx, forced || "system");
     if (gate.unlocked) this.boot(cx);
+    else if (gate.restoring) this.awaitRestoredSession(cx);
+  }
+
+  /**
+   * The host restores the saved sign-in on its own thread after the window
+   * opens (a token refresh can take seconds). Hold the gate's buttons until
+   * it answers, then open the filing UI if the session still qualifies.
+   */
+  awaitRestoredSession(cx) {
+    this.gateBusy = true;
+    this.gateDetail = "Checking this computer's sign-in…";
+    cx.spawn(async (acx) => {
+      try {
+        await this.store.call("cloud_account_restored");
+      } catch (_e) {}
+      let gate = { unlocked: false };
+      try {
+        gate = this.store.call("cloud_account_gate");
+      } catch (error) {
+        this.gateError = errorText(error);
+      }
+      this.gateBusy = false;
+      this.gateDetail = "";
+      if (gate.unlocked && !this.booted) this.boot(acx);
+      acx.notify();
+    });
   }
 
   /** The filing UI. Reached only after the Buwiz account gate is open. */
