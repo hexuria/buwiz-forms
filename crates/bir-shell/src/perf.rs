@@ -634,7 +634,7 @@ impl Probe {
         let mean = frames.iter().map(|f| f.work).sum::<f64>() / n;
         let over = frames.iter().filter(|f| f.work > f.budget).count();
         let budget = frames.first().map_or(8.3, |f| f.budget);
-        let avg = |pick: fn(&Frame) -> f64| frames.iter().map(|f| pick(f)).sum::<f64>() / n;
+        let avg = |pick: fn(&Frame) -> f64| frames.iter().map(pick).sum::<f64>() / n;
         let lines = [
             format!(
                 "bench: {} frames in {:.1}s ({:.1} frames/s), {} over {:.1} ms budget",
