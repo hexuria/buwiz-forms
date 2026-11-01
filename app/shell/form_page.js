@@ -2405,7 +2405,9 @@ function scheduleTable(cx, ui, it, width) {
   // The one sideways scroller in the app: a schedule wider than its box.
   return div()
     .id(`fp-table-${it.keys[0][0]}`)
-    .w(width)
+    .w_full()
+    .max_w(width)
+    .min_w(0)
     .rounded(RADIUS.row)
     .border(1)
     .border_color(t.border)
@@ -2680,7 +2682,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .min_h(22)
     .child(
       div()
-        .w(Math.max(120, inner - markerW - 8))
+        .flex_1()
+        .min_w(0)
+        .max_w(Math.max(120, inner - markerW - 8))
         .child(Text(cx, "control", req ? `${it.l} *` : it.l).whitespace_normal()),
     );
   if (it.rows) label.child(Text(cx, "meta", `${it.rows} rows`, "fg3").flex_none().pt(2));
@@ -3351,7 +3355,7 @@ function formContent(cx, app, width) {
     }
   });
 
-  const parts = div().flex().flex_col().gap(SPACE[4]).w(partsW);
+  const parts = div().flex().flex_col().gap(SPACE[4]).w_full().max_w(partsW).min_w(0);
   f.parts.forEach((p, pi) => {
     // Dev start route only (BIR_SHELL_START solo=<part>): draw that part alone.
     if (ui.devSolo != null && pi !== ui.devSolo) return;
@@ -3471,7 +3475,7 @@ function drawFormSplit(cx, app, L) {
       .when(Boolean(c.attn), (el) => el.child(c.attn))
       .child(div().id("fp-nav-list").flex().flex_col().gap(2).flex_1().min_h(0).w(navW).overflow_y_scrollbar().children(c.navRows));
   }
-  const body = div().flex().flex_col().w(formW + 22).pl(22).pt(28).pb(56).child(c.page);
+  const body = div().flex().flex_col().w_full().max_w(formW + 52).min_w(0).pl(22).pr(30).pt(28).pb(56).child(c.page);
   if (c.parts) body.child(c.parts);
   return div()
     .id("fp-split")
