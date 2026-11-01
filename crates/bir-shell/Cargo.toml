@@ -26,6 +26,13 @@ name = "bir-headless"
 path = "src/bin/headless.rs"
 required-features = ["agent"]
 
+# Spawns the bir-headless binary; without `agent` the binary is not built, so
+# a plain `cargo test` must skip this target instead of failing on a missing exe.
+[[test]]
+name = "headless_detach"
+path = "tests/headless_detach.rs"
+required-features = ["agent"]
+
 [features]
 # GPUI Fast (https://gpui-kit.com/docs/installation/#optional-gpui-fast-backend):
 # its retained rendering and layout engine in place of upstream GPUI, across
