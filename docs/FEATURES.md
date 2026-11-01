@@ -42,7 +42,7 @@ there, but nobody has run it on that platform.
   this is not full certification, and all Windows cells without specific
   evidence remain "untested".
 - The table was derived from the code on branch `forms/integration` (commit
-  `fe86f57d`): `cfg(target_os)` blocks, `crates/bir-desktop/src/platform/`,
+  `fe86f57d`): `cfg(target_os)` blocks, `crates/bir-shell/src/platform/`,
   `gui.rs`, `export_target.rs`, `crates/bir-core/src/db/mod.rs` and the
   packaging files. It was not produced by running the app on each platform.
 - The same data drives the matrix at the top of each platform page.

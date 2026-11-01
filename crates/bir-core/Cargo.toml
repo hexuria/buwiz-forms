@@ -11,7 +11,7 @@ build = "build.rs"
 unexpected_cfgs = "allow"
 
 [features]
-# Mac App Store build, enabled by `bir-desktop/mas_build`. Compiles out the
+# Mac App Store build, enabled by `bir-shell/mas_build`. Compiles out the
 # `sh -c` runner for user cron jobs (arbitrary code execution is rejected by
 # App Review 2.5.2 and cannot run under the App Sandbox); such jobs are marked
 # unavailable instead of executed.

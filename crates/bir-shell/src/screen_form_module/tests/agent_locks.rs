@@ -202,7 +202,7 @@ fn the_shared_lock_map_is_identical_for_a_sample_draft() {
 /// The profile context the page's open builds for `draft` (`opened_json`:
 /// `values_json` of the profile's own recomputed draft) and the one the
 /// desktop assistant builds for the same draft
-/// (crates/bir-desktop/src/agent/host_generic.rs `profile_context`:
+/// (crates/bir-shell/src/agent/host_generic.rs `profile_context`:
 /// `agent::field_map`, each value a JSON string).
 fn page_and_desktop_contexts(
     kind: AgentFormKind,

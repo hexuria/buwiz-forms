@@ -117,7 +117,7 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
         // release stays closed.
         set_development_mode(cfg!(debug_assertions));
 
-        // Storage identity — same key painted `bir` would use so the JS
+        // Storage identity — the shell's key so the JS
         // `storage` API lands in the app's own data dir.
         if let Err(error) = set_bundle_id("com.buwiz.bir") {
             tracing::warn!("storage unavailable: {error}");

@@ -1,6 +1,6 @@
 //! Menu-bar status item, hide/show, and the global show hotkey.
 //!
-//! This is the painted app's tray (`tray-icon` + `global-hotkey`), not a new
+//! This is the shell app's tray (`tray-icon` + `global-hotkey`), not a new
 //! one. Hide removes the window (and, on macOS, the Dock icon). Show is the
 //! tray's Show item, a click on the status item while the app is hidden, the
 //! stored global hotkey, or a Dock/taskbar reopen.
@@ -8,6 +8,7 @@
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(not(feature = "mas_build"))]
 use global_hotkey::hotkey::HotKey;
 use gpui_shell::gpui::{App, AsyncApp};
 
@@ -222,10 +223,12 @@ fn try_create_tray() -> Option<TrayUi> {
 }
 
 async fn poll_loop(cx: &mut AsyncApp) {
+    #[cfg(not(feature = "mas_build"))]
     let mut hotkeys = HotkeyWatch::new();
     loop {
         let stop = cx.update(|cx| {
             let stop = poll_tray(cx);
+            #[cfg(not(feature = "mas_build"))]
             hotkeys.poll(cx);
             stop
         });
@@ -302,6 +305,7 @@ fn poll_tray(cx: &mut App) -> bool {
     false
 }
 
+#[cfg(not(feature = "mas_build"))]
 struct HotkeyWatch {
     manager: Option<global_hotkey::GlobalHotKeyManager>,
     registered: Option<HotKey>,
@@ -309,6 +313,7 @@ struct HotkeyWatch {
     tick: u32,
 }
 
+#[cfg(not(feature = "mas_build"))]
 impl HotkeyWatch {
     fn new() -> Self {
         let manager = match global_hotkey::GlobalHotKeyManager::new() {
@@ -400,6 +405,7 @@ pub fn show_app(cx: &mut App) {
         .detach();
 }
 
+#[cfg(not(feature = "mas_build"))]
 fn toggle(cx: &mut App) {
     if app_is_hidden() {
         show_app(cx);
@@ -549,7 +555,7 @@ fn reclaim_menu_bar() {
 #[cfg(target_os = "linux")]
 fn linux_set_mapped(mapped: bool) {
     // GPUI has no window-hide on Linux. `xdotool` is the same best-effort
-    // the painted app uses; without it the tray Show item still activates.
+    // the shell uses; without it the tray Show item still activates.
     let verb = if mapped { "windowmap" } else { "windowunmap" };
     let _ = std::process::Command::new("sh")
         .arg("-c")

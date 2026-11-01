@@ -11,12 +11,19 @@
 mod account_gate;
 #[cfg(feature = "agent")]
 mod agent;
+
+#[cfg(feature = "agent")]
+pub fn run_headless() -> std::process::ExitCode {
+    agent::headless::run()
+}
 mod app_menu;
 mod auth_limiter;
 mod bir_module;
 mod blitz_render;
 mod cloud_account;
 mod dashboard_module;
+#[cfg(target_os = "linux")]
+mod desktop_entry;
 mod host;
 mod hotkey;
 #[cfg(any(test, target_os = "linux"))]

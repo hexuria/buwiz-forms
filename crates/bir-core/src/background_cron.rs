@@ -21,7 +21,7 @@ static ACTIVE_JOBS: OnceLock<Arc<Mutex<HashSet<String>>>> = OnceLock::new();
 /// on, then returns, so the submission worker can drop the database.
 static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 /// The shell holds this until a Buwiz account is signed in. Default false so
-/// bir-core and bir-desktop cron tests keep filing. The shell sets it true
+/// bir-core and bir-shell cron tests keep filing. The shell sets it true
 /// before the worker starts.
 static SUBMISSION_PAUSED: AtomicBool = AtomicBool::new(false);
 

@@ -1,16 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/bir",
     "crates/bir-core",
-    "crates/bir-desktop",
     "crates/bir-mcp",
     "crates/bir-print",
     "crates/bir-rules",
     "crates/bir-rules-codegen",
     "crates/bir-rules-platform",
 ]
-default-members = ["crates/bir-desktop"]
 
 [workspace.package]
 version = "0.1.0"
@@ -51,10 +48,8 @@ rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
 
 
 
-# gpui-agent control plane (main). One rev for bir-desktop (`agent` feature) and
+# gpui-agent control plane. One rev for bir-shell (`agent` feature) and
 # bir-mcp, so both sides speak one protocol and one discovery format.
-# `version` lets crates.io `bir` (via bir-desktop) resolve the published crate;
-# local and CI builds use the git rev.
 gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3" }
 
 # Error handling
@@ -66,19 +61,6 @@ dotenvy = "0.15.7"
 
 # OS integration
 keyring = { version = "3" }
-
-# GPUI via longbridge/gpui-kit 0.6 (pins gpui-pre / gpui-component / assets).
-# `gpui` is package gpui-pre (kit's pin), crate name `gpui`, so existing
-# `use gpui::*` / `gpui::Action` and proc-macros keep resolving. gpui-kit is a
-# different crates.io package, so Cargo allows both names on one gpui-pre graph.
-gpui-kit = "0.6"
-gpui = { package = "gpui-pre", version = "0.3" }
-gpui-component = "0.6"
-gpui-wry = "0.6"
-# Pure proc-macro (syn/quote/proc-macro2 only, no gpui dependency of its own),
-# so it inherits whatever `gpui` is in scope at the call site and cannot
-# introduce a second GPUI crate instance.
-gpui-rsx = "0.6"
 
 # Cargo resolves 1042 packages here: 1036 external dependencies against 6
 # workspace crates. Full debuginfo on all of them is what made target/ grow to

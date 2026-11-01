@@ -41,7 +41,7 @@ If these vars are unset, behavior stays as today: fetch `tinDispatcherSFTP.php`,
 - `SftpEndpoint::from_env()` only reads `TEST_SFTP_*`.
 - `open_iaf_session()` uses env if `TEST_SFTP_HOST` is set, else dispatcher.
 
-`crates/bir-desktop/src/gui.rs` already calls `dotenvy::dotenv().ok()`.
+`crates/bir-shell/src/gui.rs` already calls `dotenvy::dotenv().ok()`.
 `bir-headless` and `sftp_harness` do **not** load `.env` today.
 
 `.env.example` has Google/IMAP/signing keys only. `.gitignore` already ignores `.env`, `.env.local`, `.env.*.local`.
@@ -143,7 +143,7 @@ Update:
 
 - `evidence/sftp-submission/STUDY_WALKTHROUGH.md` — env override section
 - `evidence/sftp-submission/README.md` — mention `.env.example`
-- `crates/bir-desktop/docs/AGENT.md` claimed-queue paragraph — dispatcher default, `BIR_SFTP_*` override
+- `crates/bir-shell/docs/AGENT.md` claimed-queue paragraph — dispatcher default, `BIR_SFTP_*` override
 - `sftp_harness.rs` module docs
 
 State clearly: live BIR email proof used dispatcher, not env. Env is for labs and emergency host changes.

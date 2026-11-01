@@ -4,7 +4,7 @@
 //! never Rust types. Functions are synchronous (main thread, no engine
 //! re-entry); slow work (SFTP, exports) gets an `async_function` in a later
 //! slice. The database opens lazily through `open_live_database` so
-//! `BIR_DATABASE_PATH` keeps working for tests exactly like painted `bir`.
+//! `BIR_DATABASE_PATH` keeps working for tests across both shell hosts.
 
 use std::cell::RefCell;
 
@@ -76,7 +76,7 @@ static OWNER_LOCK_RELEASED: std::sync::atomic::AtomicBool =
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — once per process, on its own
-/// thread and Tokio runtime, exactly as painted `bir` and `bir-headless`
+/// thread and Tokio runtime, exactly as the shell GUI and `bir-headless`
 /// do. It shares `db`, the one owner-locked connection, rather than opening
 /// a second. `BIR_SFTP_DRY_RUN` is read by the worker's transport, unchanged.
 fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
@@ -167,6 +167,7 @@ fn release_database() {
 
 /// The stored global-show chord, if the database is already open and a key
 /// is saved. Does not open the database: a missing handle means "not set".
+#[cfg(not(feature = "mas_build"))]
 pub(crate) fn stored_global_hotkey() -> Option<String> {
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
     let db = handle.lock().ok()?;
@@ -225,7 +226,7 @@ pub(crate) fn submission_worker_wakes() -> u32 {
 }
 
 /// Tell the submission worker the queue changed, so a queued return goes out
-/// now rather than on the worker's next one-minute tick (the painted views
+/// now rather than on the worker's next one-minute tick (the shell form screens
 /// and the agent host do the same after Queue and Cancel queue).
 pub(crate) fn wake_submission_worker() {
     #[cfg(test)]
@@ -1427,7 +1428,7 @@ fn get_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 /// Fields the script reports merge over a profile-derived draft before the
-/// typed save — the same overlay shape the painted app uses, so the draft
+/// typed save — the same overlay shape the shell UI uses, so the draft
 /// keeps every engine-required field even when the UI edits a subset.
 fn overlay_fields<T: serde::Serialize + serde::de::DeserializeOwned>(
     base: T,
@@ -1567,12 +1568,17 @@ fn list_queued() -> HostResult {
 
 /// Move a saved draft into the queue. Generic forms go through
 /// `QueueableKind` + `save_queued_queueable`; the two engine-guarded forms
-/// use their dedicated transition + persistence, mirroring the painted views.
+/// use their dedicated transition + persistence, mirroring the shell form screens.
 fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
     let form_code = arguments.string(1)?.to_owned();
     let year = arguments.integer(2)? as u16;
     let quarter = optional_quarter(arguments, 3)?;
+    if !bir_core::forms::can_queue_for_submission(&form_code) {
+        return Err(HostError::new(format!(
+            "{form_code} cannot be queued for submission yet"
+        )));
+    }
     let queued = with_database(|db| {
         let queued: Result<i64, HostError> = (|| match form_code.as_str() {
             "2551Q" => crate::screen_form_module::out_of_line(|| {
@@ -1659,7 +1665,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 /// Cancel an unclaimed queued submission back to Draft (same guards as the
-/// painted views: claimed or submitted work cannot be canceled this way).
+/// shell form screens: claimed or submitted work cannot be canceled this way).
 fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
     let form_code = arguments.string(1)?.to_owned();
@@ -1992,7 +1998,7 @@ pub(crate) fn print_fields(
 }
 
 /// Fill the form's frozen print sheet, write it to a temp HTML file, and open
-/// it with the platform's default handler (the painted app shows it in a wry
+/// it with the platform's default handler (the shell app opens it in a wry
 /// preview window — the shell has no wry, and `cx.open_url` is HTTP-only, so
 /// the printable equivalent is the system browser via xdg-open/open/start).
 fn form_print_html(arguments: &gpui_shell::HostArguments) -> HostResult {
@@ -4286,7 +4292,7 @@ mod tests {
     // ---------- the submission worker ----------
 
     /// The shell's launch starts the submission worker on the database it
-    /// opens, so a queued return is sent without painted `bir` or
+    /// opens, so a queued return is sent without another GUI process or
     /// `bir-headless` running. Opening the database reads its key, so this
     /// runs in a child test process on a scratch `BIR_DATABASE_PATH` with
     /// `EBIR_TEST_ENV` (key off the keychain) and `BIR_SFTP_DRY_RUN`: never

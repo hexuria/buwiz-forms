@@ -882,7 +882,7 @@ impl AgentFormDef {
 ///   `values_json`: the [`field_map`] plus each duplicate occurrence the
 ///   page shows (`txtEmail#occurrence-1`) and the page's display-only
 ///   text (the row modules' additions, an unescaped line of business);
-/// - the desktop assistant (bir-desktop `profile_context`) builds the draft
+/// - the desktop assistant (bir-shell `profile_context`) builds the draft
 ///   for the open return's TIN, year and period and reads it with
 ///   [`field_map`] alone.
 ///

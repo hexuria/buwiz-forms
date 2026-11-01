@@ -1,7 +1,7 @@
 //! A4 print layout for the frozen BIR sheets.
 //!
-//! Ported from bir-desktop/src/views/frozen_html_preview.rs (commit 51e5bcfd
-//! "A4 fit"). Each `.page` sits in a paper-sized `.sheet` (the wrappers are
+//! Ported from the retired painted preview's A4 fit implementation. Each
+//! `.page` sits in a paper-sized `.sheet` (the wrappers are
 //! written by [`crate::static_html`]), the page is zoomed to fit A4, and
 //! html/body are pinned to the paper width so WebKit doesn't re-scale the
 //! print layout. Without that pin a 4-page form printed as 8 pages.

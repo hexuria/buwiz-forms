@@ -216,7 +216,7 @@ jobs:
 
       # The shipped app is the gpui-shell host (crates/bir-shell — a standalone
       # workspace with its own lockfile and target dir), built with no
-      # features: release runs the upstream engine. The painted bir-desktop
+      # features: release runs the upstream engine. The retired painted host
       # stays buildable but is not shipped.
       - name: Build ARM64
         run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target aarch64-apple-darwin

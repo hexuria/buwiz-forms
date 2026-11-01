@@ -9,14 +9,14 @@
 # Environment:
 #   VERSION               required, must match ^[0-9]+\.[0-9]+\.[0-9]+$
 #   BIN_NAME              cargo binary in <triple>/release to package
-#                         (default "bir-desktop"; "bir-shell" for the shell)
+#                         (default "bir-shell"; "bir-shell" for the shell)
 #   BIN_TARGET_ROOT       directory holding <triple>/release
 #                         (default "target"; "crates/bir-shell/target" for the
 #                         shell, a standalone workspace with its own target dir)
 #   RESOURCE_DIRS         repo-relative directories also staged into
 #                         Contents/Resources next to assets/ — "app
 #                         print-overrides" for the shell, empty for the
-#                         painted app
+#                         shell app
 #   BUILD_NUMBER          default: parsed from the justfile BUILD_NUMBER line
 #   SIGNING_IDENTITY      default "-" (ad-hoc, local smoke tests only);
 #                         otherwise a codesign identity name or SHA-1
@@ -45,7 +45,7 @@ fi
 
 APP_NAME="${APP_NAME:-eBIRForms}"
 BUNDLE_ID="${BUNDLE_ID:-dev.goldcoders.bir}"
-BIN_NAME="${BIN_NAME:-bir-desktop}"
+BIN_NAME="${BIN_NAME:-bir-shell}"
 BIN_TARGET_ROOT="${BIN_TARGET_ROOT:-target}"
 RESOURCE_DIRS="${RESOURCE_DIRS:-}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
@@ -165,8 +165,8 @@ PYEOF
 
 # ── a. Universal binary ──────────────────────────────────────────────────────
 
-python3 scripts/alias_desktop_bin.py "$BIN_TARGET_ROOT/aarch64-apple-darwin/release" "$BIN_NAME"
-python3 scripts/alias_desktop_bin.py "$BIN_TARGET_ROOT/x86_64-apple-darwin/release" "$BIN_NAME"
+python3 scripts/alias_app_bin.py "$BIN_TARGET_ROOT/aarch64-apple-darwin/release" "$BIN_NAME"
+python3 scripts/alias_app_bin.py "$BIN_TARGET_ROOT/x86_64-apple-darwin/release" "$BIN_NAME"
 lipo -create \
   "$BIN_TARGET_ROOT/aarch64-apple-darwin/release/bir" \
   "$BIN_TARGET_ROOT/x86_64-apple-darwin/release/bir" \

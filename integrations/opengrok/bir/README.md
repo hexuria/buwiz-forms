@@ -35,7 +35,7 @@ each instance a name with `GPUI_AGENT_CONNECT_ID`, so the user can tell them
 apart and pick one (otherwise it is listed as `pid:<pid>`):
 
 ```sh
-rtk cargo build --locked --release -p bir-desktop --features agent
+rtk cargo build --locked --release -p bir-shell --features agent
 GPUI_AGENT=1 GPUI_AGENT_TOKEN='<agent token>' GPUI_AGENT_CONNECT_ID=bir target/release/bir
 ```
 
@@ -48,7 +48,7 @@ port and publishes it in its discovery record:
 ```sh
 EBIR_TEST_ENV=1 BIR_DATABASE_PATH=/tmp/bir-demo/bir_data.db \
 GPUI_AGENT=1 GPUI_AGENT_TOKEN='<demo agent token>' GPUI_AGENT_CONNECT_ID=bir-demo \
-  target/debug/bir-desktop
+  target/debug/bir-shell
 ```
 
 ## Agent tokens: `BIR_MCP_TOKENS`
@@ -107,7 +107,7 @@ discovery records, none is logged, and none may be committed.
 
 Discovery is gpui-agent's own (`gpui_agent::discovery`). Every BIR host, the
 desktop window and `bir-headless serve` alike, writes
-`<runtime dir>/hosts/<pid>-<port>.json` (`addr`, `pid`, `app: "bir-desktop"`,
+`<runtime dir>/hosts/<pid>-<port>.json` (`addr`, `pid`, `app: "bir-shell"`,
 `executable`, and `connect_id` from `GPUI_AGENT_CONNECT_ID`; never a token)
 and removes it on exit. The runtime dir is `GPUI_AGENT_RUNTIME_DIR` if set,
 else `$XDG_RUNTIME_DIR/gpui-agent`, else `$TMPDIR/gpui-agent-<uid>`; BIR

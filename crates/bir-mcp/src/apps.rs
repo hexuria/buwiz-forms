@@ -4,10 +4,10 @@
 use gpui_agent::discovery::{self, HostRecord};
 use std::path::Path;
 
-/// `app` in a painted BIR host's record. `bir-shell` publishes its own name.
-pub const BIR_APP: &str = "bir-desktop";
-/// `app` values that are BIR. Headless still publishes `bir-desktop`.
-pub const BIR_APPS: [&str; 2] = [BIR_APP, "bir-shell"];
+/// `app` in a BIR host's discovery record.
+pub const BIR_APP: &str = "bir-shell";
+/// The only accepted BIR application record value.
+pub const BIR_APPS: [&str; 1] = [BIR_APP];
 /// Executable basenames of the BIR hosts. A packaged shell is renamed to `bir`.
 pub const BIR_EXECUTABLES: [&str; 3] = ["bir", "bir-headless", "bir-shell"];
 const HEADLESS_EXECUTABLE: &str = "bir-headless";
@@ -20,7 +20,7 @@ fn executable_name(record: &HostRecord) -> &str {
 }
 
 pub fn is_bir(record: &HostRecord) -> bool {
-    BIR_APPS.contains(&record.app.as_str()) || BIR_EXECUTABLES.contains(&executable_name(record))
+    BIR_APPS.contains(&record.app.as_str()) && BIR_EXECUTABLES.contains(&executable_name(record))
 }
 
 /// `desktop` or `headless`, from the record alone (`app.info` is the
@@ -188,6 +188,13 @@ mod tests {
     }
 
     #[test]
+    fn rejects_records_from_the_retired_app_even_with_a_known_executable() {
+        let app = ["bir", "desktop"].join("-");
+        let legacy = record("127.0.0.1:1", &app, "/usr/bin/bir", None);
+        assert!(!is_bir(&legacy));
+    }
+
+    #[test]
     fn resolve_by_connect_id_pid_and_refuses_foreign_or_unknown() {
         let root = tempfile::tempdir().unwrap();
         let root = root.path();
@@ -222,10 +229,16 @@ mod tests {
         assert!(is_bir(&record(
             "127.0.0.1:9",
             "bir-shell",
-            "ebirforms",
+            "bir-shell",
             None
         )));
         assert!(is_bir(&record(
+            "127.0.0.1:9",
+            "bir-shell",
+            "/usr/bin/bir-shell",
+            None
+        )));
+        assert!(!is_bir(&record(
             "127.0.0.1:9",
             "custom",
             "/usr/bin/bir-shell",

@@ -185,7 +185,7 @@ argument cannot be skipped.
 
 1. Grok Bot / gpui-agent against bir-headless. GUI does not need to be open.
    filing.start and filing.queue accept tin, code, year, period. Queue with
-   confirm=true. Recipe: crates/bir-desktop/recipes/form-1601c-queue.json
+   confirm=true. Recipe: crates/bir-shell/recipes/form-1601c-queue.json
 2. Painted bir confirm button. Cron still needs painted bir or bir-headless
    running to PUT.
 3. Cron on a row that is already Queued. Cron does not create the queue.

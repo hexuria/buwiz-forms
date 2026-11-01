@@ -493,7 +493,7 @@ impl Database {
     }
 
     /// Returns the current SQLite `data_version`, which increments whenever another connection
-    /// commits a write to the WAL. Used by the db-watcher in `bir-desktop` to detect external
+    /// commits a write to the WAL. Used by the db-watcher in `bir-shell` to detect external
     /// database changes without requiring direct access to the raw `conn` field.
     pub fn data_version(&self) -> Option<i32> {
         self.conn

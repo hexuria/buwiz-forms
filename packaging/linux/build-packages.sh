@@ -63,7 +63,7 @@ esac
 OUT="$(mkdir -p "$OUT" && cd "$OUT" && pwd)"
 # The shipped app is the gpui-shell host: crates/bir-shell is a standalone
 # workspace, so its binaries land under crates/bir-shell/target. BIN_DIR may be
-# overridden to package a differently-rooted build (e.g. the painted app).
+# overridden to package a differently-rooted build (e.g. an alternate build).
 BIN_DIR="${BIN_DIR:-$ROOT/crates/bir-shell/target/$TARGET/release}"
 BIN="$BIN_DIR/bir"
 if [ ! -x "$BIN" ]; then

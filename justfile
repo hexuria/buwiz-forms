@@ -1,9 +1,5 @@
-# Headless CLI crate `bir`: just publish-bir
-#   just publish-bir                 bump patch of crates/bir, push main, tag bir-v<version>
-#   just publish-bir 0.1.0           tag that exact version (first release)
-# CI on bir-v* cargo-publishes `bir` and uploads cargo-binstall archives.
+# The `bir-v*` workflow archives bir-headless as `bir`.
 # Desktop releases stay `just publish` / `just publish 0.2.0` (tag v*).
-# This recipe does not cargo-publish and does not read a registry token.
 set dotenv-load := true
 
 set windows-shell := ["pwsh", "-NoProfile", "-c"]
@@ -52,13 +48,8 @@ bump-build:
 help:
     @just --list
 
-# Run the app locally — the gpui-shell JS app (crates/bir-shell, a standalone
-# workspace). Frozen HTML print previews are compiled into bir-print.
+# Run the gpui-shell JavaScript app from its standalone workspace.
 run *args="": (shell-run args)
-
-# The painted (native GPUI) app, kept buildable until the cutover completes.
-run-painted:
-    cargo run --locked --bin bir-desktop --features dev-tools
 
 # gpui-shell host — a standalone workspace under crates/bir-shell (its own
 # lockfile carries the LLRT/quickjs pins; see its Cargo.toml). `just check`
@@ -101,8 +92,10 @@ shell-check: shell-ui-test
     cargo check --locked --manifest-path crates/bir-shell/Cargo.toml --features agent
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --all-targets -- -D warnings
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --all-targets -- -D warnings
-    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } }}
+    cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features mas_build --all-targets -- -D warnings
+    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } }}
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
+    cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --test headless_detach
 
 # Run code formatting, linting, and type checking
 [unix]
@@ -120,31 +113,6 @@ check:
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     cargo clippy --locked --workspace -- -D warnings
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-# Build and run the painted Windows runtime smoke gate in isolated phases.
-[windows]
-smoke-windows profile="release":
-    #!pwsh -NoProfile
-    $ErrorActionPreference = 'Stop'
-    $profileName = "{{profile}}"
-    if ($profileName -notin @("debug", "release")) {
-        throw "profile must be debug or release"
-    }
-    $cargoArgs = @("build", "--locked", "-p", "bir-desktop", "--bin", "bir-desktop", "--features", "dev-tools,agent")
-    if ($profileName -eq "release") { $cargoArgs += "--release" }
-    & cargo @cargoArgs
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $targetDir = if ($profileName -eq "release") { "target\release" } else { "target\debug" }
-    & {{PYTHON}} scripts/alias_desktop_bin.py $targetDir
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $binary = if ($profileName -eq "release") {
-        "target\release\bir.exe"
-    } else {
-        "target\debug\bir.exe"
-    }
-    $work = "target\windows-smoke\$profileName"
-    & {{PYTHON}} scripts/windows_smoke.py --bin $binary --work $work --json-out "$work\results.json"
-    exit $LASTEXITCODE
 
 # Check for vulnerability advisories (requires: cargo install cargo-audit)
 [unix]
@@ -510,7 +478,7 @@ exe: check-exe-prerequisites build-frozen-html-identity
     $ISCC = "{{ISCC}}"
     
     # The shipped app is the gpui-shell host (crates/bir-shell, a standalone
-    # workspace) built with no features; the painted bir-desktop stays
+    # workspace) built with no features; the retired painted host is not shipped
     # buildable for development but is not packaged.
     cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
@@ -518,7 +486,7 @@ exe: check-exe-prerequisites build-frozen-html-identity
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting EXE packaging.")
         exit $cargoExitCode
     }
-    {{PYTHON}} scripts/alias_desktop_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
+    {{PYTHON}} scripts/alias_app_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     $VERSION = "{{VERSION}}"
@@ -565,7 +533,7 @@ msix: build-frozen-html-identity
     Write-Warning "BLOCKED: certify manifest artwork and packaged MSVC runtime behavior before Store submission"
     
     # The shipped app is the gpui-shell host (crates/bir-shell, a standalone
-    # workspace) built with no features; the painted bir-desktop stays
+    # workspace) built with no features; the retired painted host is not shipped
     # buildable for development but is not packaged.
     cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{WIN_TARGET}}
     if ($LASTEXITCODE -ne 0) {
@@ -573,7 +541,7 @@ msix: build-frozen-html-identity
         [Console]::Error.WriteLine("cargo build failed (exit code $cargoExitCode). Aborting MSIX packaging.")
         exit $cargoExitCode
     }
-    {{PYTHON}} scripts/alias_desktop_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
+    {{PYTHON}} scripts/alias_app_bin.py "crates/bir-shell/target/{{WIN_TARGET}}/release" bir-shell
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     $VERSION = "{{VERSION}}"
@@ -675,39 +643,6 @@ publish version="":
     git push origin "v$NEW_VER"
     Write-Host "🚀 Release v$NEW_VER triggered"
 
-# Bump the patch, or tag an exact version, as bir-v* (not the desktop release).
-[unix]
-publish-bir version="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ver="{{version}}"
-    if [ -n "${ver}" ] && ! [[ "${ver}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "version must be MAJOR.MINOR.PATCH, got ${ver}" >&2
-        exit 1
-    fi
-    if [ -n "${ver}" ]; then
-        {{PYTHON}} scripts/publish_bir.py "${ver}"
-    else
-        {{PYTHON}} scripts/publish_bir.py
-    fi
-
-[windows]
-publish-bir version="":
-    #!pwsh -NoProfile
-    $ErrorActionPreference = 'Stop'
-    $ver = '{{version}}'
-    if ($ver -and $ver -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
-        [Console]::Error.WriteLine("version must be MAJOR.MINOR.PATCH, got $ver")
-        exit 1
-    }
-    if ($ver) {
-        {{PYTHON}} scripts/publish_bir.py $ver
-    } else {
-        {{PYTHON}} scripts/publish_bir.py
-    }
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-
 # Remove build artifacts
 [unix]
 clean:
@@ -725,7 +660,7 @@ clean:
 # Packages the shipped gpui-shell app: crates/bir-shell is a standalone
 # workspace built with no features, and the .app stages app/ and
 # print-overrides/ under Contents/Resources where the shell resolves them
-# (crates/bir-shell/src/packaged.rs). The painted bir-desktop stays buildable
+# (crates/bir-shell/src/packaged.rs). The retired painted host stays buildable
 # for development but is not packaged here.
 _package-mac args="": build-frozen-html-identity
     #!/usr/bin/env bash
@@ -733,15 +668,15 @@ _package-mac args="": build-frozen-html-identity
     for arg in {{args}}; do
         case "$arg" in
             --native-evidence|--agent)
-                echo "⚠️  $arg is a bir-desktop feature; the shipped shell ignores it" ;;
+                echo "⚠️  $arg is a bir-shell feature; the shipped shell ignores it" ;;
         esac
     done
     echo "Building for ARM64..."
     cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{MAC_ARM_TARGET}}
     echo "Building for x86_64..."
     cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{MAC_X86_TARGET}}
-    {{PYTHON}} scripts/alias_desktop_bin.py crates/bir-shell/target/{{MAC_ARM_TARGET}}/release bir-shell
-    {{PYTHON}} scripts/alias_desktop_bin.py crates/bir-shell/target/{{MAC_X86_TARGET}}/release bir-shell
+    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{MAC_ARM_TARGET}}/release bir-shell
+    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{MAC_X86_TARGET}}/release bir-shell
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
     lipo -create crates/bir-shell/target/{{MAC_ARM_TARGET}}/release/bir crates/bir-shell/target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
@@ -783,18 +718,13 @@ _package-mac args="": build-frozen-html-identity
         cd {{RELEASE_DIR}} && zip -r "{{APP_NAME}}-macOS-{{VERSION}}.zip" "{{APP_NAME}}.app"; \
     fi
 
-# MAS/TestFlight still packages the painted bir-desktop + mas_build — a
-# conservative hold, not the shipped-app story. bir-shell has no mas_build
-# equivalent yet, and its QuickJS JIT engine needs the sandboxed
-# allow-unsigned-executable-memory/allow-jit entitlement story worked out
-# before App Store submission. Non-store releases (DMG, EXE, deb/rpm) ship
-# bir-shell; cutting MAS over is follow-up work (see
-# docs/plans/gpui-shell-migration.md, S7).
+# MAS/TestFlight packages the gpui-shell binary. The macOS JIT entitlement
+# combination and App Store build remain unverified until checked on macOS.
 _package-mac-appstore args="": build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
     CERT="${CODESIGN_IDENTITY:--}"
-    echo "Building for Mac App Store (painted bir-desktop — see deferral note above)..."
+    echo "Building bir-shell for the Mac App Store..."
     # Always include mas_build feature
     FEATURES="mas_build"
     for arg in {{args}}; do
@@ -805,21 +735,23 @@ _package-mac-appstore args="": build-frozen-html-identity
     FEATURES_FLAG="--features $FEATURES"
     
     echo "Building for ARM64..."
-    cargo build --locked --release --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell --target {{MAC_ARM_TARGET}} $FEATURES_FLAG
     echo "Building for x86_64..."
-    cargo build --locked --release --target {{MAC_X86_TARGET}} $FEATURES_FLAG
+    cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell --target {{MAC_X86_TARGET}} $FEATURES_FLAG
     
-    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_ARM_TARGET}}/release
-    {{PYTHON}} scripts/alias_desktop_bin.py target/{{MAC_X86_TARGET}}/release
+    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{MAC_ARM_TARGET}}/release bir-shell
+    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{MAC_X86_TARGET}}/release bir-shell
     mkdir -p {{RELEASE_DIR}}
     echo "Creating universal binary (lipo)..."
-    lipo -create target/{{MAC_ARM_TARGET}}/release/bir target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
+    lipo -create crates/bir-shell/target/{{MAC_ARM_TARGET}}/release/bir crates/bir-shell/target/{{MAC_X86_TARGET}}/release/bir -output {{RELEASE_DIR}}/bir
     
     echo "Creating sandboxed .app bundle..."
     rm -rf "{{MAC_APP}}"
     mkdir -p "{{MAC_APP}}/Contents/MacOS" "{{MAC_APP}}/Contents/Resources"
     cp {{RELEASE_DIR}}/bir "{{MAC_APP}}/Contents/MacOS/"
     cp -R assets "{{MAC_APP}}/Contents/Resources/"
+    cp -R app "{{MAC_APP}}/Contents/Resources/"
+    cp -R print-overrides "{{MAC_APP}}/Contents/Resources/"
     rm -rf "{{MAC_APP}}/Contents/Resources/assets/macos"
     cp assets/AppIcon.icns "{{MAC_APP}}/Contents/Resources/"
 
@@ -898,7 +830,7 @@ _package-linux: build-frozen-html-identity
     #!/usr/bin/env bash
     set -e
     cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target {{LINUX_TARGET}}
-    {{PYTHON}} scripts/alias_desktop_bin.py crates/bir-shell/target/{{LINUX_TARGET}}/release bir-shell
+    {{PYTHON}} scripts/alias_app_bin.py crates/bir-shell/target/{{LINUX_TARGET}}/release bir-shell
     mkdir -p {{RELEASE_DIR}}
     if command -v cargo-deb >/dev/null 2>&1; then
         DEB="{{RELEASE_DIR}}/{{APP_NAME}}-Linux-x64-{{VERSION}}.deb"

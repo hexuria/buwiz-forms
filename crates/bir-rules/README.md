@@ -17,14 +17,14 @@ rules/ evidence
     |
     | explicit deterministic code generation
     v
-bir-rules  <-  bir-core  <-  bir-desktop (GPUI)
+bir-rules  <-  bir-core  <-  bir-shell (GPUI)
 ```
 
 - `bir-rules` must not depend on `bir-core`, GPUI, the database, networking, or
   submission code.
 - `bir-core` owns form-specific adapters, checked XML/payload proof,
   persistence, final-copy checks, and submission revalidation.
-- `bir-desktop` consumes the same report types through `bir-core`. It must not
+- `bir-shell` consumes the same report types through `bir-core`. It must not
   implement a second copy of a validation or tax formula.
 
 ## Intended source layout

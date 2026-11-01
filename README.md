@@ -152,28 +152,26 @@ More in [docs/platforms/linux.md](docs/platforms/linux.md).
 
 ## Headless command line (`bir`)
 
-Without the desktop app, the headless agent installs straight from this
-repository. There is no crates.io release and no clone is needed:
+The headless agent binary is `bir-headless` in the standalone shell workspace.
+From a checkout:
 
 ```bash
-cargo install --git https://github.com/hexuria/buwiz-forms bir --locked
+cargo install --path crates/bir-shell --features agent --bin bir-headless --locked
 ```
 
-That builds `main`. Add `--tag <tag>` or `--rev <commit>` to pin a version,
-and run the same command again to update. The build needs the same system
-libraries as the desktop app (see your platform's page under `docs/platforms/`).
+The headless release workflow archives the same executable as `bir`.
 
 `cargo install` makes a release build, and a release build starts automation
 only with `GPUI_AGENT_ALLOW_RELEASE=1`:
 
 ```bash
-GPUI_AGENT=1 GPUI_AGENT_ALLOW_RELEASE=1 GPUI_AGENT_TOKEN=<token> bir serve --detach
-bir status      # same env; prints the hello line
-bir shutdown
+GPUI_AGENT=1 GPUI_AGENT_ALLOW_RELEASE=1 GPUI_AGENT_TOKEN=<token> bir-headless serve --detach
+bir-headless status
+bir-headless shutdown
 ```
 
 Environment and the full command list are in
-[crates/bir-desktop/docs/AGENT.md](crates/bir-desktop/docs/AGENT.md).
+[crates/bir-shell/docs/AGENT.md](crates/bir-shell/docs/AGENT.md).
 
 This `bir` is a command line tool, not the desktop app. The desktop app comes
 from the dmg, deb or exe on the Releases page. Publish flow and tags are in

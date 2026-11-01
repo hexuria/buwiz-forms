@@ -18,7 +18,7 @@ WINDOWS_RELEASE_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-win
 MACOS_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/release-macos.yml"
 MACOS_PACKAGE_SCRIPT_PATH = REPOSITORY_ROOT / "scripts/package_macos_release.sh"
 CI_WORKFLOW_PATH = REPOSITORY_ROOT / ".github/workflows/ci.yml"
-DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-desktop/Cargo.toml"
+DESKTOP_MANIFEST_PATH = REPOSITORY_ROOT / "crates/bir-shell/Cargo.toml"
 LINUX_BUILD_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/build-packages.sh"
 LINUX_SMOKE_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/smoke-test.sh"
 LINUX_INSTALL_SCRIPT_PATH = REPOSITORY_ROOT / "packaging/linux/install-linux.sh"
@@ -410,7 +410,11 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         )
         self.assertIn('cargo install --list 2>/dev/null', self.linux_setup)
         self.assertIn('--rev "$rev" gpui-agent-cli', self.linux_setup)
-        self.assertNotIn("crates/bir-desktop/Cargo.toml", self.linux_setup)
+        self.assertIn(
+            "cargo build --locked --manifest-path crates/bir-shell/Cargo.toml "
+            "--features agent --bin bir-headless",
+            self.linux_setup,
+        )
         self.assertNotIn("--locked gpui-agent-cli", self.linux_setup)
         self.assertNotIn("installing from main", self.linux_setup)
         self.assertIn("'Cargo.toml'", self.windows_setup)

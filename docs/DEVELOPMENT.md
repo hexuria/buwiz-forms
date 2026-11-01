@@ -77,18 +77,18 @@ revision. Set `GPUI_AGENT_TOKEN` for secure driving. For local-only driving,
 `GPUI_AGENT_INSECURE_NO_TOKEN=1` remains available (never on shared machines).
 
 ```bash
-# Build the painted app with the control plane. `dev-tools` is not required;
+# Build the shell GUI with the control plane. `dev-tools` is not required;
 # add it only for --dev-export-live-database or to open a form that is still
 # being certified from a *release* build.
-cargo build --locked --bin bir-desktop --features agent
+cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell --features agent
 
 export GPUI_AGENT=1
-export GPUI_AGENT_TOKEN=dev-secret          # required to bind (protocol v2 HMAC)
+export GPUI_AGENT_TOKEN=<local-development-token> # required to bind (protocol v2 HMAC)
 export GPUI_AGENT_ADDR=127.0.0.1:17421      # default; use 127.0.0.1:17423 when NativeChat owns 17421
 # Release binaries also need:
 # export GPUI_AGENT_ALLOW_RELEASE=1
 export GPUI_AGENT_SCREENSHOT_DIR=/tmp/bir-shots
-./target/debug/bir-desktop
+./crates/bir-shell/target/debug/bir-shell
 ```
 
 Then, from another shell with the same `GPUI_AGENT_TOKEN` / `GPUI_AGENT_ADDR`:
@@ -106,10 +106,10 @@ A bare `gpui-agent` command (no `--addr`, no `--connect`) talks to
 `GPUI_AGENT_ADDR`, else `127.0.0.1:17421`; it never reuses an earlier
 `--connect` choice. Pass `--connect last` to reuse the saved choice, or
 `--connect <app|connect-id|pid>` to pick a host from the discovery list
-(painted and headless hosts are both listed under `bir-desktop`).
+(the shell GUI and headless hosts both publish app `bir-shell`).
 
 Before driving a host, check who owns the port — `lsof -nP -iTCP:17421
--sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir-desktop` (`bir` in a packaged install) or
+-sTCP:LISTEN` (or `17423` when that is `GPUI_AGENT_ADDR`) must show `bir-shell` (`bir` in a packaged install) or
 `bir-headless`. Another process there (an editor forwarding a remote machine,
 say) answers the protocol convincingly; `hello.os` and the chord style
 (`cmd-b` on macOS, `ctrl-b` on Linux) tell the two apart. A `focused`-scope
@@ -118,45 +118,19 @@ and macOS screenshots need Screen Recording granted to that exact binary path.
 
 The full contract — authorization, the two-host port handoff, screenshot and
 scroll semantics, and the AI-agent playbook — is in
-[`crates/bir-desktop/docs/AGENT.md`](../crates/bir-desktop/docs/AGENT.md).
+[`crates/bir-shell/docs/AGENT.md`](../crates/bir-shell/docs/AGENT.md).
 
 ## Publishing the `bir` CLI
 
-The headless agent is the package `bir` (`crates/bir`, binary `bir`). Users install it
-from git: `cargo install --git https://github.com/hexuria/buwiz-forms bir --locked`.
-The shipped desktop GUI is the cargo target `bir-shell` in `crates/bir-shell`
-(a standalone workspace with its own lockfile and target dir); the painted
-`bir-desktop` in `crates/bir-desktop` stays buildable for development and is
-still what `just app`/`testflight` packages for MAS. Neither collides with the
-`bir` CLI. Packaging renames the shipped build output:
-`scripts/alias_desktop_bin.py <target dir> [src name]` copies `bir-shell`
-(the default src name is `bir-desktop`) to `bir` (`bir.exe` on Windows) before
-the dmg, deb and exe steps, so installed artifacts and the
-`[package.metadata.deb]` asset path still use `bir`. Run it after
-`cargo build --release` and before `cargo deb --no-build`. Release packages
-also stage `app/` and `print-overrides/` where the shell resolves them
-(`Contents/Resources/` on macOS, beside `bir` on Windows/tarball,
-`/usr/share/ebirforms/` for deb/rpm — `crates/bir-shell/src/packaged.rs`).
-
-- Desktop releases use tags `vMAJOR.MINOR.PATCH` (`just publish`).
-- The CLI uses tags `bir-vMAJOR.MINOR.PATCH` (`just publish-bir`, which runs
-  `scripts/publish_bir.py`). With no argument it bumps the patch of
-  `crates/bir`; with one it tags that exact version. The recipe tags and
-  pushes. It does not run `cargo publish` and reads no registry token.
-- `.github/workflows/bir.yml` runs on `bir-v*` tags only. It checks the tag
-  against `crates/bir/Cargo.toml`, builds `x86_64-unknown-linux-gnu` and
-  `aarch64-apple-darwin`, uploads `bir-<target>.tgz` plus `.sha256` and
-  `SHA256SUMS` to the GitHub Release, then runs `cargo publish` for
-  `bir-rules`, `bir-core`, `bir-print`, `bir-desktop` and `bir`.
-- `cargo binstall bir` reads `[package.metadata.binstall]` in
-  `crates/bir/Cargo.toml`: it fetches
-  `bir-v<version>/bir-<target>.tgz`, with the `bir` binary at the archive root.
-- crates.io publishing is not set up (#65 was met by the git install
-  instead). The `cargo publish` job fails until three things exist:
-  `gpui-agent` 0.1.0 on crates.io, the `CARGO_REGISTRY_TOKEN` Actions secret,
-  and crates that package from their own roots. The last one is the unmerged
-  branch `feat/publish65` (closed PR #106), which moves `html-frozen/` into
-  `crates/bir-print/`. The release archives upload before that job runs.
+- The headless agent binary is `bir-headless` in the standalone
+  `crates/bir-shell` workspace. Build locally with
+  `cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --bin bir-headless`.
+  Install from a checkout with
+  `cargo install --path crates/bir-shell --features agent --bin bir-headless --locked`.
+- Desktop releases use tags `vMAJOR.MINOR.PATCH` (`just publish`); headless
+  archives use `bir-vMAJOR.MINOR.PATCH`. `.github/workflows/bir.yml` builds
+  `bir-headless` against the version in `crates/bir-shell/Cargo.toml` and
+  archives it as `bir`. Cargo publishing is not configured.
 - The toolchain is pinned to Rust 1.99.0.
 - `scripts/test_publish_bir.py` tests the publish script.
 
@@ -255,7 +229,7 @@ The **macOS** release job codesigns and notarizes the DMG. Configure these Repos
 - `crates/bir-core/`: Contains all domain logic, SQLite database integrations, API communications, IMAP automated email tracking, cryptography, and XML generation logic.
   - `forms/` — Form data models, `FormValidator` trait, ATC tax code tables, and the form registry.
   - `db/` — Decomposed database layer with domain-specific modules (`profiles.rs`, `drafts.rs`, `submissions.rs`, `receipts.rs`, `jobs.rs`, `notices.rs`, `migrations.rs`).
-- `crates/bir-desktop/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming. Opt-in gpui-agent / `bir-headless` runbook: [`crates/bir-desktop/docs/AGENT.md`](../crates/bir-desktop/docs/AGENT.md).
+- `crates/bir-shell/`: The GPUI-based frontend application managing windows, forms, inputs, locking, and theming. Opt-in gpui-agent / `bir-headless` runbook: [`crates/bir-shell/docs/AGENT.md`](../crates/bir-shell/docs/AGENT.md).
   - `components/form_engine.rs` — `FormViewTrait` providing shared status pipeline, header, and action infrastructure for all tax forms.
   - `components/form_parts.rs` — Reusable UI primitives: `form_accordion`, `taxpayer_info_section`, `atc_schedule_table`, `computation_row_*`, `penalty_summary_section`, and more.
   - `views/` — Per-form view implementations (e.g., `form_2551q_view.rs`, `form_1701q_view.rs`) that compose the shared components.
@@ -312,11 +286,11 @@ so developers can run the workflow without an agent-specific command wrapper.
   - Windows: `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db`
   - Linux: `~/.taxman-ebir/bir_data.db`
   - Debug builds with the Dev Mode "separate database" switch use `bir_data.dev.db` next to it.
-  - gpui-agent / `bir-headless` live path, token, and `--wait` handoff: [`crates/bir-desktop/docs/AGENT.md`](../crates/bir-desktop/docs/AGENT.md)
+  - gpui-agent / `bir-headless` live path, token, and `--wait` handoff: [`crates/bir-shell/docs/AGENT.md`](../crates/bir-shell/docs/AGENT.md)
 - **Background Engine:** Background cron tasks (auto-fetch) run in-process on a dedicated thread and are decoupled from the active taxpayer profile.
 - **Schema Migrations:** Managed via a `schema_version` table with forward-only numbered migrations in `bir-core/src/db/migrations.rs`.
 - **Security:** Sensitive credential fields (`imap_app_password`, `oauth_access_token`, `oauth_refresh_token`, `profile_pin_hash`) are zeroed on `Drop` via the `zeroize` crate. Google OAuth for a shared inbox is stored once in `inbox_oauth_tokens` (SQLCipher) and copied onto every profile that uses that mailbox. Never log raw tokens.
 - **Feature Flags:**
   - `dev-tools` — Developer diagnostics: the `--dev-export-live-database` command, and (in a **release** build) permission to open a form whose HTML release certification is still in progress. A debug build already satisfies that gate through `debug_assertions`, so `dev-tools` changes nothing there. Automatically included in `just run`.
-  - `agent` — Opt-in gpui-agent control plane for painted `bir` (`--features agent`) and the `bir-headless` daemon. It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the app can open. Off in product/release builds unless you pass `just _package-mac --agent`, which compiles the feature into the Mac bundle. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-desktop/docs/AGENT.md`](../crates/bir-desktop/docs/AGENT.md).
-- **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_desktop=debug,bir_print=debug,bir_core=info`).
+  - `agent` — Opt-in gpui-agent control plane for the shell GUI and `bir-headless`. It does **not** need `dev-tools`: a debug build with `--features agent` alone binds the agent and drives every form the shell can open. Release builds omit the feature unless explicitly enabled; `just app` uses `mas_build` for Mac App Store packaging. Runtime bind requires `GPUI_AGENT=1` **and** `GPUI_AGENT_TOKEN` (protocol v2 HMAC). Release binaries also need `GPUI_AGENT_ALLOW_RELEASE=1`. `GPUI_AGENT_INSECURE_NO_TOKEN=1` is demo-only. There is no `scripts/bir-agent` wrapper; set those env vars and use `gpui-agent`. Authorization, `--wait` handoff, and the AI-agent playbook live in [`crates/bir-shell/docs/AGENT.md`](../crates/bir-shell/docs/AGENT.md).
+- **Tracing:** Debug builds initialize `tracing-subscriber` automatically. Control verbosity with `RUST_LOG` (default: `bir_shell=debug,bir_print=debug,bir_core=info`).

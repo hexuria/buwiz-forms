@@ -59,9 +59,9 @@ pub fn developer_mode_enabled() -> bool {
 /// Painted `bir` directives when `RUST_LOG` is unset.
 pub fn desktop_filter(developer_mode: bool) -> &'static str {
     if developer_mode {
-        "bir=debug,bir_desktop=debug,bir_print=debug,bir_core=info"
+        "bir=debug,bir_shell=debug,bir_print=debug,bir_core=info"
     } else {
-        "bir=info,bir_desktop=info,bir_print=error,bir_core=info"
+        "bir=info,bir_shell=info,bir_print=error,bir_core=info"
     }
 }
 
@@ -360,11 +360,11 @@ mod tests {
     fn desktop_filter_strings_are_the_painted_directives() {
         assert_eq!(
             desktop_filter(false),
-            "bir=info,bir_desktop=info,bir_print=error,bir_core=info"
+            "bir=info,bir_shell=info,bir_print=error,bir_core=info"
         );
         assert_eq!(
             desktop_filter(true),
-            "bir=debug,bir_desktop=debug,bir_print=debug,bir_core=info"
+            "bir=debug,bir_shell=debug,bir_print=debug,bir_core=info"
         );
     }
 

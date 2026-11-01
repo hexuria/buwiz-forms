@@ -83,7 +83,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
   - Keep process/agent liveness, semantic readiness, and painted-content checks distinct. A failed capture is SKIPPED, not a passed visual check. Add value correctness at the Rust HTML boundary (§15), not only a dark-pixel threshold.
   - Retain diagnostic exit code and stderr independently. `0xC000041D` is a callback exception; only the stack-overflow log/debugger establishes that cause. Do not rename it `0xC00000FD`.
   - Local commands after integration: `just smoke-windows debug`, then `just smoke-windows release`. Both must pass after W01, plus a visible filled-form run on this Windows VM before pushing.
-- [ ] **1.2 Turn the existing PE reader into a regression assertion** after §3 chooses the measured reserve. Check both Cargo's `bir-desktop.exe` and its shipping `bir.exe` alias; fail a reserve below policy. Test truncated/non-PE/wrong optional-header input and prove a 1 MiB fixture fails the new policy.
+- [ ] **1.2 Turn the existing PE reader into a regression assertion** after §3 chooses the measured reserve. Check both Cargo's `bir-shell.exe` and its shipping `bir.exe` alias; fail a reserve below policy. Test truncated/non-PE/wrong optional-header input and prove a 1 MiB fixture fails the new policy.
 - [ ] **1.3 Workflow audit:** scope `zizmor --persona=auditor` to changed workflows, triage findings without weakening repository security. This is separate from fixing the application crash.
 - [ ] **1.4 Promote only after evidence:** remove report-only behavior only after debug/release local runs and matching CI succeed, with fixture/paint coverage reported. Require three consecutive clean executions per profile on the same revision (a retry does not erase a failure). Setting branch-protection required checks is an **owner action**, not authorized here. Never disable a failing phase to turn CI green.
 
@@ -125,7 +125,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 | Date | Result |
 |---|---|
 | 2026-10-12 | Implemented the Windows two-phase WebView construction and explicit pending/ready/failed state. The first main-branch smoke results were release: both previews panic with `RefCell already borrowed` (#97); debug: 1601C panics and 2551Q overflows its stack (`0xC00000FD`, #96); submit passes in both; `stack_reserve` is 1 MiB. |
-| 2026-10-13 | W01/#96 measured and fixed on branch: CDB proves bounded layout recursion in debug (`__chkstk` in `dashboard::render`, ~150 GPUI request_layout frames), 1 MiB crashes 4/4 at taxpayer-sidebar, 2 MiB survives; shipped binary gets `/STACK:8388608` via `crates/bir-desktop/build.rs` plus a CI PE-header regression (`scripts/check_pe_stack_reserve.py`). |
+| 2026-10-13 | W01/#96 measured and fixed on branch: CDB proves bounded layout recursion in debug (`__chkstk` in `dashboard::render`, ~150 GPUI request_layout frames), 1 MiB crashes 4/4 at taxpayer-sidebar, 2 MiB survives; shipped binary gets `/STACK:8388608` via `crates/bir-shell/build.rs` plus a CI PE-header regression (`scripts/check_pe_stack_reserve.py`). |
 | 2026-10-12 | Confirmed the second #97 rendering cause: DirectComposition hid the visible, correctly sized WebView2 child HWND. With `GPUI_DISABLE_DIRECT_COMPOSITION=1`, filled 1601C and 2551Q previews rendered; the main window continued to paint normally. |
 
 ---
@@ -137,7 +137,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
 - `[profile.dev]` leaves workspace crates at opt-level 0 (only deps get 1), so GPUI render frames are large.
 - Earlier 8 MiB experimental copies ran the exercised paths; that is supporting evidence, not a measurement on newer main or a fix in the shipped binary.
 - Latest local release previews pass. Unpatched debug maximizes successfully, then crashes on taxpayer-sidebar navigation before 2551Q opens. Stderr says main-thread stack overflow; exit is `0xC000041D`.
-- **Cause diagnosed (2026-10-13):** CDB on the unpatched 1 MiB debug binary catches `c00000fd` at `bir_desktop!__chkstk` entering `bir_desktop::views::dashboard::impl$2::render` (dashboard.rs). ~150 bounded frames of `gpui` element `Interactivity::request_layout` + `smallvec` `Extend` + `with_element_state`/`with_text_style`/`with_image_cache` wrappers — deep-but-bounded layout recursion per nesting level, inflated by unoptimized debug frames. Not unbounded recursion, so a PE reserve policy is a legitimate fix; no single surprising frame to follow up on.
+- **Cause diagnosed (2026-10-13):** CDB on the unpatched 1 MiB debug binary catches `c00000fd` at `bir_shell!__chkstk` entering `bir_shell::views::dashboard::impl$2::render` (dashboard.rs). ~150 bounded frames of `gpui` element `Interactivity::request_layout` + `smallvec` `Extend` + `with_element_state`/`with_text_style`/`with_image_cache` wrappers — deep-but-bounded layout recursion per nesting level, inflated by unoptimized debug frames. Not unbounded recursion, so a PE reserve policy is a legitimate fix; no single surprising frame to follow up on.
 
 - [x] **3.1 Measure before choosing a number.**
   - Built exact-head debug (`3169105b`, sha256 `096daea8...`) and release once; originals untouched; diagnostic copies patched to 1/2/4/8 MiB via PE edit.
@@ -146,9 +146,9 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (with PR link) · `
   - Release matrix: full flow **passes 3/3 at every reserve** — 1, 2, 4 and 8 MiB — confirming optimized frames shrink the same recursion below 1 MiB.
   - Debugger stack captured on the unpatched failure (see facts above); recursion is bounded.
 - [x] **3.2 Fix at the binary, not RUSTFLAGS.**
-  - `crates/bir-desktop/build.rs` emits `cargo:rustc-link-arg-bin=bir-desktop=/STACK:8388608` only when `CARGO_CFG_TARGET_OS=windows` and `CARGO_CFG_TARGET_ENV=msvc`. Per-bin flag: `bir-headless`, tests and other crates keep platform defaults.
+  - `crates/bir-shell/build.rs` emits `cargo:rustc-link-arg-bin=bir-shell=/STACK:8388608` only when `CARGO_CFG_TARGET_OS=windows` and `CARGO_CFG_TARGET_ENV=msvc`. Per-bin flag: `bir-headless`, tests and other crates keep platform defaults.
   - Chosen reserve **8 MiB** — smallest consistently passing debug reserve is 2 MiB; 8 MiB is ~4× margin over observed need, matching the earlier experimental evidence, with headroom for deeper element trees.
-  - Regression: `scripts/check_pe_stack_reserve.py` + `scripts/tests/test_pe_stack_reserve.py`; CI `check` job verifies the release `bir-desktop.exe` after `just exe` and a debug `bir-desktop.exe`, both on Windows only. Reverting `build.rs` fails the PE check.
+  - Regression: `scripts/check_pe_stack_reserve.py` + `scripts/tests/test_pe_stack_reserve.py`; CI `check` job verifies the release `bir-shell.exe` after `just exe` and a debug `bir-shell.exe`, both on Windows only. Reverting `build.rs` fails the PE check.
 - [x] **3.3 Find the deep frames:** `c00000fd` at `__chkstk` inside `dashboard::render`; the depth is ~150 small GPUI layout frames (request_layout/smallvec/element-state wrappers), not a big-array frame — no follow-up issue needed.
 - **Owners:** §1.2 (PE header) and §1.1 (debug and release runs).
 - **Acceptance:** rebuild without editbin/environment overrides; both executable names meet PE policy; all navigation and preview steps pass three consecutive times in debug/release; macOS/Linux compilation unchanged. Run `cargo fmt --all -- --check`, focused build-script/policy tests, agent-feature desktop Clippy, then the normal workspace tests once. Publish the local visible recording before claiming the runtime fixed. Reverting the linker policy must fail the PE regression.
@@ -432,7 +432,7 @@ preview snapshot.
   ignores unmatched keys and only fills known direct names/approved joins.
   An emitted value is therefore not evidence that its physical print box is filled.
 - `Form2551QView::{preview_draft_snapshot,preview_pdf}` in
-  `crates/bir-desktop/src/views/form_2551q_view.rs` uses in-memory Draft data,
+  `crates/bir-shell/src/screen_form_module.rs` uses in-memory Draft data,
   but reloads persisted non-Draft data. Both semantics must be preserved.
 
 ### 15.1 Repair the fixture before diagnosing identity (W03)

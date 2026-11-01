@@ -127,8 +127,8 @@ jobs:
         run: |
           cargo build --locked --release --target aarch64-apple-darwin
           cargo build --locked --release --target x86_64-apple-darwin
-          python3 scripts/alias_desktop_bin.py target/aarch64-apple-darwin/release
-          python3 scripts/alias_desktop_bin.py target/x86_64-apple-darwin/release
+          python3 scripts/alias_app_bin.py target/aarch64-apple-darwin/release
+          python3 scripts/alias_app_bin.py target/x86_64-apple-darwin/release
 
       - name: Assemble, sign, notarize, and bind candidate application
         shell: bash
@@ -319,7 +319,7 @@ jobs:
           $stage = "$root/eBIRForms-Windows-x64"
           $archive = "$root/eBIRForms-Windows-x64-$env:GITHUB_SHA.zip"
           $sourceRevision = $env:GITHUB_SHA
-          python scripts/alias_desktop_bin.py "target/x86_64-pc-windows-msvc/release"
+          python scripts/alias_app_bin.py "target/x86_64-pc-windows-msvc/release"
           New-Item -ItemType Directory -Force -Path "$stage/assets" | Out-Null
           Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$stage/bir.exe"
           Copy-Item "assets/*" "$stage/assets" -Recurse -Force
@@ -403,7 +403,7 @@ jobs:
           STAGE="$ROOT/eBIRForms-Linux-x64"
           ARCHIVE="$ROOT/eBIRForms-Linux-x64-$GITHUB_SHA.tar.gz"
           SOURCE_REVISION="$GITHUB_SHA"
-          python3 scripts/alias_desktop_bin.py target/x86_64-unknown-linux-gnu/release
+          python3 scripts/alias_app_bin.py target/x86_64-unknown-linux-gnu/release
           mkdir -p "$STAGE"
           cp target/x86_64-unknown-linux-gnu/release/bir "$STAGE/"
           cp -R assets "$STAGE/"

@@ -158,7 +158,7 @@ sudo apt-get install -y \
 ## Single instance
 
 - `platform::enforce_single_instance` is an empty stub on Linux. The guard is
-  the loopback ping in `crates/bir-desktop/src/ipc.rs`. The first copy writes
+  the loopback ping in `crates/bir-shell/src/ipc.rs`. The first copy writes
   its UDP port to `instance.port`. A second copy sends `SHOW`, and if it gets an
   answer, it exits. A stale file is harmless: the ping times out after 100 ms.
 - Raising the first window uses `xdotool` and GPUI's activate. Whether this

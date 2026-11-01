@@ -37,7 +37,7 @@ touch the live encrypted database.
 | Audit, compile, digest, drift | `crates/bir-rules-codegen/` |
 | Typed evaluator, workflow, serialization primitives | `crates/bir-rules/` |
 | Shadow/trusted dispatch, Final Copy proof | `crates/bir-core/src/form_rules/` |
-| Stale-safe report controller | `crates/bir-desktop/src/components/form_validation/` |
+| Stale-safe report controller | `crates/bir-shell/src/components/form_validation/` |
 
 Evidence flows one way: `rules/` → codegen → runtime → core → GPUI. The packaged
 app never reads `rules/`.
