@@ -1,0 +1,4 @@
+2026-11-01T01:44:00.272775Z DEBUG request{method=POST uri=/auth/device/start version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-11-01T01:44:00.276254Z DEBUG request{method=POST uri=/auth/device/start version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=3 ms status=200
+2026-11-01T01:44:49.533355Z DEBUG request{method=GET uri=/me version=HTTP/1.1}: tower_http::trace::on_request: started processing request
+2026-11-01T01:44:49.541517Z DEBUG request{method=GET uri=/me version=HTTP/1.1}: tower_http::trace::on_response: finished processing request latency=8 ms status=200
