@@ -469,6 +469,7 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
 
+    #[cfg(unix)]
     fn isolate_paths(dir: &Path) -> (PathBuf, PathBuf) {
         let log = dir.join("logs/bir-headless.log");
         let pid = dir.join("bir-headless.pid");

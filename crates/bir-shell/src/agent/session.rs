@@ -678,7 +678,6 @@ impl Session {
         let needs = agent::needs_you(kind, &map, &errors);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
-            open.dirty = false;
         }
         Ok(DispatchResult::json(json!({
             "form": kind.form_code(),
@@ -724,6 +723,7 @@ impl Session {
         drop(db);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
+            open.dirty = false;
         }
         Ok(DispatchResult::json(json!({
             "status": format!("{status:?}"),
@@ -1799,6 +1799,32 @@ mod tests {
         .unwrap();
         let error = call(&mut session, "form.dismiss", json!({})).unwrap_err();
         assert!(error.contains("unsaved edits"), "{error}");
+    }
+
+    #[test]
+    fn agent_save_draft_clears_unsaved_edits_so_dismiss_succeeds() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:txtSheets": "3"}, "source": "ai"}),
+        )
+        .unwrap();
+        call(&mut session, "form.needs_you", json!({})).unwrap();
+        let error = call(&mut session, "form.dismiss", json!({})).unwrap_err();
+        assert!(error.contains("unsaved edits"), "{error}");
+        call(&mut session, "form.validate", json!({})).unwrap();
+        let saved = call(&mut session, "form.save_draft", json!({})).unwrap();
+        assert_eq!(saved["saved"], json!(true), "{saved}");
+        call(&mut session, "form.dismiss", json!({})).unwrap();
+        assert!(call(&mut session, "form.fields", json!({})).is_err());
     }
 
     #[test]
