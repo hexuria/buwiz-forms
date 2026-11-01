@@ -768,7 +768,8 @@ pub(crate) fn fit(result: &mut Value) {
                 items.truncate(100);
                 items.iter_mut().fold(cut, |cut, item| cap(item) || cut)
             }
-            Value::Object(map) => map.values_mut().fold(false, |cut, item| cap(item) || cut),
+            // `|`, not `any`: every value must be capped, not just up to the first cut.
+            Value::Object(map) => map.values_mut().fold(false, |cut, item| cap(item) | cut),
             _ => false,
         }
     }
