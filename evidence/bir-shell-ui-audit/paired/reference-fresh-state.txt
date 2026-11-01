@@ -1,0 +1,5 @@
+Before headed first launch 2026-11-01T02:29:39+00:00
+ABSENT /audit/headed-data (/tmp/ebirforms-paired-audit-20261101/headed-data)
+ABSENT /audit/headed-home
+ABSENT /audit/headed-data/ebirforms.sqlite
+No seed/bypass; all inherited BIR_SFTP_* stripped; only BIR_SFTP_DRY_RUN=1

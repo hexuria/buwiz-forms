@@ -1,0 +1,27 @@
+diff --git a/app/shell/gpui-kit.d.ts b/app/shell/gpui-kit.d.ts
+index ade86438..1cd62fac 100644
+--- a/app/shell/gpui-kit.d.ts
++++ b/app/shell/gpui-kit.d.ts
+@@ -27917,6 +27917,10 @@ declare module "bir" {
+   export function record_screen_log(level: string, message: string): null;
+   /** Next UI command from the gpui-agent host, or null when none is waiting. */
+   export function agent_take(): string | null;
++  /** Pick up filings an assistant queued on the account server. Null when there is nothing to say. */
++  export function pull_device_filings(): { message: string; icon: string } | null;
++  /** True once the main window is up. False through the gate, first launch, and sign-in. */
++  export function shell_set_chrome(open: boolean): null;
+ 
+   export interface CloudAccountStatus {
+       server_url: string;
+@@ -28085,6 +28089,11 @@ declare module "bir" {
+   export function test_inbox_connection(tin: string): Promise<InboxVerifyResult>;
+   /** Runs the cron-side fetch→confirm poll for this inbox once, updating its job row. */
+   export function check_inbox_now(tin: string): Promise<InboxCheckResult>;
++  /** Standing OK for an assistant to file one form for this branch. The Queue button does not use it. */
++  export interface SendGrant { tin: string; form: string; granted_at: string; }
++  export function list_send_grants(tin: string): SendGrant[];
++  export function grant_send(tin: string, form: string): SendGrant;
++  export function revoke_send(tin: string, form: string): void;
+ 
+   export interface ScreenFormIndexEntry {
+       c: string;
