@@ -35,14 +35,24 @@ const ATTACHMENTS_PREFIX: &str = "mini_app.attachments.";
 const VIEWS: [&str; 5] = ["summary", "paper", "amend", "attachments", "import"];
 
 fn check_keys(arguments: &Map<String, Value>, allowed: &[&str]) -> Result<(), String> {
-    match arguments.keys().find(|key| !allowed.contains(&key.as_str())) {
-        Some(key) => Err(format!("unknown argument `{key}` (allowed: {})", allowed.join(", "))),
+    match arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        Some(key) => Err(format!(
+            "unknown argument `{key}` (allowed: {})",
+            allowed.join(", ")
+        )),
         None => Ok(()),
     }
 }
 
 fn text<'a>(arguments: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
-    arguments.get(key).and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty())
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
 }
 
 /// The return a call names.
@@ -73,16 +83,24 @@ impl Target {
 
 /// The return of `ticket` (a return's ticket; a taxpayer's with `form` and
 /// `period`), or of `form` holding a return's value (an expanded ticket).
-pub(crate) fn target(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Target, String> {
+pub(crate) fn target(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Target, String> {
     let mut named = taxform::TaxformArgs::default();
     if let Some(ticket) = text(arguments, "ticket") {
         if !tickets::is_ticket(ticket) {
             return Err("`ticket` must be a ticket (tkt_...): the return's, or the taxpayer's with `form` and `period`".into());
         }
-        let subject = tickets::subject(db, ticket)?.ok_or("the ticket is not one BIR issued, or it was revoked")?;
+        let subject = tickets::subject(db, ticket)?
+            .ok_or("the ticket is not one BIR issued, or it was revoked")?;
         named = match subject.return_value() {
             Some(value) => taxform::parse(value, today),
-            None => taxform::TaxformArgs { tin: Some(subject.full_tin()), ..Default::default() },
+            None => taxform::TaxformArgs {
+                tin: Some(subject.full_tin()),
+                ..Default::default()
+            },
         };
     }
     if let Some(form) = text(arguments, "form") {
@@ -95,46 +113,74 @@ pub(crate) fn target(db: &Database, arguments: &Map<String, Value>, today: Naive
         named.tin = read.tin.or(named.tin);
     }
     if let Some(raw) = text(arguments, "period") {
-        named.period = Some(
-            taxform::parse(raw, today)
-                .period
-                .ok_or_else(|| format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)"))?,
-        );
+        named.period = Some(taxform::parse(raw, today).period.ok_or_else(|| {
+            format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)")
+        })?);
     }
-    let tin = named.tin.ok_or("name the return: its ticket, or the taxpayer's `ticket` with `form` and `period`")?;
-    let code = named.form.ok_or("`form` is required with a taxpayer's ticket")?;
+    let tin = named.tin.ok_or(
+        "name the return: its ticket, or the taxpayer's `ticket` with `form` and `period`",
+    )?;
+    let code = named
+        .form
+        .ok_or("`form` is required with a taxpayer's ticket")?;
     let period = named
         .period
         .ok_or("`period` is required with a taxpayer's ticket")?
         .for_form(code, today)
         .map_err(|ask| ask.to_string())?;
-    let kind = AgentFormKind::from_code(code).ok_or_else(|| format!("BIR does not prepare {code} returns"))?;
+    let kind = AgentFormKind::from_code(code)
+        .ok_or_else(|| format!("BIR does not prepare {code} returns"))?;
     let branch = resolve::branches(db, Some(&tin))?
         .into_iter()
         .next()
         .ok_or("this taxpayer is no longer saved in BIR")?;
-    Ok(Target { tin: branch.tin, taxpayer: branch.name, code, kind, period })
+    Ok(Target {
+        tin: branch.tin,
+        taxpayer: branch.name,
+        code,
+        kind,
+        period,
+    })
 }
 
 /// A number in a box (`13,600.00`, `-5`, `(1,000.00)`), if it is one.
 fn number(value: &str) -> Option<f64> {
     let trimmed = value.trim();
     let negative = trimmed.starts_with('(') && trimmed.ends_with(')');
-    let clean: String = trimmed.chars().filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect();
+    let clean: String = trimmed
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+        .collect();
     if clean.is_empty() || clean == "-" || clean == "." {
         return None;
     }
-    clean.parse::<f64>().ok().map(|n| if negative { -n } else { n })
+    clean
+        .parse::<f64>()
+        .ok()
+        .map(|n| if negative { -n } else { n })
 }
 
 /// A box whose value names the taxpayer's identity or a code, not an
 /// amount or an answer to show: never on a card.
 fn identity_box(label: &str, value: &str) -> bool {
     let lower = label.to_lowercase();
-    ["tin", "zip", "telephone", "contact", "email", "e-mail", "rdo", "branch code", "page 2", "page 3", "signature"]
-        .iter()
-        .any(|word| lower.contains(word))
-        || value.chars().filter(char::is_ascii_digit).count() >= 9 && number(value).is_none_or(|n| n.fract() == 0.0 && !value.contains(','))
+    [
+        "tin",
+        "zip",
+        "telephone",
+        "contact",
+        "email",
+        "e-mail",
+        "rdo",
+        "branch code",
+        "page 2",
+        "page 3",
+        "signature",
+    ]
+    .iter()
+    .any(|word| lower.contains(word))
+        || value.chars().filter(char::is_ascii_digit).count() >= 9
+            && number(value).is_none_or(|n| n.fract() == 0.0 && !value.contains(','))
 }
 
 /// The item number a box is under, for ordering: `14`, `26`, `36A`.
@@ -154,9 +200,16 @@ struct Shown {
 
 /// An amount as BIR's forms write one: `186,000.00`, `(1,000.00)`.
 fn money(value: &str) -> bool {
-    let inner = value.trim().trim_start_matches('(').trim_end_matches(')').trim_start_matches('-');
+    let inner = value
+        .trim()
+        .trim_start_matches('(')
+        .trim_end_matches(')')
+        .trim_start_matches('-');
     inner.rsplit_once('.').is_some_and(|(whole, cents)| {
-        cents.len() == 2 && cents.chars().all(|c| c.is_ascii_digit()) && !whole.is_empty() && whole.chars().all(|c| c.is_ascii_digit() || c == ',')
+        cents.len() == 2
+            && cents.chars().all(|c| c.is_ascii_digit())
+            && !whole.is_empty()
+            && whole.chars().all(|c| c.is_ascii_digit() || c == ',')
     })
 }
 
@@ -166,16 +219,33 @@ fn money(value: &str) -> bool {
 fn filled(kind: AgentFormKind, draft: &Value) -> Result<Vec<Shown>, String> {
     let def = kind.definition();
     let map = agent::field_map(kind, draft)?;
-    let tin: String = agent::identity(kind, draft).map(|who| who.tin).unwrap_or_default().chars().filter(char::is_ascii_digit).collect();
-    let part_of_tin = |value: &str| value.len() >= 3 && value.chars().all(|c| c.is_ascii_digit()) && tin.contains(value);
+    let tin: String = agent::identity(kind, draft)
+        .map(|who| who.tin)
+        .unwrap_or_default()
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect();
+    let part_of_tin = |value: &str| {
+        value.len() >= 3 && value.chars().all(|c| c.is_ascii_digit()) && tin.contains(value)
+    };
     let mut out: Vec<Shown> = Vec::new();
     for entry in &def.boxes {
-        if entry.group.is_some() || entry.key.contains('{') || entry.kind.contains("hidden") || entry.required == "hidden" {
+        if entry.group.is_some()
+            || entry.key.contains('{')
+            || entry.kind.contains("hidden")
+            || entry.required == "hidden"
+        {
             continue;
         }
         let value = def.box_value(&entry.key, &map);
         let value = value.trim();
-        if value.is_empty() || value == "false" || value == "0" || value == "0.00" || identity_box(&entry.label, value) || part_of_tin(value) {
+        if value.is_empty()
+            || value == "false"
+            || value == "0"
+            || value == "0.00"
+            || identity_box(&entry.label, value)
+            || part_of_tin(value)
+        {
             continue;
         }
         let value = match entry.options.iter().find(|option| option.value == value) {
@@ -183,9 +253,23 @@ fn filled(kind: AgentFormKind, draft: &Value) -> Result<Vec<Shown>, String> {
             _ if value == "true" => "Yes".to_string(),
             _ => value.to_string(),
         };
-        let label = entry.label.trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ' || c == '.').trim().to_string();
-        let label = if label.is_empty() { entry.label.clone() } else { label };
-        out.push(Shown { key: entry.key.clone(), item: entry.item.clone(), label, value, computed: entry.computed });
+        let label = entry
+            .label
+            .trim_start_matches(|c: char| c.is_ascii_digit() || c == ' ' || c == '.')
+            .trim()
+            .to_string();
+        let label = if label.is_empty() {
+            entry.label.clone()
+        } else {
+            label
+        };
+        out.push(Shown {
+            key: entry.key.clone(),
+            item: entry.item.clone(),
+            label,
+            value,
+            computed: entry.computed,
+        });
     }
     out.sort_by_key(|shown| item_order(&shown.item));
     Ok(out)
@@ -204,15 +288,24 @@ fn shown_json(shown: &Shown) -> Value {
 }
 
 /// `bir_return {ticket?, form?, period?, view}`.
-pub(crate) fn view(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn view(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["ticket", "form", "period", "view"])?;
     let view = text(arguments, "view").unwrap_or("summary");
     if !VIEWS.contains(&view) {
-        return Err(format!("`view` must be one of {} (got `{view}`)", VIEWS.join(", ")));
+        return Err(format!(
+            "`view` must be one of {} (got `{view}`)",
+            VIEWS.join(", ")
+        ));
     }
     let target = target(db, arguments, today)?;
     let stored = target.stored(db, today);
-    let draft = stored.as_ref().and_then(|filing| db.draft_data_json(filing.id).ok().flatten());
+    let draft = stored
+        .as_ref()
+        .and_then(|filing| db.draft_data_json(filing.id).ok().flatten());
     let mut out = json!({
         "view": view,
         "form": target.code,
@@ -242,7 +335,9 @@ fn not_saved() -> Value {
 
 /// The money items of the return and what is left to pay.
 fn summary(kind: AgentFormKind, draft: Option<&Value>) -> Result<Value, String> {
-    let Some(draft) = draft else { return Ok(not_saved()) };
+    let Some(draft) = draft else {
+        return Ok(not_saved());
+    };
     let boxes = filled(kind, draft)?;
     let money: Vec<&Shown> = boxes
         .iter()
@@ -250,14 +345,18 @@ fn summary(kind: AgentFormKind, draft: Option<&Value>) -> Result<Value, String> 
         .collect();
     // One row per item (two-column forms repeat an item for A and B); the
     // schedules' rows (no item number) first, as the amounts they add up.
-    let (rows, items): (Vec<&Shown>, Vec<&Shown>) = money.iter().partition(|shown| shown.item.is_empty());
+    let (rows, items): (Vec<&Shown>, Vec<&Shown>) =
+        money.iter().partition(|shown| shown.item.is_empty());
     let money: Vec<&Shown> = rows.into_iter().chain(items).collect();
     let mut seen: Vec<(String, String)> = Vec::new();
     let mut items = Vec::new();
     for shown in &money {
         let id = (shown.item.clone(), shown.label.clone());
         // A schedule's total repeats an item's amount: the item says it.
-        let repeated = shown.item.is_empty() && money.iter().any(|other| !other.item.is_empty() && other.value == shown.value);
+        let repeated = shown.item.is_empty()
+            && money
+                .iter()
+                .any(|other| !other.item.is_empty() && other.value == shown.value);
         if seen.contains(&id) || repeated {
             continue;
         }
@@ -279,10 +378,15 @@ fn summary(kind: AgentFormKind, draft: Option<&Value>) -> Result<Value, String> 
 
 /// Every filled box, for the paper view.
 fn paper(kind: AgentFormKind, draft: Option<&Value>) -> Result<Value, String> {
-    let Some(draft) = draft else { return Ok(not_saved()) };
+    let Some(draft) = draft else {
+        return Ok(not_saved());
+    };
     // A box with no item number is a schedule's row or the page's own
     // bookkeeping (page count, flags): only amounts are kept.
-    let boxes: Vec<Shown> = filled(kind, draft)?.into_iter().filter(|shown| !shown.item.is_empty() || money(&shown.value)).collect();
+    let boxes: Vec<Shown> = filled(kind, draft)?
+        .into_iter()
+        .filter(|shown| !shown.item.is_empty() || money(&shown.value))
+        .collect();
     Ok(json!({
         "items": boxes.iter().map(shown_json).collect::<Vec<_>>(),
         "note": "The return's filled boxes in item order, as they print on the official form (taxpayer numbers left out). Open it in BIR Forms for the printable page.",
@@ -291,16 +395,28 @@ fn paper(kind: AgentFormKind, draft: Option<&Value>) -> Result<Value, String> {
 
 /// The filed version (kept when the return was reverted for amendment)
 /// against the amended draft, the items that differ.
-fn amend(db: &Database, target: &Target, stored: Option<&FormDraftSummary>, draft: Option<&Value>) -> Result<Value, String> {
-    let (Some(filing), Some(draft)) = (stored, draft) else { return Ok(not_saved()) };
-    let snapshots = db.list_amendment_snapshots_for_tin(&filing.tin).map_err(|error| error.to_string())?;
+fn amend(
+    db: &Database,
+    target: &Target,
+    stored: Option<&FormDraftSummary>,
+    draft: Option<&Value>,
+) -> Result<Value, String> {
+    let (Some(filing), Some(draft)) = (stored, draft) else {
+        return Ok(not_saved());
+    };
+    let snapshots = db
+        .list_amendment_snapshots_for_tin(&filing.tin)
+        .map_err(|error| error.to_string())?;
     let original = snapshots.iter().find(|snapshot| {
         snapshot.form_code == target.code
             && serde_json::from_str::<Value>(&snapshot.draft_json).is_ok_and(|json| {
                 json["id"].as_i64() == Some(filing.id)
-                    || agent::identity(target.kind, &json).ok().zip(agent::identity(target.kind, draft).ok()).is_some_and(
-                        |(old, new)| old.taxable_year == new.taxable_year && old.period == new.period,
-                    )
+                    || agent::identity(target.kind, &json)
+                        .ok()
+                        .zip(agent::identity(target.kind, draft).ok())
+                        .is_some_and(|(old, new)| {
+                            old.taxable_year == new.taxable_year && old.period == new.period
+                        })
             })
     });
     let Some(original) = original else {
@@ -319,17 +435,28 @@ fn amend(db: &Database, target: &Target, stored: Option<&FormDraftSummary>, draf
             },
         }));
     };
-    let before: Value = serde_json::from_str(&original.draft_json).map_err(|error| error.to_string())?;
-    let old: BTreeMap<String, String> = filled(target.kind, &before)?.into_iter().map(|shown| (shown.key, shown.value)).collect();
+    let before: Value =
+        serde_json::from_str(&original.draft_json).map_err(|error| error.to_string())?;
+    let old: BTreeMap<String, String> = filled(target.kind, &before)?
+        .into_iter()
+        .map(|shown| (shown.key, shown.value))
+        .collect();
     let now = filled(target.kind, draft)?;
     let def = target.kind.definition();
     let mut changes = Vec::new();
-    let mut keys: Vec<&String> = old.keys().chain(now.iter().map(|shown| &shown.key)).collect();
+    let mut keys: Vec<&String> = old
+        .keys()
+        .chain(now.iter().map(|shown| &shown.key))
+        .collect();
     keys.sort();
     keys.dedup();
-    let new: BTreeMap<&String, &String> = now.iter().map(|shown| (&shown.key, &shown.value)).collect();
+    let new: BTreeMap<&String, &String> =
+        now.iter().map(|shown| (&shown.key, &shown.value)).collect();
     for key in keys {
-        let (was, is) = (old.get(key).map(String::as_str).unwrap_or(""), new.get(key).map(|v| v.as_str()).unwrap_or(""));
+        let (was, is) = (
+            old.get(key).map(String::as_str).unwrap_or(""),
+            new.get(key).map(|v| v.as_str()).unwrap_or(""),
+        );
         let entry = def.box_def(key);
         let label = entry.map(|entry| entry.label.as_str()).unwrap_or(key);
         if was == is || label.to_lowercase().contains("amended") {
@@ -362,7 +489,9 @@ fn attachment_store(db: &Database, target: &Target) -> Map<String, Value> {
 /// missing for this return.
 fn attachments(db: &Database, target: &Target) -> Result<Value, String> {
     let kept = attachment_store(db, target);
-    let listed = lookup::notes(target.code).map(|notes| notes.attach.as_slice()).unwrap_or_default();
+    let listed = lookup::notes(target.code)
+        .map(|notes| notes.attach.as_slice())
+        .unwrap_or_default();
     Ok(json!({
         "items": listed.iter().map(|attachment| json!({
             "id": attachment.id,
@@ -405,11 +534,23 @@ fn import_view(target: &Target, stored: Option<&FormDraftSummary>) -> Value {
 
 /// `bir_card_attach {ticket, attachment, upload, name}` (the attach card's
 /// Upload): keep `bytes` as the return's attachment.
-pub(crate) fn attach(db: &Database, arguments: &Map<String, Value>, bytes: &[u8], dir: &std::path::Path, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn attach(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    bytes: &[u8],
+    dir: &std::path::Path,
+    today: NaiveDate,
+) -> Result<Value, String> {
     let target = target(db, arguments, today)?;
-    let id = text(arguments, "attachment").ok_or("`attachment` is required: the attachment's id")?;
-    let listed = lookup::notes(target.code).map(|notes| notes.attach.as_slice()).unwrap_or_default();
-    let attachment = listed.iter().find(|attachment| attachment.id == id).ok_or_else(|| format!("{} lists no attachment `{id}`", target.code))?;
+    let id =
+        text(arguments, "attachment").ok_or("`attachment` is required: the attachment's id")?;
+    let listed = lookup::notes(target.code)
+        .map(|notes| notes.attach.as_slice())
+        .unwrap_or_default();
+    let attachment = listed
+        .iter()
+        .find(|attachment| attachment.id == id)
+        .ok_or_else(|| format!("{} lists no attachment `{id}`", target.code))?;
     let name = text(arguments, "name").ok_or("`name` is required: the picked file's name")?;
     let ext = std::path::Path::new(name)
         .extension()
@@ -418,13 +559,17 @@ pub(crate) fn attach(db: &Database, arguments: &Map<String, Value>, bytes: &[u8]
         .filter(|ext| ext.chars().all(|c| c.is_ascii_alphanumeric()) && ext.len() <= 5)
         .ok_or("`name` must be the picked file's name, with its extension")?;
     let folder = dir.join(target.value().replace(['/', ' '], "_"));
-    std::fs::create_dir_all(&folder).map_err(|error| format!("cannot keep the attachment: {error}"))?;
+    std::fs::create_dir_all(&folder)
+        .map_err(|error| format!("cannot keep the attachment: {error}"))?;
     let file = folder.join(format!("{id}.{ext}"));
     std::fs::write(&file, bytes).map_err(|error| format!("cannot keep the attachment: {error}"))?;
     let mut kept = attachment_store(db, &target);
     kept.insert(id.to_string(), json!({ "name": name, "file": file.display().to_string(), "uploaded_at": chrono::Utc::now().to_rfc3339() }));
-    db.set_setting(&format!("{ATTACHMENTS_PREFIX}{}", target.value()), &Value::Object(kept).to_string())
-        .map_err(|error| error.to_string())?;
+    db.set_setting(
+        &format!("{ATTACHMENTS_PREFIX}{}", target.value()),
+        &Value::Object(kept).to_string(),
+    )
+    .map_err(|error| error.to_string())?;
     Ok(json!({ "kept": true, "attachment": attachment.label, "name": name }))
 }
 
@@ -460,16 +605,24 @@ fn csv_line(line: &str) -> Vec<String> {
         }
     }
     cells.push(cell);
-    cells.into_iter().map(|cell| cell.trim().to_string()).collect()
+    cells
+        .into_iter()
+        .map(|cell| cell.trim().to_string())
+        .collect()
 }
 
 fn xml_text(raw: &str) -> String {
-    raw.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+    raw.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 /// The first worksheet of an .xlsx, as text cells (shared strings resolved).
 fn xlsx_rows(bytes: &[u8]) -> Result<Vec<Vec<String>>, String> {
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| "this .xlsx file is not readable".to_string())?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
+        .map_err(|_| "this .xlsx file is not readable".to_string())?;
     let mut read = |name: &str| -> Option<String> {
         let mut file = zip.by_name(name).ok()?;
         let mut text = String::new();
@@ -482,23 +635,39 @@ fn xlsx_rows(bytes: &[u8]) -> Result<Vec<Vec<String>>, String> {
     let t = regex::Regex::new(r"(?s)<t[^>]*>(.*?)</t>").expect("regex");
     let shared: Vec<String> = si
         .captures_iter(&shared_xml)
-        .map(|cap| t.captures_iter(&cap[1]).map(|part| xml_text(&part[1])).collect::<String>())
+        .map(|cap| {
+            t.captures_iter(&cap[1])
+                .map(|part| xml_text(&part[1]))
+                .collect::<String>()
+        })
         .collect();
     let row_re = regex::Regex::new(r"(?s)<row[^>]*>(.*?)</row>").expect("regex");
-    let cell_re = regex::Regex::new(r#"(?s)<c\s+r="([A-Z]+)\d+"([^>]*?)(?:/>|>(.*?)</c>)"#).expect("regex");
+    let cell_re =
+        regex::Regex::new(r#"(?s)<c\s+r="([A-Z]+)\d+"([^>]*?)(?:/>|>(.*?)</c>)"#).expect("regex");
     let value_re = regex::Regex::new(r"(?s)<v>(.*?)</v>").expect("regex");
     let mut rows = Vec::new();
     for row in row_re.captures_iter(&sheet) {
         let mut cells: Vec<String> = Vec::new();
         for cell in cell_re.captures_iter(&row[1]) {
-            let column = cell[1].bytes().fold(0usize, |n, b| n * 26 + usize::from(b - b'A' + 1)) - 1;
+            let column = cell[1]
+                .bytes()
+                .fold(0usize, |n, b| n * 26 + usize::from(b - b'A' + 1))
+                - 1;
             let attrs = &cell[2];
             let inner = cell.get(3).map(|m| m.as_str()).unwrap_or("");
-            let raw = value_re.captures(inner).map(|v| xml_text(&v[1])).unwrap_or_default();
+            let raw = value_re
+                .captures(inner)
+                .map(|v| xml_text(&v[1]))
+                .unwrap_or_default();
             let value = if attrs.contains(r#"t="s""#) {
-                raw.parse::<usize>().ok().and_then(|i| shared.get(i).cloned()).unwrap_or_default()
+                raw.parse::<usize>()
+                    .ok()
+                    .and_then(|i| shared.get(i).cloned())
+                    .unwrap_or_default()
             } else if attrs.contains(r#"t="inlineStr""#) {
-                t.captures_iter(inner).map(|part| xml_text(&part[1])).collect()
+                t.captures_iter(inner)
+                    .map(|part| xml_text(&part[1]))
+                    .collect()
             } else {
                 raw
             };
@@ -515,35 +684,65 @@ fn xlsx_rows(bytes: &[u8]) -> Result<Vec<Vec<String>>, String> {
 /// A date cell: 2026-07-15, 07/15/2026, or an Excel day number.
 fn cell_date(cell: &str) -> Option<NaiveDate> {
     let cell = cell.trim();
-    for format in ["%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d", "%b %d, %Y", "%d %b %Y"] {
+    for format in [
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%m/%d/%y",
+        "%Y/%m/%d",
+        "%b %d, %Y",
+        "%d %b %Y",
+    ] {
         if let Ok(day) = NaiveDate::parse_from_str(cell, format) {
             return Some(day);
         }
     }
     let serial: f64 = cell.parse().ok()?;
-    (20_000.0..80_000.0).contains(&serial).then(|| NaiveDate::from_ymd_opt(1899, 12, 30).expect("epoch") + Duration::days(serial as i64))
+    (20_000.0..80_000.0).contains(&serial).then(|| {
+        NaiveDate::from_ymd_opt(1899, 12, 30).expect("epoch") + Duration::days(serial as i64)
+    })
 }
 
 /// An amount cell: `12,400.00`, `₱ 990`; not `12,4OO.00`.
 fn cell_amount(cell: &str) -> Option<f64> {
     let trimmed = cell.trim();
-    let trimmed = trimmed.strip_prefix("PHP").or_else(|| trimmed.strip_prefix("Php")).unwrap_or(trimmed);
-    let clean: String = trimmed.chars().filter(|c| !matches!(c, '₱' | ',' | ' ' | '\u{a0}')).collect();
-    if clean.is_empty() || clean.chars().any(|c| !(c.is_ascii_digit() || c == '.' || c == '-')) {
+    let trimmed = trimmed
+        .strip_prefix("PHP")
+        .or_else(|| trimmed.strip_prefix("Php"))
+        .unwrap_or(trimmed);
+    let clean: String = trimmed
+        .chars()
+        .filter(|c| !matches!(c, '₱' | ',' | ' ' | '\u{a0}'))
+        .collect();
+    if clean.is_empty()
+        || clean
+            .chars()
+            .any(|c| !(c.is_ascii_digit() || c == '.' || c == '-'))
+    {
         return None;
     }
     clean.parse().ok()
 }
 
 fn period_bounds(period: TaxPeriod) -> (NaiveDate, NaiveDate) {
-    let first = |year: u16, month: u32| NaiveDate::from_ymd_opt(i32::from(year), month, 1).expect("a month");
+    let first = |year: u16, month: u32| {
+        NaiveDate::from_ymd_opt(i32::from(year), month, 1).expect("a month")
+    };
     let last = |year: u16, month: u32| {
-        let next = if month == 12 { first(year + 1, 1) } else { first(year, month + 1) };
+        let next = if month == 12 {
+            first(year + 1, 1)
+        } else {
+            first(year, month + 1)
+        };
         next - Duration::days(1)
     };
     match period {
-        TaxPeriod::Month { year, month } => (first(year, u32::from(month)), last(year, u32::from(month))),
-        TaxPeriod::Quarter { year, quarter } => (first(year, u32::from(quarter) * 3 - 2), last(year, u32::from(quarter) * 3)),
+        TaxPeriod::Month { year, month } => {
+            (first(year, u32::from(month)), last(year, u32::from(month)))
+        }
+        TaxPeriod::Quarter { year, quarter } => (
+            first(year, u32::from(quarter) * 3 - 2),
+            last(year, u32::from(quarter) * 3),
+        ),
         TaxPeriod::Year(year) => (first(year, 1), last(year, 12)),
         TaxPeriod::Day(day) => (day, day),
     }
@@ -559,9 +758,19 @@ pub(crate) struct Imported {
 /// `bir_card_import {ticket, upload, name}`: read the sheet's rows for the
 /// return (a date and an amount each, within the return's period). Reads
 /// only; the total waits for `bir_card_import_fill`.
-pub(crate) fn import_read(db: &Database, arguments: &Map<String, Value>, bytes: &[u8], today: NaiveDate) -> Result<(Value, Imported), String> {
+pub(crate) fn import_read(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    bytes: &[u8],
+    today: NaiveDate,
+) -> Result<(Value, Imported), String> {
     let target = target(db, arguments, today)?;
-    let key = import_box(target.code).ok_or_else(|| format!("BIR imports a sales sheet into 2551Q, 1701Q and 2550Q only, not {}", target.code))?;
+    let key = import_box(target.code).ok_or_else(|| {
+        format!(
+            "BIR imports a sales sheet into 2551Q, 1701Q and 2550Q only, not {}",
+            target.code
+        )
+    })?;
     let name = text(arguments, "name").ok_or("`name` is required: the picked file's name")?;
     let rows = sheet_rows(name, bytes)?;
     // The header row: a cell about the date and one about the amount.
@@ -569,18 +778,25 @@ pub(crate) fn import_read(db: &Database, arguments: &Map<String, Value>, bytes: 
         row.iter().any(|cell| cell.to_lowercase().contains("date"))
             && row.iter().any(|cell| {
                 let lower = cell.to_lowercase();
-                ["amount", "sales", "total", "gross", "receipt"].iter().any(|word| lower.contains(word))
+                ["amount", "sales", "total", "gross", "receipt"]
+                    .iter()
+                    .any(|word| lower.contains(word))
             })
     });
     let (date_col, amount_col, start) = match header {
         Some(at) => {
             let row = &rows[at];
-            let date = row.iter().position(|cell| cell.to_lowercase().contains("date")).unwrap_or(0);
+            let date = row
+                .iter()
+                .position(|cell| cell.to_lowercase().contains("date"))
+                .unwrap_or(0);
             let amount = row
                 .iter()
                 .position(|cell| {
                     let lower = cell.to_lowercase();
-                    ["amount", "sales", "total", "gross", "receipt"].iter().any(|word| lower.contains(word))
+                    ["amount", "sales", "total", "gross", "receipt"]
+                        .iter()
+                        .any(|word| lower.contains(word))
                 })
                 .unwrap_or(1);
             (date, amount, at + 1)
@@ -598,7 +814,10 @@ pub(crate) fn import_read(db: &Database, arguments: &Map<String, Value>, bytes: 
         let why = match (cell_date(cell(date_col)), cell_amount(cell(amount_col))) {
             (None, _) => Some(("no date BIR can read", cell(date_col).to_string())),
             (_, None) => Some(("amount isn't a number", cell(amount_col).to_string())),
-            (Some(day), _) if day < from || day > to => Some(("date outside the period", day.format("%Y-%m-%d").to_string())),
+            (Some(day), _) if day < from || day > to => Some((
+                "date outside the period",
+                day.format("%Y-%m-%d").to_string(),
+            )),
             (Some(_), Some(amount)) => {
                 read += 1;
                 total += amount;
@@ -610,8 +829,17 @@ pub(crate) fn import_read(db: &Database, arguments: &Map<String, Value>, bytes: 
         }
     }
     let total = (total * 100.0).round() / 100.0;
-    let label = target.kind.definition().box_def(key).map(|entry| entry.label.clone()).unwrap_or_default();
-    let imported = Imported { value: target.value(), total, rows: read };
+    let label = target
+        .kind
+        .definition()
+        .box_def(key)
+        .map(|entry| entry.label.clone())
+        .unwrap_or_default();
+    let imported = Imported {
+        value: target.value(),
+        total,
+        rows: read,
+    };
     Ok((
         json!({
             "file": name,
@@ -628,7 +856,11 @@ pub(crate) fn import_read(db: &Database, arguments: &Map<String, Value>, bytes: 
 
 /// `bir_card_import_fill {ticket, import}`: put an import's total in the
 /// return's box and save the draft.
-pub(crate) fn import_fill(db: &Database, imported: &Imported, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn import_fill(
+    db: &Database,
+    imported: &Imported,
+    today: NaiveDate,
+) -> Result<Value, String> {
     let named = taxform::parse(&imported.value, today);
     let (Some(tin), Some(code), Some(period)) = (named.tin, named.form, named.period) else {
         return Err("the import's return is incomplete".into());
@@ -642,20 +874,35 @@ pub(crate) fn import_fill(db: &Database, imported: &Imported, today: NaiveDate) 
         .ok_or("this taxpayer is no longer saved in BIR")?;
     let profile = crate::agent::load_profile(db, &tin)?;
     let (year, slot) = period.open_args();
-    let mut draft = crate::screen_form_module::load_draft(db, kind, &profile, year, slot, false, None)?;
+    let mut draft =
+        crate::screen_form_module::load_draft(db, kind, &profile, year, slot, false, None)?;
     if agent::identity(kind, &draft)?.status != FilingStatus::Draft {
         return Err("this return is no longer a draft: it cannot be filled".into());
     }
     let from_profile = crate::agent::profile_context(db, kind, &profile, year, slot)?;
-    agent::fill(kind, &mut draft, key, &json!(format!("{:.2}", imported.total)), Some(&from_profile))?;
+    agent::fill(
+        kind,
+        &mut draft,
+        key,
+        &json!(format!("{:.2}", imported.total)),
+        Some(&from_profile),
+    )?;
     agent::save_draft(kind, db, &mut draft)?;
-    let label = kind.definition().box_def(key).map(|entry| entry.label.clone()).unwrap_or_default();
+    let label = kind
+        .definition()
+        .box_def(key)
+        .map(|entry| entry.label.clone())
+        .unwrap_or_default();
     Ok(json!({ "filled": true, "box": label, "total": imported.total, "rows": imported.rows }))
 }
 
 /// The three app-only tools' `tools/list` entries.
 pub(crate) fn app_descriptors() -> Vec<Value> {
-    let tool = |name: &str, description: &str, properties: Value, required: &[&str], read_only: bool| {
+    let tool = |name: &str,
+                description: &str,
+                properties: Value,
+                required: &[&str],
+                read_only: bool| {
         json!({
             "name": name,
             "description": description,
@@ -716,13 +963,22 @@ mod tests {
 
     #[test]
     fn a_sheet_reads_its_rows_and_cells() {
-        assert_eq!(csv_line(r#"2026-07-01,"12,400.00",x"#), ["2026-07-01", "12,400.00", "x"]);
+        assert_eq!(
+            csv_line(r#"2026-07-01,"12,400.00",x"#),
+            ["2026-07-01", "12,400.00", "x"]
+        );
         assert_eq!(cell_amount("12,400.00"), Some(12400.0));
         assert_eq!(cell_amount("₱ 990"), Some(990.0));
         assert_eq!(cell_amount("12,4OO.00"), None);
-        assert_eq!(cell_date("07/15/2026"), NaiveDate::from_ymd_opt(2026, 7, 15));
+        assert_eq!(
+            cell_date("07/15/2026"),
+            NaiveDate::from_ymd_opt(2026, 7, 15)
+        );
         assert_eq!(cell_date("46218"), NaiveDate::from_ymd_opt(2026, 7, 15));
-        let (from, to) = period_bounds(TaxPeriod::Quarter { year: 2026, quarter: 3 });
+        let (from, to) = period_bounds(TaxPeriod::Quarter {
+            year: 2026,
+            quarter: 3,
+        });
         assert_eq!((from.month(), to.day()), (7, 30));
         assert!(identity_box("Page 2 TIN 1", "123"));
         assert!(!identity_box("Total Tax Due", "13,600.00"));

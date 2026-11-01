@@ -34,8 +34,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use super::confirm::{check_keys, text, watched_branches};
-use super::watch::Watch;
 use super::resolve::{self, Branch};
+use super::watch::Watch;
 
 /// Settings key of every recorded payment (a JSON list). Every build reads
 /// it (`crate::payment_records`); only this module writes it.
@@ -110,7 +110,8 @@ struct Proof {
 
 impl Payment {
     fn total(&self) -> Option<f64> {
-        self.amount.map(|amount| cents(amount + self.fee.unwrap_or(0.0)))
+        self.amount
+            .map(|amount| cents(amount + self.fee.unwrap_or(0.0)))
     }
 
     /// How it was recorded: `email`, `receipt` or `manual`.
@@ -151,10 +152,14 @@ fn period_label(form: &str, canonical: &str) -> String {
 }
 
 fn load(db: &Database) -> Result<Vec<Payment>, String> {
-    let Some(stored) = db.get_setting(PAYMENTS_KEY).map_err(|error| error.to_string())? else {
+    let Some(stored) = db
+        .get_setting(PAYMENTS_KEY)
+        .map_err(|error| error.to_string())?
+    else {
         return Ok(Vec::new());
     };
-    serde_json::from_str(&stored).map_err(|error| format!("the stored payments are unreadable: {error}"))
+    serde_json::from_str(&stored)
+        .map_err(|error| format!("the stored payments are unreadable: {error}"))
 }
 
 /// `bir_card_remove_payment {tin, form, period, id}`: payment `id` taken off
@@ -300,9 +305,9 @@ fn amount_argument(arguments: &Map<String, Value>, key: &str) -> Result<Option<f
             .filter(|amount| *amount >= 0.0)
             .map(|amount| Some(cents(amount)))
             .ok_or_else(|| format!("`{key}` must be an amount in pesos (got {number})")),
-        Some(Value::String(text)) => amount(text)
-            .map(Some)
-            .ok_or_else(|| format!("`{key}` must be an amount in pesos, e.g. 629.94 (got `{text}`)")),
+        Some(Value::String(text)) => amount(text).map(Some).ok_or_else(|| {
+            format!("`{key}` must be an amount in pesos, e.g. 629.94 (got `{text}`)")
+        }),
         Some(other) => Err(format!("`{key}` must be an amount in pesos (got {other})")),
     }
 }
@@ -336,7 +341,9 @@ fn paid_time(raw: &str) -> Result<String, String> {
         .and_then(|local| local.and_local_timezone(manila).single())
         .map(|at| at.to_rfc3339())
         .ok_or_else(|| {
-            format!("`paid_at` must be when it was paid, e.g. 2026-10-26T18:57:10+08:00 (got `{raw}`)")
+            format!(
+                "`paid_at` must be when it was paid, e.g. 2026-10-26T18:57:10+08:00 (got `{raw}`)"
+            )
         })
 }
 
@@ -648,12 +655,14 @@ pub(crate) fn list(
     };
     let tin = optional_text(arguments, "tin")?
         .map(|tin| {
-            taxform::tin_digits(&tin).ok_or_else(|| format!("`{tin}` is not a TIN (9 or 14 digits)"))
+            taxform::tin_digits(&tin)
+                .ok_or_else(|| format!("`{tin}` is not a TIN (9 or 14 digits)"))
         })
         .transpose()?;
     let form = optional_text(arguments, "form")?
         .map(|form| {
-            taxform::form_code_of(&form).ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))
+            taxform::form_code_of(&form)
+                .ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))
         })
         .transpose()?;
     let period = match (optional_text(arguments, "period")?, form) {
@@ -677,10 +686,18 @@ pub(crate) fn list(
         })
         .filter(|payment| message_id.is_none() || payment.message_id == message_id)
         .filter(|payment| form.is_none_or(|code| payment.form == code))
-        .filter(|payment| period.as_ref().is_none_or(|period| payment.period == *period))
+        .filter(|payment| {
+            period
+                .as_ref()
+                .is_none_or(|period| payment.period == *period)
+        })
         .filter(|payment| {
             year.as_ref().is_none_or(|year| {
-                payment.paid_at.as_deref().unwrap_or(&payment.recorded_at).starts_with(year.as_str())
+                payment
+                    .paid_at
+                    .as_deref()
+                    .unwrap_or(&payment.recorded_at)
+                    .starts_with(year.as_str())
             })
         })
         .collect();
@@ -700,7 +717,13 @@ pub(crate) fn list(
     for payment in &payments {
         let paid = payment.total().unwrap_or(0.0);
         total += paid;
-        let month: String = payment.paid_at.as_deref().unwrap_or(&payment.recorded_at).chars().take(7).collect();
+        let month: String = payment
+            .paid_at
+            .as_deref()
+            .unwrap_or(&payment.recorded_at)
+            .chars()
+            .take(7)
+            .collect();
         for (list, key) in [(&mut by_form, payment.form.clone()), (&mut by_month, month)] {
             match list.iter_mut().find(|(known, _)| *known == key) {
                 Some(entry) => entry.1 += paid,
@@ -711,7 +734,9 @@ pub(crate) fn list(
     by_form.sort_by(|a, b| b.1.total_cmp(&a.1));
     by_month.sort_by(|a, b| a.0.cmp(&b.0));
     let sums = |list: Vec<(String, f64)>, key: &str| -> Vec<Value> {
-        list.into_iter().map(|(name, amount)| json!({ key: name, "amount": cents(amount) })).collect()
+        list.into_iter()
+            .map(|(name, amount)| json!({ key: name, "amount": cents(amount) }))
+            .collect()
     };
     Ok(json!({
         "year": year,
@@ -738,7 +763,10 @@ pub(crate) fn keys(db: &Database) -> Result<Vec<String>, String> {
 
 /// The payments recorded on or after `since` (YYYY-MM-DD), newest first.
 pub(crate) fn recorded_since(db: &Database, since: &str) -> Result<Vec<Value>, String> {
-    let mut found: Vec<Payment> = load(db)?.into_iter().filter(|payment| payment.recorded_at.as_str() >= since).collect();
+    let mut found: Vec<Payment> = load(db)?
+        .into_iter()
+        .filter(|payment| payment.recorded_at.as_str() >= since)
+        .collect();
     found.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
     Ok(found
         .iter()
@@ -784,7 +812,12 @@ pub(crate) fn search(
     }
     let senders: Vec<String> = CHANNELS
         .iter()
-        .flat_map(|channel| channel.senders.iter().map(|sender| format!("from:{sender}")))
+        .flat_map(|channel| {
+            channel
+                .senders
+                .iter()
+                .map(|sender| format!("from:{sender}"))
+        })
         .collect();
     let named = if tins.is_empty() {
         String::new()
@@ -850,7 +883,10 @@ pub(crate) fn parse(arguments: &Map<String, Value>, today: NaiveDate) -> Result<
     check_keys(arguments, &["text", "message_id"])?;
     let email = text(arguments, "text")?;
     let message_id = optional_text(arguments, "message_id")?;
-    let Some(mut parsed) = CHANNELS.iter().find_map(|channel| (channel.parse)(email, today)) else {
+    let Some(mut parsed) = CHANNELS
+        .iter()
+        .find_map(|channel| (channel.parse)(email, today))
+    else {
         return Ok(Value::Null);
     };
     if let Some(record) = parsed.get_mut("record").and_then(Value::as_object_mut) {
@@ -864,7 +900,13 @@ pub(crate) fn parse(arguments: &Map<String, Value>, today: NaiveDate) -> Result<
 
 /// A TIN as a payment names it, all 14 digits (a root is its head office).
 fn full_tin(tin: &str) -> Option<String> {
-    taxform::tin_digits(tin).map(|digits| if digits.len() == 9 { format!("{digits}00000") } else { digits })
+    taxform::tin_digits(tin).map(|digits| {
+        if digits.len() == 9 {
+            format!("{digits}00000")
+        } else {
+            digits
+        }
+    })
 }
 
 /// A routine's `bir_record_payment` (spec 5.9, the routine's `writes`):
@@ -884,7 +926,9 @@ pub(crate) fn email_backed(
         ));
     };
     if optional_text(arguments, "proof_path")?.is_some() {
-        return Err(format!("{RULE}: the email is the proof, so a routine passes no `proof_path`"));
+        return Err(format!(
+            "{RULE}: the email is the proof, so a routine passes no `proof_path`"
+        ));
     }
     // the email as bir_payment_parse read it, not the copy the model sends
     // back (that one has its TIN hidden, and could be changed)
@@ -902,7 +946,12 @@ pub(crate) fn email_backed(
         ));
     };
     let said = |key: &str| record[key].as_str().unwrap_or("");
-    let asked = |key: &str| optional_text(arguments, key).ok().flatten().unwrap_or_default();
+    let asked = |key: &str| {
+        optional_text(arguments, key)
+            .ok()
+            .flatten()
+            .unwrap_or_default()
+    };
     let code = taxform::form_code_of(&asked("form"));
     let period = |text: &str| code.and_then(|code| period_of(code, text, today).ok());
     let mut differs = Vec::new();
@@ -919,7 +968,8 @@ pub(crate) fn email_backed(
     if amount.is_none() || amount != record["amount"].as_f64().map(cents) {
         differs.push("amount");
     }
-    if !said("reference").is_empty() && !asked("reference").eq_ignore_ascii_case(said("reference")) {
+    if !said("reference").is_empty() && !asked("reference").eq_ignore_ascii_case(said("reference"))
+    {
         differs.push("reference");
     }
     if !differs.is_empty() {
@@ -951,7 +1001,9 @@ pub(crate) fn remember_email(message_id: &str, text: &str) {
 
 fn read_email(message_id: &str) -> Option<String> {
     let read = READ.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    read.iter().find(|(id, _)| id == message_id).map(|(_, text)| text.clone())
+    read.iter()
+        .find(|(id, _)| id == message_id)
+        .map(|(_, text)| text.clone())
 }
 
 /// `text` cut to at most `max` bytes, at a character boundary.
@@ -967,24 +1019,33 @@ fn capped(text: &str, max: usize) -> &str {
 /// whether its return already holds it, by the rule [`record`] uses for
 /// the same payment (its reference through the same channel).
 pub(crate) fn with_recorded(db: &Database, mut parsed: Value, today: NaiveDate) -> Value {
-    let Some(record) = parsed.get("record") else { return parsed };
+    let Some(record) = parsed.get("record") else {
+        return parsed;
+    };
     let field = |name: &str| record[name].as_str().unwrap_or("");
     let (reference, channel) = (field("reference"), field("channel"));
     let message_id = field("message_id");
     let readable = readable(record);
     let same_email = !message_id.is_empty()
-        && load(db).is_ok_and(|payments| payments.iter().any(|payment| payment.message_id.as_deref() == Some(message_id)));
-    let recorded = same_email
-        || readable && target(db, field("tin"), field("form"), field("period"), today).is_ok_and(|target| {
-            let key = target.key();
-            load(db).is_ok_and(|payments| {
-                payments.iter().any(|payment| {
-                    payment.key == key
-                        && payment.reference.eq_ignore_ascii_case(reference)
-                        && payment.channel.eq_ignore_ascii_case(channel)
-                })
-            })
+        && load(db).is_ok_and(|payments| {
+            payments
+                .iter()
+                .any(|payment| payment.message_id.as_deref() == Some(message_id))
         });
+    let recorded = same_email
+        || readable
+            && target(db, field("tin"), field("form"), field("period"), today).is_ok_and(
+                |target| {
+                    let key = target.key();
+                    load(db).is_ok_and(|payments| {
+                        payments.iter().any(|payment| {
+                            payment.key == key
+                                && payment.reference.eq_ignore_ascii_case(reference)
+                                && payment.channel.eq_ignore_ascii_case(channel)
+                        })
+                    })
+                },
+            );
     parsed["recorded"] = json!(recorded);
     parsed["readable"] = json!(readable);
     parsed
@@ -997,12 +1058,18 @@ pub(crate) fn readable(record: &Value) -> bool {
     let field = |name: &str| record[name].as_str().unwrap_or("").trim().to_string();
     let amount = record["amount"]
         .as_f64()
-        .or_else(|| record["amount"].as_str().and_then(|raw| raw.replace(',', "").parse().ok()))
+        .or_else(|| {
+            record["amount"]
+                .as_str()
+                .and_then(|raw| raw.replace(',', "").parse().ok())
+        })
         .unwrap_or(0.0);
     taxform::form_code_of(&field("form")).is_some()
         && taxform::tin_digits(&field("tin")).is_some()
         && amount > 0.0
-        && field("reference").chars().any(|c| c.is_ascii_alphanumeric())
+        && field("reference")
+            .chars()
+            .any(|c| c.is_ascii_alphanumeric())
 }
 
 /// The labels of MyEG's "BIR Transaction Success" email, in its order.
@@ -1083,7 +1150,11 @@ fn parse_myeg(email: &str, today: NaiveDate) -> Option<Value> {
     let first_word = |label: &str| get(label).and_then(|value| value.split_whitespace().next());
     let root: String = get("TIN")?.chars().filter(char::is_ascii_digit).collect();
     let branch_code = first_word("Branch Code")
-        .map(|code| code.chars().filter(char::is_ascii_digit).collect::<String>())
+        .map(|code| {
+            code.chars()
+                .filter(char::is_ascii_digit)
+                .collect::<String>()
+        })
         .filter(|code| !code.is_empty() && code.len() <= 5)
         .map(|code| format!("{code:0>5}"));
     let tin = match root.len() {
@@ -1119,9 +1190,13 @@ fn parse_myeg(email: &str, today: NaiveDate) -> Option<Value> {
     let reference = first_word("Reference Number").unwrap_or("").to_string();
     let transaction_number = first_word("Transaction Number").map(str::to_string);
     let channel = "MyEG";
-    let token = form
-        .zip(period)
-        .map(|(code, period)| format!("{}{}", taxform::TOKEN_PREFIX, taxform::canonical_value(&tin, code, period)));
+    let token = form.zip(period).map(|(code, period)| {
+        format!(
+            "{}{}",
+            taxform::TOKEN_PREFIX,
+            taxform::canonical_value(&tin, code, period)
+        )
+    });
     Some(json!({
         "channel": channel,
         "method": get("Payment Channel"),
@@ -1231,7 +1306,10 @@ fn confirmation_page(status: &FilingStatus, marks: &Value, width: &str, height: 
     };
     let mut html = page_open("page-record-confirmation", width, height);
     html.push_str("<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">BIR filing confirmation</h1>");
-    html.push_str(&format!("<p style=\"margin:0 0 10pt 0\">{}</p>", escape(&state)));
+    html.push_str(&format!(
+        "<p style=\"margin:0 0 10pt 0\">{}</p>",
+        escape(&state)
+    ));
     html.push_str("<table style=\"border-collapse:collapse\">");
     if let Some(reference) = &reference {
         html.push_str(&row("File name", reference));
@@ -1300,7 +1378,9 @@ fn proof_html(proof: &Proof) -> String {
 
 fn payment_page(payments: &[Payment], width: &str, height: &str) -> String {
     let mut html = page_open("page-record-payment", width, height);
-    html.push_str("<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">Proof of payment</h1>");
+    html.push_str(
+        "<h1 style=\"font-size:17pt;font-weight:700;margin:0 0 10pt 0\">Proof of payment</h1>",
+    );
     if payments.is_empty() {
         html.push_str("<p>No payment is recorded for this return.</p></div>");
         return html;
@@ -1356,7 +1436,10 @@ fn payment_page(payments: &[Payment], width: &str, height: &str) -> String {
 
 /// Gmail's page for the message `message_id`.
 fn gmail_url(message_id: &str) -> String {
-    format!("https://mail.google.com/mail/u/0/#all/{}", resolve::encode_component(message_id))
+    format!(
+        "https://mail.google.com/mail/u/0/#all/{}",
+        resolve::encode_component(message_id)
+    )
 }
 
 /// One return's receipt, made in memory.
@@ -1374,7 +1457,11 @@ pub(crate) struct Receipt {
 /// return as a static page, every payment with its details and its proof
 /// (an uploaded receipt embedded, or the payment email's text), and the
 /// Gmail link of its email when it has one. Writes nothing.
-pub(crate) fn receipt(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Receipt, String> {
+pub(crate) fn receipt(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Receipt, String> {
     check_keys(arguments, &["tin", "form", "period"])?;
     let target = target(
         db,
@@ -1384,7 +1471,10 @@ pub(crate) fn receipt(db: &Database, arguments: &Map<String, Value>, today: Naiv
         today,
     )?;
     let key = target.key();
-    let payments: Vec<Payment> = load(db)?.into_iter().filter(|payment| payment.key == key).collect();
+    let payments: Vec<Payment> = load(db)?
+        .into_iter()
+        .filter(|payment| payment.key == key)
+        .collect();
     if payments.is_empty() {
         return Err(format!(
             "no payment is recorded for {} of {}, so there is no receipt to show",
@@ -1399,7 +1489,10 @@ pub(crate) fn receipt(db: &Database, arguments: &Map<String, Value>, today: Naiv
         escape(&title),
         payment_page(&payments, "595pt", "842pt")
     );
-    let gmail = payments.iter().find_map(|payment| payment.message_id.as_deref()).map(gmail_url);
+    let gmail = payments
+        .iter()
+        .find_map(|payment| payment.message_id.as_deref())
+        .map(gmail_url);
     let details: Vec<Value> = payments
         .iter()
         .map(|payment| {
@@ -1426,7 +1519,11 @@ pub(crate) fn receipt(db: &Database, arguments: &Map<String, Value>, today: Naiv
         "gmail_url": gmail,
         "payments": details,
     });
-    Ok(Receipt { html, title, summary })
+    Ok(Receipt {
+        html,
+        title,
+        summary,
+    })
 }
 
 /// `bir_filing_record {tin, form, period}`: the filled return, BIR's
@@ -1528,13 +1625,16 @@ pub(crate) fn filing_record_page(
         Some(at) => format!("{}{pages}{}", &document[..at], &document[at..]),
         None => format!("{document}{pages}"),
     };
-    let html = crate::static_html::staticize(&crate::print_sheet::prepare_html_for(
-        slug, &document, true,
-    ));
+    let html =
+        crate::static_html::staticize(&crate::print_sheet::prepare_html_for(slug, &document, true));
     Ok(RecordPage {
         html,
         file: format!("bir-{code}-{}-record", target.period.canonical()),
-        title: format!("{} · {} · filing record", target.label(), target.branch.name),
+        title: format!(
+            "{} · {} · filing record",
+            target.label(),
+            target.branch.name
+        ),
         form: code,
         taxpayer: target.branch.name.clone(),
         facts: json!({
@@ -1589,7 +1689,10 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("bir-payments-{name}-{}-{stamp}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "bir-payments-{name}-{}-{stamp}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1627,12 +1730,18 @@ mod tests {
             .map(|field| {
                 let (label, value) = MYEG_LABELS
                     .iter()
-                    .find_map(|label| field.strip_prefix(label).map(|value| (*label, value.trim())))
+                    .find_map(|label| {
+                        field
+                            .strip_prefix(label)
+                            .map(|value| (*label, value.trim()))
+                    })
                     .unwrap();
                 format!("{label}:\t{value}\n")
             })
             .collect::<String>();
-        let email = format!("BIR Transaction Success\n\n{table}\nThank you for using MyEG. 2026 MyEG Philippines.");
+        let email = format!(
+            "BIR Transaction Success\n\n{table}\nThank you for using MyEG. 2026 MyEG Philippines."
+        );
         let parsed = parse(&args(json!({"text": email})), today()).unwrap();
         assert_eq!(parsed["tin"], TIN);
         assert_eq!(parsed["period"], "2026-Q3");
@@ -1644,7 +1753,10 @@ mod tests {
     #[test]
     fn an_email_bir_does_not_know_parses_to_null() {
         let other = "GCash: You have paid PHP 629.94 to BIR. Ref No. 1234567890123.";
-        assert_eq!(parse(&args(json!({"text": other})), today()).unwrap(), Value::Null);
+        assert_eq!(
+            parse(&args(json!({"text": other})), today()).unwrap(),
+            Value::Null
+        );
         assert!(parse(&args(json!({"text": MYEG, "x": 1})), today()).is_err());
     }
 
@@ -1655,8 +1767,14 @@ mod tests {
         let query = found["query"].as_str().unwrap();
         assert!(query.starts_with("after:2026/09/26 "), "{query}");
         assert!(query.contains("from:no-reply@myeg.ph"), "{query}");
-        assert!(query.contains("-from:ebirforms-noreply@bir.gov.ph"), "{query}");
-        assert!(query.contains("\"779025068\" OR \"779-025-068\""), "{query}");
+        assert!(
+            query.contains("-from:ebirforms-noreply@bir.gov.ph"),
+            "{query}"
+        );
+        assert!(
+            query.contains("\"779025068\" OR \"779-025-068\""),
+            "{query}"
+        );
         assert_eq!(found["awaiting"], json!([]));
         assert!(search(&db, &args(json!({"tins": ["999999999"]})), today()).is_err());
     }
@@ -1685,7 +1803,11 @@ mod tests {
         unknown["record"]["message_id"] = json!("gmail-other");
         assert_eq!(with_recorded(&db, unknown, today())["recorded"], false);
         let listed = list(&db, &args(json!({"message_id": "gmail-masked"})), today()).unwrap();
-        assert_eq!(listed["payments"].as_array().map(Vec::len), Some(1), "{listed}");
+        assert_eq!(
+            listed["payments"].as_array().map(Vec::len),
+            Some(1),
+            "{listed}"
+        );
         assert_eq!(listed["payments"][0]["form"], "2551Q");
         let none = list(&db, &args(json!({"message_id": "gmail-other"})), today()).unwrap();
         assert_eq!(none["payments"], json!([]));
@@ -1696,12 +1818,18 @@ mod tests {
         let db = db();
         let receipts = scratch("email");
         let parsed = parse(&args(json!({"text": MYEG})), today()).unwrap();
-        assert_eq!(with_recorded(&db, parsed.clone(), today())["recorded"], false);
+        assert_eq!(
+            with_recorded(&db, parsed.clone(), today())["recorded"],
+            false
+        );
         let mut call = parsed["record"].as_object().unwrap().clone();
         call.insert("message_id".into(), json!("gmail-1"));
         let first = record(&db, &call, today(), &receipts).unwrap();
         // the Payment found card now opens as already recorded
-        assert_eq!(with_recorded(&db, parsed.clone(), today())["recorded"], true);
+        assert_eq!(
+            with_recorded(&db, parsed.clone(), today())["recorded"],
+            true
+        );
         assert_eq!(first["recorded"], true, "{first}");
         assert_eq!(first["already"], false);
         let payment = &first["payment"];
@@ -1728,19 +1856,38 @@ mod tests {
         for key in ["amount", "fee"] {
             card.insert(key.into(), json!(card[key].to_string()));
         }
-        assert_eq!(record(&db, &card, today(), &receipts).unwrap()["already"], true);
+        assert_eq!(
+            record(&db, &card, today(), &receipts).unwrap()["already"],
+            true
+        );
 
-        let listed = list(&db, &args(json!({"tin": ROOT, "form": "2551Q", "period": "Q3 2026"})), today()).unwrap();
+        let listed = list(
+            &db,
+            &args(json!({"tin": ROOT, "form": "2551Q", "period": "Q3 2026"})),
+            today(),
+        )
+        .unwrap();
         assert_eq!(listed["payments"].as_array().unwrap().len(), 1, "{listed}");
         // Remove takes it off only the return it is on
         let id = listed["payments"][0]["id"].as_str().unwrap().to_string();
         let other = json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q2", "id": id});
         assert!(remove(&db, &args(other), today(), &receipts).is_err());
-        let gone = remove(&db, &args(json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3", "id": id})), today(), &receipts).unwrap();
+        let gone = remove(
+            &db,
+            &args(json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3", "id": id})),
+            today(),
+            &receipts,
+        )
+        .unwrap();
         assert_eq!(gone["removed"], true);
-        assert!(!crate::payment_records::recorded_for(&db, TIN, "2551Q", "2026-Q3"));
+        assert!(!crate::payment_records::recorded_for(
+            &db, TIN, "2551Q", "2026-Q3"
+        ));
         // recorded again, as the routine would after a remove
-        assert_eq!(record(&db, &call, today(), &receipts).unwrap()["already"], false);
+        assert_eq!(
+            record(&db, &call, today(), &receipts).unwrap()["already"],
+            false
+        );
         let none = list(&db, &args(json!({"tin": ROOT, "form": "1601C"})), today()).unwrap();
         assert_eq!(none["payments"], json!([]));
         assert!(list(&db, &args(json!({"period": "2026-Q3"})), today()).is_err());
@@ -1751,22 +1898,50 @@ mod tests {
         let db = db();
         let receipts = scratch("receipt-page");
         let ask = args(json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3"}));
-        let none = receipt(&db, &ask, today()).err().expect("no payment, no receipt");
-        assert!(none.contains("no payment is recorded for 2551Q · Q3 2026 of Dela Cruz, Juan"), "{none}");
+        let none = receipt(&db, &ask, today())
+            .err()
+            .expect("no payment, no receipt");
+        assert!(
+            none.contains("no payment is recorded for 2551Q · Q3 2026 of Dela Cruz, Juan"),
+            "{none}"
+        );
         // the payments routine: the email's text and id ride in the record
-        let parsed = parse(&args(json!({"text": format!("  {MYEG}\n"), "message_id": "18f0a1b2c3d4e5f6"})), today()).unwrap();
+        let parsed = parse(
+            &args(json!({"text": format!("  {MYEG}\n"), "message_id": "18f0a1b2c3d4e5f6"})),
+            today(),
+        )
+        .unwrap();
         assert_eq!(parsed["record"]["raw"], MYEG, "trimmed");
         assert_eq!(parsed["record"]["message_id"], "18f0a1b2c3d4e5f6");
         assert_eq!(capped("ab₱", 3), "ab", "cut at a character");
-        record(&db, parsed["record"].as_object().unwrap(), today(), &receipts).unwrap();
+        record(
+            &db,
+            parsed["record"].as_object().unwrap(),
+            today(),
+            &receipts,
+        )
+        .unwrap();
         let shown = receipt(&db, &ask, today()).unwrap();
         assert_eq!(shown.title, "Receipt · 2551Q · Q3 2026 · Dela Cruz, Juan");
-        assert_eq!(shown.summary["gmail_url"], "https://mail.google.com/mail/u/0/#all/18f0a1b2c3d4e5f6");
+        assert_eq!(
+            shown.summary["gmail_url"],
+            "https://mail.google.com/mail/u/0/#all/18f0a1b2c3d4e5f6"
+        );
         assert_eq!(shown.summary["payments"][0]["total"], 649.94);
         assert_eq!(shown.summary["payments"][0]["proof"], "email");
-        assert!(!shown.summary.to_string().contains("BUREAU"), "no email text in the summary");
-        assert!(shown.html.starts_with("<!DOCTYPE html>") && !shown.html.to_ascii_lowercase().contains("<script"));
-        assert!(shown.html.contains("Reference Number TESTREF") || shown.html.contains("Transaction Amount PHP 629.94"), "the email's text");
+        assert!(
+            !shown.summary.to_string().contains("BUREAU"),
+            "no email text in the summary"
+        );
+        assert!(
+            shown.html.starts_with("<!DOCTYPE html>")
+                && !shown.html.to_ascii_lowercase().contains("<script")
+        );
+        assert!(
+            shown.html.contains("Reference Number TESTREF")
+                || shown.html.contains("Transaction Amount PHP 629.94"),
+            "the email's text"
+        );
         assert!(shown.html.contains("PHP 649.94") && shown.html.contains("Recorded"));
         // a receipt file is embedded in the page
         let scan = receipts.join("bank-receipt.png");
@@ -1778,9 +1953,17 @@ mod tests {
             &receipts,
         )
         .unwrap();
-        let filed = receipt(&db, &args(json!({"tin": ROOT, "form": "1601C", "period": "2026-01"})), today()).unwrap();
+        let filed = receipt(
+            &db,
+            &args(json!({"tin": ROOT, "form": "1601C", "period": "2026-01"})),
+            today(),
+        )
+        .unwrap();
         assert_eq!(filed.title, "Receipt · 1601C · Jan 2026 · Dela Cruz, Juan");
-        assert!(filed.html.contains("<img src=\"data:image/png;base64,"), "the scan, embedded");
+        assert!(
+            filed.html.contains("<img src=\"data:image/png;base64,"),
+            "the scan, embedded"
+        );
         assert_eq!(filed.summary["gmail_url"], Value::Null);
         assert_eq!(filed.summary["payments"][0]["proof"], "receipt");
     }
@@ -1794,7 +1977,13 @@ mod tests {
         assert_eq!(marked["payment"]["channel"], "manual");
         assert_eq!(marked["payment"]["proof"]["kind"], "none");
         assert_eq!(marked["payment"]["amount"], Value::Null);
-        let again = mark_paid(&db, &args(json!({"tin": TIN, "form": "2551Q", "period": "09/30/2026"})), today(), &receipts).unwrap();
+        let again = mark_paid(
+            &db,
+            &args(json!({"tin": TIN, "form": "2551Q", "period": "09/30/2026"})),
+            today(),
+            &receipts,
+        )
+        .unwrap();
         assert_eq!(again["already"], true);
 
         // A bank receipt scan, attached later.
@@ -1819,14 +2008,23 @@ mod tests {
         assert_eq!(payment["paid_at"], "2026-10-25T09:30:00+08:00");
         assert_eq!(payment["source"], "receipt");
         let stored = payment["proof"]["path"].as_str().unwrap();
-        assert!(stored.starts_with(receipts.join("stored").to_str().unwrap()), "{stored}");
+        assert!(
+            stored.starts_with(receipts.join("stored").to_str().unwrap()),
+            "{stored}"
+        );
         assert!(Path::new(stored).exists());
         assert_eq!(payment["proof"]["name"], "bank-receipt.png");
         let listed = list(&db, &args(json!({"tin": ROOT})), today()).unwrap();
         assert_eq!(listed["payments"].as_array().unwrap().len(), 1, "{listed}");
 
         // The Forms app's "Attach receipt" on a return paid with no proof.
-        let other = mark_paid(&db, &args(json!({"tin": ROOT, "form": "1601C", "period": "2026-09"})), today(), &receipts).unwrap();
+        let other = mark_paid(
+            &db,
+            &args(json!({"tin": ROOT, "form": "1601C", "period": "2026-09"})),
+            today(),
+            &receipts,
+        )
+        .unwrap();
         assert_eq!(other["payment"]["proof"]["kind"], "none");
         let pdf = receipts.join("receipt.pdf");
         std::fs::write(&pdf, b"%PDF-1.4 scan").unwrap();
@@ -1851,7 +2049,10 @@ mod tests {
             json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3", "channel": "x", "paid_at": "2026-10-25"}),
             json!({"tin": "999999999", "form": "2551Q", "period": "2026-Q3", "channel": "x", "amount": 1, "paid_at": "2026-10-25"}),
         ] {
-            assert!(record(&db, &args(bad.clone()), today(), &receipts).is_err(), "{bad}");
+            assert!(
+                record(&db, &args(bad.clone()), today(), &receipts).is_err(),
+                "{bad}"
+            );
         }
     }
 
@@ -1859,8 +2060,10 @@ mod tests {
     fn the_filing_record_holds_the_form_the_confirmation_and_the_payment() {
         let db = db();
         let profile = db.get_profile(TIN).unwrap().unwrap();
-        db.save_2551q_draft(&bir_core::forms::Form2551QDraft::new_from_profile(&profile, 2026, 3))
-            .unwrap();
+        db.save_2551q_draft(&bir_core::forms::Form2551QDraft::new_from_profile(
+            &profile, 2026, 3,
+        ))
+        .unwrap();
         let receipts = scratch("record");
         let scan = receipts.join("receipt.png");
         std::fs::write(&scan, b"\x89PNG\r\n\x1a\nscan").unwrap();
@@ -1878,7 +2081,13 @@ mod tests {
         )
         .unwrap();
         let path = made["path"].as_str().unwrap();
-        assert!(made["link"].as_str().unwrap().starts_with("rox://view?path=%2F"), "{made}");
+        assert!(
+            made["link"]
+                .as_str()
+                .unwrap()
+                .starts_with("rox://view?path=%2F"),
+            "{made}"
+        );
         assert_eq!(made["status"], "Draft");
         assert_eq!(made["payments"], 1);
         let html = std::fs::read_to_string(path).unwrap();

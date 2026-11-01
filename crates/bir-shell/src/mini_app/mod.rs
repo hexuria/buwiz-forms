@@ -29,13 +29,13 @@ mod bridge;
 mod calendar;
 mod cards;
 mod confirm;
-mod lookup;
-pub(crate) mod payments;
-mod plain;
 #[cfg(test)]
 mod demo_tests;
 #[cfg(test)]
 mod e2e_seed;
+mod lookup;
+pub(crate) mod payments;
+mod plain;
 mod resolve;
 mod return_view;
 mod scope;
@@ -86,7 +86,10 @@ pub fn main() -> ExitCode {
         ["mcp"] => run(Transport::Stdio),
         ["print-v1-manifest"] => match v1::manifest::unsigned(&apps::Catalog::from_env()) {
             Ok(manifest) => {
-                println!("{}", serde_json::to_string_pretty(&manifest).expect("json value"));
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&manifest).expect("json value")
+                );
                 ExitCode::SUCCESS
             }
             Err(error) => {

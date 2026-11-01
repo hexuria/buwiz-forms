@@ -95,7 +95,11 @@ impl Subject {
     /// digits (a taxpayer is its head office, `00000`).
     pub(crate) fn full_tin(&self) -> String {
         let tin = self.tin();
-        if tin.len() == 9 { format!("{tin}00000") } else { tin }
+        if tin.len() == 9 {
+            format!("{tin}00000")
+        } else {
+            tin
+        }
     }
 
     /// The 9-digit root every call with this ticket is held to.
@@ -127,12 +131,7 @@ impl Subject {
             }
             Self::Return(value) => {
                 let named = taxform::parse(value, today);
-                format!(
-                    "{} · {} · {}",
-                    named.form?,
-                    named.period?.label(),
-                    who.name
-                )
+                format!("{} · {} · {}", named.form?, named.period?.label(), who.name)
             }
         };
         Some(clip(&title))
@@ -155,7 +154,11 @@ impl Subject {
                     out.insert("period".into(), Value::from(period.canonical()));
                 }
                 let tin = self.tin();
-                let tin = if tin.len() == 9 { format!("{tin}00000") } else { tin };
+                let tin = if tin.len() == 9 {
+                    format!("{tin}00000")
+                } else {
+                    tin
+                };
                 ("return", tin)
             }
         };
@@ -177,9 +180,8 @@ fn clip(text: &str) -> String {
 
 /// Whether `text` has the ticket grammar `^tkt_[0-9A-HJKMNP-TV-Z]{26}$`.
 pub(crate) fn is_ticket(text: &str) -> bool {
-    text.strip_prefix("tkt_").is_some_and(|rest| {
-        rest.len() == 26 && rest.bytes().all(|byte| CROCKFORD.contains(&byte))
-    })
+    text.strip_prefix("tkt_")
+        .is_some_and(|rest| rest.len() == 26 && rest.bytes().all(|byte| CROCKFORD.contains(&byte)))
 }
 
 /// A fresh ticket: 130 bits from the OS CSPRNG, 5 bits per character.
@@ -215,7 +217,10 @@ fn save(db: &Database, map: &Map<String, Value>) -> Result<(), String> {
 pub(crate) fn issue(db: &Database, subject: &Subject) -> Result<String, String> {
     let mut map = load(db)?;
     let encoded = subject.encode();
-    if let Some((ticket, _)) = map.iter().find(|(_, stored)| stored.as_str() == Some(&encoded)) {
+    if let Some((ticket, _)) = map
+        .iter()
+        .find(|(_, stored)| stored.as_str() == Some(&encoded))
+    {
         return Ok(ticket.clone());
     }
     let ticket = new_ticket()?;
@@ -367,10 +372,17 @@ mod tests {
         assert_eq!(super::subject(&db, &other).unwrap(), None);
         // a return's title names the form, the period and the taxpayer
         let ret = Subject::of_return(&format!("{ROOT}/2551Q-2026-Q3"), today()).unwrap();
-        assert_eq!(ret.title(&db, today()).unwrap(), "2551Q · Q3 2026 · Dela Cruz Jane");
+        assert_eq!(
+            ret.title(&db, today()).unwrap(),
+            "2551Q · Q3 2026 · Dela Cruz Jane"
+        );
         assert_eq!(ret.root(), ROOT);
         // an unsaved taxpayer has no title
-        assert!(Subject::Taxpayer("987654321".into()).title(&db, today()).is_none());
+        assert!(
+            Subject::Taxpayer("987654321".into())
+                .title(&db, today())
+                .is_none()
+        );
     }
 
     #[test]

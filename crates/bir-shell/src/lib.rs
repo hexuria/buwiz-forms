@@ -26,6 +26,7 @@ mod logging;
 pub mod mini_app;
 mod packaged;
 mod payment_records;
+mod perf;
 pub mod print_preview_window;
 pub mod print_sheet;
 mod screen_form_module;

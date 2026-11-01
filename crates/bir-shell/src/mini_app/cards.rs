@@ -88,19 +88,37 @@ pub(crate) const KINDS: &[(&str, &str, bool)] = &[
 
 /// The card apps, in manifest order.
 #[cfg(test)]
-pub(crate) const APPS: [&str; 8] =
-    ["card-people", "card-forms", "card-dates", "card-money", "card-help", "card-return", "card-quick", "card-calc"];
+pub(crate) const APPS: [&str; 8] = [
+    "card-people",
+    "card-forms",
+    "card-dates",
+    "card-money",
+    "card-help",
+    "card-return",
+    "card-quick",
+    "card-calc",
+];
 
 /// Props a card's snapshot may fill: a little under 8 KiB, so the host's
 /// limit holds after encoding.
 const PROPS_MAX: usize = 7_600;
 
 fn kind(id: &str) -> (&'static str, &'static str, bool) {
-    *KINDS.iter().find(|(kind, ..)| *kind == id).expect("a known card")
+    *KINDS
+        .iter()
+        .find(|(kind, ..)| *kind == id)
+        .expect("a known card")
 }
 
 /// `_meta["rox/open"]` for card `id`.
-pub(crate) fn open(id: &str, title: &str, ticket: Option<&str>, snapshot: Value, tool: &str, args: Value) -> Value {
+pub(crate) fn open(
+    id: &str,
+    title: &str,
+    ticket: Option<&str>,
+    snapshot: Value,
+    tool: &str,
+    args: Value,
+) -> Value {
     let (card, app, small) = kind(id);
     // The arguments are kept only for Refresh: an action card's (no tool)
     // could hold what the assistant read (an email's text, BIR's file name),
@@ -211,31 +229,50 @@ pub(crate) fn recorded(result: &Value) -> bool {
 }
 
 fn data(result: &Value) -> Option<Value> {
-    if let Some(value) = result.get("structuredContent").and_then(|structured| structured.get("result")) {
+    if let Some(value) = result
+        .get("structuredContent")
+        .and_then(|structured| structured.get("result"))
+    {
         return Some(value.clone());
     }
-    result["content"][0]["text"].as_str().and_then(|text| serde_json::from_str(text).ok())
+    result["content"][0]["text"]
+        .as_str()
+        .and_then(|text| serde_json::from_str(text).ok())
 }
 
 fn ticket_arg(args: &Map<String, Value>) -> Option<String> {
-    args.get("ticket").or_else(|| args.get("tin")).and_then(Value::as_str).map(str::to_string)
+    args.get("ticket")
+        .or_else(|| args.get("tin"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 /// Whether `from`..`to` is a week or less.
 fn one_week(args: &Map<String, Value>) -> bool {
-    let day = |key: &str| args.get(key).and_then(Value::as_str).and_then(|raw| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok());
+    let day = |key: &str| {
+        args.get(key)
+            .and_then(Value::as_str)
+            .and_then(|raw| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok())
+    };
     matches!((day("from"), day("to")), (Some(from), Some(to)) if (to - from).num_days() <= 7)
 }
 
 /// Whether `from`..`to` is one calendar month.
 fn one_month(args: &Map<String, Value>) -> bool {
-    let day = |key: &str| args.get(key).and_then(Value::as_str).and_then(|raw| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok());
+    let day = |key: &str| {
+        args.get(key)
+            .and_then(Value::as_str)
+            .and_then(|raw| NaiveDate::parse_from_str(raw, "%Y-%m-%d").ok())
+    };
     matches!((day("from"), day("to")), (Some(from), Some(to)) if from.format("%Y-%m").to_string() == to.format("%Y-%m").to_string())
 }
 
 /// The `@bir:taxprofile:` token of a ticket, for a chip's prompt.
 fn token(ticket: &Option<String>) -> String {
-    ticket.as_deref().map(|ticket| format!("@bir:taxprofile:{ticket}")).unwrap_or_else(|| "my taxpayers".into())
+    ticket
+        .as_deref()
+        .map(|ticket| format!("@bir:taxprofile:{ticket}"))
+        .unwrap_or_else(|| "my taxpayers".into())
 }
 
 /// Add the card (and next-step chips) a tool's answer to the assistant
@@ -244,109 +281,290 @@ pub(crate) fn decorate(tool: &str, args: &Map<String, Value>, result: &mut Value
     if result["isError"] == true {
         return;
     }
-    let Some(data) = data(result) else { return };
+    let Some(data) = data(result) else {
+        return;
+    };
     let ticket = ticket_arg(args);
-    let who = data["taxpayer"].as_str().or(data["name"].as_str()).unwrap_or("").to_string();
+    let who = data["taxpayer"]
+        .as_str()
+        .or(data["name"].as_str())
+        .unwrap_or("")
+        .to_string();
     let args_value = Value::Object(args.clone());
     let (card, chips): (Value, Vec<(&str, String)>) = match tool {
         taxpayer::PROFILE_FORMS => (
-            open("forms", &format!("Forms · {who}"), ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "forms",
+                &format!("Forms · {who}"),
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![
-                ("What's due next", format!("What's due for {}?", token(&ticket))),
-                ("This year's returns", format!("How did {} do this year?", token(&ticket))),
+                (
+                    "What's due next",
+                    format!("What's due for {}?", token(&ticket)),
+                ),
+                (
+                    "This year's returns",
+                    format!("How did {} do this year?", token(&ticket)),
+                ),
             ],
         ),
         taxpayer::RETURNS_LIST if args.contains_key("form") && args.contains_key("period") => (
-            open("status", &format!("Return · {who}"), ticket.as_deref(), data.clone(), tool, args_value),
-            vec![("Anything unpaid?", format!("What hasn't {} paid?", token(&ticket)))],
+            open(
+                "status",
+                &format!("Return · {who}"),
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
+            vec![(
+                "Anything unpaid?",
+                format!("What hasn't {} paid?", token(&ticket)),
+            )],
         ),
         taxpayer::RETURNS_LIST => (
-            open("matrix", &format!("Returns · {who}"), ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "matrix",
+                &format!("Returns · {who}"),
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![
-                ("Anything late?", format!("Is anything late for {}?", token(&ticket))),
-                ("What's unpaid?", format!("What hasn't {} paid?", token(&ticket))),
+                (
+                    "Anything late?",
+                    format!("Is anything late for {}?", token(&ticket)),
+                ),
+                (
+                    "What's unpaid?",
+                    format!("What hasn't {} paid?", token(&ticket)),
+                ),
             ],
         ),
         "bir_calendar_get" if one_week(args) => (
-            open("week", "This week", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "week",
+                "This week",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("Anything late?", "Is anything late?".into())],
         ),
         "bir_calendar_get" if one_month(args) => (
-            open("month", "Calendar", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "month",
+                "Calendar",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("Anything late?", "Is anything late?".into())],
         ),
         "bir_calendar_get" => (
-            open("dues", "What's due", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "dues",
+                "What's due",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![
                 ("Anything late?", "Is anything late?".into()),
                 ("How are my clients?", "How are my clients doing?".into()),
             ],
         ),
         answers::TAXPAYER if data["view"] == "branches" => (
-            open("branches", &who, ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "branches",
+                &who,
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("Who is this?", format!("Who is {}?", token(&ticket)))],
         ),
         answers::TAXPAYER => (
-            open("taxpayer", &who, ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "taxpayer",
+                &who,
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![
-                ("Her forms", format!("What forms is {} registered for?", token(&ticket))),
+                (
+                    "Her forms",
+                    format!("What forms is {} registered for?", token(&ticket)),
+                ),
                 ("What's due", format!("What's due for {}?", token(&ticket))),
             ],
         ),
         answers::FIND_TAXPAYER => (
-            open("pick", "Which taxpayer?", None, data.clone(), tool, args_value),
+            open(
+                "pick",
+                "Which taxpayer?",
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         answers::PENALTY if data["mode"] == "estimate" => (
-            open("penalty", "Penalty estimate", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "penalty",
+                "Penalty estimate",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         answers::PENALTY => (
-            open("overdue", "Late returns", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "overdue",
+                "Late returns",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("What's due next", "What's due next?".into())],
         ),
         answers::UNPAID => (
-            open("unpaid", "Not paid yet", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "unpaid",
+                "Not paid yet",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         answers::BOARD if data["mode"] == "bulk" => (
-            open("bulk", data["label"].as_str().unwrap_or("One form, every taxpayer"), None, data.clone(), tool, args_value),
+            open(
+                "bulk",
+                data["label"].as_str().unwrap_or("One form, every taxpayer"),
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         answers::BOARD if data["mode"] == "on_time" => (
-            open("streak", &format!("On time · {}", data["year"]), None, data.clone(), tool, args_value),
+            open(
+                "streak",
+                &format!("On time · {}", data["year"]),
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("Who is late now?", "Which returns are late?".into())],
         ),
         answers::BOARD => (
-            open("board", "My taxpayers", None, data.clone(), tool, args_value),
+            open(
+                "board",
+                "My taxpayers",
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("Only the late ones", "Which returns are late?".into())],
         ),
         answers::QUICK_ADD => (
-            open("quickadd", if data["exists"] == true { "Already in BIR" } else { "New taxpayer" }, None, data.clone(), "", args_value),
+            open(
+                "quickadd",
+                if data["exists"] == true {
+                    "Already in BIR"
+                } else {
+                    "New taxpayer"
+                },
+                None,
+                data.clone(),
+                "",
+                args_value,
+            ),
             vec![],
         ),
         answers::OUTBOX => (
-            open("outbox", "Sending queue", None, data.clone(), tool, args_value),
+            open(
+                "outbox",
+                "Sending queue",
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         answers::DIGEST => (
-            open("digest", "Since yesterday", None, data.clone(), tool, args_value),
+            open(
+                "digest",
+                "Since yesterday",
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![("What's unpaid?", "What haven't I paid?".into())],
         ),
         lookup::FORM_INFO => (
-            open("explain", &format!("{} · {}", data["form"].as_str().unwrap_or(""), data["title"].as_str().unwrap_or("")), ticket.as_deref(), data.clone(), tool, args_value),
-            vec![("What's due for it?", format!("When is {} due?", data["form"].as_str().unwrap_or("it")))],
+            open(
+                "explain",
+                &format!(
+                    "{} · {}",
+                    data["form"].as_str().unwrap_or(""),
+                    data["title"].as_str().unwrap_or("")
+                ),
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
+            vec![(
+                "What's due for it?",
+                format!("When is {} due?", data["form"].as_str().unwrap_or("it")),
+            )],
         ),
         lookup::LOOKUP => {
             let (card, title) = match data["mode"].as_str() {
-                Some("atc") => ("atc", format!("ATC {}", data["code"].as_str().unwrap_or(""))),
+                Some("atc") => (
+                    "atc",
+                    format!("ATC {}", data["code"].as_str().unwrap_or("")),
+                ),
                 Some("rdo") => ("rdo", "Revenue district office".to_string()),
                 _ => ("rate", "Quick tax".to_string()),
             };
-            (open(card, &title, None, data.clone(), tool, args_value), vec![])
+            (
+                open(card, &title, None, data.clone(), tool, args_value),
+                vec![],
+            )
         }
         calendar::DEADLINE => (
-            open("shift", &format!("{} deadline", data["label"].as_str().unwrap_or("The")), ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "shift",
+                &format!("{} deadline", data["label"].as_str().unwrap_or("The")),
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         return_view::RETURN => {
@@ -366,30 +584,87 @@ pub(crate) fn decorate(tool: &str, args: &Map<String, Value>, result: &mut Value
             // The import card changes the draft only when the user presses
             // Fill; it has nothing to refresh.
             let read = if card == "import" { "" } else { tool };
-            (open(card, &format!("{label} · {}", data["taxpayer"].as_str().unwrap_or("")), ticket.as_deref(), data.clone(), read, args_value), chips)
+            (
+                open(
+                    card,
+                    &format!("{label} · {}", data["taxpayer"].as_str().unwrap_or("")),
+                    ticket.as_deref(),
+                    data.clone(),
+                    read,
+                    args_value,
+                ),
+                chips,
+            )
         }
         "bir_drafts_list" => (
-            open("drafts", "Drafts", ticket.as_deref(), data.clone(), tool, args_value),
+            open(
+                "drafts",
+                "Drafts",
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         "bir_payments_list" if !args.contains_key("form") => (
-            open("paidsum", &format!("Paid{}", data["year"].as_str().map(|year| format!(" in {year}")).unwrap_or_default()), ticket.as_deref(), data.clone(), tool, args_value),
-            vec![("What's unpaid?", format!("What hasn't {} paid?", token(&ticket)))],
+            open(
+                "paidsum",
+                &format!(
+                    "Paid{}",
+                    data["year"]
+                        .as_str()
+                        .map(|year| format!(" in {year}"))
+                        .unwrap_or_default()
+                ),
+                ticket.as_deref(),
+                data.clone(),
+                tool,
+                args_value,
+            ),
+            vec![(
+                "What's unpaid?",
+                format!("What hasn't {} paid?", token(&ticket)),
+            )],
         ),
         "bir_status" => (
             open("health", "BIR", None, data.clone(), tool, args_value),
             vec![],
         ),
         "bir_calendar_set" if args.contains_key("reminder_days") => (
-            open("remind", &format!("Reminders · {}", data["taxpayer"].as_str().unwrap_or("")), ticket.as_deref(), data.clone(), "", args_value),
+            open(
+                "remind",
+                &format!("Reminders · {}", data["taxpayer"].as_str().unwrap_or("")),
+                ticket.as_deref(),
+                data.clone(),
+                "",
+                args_value,
+            ),
             vec![],
         ),
         "bir_form_needs_you" if data["ok"] != true => (
-            open("needs", &format!("What {} needs", data["form"].as_str().unwrap_or("the return")), None, data.clone(), tool, args_value),
+            open(
+                "needs",
+                &format!(
+                    "What {} needs",
+                    data["form"].as_str().unwrap_or("the return")
+                ),
+                None,
+                data.clone(),
+                tool,
+                args_value,
+            ),
             vec![],
         ),
         "bir_form_send" if data["status"] == "approval_required" => (
-            open("approve", &format!("Send {}?", data["form"].as_str().unwrap_or("this return")), None, data.clone(), "", args_value),
+            open(
+                "approve",
+                &format!("Send {}?", data["form"].as_str().unwrap_or("this return")),
+                None,
+                data.clone(),
+                "",
+                args_value,
+            ),
             vec![],
         ),
         // The email's text stays out of the card (it names the TIN, 6.6).
@@ -412,7 +687,14 @@ pub(crate) fn decorate(tool: &str, args: &Map<String, Value>, result: &mut Value
         // A receipt's page can be larger than a call answers: no Refresh;
         // View receipt shows it.
         "bir_payment_receipt" => (
-            open("receipt", &format!("Receipt · {}", data["label"].as_str().unwrap_or("")), ticket.as_deref(), without(&data, &["title"]), "", args_value),
+            open(
+                "receipt",
+                &format!("Receipt · {}", data["label"].as_str().unwrap_or("")),
+                ticket.as_deref(),
+                without(&data, &["title"]),
+                "",
+                args_value,
+            ),
             vec![],
         ),
         // A confirmation BIR already had gets the compact card that opens
@@ -421,7 +703,11 @@ pub(crate) fn decorate(tool: &str, args: &Map<String, Value>, result: &mut Value
         "bir_confirm_filing" => (
             open(
                 "confirm",
-                if data["already"] == true { "Already confirmed" } else { "BIR confirmation" },
+                if data["already"] == true {
+                    "Already confirmed"
+                } else {
+                    "BIR confirmation"
+                },
                 None,
                 without(&data, &["reference", "message_id", "filename"]),
                 "",
@@ -467,7 +753,9 @@ pub(crate) fn mark_paid_card(args: &Map<String, Value>) -> Value {
 /// Shrink a card's props under the limit: the longest list in the
 /// snapshot loses its tail (noted as `more`) until it fits.
 pub(crate) fn fit(result: &mut Value) {
-    let Some(props) = result.pointer_mut("/_meta/rox~1open/props") else { return };
+    let Some(props) = result.pointer_mut("/_meta/rox~1open/props") else {
+        return;
+    };
     // Only answer cards carry a snapshot (an app's own open does not).
     if props.get("snapshot").is_none() {
         return;
@@ -480,7 +768,8 @@ pub(crate) fn fit(result: &mut Value) {
                 items.truncate(100);
                 items.iter_mut().fold(cut, |cut, item| cap(item) || cut)
             }
-            Value::Object(map) => map.values_mut().fold(false, |cut, item| cap(item) || cut),
+            // `|`, not `any`: every value must be capped, not just up to the first cut.
+            Value::Object(map) => map.values_mut().fold(false, |cut, item| cap(item) | cut),
             _ => false,
         }
     }
@@ -491,7 +780,9 @@ pub(crate) fn fit(result: &mut Value) {
         if props.to_string().len() <= PROPS_MAX {
             return;
         }
-        let Some(list) = longest_list(&mut props["snapshot"]) else { break };
+        let Some(list) = longest_list(&mut props["snapshot"]) else {
+            break;
+        };
         let keep = list.len() * 3 / 4;
         list.truncate(keep);
         props["snapshot"]["more"] = json!(true);
@@ -548,13 +839,18 @@ mod tests {
 
     #[test]
     fn a_card_is_inline_with_a_snapshot_and_fits_8_kib() {
-        let rows: Vec<Value> = (0..500).map(|i| json!({"form": "2551Q", "period": format!("2026-{i}"), "status": "draft"})).collect();
+        let rows: Vec<Value> = (0..500)
+            .map(|i| json!({"form": "2551Q", "period": format!("2026-{i}"), "status": "draft"}))
+            .collect();
         let mut result = json!({
             "content": [{"type": "text", "text": "x"}],
             "structuredContent": {"result": {"taxpayer": "Dela Cruz Jane", "returns": rows}},
             "isError": false,
         });
-        let args = json!({"ticket": "tkt_0000000000000000000000000Z"}).as_object().unwrap().clone();
+        let args = json!({"ticket": "tkt_0000000000000000000000000Z"})
+            .as_object()
+            .unwrap()
+            .clone();
         decorate(taxpayer::RETURNS_LIST, &args, &mut result);
         fit(&mut result);
         let open = &result["_meta"]["rox/open"];

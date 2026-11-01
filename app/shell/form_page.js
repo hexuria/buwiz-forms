@@ -9,7 +9,7 @@
 // with a "Checking…" chip while it runs. The html-frozen/ sheets stay the
 // print output and are not touched here.
 
-import { View, div } from "gpui-kit";
+import { View, div, list } from "gpui-kit";
 import { InputState, CalendarState, Popup } from "gpui-base";
 import { Spinner } from "gpui-component";
 import {
@@ -279,6 +279,7 @@ export class FormPageActions {
     for (const input of state?.inputs?.values() || []) input.release();
     for (const handle of state?.editFocus?.values() || []) handle.release();
     state?.checkButton?.entity.release();
+    if (state?.slots) for (const slot of [state.slots.head, ...state.slots.parts, ...state.slots.folds]) slot.release();
   }
 
   /**
@@ -355,8 +356,9 @@ export class FormPageActions {
       guided: false,
     };
     if (!schema) return;
+    const s0 = this.state;
     this.state.checkButton = {
-      entity: cx.new(FormCheckButton, { ui: this, state: this.state }),
+      entity: cx.new(FormCheckButton, viewProps(() => ({ ui: this, state: s0 }))),
       checking: false,
     };
     cx.spawn(async (acx) => {
@@ -561,6 +563,7 @@ export class FormPageActions {
       }
     }
     if (cx) {
+      this.makeSlots(cx);
       // So is the part's "From tax profile" fold (Enter or Space unfolds it).
       const fold = `fold-${partIndex}`;
       if (cx.focus_handle && !s.editFocus.has(fold) && this.tuckedItems(partIndex).length) {
@@ -574,11 +577,9 @@ export class FormPageActions {
         }
         if (!s.rowViews.has(id)) {
           const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
-          s.rowViews.set(id, {
-            props,
-            snapshot: this.rowSnapshot(props),
-            entity: cx.new(FormItemView, props),
-          });
+          const row = { props, snapshot: this.rowSnapshot(props) };
+          row.entity = cx.new(FormItemView, viewProps(() => row.props));
+          s.rowViews.set(id, row);
         }
       });
       this.refreshRows();
@@ -661,9 +662,140 @@ export class FormPageActions {
     return sig;
   }
 
+  /**
+   * The wide layout's lazy list, as `{ key, draw }` items: the head, then
+   * each part's header, its rows and its profile fold, with the card's
+   * edges drawn on the items. Each item that handles input is a retained
+   * view (a lazy list's items may not hold handlers). `null` when the page
+   * cannot be drawn that way yet (still opening, or a part whose rows are
+   * not retained), which keeps the one long scroll area.
+   */
+  listItems(cx, width) {
+    const s = this.state;
+    if (!s?.schema || !s.draft || s.loading || s.error || !s.slots) return null;
+    const t = tokens(cx);
+    const parts = s.schema.parts;
+    const items = [{ key: "head", draw: () => s.slots.head }];
+    const edge = (el, first, last) =>
+      el
+        .border_l(1)
+        .border_r(1)
+        .border_color(t.border)
+        .bg(t.surface)
+        .when(first, (e) => e.border_t(1))
+        .when(last, (e) => e.border_b(1).rounded_b(RADIUS.card).overflow_hidden());
+    for (let pi = 0; pi < parts.length; pi++) {
+      if (this.devSolo != null && pi !== this.devSolo) continue;
+      const p = parts[pi];
+      const open = s.openParts.has(pi);
+      const head = s.slots.parts[pi];
+      if (!head) return null;
+      const body = [];
+      if (open) {
+        const tucked = this.tuckedItems(pi);
+        for (let ii = 0; ii < p.items.length; ii++) {
+          if (this.devItems && (ii < this.devItems.from || ii > this.devItems.to)) continue;
+          const row = s.rowViews.get(`${pi}:${ii}`);
+          if (!row) return null;
+          if (tucked.includes(ii)) {
+            if (ii !== tucked[0]) continue;
+            const fold = s.slots.folds[pi];
+            if (!fold) return null;
+            body.push({ key: `fold:${pi}`, draw: () => fold });
+            if (s.profileOpen.has(pi)) {
+              for (const tj of tucked) {
+                const tucked = s.rowViews.get(`${pi}:${tj}`);
+                if (!tucked) return null;
+                body.push({ key: `row:${pi}:${tj}`, draw: () => (tj === 0 ? div().border_t(1).border_color(t.border).child(tucked.entity) : tucked.entity) });
+              }
+            }
+            continue;
+          }
+          body.push({ key: `row:${pi}:${ii}`, draw: () => row.entity });
+        }
+      }
+      const gap = items.length > 1;
+      items.push({
+        key: `part:${pi}`,
+        draw: () =>
+          div()
+            .when(gap, (el) => el.pt(SPACE[4]))
+            .child(
+              div()
+                .border_l(1)
+                .border_r(1)
+                .border_t(1)
+                .border_color(t.border)
+                .bg(t.surface)
+                .rounded_t(RADIUS.card)
+                .overflow_hidden()
+                .when(!open, (el) => el.border_b(1).rounded_b(RADIUS.card))
+                .child(head),
+            ),
+      });
+      body.forEach((item, at) => {
+        const draw = item.draw;
+        items.push({ key: item.key, draw: () => edge(div(), at === 0, at === body.length - 1).child(draw()) });
+      });
+    }
+    return items;
+  }
+
+  /**
+   * The list's retained items other than the rows: created once per opening
+   * (from an event or a task, where views may be created), then refreshed
+   * with the page. A slot's own render reads the page's state, so a refresh
+   * only has to mark it dirty.
+   */
+  makeSlots(cx) {
+    const s = this.state;
+    if (!s?.schema || s.slots || !cx?.new) return;
+    const props = (extra) => viewProps(() => ({ ui: this, state: s, ...extra }));
+    s.slots = {
+      head: cx.new(FormHeadView, props({})),
+      parts: s.schema.parts.map((_p, pi) => cx.new(FormPartHeadView, props({ pi }))),
+      folds: s.schema.parts.map((_p, pi) => cx.new(FormFoldView, props({ pi }))),
+      sigs: [],
+    };
+  }
+
+  /**
+   * Mark the slots for a fresh render: the head always (it reads much of the
+   * page), a part's header and fold when what they show changed.
+   */
+  refreshSlots() {
+    const s = this.state;
+    if (!s?.slots) return;
+    s.slots.head.set_props(REDRAW);
+    s.schema.parts.forEach((p, pi) => {
+      const tucked = this.tuckedItems(pi);
+      const flagged = tucked.map((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors?.[`${pi}:${ii}`] || "");
+      const sig = JSON.stringify([s.openParts.has(pi), s.profileOpen.has(pi), s.profile.size, s.editable, tucked, flagged, s.editFocus.has(`fold-${pi}`)]);
+      if (s.slots.sigs[pi] === sig) return;
+      s.slots.sigs[pi] = sig;
+      s.slots.parts[pi].set_props(REDRAW);
+      s.slots.folds[pi].set_props(REDRAW);
+    });
+  }
+
+  /**
+   * The page itself was drawn again (any app state may have changed): the
+   * slots follow on the next tick, as they cannot be told during a render.
+   */
+  syncSlots(cx) {
+    const s = this.state;
+    if (!s?.slots || s.slotsQueued) return;
+    s.slotsQueued = true;
+    cx.timer.after(0, () => {
+      s.slotsQueued = false;
+      if (s === this.state) this.refreshSlots();
+    });
+  }
+
   /** Retained rows keep their snapshots until something they display changes. */
   refreshRows() {
     const s = this.state;
+    this.refreshSlots();
     if (!s?.rowViews) return;
     const width = this.rowWidth();
     s.rowLayoutWidth = width;
@@ -674,8 +806,24 @@ export class FormPageActions {
       if (snapshot === row.snapshot) continue;
       row.props = props;
       row.snapshot = snapshot;
-      row.entity.set_props(props);
+      row.entity.set_props(REDRAW);
     }
+  }
+
+  /**
+   * One retained row, refreshed alone: what a hover moving from one row to
+   * another changes (only those two rows read `hoverItem`).
+   */
+  refreshRow(id) {
+    const s = this.state;
+    const row = id && s?.rowViews?.get(id);
+    if (!row || !s.openParts.has(row.props.pi)) return;
+    const props = { ...row.props, width: this.rowWidth() };
+    const snapshot = this.rowSnapshot(props);
+    if (snapshot === row.snapshot) return;
+    row.props = props;
+    row.snapshot = snapshot;
+    row.entity.set_props(REDRAW);
   }
 
   refreshLayout() {
@@ -688,7 +836,7 @@ export class FormPageActions {
     const check = this.state.checkButton;
     if (check && check.checking !== this.state.checking) {
       check.checking = this.state.checking;
-      check.entity.set_props({ ui: this, state: this.state });
+      check.entity.set_props(REDRAW);
     }
     const snapshot = this.chromeSnapshot();
     if (snapshot === this.state.chromeSnapshot) return;
@@ -2609,11 +2757,23 @@ function datePicker(cx, ui, id, date, row = id) {
   return popup.content(card);
 }
 
+/**
+ * A retained view's props, read through `get()` when it renders, so the
+ * page changes them in place and `set_props(REDRAW)` only marks the view for
+ * a fresh render. The views have no `update`: before calling one, gpui-shell
+ * checkpoints everything reachable from the view (so a throwing update can
+ * be rolled back), and props holding the page state made that walk cover the
+ * whole application on every changed row of every fill.
+ */
+function viewProps(read) {
+  return { get: read };
+}
+const REDRAW = {};
+
 class FormCheckButton extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
-    const { ui, state: s } = this.props;
+    const { ui, state: s } = this.props.get();
     if (s !== ui.state) return div();
     const leading = div().size(16).flex_none().flex().items_center().justify_center()
       .child(s.checking ? Spinner.new().size("xsmall").color(tokens(cx).fg) : Icon(cx, "circle-check"));
@@ -2624,11 +2784,43 @@ class FormCheckButton extends View {
   }
 }
 
+/** The page's head (title, actions, taxpayer bar, notes): the lazy list's first item. */
+class FormHeadView extends View {
+  init(props) { this.props = props; }
+  render(cx) {
+    const { ui, state } = this.props.get();
+    if (state !== ui.state) return div();
+    const c = formContent(cx, ui.app, ui.app.layout().column, { headOnly: true });
+    return c.page || c.early || div();
+  }
+}
+
+/** A part card's header in the lazy list. */
+class FormPartHeadView extends View {
+  init(props) { this.props = props; }
+  render(cx) {
+    const { ui, state, pi } = this.props.get();
+    if (state !== ui.state) return div();
+    return partHeader(cx, ui, state.schema.parts[pi], pi);
+  }
+}
+
+/** A part's "From tax profile" fold in the lazy list. */
+class FormFoldView extends View {
+  init(props) { this.props = props; }
+  render(cx) {
+    const { ui, state, pi } = this.props.get();
+    if (state !== ui.state) return div();
+    const tucked = ui.tuckedItems(pi);
+    if (!tucked.length) return div();
+    return profileGroup(cx, ui, pi, tucked, tucked[0] > 0);
+  }
+}
+
 class FormItemView extends View {
   init(props) { this.props = props; }
-  update(props) { this.props = props; }
   render(cx) {
-    const { ui, state, it, pi, ii, width } = this.props;
+    const { ui, state, it, pi, ii, width } = this.props.get();
     if (state !== ui.state) return div();
     const row = itemRow(cx, ui, it, pi, ii, width);
     if (ii > 0) row.border_t(1).border_color(tokens(cx).border);
@@ -2826,8 +3018,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
       el.on_hover((hovered, cx) => {
         const next = hovered ? id : s.hoverItem === id ? null : s.hoverItem;
         if (next === s.hoverItem) return;
+        const was = s.hoverItem;
         s.hoverItem = next;
-        ui.refreshRows();
+        ui.refreshRow(was);
+        ui.refreshRow(next);
         cx.notify();
       }),
     )
@@ -3107,7 +3301,7 @@ export function renderRemovalConfirm(cx, app) {
  * area; `renderFormSplit` pins the navigator beside a form that scrolls on
  * its own.
  */
-function formContent(cx, app, width) {
+function formContent(cx, app, width, opts = {}) {
   const ui = app.formUi;
   const s = ui.state;
   const t = tokens(cx);
@@ -3261,6 +3455,8 @@ function formContent(cx, app, width) {
     return { page: page.child(div().py(40).flex().justify_center().child(Text(cx, "body", `Opening ${f.c}…`, "fg3"))) };
   }
 
+  if (opts.headOnly) return { page };
+
   // Part navigator: 208 px beside the parts, a chip row below 760 px. Labels
   // wrap instead of truncating; each part shows its item count and, in red,
   // how many of its items have a validation message.
@@ -3351,6 +3547,8 @@ function formContent(cx, app, width) {
     }
   });
 
+  // The wide layout draws the parts as a lazy list (drawFormSplit).
+  if (opts.noParts) return { page, nav, navHead, attn, navRows, parts: true, sideNav };
   const parts = div().flex().flex_col().gap(SPACE[4]).w(partsW);
   f.parts.forEach((p, pi) => {
     // Dev start route only (BIR_SHELL_START solo=<part>): draw that part alone.
@@ -3365,24 +3563,7 @@ function formContent(cx, app, width) {
       .border_color(t.border)
       .bg(t.surface)
       .overflow_hidden()
-      .child(
-        div()
-          .id(`fp-part-${pi}-toggle`)
-          .flex()
-          .flex_row()
-          .items_center()
-          .gap(SPACE[2])
-          .min_h(48)
-          .pl(SPACE[3])
-          .pr(SPACE[4])
-          .cursor_pointer()
-          .accessibility_label(partName(p, pi))
-          .on_click((_e, cx) => ui.togglePart(pi, cx))
-          .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
-          // min_w(0) lets a long part name wrap instead of running under the count.
-          .child(Text(cx, "control", partName(p, pi)).font_weight(600).flex_1().min_w(0).whitespace_normal())
-          .child(Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3").flex_none()),
-      );
+      .child(partHeader(cx, ui, p, pi));
     if (open) {
       const body = div().flex().flex_col().border_t(1).border_color(t.border);
       const rowOf = (ii) => {
@@ -3412,6 +3593,27 @@ function formContent(cx, app, width) {
   });
 
   return { page, nav, navHead, attn, navRows, parts, sideNav };
+}
+
+/** A part card's header: its name and item count; a click folds or unfolds it. */
+function partHeader(cx, ui, p, pi) {
+  const open = ui.state.openParts.has(pi);
+  return div()
+    .id(`fp-part-${pi}-toggle`)
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(SPACE[2])
+    .min_h(48)
+    .pl(SPACE[3])
+    .pr(SPACE[4])
+    .cursor_pointer()
+    .accessibility_label(partName(p, pi))
+    .on_click((_e, cx) => ui.togglePart(pi, cx))
+    .child(Icon(cx, open ? "chevron-down" : "chevron-right", { color: "fg3" }))
+    // min_w(0) lets a long part name wrap instead of running under the count.
+    .child(Text(cx, "control", partName(p, pi)).font_weight(600).flex_1().min_w(0).whitespace_normal())
+    .child(Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg3").flex_none());
 }
 
 /**
@@ -3458,12 +3660,13 @@ export function renderFormSplit(cx, app, L) {
 
 function drawFormSplit(cx, app, L) {
   if (L.column < BREAK.formNav) return null;
-  const c = formContent(cx, app, L.column);
+  const formW = L.column - 208 - 28;
+  const items = app.formUi.listItems(cx, formW);
+  const c = formContent(cx, app, L.column, { noParts: Boolean(items) });
   if (c.early) return null;
   // The column's left edge, matching the centred column of the main scroll area.
   const left = Math.max(L.padX, Math.floor((L.mainWidth - L.column) / 2));
   const navW = 208 + 6; // the rows plus room for the list's scrollbar
-  const formW = L.column - 208 - 28;
   const navCol = div().flex().flex_col().flex_none().w(left + navW).pl(left).h_full().min_h(0).pt(28).pb(16);
   if (c.parts) {
     navCol
@@ -3471,15 +3674,24 @@ function drawFormSplit(cx, app, L) {
       .when(Boolean(c.attn), (el) => el.child(c.attn))
       .child(div().id("fp-nav-list").flex().flex_col().gap(2).flex_1().min_h(0).w(navW).overflow_y_scrollbar().children(c.navRows));
   }
+  const split = div().id("fp-split").flex().flex_row().flex_1().min_h(0).w_full().child(navCol);
+  if (items && c.parts) {
+    // Only the items on screen are built and laid out, so a scroll tick or a
+    // keystroke costs what is visible rather than every open part.
+    app.formUi.syncSlots(cx);
+    const last = items.length - 1;
+    const scroll = list(
+      "fp-scroll",
+      items.length,
+      (i) => items[i].key,
+      (i) => div().w(formW + 22).pl(22).when(i === 0, (el) => el.pt(28)).when(i === last, (el) => el.pb(56)).child(items[i].draw()),
+    )
+      .flex_1()
+      .min_w(0)
+      .h_full();
+    return split.child(scroll);
+  }
   const body = div().flex().flex_col().w(formW + 22).pl(22).pt(28).pb(56).child(c.page);
   if (c.parts) body.child(c.parts);
-  return div()
-    .id("fp-split")
-    .flex()
-    .flex_row()
-    .flex_1()
-    .min_h(0)
-    .w_full()
-    .child(navCol)
-    .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
+  return split.child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
 }

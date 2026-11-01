@@ -22,8 +22,14 @@ pub(crate) const PROFILE_FORMS: &str = "bir_profile_forms";
 pub(crate) const RETURNS_LIST: &str = "bir_returns_list";
 
 fn check_keys(arguments: &Map<String, Value>, allowed: &[&str]) -> Result<(), String> {
-    match arguments.keys().find(|key| !allowed.contains(&key.as_str())) {
-        Some(key) => Err(format!("unknown argument `{key}` (allowed: {})", allowed.join(", "))),
+    match arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        Some(key) => Err(format!(
+            "unknown argument `{key}` (allowed: {})",
+            allowed.join(", ")
+        )),
         None => Ok(()),
     }
 }
@@ -53,12 +59,19 @@ fn year_of(arguments: &Map<String, Value>, today: NaiveDate) -> Result<Option<u1
             .and_then(|year| u16::try_from(year).ok())
             .filter(|year| (2000..=today.year() as u16 + 1).contains(year))
             .map(Some)
-            .ok_or_else(|| format!("`year` must be a tax year such as {} (got {value})", today.year())),
+            .ok_or_else(|| {
+                format!(
+                    "`year` must be a tax year such as {} (got {value})",
+                    today.year()
+                )
+            }),
     }
 }
 
 fn form_title(code: &str) -> &'static str {
-    bir_core::forms::find_form(code).map(|form| form.title).unwrap_or("")
+    bir_core::forms::find_form(code)
+        .map(|form| form.title)
+        .unwrap_or("")
 }
 
 fn frequency(code: &str) -> &'static str {
@@ -157,11 +170,17 @@ pub(crate) fn returns_list(
     // One return: its form and period.
     let period = match (form, arguments.get("period").and_then(Value::as_str)) {
         (Some(form), Some(raw)) => {
-            let code = taxform::form_code_of(form).ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
-            let named = taxform::parse(raw, today)
-                .period
-                .ok_or_else(|| format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)"))?;
-            Some(named.for_form(code, today).map_err(|ask| ask.to_string())?.canonical())
+            let code = taxform::form_code_of(form)
+                .ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
+            let named = taxform::parse(raw, today).period.ok_or_else(|| {
+                format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)")
+            })?;
+            Some(
+                named
+                    .for_form(code, today)
+                    .map_err(|ask| ask.to_string())?
+                    .canonical(),
+            )
         }
         (None, Some(_)) => return Err("`period` needs `form`".into()),
         _ => None,
@@ -183,7 +202,11 @@ pub(crate) fn returns_list(
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|row| period.as_ref().is_none_or(|period| row["period"] == *period))
+        .filter(|row| {
+            period
+                .as_ref()
+                .is_none_or(|period| row["period"] == *period)
+        })
         .filter(|row| {
             year.is_none_or(|year| {
                 row["period"]
@@ -271,10 +294,14 @@ mod tests {
             name: "Dela Cruz Jane".into(),
             taxpayer_type: TaxpayerType::Individual,
             birth_date: None,
-            head_office: BranchFacts { rdo_code: "047".into(), ..BranchFacts::default() },
+            head_office: BranchFacts {
+                rdo_code: "047".into(),
+                ..BranchFacts::default()
+            },
         })
         .unwrap();
-        db.set_yearly_forms(&format!("{ROOT}00000"), 2026, &["2551Q", "1701Q"]).unwrap();
+        db.set_yearly_forms(&format!("{ROOT}00000"), 2026, &["2551Q", "1701Q"])
+            .unwrap();
         db
     }
 
@@ -286,11 +313,25 @@ mod tests {
     fn profile_forms_lists_the_registered_forms_with_their_periods() {
         let db = db();
         let ticket = tickets::issue(&db, &tickets::Subject::Taxpayer(ROOT.into())).unwrap();
-        let got = profile_forms(&db, &args(json!({"ticket": ticket, "year": 2026})), today()).unwrap();
+        let got =
+            profile_forms(&db, &args(json!({"ticket": ticket, "year": 2026})), today()).unwrap();
         assert_eq!(got["taxpayer"], "Dela Cruz Jane");
-        let codes: Vec<&str> = got["registered"].as_array().unwrap().iter().map(|f| f["code"].as_str().unwrap()).collect();
-        assert!(codes.contains(&"2551Q") && codes.contains(&"1701Q"), "{got}");
-        let q = got["registered"].as_array().unwrap().iter().find(|f| f["code"] == "2551Q").unwrap();
+        let codes: Vec<&str> = got["registered"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["code"].as_str().unwrap())
+            .collect();
+        assert!(
+            codes.contains(&"2551Q") && codes.contains(&"1701Q"),
+            "{got}"
+        );
+        let q = got["registered"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["code"] == "2551Q")
+            .unwrap();
         assert_eq!(q["frequency"], "quarterly");
         assert!(!q["periods"].as_array().unwrap().is_empty(), "{q}");
         assert!(!got["as_needed"].as_array().unwrap().is_empty());
@@ -300,9 +341,19 @@ mod tests {
     #[test]
     fn both_refuse_a_tin_or_an_unissued_ticket() {
         let db = db();
-        for bad in [json!({"ticket": ROOT}), json!({"ticket": format!("tkt_{}", "0".repeat(26))}), json!({})] {
-            assert!(profile_forms(&db, &args(bad.clone()), today()).is_err(), "{bad}");
-            assert!(returns_list(&db, &args(bad.clone()), today()).is_err(), "{bad}");
+        for bad in [
+            json!({"ticket": ROOT}),
+            json!({"ticket": format!("tkt_{}", "0".repeat(26))}),
+            json!({}),
+        ] {
+            assert!(
+                profile_forms(&db, &args(bad.clone()), today()).is_err(),
+                "{bad}"
+            );
+            assert!(
+                returns_list(&db, &args(bad.clone()), today()).is_err(),
+                "{bad}"
+            );
         }
     }
 
@@ -310,7 +361,8 @@ mod tests {
     fn returns_list_answers_for_the_ticket() {
         let db = db();
         let ticket = tickets::issue(&db, &tickets::Subject::Taxpayer(ROOT.into())).unwrap();
-        let got = returns_list(&db, &args(json!({"ticket": ticket, "year": 2026})), today()).unwrap();
+        let got =
+            returns_list(&db, &args(json!({"ticket": ticket, "year": 2026})), today()).unwrap();
         assert_eq!(got["taxpayer"], "Dela Cruz Jane");
         assert!(got["returns"].is_array());
     }

@@ -117,7 +117,11 @@ impl Event {
     fn sync_json(&self) -> Value {
         let filed = if self.filed() { "[Filed] " } else { "" };
         let title = format!("{filed}[BIR] {} · {}", self.label(), self.taxpayer);
-        let last4: String = self.tin.chars().skip(self.tin.len().saturating_sub(4)).collect();
+        let last4: String = self
+            .tin
+            .chars()
+            .skip(self.tin.len().saturating_sub(4))
+            .collect();
         let description = format!(
             "Taxpayer: {} (TIN ending {last4})\nForm: {} {}\nPeriod: {}\nDue: {}\nStatus: {}\nIn Rox: {}{}",
             self.taxpayer,
@@ -169,7 +173,9 @@ pub(crate) fn period_of(period: &DeadlinePeriod) -> Option<TaxPeriod> {
             year: u16::try_from(taxable_year).ok()?,
             quarter,
         },
-        DeadlinePeriod::Annual { taxable_year } => TaxPeriod::Year(u16::try_from(taxable_year).ok()?),
+        DeadlinePeriod::Annual { taxable_year } => {
+            TaxPeriod::Year(u16::try_from(taxable_year).ok()?)
+        }
         DeadlinePeriod::EventBased => return None,
     })
 }
@@ -196,7 +202,12 @@ fn reminder_days(db: &Database, tin: &str) -> Vec<u32> {
 
 /// The due date of `code`'s return for `period` (its final deadline, after
 /// any official extension), when the calendar rules date it.
-pub(crate) fn due_date(db: &Database, tin: &str, code: &str, period: TaxPeriod) -> Option<NaiveDate> {
+pub(crate) fn due_date(
+    db: &Database,
+    tin: &str,
+    code: &str,
+    period: TaxPeriod,
+) -> Option<NaiveDate> {
     let global = db.get_deadline_overrides();
     let overrides = match db.get_profile(tin).ok().flatten() {
         Some(profile) => bir_core::forms::event_trigger::periodic_overrides(
@@ -217,14 +228,21 @@ pub(crate) fn due_date(db: &Database, tin: &str, code: &str, period: TaxPeriod) 
 /// holiday, or a deadline moved by an advisory or by the user), and whether
 /// a move saved in BIR can be taken back. `ticket` (already a TIN here)
 /// applies that taxpayer's overrides.
-pub(crate) fn deadline(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn deadline(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["form", "period", "tin"])?;
     let raw = text(arguments, "form")?.ok_or("`form` is required: a form code such as 2551Q")?;
-    let code = taxform::form_code_of(raw).ok_or_else(|| format!("`form` `{raw}` is not a BIR form code"))?;
+    let code = taxform::form_code_of(raw)
+        .ok_or_else(|| format!("`form` `{raw}` is not a BIR form code"))?;
     let period = match text(arguments, "period")? {
         Some(raw) => taxform::parse(raw, today)
             .period
-            .ok_or_else(|| format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)"))?
+            .ok_or_else(|| {
+                format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)")
+            })?
             .for_form(code, today)
             .map_err(|ask| ask.to_string())?,
         None => DeadlineResolver::last_closed_period(code, today)
@@ -237,34 +255,69 @@ pub(crate) fn deadline(db: &Database, arguments: &Map<String, Value>, today: Nai
             .into_iter()
             .find(|deadline| period_of(&deadline.period) == Some(period))
     };
-    let rule = find(&[]).ok_or_else(|| format!("BIR's calendar has no {code} deadline for {}", period.label()))?;
+    let rule = find(&[]).ok_or_else(|| {
+        format!(
+            "BIR's calendar has no {code} deadline for {}",
+            period.label()
+        )
+    })?;
     let global = db.get_deadline_overrides();
-    let overrides = match text(arguments, "tin")?.and_then(|tin| db.get_profile(tin).ok().flatten()) {
-        Some(profile) => bir_core::forms::event_trigger::periodic_overrides(&global, &profile, Some(period.year())),
+    let overrides = match text(arguments, "tin")?.and_then(|tin| db.get_profile(tin).ok().flatten())
+    {
+        Some(profile) => bir_core::forms::event_trigger::periodic_overrides(
+            &global,
+            &profile,
+            Some(period.year()),
+        ),
         None => global.clone(),
     };
     let applied = find(&overrides).unwrap_or_else(|| rule.clone());
-    let official = rule.original_deadline_date().ok_or("this deadline is not dated")?;
+    let official = rule
+        .original_deadline_date()
+        .ok_or("this deadline is not dated")?;
     let weekday_moved = rule.final_deadline_date().unwrap_or(official);
     let applies = applied.final_deadline_date().unwrap_or(weekday_moved);
     use bir_core::calendar_rules::DeadlineStatus;
     let (kind, reason) = match applied.status {
         DeadlineStatus::Normal => ("normal", String::new()),
-        DeadlineStatus::WeekendAdjusted => ("weekend", "It falls on a weekend, so BIR's rule moves it to the next working day.".to_string()),
+        DeadlineStatus::WeekendAdjusted => (
+            "weekend",
+            "It falls on a weekend, so BIR's rule moves it to the next working day.".to_string(),
+        ),
         DeadlineStatus::HolidayAdjusted | DeadlineStatus::NonWorkingDayAdjusted => (
             "holiday",
-            format!("It falls on a holiday or non-working day{}.", applied.source_reference.as_deref().map(|r| format!(" ({r})")).unwrap_or_default()),
+            format!(
+                "It falls on a holiday or non-working day{}.",
+                applied
+                    .source_reference
+                    .as_deref()
+                    .map(|r| format!(" ({r})"))
+                    .unwrap_or_default()
+            ),
         ),
         DeadlineStatus::Extended => (
             "moved",
-            format!("Moved{}.", applied.source_reference.as_deref().filter(|r| !r.is_empty()).map(|r| format!(": {r}")).unwrap_or_default()),
+            format!(
+                "Moved{}.",
+                applied
+                    .source_reference
+                    .as_deref()
+                    .filter(|r| !r.is_empty())
+                    .map(|r| format!(": {r}"))
+                    .unwrap_or_default()
+            ),
         ),
         DeadlineStatus::EventBased => ("event", String::new()),
     };
     // A move saved in BIR (not a shipped holiday) is one the user can undo.
     let saved = global.iter().find(|entry| {
-        !entry.id.starts_with(bir_core::official_holidays::SEED_ID_PREFIX)
-            && entry.affected_form_codes.iter().any(|form| taxform::form_code_of(form) == Some(code))
+        !entry
+            .id
+            .starts_with(bir_core::official_holidays::SEED_ID_PREFIX)
+            && entry
+                .affected_form_codes
+                .iter()
+                .any(|form| taxform::form_code_of(form) == Some(code))
             && (entry.original_deadline == official || entry.original_deadline == weekday_moved)
     });
     let day = |date: NaiveDate| date.format("%Y-%m-%d").to_string();
@@ -504,7 +557,11 @@ pub(crate) fn set(db: &Database, arguments: &Map<String, Value>) -> Result<Value
                     .ok_or_else(|| format!("`forms` must be form codes such as 2551Q (got {form})"))
             })
             .collect::<Result<_, _>>()?,
-        Some(other) => return Err(format!("`forms` must be a list of form codes (got {other})")),
+        Some(other) => {
+            return Err(format!(
+                "`forms` must be a list of form codes (got {other})"
+            ));
+        }
     };
     let enabled = match arguments.get("enabled") {
         None | Some(Value::Null) if forms.is_empty() => None,
@@ -525,7 +582,11 @@ pub(crate) fn set(db: &Database, arguments: &Map<String, Value>) -> Result<Value
                 })
                 .collect::<Result<Vec<u32>, String>>()?,
         ),
-        Some(other) => return Err(format!("`reminder_days` must be a list of days (got {other})")),
+        Some(other) => {
+            return Err(format!(
+                "`reminder_days` must be a list of days (got {other})"
+            ));
+        }
     };
     if forms.is_empty() && days.is_none() {
         return Err("name `forms` with `enabled`, or `reminder_days`".into());
@@ -580,9 +641,11 @@ fn since_stamp(arguments: &Map<String, Value>) -> Result<Option<String>, String>
     let raw = match arguments.get("since") {
         None | Some(Value::Null) => return Ok(None),
         Some(Value::Number(seconds)) => {
-            let seconds = seconds.as_i64().ok_or("`since` must be whole Unix seconds")?;
-            let at = chrono::DateTime::from_timestamp(seconds, 0)
-                .ok_or("`since` is out of range")?;
+            let seconds = seconds
+                .as_i64()
+                .ok_or("`since` must be whole Unix seconds")?;
+            let at =
+                chrono::DateTime::from_timestamp(seconds, 0).ok_or("`since` is out of range")?;
             return Ok(Some(stamp(at)));
         }
         Some(Value::String(raw)) if raw.trim().is_empty() => return Ok(None),
@@ -627,12 +690,16 @@ pub(crate) fn changes(
     let mut record = load_sync(db)?;
     let before = record.clone();
     for (key, event) in &current {
-        let entry = record
-            .entry(key.clone())
-            .or_insert_with(|| json!({ "event_id": null, "linked_at": null, "change": "", "event": null }));
+        let entry = record.entry(key.clone()).or_insert_with(
+            || json!({ "event_id": null, "linked_at": null, "change": "", "event": null }),
+        );
         let removed = entry["change"] == "removed";
         if removed || entry["event"] != *event {
-            entry["change"] = json!(if entry["event_id"].is_string() { "changed" } else { "added" });
+            entry["change"] = json!(if entry["event_id"].is_string() {
+                "changed"
+            } else {
+                "added"
+            });
             entry["event"] = event.clone();
             entry["changed_at"] = json!(now);
         }
@@ -679,7 +746,8 @@ pub(crate) fn changes(
         })
         .collect();
     pending.sort_by(|a, b| {
-        (a["changed_at"].as_str(), a["key"].as_str()).cmp(&(b["changed_at"].as_str(), b["key"].as_str()))
+        (a["changed_at"].as_str(), a["key"].as_str())
+            .cmp(&(b["changed_at"].as_str(), b["key"].as_str()))
     });
     Ok(json!({
         "since": since,
@@ -783,7 +851,12 @@ mod tests {
         assert_eq!(q3["status"], "not_started");
         assert_eq!(q3["enabled"], true);
         assert_eq!(q3["tin"], TIN);
-        assert!(q3["open"].as_str().unwrap().starts_with("rox://app/bir/forms?props="));
+        assert!(
+            q3["open"]
+                .as_str()
+                .unwrap()
+                .starts_with("rox://app/bir/forms?props=")
+        );
         assert!(
             events
                 .iter()
@@ -793,7 +866,12 @@ mod tests {
         let profile = db.get_profile(TIN).unwrap().unwrap();
         db.save_2551q_draft(&Form2551QDraft::new_from_profile(&profile, 2026, 3))
             .unwrap();
-        let again = get(&db, &args(json!({"tin": ROOT, "from": "2026-10-01", "to": "2026-10-31"})), today()).unwrap();
+        let again = get(
+            &db,
+            &args(json!({"tin": ROOT, "from": "2026-10-01", "to": "2026-10-31"})),
+            today(),
+        )
+        .unwrap();
         let q3 = again["events"]
             .as_array()
             .unwrap()
@@ -802,7 +880,12 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(q3["status"], "draft");
-        assert!(q3["status_detail"].as_str().unwrap().starts_with("Draft · "));
+        assert!(
+            q3["status_detail"]
+                .as_str()
+                .unwrap()
+                .starts_with("Draft · ")
+        );
         // Batch off, then one back on.
         let schedule = set(
             &db,
@@ -817,8 +900,17 @@ mod tests {
                 .all(|form| form["enabled"] == false),
             "{schedule}"
         );
-        set(&db, &args(json!({"tin": ROOT, "forms": ["1601C"], "enabled": true, "reminder_days": [3]}))).unwrap();
-        let after = get(&db, &args(json!({"tin": ROOT, "from": "2026-10-01", "to": "2026-10-31"})), today()).unwrap();
+        set(
+            &db,
+            &args(json!({"tin": ROOT, "forms": ["1601C"], "enabled": true, "reminder_days": [3]})),
+        )
+        .unwrap();
+        let after = get(
+            &db,
+            &args(json!({"tin": ROOT, "from": "2026-10-01", "to": "2026-10-31"})),
+            today(),
+        )
+        .unwrap();
         for event in after["events"].as_array().unwrap() {
             assert_eq!(event["enabled"], event["form"] == "1601C", "{event}");
             assert_eq!(event["reminder_days"], json!([3]));
@@ -840,33 +932,70 @@ mod tests {
             .find(|change| change["key"] == format!("{ROOT}/2551Q-2026-Q3"))
             .unwrap()
             .clone();
-        assert!(q3["event"]["title"].as_str().unwrap().contains("2551Q · Q3 2026"));
+        assert!(
+            q3["event"]["title"]
+                .as_str()
+                .unwrap()
+                .contains("2551Q · Q3 2026")
+        );
         // Asked again, the same ids: nothing new for a routine.
         let again = changes(&db, &Map::new(), today()).unwrap();
         assert_eq!(again["changes"], first["changes"]);
         // Linking takes it off the list.
         for change in &listed {
-            link(&db, &args(json!({"key": change["key"], "event_id": format!("g-{}", change["key"])}))).unwrap();
+            link(
+                &db,
+                &args(json!({"key": change["key"], "event_id": format!("g-{}", change["key"])})),
+            )
+            .unwrap();
         }
-        assert!(changes(&db, &Map::new(), today()).unwrap()["changes"].as_array().unwrap().is_empty());
+        assert!(
+            changes(&db, &Map::new(), today()).unwrap()["changes"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
         // Turned off, every event is a removal carrying its Google id.
-        set(&db, &args(json!({"tin": TIN, "forms": ["2551Q"], "enabled": false}))).unwrap();
+        set(
+            &db,
+            &args(json!({"tin": TIN, "forms": ["2551Q"], "enabled": false})),
+        )
+        .unwrap();
         let removed = changes(&db, &Map::new(), today()).unwrap();
         let removed = removed["changes"].as_array().unwrap();
         assert_eq!(removed.len(), listed.len());
-        assert!(removed.iter().all(|change| change["change"] == "removed" && change["event_id"].is_string()));
+        assert!(
+            removed
+                .iter()
+                .all(|change| change["change"] == "removed" && change["event_id"].is_string())
+        );
         // Deleted in Google: link with no id forgets it.
         for change in removed {
             link(&db, &args(json!({"key": change["key"], "event_id": null}))).unwrap();
         }
-        assert!(changes(&db, &Map::new(), today()).unwrap()["changes"].as_array().unwrap().is_empty());
+        assert!(
+            changes(&db, &Map::new(), today()).unwrap()["changes"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
         assert!(link(&db, &args(json!({"key": "nope", "event_id": "x"}))).is_err());
         // A `since` after everything lists nothing.
-        set(&db, &args(json!({"tin": TIN, "forms": ["2551Q"], "enabled": true}))).unwrap();
+        set(
+            &db,
+            &args(json!({"tin": TIN, "forms": ["2551Q"], "enabled": true})),
+        )
+        .unwrap();
         let later = changes(&db, &args(json!({"since": "2999-01-01"})), today()).unwrap();
         assert!(later["changes"].as_array().unwrap().is_empty());
         let all = changes(&db, &args(json!({"since": 0})), today()).unwrap();
-        assert!(all["changes"].as_array().unwrap().iter().all(|change| change["change"] == "added"));
+        assert!(
+            all["changes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|change| change["change"] == "added")
+        );
     }
 
     /// A deadline moved from chat moves the calendar for every taxpayer and
@@ -878,8 +1007,12 @@ mod tests {
         let db = db();
         forms_set(&db, &["2551Q"]);
         let q3 = |db: &Database| {
-            get(db, &args(json!({"tin": ROOT, "from": "2026-10-01", "to": "2026-11-30"})), today())
-                .unwrap()["events"]
+            get(
+                db,
+                &args(json!({"tin": ROOT, "from": "2026-10-01", "to": "2026-11-30"})),
+                today(),
+            )
+            .unwrap()["events"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -892,8 +1025,9 @@ mod tests {
         assert_eq!(before["moved"], false);
         let profile = db.get_profile(TIN).unwrap().unwrap();
         let kind = bir_core::forms::agent::AgentFormKind::Form2551Q;
-        let opened = crate::screen_form_module::load_draft(&db, kind, &profile, 2026, 3, false, None)
-            .unwrap();
+        let opened =
+            crate::screen_form_module::load_draft(&db, kind, &profile, 2026, 3, false, None)
+                .unwrap();
         assert_eq!(opened["penalty_due_date"], "2026-10-26");
 
         bir_core::deadline_overrides::set(
@@ -906,8 +1040,9 @@ mod tests {
         assert_eq!(after["due"], "2026-11-03");
         assert_eq!(after["rule_due"], "2026-10-25");
         assert_eq!(after["moved_reason"], "RMC 1-2026");
-        let opened = crate::screen_form_module::load_draft(&db, kind, &profile, 2026, 3, false, None)
-            .unwrap();
+        let opened =
+            crate::screen_form_module::load_draft(&db, kind, &profile, 2026, 3, false, None)
+                .unwrap();
         assert_eq!(opened["penalty_due_date"], "2026-11-03");
         let mut draft: Form2551QDraft = serde_json::from_value(opened).unwrap();
         draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
@@ -934,8 +1069,28 @@ mod tests {
     #[test]
     fn a_due_date_comes_from_the_calendar_rules() {
         let db = db();
-        let due = due_date(&db, TIN, "1601C", TaxPeriod::Month { year: 2026, month: 9 }).unwrap();
+        let due = due_date(
+            &db,
+            TIN,
+            "1601C",
+            TaxPeriod::Month {
+                year: 2026,
+                month: 9,
+            },
+        )
+        .unwrap();
         assert_eq!((due.year(), due.month()), (2026, 10));
-        assert!(due_date(&db, TIN, "1601C", TaxPeriod::Quarter { year: 2026, quarter: 3 }).is_none());
+        assert!(
+            due_date(
+                &db,
+                TIN,
+                "1601C",
+                TaxPeriod::Quarter {
+                    year: 2026,
+                    quarter: 3
+                }
+            )
+            .is_none()
+        );
     }
 }

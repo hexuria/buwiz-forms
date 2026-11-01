@@ -12,8 +12,8 @@ use bir_core::calendar_rules::DeadlineResolver;
 use bir_core::db::Database;
 use bir_core::forms::FilingStatus;
 use bir_core::forms::taxform::{self, TaxPeriod};
-use bir_core::profile::TaxpayerType;
 use bir_core::penalties::{PenaltyProfile, PenaltyRequest, compute_penalties};
+use bir_core::profile::TaxpayerType;
 use bir_core::tax_profile::BranchField;
 use chrono::{Datelike, Duration, NaiveDate};
 use serde_json::{Map, Value, json};
@@ -36,17 +36,36 @@ pub(crate) const CANCEL_SEND: &str = "bir_card_cancel_send";
 
 /// The assistant's tools of this module, all read-only (`bir_quick_add`
 /// only prefills a card; the user's Save adds the taxpayer).
-pub(crate) const TOOLS: [&str; 8] = [FIND_TAXPAYER, TAXPAYER, PENALTY, UNPAID, BOARD, QUICK_ADD, OUTBOX, DIGEST];
+pub(crate) const TOOLS: [&str; 8] = [
+    FIND_TAXPAYER,
+    TAXPAYER,
+    PENALTY,
+    UNPAID,
+    BOARD,
+    QUICK_ADD,
+    OUTBOX,
+    DIGEST,
+];
 
 fn check_keys(arguments: &Map<String, Value>, allowed: &[&str]) -> Result<(), String> {
-    match arguments.keys().find(|key| !allowed.contains(&key.as_str())) {
-        Some(key) => Err(format!("unknown argument `{key}` (allowed: {})", allowed.join(", "))),
+    match arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        Some(key) => Err(format!(
+            "unknown argument `{key}` (allowed: {})",
+            allowed.join(", ")
+        )),
         None => Ok(()),
     }
 }
 
 fn text<'a>(arguments: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
-    arguments.get(key).and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty())
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
 }
 
 /// The subject of a `ticket` argument, if one is given.
@@ -76,7 +95,10 @@ fn amount(arguments: &Map<String, Value>, key: &str) -> Result<Option<f64>, Stri
         None | Some(Value::Null) => Ok(None),
         Some(Value::Number(n)) => Ok(n.as_f64()),
         Some(Value::String(raw)) => {
-            let clean: String = raw.chars().filter(|c| c.is_ascii_digit() || *c == '.').collect();
+            let clean: String = raw
+                .chars()
+                .filter(|c| c.is_ascii_digit() || *c == '.')
+                .collect();
             clean
                 .parse::<f64>()
                 .map(Some)
@@ -97,7 +119,9 @@ fn distance(a: &str, b: &str) -> usize {
         let mut prev = row[0];
         row[0] = i + 1;
         for (j, cb) in b.iter().enumerate() {
-            let next = (row[j + 1] + 1).min(row[j] + 1).min(prev + usize::from(ca != cb));
+            let next = (row[j + 1] + 1)
+                .min(row[j] + 1)
+                .min(prev + usize::from(ca != cb));
             prev = row[j + 1];
             row[j + 1] = next;
         }
@@ -124,16 +148,26 @@ pub(crate) fn name_score(query: &str, name: &str) -> f64 {
         named.iter().any(|candidate| {
             candidate == word
                 || (word.len() >= 2 && candidate.starts_with(word))
-                || distance(word, candidate) <= if word.len() >= 6 { 2 } else { usize::from(word.len() >= 3) }
+                || distance(word, candidate)
+                    <= if word.len() >= 6 {
+                        2
+                    } else {
+                        usize::from(word.len() >= 3)
+                    }
         })
     };
     asked.iter().filter(|word| hit(word)).count() as f64 / asked.len() as f64
 }
 
 /// `bir_find_taxpayer {name}`.
-pub(crate) fn find_taxpayer(db: &Database, arguments: &Map<String, Value>, _today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn find_taxpayer(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    _today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["name"])?;
-    let query = text(arguments, "name").ok_or("`name` is required: the name as the user wrote it")?;
+    let query =
+        text(arguments, "name").ok_or("`name` is required: the name as the user wrote it")?;
     let mut scored: Vec<(f64, resolve::Branch)> = resolve::branches(db, None)?
         .into_iter()
         .filter(|branch| branch.is_head_office)
@@ -169,7 +203,11 @@ pub(crate) fn find_taxpayer(db: &Database, arguments: &Map<String, Value>, _toda
 
 /// `bir_taxpayer {ticket, view?}`: `view: "branches"` answers the same
 /// facts on the branches card.
-pub(crate) fn taxpayer(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn taxpayer(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["ticket", "view"])?;
     let view = match text(arguments, "view") {
         None | Some("glance") => "glance",
@@ -195,11 +233,18 @@ pub(crate) fn taxpayer(db: &Database, arguments: &Map<String, Value>, today: Nai
             })
         })
         .collect();
-    let head = who.branches.iter().find(|branch| branch.is_head_office).or(who.branches.first());
+    let head = who
+        .branches
+        .iter()
+        .find(|branch| branch.is_head_office)
+        .or(who.branches.first());
     let year = today.year() as u16;
     let mut forms: Vec<String> = Vec::new();
     if let Some(head) = head {
-        for code in db.active_form_codes_for_year(&head.tin, year).unwrap_or_default() {
+        for code in db
+            .active_form_codes_for_year(&head.tin, year)
+            .unwrap_or_default()
+        {
             if let Some(code) = taxform::form_code_of(&code)
                 && !forms.iter().any(|known| known == code)
             {
@@ -210,7 +255,10 @@ pub(crate) fn taxpayer(db: &Database, arguments: &Map<String, Value>, today: Nai
     let mut window = Map::new();
     window.insert("tin".into(), json!(subject.full_tin()));
     window.insert("from".into(), json!(today.format("%Y-%m-%d").to_string()));
-    window.insert("to".into(), json!((today + Duration::days(370)).format("%Y-%m-%d").to_string()));
+    window.insert(
+        "to".into(),
+        json!((today + Duration::days(370)).format("%Y-%m-%d").to_string()),
+    );
     let next = calendar::get(db, &window, today)
         .ok()
         .and_then(|got| {
@@ -250,25 +298,39 @@ fn money(value: f64) -> f64 {
 
 /// `bir_penalty {form, period?, due?, tax_due?, filed_on?, ticket?}` (an
 /// estimate), or `{ticket?}` alone (the returns already late).
-pub(crate) fn penalty(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
-    check_keys(arguments, &["ticket", "form", "period", "due", "tax_due", "filed_on"])?;
+pub(crate) fn penalty(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
+    check_keys(
+        arguments,
+        &["ticket", "form", "period", "due", "tax_due", "filed_on"],
+    )?;
     let subject = subject(db, arguments)?;
     let Some(form) = text(arguments, "form") else {
         return overdue(db, subject, today);
     };
-    let code = taxform::form_code_of(form).ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
+    let code = taxform::form_code_of(form)
+        .ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
     let period = text(arguments, "period")
         .map(|raw| {
-            taxform::parse(raw, today)
-                .period
-                .ok_or_else(|| format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)"))
+            taxform::parse(raw, today).period.ok_or_else(|| {
+                format!("`period` `{raw}` is not a period (e.g. 2026-Q3, 2026-09, 2025)")
+            })
         })
         .transpose()?;
     let due = match (date(arguments, "due")?, &subject, period) {
         (Some(due), _, _) => due,
-        (None, Some(subject), Some(period)) => calendar::due_date(db, &subject.full_tin(), code, period)
-            .ok_or("BIR has no deadline for that form and period")?,
-        _ => return Err("give the return's `due` date, or the taxpayer's `ticket` with the `period`".into()),
+        (None, Some(subject), Some(period)) => {
+            calendar::due_date(db, &subject.full_tin(), code, period)
+                .ok_or("BIR has no deadline for that form and period")?
+        }
+        _ => {
+            return Err(
+                "give the return's `due` date, or the taxpayer's `ticket` with the `period`".into(),
+            );
+        }
     };
     let filed_on = date(arguments, "filed_on")?.unwrap_or(today);
     let tax_due = amount(arguments, "tax_due")?.unwrap_or(0.0);
@@ -308,14 +370,22 @@ fn overdue(db: &Database, subject: Option<Subject>, today: NaiveDate) -> Result<
     if let Some(subject) = &subject {
         window.insert("tin".into(), json!(subject.full_tin()));
     }
-    window.insert("from".into(), json!((today - Duration::days(400)).format("%Y-%m-%d").to_string()));
+    window.insert(
+        "from".into(),
+        json!((today - Duration::days(400)).format("%Y-%m-%d").to_string()),
+    );
     window.insert("to".into(), json!(today.format("%Y-%m-%d").to_string()));
-    let events = calendar::get(db, &window, today)?["events"].as_array().cloned().unwrap_or_default();
+    let events = calendar::get(db, &window, today)?["events"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let items: Vec<Value> = events
         .iter()
         .filter(|event| event["overdue"] == true && event["enabled"] == true)
         .map(|event| {
-            let due = event["due"].as_str().and_then(|due| NaiveDate::parse_from_str(due, "%Y-%m-%d").ok());
+            let due = event["due"]
+                .as_str()
+                .and_then(|due| NaiveDate::parse_from_str(due, "%Y-%m-%d").ok());
             json!({
                 "key": event["key"],
                 "tin": event["tin"],
@@ -340,7 +410,11 @@ fn overdue(db: &Database, subject: Option<Subject>, today: NaiveDate) -> Result<
 // ------------------------------------------------------------ unpaid
 
 /// `bir_unpaid {ticket?}`: returns sent or confirmed with no payment.
-pub(crate) fn unpaid(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn unpaid(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["ticket"])?;
     let mut search = Map::new();
     if let Some(subject) = subject(db, arguments)? {
@@ -366,7 +440,11 @@ pub(crate) fn unpaid(db: &Database, arguments: &Map<String, Value>, today: Naive
 /// late, this year. `{form, period?}`: one return across every taxpayer
 /// who files it (bulk); `{view: "on_time"}`: each taxpayer's on-time rate
 /// this year (streak).
-pub(crate) fn board(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn board(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["form", "period", "view"])?;
     if let Some(form) = text(arguments, "form") {
         return bulk(db, form, text(arguments, "period"), today);
@@ -377,16 +455,31 @@ pub(crate) fn board(db: &Database, arguments: &Map<String, Value>, today: NaiveD
     match text(arguments, "view") {
         None | Some("standing") => {}
         Some("on_time") => return on_time(db, today),
-        Some(other) => return Err(format!("`view` must be standing or on_time (got `{other}`)")),
+        Some(other) => {
+            return Err(format!(
+                "`view` must be standing or on_time (got `{other}`)"
+            ));
+        }
     }
     let mut window = Map::new();
     window.insert("from".into(), json!(format!("{}-01-01", today.year())));
-    window.insert("to".into(), json!((today + Duration::days(60)).format("%Y-%m-%d").to_string()));
-    let events = calendar::get(db, &window, today)?["events"].as_array().cloned().unwrap_or_default();
+    window.insert(
+        "to".into(),
+        json!((today + Duration::days(60)).format("%Y-%m-%d").to_string()),
+    );
+    let events = calendar::get(db, &window, today)?["events"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     let soon = today + Duration::days(14);
     let mut rows: Vec<(String, String, u32, u32, u32)> = Vec::new();
     for event in events.iter().filter(|event| event["enabled"] == true) {
-        let tin: String = event["tin"].as_str().unwrap_or("").chars().take(9).collect();
+        let tin: String = event["tin"]
+            .as_str()
+            .unwrap_or("")
+            .chars()
+            .take(9)
+            .collect();
         let name = event["taxpayer"].as_str().unwrap_or("").to_string();
         let at = match rows.iter().position(|row| row.0 == tin) {
             Some(at) => at,
@@ -395,8 +488,13 @@ pub(crate) fn board(db: &Database, arguments: &Map<String, Value>, today: NaiveD
                 rows.len() - 1
             }
         };
-        let done = matches!(event["status"].as_str(), Some("filed" | "confirmed" | "paid"));
-        let due = event["due"].as_str().and_then(|due| NaiveDate::parse_from_str(due, "%Y-%m-%d").ok());
+        let done = matches!(
+            event["status"].as_str(),
+            Some("filed" | "confirmed" | "paid")
+        );
+        let due = event["due"]
+            .as_str()
+            .and_then(|due| NaiveDate::parse_from_str(due, "%Y-%m-%d").ok());
         if done {
             rows[at].2 += 1;
         } else if event["overdue"] == true {
@@ -426,17 +524,29 @@ fn branch_name(branch: &resolve::Branch) -> String {
     if branch.is_head_office {
         branch.name.clone()
     } else {
-        format!("{} · branch {}", branch.name, branch.tin.get(9..).unwrap_or(""))
+        format!(
+            "{} · branch {}",
+            branch.name,
+            branch.tin.get(9..).unwrap_or("")
+        )
     }
 }
 
 /// One form and period across every taxpayer who files it.
-fn bulk(db: &Database, form: &str, period: Option<&str>, today: NaiveDate) -> Result<Value, String> {
-    let code = taxform::form_code_of(form).ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
+fn bulk(
+    db: &Database,
+    form: &str,
+    period: Option<&str>,
+    today: NaiveDate,
+) -> Result<Value, String> {
+    let code = taxform::form_code_of(form)
+        .ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
     let period = match period {
         Some(raw) => taxform::parse(raw, today)
             .period
-            .ok_or_else(|| format!("`period` `{raw}` is not a period (e.g. 2026-10, 2026-Q3, 2025)"))?
+            .ok_or_else(|| {
+                format!("`period` `{raw}` is not a period (e.g. 2026-10, 2026-Q3, 2025)")
+            })?
             .for_form(code, today)
             .map_err(|ask| ask.to_string())?,
         None => DeadlineResolver::last_closed_period(code, today)
@@ -455,7 +565,9 @@ fn bulk(db: &Database, form: &str, period: Option<&str>, today: NaiveDate) -> Re
             continue;
         }
         let stored = resolve::stored_returns(db, &branch.tin, code, today);
-        let status = calendar::status_word(resolve::furthest(&stored, code, period).map(|filing| &filing.status));
+        let status = calendar::status_word(
+            resolve::furthest(&stored, code, period).map(|filing| &filing.status),
+        );
         let due = calendar::due_date(db, &branch.tin, code, period);
         let late = !done(status) && due.is_some_and(|due| due < today);
         let name = branch_name(&branch);
@@ -493,20 +605,33 @@ fn on_time(db: &Database, today: NaiveDate) -> Result<Value, String> {
     let mut window = Map::new();
     window.insert("from".into(), json!(format!("{}-01-01", today.year())));
     window.insert("to".into(), json!(today.format("%Y-%m-%d").to_string()));
-    let events = calendar::get(db, &window, today)?["events"].as_array().cloned().unwrap_or_default();
-    let mut stored: std::collections::HashMap<(String, String), Vec<(TaxPeriod, bir_core::forms::FormDraftSummary)>> =
-        std::collections::HashMap::new();
+    let events = calendar::get(db, &window, today)?["events"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut stored: std::collections::HashMap<
+        (String, String),
+        Vec<(TaxPeriod, bir_core::forms::FormDraftSummary)>,
+    > = std::collections::HashMap::new();
     // root -> (name, due, on time, late)
     let mut rows: Vec<(String, String, u32, u32, u32)> = Vec::new();
     for event in events.iter().filter(|event| event["enabled"] == true) {
         let tin = event["tin"].as_str().unwrap_or("").to_string();
         let form = event["form"].as_str().unwrap_or("").to_string();
-        let Some(due) = event["due"].as_str().map(str::to_string) else { continue };
+        let Some(due) = event["due"].as_str().map(str::to_string) else {
+            continue;
+        };
         let root: String = tin.chars().take(9).collect();
         let at = match rows.iter().position(|row| row.0 == root) {
             Some(at) => at,
             None => {
-                rows.push((root.clone(), event["taxpayer"].as_str().unwrap_or("").to_string(), 0, 0, 0));
+                rows.push((
+                    root.clone(),
+                    event["taxpayer"].as_str().unwrap_or("").to_string(),
+                    0,
+                    0,
+                    0,
+                ));
                 rows.len() - 1
             }
         };
@@ -546,7 +671,11 @@ fn on_time(db: &Database, today: NaiveDate) -> Result<Value, String> {
         })
         .collect();
     // The ones who file late most come first.
-    out.sort_by(|a, b| a.0.unwrap_or(101).cmp(&b.0.unwrap_or(101)).then(a.1.cmp(&b.1)));
+    out.sort_by(|a, b| {
+        a.0.unwrap_or(101)
+            .cmp(&b.0.unwrap_or(101))
+            .then(a.1.cmp(&b.1))
+    });
     Ok(json!({
         "mode": "on_time",
         "year": today.year(),
@@ -560,7 +689,17 @@ fn on_time(db: &Database, today: NaiveDate) -> Result<Value, String> {
 fn taxpayer_type(raw: Option<&str>, name: &str) -> Result<TaxpayerType, String> {
     let guess = |name: &str| {
         let lower = name.to_lowercase();
-        if [" corp", " inc", "corporation", "incorporated", " co.", " ltd"].iter().any(|word| lower.contains(word)) {
+        if [
+            " corp",
+            " inc",
+            "corporation",
+            "incorporated",
+            " co.",
+            " ltd",
+        ]
+        .iter()
+        .any(|word| lower.contains(word))
+        {
             TaxpayerType::Corporation
         } else {
             TaxpayerType::Individual
@@ -574,7 +713,11 @@ fn taxpayer_type(raw: Option<&str>, name: &str) -> Result<TaxpayerType, String> 
         Some("cooperative") => TaxpayerType::Cooperative,
         Some("estate") => TaxpayerType::Estate,
         Some("trust") => TaxpayerType::Trust,
-        Some(other) => return Err(format!("`type` must be individual, corporation, partnership, cooperative, estate or trust (got `{other}`)")),
+        Some(other) => {
+            return Err(format!(
+                "`type` must be individual, corporation, partnership, cooperative, estate or trust (got `{other}`)"
+            ));
+        }
     })
 }
 
@@ -590,9 +733,14 @@ fn rdo_code(raw: &str) -> Result<(String, String), String> {
 /// `bir_quick_add {name, tin?, type?, rdo?}`: a new taxpayer's card,
 /// prefilled. Nothing is saved: the user checks it and presses Save
 /// (`bir_card_add_taxpayer`).
-pub(crate) fn quick_add(db: &Database, arguments: &Map<String, Value>, _today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn quick_add(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    _today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["name", "tin", "type", "rdo"])?;
-    let name = text(arguments, "name").ok_or("`name` is required: the registered name as the user wrote it")?;
+    let name = text(arguments, "name")
+        .ok_or("`name` is required: the registered name as the user wrote it")?;
     let root = text(arguments, "tin")
         .map(|raw| {
             taxform::tin_digits(raw)
@@ -634,7 +782,8 @@ pub(crate) fn quick_add(db: &Database, arguments: &Map<String, Value>, _today: N
 /// Save, apps only): add the taxpayer the ticket's TIN names.
 pub(crate) fn add_taxpayer(db: &Database, arguments: &Map<String, Value>) -> Result<Value, String> {
     check_keys(arguments, &["ticket", "name", "type", "rdo"])?;
-    let ticket = text(arguments, "ticket").ok_or("`ticket` is required: the card's ticket for the TIN")?;
+    let ticket =
+        text(arguments, "ticket").ok_or("`ticket` is required: the card's ticket for the TIN")?;
     let root = match tickets::subject(db, ticket)? {
         Some(Subject::Taxpayer(root)) => root,
         Some(_) => return Err("the ticket names a branch or a return, not a new taxpayer".into()),
@@ -654,7 +803,10 @@ pub(crate) fn add_taxpayer(db: &Database, arguments: &Map<String, Value>) -> Res
         name: name.to_string(),
         taxpayer_type: kind,
         birth_date: None,
-        head_office: bir_core::tax_profile::BranchFacts { rdo_code: rdo, ..Default::default() },
+        head_office: bir_core::tax_profile::BranchFacts {
+            rdo_code: rdo,
+            ..Default::default()
+        },
     })
     .map_err(|error| error.to_string())?;
     Ok(json!({ "saved": true, "ticket": ticket, "name": name }))
@@ -680,19 +832,29 @@ fn name_of(names: &[resolve::Branch], tin: &str) -> String {
     let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
     names
         .iter()
-        .find(|branch| branch.tin == digits || (digits.len() == 9 && branch.root == digits && branch.is_head_office))
+        .find(|branch| {
+            branch.tin == digits
+                || (digits.len() == 9 && branch.root == digits && branch.is_head_office)
+        })
         .map(branch_name)
         .unwrap_or_default()
 }
 
 /// `bir_outbox {}`: returns waiting to be sent to eBIRForms, and the ones
 /// sent in the last 30 days that BIR has not confirmed yet.
-pub(crate) fn outbox(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn outbox(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &[])?;
     let names = names(db);
     let since = (today - Duration::days(30)).format("%Y-%m-%d").to_string();
     let (mut queued, mut sent) = (Vec::new(), Vec::new());
-    for summary in db.list_all_queued_submissions().map_err(|error| error.to_string())? {
+    for summary in db
+        .list_all_queued_submissions()
+        .map_err(|error| error.to_string())?
+    {
         let period = summary_period(&summary);
         let row = json!({
             "tin": summary.tin,
@@ -705,7 +867,9 @@ pub(crate) fn outbox(db: &Database, arguments: &Map<String, Value>, today: Naive
         });
         match summary.status {
             FilingStatus::Queued => queued.push(row),
-            FilingStatus::Submitted if summary.updated_at.as_str() >= since.as_str() => sent.push(row),
+            FilingStatus::Submitted if summary.updated_at.as_str() >= since.as_str() => {
+                sent.push(row)
+            }
             _ => {}
         }
     }
@@ -719,11 +883,18 @@ pub(crate) fn outbox(db: &Database, arguments: &Map<String, Value>, today: Naive
 /// `bir_card_cancel_send {ticket}` (the outbox card's Cancel, apps only):
 /// the queued return the ticket names, as its stored row has it. The
 /// caller cancels it through the `cancel_queued` host function.
-pub(crate) fn queued_row(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Vec<Value>, String> {
+pub(crate) fn queued_row(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Vec<Value>, String> {
     check_keys(arguments, &["ticket"])?;
     let ticket = text(arguments, "ticket").ok_or("`ticket` is required: the return's ticket")?;
     let value = match tickets::subject(db, ticket)? {
-        Some(subject) => subject.return_value().map(str::to_string).ok_or("the ticket names a taxpayer, not a return")?,
+        Some(subject) => subject
+            .return_value()
+            .map(str::to_string)
+            .ok_or("the ticket names a taxpayer, not a return")?,
         None => return Err("the ticket is not one BIR issued, or it was revoked".into()),
     };
     let named = taxform::parse(&value, today);
@@ -737,12 +908,27 @@ pub(crate) fn queued_row(db: &Database, arguments: &Map<String, Value>, today: N
         .find(|summary| {
             summary.status == FilingStatus::Queued
                 && summary.form_code == code
-                && summary.tin.chars().filter(char::is_ascii_digit).collect::<String>().starts_with(&tin)
+                && summary
+                    .tin
+                    .chars()
+                    .filter(char::is_ascii_digit)
+                    .collect::<String>()
+                    .starts_with(&tin)
                 && summary_period(summary) == period
         })
-        .ok_or("this return is not waiting in the sending queue any more (it was sent or cancelled)")?;
-    let slot = summary.month.or(summary.quarter).map_or(Value::Null, |slot| json!(slot));
-    Ok(vec![json!(summary.tin), json!(summary.form_code), json!(summary.taxable_year), slot])
+        .ok_or(
+            "this return is not waiting in the sending queue any more (it was sent or cancelled)",
+        )?;
+    let slot = summary
+        .month
+        .or(summary.quarter)
+        .map_or(Value::Null, |slot| json!(slot));
+    Ok(vec![
+        json!(summary.tin),
+        json!(summary.form_code),
+        json!(summary.taxable_year),
+        slot,
+    ])
 }
 
 // ------------------------------------------------------------ digest
@@ -750,7 +936,11 @@ pub(crate) fn queued_row(db: &Database, arguments: &Map<String, Value>, today: N
 /// `bir_digest {since?}`: what BIR recorded since yesterday (or `since`):
 /// returns BIR confirmed and payments recorded (the routines' work), and
 /// returns sent more than three days ago still without a confirmation.
-pub(crate) fn digest(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn digest(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["since"])?;
     let since = date(arguments, "since")?.unwrap_or(today - Duration::days(1));
     let since_text = since.format("%Y-%m-%d").to_string();
@@ -758,7 +948,10 @@ pub(crate) fn digest(db: &Database, arguments: &Map<String, Value>, today: Naive
     let names = names(db);
     let paid_keys = payments::keys(db)?;
     let mut items = Vec::new();
-    for summary in db.list_all_filed_submissions().map_err(|error| error.to_string())? {
+    for summary in db
+        .list_all_filed_submissions()
+        .map_err(|error| error.to_string())?
+    {
         let period = summary_period(&summary);
         let key = taxform::canonical_value(&summary.tin, &summary.form_code, period);
         let row = |kind: &str, detail: String| {
@@ -774,7 +967,11 @@ pub(crate) fn digest(db: &Database, arguments: &Map<String, Value>, today: Naive
                 "key": key,
             })
         };
-        let at = summary.updated_at.get(..10).unwrap_or(&summary.updated_at).to_string();
+        let at = summary
+            .updated_at
+            .get(..10)
+            .unwrap_or(&summary.updated_at)
+            .to_string();
         match summary.status {
             FilingStatus::Confirmed | FilingStatus::Paid if at >= since_text => {
                 let received = db
@@ -783,10 +980,19 @@ pub(crate) fn digest(db: &Database, arguments: &Map<String, Value>, today: Naive
                     .flatten()
                     .and_then(|data| data["confirmed_at"].as_str().map(str::to_string))
                     .unwrap_or_else(|| summary.updated_at.clone());
-                items.push(row("confirmed", format!("BIR confirmation received {}", received.get(..10).unwrap_or(&received))));
+                items.push(row(
+                    "confirmed",
+                    format!(
+                        "BIR confirmation received {}",
+                        received.get(..10).unwrap_or(&received)
+                    ),
+                ));
             }
             FilingStatus::Submitted if at < stale => {
-                items.push(row("waiting", format!("Sent {at}; no confirmation from BIR yet")));
+                items.push(row(
+                    "waiting",
+                    format!("Sent {at}; no confirmation from BIR yet"),
+                ));
             }
             _ => {}
         }

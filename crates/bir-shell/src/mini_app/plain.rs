@@ -63,10 +63,15 @@ pub(crate) fn classify(text: &str) -> Option<Refusal> {
 fn action(tool: &str) -> &'static str {
     match tool {
         "bir_app_open" => "open its apps",
-        "bir_profiles_list" | "bir_dues_list" | "bir_drafts_list" | "bir_calendar_get"
+        "bir_profiles_list"
+        | "bir_dues_list"
+        | "bir_drafts_list"
+        | "bir_calendar_get"
         | "bir_calendar_changes" => "read this computer's taxpayers and their returns",
         "bir_calendar_set" | "bir_calendar_link" => "change the filing calendar",
-        "bir_confirmation_search" | "bir_confirm_filing" => "check or record BIR's filing confirmations",
+        "bir_confirmation_search" | "bir_confirm_filing" => {
+            "check or record BIR's filing confirmations"
+        }
         "bir_payment_search" | "bir_payment_parse" | "bir_record_payment" | "bir_mark_paid"
         | "bir_payments_list" | "bir_filing_record" => "read or record this taxpayer's payments",
         name if name.starts_with("bir_deadline_") => "read or move deadlines",
@@ -177,7 +182,12 @@ mod tests {
         let mut result = refused(crate::account_gate::LOCKED_MESSAGE);
         rewrite("bir_app_list_returns", &mut result, true);
         assert_eq!(result["isError"], true);
-        assert!(result["content"][0]["text"].as_str().unwrap().starts_with("You're signed out of Buwiz"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("You're signed out of Buwiz")
+        );
         // anything else is left alone
         let mut other = refused("`tin` must be a ticket");
         rewrite("bir_drafts_list", &mut other, false);

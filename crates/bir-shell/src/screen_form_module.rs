@@ -257,24 +257,60 @@ export function screen_form_check_notice(form_code: string, draft: object, token
 
 pub fn register(module: HostModule) -> HostModule {
     module
-        .function("screen_form_schema", screen_form_schema)
-        .function("screen_forms_index", |_| screen_forms_index())
+        .function(
+            "screen_form_schema",
+            crate::perf::timed("screen_form_schema", screen_form_schema),
+        )
+        .function(
+            "screen_forms_index",
+            crate::perf::timed("screen_forms_index", |_| screen_forms_index()),
+        )
         .async_function("screen_form_open", screen_form_open)
         .async_function("screen_form_sample", screen_form_sample)
         .async_function("screen_form_sample_period", screen_form_sample_period)
         .async_function("screen_form_amend", screen_form_amend)
         .async_function("screen_form_filed_original", screen_form_filed_original)
-        .function("screen_form_fill", screen_form_fill)
-        .function("screen_form_use_profile", screen_form_use_profile)
+        .function(
+            "screen_form_fill",
+            crate::perf::timed("screen_form_fill", screen_form_fill),
+        )
+        .function(
+            "screen_form_use_profile",
+            crate::perf::timed("screen_form_use_profile", screen_form_use_profile),
+        )
         .async_function("screen_form_validate", screen_form_validate)
-        .function("screen_form_save", screen_form_save)
-        .function("screen_form_print", screen_form_print)
-        .function("screen_form_print_sample", screen_form_print_sample)
-        .function("screen_form_preview_sync", screen_form_preview_sync)
-        .function("screen_form_queue", screen_form_queue)
-        .function("screen_form_cancel_queue", screen_form_cancel_queue)
-        .function("screen_form_notes_seen", screen_form_notes_seen)
-        .function("screen_form_check_notice", screen_form_check_notice)
+        .function(
+            "screen_form_save",
+            crate::perf::timed("screen_form_save", screen_form_save),
+        )
+        .function(
+            "screen_form_print",
+            crate::perf::timed("screen_form_print", screen_form_print),
+        )
+        .function(
+            "screen_form_print_sample",
+            crate::perf::timed("screen_form_print_sample", screen_form_print_sample),
+        )
+        .function(
+            "screen_form_preview_sync",
+            crate::perf::timed("screen_form_preview_sync", screen_form_preview_sync),
+        )
+        .function(
+            "screen_form_queue",
+            crate::perf::timed("screen_form_queue", screen_form_queue),
+        )
+        .function(
+            "screen_form_cancel_queue",
+            crate::perf::timed("screen_form_cancel_queue", screen_form_cancel_queue),
+        )
+        .function(
+            "screen_form_notes_seen",
+            crate::perf::timed("screen_form_notes_seen", screen_form_notes_seen),
+        )
+        .function(
+            "screen_form_check_notice",
+            crate::perf::timed("screen_form_check_notice", screen_form_check_notice),
+        )
 }
 
 /// Record the one-time notes an opening offered as seen (D3), each by an
@@ -2914,7 +2950,9 @@ fn on_large_stack<T: Send + 'static>(
 /// Whether `draft` is a sent return that is paid: its status says so, or a
 /// payment is recorded for it (bir_record_payment, bir_mark_paid).
 fn sent_and_paid(db: &bir_core::db::Database, kind: AgentFormKind, draft: &Value) -> bool {
-    let Ok(identity) = agent::identity(kind, draft) else { return false };
+    let Ok(identity) = agent::identity(kind, draft) else {
+        return false;
+    };
     let year = identity.taxable_year;
     let period = match identity.period {
         FilingPeriod::Monthly(month) => format!("{year}-{month:02}"),
@@ -2954,7 +2992,11 @@ fn evaluate_here(
     // A paid return's penalties are settled ([`sent_and_paid`]): what it was
     // filed and paid with stays, and today's date does not make them stale.
     if paid && let Value::Array(list) = &mut errors {
-        list.retain(|error| !error["message"].as_str().is_some_and(|message| message.contains("is stale or inconsistent")));
+        list.retain(|error| {
+            !error["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("is stale or inconsistent"))
+        });
     }
     // A page notice beside the form's own messages (PR 4: a stored 2553 row
     // whose entry is not the one the sheet prints there).
@@ -3293,7 +3335,16 @@ fn open_screen_form(
         })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
-            opened_json(kind, year, period, draft, from_profile, build, checked, paid)
+            opened_json(
+                kind,
+                year,
+                period,
+                draft,
+                from_profile,
+                build,
+                checked,
+                paid,
+            )
         })
         .and_then(|result| result)
         .map_err(host_error)?;
@@ -5381,7 +5432,8 @@ fn screen_form_validate(
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
-            let (mut values, mut errors, status) = evaluate_here(kind, &mut draft, &rows_checked, paid)?;
+            let (mut values, mut errors, status) =
+                evaluate_here(kind, &mut draft, &rows_checked, paid)?;
             if let Some(mark) = &sample {
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
@@ -6786,7 +6838,13 @@ mod tests {
         let day = |m, d| chrono::NaiveDate::from_ymd_opt(2026, m, d).unwrap();
         let mut draft = open("2551Q", 1)["draft"].clone();
         draft["schedule_1"] = json!([{"atc": "PT010", "atc_description": "Persons exempt from VAT", "taxable_amount": 20998.0, "tax_rate": 0.03, "tax_due": 629.94}]);
-        let validate = |draft: &Value| call_async("screen_form_validate", vec!["2551Q".into(), json(draft.clone())]).unwrap();
+        let validate = |draft: &Value| {
+            call_async(
+                "screen_form_validate",
+                vec!["2551Q".into(), json(draft.clone())],
+            )
+            .unwrap()
+        };
         let stale = |checked: &Value| checked["errors"].to_string().contains("is stale");
         // computed and sent on the 20th, before Q1's April 25 deadline
         let on_time = with_clock(day(4, 20), || validate(&draft))["draft"].clone();
@@ -6794,13 +6852,22 @@ mod tests {
         let (_, raw) = raw_row(id);
         let filed: Value = serde_json::from_str(&raw).unwrap();
         // unpaid in October: the penalties have grown
-        assert!(stale(&with_clock(day(10, 29), || validate(&filed))), "an unpaid return's penalties grow");
+        assert!(
+            stale(&with_clock(day(10, 29), || validate(&filed))),
+            "an unpaid return's penalties grow"
+        );
         // paid: they stay as filed
         // The mini app records payments (agent builds); every build reads them.
         #[cfg(feature = "agent")]
         with_database(|db| {
-            crate::mini_app::payments::mark_paid(db, &serde_json::from_value(json!({"tin": TIN, "form": "2551Q", "period": "2026-Q1"})).unwrap(), day(10, 29), &std::env::temp_dir())
-                .map_err(HostError::new)
+            crate::mini_app::payments::mark_paid(
+                db,
+                &serde_json::from_value(json!({"tin": TIN, "form": "2551Q", "period": "2026-Q1"}))
+                    .unwrap(),
+                day(10, 29),
+                &std::env::temp_dir(),
+            )
+            .map_err(HostError::new)
         })
         .unwrap();
         #[cfg(not(feature = "agent"))]

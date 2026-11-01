@@ -28,7 +28,10 @@ use super::apps::{self, Catalog};
 use super::bridge::{Bridge, Call};
 use super::v1::{self, Caller, Origin, app_tools, manifest as v1_manifest};
 use super::watch::Watch;
-use super::{answers, calendar, cards, confirm, lookup, payments, plain, resolve, return_view, scope, taxpayer};
+use super::{
+    answers, calendar, cards, confirm, lookup, payments, plain, resolve, return_view, scope,
+    taxpayer,
+};
 use crate::agent::{Session, UiQueue};
 
 pub(crate) const SERVER_NAME: &str = "bir-mini-app";
@@ -307,7 +310,10 @@ impl MiniServer {
         // Reserved tools first; an unknown `rox.*` is method-not-found (7.9).
         if name.starts_with("rox.") {
             return match self.v1.reserved(&self.catalog, name, arguments) {
-                None => Err((METHOD_NOT_FOUND, format!("{name} is not a tool of this plugin"))),
+                None => Err((
+                    METHOD_NOT_FOUND,
+                    format!("{name} is not a tool of this plugin"),
+                )),
                 Some(Err(message)) => Err((INVALID_REQUEST, message)),
                 Some(Ok(result)) => Ok(now(result)),
             };
@@ -339,7 +345,9 @@ impl MiniServer {
         }
         let asked = arguments.clone();
         let mut arguments = arguments.clone();
-        let has_ticket = Value::Object(arguments.clone()).to_string().contains("tkt_");
+        let has_ticket = Value::Object(arguments.clone())
+            .to_string()
+            .contains("tkt_");
         if (has_ticket || caller.origin == Origin::App)
             && let Err(message) = database(|db| v1::expand(db, name, &mut arguments, caller.origin))
         {
@@ -354,14 +362,26 @@ impl MiniServer {
                 _ => Ok(()),
             };
             if let Err(message) = backed {
-                return Ok(now(v1::fail("permission_denied", &format!("{name}: {message}"))));
+                return Ok(now(v1::fail(
+                    "permission_denied",
+                    &format!("{name}: {message}"),
+                )));
             }
             if matches!(name, BIR_RECORD_PAYMENT | BIR_CONFIRM_FILING) {
-                let text = |key: &str| arguments.get(key).and_then(Value::as_str).map(str::to_string);
-                let inside = Watch::of(&caller.params)
-                    .and_then(|watch| database(|db| watch.allows(db, text("tin").as_deref(), text("form").as_deref())));
+                let text = |key: &str| {
+                    arguments
+                        .get(key)
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                };
+                let inside = Watch::of(&caller.params).and_then(|watch| {
+                    database(|db| watch.allows(db, text("tin").as_deref(), text("form").as_deref()))
+                });
                 if let Err(message) = inside {
-                    return Ok(now(v1::fail("permission_denied", &format!("{name}: {message}"))));
+                    return Ok(now(v1::fail(
+                        "permission_denied",
+                        &format!("{name}: {message}"),
+                    )));
                 }
             }
         }
@@ -374,7 +394,9 @@ impl MiniServer {
         let reply = if name == BIR_MARK_PAID && caller.origin == Origin::Agent {
             Ok(now(cards::mark_paid_card(&arguments)))
         } else if name == BIR_PAYMENT_RECEIPT {
-            Ok(now(self.payment_receipt(&arguments, caller.origin == Origin::App)))
+            Ok(now(
+                self.payment_receipt(&arguments, caller.origin == Origin::App)
+            ))
         } else {
             self.dispatch(name, &arguments)
         };
@@ -439,7 +461,10 @@ impl MiniServer {
         match database(|db| payments::receipt(db, arguments, today)) {
             Err(message) => tool_error(format!("{BIR_PAYMENT_RECEIPT}: {message}")),
             Ok(receipt) if for_app => {
-                let form = receipt.summary["form"].as_str().unwrap_or("receipt").to_string();
+                let form = receipt.summary["form"]
+                    .as_str()
+                    .unwrap_or("receipt")
+                    .to_string();
                 let mut result = app_tools::preview_result(&form, receipt.html, receipt.title);
                 result["structuredContent"]["gmail_url"] = receipt.summary["gmail_url"].clone();
                 result
@@ -458,11 +483,15 @@ impl MiniServer {
             .and_then(Value::as_str)
             .and_then(taxform::form_code_of)
             .ok_or("`form` must be a BIR form code")?;
-        let ticket = arguments.get("tin").and_then(Value::as_str).ok_or("`tin` must be the taxpayer's ticket")?;
+        let ticket = arguments
+            .get("tin")
+            .and_then(Value::as_str)
+            .ok_or("`tin` must be the taxpayer's ticket")?;
         let tin = database(|db| {
             let subject = app_tools::subject_of(db, ticket)?;
             let tin = subject.full_tin();
-            db.grant_send(&tin, form).map_err(|error| error.to_string())?;
+            db.grant_send(&tin, form)
+                .map_err(|error| error.to_string())?;
             Ok(tin)
         })?;
         self.once_grants.push((tin, form.to_string()));
@@ -485,9 +514,19 @@ impl MiniServer {
     /// The attach card's Upload (`bir_card_attach`): the uploaded bytes
     /// kept as one of the return's attachments, next to the receipts.
     fn card_attach(&mut self, arguments: &Map<String, Value>) -> Result<Value, String> {
-        let upload = arguments.get("upload").and_then(Value::as_str).ok_or("`upload` is required")?;
-        let bytes = self.v1.uploads.take(upload).ok_or("`upload` is not an upload in progress")?;
-        let dir = payments::receipts_dir().parent().map(|dir| dir.join("attachments")).unwrap_or_else(|| "attachments".into());
+        let upload = arguments
+            .get("upload")
+            .and_then(Value::as_str)
+            .ok_or("`upload` is required")?;
+        let bytes = self
+            .v1
+            .uploads
+            .take(upload)
+            .ok_or("`upload` is not an upload in progress")?;
+        let dir = payments::receipts_dir()
+            .parent()
+            .map(|dir| dir.join("attachments"))
+            .unwrap_or_else(|| "attachments".into());
         let mut rest = arguments.clone();
         rest.remove("upload");
         let today = taxform::today();
@@ -497,12 +536,20 @@ impl MiniServer {
     /// The import card's read (`bir_card_import`): rows read and skipped;
     /// the total is kept for its Fill under a new import id.
     fn card_import(&mut self, arguments: &Map<String, Value>) -> Result<Value, String> {
-        let upload = arguments.get("upload").and_then(Value::as_str).ok_or("`upload` is required")?;
-        let bytes = self.v1.uploads.take(upload).ok_or("`upload` is not an upload in progress")?;
+        let upload = arguments
+            .get("upload")
+            .and_then(Value::as_str)
+            .ok_or("`upload` is required")?;
+        let bytes = self
+            .v1
+            .uploads
+            .take(upload)
+            .ok_or("`upload` is not an upload in progress")?;
         let mut rest = arguments.clone();
         rest.remove("upload");
         let today = taxform::today();
-        let (mut answer, imported) = database(|db| return_view::import_read(db, &rest, &bytes, today))?;
+        let (mut answer, imported) =
+            database(|db| return_view::import_read(db, &rest, &bytes, today))?;
         let mut stamp = [0u8; 8];
         getrandom::fill(&mut stamp).map_err(|error| error.to_string())?;
         let id = format!("imp_{}", hex::encode(stamp));
@@ -516,11 +563,16 @@ impl MiniServer {
 
     /// The import card's Fill (`bir_card_import_fill {ticket, import}`).
     fn card_import_fill(&mut self, arguments: &Map<String, Value>) -> Result<Value, String> {
-        let id = arguments.get("import").and_then(Value::as_str).ok_or("`import` is required")?;
+        let id = arguments
+            .get("import")
+            .and_then(Value::as_str)
+            .ok_or("`import` is required")?;
         let today = taxform::today();
         let mut target_args = arguments.clone();
         target_args.remove("import");
-        let value = database(|db| return_view::target(db, &target_args, today).map(|target| target.value()))?;
+        let value = database(|db| {
+            return_view::target(db, &target_args, today).map(|target| target.value())
+        })?;
         let at = self
             .imports
             .iter()
@@ -539,7 +591,8 @@ impl MiniServer {
         }
         let _ = database(|db| {
             for (tin, form) in &grants {
-                db.revoke_send(tin, form).map_err(|error| error.to_string())?;
+                db.revoke_send(tin, form)
+                    .map_err(|error| error.to_string())?;
             }
             Ok(())
         });
@@ -606,7 +659,9 @@ impl MiniServer {
             app_tools::UPLOAD => now(call_result(self.v1.uploads.append(arguments))),
             app_tools::PRINT_PREVIEW => now(print_preview(arguments, today)),
             app_tools::ALLOW_SEND => now(call_result(self.allow_send_once(arguments))),
-            answers::ADD_TAXPAYER => now(call_result(database(|db| answers::add_taxpayer(db, arguments)))),
+            answers::ADD_TAXPAYER => now(call_result(database(|db| {
+                answers::add_taxpayer(db, arguments)
+            }))),
             answers::CANCEL_SEND => now(call_result(self.cancel_send(arguments))),
             // an app names the return by its ticket: the TIN is expanded here
             BIR_CARD_REMOVE_PAYMENT => now(call_result(database(|db| {
@@ -632,8 +687,13 @@ impl MiniServer {
                 } else {
                     None
                 };
-                let scope = prepared.as_ref().and_then(|prepared| prepared.scope.clone());
-                match self.bridge.call(request.function, request.args.clone(), scope.as_deref()) {
+                let scope = prepared
+                    .as_ref()
+                    .and_then(|prepared| prepared.scope.clone());
+                match self
+                    .bridge
+                    .call(request.function, request.args.clone(), scope.as_deref())
+                {
                     Call::Ready(Ok(value)) => now(call_result(match &prepared {
                         Some(prepared) => {
                             database(|db| app_tools::finish(db, &request, prepared, value))
@@ -683,21 +743,37 @@ impl MiniServer {
         let mut stamp = [0u8; 8];
         getrandom::fill(&mut stamp).map_err(|error| error.to_string())?;
         let path = std::env::temp_dir().join(format!("bir-receipt-{}.{ext}", hex::encode(stamp)));
-        std::fs::write(&path, bytes).map_err(|error| format!("cannot keep the receipt: {error}"))?;
-        arguments.insert("proof_path".into(), Value::String(path.display().to_string()));
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("cannot keep the receipt: {error}"))?;
+        arguments.insert(
+            "proof_path".into(),
+            Value::String(path.display().to_string()),
+        );
         Ok(Some(path))
     }
 
     /// One tool of this server's own, its arguments already in TINs.
-    fn dispatch(&mut self, name: &str, arguments: &Map<String, Value>) -> Result<Reply, (i64, String)> {
+    fn dispatch(
+        &mut self,
+        name: &str,
+        arguments: &Map<String, Value>,
+    ) -> Result<Reply, (i64, String)> {
         match name {
             BIR_STATUS => Ok(now(self.status())),
             BIR_APP_OPEN => Ok(now(self.app_open(arguments))),
             BIR_RESOLVE => Ok(now(self.resolve(arguments))),
             BIR_DRAFTS_LIST => Ok(now(self.drafts_list(arguments))),
             BIR_CALENDAR_GET => Ok(now(self.on_database(name, arguments, calendar::get))),
-            taxpayer::PROFILE_FORMS => Ok(now(self.on_database(name, arguments, taxpayer::profile_forms))),
-            answers::FIND_TAXPAYER => Ok(now(self.on_database(name, arguments, answers::find_taxpayer))),
+            taxpayer::PROFILE_FORMS => Ok(now(self.on_database(
+                name,
+                arguments,
+                taxpayer::profile_forms,
+            ))),
+            answers::FIND_TAXPAYER => Ok(now(self.on_database(
+                name,
+                arguments,
+                answers::find_taxpayer,
+            ))),
             answers::TAXPAYER => Ok(now(self.on_database(name, arguments, answers::taxpayer))),
             answers::PENALTY => Ok(now(self.on_database(name, arguments, answers::penalty))),
             answers::UNPAID => Ok(now(self.on_database(name, arguments, answers::unpaid))),
@@ -709,48 +785,83 @@ impl MiniServer {
             lookup::LOOKUP => Ok(now(self.on_database(name, arguments, lookup::lookup))),
             return_view::RETURN => Ok(now(self.on_database(name, arguments, return_view::view))),
             calendar::DEADLINE => Ok(now(self.on_database(name, arguments, calendar::deadline))),
-            taxpayer::RETURNS_LIST => Ok(now(self.on_database(name, arguments, taxpayer::returns_list))),
-            BIR_CALENDAR_SET => Ok(now(self.on_database(name, arguments, |db, arguments, _| {
-                calendar::set(db, arguments)
-            }))),
+            taxpayer::RETURNS_LIST => Ok(now(self.on_database(
+                name,
+                arguments,
+                taxpayer::returns_list,
+            ))),
+            BIR_CALENDAR_SET => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, _| calendar::set(db, arguments),
+            ))),
             BIR_CALENDAR_CHANGES => Ok(now(self.on_database(name, arguments, calendar::changes))),
-            BIR_CALENDAR_LINK => Ok(now(self.on_database(name, arguments, |db, arguments, _| {
-                calendar::link(db, arguments)
-            }))),
-            BIR_CONFIRMATION_SEARCH => Ok(now(routine_query(self.on_database(name, arguments, confirm::search)))),
+            BIR_CALENDAR_LINK => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, _| calendar::link(db, arguments),
+            ))),
+            BIR_CONFIRMATION_SEARCH => Ok(now(routine_query(self.on_database(
+                name,
+                arguments,
+                confirm::search,
+            )))),
             BIR_CONFIRM_FILING => Ok(now(self.on_database(name, arguments, confirm::confirm))),
             // Payments and the printable filing record.
-            BIR_PAYMENT_SEARCH => Ok(now(routine_query(self.on_database(name, arguments, payments::search)))),
-            BIR_PAYMENT_PARSE => Ok(now(self.on_database(name, arguments, |db, arguments, today| {
-                if let (Some(Value::String(id)), Some(Value::String(text))) = (arguments.get("message_id"), arguments.get("text")) {
-                    payments::remember_email(id, text);
-                }
-                payments::parse(arguments, today).map(|parsed| payments::with_recorded(db, parsed, today))
-            }))),
-            BIR_RECORD_PAYMENT => Ok(now(self.on_database(name, arguments, |db, arguments, today| {
-                payments::record(db, arguments, today, &payments::receipts_dir())
-            }))),
-            BIR_MARK_PAID => Ok(now(self.on_database(name, arguments, |db, arguments, today| {
-                payments::mark_paid(db, arguments, today, &payments::receipts_dir())
-            }))),
-            BIR_PAYMENTS_LIST => Ok(now(self.on_database(name, arguments, payments::list))),
-            BIR_FILING_RECORD => Ok(now(self.on_database(name, arguments, |db, arguments, today| {
-                payments::filing_record(db, arguments, today, &std::env::temp_dir())
-            }))),
-            // Deadline overrides.
-            name if DEADLINE_TOOLS.contains(&name) => {
-                Ok(now(self.on_database(name, arguments, |db, arguments, today| {
-                    match name {
-                        BIR_DEADLINE_OVERRIDE_SET => {
-                            bir_core::deadline_overrides::set(db, arguments, today)
-                        }
-                        BIR_DEADLINE_OVERRIDES_LIST => {
-                            bir_core::deadline_overrides::list(db, arguments)
-                        }
-                        _ => bir_core::deadline_overrides::remove(db, arguments, today),
+            BIR_PAYMENT_SEARCH => Ok(now(routine_query(self.on_database(
+                name,
+                arguments,
+                payments::search,
+            )))),
+            BIR_PAYMENT_PARSE => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, today| {
+                    if let (Some(Value::String(id)), Some(Value::String(text))) =
+                        (arguments.get("message_id"), arguments.get("text"))
+                    {
+                        payments::remember_email(id, text);
                     }
-                })))
-            }
+                    payments::parse(arguments, today)
+                        .map(|parsed| payments::with_recorded(db, parsed, today))
+                },
+            ))),
+            BIR_RECORD_PAYMENT => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, today| {
+                    payments::record(db, arguments, today, &payments::receipts_dir())
+                },
+            ))),
+            BIR_MARK_PAID => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, today| {
+                    payments::mark_paid(db, arguments, today, &payments::receipts_dir())
+                },
+            ))),
+            BIR_PAYMENTS_LIST => Ok(now(self.on_database(name, arguments, payments::list))),
+            BIR_FILING_RECORD => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, today| {
+                    payments::filing_record(db, arguments, today, &std::env::temp_dir())
+                },
+            ))),
+            // Deadline overrides.
+            name if DEADLINE_TOOLS.contains(&name) => Ok(now(self.on_database(
+                name,
+                arguments,
+                |db, arguments, today| match name {
+                    BIR_DEADLINE_OVERRIDE_SET => {
+                        bir_core::deadline_overrides::set(db, arguments, today)
+                    }
+                    BIR_DEADLINE_OVERRIDES_LIST => {
+                        bir_core::deadline_overrides::list(db, arguments)
+                    }
+                    _ => bir_core::deadline_overrides::remove(db, arguments, today),
+                },
+            ))),
             _ => {
                 let tool = HOST_TOOLS
                     .contains(&name)
@@ -827,16 +938,27 @@ impl MiniServer {
         // For the health card: the Buwiz server it signs in with, and (once
         // the database is open) the taxpayers and the sending queue.
         if let Ok((origin, _)) = signin::configured_origins() {
-            status["server"] = json!(origin.trim_start_matches("https://").trim_start_matches("http://"));
+            status["server"] = json!(
+                origin
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+            );
         }
         if signed_in {
             let _ = database(|db| {
-                let queue = db.list_all_queued_submissions().map_err(|error| error.to_string())?;
+                let queue = db
+                    .list_all_queued_submissions()
+                    .map_err(|error| error.to_string())?;
                 status["queue"] = json!({
                     "waiting": queue.iter().filter(|row| row.status == bir_core::forms::FilingStatus::Queued).count(),
                     "sent_unconfirmed": queue.iter().filter(|row| row.status == bir_core::forms::FilingStatus::Submitted).count(),
                 });
-                status["taxpayers"] = json!(resolve::branches(db, None)?.iter().filter(|branch| branch.is_head_office).count());
+                status["taxpayers"] = json!(
+                    resolve::branches(db, None)?
+                        .iter()
+                        .filter(|branch| branch.is_head_office)
+                        .count()
+                );
                 Ok(())
             });
         }
@@ -849,8 +971,9 @@ impl MiniServer {
     /// in, whatever the account gate opened with at launch.
     fn sign_in(&mut self) -> (bool, Option<String>) {
         let session = match &self.gate {
-            Gate::Desktop => signin::configured_origins()
-                .and_then(|(origin, _)| signin::signed_in(&origin, &DesktopStore, signin::unix_now())),
+            Gate::Desktop => signin::configured_origins().and_then(|(origin, _)| {
+                signin::signed_in(&origin, &DesktopStore, signin::unix_now())
+            }),
             Gate::Fixed(_) => Ok(()),
         };
         match session {
@@ -943,9 +1066,17 @@ impl MiniServer {
                 if let Some(draft_id) = draft_id {
                     props["draft_id"] = json!(draft_id);
                 }
-                (props, format!("Opening {} on {}…", app.title, target.title), format!("BIR Form {}", target.title))
+                (
+                    props,
+                    format!("Opening {} on {}…", app.title, target.title),
+                    format!("BIR Form {}", target.title),
+                )
             }
-            (_, _, None) => (json!({}), format!("Opening {}…", app.title), app.title.clone()),
+            (_, _, None) => (
+                json!({}),
+                format!("Opening {}…", app.title),
+                app.title.clone(),
+            ),
             ("tax-profile", None, Some(tin)) => {
                 let (mut props, name) = database(|db| resolve::app_profile(db, &tin))?
                     .ok_or_else(|| {
@@ -962,7 +1093,11 @@ impl MiniServer {
                     }
                     props["branch"] = json!(format!("{digits:0>5}"));
                 }
-                (props, format!("Opening {} for {name}…", app.title), format!("{} · {name}", app.title))
+                (
+                    props,
+                    format!("Opening {} for {name}…", app.title),
+                    format!("{} · {name}", app.title),
+                )
             }
             (_, _, Some(tin)) => {
                 let (row, _) = self.taxpayer(&tin)?;
@@ -1035,7 +1170,11 @@ impl MiniServer {
         &mut self,
         name: &str,
         arguments: &Map<String, Value>,
-        run: impl FnOnce(&bir_core::db::Database, &Map<String, Value>, chrono::NaiveDate) -> Result<Value, String>,
+        run: impl FnOnce(
+            &bir_core::db::Database,
+            &Map<String, Value>,
+            chrono::NaiveDate,
+        ) -> Result<Value, String>,
     ) -> Value {
         if let Err(message) = self.allow() {
             return tool_error(message);
@@ -1137,23 +1276,45 @@ fn database<R>(
 /// itself. The page keeps its TINs and names as printed: it goes to Rox's
 /// viewer, never to the app or the model.
 fn print_preview(arguments: &Map<String, Value>, today: chrono::NaiveDate) -> Value {
-    let form = arguments.get("form").and_then(Value::as_str).unwrap_or_default().to_string();
+    let form = arguments
+        .get("form")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let page = database(|db| app_tools::preview_ask(db, arguments)).and_then(|ask| match ask {
         app_tools::PreviewAsk::Draft(args) => {
-            let arguments = gpui_shell::HostArguments::new(args.into_iter().map(crate::bir_module::json));
-            crate::screen_form_module::print_preview_page(&arguments).map_err(|error| error.message().to_string())
+            let arguments =
+                gpui_shell::HostArguments::new(args.into_iter().map(crate::bir_module::json));
+            crate::screen_form_module::print_preview_page(&arguments)
+                .map_err(|error| error.message().to_string())
         }
-        app_tools::PreviewAsk::Period { tin, form, year, quarter } => crate::bir_module::with_database(|db| {
-            let (fields, receipt) = crate::bir_module::print_fields(db, &tin, &form, year, Some(quarter))?;
-            let slug = crate::bir_module::print_slug_for(&form).ok_or_else(|| HostError::new(format!("Form {form} has no print sheet")))?;
-            let name = db.get_profile_by_tin(&tin).ok().flatten().map(|profile| profile.full_name.clone());
+        app_tools::PreviewAsk::Period {
+            tin,
+            form,
+            year,
+            quarter,
+        } => crate::bir_module::with_database(|db| {
+            let (fields, receipt) =
+                crate::bir_module::print_fields(db, &tin, &form, year, Some(quarter))?;
+            let slug = crate::bir_module::print_slug_for(&form)
+                .ok_or_else(|| HostError::new(format!("Form {form} has no print sheet")))?;
+            let name = db
+                .get_profile_by_tin(&tin)
+                .ok()
+                .flatten()
+                .map(|profile| profile.full_name.clone());
             crate::bir_module::print_preview_page(slug, &form, &fields, receipt.as_ref(), name)
         })
         .map_err(|error| error.message().to_string()),
-        app_tools::PreviewAsk::Record(args) => database(|db| payments::filing_record_page(db, &args, today)).map(|record| {
-            let title = format!("BIR Form {} \u{2014} {} \u{b7} filing record", record.form, record.taxpayer);
-            (record.html, title)
-        }),
+        app_tools::PreviewAsk::Record(args) => {
+            database(|db| payments::filing_record_page(db, &args, today)).map(|record| {
+                let title = format!(
+                    "BIR Form {} \u{2014} {} \u{b7} filing record",
+                    record.form, record.taxpayer
+                );
+                (record.html, title)
+            })
+        }
     });
     match page {
         Ok((html, title)) => app_tools::preview_result(&form, html, title),
@@ -1190,8 +1351,14 @@ fn now(result: Value) -> Reply {
 /// assistant's, not one of them).
 fn is_app_only(name: &str) -> bool {
     app_tools::function_of(name).is_some()
-        || [app_tools::TICKET_SUBJECT, app_tools::TICKET_ISSUE, app_tools::UPLOAD, app_tools::PRINT_PREVIEW, app_tools::ALLOW_SEND]
-            .contains(&name)
+        || [
+            app_tools::TICKET_SUBJECT,
+            app_tools::TICKET_ISSUE,
+            app_tools::UPLOAD,
+            app_tools::PRINT_PREVIEW,
+            app_tools::ALLOW_SEND,
+        ]
+        .contains(&name)
         || CARD_TOOLS.contains(&name)
 }
 
@@ -1771,7 +1938,11 @@ mod tests {
         assert!(capabilities["resources"].is_object());
         assert_eq!(reply["result"]["serverInfo"]["name"], SERVER_NAME);
         let instructions = reply["result"]["instructions"].as_str().unwrap();
-        assert!(instructions.chars().count() <= 4000, "{}", instructions.chars().count());
+        assert!(
+            instructions.chars().count() <= 4000,
+            "{}",
+            instructions.chars().count()
+        );
         assert!(!instructions.contains("bir_call"));
         assert!(!instructions.contains("000000000"));
     }
@@ -1779,14 +1950,30 @@ mod tests {
     #[test]
     fn tools_list_has_named_app_tools_and_no_generic_bridge() {
         let names = names();
-        for wanted in [BIR_STATUS, BIR_APP_OPEN, BIR_RESOLVE, BIR_DRAFTS_LIST, "bir_form_open", "bir_form_fill"] {
+        for wanted in [
+            BIR_STATUS,
+            BIR_APP_OPEN,
+            BIR_RESOLVE,
+            BIR_DRAFTS_LIST,
+            "bir_form_open",
+            "bir_form_fill",
+        ] {
             assert!(names.iter().any(|name| name == wanted), "{wanted} missing");
         }
         for wanted in PAYMENT_TOOLS.iter().chain(DEADLINE_TOOLS.iter()) {
             assert!(names.iter().any(|name| name == wanted), "{wanted} missing");
         }
-        for gone in ["bir_call", "bir_list_apps", "bir_connect", "bir_form_review", "bir_form_preview"] {
-            assert!(!names.iter().any(|name| name == gone), "{gone} must not be offered");
+        for gone in [
+            "bir_call",
+            "bir_list_apps",
+            "bir_connect",
+            "bir_form_review",
+            "bir_form_preview",
+        ] {
+            assert!(
+                !names.iter().any(|name| name == gone),
+                "{gone} must not be offered"
+            );
         }
         for reserved in v1::RESERVED {
             assert!(names.iter().any(|name| name == reserved));
@@ -1800,14 +1987,23 @@ mod tests {
         for tool in tool_list()["tools"].as_array().unwrap() {
             let name = tool["name"].as_str().unwrap();
             let app_only = is_app_only(name);
-            assert_eq!(app_only, name.starts_with(app_tools::PREFIX) && name != BIR_APP_OPEN
-                || name == app_tools::TICKET_SUBJECT || name == app_tools::TICKET_ISSUE || name == app_tools::ALLOW_SEND
-                || name.starts_with("bir_card_"), "{name}");
+            assert_eq!(
+                app_only,
+                name.starts_with(app_tools::PREFIX) && name != BIR_APP_OPEN
+                    || name == app_tools::TICKET_SUBJECT
+                    || name == app_tools::TICKET_ISSUE
+                    || name == app_tools::ALLOW_SEND
+                    || name.starts_with("bir_card_"),
+                "{name}"
+            );
             let audience = &tool["_meta"]["rox/audience"];
             if app_only {
                 assert_eq!(audience, &json!(["app"]), "{name}");
             } else {
-                assert!(audience.is_null(), "{name} must stay on the agent's surface");
+                assert!(
+                    audience.is_null(),
+                    "{name} must stay on the agent's surface"
+                );
             }
         }
         let unique: std::collections::HashSet<&String> = names.iter().collect();
@@ -1818,14 +2014,24 @@ mod tests {
                 continue;
             }
             assert!(name.starts_with("bir_") && name.len() <= 63, "{name}");
-            assert!(tool["annotations"]["readOnlyHint"].is_boolean(), "{name} has no readOnlyHint");
-            assert!(tool["description"].as_str().unwrap().chars().count() <= 1024, "{name}");
+            assert!(
+                tool["annotations"]["readOnlyHint"].is_boolean(),
+                "{name} has no readOnlyHint"
+            );
+            assert!(
+                tool["description"].as_str().unwrap().chars().count() <= 1024,
+                "{name}"
+            );
         }
         // every tool an app or routine names is served
         let manifest = v1_manifest::unsigned(&Catalog::Embedded).unwrap();
         for app in manifest["apps"].as_array().unwrap() {
             for tool in app["permissions"]["tools"].as_array().unwrap() {
-                assert!(names.iter().any(|name| name == tool), "{} names {tool}", app["id"]);
+                assert!(
+                    names.iter().any(|name| name == tool),
+                    "{} names {tool}",
+                    app["id"]
+                );
             }
         }
         for routine in manifest["routines"].as_array().unwrap() {
@@ -1837,19 +2043,37 @@ mod tests {
     #[test]
     fn app_tools_answer_apps_only_and_only_what_the_app_lists() {
         let mut server = server();
-        let index = call_as(&mut server, app("forms"), "bir_app_screen_forms_index", json!({}));
+        let index = call_as(
+            &mut server,
+            app("forms"),
+            "bir_app_screen_forms_index",
+            json!({}),
+        );
         assert_eq!(index["isError"], false, "{index}");
         assert!(index["structuredContent"]["result"].is_array());
         // the assistant, or no caller at all, is refused
         for caller in [agent(), json!(null)] {
             let refused = call_as(&mut server, caller, "bir_app_screen_forms_index", json!({}));
-            assert_eq!(refused["structuredContent"]["code"], "permission_denied", "{refused}");
+            assert_eq!(
+                refused["structuredContent"]["code"], "permission_denied",
+                "{refused}"
+            );
         }
         // the calendar does not list it
-        let other = call_as(&mut server, app("calendar"), "bir_app_screen_forms_index", json!({}));
+        let other = call_as(
+            &mut server,
+            app("calendar"),
+            "bir_app_screen_forms_index",
+            json!({}),
+        );
         assert_eq!(other["structuredContent"]["code"], "permission_denied");
         // an app may not call a tool its manifest entry leaves out
-        let profiles = call_as(&mut server, app("deadlines"), "bir_profiles_list", json!({}));
+        let profiles = call_as(
+            &mut server,
+            app("deadlines"),
+            "bir_profiles_list",
+            json!({}),
+        );
         assert_eq!(profiles["structuredContent"]["code"], "permission_denied");
     }
 
@@ -1860,7 +2084,12 @@ mod tests {
         save_taxpayer(&mut server, &format!("{OTHER}00000"), "Other Taxpayer");
         let mine = ticket_of(ROOT);
         // naming a taxpayer needs a ticket
-        let bare = call_as(&mut server, app("forms"), "bir_app_list_tax_years", json!({"args": [TIN]}));
+        let bare = call_as(
+            &mut server,
+            app("forms"),
+            "bir_app_list_tax_years",
+            json!({"args": [TIN]}),
+        );
         assert_eq!(bare["isError"], true, "{bare}");
         let held = call_as(
             &mut server,
@@ -1877,7 +2106,12 @@ mod tests {
             json!({"args": [format!("{OTHER}00000")], "ticket": mine}),
         );
         assert_eq!(other["isError"], true);
-        assert!(other["content"][0]["text"].as_str().unwrap().contains("outside this app's scope"));
+        assert!(
+            other["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("outside this app's scope")
+        );
         // a ticket BIR did not issue
         let forged = call_as(
             &mut server,
@@ -1887,19 +2121,54 @@ mod tests {
         );
         assert_eq!(forged["isError"], true);
         // a list across taxpayers carries each one's ticket; with a ticket, only that one
-        let all = call_as(&mut server, app("forms"), "bir_app_list_taxpayers", json!({}));
-        let rows = all["structuredContent"]["result"].as_array().unwrap().clone();
+        let all = call_as(
+            &mut server,
+            app("forms"),
+            "bir_app_list_taxpayers",
+            json!({}),
+        );
+        let rows = all["structuredContent"]["result"]
+            .as_array()
+            .unwrap()
+            .clone();
         assert_eq!(rows.len(), 2);
-        assert!(rows.iter().all(|row| row["ticket"].as_str().is_some_and(tickets::is_ticket)));
-        let scoped = call_as(&mut server, app("forms"), "bir_app_list_taxpayers", json!({"ticket": mine}));
-        let rows = scoped["structuredContent"]["result"].as_array().unwrap().clone();
+        assert!(
+            rows.iter()
+                .all(|row| row["ticket"].as_str().is_some_and(tickets::is_ticket))
+        );
+        let scoped = call_as(
+            &mut server,
+            app("forms"),
+            "bir_app_list_taxpayers",
+            json!({"ticket": mine}),
+        );
+        let rows = scoped["structuredContent"]["result"]
+            .as_array()
+            .unwrap()
+            .clone();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["ticket"], mine);
         // the app learns its ticket's TIN from BIR, the assistant does not
-        let subject = call_as(&mut server, app("forms"), app_tools::TICKET_SUBJECT, json!({"ticket": mine}));
-        assert_eq!(subject["structuredContent"]["result"]["tin"], TIN, "{subject}");
-        assert_eq!(subject["structuredContent"]["result"]["title"], "Scratch Taxpayer");
-        let refused = call_as(&mut server, agent(), app_tools::TICKET_SUBJECT, json!({"ticket": mine}));
+        let subject = call_as(
+            &mut server,
+            app("forms"),
+            app_tools::TICKET_SUBJECT,
+            json!({"ticket": mine}),
+        );
+        assert_eq!(
+            subject["structuredContent"]["result"]["tin"], TIN,
+            "{subject}"
+        );
+        assert_eq!(
+            subject["structuredContent"]["result"]["title"],
+            "Scratch Taxpayer"
+        );
+        let refused = call_as(
+            &mut server,
+            agent(),
+            app_tools::TICKET_SUBJECT,
+            json!({"ticket": mine}),
+        );
         assert_eq!(refused["isError"], true);
     }
 
@@ -1921,7 +2190,10 @@ mod tests {
         assert!(matches!(reply, Reply::Later(_)));
         let reply = reply.wait().unwrap();
         assert_eq!(reply["id"], 7);
-        assert_eq!(reply["result"]["structuredContent"]["result"]["form_code"], "0619E");
+        assert_eq!(
+            reply["result"]["structuredContent"]["result"]["form_code"],
+            "0619E"
+        );
     }
 
     #[test]
@@ -1938,15 +2210,26 @@ mod tests {
         let draft = sample["structuredContent"]["result"]["draft"].clone();
         assert!(draft.is_object(), "{sample}");
         let ask = json!({"ticket": ticket, "form": "2551Q", "draft_json": draft.to_string()});
-        let shown = call_as(&mut server, app("forms"), app_tools::PRINT_PREVIEW, ask.clone());
+        let shown = call_as(
+            &mut server,
+            app("forms"),
+            app_tools::PRINT_PREVIEW,
+            ask.clone(),
+        );
         assert_eq!(shown["isError"], false, "{}", shown["content"]);
         let resource = &shown["content"][0]["resource"];
         assert_eq!(shown["content"][0]["type"], "resource");
         assert_eq!(resource["mimeType"], "text/html");
         let html = resource["text"].as_str().unwrap().to_ascii_lowercase();
-        assert!(html.contains("<html") && html.contains("</html>"), "a whole page");
+        assert!(
+            html.contains("<html") && html.contains("</html>"),
+            "a whole page"
+        );
         assert!(!html.contains("<script"), "a static page");
-        assert_eq!(shown["structuredContent"]["title"], "BIR Form 2551Q \u{2014} Scratch Taxpayer");
+        assert_eq!(
+            shown["structuredContent"]["title"],
+            "BIR Form 2551Q \u{2014} Scratch Taxpayer"
+        );
         // a 2551Q as stored for its quarter: this one has none yet
         let period = call_as(
             &mut server,
@@ -1955,7 +2238,13 @@ mod tests {
             json!({"ticket": ticket, "form": "2551Q", "year": 2026, "quarter": 3}),
         );
         assert_eq!(period["isError"], true);
-        assert!(period["content"][0]["text"].as_str().unwrap().contains("No saved 2551Q draft"), "{period}");
+        assert!(
+            period["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("No saved 2551Q draft"),
+            "{period}"
+        );
         // a saved return prints as stored, by its id
         let opened = call_as(
             &mut server,
@@ -1970,7 +2259,9 @@ mod tests {
             "bir_app_screen_form_save",
             json!({"args": ["0619E", opened], "ticket": ticket}),
         );
-        let id = saved["structuredContent"]["result"]["id"].as_i64().expect("a saved return's id");
+        let id = saved["structuredContent"]["result"]["id"]
+            .as_i64()
+            .expect("a saved return's id");
         let stored = call_as(
             &mut server,
             app("forms"),
@@ -1978,12 +2269,32 @@ mod tests {
             json!({"ticket": ticket, "form": "0619E", "draft_id": id}),
         );
         assert_eq!(stored["isError"], false, "{}", stored["content"]);
-        assert_eq!(stored["structuredContent"]["title"], "BIR Form 0619E \u{2014} Scratch Taxpayer");
-        assert!(stored["content"][0]["resource"]["text"].as_str().unwrap().len() > 1000);
+        assert_eq!(
+            stored["structuredContent"]["title"],
+            "BIR Form 0619E \u{2014} Scratch Taxpayer"
+        );
+        assert!(
+            stored["content"][0]["resource"]["text"]
+                .as_str()
+                .unwrap()
+                .len()
+                > 1000
+        );
         // the assistant, another app, another taxpayer's ticket, no ticket,
         // or nothing to print: refused
-        assert_eq!(call_as(&mut server, agent(), app_tools::PRINT_PREVIEW, ask.clone())["isError"], true);
-        assert_eq!(call_as(&mut server, app("calendar"), app_tools::PRINT_PREVIEW, ask.clone())["isError"], true);
+        assert_eq!(
+            call_as(&mut server, agent(), app_tools::PRINT_PREVIEW, ask.clone())["isError"],
+            true
+        );
+        assert_eq!(
+            call_as(
+                &mut server,
+                app("calendar"),
+                app_tools::PRINT_PREVIEW,
+                ask.clone()
+            )["isError"],
+            true
+        );
         save_taxpayer(&mut server, &format!("{OTHER}00000"), "Other Taxpayer");
         let other = ticket_of(OTHER);
         let mut theirs = ask.clone();
@@ -1999,7 +2310,12 @@ mod tests {
             json!({"ticket": other, "form": "0619E", "draft_id": id}),
             json!({"ticket": ticket, "form": "0619E", "draft_id": id + 1000}),
         ] {
-            let refused = call_as(&mut server, app("forms"), app_tools::PRINT_PREVIEW, bad.clone());
+            let refused = call_as(
+                &mut server,
+                app("forms"),
+                app_tools::PRINT_PREVIEW,
+                bad.clone(),
+            );
             assert_eq!(refused["isError"], true, "{bad}");
         }
         // a sent return's filing record: this one has none yet
@@ -2010,7 +2326,13 @@ mod tests {
             json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3"}),
         );
         assert_eq!(record["isError"], true);
-        assert!(record["content"][0]["text"].as_str().unwrap().contains("has no 2551Q return"), "{record}");
+        assert!(
+            record["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("has no 2551Q return"),
+            "{record}"
+        );
     }
 
     #[test]
@@ -2021,8 +2343,16 @@ mod tests {
         let ask = json!({"tin": ticket, "form": "1601C", "period": "2026-01"});
         let none = call_as(&mut server, agent(), BIR_PAYMENT_RECEIPT, ask.clone());
         assert_eq!(none["isError"], true);
-        assert!(none["content"][0]["text"].as_str().unwrap().contains("no payment is recorded"), "{none}");
-        let email = format!("Payment received. TIN {ROOT}, Form 1601C, period 01/31/2026, PHP 1,000.00, ref TESTREF9");
+        assert!(
+            none["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("no payment is recorded"),
+            "{none}"
+        );
+        let email = format!(
+            "Payment received. TIN {ROOT}, Form 1601C, period 01/31/2026, PHP 1,000.00, ref TESTREF9"
+        );
         let recorded = call_as(
             &mut server,
             agent(),
@@ -2036,19 +2366,34 @@ mod tests {
         assert_card(&card, BIR_PAYMENT_RECEIPT, "receipt");
         assert_no_tin(&card, BIR_PAYMENT_RECEIPT);
         let snapshot = &card["_meta"]["rox/open"]["props"]["snapshot"];
-        assert_eq!(snapshot["gmail_url"], "https://mail.google.com/mail/u/0/#all/18f0a1b2c3d4e5f6");
+        assert_eq!(
+            snapshot["gmail_url"],
+            "https://mail.google.com/mail/u/0/#all/18f0a1b2c3d4e5f6"
+        );
         assert_eq!(snapshot["payments"][0]["reference"], "TESTREF9");
-        assert!(!card.to_string().contains("Payment received"), "no email text");
+        assert!(
+            !card.to_string().contains("Payment received"),
+            "no email text"
+        );
         assert_eq!(card["_meta"]["rox/open"]["props"]["ticket"], ticket);
         // Forms (rox.preview): the page, its title and the Gmail link
         let page = call_as(&mut server, app("forms"), BIR_PAYMENT_RECEIPT, ask.clone());
         assert_eq!(page["isError"], false, "{page}");
         assert_eq!(page["content"][0]["resource"]["mimeType"], "text/html");
         let html = page["content"][0]["resource"]["text"].as_str().unwrap();
-        assert!(html.contains("Payment received. TIN") && html.contains("TESTREF9"), "the email as it reads");
+        assert!(
+            html.contains("Payment received. TIN") && html.contains("TESTREF9"),
+            "the email as it reads"
+        );
         assert!(!html.to_ascii_lowercase().contains("<script"));
-        assert_eq!(page["structuredContent"]["title"], "Receipt \u{b7} 1601C \u{b7} Jan 2026 \u{b7} Scratch Taxpayer");
-        assert_eq!(page["structuredContent"]["gmail_url"], snapshot["gmail_url"]);
+        assert_eq!(
+            page["structuredContent"]["title"],
+            "Receipt \u{b7} 1601C \u{b7} Jan 2026 \u{b7} Scratch Taxpayer"
+        );
+        assert_eq!(
+            page["structuredContent"]["gmail_url"],
+            snapshot["gmail_url"]
+        );
         // the parsed payment email's card leaves the email's text out
         let parsed = call_as(
             &mut server,
@@ -2056,9 +2401,15 @@ mod tests {
             BIR_PAYMENT_PARSE,
             json!({"text": "Agency Name BUREAU OF INTERNAL REVENUE (BIR) | TIN 123456788 | Branch Code 00000 | RDO Code 040 - PASIG | Form Type 2551Q | Tax Type PT | Return Period 09/30/2026 | Transaction Date 10/26/2026 18:57:10 | Transaction Number TEST2026102618575200000001 | Reference Number TESTREF001 | Payment Channel Mobile | Transaction Amount PHP 629.94 | Bank Fee PHP 0.00 | Transaction Fee PHP 20.00 | Total Amount PHP 649.94", "message_id": "test-3"}),
         );
-        assert!(parsed["structuredContent"]["result"]["record"]["raw"].is_string(), "the record keeps the email");
+        assert!(
+            parsed["structuredContent"]["result"]["record"]["raw"].is_string(),
+            "the record keeps the email"
+        );
         let props = &parsed["_meta"]["rox/open"]["props"]["snapshot"];
-        assert!(props["record"].get("raw").is_none() && props.get("raw").is_none(), "{props}");
+        assert!(
+            props["record"].get("raw").is_none() && props.get("raw").is_none(),
+            "{props}"
+        );
         assert_eq!(props["record"]["message_id"], "test-3");
     }
 
@@ -2067,16 +2418,41 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         let ticket = ticket_of(ROOT);
-        let paid = call(&mut server, BIR_MARK_PAID, json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3"}));
+        let paid = call(
+            &mut server,
+            BIR_MARK_PAID,
+            json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3"}),
+        );
         assert_eq!(paid["isError"], false, "{paid}");
-        let listed = call_as(&mut server, app("forms"), BIR_PAYMENTS_LIST, json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3"}));
-        let id = listed["structuredContent"]["result"]["payments"][0]["id"].as_str().unwrap().to_string();
+        let listed = call_as(
+            &mut server,
+            app("forms"),
+            BIR_PAYMENTS_LIST,
+            json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3"}),
+        );
+        let id = listed["structuredContent"]["result"]["payments"][0]["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let args = json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3", "id": id});
-        assert_eq!(call_as(&mut server, agent(), BIR_CARD_REMOVE_PAYMENT, args.clone())["isError"], true, "the assistant cannot");
+        assert_eq!(
+            call_as(&mut server, agent(), BIR_CARD_REMOVE_PAYMENT, args.clone())["isError"],
+            true,
+            "the assistant cannot"
+        );
         let removed = call_as(&mut server, app("forms"), BIR_CARD_REMOVE_PAYMENT, args);
         assert_eq!(removed["isError"], false, "{removed}");
-        let left = call_as(&mut server, app("forms"), BIR_PAYMENTS_LIST, json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3"}));
-        assert_eq!(left["structuredContent"]["result"]["payments"], json!([]), "{left}");
+        let left = call_as(
+            &mut server,
+            app("forms"),
+            BIR_PAYMENTS_LIST,
+            json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3"}),
+        );
+        assert_eq!(
+            left["structuredContent"]["result"]["payments"],
+            json!([]),
+            "{left}"
+        );
     }
 
     #[test]
@@ -2084,13 +2460,21 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         let ticket = ticket_of(ROOT);
-        let result = call_as(&mut server, agent(), BIR_APP_OPEN, json!({"app": "forms", "tin": ticket}));
+        let result = call_as(
+            &mut server,
+            agent(),
+            BIR_APP_OPEN,
+            json!({"app": "forms", "tin": ticket}),
+        );
         assert_eq!(result["isError"], false, "{result}");
         assert_eq!(
             result["_meta"]["rox/open"],
             json!({"app": "forms", "props": {"ticket": ticket}, "ticket": ticket, "title": "BIR Forms · Scratch Taxpayer", "placement": "full"})
         );
-        assert_eq!(result["content"][0]["text"], "Opening BIR Forms for Scratch Taxpayer…");
+        assert_eq!(
+            result["content"][0]["text"],
+            "Opening BIR Forms for Scratch Taxpayer…"
+        );
         let plain = call(&mut server, BIR_APP_OPEN, json!({"app": "calendar"}));
         assert_eq!(
             plain["_meta"]["rox/open"],
@@ -2111,7 +2495,12 @@ mod tests {
         assert_eq!(open["title"], "BIR Form 2551Q · Q3 2026 · Scratch Taxpayer");
         assert!(!open.to_string().contains(ROOT), "{open}");
         // the deadline card opens inline
-        let card = call_as(&mut server, agent(), BIR_APP_OPEN, json!({"app": "deadlines", "tin": ticket}));
+        let card = call_as(
+            &mut server,
+            agent(),
+            BIR_APP_OPEN,
+            json!({"app": "deadlines", "tin": ticket}),
+        );
         assert_eq!(card["_meta"]["rox/open"]["placement"], "inline");
         assert_eq!(card["_meta"]["rox/open"]["props"]["ticket"], ticket);
         for bad in [
@@ -2120,7 +2509,11 @@ mod tests {
             json!({"app": "settings"}),
             json!({"app": "forms", "tin": format!("{OTHER}00000")}),
         ] {
-            assert_eq!(call(&mut server, BIR_APP_OPEN, bad.clone())["isError"], true, "{bad}");
+            assert_eq!(
+                call(&mut server, BIR_APP_OPEN, bad.clone())["isError"],
+                true,
+                "{bad}"
+            );
         }
     }
 
@@ -2129,7 +2522,12 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         let resolve = json!({ "origin": "resolve", "plugin": "dev.goldcoders.bir", "ts": 1 });
-        let token = call_as(&mut server, resolve.clone(), BIR_RESOLVE, json!({"kind": "scope", "name": "taxprofile", "value": ROOT}));
+        let token = call_as(
+            &mut server,
+            resolve.clone(),
+            BIR_RESOLVE,
+            json!({"kind": "scope", "name": "taxprofile", "value": ROOT}),
+        );
         let answer = &token["structuredContent"];
         assert_eq!(answer["result"], "token", "{token}");
         assert!(tickets::is_ticket(answer["ticket"].as_str().unwrap()));
@@ -2142,7 +2540,10 @@ mod tests {
             BIR_RESOLVE,
             json!({"kind": "scope", "name": "taxform", "value": "255", "complete": true}),
         );
-        assert_eq!(suggested["structuredContent"]["result"], "choices", "{suggested}");
+        assert_eq!(
+            suggested["structuredContent"]["result"], "choices",
+            "{suggested}"
+        );
         let missing = call_as(
             &mut server,
             resolve,
@@ -2168,7 +2569,8 @@ mod tests {
         );
         assert_eq!(opened["isError"], false, "{opened}");
         let refused = call_as(&mut server, agent(), "bir_form_send", json!({}));
-        let text: Value = serde_json::from_str(refused["content"][0]["text"].as_str().unwrap()).unwrap();
+        let text: Value =
+            serde_json::from_str(refused["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(text["status"], "approval_required");
         assert_eq!(text["queued"], false);
         // The Forms app's toggle grants it, held to its ticket.
@@ -2180,17 +2582,37 @@ mod tests {
         );
         assert_eq!(granted["isError"], false, "{granted}");
         let checked = call_as(&mut server, agent(), "bir_form_send", json!({}));
-        let text: Value = serde_json::from_str(checked["content"][0]["text"].as_str().unwrap()).unwrap();
-        assert_eq!(text["status"], "invalid", "past the grant, the page's Validate decides");
-        call_as(&mut server, app("forms"), "bir_app_revoke_send", json!({"args": [TIN, "2551Q"], "ticket": ticket}));
+        let text: Value =
+            serde_json::from_str(checked["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            text["status"], "invalid",
+            "past the grant, the page's Validate decides"
+        );
+        call_as(
+            &mut server,
+            app("forms"),
+            "bir_app_revoke_send",
+            json!({"args": [TIN, "2551Q"], "ticket": ticket}),
+        );
         let again = call_as(&mut server, agent(), "bir_form_send", json!({}));
-        let text: Value = serde_json::from_str(again["content"][0]["text"].as_str().unwrap()).unwrap();
+        let text: Value =
+            serde_json::from_str(again["content"][0]["text"].as_str().unwrap()).unwrap();
         assert_eq!(text["status"], "approval_required");
         // what the assistant reads names the taxpayer by ticket
-        let drafts = call_as(&mut server, agent(), BIR_DRAFTS_LIST, json!({"tin": ticket, "form": "2551Q"}));
+        let drafts = call_as(
+            &mut server,
+            agent(),
+            BIR_DRAFTS_LIST,
+            json!({"tin": ticket, "form": "2551Q"}),
+        );
         let listed = &drafts["structuredContent"]["result"]["drafts"];
         assert_eq!(listed[0]["period"], "2026-Q1", "{drafts}");
-        assert!(listed[0]["token"].as_str().unwrap().starts_with("@bir:taxform:tkt_"));
+        assert!(
+            listed[0]["token"]
+                .as_str()
+                .unwrap()
+                .starts_with("@bir:taxform:tkt_")
+        );
         assert!(!drafts.to_string().contains(ROOT), "{drafts}");
     }
 
@@ -2199,30 +2621,60 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         let routine = json!({ "origin": "routine", "plugin": "dev.goldcoders.bir", "ts": 1 });
-        let search = call_as(&mut server, routine.clone(), BIR_CONFIRMATION_SEARCH, json!({}));
+        let search = call_as(
+            &mut server,
+            routine.clone(),
+            BIR_CONFIRMATION_SEARCH,
+            json!({}),
+        );
         assert_eq!(search["isError"], false, "{search}");
         assert!(search["structuredContent"]["result"]["query"].is_string());
         // the broker reads the search text at the top (spec 5.9 step 1)
         for tool in [BIR_CONFIRMATION_SEARCH, BIR_PAYMENT_SEARCH] {
             let search = call_as(&mut server, routine.clone(), tool, json!({}));
-            assert!(search["structuredContent"]["query"].is_string(), "{tool}: {search}");
+            assert!(
+                search["structuredContent"]["query"].is_string(),
+                "{tool}: {search}"
+            );
         }
         for (tool, args) in [
-            (BIR_CALENDAR_SET, json!({"tin": ROOT, "forms": ["2551Q"], "enabled": false})),
-            (BIR_MARK_PAID, json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3"})),
+            (
+                BIR_CALENDAR_SET,
+                json!({"tin": ROOT, "forms": ["2551Q"], "enabled": false}),
+            ),
+            (
+                BIR_MARK_PAID,
+                json!({"tin": ROOT, "form": "2551Q", "period": "2026-Q3"}),
+            ),
             ("bir_form_send", json!({})),
         ] {
             let refused = call_as(&mut server, routine.clone(), tool, args);
-            assert_eq!(refused["structuredContent"]["code"], "permission_denied", "{tool}");
+            assert_eq!(
+                refused["structuredContent"]["code"], "permission_denied",
+                "{tool}"
+            );
         }
         // A routine's query writes nothing, even one the routine's turn may
         // call with its email (its `writes`), and a resolve call neither.
         let query = json!({ "origin": "routine", "plugin": "dev.goldcoders.bir", "routine": "bir-payments", "ts": 1 });
         let resolve = json!({ "origin": "resolve", "plugin": "dev.goldcoders.bir", "ts": 1 });
         for caller in [query, resolve] {
-            let refused = call_as(&mut server, caller.clone(), BIR_RECORD_PAYMENT, payment_record("REF-Q"));
-            assert_eq!(refused["structuredContent"]["code"], "permission_denied", "{caller}");
-            assert!(refused["content"][0]["text"].as_str().unwrap().contains("resolve or routine call"));
+            let refused = call_as(
+                &mut server,
+                caller.clone(),
+                BIR_RECORD_PAYMENT,
+                payment_record("REF-Q"),
+            );
+            assert_eq!(
+                refused["structuredContent"]["code"], "permission_denied",
+                "{caller}"
+            );
+            assert!(
+                refused["content"][0]["text"]
+                    .as_str()
+                    .unwrap()
+                    .contains("resolve or routine call")
+            );
         }
     }
 
@@ -2247,7 +2699,10 @@ mod tests {
     }
 
     fn denied(result: &Value) -> String {
-        assert_eq!(result["structuredContent"]["code"], "permission_denied", "{result}");
+        assert_eq!(
+            result["structuredContent"]["code"], "permission_denied",
+            "{result}"
+        );
         result["content"][0]["text"].as_str().unwrap().to_string()
     }
 
@@ -2259,7 +2714,12 @@ mod tests {
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         let email = "MyEG Philippines Centralized Management Portal\n\nTransaction Success\n\nDear Customer,\n\nThank you for using our service, the following details have been submitted to BUREAU OF INTERNAL REVENUE(BIR):\n\n*Agency Name* BUREAU OF INTERNAL REVENUE (BIR) *TIN* 123456788 *Branch Code* 00000 *RDO Code* 040 - PASIG *Form Type* 2551Q *Tax Type* PT *Return Period* 09/30/2026 *Transaction Date* 10/26/2026 18:54:10 *Transaction Number* TEST2026102618542400000002 *Reference Number* TESTREF002 *Payment Channel* Mobile *Transaction Amount* PHP 992.10 *Bank Fee* PHP 0.00 *Transaction Fee* PHP 20.00 *Total Amount* PHP 1,012.10\n\nSincerely,\n\nMYEG Philippines Inc.";
         let turn = routine_turn("bir-payments");
-        let parsed = call_as(&mut server, turn.clone(), BIR_PAYMENT_PARSE, json!({"text": email, "message_id": "msg-2"}));
+        let parsed = call_as(
+            &mut server,
+            turn.clone(),
+            BIR_PAYMENT_PARSE,
+            json!({"text": email, "message_id": "msg-2"}),
+        );
         let record = parsed["structuredContent"]["result"]["record"].clone();
         assert!(record.is_object(), "{parsed}");
         // a routine's turn shows no Payment found card
@@ -2269,9 +2729,20 @@ mod tests {
         // the same email once recorded: the compact card with View receipt,
         // in the routine's turn and in a chat
         for caller in [routine_turn("bir-payments"), agent()] {
-            let again = call_as(&mut server, caller, BIR_PAYMENT_PARSE, json!({"text": email, "message_id": "msg-2"}));
-            assert_eq!(again["structuredContent"]["result"]["recorded"], true, "{again}");
-            assert_eq!(again["_meta"]["rox/open"]["title"], "Already recorded", "{again}");
+            let again = call_as(
+                &mut server,
+                caller,
+                BIR_PAYMENT_PARSE,
+                json!({"text": email, "message_id": "msg-2"}),
+            );
+            assert_eq!(
+                again["structuredContent"]["result"]["recorded"], true,
+                "{again}"
+            );
+            assert_eq!(
+                again["_meta"]["rox/open"]["title"], "Already recorded",
+                "{again}"
+            );
         }
     }
 
@@ -2282,22 +2753,43 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         save_taxpayer(&mut server, OTHER, "Other Taxpayer");
-        let with = |params: Value| {
-            json!({ "origin": "agent", "plugin": "dev.goldcoders.bir", "routine": "bir-payments", "instance": "ri_test", "params": params, "ts": 1 })
-        };
+        let with = |params: Value| json!({ "origin": "agent", "plugin": "dev.goldcoders.bir", "routine": "bir-payments", "instance": "ri_test", "params": params, "ts": 1 });
         crate::mini_app::payments::remember_email("msg-TESTREF004", &payment_email("TESTREF004"));
-        let other = call_as(&mut server, with(json!({"taxpayers": ["Other Taxpayer"]})), BIR_RECORD_PAYMENT, payment_record("TESTREF004"));
+        let other = call_as(
+            &mut server,
+            with(json!({"taxpayers": ["Other Taxpayer"]})),
+            BIR_RECORD_PAYMENT,
+            payment_record("TESTREF004"),
+        );
         assert!(denied(&other).contains("does not watch this taxpayer"));
-        let form = call_as(&mut server, with(json!({"forms": ["1601C"]})), BIR_RECORD_PAYMENT, payment_record("TESTREF004"));
+        let form = call_as(
+            &mut server,
+            with(json!({"forms": ["1601C"]})),
+            BIR_RECORD_PAYMENT,
+            payment_record("TESTREF004"),
+        );
         assert!(denied(&form).contains("watches only 1601C"));
         let mine = with(json!({"taxpayers": ["Scratch Taxpayer"], "forms": ["2551Q"]}));
-        let recorded = call_as(&mut server, mine.clone(), BIR_RECORD_PAYMENT, payment_record("TESTREF004"));
+        let recorded = call_as(
+            &mut server,
+            mine.clone(),
+            BIR_RECORD_PAYMENT,
+            payment_record("TESTREF004"),
+        );
         assert_eq!(recorded["isError"], false, "{recorded}");
         // the instance's search keeps to its taxpayer
         let query = json!({ "origin": "routine", "plugin": "dev.goldcoders.bir", "routine": "bir-payments", "instance": "ri_test", "ts": 1 });
-        let searched = call_as(&mut server, query, BIR_PAYMENT_SEARCH, json!({"taxpayers": ["Scratch Taxpayer"], "forms": ["2551Q"]}));
+        let searched = call_as(
+            &mut server,
+            query,
+            BIR_PAYMENT_SEARCH,
+            json!({"taxpayers": ["Scratch Taxpayer"], "forms": ["2551Q"]}),
+        );
         assert_eq!(searched["isError"], false, "{searched}");
-        assert!(!searched.to_string().contains("Other Taxpayer"), "{searched}");
+        assert!(
+            !searched.to_string().contains("Other Taxpayer"),
+            "{searched}"
+        );
     }
 
     #[test]
@@ -2314,19 +2806,39 @@ mod tests {
         );
         let record = parsed["structuredContent"]["result"]["record"].clone();
         let raw = record["raw"].as_str().unwrap();
-        assert!(raw.contains("tkt_") && !raw.contains("123-456-788"), "{raw}");
+        assert!(
+            raw.contains("tkt_") && !raw.contains("123-456-788"),
+            "{raw}"
+        );
         assert_eq!(record["message_id"], "msg-1");
-        let recorded = call_as(&mut server, turn.clone(), BIR_RECORD_PAYMENT, record.clone());
+        let recorded = call_as(
+            &mut server,
+            turn.clone(),
+            BIR_RECORD_PAYMENT,
+            record.clone(),
+        );
         assert_eq!(recorded["isError"], false, "{recorded}");
-        assert_eq!(recorded["structuredContent"]["result"]["recorded"], true, "{recorded}");
+        assert_eq!(
+            recorded["structuredContent"]["result"]["recorded"], true,
+            "{recorded}"
+        );
         // kept with the email as it reads, its TIN back in place
         let kept = crate::bir_module::with_database(|db| {
-            Ok(db.get_setting("mini_app.payments").map_err(|error| HostError::new(error.to_string()))?.unwrap_or_default())
+            Ok(db
+                .get_setting("mini_app.payments")
+                .map_err(|error| HostError::new(error.to_string()))?
+                .unwrap_or_default())
         })
         .unwrap();
-        assert!(kept.contains("123-456-788") && !kept.contains("tkt_"), "{kept}");
+        assert!(
+            kept.contains("123-456-788") && !kept.contains("tkt_"),
+            "{kept}"
+        );
         let again = call_as(&mut server, turn, BIR_RECORD_PAYMENT, record);
-        assert_eq!(again["structuredContent"]["result"]["already"], true, "{again}");
+        assert_eq!(
+            again["structuredContent"]["result"]["already"], true,
+            "{again}"
+        );
     }
 
     #[test]
@@ -2350,22 +2862,59 @@ mod tests {
             ("period", json!("2026-Q2"), "period"),
             ("reference", json!("SOMETHING-ELSE"), "reference"),
         ] {
-            let refused = call_as(&mut server, turn.clone(), BIR_RECORD_PAYMENT, edited(key, value));
+            let refused = call_as(
+                &mut server,
+                turn.clone(),
+                BIR_RECORD_PAYMENT,
+                edited(key, value),
+            );
             let message = denied(&refused);
-            assert!(message.contains("a routine records only what the email says"), "{message}");
+            assert!(
+                message.contains("a routine records only what the email says"),
+                "{message}"
+            );
             assert!(message.contains(field), "{key}: {message}");
         }
         // the email is required, read first, and it is the only proof
-        let message = denied(&call_as(&mut server, turn.clone(), BIR_RECORD_PAYMENT, edited("message_id", Value::Null)));
-        assert!(message.contains("pass the email's `message_id`"), "{message}");
-        let unread = denied(&call_as(&mut server, turn.clone(), BIR_RECORD_PAYMENT, edited("message_id", json!("never-read"))));
-        assert!(unread.contains("read the email with bir_payment_parse first"), "{unread}");
-        let proof = denied(&call_as(&mut server, turn.clone(), BIR_RECORD_PAYMENT, edited("proof_path", json!("/etc/hosts"))));
+        let message = denied(&call_as(
+            &mut server,
+            turn.clone(),
+            BIR_RECORD_PAYMENT,
+            edited("message_id", Value::Null),
+        ));
+        assert!(
+            message.contains("pass the email's `message_id`"),
+            "{message}"
+        );
+        let unread = denied(&call_as(
+            &mut server,
+            turn.clone(),
+            BIR_RECORD_PAYMENT,
+            edited("message_id", json!("never-read")),
+        ));
+        assert!(
+            unread.contains("read the email with bir_payment_parse first"),
+            "{unread}"
+        );
+        let proof = denied(&call_as(
+            &mut server,
+            turn.clone(),
+            BIR_RECORD_PAYMENT,
+            edited("proof_path", json!("/etc/hosts")),
+        ));
         assert!(proof.contains("proof_path"), "{proof}");
         // an email bir cannot read records nothing, whatever `raw` the model sends
         crate::mini_app::payments::remember_email("msg-thanks", "Thanks for paying.");
-        let unknown = denied(&call_as(&mut server, turn.clone(), BIR_RECORD_PAYMENT, edited("message_id", json!("msg-thanks"))));
-        assert!(unknown.contains("does not know this email's format"), "{unknown}");
+        let unknown = denied(&call_as(
+            &mut server,
+            turn.clone(),
+            BIR_RECORD_PAYMENT,
+            edited("message_id", json!("msg-thanks")),
+        ));
+        assert!(
+            unknown.contains("does not know this email's format"),
+            "{unknown}"
+        );
         // nothing was recorded
         let listed = call(&mut server, BIR_PAYMENTS_LIST, json!({"tin": TIN}));
         assert!(!listed.to_string().contains("TESTREF002"), "{listed}");
@@ -2376,20 +2925,49 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Scratch Taxpayer");
         // bir-confirmations declares bir_confirm_filing, not bir_record_payment
-        let message = denied(&call_as(&mut server, routine_turn("bir-confirmations"), BIR_RECORD_PAYMENT, payment_record("TESTREF003")));
-        assert!(message.contains("bir-confirmations routine does not list it in its writes"), "{message}");
+        let message = denied(&call_as(
+            &mut server,
+            routine_turn("bir-confirmations"),
+            BIR_RECORD_PAYMENT,
+            payment_record("TESTREF003"),
+        ));
+        assert!(
+            message.contains("bir-confirmations routine does not list it in its writes"),
+            "{message}"
+        );
         // a routine BIR does not have declares nothing
-        denied(&call_as(&mut server, routine_turn("bir-other"), BIR_RECORD_PAYMENT, payment_record("TESTREF003")));
+        denied(&call_as(
+            &mut server,
+            routine_turn("bir-other"),
+            BIR_RECORD_PAYMENT,
+            payment_record("TESTREF003"),
+        ));
         for (tool, args) in [
-            (BIR_MARK_PAID, json!({"tin": TIN, "form": "2551Q", "period": "2026-Q3"})),
-            (BIR_CALENDAR_SET, json!({"tin": ROOT, "forms": ["2551Q"], "enabled": false})),
+            (
+                BIR_MARK_PAID,
+                json!({"tin": TIN, "form": "2551Q", "period": "2026-Q3"}),
+            ),
+            (
+                BIR_CALENDAR_SET,
+                json!({"tin": ROOT, "forms": ["2551Q"], "enabled": false}),
+            ),
             (BIR_CONFIRM_FILING, json!({})),
             ("bir_form_send", json!({})),
         ] {
-            denied(&call_as(&mut server, routine_turn("bir-payments"), tool, args));
+            denied(&call_as(
+                &mut server,
+                routine_turn("bir-payments"),
+                tool,
+                args,
+            ));
         }
         // its reads still run
-        let read = call_as(&mut server, routine_turn("bir-payments"), BIR_PAYMENTS_LIST, json!({"tin": TIN}));
+        let read = call_as(
+            &mut server,
+            routine_turn("bir-payments"),
+            BIR_PAYMENTS_LIST,
+            json!({"tin": TIN}),
+        );
         assert_eq!(read["isError"], false, "{read}");
         // the assistant in a chat records as before, with or without an email
         let mut by_hand = payment_record("TESTREF004");
@@ -2397,7 +2975,10 @@ mod tests {
         by_hand.as_object_mut().unwrap().remove("message_id");
         by_hand["amount"] = json!(500.0);
         let recorded = call_as(&mut server, agent(), BIR_RECORD_PAYMENT, by_hand);
-        assert_eq!(recorded["structuredContent"]["result"]["recorded"], true, "{recorded}");
+        assert_eq!(
+            recorded["structuredContent"]["result"]["recorded"], true,
+            "{recorded}"
+        );
     }
 
     #[test]
@@ -2418,30 +2999,86 @@ mod tests {
             ("123456788000-2551Qv2018-092026Q3.xml", "2551Q", "2026-Q3"),
             ("12345678800000-1601Cv2018-092026.xml", "1601C", "2026-09"),
         ] {
-            let answer = call_as(&mut server, turn.clone(), BIR_CONFIRM_FILING, confirm(json!(reference), form, period));
-            assert_ne!(answer["structuredContent"]["code"], "permission_denied", "{reference}: {answer}");
-            assert!(answer.to_string().contains("has no"), "{reference}: {answer}");
+            let answer = call_as(
+                &mut server,
+                turn.clone(),
+                BIR_CONFIRM_FILING,
+                confirm(json!(reference), form, period),
+            );
+            assert_ne!(
+                answer["structuredContent"]["code"], "permission_denied",
+                "{reference}: {answer}"
+            );
+            assert!(
+                answer.to_string().contains("has no"),
+                "{reference}: {answer}"
+            );
         }
         for (reference, form, period, field) in [
-            ("98765432100000-2551Qv2018-092026Q3.xml", "2551Q", "2026-Q3", "TIN"),
-            ("12345678800000-1601Cv2018-092026.xml", "2551Q", "2026-Q3", "form"),
-            ("12345678800000-2551Qv2018-062026Q2.xml", "2551Q", "2026-Q3", "period"),
-            ("12345678800000-1601Cv2018-082026.xml", "1601C", "2026-09", "period"),
+            (
+                "98765432100000-2551Qv2018-092026Q3.xml",
+                "2551Q",
+                "2026-Q3",
+                "TIN",
+            ),
+            (
+                "12345678800000-1601Cv2018-092026.xml",
+                "2551Q",
+                "2026-Q3",
+                "form",
+            ),
+            (
+                "12345678800000-2551Qv2018-062026Q2.xml",
+                "2551Q",
+                "2026-Q3",
+                "period",
+            ),
+            (
+                "12345678800000-1601Cv2018-082026.xml",
+                "1601C",
+                "2026-09",
+                "period",
+            ),
         ] {
-            let message = denied(&call_as(&mut server, turn.clone(), BIR_CONFIRM_FILING, confirm(json!(reference), form, period)));
-            assert!(message.contains("a routine confirms only the return BIR's email names"), "{message}");
+            let message = denied(&call_as(
+                &mut server,
+                turn.clone(),
+                BIR_CONFIRM_FILING,
+                confirm(json!(reference), form, period),
+            ));
+            assert!(
+                message.contains("a routine confirms only the return BIR's email names"),
+                "{message}"
+            );
             assert!(message.contains(field), "{reference}: {message}");
         }
         for reference in [Value::Null, json!(""), json!("not a file name")] {
-            let message = denied(&call_as(&mut server, turn.clone(), BIR_CONFIRM_FILING, confirm(reference.clone(), "2551Q", "2026-Q3")));
+            let message = denied(&call_as(
+                &mut server,
+                turn.clone(),
+                BIR_CONFIRM_FILING,
+                confirm(reference.clone(), "2551Q", "2026-Q3"),
+            ));
             assert!(message.contains("File name"), "{reference}: {message}");
         }
-        let mut no_id = confirm(json!("12345678800000-2551Qv2018-092026Q3.xml"), "2551Q", "2026-Q3");
+        let mut no_id = confirm(
+            json!("12345678800000-2551Qv2018-092026Q3.xml"),
+            "2551Q",
+            "2026-Q3",
+        );
         no_id.as_object_mut().unwrap().remove("message_id");
         denied(&call_as(&mut server, turn, BIR_CONFIRM_FILING, no_id));
         // the assistant in a chat is not held to a file name
-        let chat = call_as(&mut server, agent(), BIR_CONFIRM_FILING, confirm(json!(""), "2551Q", "2026-Q3"));
-        assert_ne!(chat["structuredContent"]["code"], "permission_denied", "{chat}");
+        let chat = call_as(
+            &mut server,
+            agent(),
+            BIR_CONFIRM_FILING,
+            confirm(json!(""), "2551Q", "2026-Q3"),
+        );
+        assert_ne!(
+            chat["structuredContent"]["code"], "permission_denied",
+            "{chat}"
+        );
     }
 
     #[test]
@@ -2451,11 +3088,17 @@ mod tests {
         // signed out: plain words and the sign-in app's card, not an error
         let refused = call(&mut server, "bir_profiles_list", json!({}));
         assert_eq!(refused["isError"], false, "{refused}");
-        assert_eq!(refused["content"][0]["text"], plain::signed_out_text("bir_profiles_list"));
+        assert_eq!(
+            refused["content"][0]["text"],
+            plain::signed_out_text("bir_profiles_list")
+        );
         assert_eq!(refused["_meta"]["rox/open"]["props"]["card"], "signin");
         let opened = call(&mut server, BIR_APP_OPEN, json!({"app": "forms"}));
         assert_eq!(opened["isError"], false);
-        assert_eq!(opened["_meta"]["rox/open"]["props"]["card"], "signin", "{opened}");
+        assert_eq!(
+            opened["_meta"]["rox/open"]["props"]["card"], "signin",
+            "{opened}"
+        );
         // (bir_app_list_rdos, not the account status: that reads the
         // Buwiz account from the Keychain, which tests leave alone)
         let rdos = call_as(&mut server, app("register"), "bir_app_list_rdos", json!({}));
@@ -2470,13 +3113,24 @@ mod tests {
             .wait()
             .unwrap();
         let resources = listed["result"]["resources"].as_array().unwrap().clone();
-        assert!(resources.iter().any(|resource| resource["uri"] == "rox-app://forms"));
-        assert!(resources.iter().any(|resource| resource["uri"] == v1_manifest::MANIFEST_URI));
+        assert!(
+            resources
+                .iter()
+                .any(|resource| resource["uri"] == "rox-app://forms")
+        );
+        assert!(
+            resources
+                .iter()
+                .any(|resource| resource["uri"] == v1_manifest::MANIFEST_URI)
+        );
         let read = server
             .handle(json!({"jsonrpc": "2.0", "id": 4, "method": "resources/read", "params": {"uri": v1_manifest::MANIFEST_URI}}))
             .wait()
             .unwrap();
-        assert_eq!(read["result"]["contents"][0]["mimeType"], "application/json");
+        assert_eq!(
+            read["result"]["contents"][0]["mimeType"],
+            "application/json"
+        );
         let manifest: Value =
             serde_json::from_str(read["result"]["contents"][0]["text"].as_str().unwrap()).unwrap();
         for app in manifest["apps"].as_array().unwrap() {
@@ -2505,24 +3159,53 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Dela Cruz Jane");
         crate::bir_module::with_database(|db| {
-            db.set_yearly_forms(TIN, 2026, &["2551Q", "1601C"]).map_err(|error| HostError::new(error.to_string()))?;
+            db.set_yearly_forms(TIN, 2026, &["2551Q", "1601C"])
+                .map_err(|error| HostError::new(error.to_string()))?;
             Ok(())
         })
         .unwrap();
         let ticket = ticket_of(ROOT);
         let cases = [
-            ("bir_profile_forms", json!({"ticket": ticket, "year": 2026}), "forms"),
-            ("bir_returns_list", json!({"ticket": ticket, "year": 2026}), "matrix"),
-            ("bir_returns_list", json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3"}), "status"),
-            (BIR_CALENDAR_GET, json!({"tin": ticket, "from": "2026-11-01", "to": "2026-11-30"}), "month"),
+            (
+                "bir_profile_forms",
+                json!({"ticket": ticket, "year": 2026}),
+                "forms",
+            ),
+            (
+                "bir_returns_list",
+                json!({"ticket": ticket, "year": 2026}),
+                "matrix",
+            ),
+            (
+                "bir_returns_list",
+                json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3"}),
+                "status",
+            ),
+            (
+                BIR_CALENDAR_GET,
+                json!({"tin": ticket, "from": "2026-11-01", "to": "2026-11-30"}),
+                "month",
+            ),
             (BIR_CALENDAR_GET, json!({"tin": ticket}), "dues"),
             ("bir_taxpayer", json!({"ticket": ticket}), "taxpayer"),
-            ("bir_find_taxpayer", json!({"name": "jane deli cruz"}), "pick"),
+            (
+                "bir_find_taxpayer",
+                json!({"name": "jane deli cruz"}),
+                "pick",
+            ),
             ("bir_penalty", json!({"ticket": ticket}), "overdue"),
-            ("bir_penalty", json!({"form": "0619E", "due": "2026-09-10", "filed_on": "2026-11-10", "tax_due": 10000}), "penalty"),
+            (
+                "bir_penalty",
+                json!({"form": "0619E", "due": "2026-09-10", "filed_on": "2026-11-10", "tax_due": 10000}),
+                "penalty",
+            ),
             ("bir_unpaid", json!({}), "unpaid"),
             ("bir_board", json!({}), "board"),
-            (BIR_MARK_PAID, json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3"}), "markpaid"),
+            (
+                BIR_MARK_PAID,
+                json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3"}),
+                "markpaid",
+            ),
         ];
         for (tool, args, card) in cases {
             let result = call_as(&mut server, agent(), tool, args.clone());
@@ -2533,13 +3216,26 @@ mod tests {
             assert!(open["app"].as_str().unwrap().starts_with("card-"));
             assert!(open["props"]["snapshot"].is_object(), "{tool}");
             // only a card that can re-read its answer has "as of" and Refresh
-            assert_eq!(open["props"]["as_of"].is_i64(), !open["props"]["tool"].is_null(), "{tool}");
+            assert_eq!(
+                open["props"]["as_of"].is_i64(),
+                !open["props"]["tool"].is_null(),
+                "{tool}"
+            );
             // the card may re-read its answer: the tool is in its app's grants
-            let granted = v1_manifest::served_app(&Catalog::Embedded, open["app"].as_str().unwrap()).unwrap().unwrap();
+            let granted =
+                v1_manifest::served_app(&Catalog::Embedded, open["app"].as_str().unwrap())
+                    .unwrap()
+                    .unwrap();
             if !open["props"]["tool"].is_null() {
                 assert!(
-                    granted["permissions"]["tools"].as_array().unwrap().iter().any(|t| *t == open["props"]["tool"]),
-                    "{} cannot refresh with {}", open["app"], open["props"]["tool"]
+                    granted["permissions"]["tools"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|t| *t == open["props"]["tool"]),
+                    "{} cannot refresh with {}",
+                    open["app"],
+                    open["props"]["tool"]
                 );
             }
             let props = open["props"].to_string();
@@ -2550,19 +3246,49 @@ mod tests {
             }
         }
         // the penalty is BIR's own engine: late tax costs something
-        let estimate = call_as(&mut server, agent(), "bir_penalty", json!({"form": "0619E", "due": "2026-09-10", "filed_on": "2026-11-10", "tax_due": 10000}));
-        assert!(estimate["structuredContent"]["result"]["total_penalties"].as_f64().unwrap() > 0.0, "{estimate}");
+        let estimate = call_as(
+            &mut server,
+            agent(),
+            "bir_penalty",
+            json!({"form": "0619E", "due": "2026-09-10", "filed_on": "2026-11-10", "tax_due": 10000}),
+        );
+        assert!(
+            estimate["structuredContent"]["result"]["total_penalties"]
+                .as_f64()
+                .unwrap()
+                > 0.0,
+            "{estimate}"
+        );
         // the assistant's mark paid records nothing: the user presses Save
-        let payments = call_as(&mut server, agent(), BIR_PAYMENTS_LIST, json!({"tin": ticket}));
-        assert_eq!(payments["structuredContent"]["result"]["payments"], json!([]));
+        let payments = call_as(
+            &mut server,
+            agent(),
+            BIR_PAYMENTS_LIST,
+            json!({"tin": ticket}),
+        );
+        assert_eq!(
+            payments["structuredContent"]["result"]["payments"],
+            json!([])
+        );
         // a ticket BIR did not issue
         let forged = format!("tkt_{}", "0".repeat(26));
-        for tool in ["bir_profile_forms", "bir_returns_list", "bir_taxpayer", "bir_penalty", "bir_unpaid"] {
+        for tool in [
+            "bir_profile_forms",
+            "bir_returns_list",
+            "bir_taxpayer",
+            "bir_penalty",
+            "bir_unpaid",
+        ] {
             let refused = call_as(&mut server, agent(), tool, json!({"ticket": forged}));
             assert_eq!(refused["isError"], true, "{tool}");
         }
         // apps get no card: they draw their own
-        let from_app = call_as(&mut server, app("card-forms"), "bir_profile_forms", json!({"ticket": ticket}));
+        let from_app = call_as(
+            &mut server,
+            app("card-forms"),
+            "bir_profile_forms",
+            json!({"ticket": ticket}),
+        );
         assert!(from_app["_meta"]["rox/open"].is_null());
     }
 
@@ -2575,7 +3301,13 @@ mod tests {
     fn names_a_tin(text: &str) -> Option<&'static str> {
         let runs = regex::Regex::new(r"\d(?:[\d-]*\d)?").unwrap();
         SEEDED.into_iter().find(|root| {
-            runs.find_iter(text).any(|run| run.as_str().chars().filter(char::is_ascii_digit).collect::<String>().contains(root))
+            runs.find_iter(text).any(|run| {
+                run.as_str()
+                    .chars()
+                    .filter(char::is_ascii_digit)
+                    .collect::<String>()
+                    .contains(root)
+            })
         })
     }
 
@@ -2607,12 +3339,23 @@ mod tests {
         assert_eq!(app, *kind_app, "{card}");
         assert_eq!(open["size"] == "small", *small, "{card}");
         assert!(open["props"]["snapshot"].is_object(), "{tool}");
-        assert_eq!(open["props"]["as_of"].is_i64(), !open["props"]["tool"].is_null(), "{tool}");
-        let granted = v1_manifest::served_app(&Catalog::Embedded, app).unwrap().unwrap();
+        assert_eq!(
+            open["props"]["as_of"].is_i64(),
+            !open["props"]["tool"].is_null(),
+            "{tool}"
+        );
+        let granted = v1_manifest::served_app(&Catalog::Embedded, app)
+            .unwrap()
+            .unwrap();
         if !open["props"]["tool"].is_null() {
             assert!(
-                granted["permissions"]["tools"].as_array().unwrap().iter().any(|t| *t == open["props"]["tool"]),
-                "{app} cannot refresh with {}", open["props"]["tool"]
+                granted["permissions"]["tools"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|t| *t == open["props"]["tool"]),
+                "{app} cannot refresh with {}",
+                open["props"]["tool"]
             );
         }
         let props = open["props"].to_string();
@@ -2629,37 +3372,103 @@ mod tests {
         let mut server = server();
         save_taxpayer(&mut server, TIN, "Dela Cruz Jane");
         crate::bir_module::with_database(|db| {
-            db.set_yearly_forms(TIN, 2026, &["2551Q", "1601C", "0619E"]).map_err(|error| HostError::new(error.to_string()))?;
+            db.set_yearly_forms(TIN, 2026, &["2551Q", "1601C", "0619E"])
+                .map_err(|error| HostError::new(error.to_string()))?;
             Ok(())
         })
         .unwrap();
         let ticket = ticket_of(ROOT);
         // a saved 2551Q Q3 draft to read
-        let opened = call_as(&mut server, agent(), "bir_form_open", json!({"tin": ticket, "code": "2551Q-2026-Q3"}));
+        let opened = call_as(
+            &mut server,
+            agent(),
+            "bir_form_open",
+            json!({"tin": ticket, "code": "2551Q-2026-Q3"}),
+        );
         assert_eq!(opened["isError"], false, "{opened}");
         let cases = [
-            ("bir_taxpayer", json!({"ticket": ticket, "view": "branches"}), "branches"),
-            ("bir_quick_add", json!({"name": "Reyes Mario", "tin": "111-222-333", "rdo": "40"}), "quickadd"),
+            (
+                "bir_taxpayer",
+                json!({"ticket": ticket, "view": "branches"}),
+                "branches",
+            ),
+            (
+                "bir_quick_add",
+                json!({"name": "Reyes Mario", "tin": "111-222-333", "rdo": "40"}),
+                "quickadd",
+            ),
             ("bir_board", json!({"view": "on_time"}), "streak"),
-            ("bir_board", json!({"form": "0619E", "period": "2026-10"}), "bulk"),
-            ("bir_form_info", json!({"form": "2551Q", "ticket": ticket}), "explain"),
+            (
+                "bir_board",
+                json!({"form": "0619E", "period": "2026-10"}),
+                "bulk",
+            ),
+            (
+                "bir_form_info",
+                json!({"form": "2551Q", "ticket": ticket}),
+                "explain",
+            ),
             (BIR_DRAFTS_LIST, json!({"tin": ticket}), "drafts"),
             ("bir_outbox", json!({}), "outbox"),
-            (BIR_CALENDAR_GET, json!({"from": "2026-11-01", "to": "2026-11-07"}), "week"),
-            ("bir_penalty", json!({"form": "0619E", "due": "2026-09-10", "tax_due": 100}), "penalty"),
-            ("bir_deadline", json!({"form": "2551Q", "period": "2026-Q3", "tin": ticket}), "shift"),
-            ("bir_return", json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "summary"}), "summary"),
-            ("bir_return", json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "paper"}), "preview"),
-            ("bir_return", json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "amend"}), "amend"),
-            ("bir_return", json!({"ticket": ticket, "form": "1701Q", "period": "2026-Q2", "view": "attachments"}), "attach"),
-            ("bir_return", json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "import"}), "import"),
-            (BIR_PAYMENTS_LIST, json!({"tin": ticket, "year": 2026}), "paidsum"),
+            (
+                BIR_CALENDAR_GET,
+                json!({"from": "2026-11-01", "to": "2026-11-07"}),
+                "week",
+            ),
+            (
+                "bir_penalty",
+                json!({"form": "0619E", "due": "2026-09-10", "tax_due": 100}),
+                "penalty",
+            ),
+            (
+                "bir_deadline",
+                json!({"form": "2551Q", "period": "2026-Q3", "tin": ticket}),
+                "shift",
+            ),
+            (
+                "bir_return",
+                json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "summary"}),
+                "summary",
+            ),
+            (
+                "bir_return",
+                json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "paper"}),
+                "preview",
+            ),
+            (
+                "bir_return",
+                json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "amend"}),
+                "amend",
+            ),
+            (
+                "bir_return",
+                json!({"ticket": ticket, "form": "1701Q", "period": "2026-Q2", "view": "attachments"}),
+                "attach",
+            ),
+            (
+                "bir_return",
+                json!({"ticket": ticket, "form": "2551Q", "period": "2026-Q3", "view": "import"}),
+                "import",
+            ),
+            (
+                BIR_PAYMENTS_LIST,
+                json!({"tin": ticket, "year": 2026}),
+                "paidsum",
+            ),
             (BIR_STATUS, json!({}), "health"),
             ("bir_lookup", json!({"atc": "WC158"}), "atc"),
             ("bir_lookup", json!({"rdo": "040"}), "rdo"),
-            ("bir_lookup", json!({"amount": "186,000", "rate": 3}), "rate"),
+            (
+                "bir_lookup",
+                json!({"amount": "186,000", "rate": 3}),
+                "rate",
+            ),
             ("bir_digest", json!({}), "digest"),
-            (BIR_CALENDAR_SET, json!({"tin": ticket, "reminder_days": [3, 1]}), "remind"),
+            (
+                BIR_CALENDAR_SET,
+                json!({"tin": ticket, "reminder_days": [3, 1]}),
+                "remind",
+            ),
         ];
         for (tool, args, card) in cases {
             let result = call_as(&mut server, agent(), tool, args.clone());
@@ -2670,9 +3479,21 @@ mod tests {
         let wave_one = [
             ("bir_form_needs_you", json!({}), "needs"),
             ("bir_form_send", json!({}), "approve"),
-            (BIR_PAYMENT_PARSE, json!({"text": "Agency Name BUREAU OF INTERNAL REVENUE (BIR) | TIN 123456788 | Branch Code 00000 | RDO Code 040 - PASIG | Form Type 2551Q | Tax Type PT | Return Period 09/30/2026 | Transaction Date 10/26/2026 18:57:10 | Transaction Number TEST2026102618575200000001 | Reference Number TESTREF001 | Payment Channel Mobile | Transaction Amount PHP 629.94 | Bank Fee PHP 0.00 | Transaction Fee PHP 20.00 | Total Amount PHP 649.94"}), "match"),
-            (BIR_CONFIRM_FILING, json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3", "reference": "12345678800000-2551Qv2018-092026Q3.xml", "received_at": "2026-10-20T10:00:00+08:00", "message_id": "test-1"}), "confirm"),
-            (BIR_CONFIRM_FILING, json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3", "reference": "123-456-788-00000-2551Qv2018-062026Q2.xml", "received_at": "2026-10-20T10:00:00+08:00", "message_id": "test-2"}), "confirm"),
+            (
+                BIR_PAYMENT_PARSE,
+                json!({"text": "Agency Name BUREAU OF INTERNAL REVENUE (BIR) | TIN 123456788 | Branch Code 00000 | RDO Code 040 - PASIG | Form Type 2551Q | Tax Type PT | Return Period 09/30/2026 | Transaction Date 10/26/2026 18:57:10 | Transaction Number TEST2026102618575200000001 | Reference Number TESTREF001 | Payment Channel Mobile | Transaction Amount PHP 629.94 | Bank Fee PHP 0.00 | Transaction Fee PHP 20.00 | Total Amount PHP 649.94"}),
+                "match",
+            ),
+            (
+                BIR_CONFIRM_FILING,
+                json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3", "reference": "12345678800000-2551Qv2018-092026Q3.xml", "received_at": "2026-10-20T10:00:00+08:00", "message_id": "test-1"}),
+                "confirm",
+            ),
+            (
+                BIR_CONFIRM_FILING,
+                json!({"tin": ticket, "form": "2551Q", "period": "2026-Q3", "reference": "123-456-788-00000-2551Qv2018-062026Q2.xml", "received_at": "2026-10-20T10:00:00+08:00", "message_id": "test-2"}),
+                "confirm",
+            ),
         ];
         for (tool, args, card) in wave_one {
             let result = call_as(&mut server, agent(), tool, args.clone());
@@ -2682,7 +3503,13 @@ mod tests {
         let signin = json!({"_meta": {"rox/open": cards::open("signin", "Buwiz sign-in", None, json!({"message": plain::signed_out_text("bir_calendar_get")}), "bir_status", json!({}))}, "content": [], "structuredContent": {}});
         assert_no_tin(&signin, "signin");
         // the guard itself: a TIN in any form, inside other text, is caught
-        for leak in ["123456788", "123-456-788", "12345678800000-2551Qv2018-092026Q3", "x 123-456-788-00000 y", "TIN987654321"] {
+        for leak in [
+            "123456788",
+            "123-456-788",
+            "12345678800000-2551Qv2018-092026Q3",
+            "x 123-456-788-00000 y",
+            "TIN987654321",
+        ] {
             assert!(names_a_tin(leak).is_some(), "{leak}");
             let mut guarded = json!({"_meta": {"rox/open": {"props": {"snapshot": {"note": leak}}}}, "content": [{"type": "text", "text": leak}]});
             cards::redact(&mut guarded, &SEEDED.map(str::to_string));
@@ -2690,16 +3517,33 @@ mod tests {
         }
         assert!(names_a_tin("2026-10-26 ₱186,000.00 TEST2026102618575200000001").is_none());
         // the rate card's sum and the ATC's forms come from BIR's tables
-        let rate = call_as(&mut server, agent(), "bir_lookup", json!({"amount": 186000, "rate": "3%"}));
+        let rate = call_as(
+            &mut server,
+            agent(),
+            "bir_lookup",
+            json!({"amount": 186000, "rate": "3%"}),
+        );
         assert_eq!(rate["structuredContent"]["result"]["tax"], 5580.0, "{rate}");
-        let deadline = call_as(&mut server, agent(), "bir_deadline", json!({"form": "2551Q", "period": "2026-Q3"}));
+        let deadline = call_as(
+            &mut server,
+            agent(),
+            "bir_deadline",
+            json!({"form": "2551Q", "period": "2026-Q3"}),
+        );
         let deadline = &deadline["structuredContent"]["result"];
-        assert_eq!((deadline["official"].as_str(), deadline["applies"].as_str()), (Some("2026-10-25"), Some("2026-10-26")), "{deadline}");
+        assert_eq!(
+            (deadline["official"].as_str(), deadline["applies"].as_str()),
+            (Some("2026-10-25"), Some("2026-10-26")),
+            "{deadline}"
+        );
         assert_eq!(deadline["kind"], "weekend");
         // a ticket BIR did not issue
         let forged = format!("tkt_{}", "0".repeat(26));
         for (tool, args) in [
-            ("bir_taxpayer", json!({"ticket": forged, "view": "branches"})),
+            (
+                "bir_taxpayer",
+                json!({"ticket": forged, "view": "branches"}),
+            ),
             ("bir_form_info", json!({"form": "2551Q", "ticket": forged})),
             ("bir_return", json!({"ticket": forged, "view": "summary"})),
             ("bir_deadline", json!({"form": "2551Q", "tin": forged})),
@@ -2710,38 +3554,120 @@ mod tests {
         }
         // the quickadd card saves nothing; its Save is the user's, through
         // an app-only tool the assistant cannot call
-        let offered = call_as(&mut server, agent(), "bir_quick_add", json!({"name": "Reyes Mario", "tin": "111222333"}));
-        let new_ticket = offered["structuredContent"]["result"]["ticket"].as_str().unwrap().to_string();
+        let offered = call_as(
+            &mut server,
+            agent(),
+            "bir_quick_add",
+            json!({"name": "Reyes Mario", "tin": "111222333"}),
+        );
+        let new_ticket = offered["structuredContent"]["result"]["ticket"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let save = json!({"ticket": new_ticket, "name": "Reyes Mario", "type": "individual", "rdo": "040"});
-        for tool in [answers::ADD_TAXPAYER, answers::CANCEL_SEND, BIR_CARD_REMOVE_PAYMENT, return_view::ATTACH, return_view::IMPORT, return_view::IMPORT_FILL] {
+        for tool in [
+            answers::ADD_TAXPAYER,
+            answers::CANCEL_SEND,
+            BIR_CARD_REMOVE_PAYMENT,
+            return_view::ATTACH,
+            return_view::IMPORT,
+            return_view::IMPORT_FILL,
+        ] {
             let refused = call_as(&mut server, agent(), tool, save.clone());
-            assert_eq!(refused["isError"], true, "{tool} answers the assistant: {refused}");
+            assert_eq!(
+                refused["isError"], true,
+                "{tool} answers the assistant: {refused}"
+            );
         }
-        let still = call_as(&mut server, agent(), "bir_find_taxpayer", json!({"name": "reyes mario"}));
-        assert_eq!(still["structuredContent"]["result"]["matches"], json!([]), "{still}");
+        let still = call_as(
+            &mut server,
+            agent(),
+            "bir_find_taxpayer",
+            json!({"name": "reyes mario"}),
+        );
+        assert_eq!(
+            still["structuredContent"]["result"]["matches"],
+            json!([]),
+            "{still}"
+        );
         let added = call_as(&mut server, app("card-people"), answers::ADD_TAXPAYER, save);
         assert_eq!(added["isError"], false, "{added}");
-        let found = call_as(&mut server, agent(), "bir_find_taxpayer", json!({"name": "reyes mario"}));
-        assert_eq!(found["structuredContent"]["result"]["matches"].as_array().unwrap().len(), 1, "{found}");
+        let found = call_as(
+            &mut server,
+            agent(),
+            "bir_find_taxpayer",
+            json!({"name": "reyes mario"}),
+        );
+        assert_eq!(
+            found["structuredContent"]["result"]["matches"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1,
+            "{found}"
+        );
         // the import card: read a sheet, then Fill puts the total on the draft
         let return_ticket = crate::bir_module::with_database(|db| {
-            tickets::issue(db, &tickets::Subject::Return(format!("{ROOT}/2551Q-2026-Q3"))).map_err(HostError::new)
+            tickets::issue(
+                db,
+                &tickets::Subject::Return(format!("{ROOT}/2551Q-2026-Q3")),
+            )
+            .map_err(HostError::new)
         })
         .unwrap();
         let csv = "Date,Amount\n2026-07-02,\"100,000.00\"\n2026-08-15,86000\n2026-08-16,\"12,4OO.00\"\n2026-10-02,500\n";
-        let up = call_as(&mut server, app("card-return"), app_tools::UPLOAD, json!({"data": base64::engine::general_purpose::STANDARD.encode(csv)}));
-        let upload = up["structuredContent"]["result"]["upload"].as_str().map(str::to_string).unwrap_or_else(|| {
-            serde_json::from_str::<Value>(up["content"][0]["text"].as_str().unwrap()).unwrap()["upload"].as_str().unwrap().to_string()
-        });
-        let read = call_as(&mut server, app("card-return"), return_view::IMPORT, json!({"ticket": return_ticket, "upload": upload, "name": "sales-q3.csv"}));
+        let up = call_as(
+            &mut server,
+            app("card-return"),
+            app_tools::UPLOAD,
+            json!({"data": base64::engine::general_purpose::STANDARD.encode(csv)}),
+        );
+        let upload = up["structuredContent"]["result"]["upload"]
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                serde_json::from_str::<Value>(up["content"][0]["text"].as_str().unwrap())
+                        .unwrap()["upload"]
+                        .as_str()
+                        .unwrap()
+                        .to_string()
+            });
+        let read = call_as(
+            &mut server,
+            app("card-return"),
+            return_view::IMPORT,
+            json!({"ticket": return_ticket, "upload": upload, "name": "sales-q3.csv"}),
+        );
         assert_eq!(read["isError"], false, "{read}");
         let read = &read["structuredContent"]["result"];
-        assert_eq!((read["rows"].as_u64(), read["total"].as_f64()), (Some(2), Some(186000.0)), "{read}");
+        assert_eq!(
+            (read["rows"].as_u64(), read["total"].as_f64()),
+            (Some(2), Some(186000.0)),
+            "{read}"
+        );
         assert_eq!(read["skipped"].as_array().unwrap().len(), 2, "{read}");
-        let fill = call_as(&mut server, app("card-return"), return_view::IMPORT_FILL, json!({"ticket": return_ticket, "import": read["import"]}));
+        let fill = call_as(
+            &mut server,
+            app("card-return"),
+            return_view::IMPORT_FILL,
+            json!({"ticket": return_ticket, "import": read["import"]}),
+        );
         assert_eq!(fill["isError"], false, "{fill}");
-        let paper = call_as(&mut server, agent(), "bir_return", json!({"ticket": return_ticket, "view": "paper"}));
-        assert!(paper["structuredContent"]["result"].to_string().contains("186,000") || paper["structuredContent"]["result"].to_string().contains("186000"), "{paper}");
+        let paper = call_as(
+            &mut server,
+            agent(),
+            "bir_return",
+            json!({"ticket": return_ticket, "view": "paper"}),
+        );
+        assert!(
+            paper["structuredContent"]["result"]
+                .to_string()
+                .contains("186,000")
+                || paper["structuredContent"]["result"]
+                    .to_string()
+                    .contains("186000"),
+            "{paper}"
+        );
     }
 
     #[test]
@@ -2751,7 +3677,10 @@ mod tests {
         // nothing before provision; an unknown rox.* is method-not-found
         let early = request(&mut server, json!({"name": BIR_STATUS, "arguments": {}}));
         assert_eq!(early["error"]["code"], INVALID_REQUEST);
-        let early = request(&mut server, json!({"name": "rox.ticket.resolve", "arguments": {"ticket": "x"}}));
+        let early = request(
+            &mut server,
+            json!({"name": "rox.ticket.resolve", "arguments": {"ticket": "x"}}),
+        );
         assert_eq!(early["error"]["code"], INVALID_REQUEST);
         let unknown = request(&mut server, json!({"name": "rox.revoke", "arguments": {}}));
         assert_eq!(unknown["error"]["code"], METHOD_NOT_FOUND);
@@ -2759,13 +3688,28 @@ mod tests {
         let args = Value::Object(keys::tests::provision_args([5; 32]));
         let provisioned = call(&mut server, "rox.provision", args.clone());
         let expected = jcs::sha256_hex(&v1_manifest::served(&Catalog::Embedded).unwrap()).unwrap();
-        assert_eq!(provisioned["structuredContent"], json!({"ok": true, "manifest_sha256": expected}));
-        assert_eq!(call(&mut server, "rox.provision", args)["structuredContent"]["ok"], true);
-        let other = call(&mut server, "rox.provision", Value::Object(keys::tests::provision_args([6; 32])));
+        assert_eq!(
+            provisioned["structuredContent"],
+            json!({"ok": true, "manifest_sha256": expected})
+        );
+        assert_eq!(
+            call(&mut server, "rox.provision", args)["structuredContent"]["ok"],
+            true
+        );
+        let other = call(
+            &mut server,
+            "rox.provision",
+            Value::Object(keys::tests::provision_args([6; 32])),
+        );
         assert_eq!(other["structuredContent"]["code"], "invalid_args");
-        assert!(!other.to_string().contains(&b64url(&[6; 32])), "the seed is never echoed");
+        assert!(
+            !other.to_string().contains(&b64url(&[6; 32])),
+            "the seed is never echoed"
+        );
         // a session certificate over the open, signed by the plugin key
-        let forms = v1_manifest::served_app(&Catalog::Embedded, "forms").unwrap().unwrap();
+        let forms = v1_manifest::served_app(&Catalog::Embedded, "forms")
+            .unwrap()
+            .unwrap();
         let open = json!({
             "app": "forms", "open_id": b64url(&[9; 16]), "ks_pub": b64url(&[3; 32]),
             "perms_sha256": v1_manifest::permissions_digest(&forms).unwrap(),
@@ -2777,28 +3721,61 @@ mod tests {
         assert_eq!(cert["cert"]["plugin"], "dev.goldcoders.bir");
         assert_eq!(cert["cert"]["perms_sha256"], open["perms_sha256"]);
         let public = server.v1.public_key().unwrap();
-        assert!(keys::tests::verify(&public, &cert["cert"], cert["cert_sig"].as_str().unwrap()));
+        assert!(keys::tests::verify(
+            &public,
+            &cert["cert"],
+            cert["cert_sig"].as_str().unwrap()
+        ));
         let mut unknown_app = open.clone();
         unknown_app["app"] = json!("nope");
-        assert_eq!(call(&mut server, "rox.session.open", unknown_app)["structuredContent"]["code"], "invalid_args");
+        assert_eq!(
+            call(&mut server, "rox.session.open", unknown_app)["structuredContent"]["code"],
+            "invalid_args"
+        );
         let mut wrong = open.clone();
         wrong["perms_sha256"] = json!("0".repeat(64));
-        assert_eq!(call(&mut server, "rox.session.open", wrong)["structuredContent"]["code"], "invalid_args");
+        assert_eq!(
+            call(&mut server, "rox.session.open", wrong)["structuredContent"]["code"],
+            "invalid_args"
+        );
         // a certified open may call; an uncertified one may not
-        assert_eq!(call_as(&mut server, app("forms"), "bir_app_screen_forms_index", json!({}))["isError"], false);
+        assert_eq!(
+            call_as(
+                &mut server,
+                app("forms"),
+                "bir_app_screen_forms_index",
+                json!({})
+            )["isError"],
+            false
+        );
         let mut stranger = app("forms");
         stranger["open_id"] = json!(b64url(&[8; 16]));
-        let refused = call_as(&mut server, stranger, "bir_app_screen_forms_index", json!({}));
+        let refused = call_as(
+            &mut server,
+            stranger,
+            "bir_app_screen_forms_index",
+            json!({}),
+        );
         assert_eq!(refused["structuredContent"]["code"], "permission_denied");
         // tickets: a title and nothing else; uninstall forgets them
         let ticket = ticket_of(ROOT);
         let title = call(&mut server, "rox.ticket.resolve", json!({"ticket": ticket}));
-        assert_eq!(title["structuredContent"], json!({"valid": true, "title": "Dela Cruz Jane"}));
         assert_eq!(
-            call(&mut server, "rox.session.close", json!({"open_id": b64url(&[9; 16])}))["structuredContent"],
+            title["structuredContent"],
+            json!({"valid": true, "title": "Dela Cruz Jane"})
+        );
+        assert_eq!(
+            call(
+                &mut server,
+                "rox.session.close",
+                json!({"open_id": b64url(&[9; 16])})
+            )["structuredContent"],
             json!({"ok": true})
         );
-        assert_eq!(call(&mut server, "rox.uninstall", json!({}))["structuredContent"], json!({"ok": true}));
+        assert_eq!(
+            call(&mut server, "rox.uninstall", json!({}))["structuredContent"],
+            json!({"ok": true})
+        );
         let gone = call(&mut server, "rox.ticket.resolve", json!({"ticket": ticket}));
         assert_eq!(gone["structuredContent"], json!({"valid": false}));
     }

@@ -55,9 +55,15 @@ fn read_sheet(name: &str) -> Sheet {
         } else {
             continue;
         };
-        let column: String = reference.chars().take_while(char::is_ascii_alphabetic).collect();
+        let column: String = reference
+            .chars()
+            .take_while(char::is_ascii_alphabetic)
+            .collect();
         let row: u32 = reference[column.len()..].parse().expect("a cell row");
-        sheet.entry(row).or_default().insert(column, unescape(&value));
+        sheet
+            .entry(row)
+            .or_default()
+            .insert(column, unescape(&value));
     }
     sheet
 }
@@ -162,8 +168,15 @@ fn the_2551q_sales_workbook_fills_a_return_that_validates() {
     let sheet = read_sheet("2551Q-2026-Q3-sales.xlsx");
     let gross = total(&sheet, "Month", "Gross sales");
     let tax = total(&sheet, "Month", "Percentage tax");
-    assert!(column(&sheet, "Month", "ATC").iter().all(|atc| atc == "PT010"));
-    assert_eq!(column(&sheet, "Month", "Month"), ["Jul 2026", "Aug 2026", "Sep 2026"]);
+    assert!(
+        column(&sheet, "Month", "ATC")
+            .iter()
+            .all(|atc| atc == "PT010")
+    );
+    assert_eq!(
+        column(&sheet, "Month", "Month"),
+        ["Jul 2026", "Aug 2026", "Sep 2026"]
+    );
 
     let mut server = jane();
     // Item 13 is the filer's election, never the agent's. Jane's profile
@@ -193,7 +206,11 @@ fn the_2551q_sales_workbook_fills_a_return_that_validates() {
     })
     .unwrap();
 
-    tool(&mut server, "bir_form_open", json!({"code": "@bir:taxform:123456789/2551Q-2026-Q3"}));
+    tool(
+        &mut server,
+        "bir_form_open",
+        json!({"code": "@bir:taxform:123456789/2551Q-2026-Q3"}),
+    );
     let fields = tool(&mut server, "bir_form_fields", json!({}));
     let keys: Vec<&str> = fields["boxes"]
         .as_array()
@@ -215,12 +232,17 @@ fn the_2551q_sales_workbook_fills_a_return_that_validates() {
     validates(&mut server);
     tool(&mut server, "bir_form_save_draft", json!({}));
 
-    let draft = crate::bir_module::with_database(|db| Ok(db.get_2551q_draft(TIN, 2026, 3).unwrap()))
-        .unwrap()
-        .expect("saved");
+    let draft =
+        crate::bir_module::with_database(|db| Ok(db.get_2551q_draft(TIN, 2026, 3).unwrap()))
+            .unwrap()
+            .expect("saved");
     assert_eq!(draft.schedule_1[0].atc, "PT010");
     assert_eq!(amount(draft.schedule_1[0].taxable_amount), amount(gross));
-    assert_eq!(amount(draft.total_tax_due), amount(tax), "the form's tax is the workbook's");
+    assert_eq!(
+        amount(draft.total_tax_due),
+        amount(tax),
+        "the form's tax is the workbook's"
+    );
 }
 
 #[test]
@@ -234,7 +256,11 @@ fn the_1601c_payroll_workbook_fills_a_return_that_validates() {
     assert_eq!(column(&sheet, "Employee", "Employee").len(), 5);
 
     let mut server = jane();
-    tool(&mut server, "bir_form_open", json!({"code": "123456789/1601C-2026-09"}));
+    tool(
+        &mut server,
+        "bir_form_open",
+        json!({"code": "123456789/1601C-2026-09"}),
+    );
     let filled = tool(
         &mut server,
         "bir_form_fill",
@@ -256,13 +282,17 @@ fn the_1601c_payroll_workbook_fills_a_return_that_validates() {
     validates(&mut server);
     tool(&mut server, "bir_form_save_draft", json!({}));
 
-    let draft = crate::bir_module::with_database(|db| Ok(db.get_1601c_draft(TIN, 2026, 9).unwrap()))
-        .unwrap()
-        .expect("saved");
+    let draft =
+        crate::bir_module::with_database(|db| Ok(db.get_1601c_draft(TIN, 2026, 9).unwrap()))
+            .unwrap()
+            .expect("saved");
     assert_eq!(
         amount(draft.tax_22_total_taxable),
         amount(taxable),
         "Item 22 is the workbook's taxable compensation"
     );
-    assert_eq!(amount(draft.tax_27_taxes_withheld_for_remittance), amount(withheld));
+    assert_eq!(
+        amount(draft.tax_27_taxes_withheld_for_remittance),
+        amount(withheld)
+    );
 }

@@ -14,11 +14,23 @@ use serde_json::json;
 #[test]
 #[ignore = "seeds a test Rox's scratch database; run on purpose"]
 fn seed_a_scratch_database_for_a_test_rox() {
-    assert!(std::env::var_os("BIR_E2E_SEED").is_some(), "set BIR_E2E_SEED=1");
-    assert!(std::env::var_os("EBIR_TEST_ENV").is_some(), "test databases only");
-    assert!(std::env::var_os("BIR_DATABASE_PATH").is_some(), "a scratch BIR_DATABASE_PATH");
+    assert!(
+        std::env::var_os("BIR_E2E_SEED").is_some(),
+        "set BIR_E2E_SEED=1"
+    );
+    assert!(
+        std::env::var_os("EBIR_TEST_ENV").is_some(),
+        "test databases only"
+    );
+    assert!(
+        std::env::var_os("BIR_DATABASE_PATH").is_some(),
+        "a scratch BIR_DATABASE_PATH"
+    );
     let (db, _, _) = bir_core::db::open_live_database().expect("the scratch database opens");
-    for (root, name) in [("123456788", "Dela Cruz Jane"), ("987654321", "Santos Mario")] {
+    for (root, name) in [
+        ("123456788", "Dela Cruz Jane"),
+        ("987654321", "Santos Mario"),
+    ] {
         if db.get_taxpayer(root).ok().flatten().is_none() {
             db.create_taxpayer(NewTaxpayer {
                 tin_root: root.into(),
@@ -35,14 +47,18 @@ fn seed_a_scratch_database_for_a_test_rox() {
             })
             .expect("taxpayer");
         }
-        db.set_yearly_forms(&format!("{root}00000"), 2026, &["1601C", "2551Q"]).expect("forms");
+        db.set_yearly_forms(&format!("{root}00000"), 2026, &["1601C", "2551Q"])
+            .expect("forms");
     }
     const TIN: &str = "12345678800000";
     let profile = db.get_profile(TIN).unwrap().unwrap();
-    let mut queued = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, 2026, 9);
+    let mut queued =
+        bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, 2026, 9);
     queued.any_taxes_withheld = false;
     queued.category_of_agent = "P".to_string();
-    queued.transition_to_queued().unwrap_or_else(|errors| panic!("queue: {errors:?}"));
+    queued
+        .transition_to_queued()
+        .unwrap_or_else(|errors| panic!("queue: {errors:?}"));
     db.save_queued_1601c_draft(&queued).unwrap();
     let claim = db
         .claim_queued_1601c_submission(

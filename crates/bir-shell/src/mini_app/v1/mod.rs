@@ -254,7 +254,8 @@ impl Host {
             Ok(signature) => signature,
             Err(message) => return fail("invalid_args", &message),
         };
-        self.sessions.insert(request.open_id.clone(), request.app.clone());
+        self.sessions
+            .insert(request.open_id.clone(), request.app.clone());
         ok(json!({ "cert": cert, "cert_sig": signature }))
     }
 
@@ -317,7 +318,11 @@ pub(crate) fn expand(
         match value.as_str() {
             Some(text) if tickets::is_ticket(text) => {
                 let subject = lookup(text)?;
-                let tin = if key == "tins" { subject.tin() } else { subject.full_tin() };
+                let tin = if key == "tins" {
+                    subject.tin()
+                } else {
+                    subject.full_tin()
+                };
                 Ok(Some((tin, subject)))
             }
             Some(_) if origin == Origin::App => Err(format!(
@@ -347,7 +352,11 @@ pub(crate) fn expand(
         arguments.insert("tins".into(), Value::Array(out));
     }
     for key in RETURN_ARGS {
-        let Some(text) = arguments.get(key).and_then(Value::as_str).map(str::to_string) else {
+        let Some(text) = arguments
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
             continue;
         };
         if !tickets::is_ticket(&text) {
@@ -476,7 +485,8 @@ impl<'a> Scrubber<'a> {
                         && let Some(text) = item.as_str()
                         && let Some(subject) = Subject::of_tin(text)
                     {
-                        *item = Value::String(self.ticket(&subject).unwrap_or_else(|| "[TIN]".into()));
+                        *item =
+                            Value::String(self.ticket(&subject).unwrap_or_else(|| "[TIN]".into()));
                         continue;
                     }
                     if key == "tins"
@@ -484,7 +494,9 @@ impl<'a> Scrubber<'a> {
                     {
                         for tin in tins.iter_mut() {
                             if let Some(subject) = tin.as_str().and_then(Subject::of_tin) {
-                                *tin = Value::String(self.ticket(&subject).unwrap_or_else(|| "[TIN]".into()));
+                                *tin = Value::String(
+                                    self.ticket(&subject).unwrap_or_else(|| "[TIN]".into()),
+                                );
                             }
                         }
                         continue;
@@ -493,7 +505,9 @@ impl<'a> Scrubber<'a> {
                         && let Some(text) = item.as_str()
                         && let Some(subject) = Subject::of_return(text, self.today)
                     {
-                        *item = Value::String(self.ticket(&subject).unwrap_or_else(|| "[return]".into()));
+                        *item = Value::String(
+                            self.ticket(&subject).unwrap_or_else(|| "[return]".into()),
+                        );
                         continue;
                     }
                     if LINK_KEYS.contains(&key.as_str())
@@ -517,7 +531,8 @@ impl<'a> Scrubber<'a> {
         let today = self.today;
         let tokens = token_re().replace_all(text, |caps: &regex::Captures<'_>| {
             let scope = &caps[1];
-            match subject_of_token(scope, &caps[2], today).and_then(|subject| self.ticket(&subject)) {
+            match subject_of_token(scope, &caps[2], today).and_then(|subject| self.ticket(&subject))
+            {
                 Some(ticket) => format!("@bir:{scope}:{ticket}"),
                 None => format!("@bir:{scope}:[unresolved]"),
             }
@@ -554,14 +569,22 @@ pub(crate) struct Opened {
 /// v0 props (`{tin, branch?, form?, period?, ...}`) as v1 props: the TIN
 /// becomes a ticket (a return's when `form` and `period` name one), and
 /// what is left that names no taxpayer stays.
-pub(crate) fn v1_props(db: &Database, app: &str, v0: &Value, today: NaiveDate) -> Result<Opened, String> {
+pub(crate) fn v1_props(
+    db: &Database,
+    app: &str,
+    v0: &Value,
+    today: NaiveDate,
+) -> Result<Opened, String> {
     let mut props = Map::new();
     for (key, value) in v0.as_object().into_iter().flatten() {
         if !["tin", "branch", "scope", "server"].contains(&key.as_str()) {
             props.insert(key.clone(), value.clone());
         }
     }
-    let tin = v0.get("tin").and_then(Value::as_str).and_then(taxform::tin_digits);
+    let tin = v0
+        .get("tin")
+        .and_then(Value::as_str)
+        .and_then(taxform::tin_digits);
     let Some(tin) = tin else {
         return Ok(Opened {
             props: Value::Object(props),
@@ -583,9 +606,10 @@ pub(crate) fn v1_props(db: &Database, app: &str, v0: &Value, today: NaiveDate) -
     let form = v0.get("form").and_then(Value::as_str);
     let period = v0.get("period").and_then(Value::as_str);
     let subject = match (app, form, period) {
-        ("forms", Some(form), Some(period)) => {
-            Subject::of_return(&format!("{}/{form}-{period}", taxform::token_tin(&who)), today)
-        }
+        ("forms", Some(form), Some(period)) => Subject::of_return(
+            &format!("{}/{form}-{period}", taxform::token_tin(&who)),
+            today,
+        ),
         _ => None,
     }
     .or_else(|| Subject::of_tin(&who))
@@ -652,14 +676,21 @@ fn clip(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
 }
 
-fn try_resolve(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+fn try_resolve(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     if let Some(key) = arguments
         .keys()
         .find(|key| !["kind", "name", "value", "complete", "context"].contains(&key.as_str()))
     {
         return Err(format!("unknown argument `{key}`"));
     }
-    let kind = arguments.get("kind").and_then(Value::as_str).unwrap_or("scope");
+    let kind = arguments
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or("scope");
     if !["command", "scope"].contains(&kind) {
         return Err("`kind` must be command or scope".into());
     }
@@ -670,7 +701,10 @@ fn try_resolve(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) 
         .trim()
         .to_ascii_lowercase();
     let value = arguments.get("value").and_then(Value::as_str).unwrap_or("");
-    let complete = arguments.get("complete").and_then(Value::as_bool).unwrap_or(false);
+    let complete = arguments
+        .get("complete")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let attached = arguments
         .get("context")
         .and_then(|context| context.get("attached"))
@@ -720,7 +754,8 @@ fn try_resolve(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) 
         .strip_prefix("@bir:")
         .and_then(|rest| rest.split_once(':'))
         .ok_or("the resolver named nothing")?;
-    let subject = subject_of_token(scope, token_value, today).ok_or("the resolver named nothing")?;
+    let subject =
+        subject_of_token(scope, token_value, today).ok_or("the resolver named nothing")?;
     let ticket = tickets::issue(db, &subject)?;
     let title = subject
         .title(db, today)
@@ -750,10 +785,11 @@ fn expand_value(db: &Database, name: &str, value: &str) -> Result<String, String
         return Ok(value.to_string());
     };
     let rest = &value[30..];
-    let subject = tickets::subject(db, ticket)?
-        .ok_or("That item is no longer available")?;
+    let subject = tickets::subject(db, ticket)?.ok_or("That item is no longer available")?;
     let head = match (&subject, name) {
-        (Subject::Branch(tin), "branchcode") if rest.is_empty() => format!("{}/{}", &tin[..9], &tin[9..]),
+        (Subject::Branch(tin), "branchcode") if rest.is_empty() => {
+            format!("{}/{}", &tin[..9], &tin[9..])
+        }
         (Subject::Return(value), _) => value.clone(),
         (subject, _) => subject.tin(),
     };

@@ -63,7 +63,10 @@ fn awaiting(db: &Database, branches: &[resolve::Branch], today: NaiveDate) -> Ve
         for kind in bir_core::forms::agent::AgentFormKind::all() {
             let code = kind.form_code();
             for (period, summary) in resolve::stored_returns(db, &branch.tin, code, today) {
-                if !matches!(summary.status, FilingStatus::Queued | FilingStatus::Submitted) {
+                if !matches!(
+                    summary.status,
+                    FilingStatus::Queued | FilingStatus::Submitted
+                ) {
                     continue;
                 }
                 out.push(json!({
@@ -89,7 +92,10 @@ pub(crate) fn watched_branches(
     arguments: &Map<String, Value>,
     watch: &Watch,
 ) -> Result<Vec<resolve::Branch>, String> {
-    if arguments.get("tins").is_some_and(|tins| tins.as_array().is_some_and(|tins| !tins.is_empty())) {
+    if arguments
+        .get("tins")
+        .is_some_and(|tins| tins.as_array().is_some_and(|tins| !tins.is_empty()))
+    {
         return named_branches(db, arguments);
     }
     match watch.branches(db)? {
@@ -115,9 +121,15 @@ pub(crate) fn named_branches(
                     .ok_or_else(|| format!("`{tin}` is not a TIN (9 or 14 digits)"))?;
                 if digits.len() == 9 {
                     let all = resolve::branches(db, None)?;
-                    let mine: Vec<_> = all.into_iter().filter(|branch| branch.root == digits).collect();
+                    let mine: Vec<_> = all
+                        .into_iter()
+                        .filter(|branch| branch.root == digits)
+                        .collect();
                     if mine.is_empty() {
-                        return Err(format!("no taxpayer with TIN {}", resolve::format_tin(&digits)));
+                        return Err(format!(
+                            "no taxpayer with TIN {}",
+                            resolve::format_tin(&digits)
+                        ));
                     }
                     out.extend(mine);
                 } else {
@@ -180,7 +192,12 @@ fn received(raw: &str) -> Result<(NaiveDate, NaiveTime, Option<String>), String>
         let local = at.with_timezone(&manila).naive_local();
         return Ok((local.date(), local.time(), Some(at.to_rfc3339())));
     }
-    for format in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"] {
+    for format in [
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%d %H:%M",
+    ] {
         if let Ok(local) = NaiveDateTime::parse_from_str(raw, format) {
             let at = local
                 .and_local_timezone(manila)
@@ -222,7 +239,8 @@ fn file_period(text: &str, like: TaxPeriod) -> Option<TaxPeriod> {
 /// ones that file name starts with.
 pub(crate) fn email_backed(arguments: &Map<String, Value>, today: NaiveDate) -> Result<(), String> {
     const RULE: &str = "a routine confirms only the return BIR's email names";
-    let (Ok(_), Ok(reference)) = (text(arguments, "message_id"), text(arguments, "reference")) else {
+    let (Ok(_), Ok(reference)) = (text(arguments, "message_id"), text(arguments, "reference"))
+    else {
         return Err(format!(
             "{RULE}: pass the email's `message_id` and its File name as `reference`"
         ));
@@ -232,7 +250,14 @@ pub(crate) fn email_backed(arguments: &Map<String, Value>, today: NaiveDate) -> 
     })?;
     // `2551Qv2018`: the form, then its version
     let file_form = match file_form.rfind('v') {
-        Some(at) if at > 0 && file_form[at + 1..].bytes().all(|byte| byte.is_ascii_digit()) => &file_form[..at],
+        Some(at)
+            if at > 0
+                && file_form[at + 1..]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit()) =>
+        {
+            &file_form[..at]
+        }
         _ => file_form.as_str(),
     };
     let asked = |key: &str| text(arguments, key).unwrap_or("");
@@ -244,21 +269,31 @@ pub(crate) fn email_backed(arguments: &Map<String, Value>, today: NaiveDate) -> 
             .ok()
     });
     let mut differs = Vec::new();
-    let tin = taxform::tin_digits(asked("tin"))
-        .map(|digits| if digits.len() == 9 { format!("{digits}00000") } else { digits });
+    let tin = taxform::tin_digits(asked("tin")).map(|digits| {
+        if digits.len() == 9 {
+            format!("{digits}00000")
+        } else {
+            digits
+        }
+    });
     if !tin.is_some_and(|tin| tin_spellings(&tin).contains(&file_tin)) {
         differs.push("TIN");
     }
     if code.is_none() || code != taxform::form_code_of(file_form) {
         differs.push("form");
     }
-    if period.is_none() || period.and_then(|period| file_period(&file_period_text, period)) != period {
+    if period.is_none()
+        || period.and_then(|period| file_period(&file_period_text, period)) != period
+    {
         differs.push("period");
     }
     if differs.is_empty() {
         Ok(())
     } else {
-        Err(format!("{RULE}: its File name names another {}", differs.join(", ")))
+        Err(format!(
+            "{RULE}: its File name names another {}",
+            differs.join(", ")
+        ))
     }
 }
 
@@ -272,7 +307,14 @@ pub(crate) fn confirm(
 ) -> Result<Value, String> {
     check_keys(
         arguments,
-        &["tin", "form", "period", "reference", "received_at", "message_id"],
+        &[
+            "tin",
+            "form",
+            "period",
+            "reference",
+            "received_at",
+            "message_id",
+        ],
     )?;
     let message_id = text(arguments, "message_id")?;
     let remembered = format!("{CONFIRMED_PREFIX}{message_id}");
@@ -305,7 +347,9 @@ pub(crate) fn confirm(
         .ok_or_else(|| format!("`form` `{form}` is not a BIR form code"))?;
     let period: TaxPeriod = named
         .period
-        .ok_or_else(|| format!("`period` `{period}` is not a period (e.g. 2026-Q3, 2026-09, 2025)"))?
+        .ok_or_else(|| {
+            format!("`period` `{period}` is not a period (e.g. 2026-Q3, 2026-09, 2025)")
+        })?
         .for_form(code, today)?;
     let returns = resolve::stored_returns(db, &branch.tin, code, today);
     let filing = resolve::furthest(&returns, code, period).ok_or_else(|| {
@@ -324,7 +368,10 @@ pub(crate) fn confirm(
         .draft_data_json(filing.id)
         .map_err(|error| error.to_string())?
         .unwrap_or(Value::Null);
-    let filename = marks["submission_filename"].as_str().unwrap_or("").to_string();
+    let filename = marks["submission_filename"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
     let answer = |confirmed: bool, status: &FilingStatus, reason: Option<String>| {
         let mut answer = json!({
             "confirmed": confirmed,
@@ -348,7 +395,11 @@ pub(crate) fn confirm(
     };
     match filing.status {
         FilingStatus::Confirmed | FilingStatus::Paid => {
-            return Ok(answer(true, &filing.status, Some("This return was already confirmed.".into())));
+            return Ok(answer(
+                true,
+                &filing.status,
+                Some("This return was already confirmed.".into()),
+            ));
         }
         FilingStatus::Draft => {
             return Ok(answer(
@@ -374,7 +425,8 @@ pub(crate) fn confirm(
         ));
     }
     // The email names the file it confirms; it must be this return's.
-    if let (Some(named), Some(ours)) = (split_bir_filename(reference), split_bir_filename(&filename))
+    if let (Some(named), Some(ours)) =
+        (split_bir_filename(reference), split_bir_filename(&filename))
         && (named.1 != ours.1 || named.2 != ours.2)
     {
         return Ok(answer(
@@ -394,7 +446,11 @@ pub(crate) fn confirm(
         source_from: Some(BIR_SENDER.to_string()),
         raw_text: format!(
             "Confirmed from email {message_id} (bir_confirm_filing). File name: {}. Received by BIR: {date} {time}.",
-            if reference.is_empty() { &filename } else { reference }
+            if reference.is_empty() {
+                &filename
+            } else {
+                reference
+            }
         ),
         raw_html: None,
     };
@@ -458,7 +514,10 @@ mod tests {
         let db = db();
         let found = search(&db, &args(json!({"tins": [ROOT]})), today()).unwrap();
         let query = found["query"].as_str().unwrap();
-        assert!(query.starts_with("from:ebirforms-noreply@bir.gov.ph after:2026/09/26"), "{query}");
+        assert!(
+            query.starts_with("from:ebirforms-noreply@bir.gov.ph after:2026/09/26"),
+            "{query}"
+        );
         assert!(query.contains("\"12345678800000\""), "{query}");
         assert!(query.contains("\"123456788000\""), "{query}");
         assert_eq!(found["since"], "2026-09-26");
@@ -470,8 +529,10 @@ mod tests {
     fn a_return_that_was_not_sent_is_not_confirmed() {
         let db = db();
         let profile = db.get_profile(TIN).unwrap().unwrap();
-        db.save_2551q_draft(&bir_core::forms::Form2551QDraft::new_from_profile(&profile, 2026, 3))
-            .unwrap();
+        db.save_2551q_draft(&bir_core::forms::Form2551QDraft::new_from_profile(
+            &profile, 2026, 3,
+        ))
+        .unwrap();
         let answer = confirm(
             &db,
             &args(json!({
@@ -501,7 +562,8 @@ mod tests {
         let db = db();
         let profile = db.get_profile(TIN).unwrap().unwrap();
         // A zero return: no taxes withheld, a private employer.
-        let mut queued = bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, 2026, 9);
+        let mut queued =
+            bir_core::forms::form_1601c::Form1601CDraft::new_from_profile(&profile, 2026, 9);
         queued.any_taxes_withheld = false;
         queued.category_of_agent = "P".to_string();
         queued
@@ -541,7 +603,10 @@ mod tests {
         let answer = confirm(&db, &args(email.clone()), today()).unwrap();
         assert_eq!(answer["confirmed"], true, "{answer}");
         assert_eq!(answer["status"], "Confirmed");
-        assert_eq!(answer["token"], format!("@bir:taxform:{ROOT}/1601C-2026-09"));
+        assert_eq!(
+            answer["token"],
+            format!("@bir:taxform:{ROOT}/1601C-2026-09")
+        );
         let stored = db.get_1601c_draft(TIN, 2026, 9).unwrap().unwrap();
         assert_eq!(stored.status, FilingStatus::Confirmed);
         let again = confirm(&db, &args(email), today()).unwrap();

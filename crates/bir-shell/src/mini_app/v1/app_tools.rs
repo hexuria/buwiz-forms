@@ -293,13 +293,20 @@ pub(crate) struct HostRequest {
 
 pub(crate) fn request(tool: &str, arguments: &Map<String, Value>) -> Result<HostRequest, String> {
     let function = function_of(tool).ok_or_else(|| format!("unknown tool: {tool}"))?;
-    if let Some(key) = arguments.keys().find(|key| !["args", "args_json", "ticket"].contains(&key.as_str())) {
-        return Err(format!("unknown argument `{key}` (allowed: args, args_json, ticket)"));
+    if let Some(key) = arguments
+        .keys()
+        .find(|key| !["args", "args_json", "ticket"].contains(&key.as_str()))
+    {
+        return Err(format!(
+            "unknown argument `{key}` (allowed: args, args_json, ticket)"
+        ));
     }
     // A signed call carries whole numbers only: a draft's amounts (629.94,
     // a 0.03 rate) come as `args_json`, the arguments as JSON text.
     let args = match (arguments.get("args"), arguments.get("args_json")) {
-        (Some(args), Some(_)) if !args.is_null() => return Err("send `args` or `args_json`, not both".into()),
+        (Some(args), Some(_)) if !args.is_null() => {
+            return Err("send `args` or `args_json`, not both".into());
+        }
         (_, Some(Value::String(text))) => match serde_json::from_str(text) {
             Ok(Value::Array(args)) => args,
             _ => return Err("`args_json` must be a JSON array of the function's arguments".into()),
@@ -391,7 +398,9 @@ pub(crate) fn finish(
 ) -> Result<Value, String> {
     let function = request.function;
     if function == "move_taxpayer_tin" {
-        if let (Some(from), Some(to)) = (&prepared.root, request.args.get(1).and_then(scope::root_of)) {
+        if let (Some(from), Some(to)) =
+            (&prepared.root, request.args.get(1).and_then(scope::root_of))
+        {
             tickets::move_root(db, from, &to)?;
         }
         return Ok(value);
@@ -405,7 +414,10 @@ pub(crate) fn finish(
                 .and_then(Value::as_str)
                 .and_then(Subject::of_tin);
             if let Some(subject) = subject {
-                created.insert("ticket".into(), Value::String(tickets::issue(db, &subject)?));
+                created.insert(
+                    "ticket".into(),
+                    Value::String(tickets::issue(db, &subject)?),
+                );
             }
             Ok(Value::Object(created))
         }
@@ -421,7 +433,11 @@ fn with_tickets(db: &Database, rows: Value, field: &str) -> Result<Value, String
     };
     let subjects: Vec<Option<Subject>> = rows
         .iter()
-        .map(|row| row.get(field).and_then(Value::as_str).and_then(Subject::of_tin))
+        .map(|row| {
+            row.get(field)
+                .and_then(Value::as_str)
+                .and_then(Subject::of_tin)
+        })
         .collect();
     let issued = tickets::issue_all(db, &subjects)?;
     for (row, ticket) in rows.iter_mut().zip(issued) {
@@ -485,7 +501,12 @@ pub(crate) enum PreviewAsk {
     Draft(Vec<Value>),
     /// A 2551Q or 1601C as stored for its period (`quarter` is the month
     /// for 1601C), of the ticket's branch.
-    Period { tin: String, form: String, year: u16, quarter: u8 },
+    Period {
+        tin: String,
+        form: String,
+        year: u16,
+        quarter: u8,
+    },
     /// A sent return's filing record: `{tin, form, period}` with the
     /// ticket's TIN.
     Record(Map<String, Value>),
@@ -499,10 +520,26 @@ pub(crate) enum PreviewAsk {
 /// taxpayer, and a record is of the ticket's own branch. A draft's amounts
 /// are not integers, which a signed call carries only as text: a saved
 /// return is read here, and a sample comes as JSON text.
-pub(crate) fn preview_ask(db: &Database, arguments: &Map<String, Value>) -> Result<PreviewAsk, String> {
-    const KEYS: [&str; 9] = ["ticket", "form", "draft_id", "year", "quarter", "draft_json", "edits", "unlocked", "period"];
+pub(crate) fn preview_ask(
+    db: &Database,
+    arguments: &Map<String, Value>,
+) -> Result<PreviewAsk, String> {
+    const KEYS: [&str; 9] = [
+        "ticket",
+        "form",
+        "draft_id",
+        "year",
+        "quarter",
+        "draft_json",
+        "edits",
+        "unlocked",
+        "period",
+    ];
     if let Some(key) = arguments.keys().find(|key| !KEYS.contains(&key.as_str())) {
-        return Err(format!("unknown argument `{key}` (allowed: {})", KEYS.join(", ")));
+        return Err(format!(
+            "unknown argument `{key}` (allowed: {})",
+            KEYS.join(", ")
+        ));
     }
     let ticket = arguments
         .get("ticket")
@@ -513,24 +550,40 @@ pub(crate) fn preview_ask(db: &Database, arguments: &Map<String, Value>) -> Resu
         .get("form")
         .and_then(Value::as_str)
         .ok_or("`form` is required: a BIR form code")?;
-    let given = ["draft_id", "year", "draft_json", "period"].iter().filter(|key| arguments.contains_key(**key)).count();
+    let given = ["draft_id", "year", "draft_json", "period"]
+        .iter()
+        .filter(|key| arguments.contains_key(**key))
+        .count();
     if given != 1 {
         return Err("pass one of `draft_id` or `year` and `quarter` (a saved return), `draft_json` (a sample) or `period` (a sent return's record)".into());
     }
     if let Some(year) = arguments.get("year") {
-        let year = year.as_u64().and_then(|y| u16::try_from(y).ok()).ok_or("`year` must be a year like 2026")?;
+        let year = year
+            .as_u64()
+            .and_then(|y| u16::try_from(y).ok())
+            .ok_or("`year` must be a year like 2026")?;
         let quarter = arguments
             .get("quarter")
             .and_then(Value::as_u64)
             .and_then(|q| u8::try_from(q).ok())
             .ok_or("`quarter` (the quarter, or the month for 1601C) must be a number")?;
         if !["2551Q", "1601C"].contains(&form) {
-            return Err(format!("`year` and `quarter` name a 2551Q or 1601C; {form} prints by `draft_id`"));
+            return Err(format!(
+                "`year` and `quarter` name a 2551Q or 1601C; {form} prints by `draft_id`"
+            ));
         }
         if arguments.len() != 4 {
-            return Err("a saved return prints as stored: `ticket`, `form`, `year` and `quarter` only".into());
+            return Err(
+                "a saved return prints as stored: `ticket`, `form`, `year` and `quarter` only"
+                    .into(),
+            );
         }
-        return Ok(PreviewAsk::Period { tin: subject.full_tin(), form: form.to_string(), year, quarter });
+        return Ok(PreviewAsk::Period {
+            tin: subject.full_tin(),
+            form: form.to_string(),
+            year,
+            quarter,
+        });
     }
     if let Some(id) = arguments.get("draft_id") {
         let id = id.as_i64().ok_or("`draft_id` must be an integer")?;
@@ -558,8 +611,14 @@ pub(crate) fn preview_ask(db: &Database, arguments: &Map<String, Value>) -> Resu
             if !edits.is_object() {
                 return Err("`edits` must be an object of box keys to values".into());
             }
-            let unlocked = arguments.get("unlocked").cloned().unwrap_or_else(|| json!([]));
-            if !unlocked.as_array().is_some_and(|keys| keys.iter().all(Value::is_string)) {
+            let unlocked = arguments
+                .get("unlocked")
+                .cloned()
+                .unwrap_or_else(|| json!([]));
+            if !unlocked
+                .as_array()
+                .is_some_and(|keys| keys.iter().all(Value::is_string))
+            {
                 return Err("`unlocked` must be a list of box keys".into());
             }
             args.extend([edits, unlocked]);
@@ -656,9 +715,15 @@ mod tests {
             assert!(module.has(function), "{function} is not a host function");
             let name = tool_name(function);
             assert!(name.len() <= 63 && name.starts_with("bir_"), "{name}");
-            assert!(name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'));
+            assert!(
+                name.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+            );
         }
-        assert_eq!(function_of("bir_app_list_taxpayers"), Some("list_taxpayers"));
+        assert_eq!(
+            function_of("bir_app_list_taxpayers"),
+            Some("list_taxpayers")
+        );
         assert_eq!(function_of("bir_app_set_setting"), None);
         assert!(read_only("bir_app_list_taxpayers") && !read_only("bir_app_delete_taxpayer"));
     }
@@ -668,10 +733,21 @@ mod tests {
         let args = |v: Value| v.as_object().unwrap().clone();
         let tool = "bir_app_screen_form_save";
         let sent = request(tool, &args(json!({"args_json": "[\"2551Q\", {\"tax_rate\": 0.03, \"amount\": 629.94}]", "ticket": "t"}))).unwrap();
-        assert_eq!(sent.args, vec![json!("2551Q"), json!({"tax_rate": 0.03, "amount": 629.94})]);
+        assert_eq!(
+            sent.args,
+            vec![json!("2551Q"), json!({"tax_rate": 0.03, "amount": 629.94})]
+        );
         assert_eq!(sent.ticket.as_deref(), Some("t"));
-        assert_eq!(request(tool, &args(json!({"args": [1, 2]}))).unwrap().args, vec![json!(1), json!(2)]);
-        for bad in [json!({"args": [], "args_json": "[]"}), json!({"args_json": "{}"}), json!({"args_json": [1]}), json!({"args_json": "not json"})] {
+        assert_eq!(
+            request(tool, &args(json!({"args": [1, 2]}))).unwrap().args,
+            vec![json!(1), json!(2)]
+        );
+        for bad in [
+            json!({"args": [], "args_json": "[]"}),
+            json!({"args_json": "{}"}),
+            json!({"args_json": [1]}),
+            json!({"args_json": "not json"}),
+        ] {
             assert!(request(tool, &args(bad.clone())).is_err(), "{bad}");
         }
     }
@@ -680,18 +756,30 @@ mod tests {
     fn uploads_append_and_cap() {
         let mut uploads = Uploads::default();
         let first = uploads
-            .append(json!({"data": STANDARD.encode(b"abc")}).as_object().unwrap())
+            .append(
+                json!({"data": STANDARD.encode(b"abc")})
+                    .as_object()
+                    .unwrap(),
+            )
             .unwrap();
         let id = first["upload"].as_str().unwrap().to_string();
         let more = uploads
-            .append(json!({"upload": id, "data": STANDARD.encode(b"de")}).as_object().unwrap())
+            .append(
+                json!({"upload": id, "data": STANDARD.encode(b"de")})
+                    .as_object()
+                    .unwrap(),
+            )
             .unwrap();
         assert_eq!(more["bytes"], 5);
         assert_eq!(uploads.take(&id).unwrap(), b"abcde");
         assert!(uploads.take(&id).is_none());
         assert!(
             uploads
-                .append(json!({"upload": "up_nope", "data": ""}).as_object().unwrap())
+                .append(
+                    json!({"upload": "up_nope", "data": ""})
+                        .as_object()
+                        .unwrap()
+                )
                 .is_err()
         );
     }
