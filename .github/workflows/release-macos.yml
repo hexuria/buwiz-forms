@@ -152,7 +152,7 @@ jobs:
     # signing material; skip them. Same-repo PRs keep failing closed if a
     # required secret is absent.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-14  # M1 runner — can build both arm64 and x86_64
+    runs-on: macos-15  # M1 runner — can build both arm64 and x86_64
     timeout-minutes: 180
     env:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}

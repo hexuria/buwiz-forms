@@ -51,7 +51,7 @@ class HtmlReleaseGatePolicyTests(unittest.TestCase):
             self.candidate.count("uses: actions/upload-artifact@v4"),
             3,
         )
-        self.assertIn("runs-on: macos-14", self.candidate)
+        self.assertIn("runs-on: macos-15", self.candidate)
         self.assertIn("runs-on: windows-latest", self.candidate)
         self.assertIn("runs-on: ubuntu-22.04", self.candidate)
         self.assertIn("cargo fmt --all -- --check", self.candidate)

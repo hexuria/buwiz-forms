@@ -362,7 +362,7 @@ class ReleaseWorkflowPolicyTests(unittest.TestCase):
         if all_systems is not None:
             self.assertEqual(
                 [entry["os"] for entry in json.loads(all_systems.group(1))["include"]],
-                ["macos-14", "ubuntu-22.04", "windows-latest"],
+                ["macos-15", "ubuntu-22.04", "windows-latest"],
             )
         self.assertEqual(
             check.count("cargo install just --version 1.45.0 --locked"),
