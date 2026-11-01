@@ -452,7 +452,7 @@ mod tests {
             self.calls.push((app.id.clone(), call, args.clone()));
             assert!(app.token_known, "called {} without a token", app.id);
             match call {
-                HostCall::Hello => Ok(json!({"app": "bir-desktop"})),
+                HostCall::Hello => Ok(json!({"app": "bir-shell"})),
                 HostCall::Invoke("app.info") => {
                     let database = self
                         .apps
@@ -461,7 +461,7 @@ mod tests {
                         .map(|(_, database)| *database)
                         .unwrap();
                     Ok(json!({
-                        "app": "bir-desktop",
+                        "app": "bir-shell",
                         "mode": app.mode,
                         "database": database,
                         "profiles": [{"tin": "11111111400000", "name": "Test Taxpayer"}]

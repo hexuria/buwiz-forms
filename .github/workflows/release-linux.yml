@@ -117,12 +117,12 @@ jobs:
 
       # The shipped app is the gpui-shell host (crates/bir-shell — a standalone
       # workspace with its own lockfile and target dir), built with no
-      # features. The painted bir-desktop stays buildable but is not shipped.
+      # features. The retired painted host is not shipped.
       - name: Build release binary
         run: cargo build --locked --release --manifest-path crates/bir-shell/Cargo.toml --target ${{ matrix.target }}
 
       - name: Stage desktop executable name
-        run: python3 scripts/alias_desktop_bin.py crates/bir-shell/target/${{ matrix.target }}/release bir-shell
+        run: python3 scripts/alias_app_bin.py crates/bir-shell/target/${{ matrix.target }}/release bir-shell
 
       - name: Resolve package version
         id: version

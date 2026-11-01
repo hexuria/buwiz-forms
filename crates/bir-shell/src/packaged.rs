@@ -6,7 +6,7 @@
 //! application lives at `Contents/Resources/app`, beside the `Contents/MacOS`
 //! executable; on Windows and Linux it sits next to the executable as `app/`.
 //! The deb/rpm/pacman packages instead keep immutable resources under the FHS
-//! share directory `usr/share/ebirforms`, the same place bir-desktop looks.
+//! share directory `usr/share/ebirforms`, the same place bir-shell looks.
 //!
 //! Each caller decides when a candidate counts: the application directory must
 //! look like an application (manifest or entry file), while a resource
@@ -47,7 +47,7 @@ fn candidates(executable_dir: &Path, name: &str) -> Vec<PathBuf> {
         executable_dir.join(name),
     ];
     // deb/rpm/pacman installs: `usr/bin/ebirforms` reads
-    // `usr/share/ebirforms/<name>` — bir-desktop's distribution location.
+    // `usr/share/ebirforms/<name>` — bir-shell's distribution location.
     // `cfg!` keeps `mut` used on every platform.
     if cfg!(target_os = "linux") {
         candidates.push(PathBuf::from("/usr/share/ebirforms").join(name));

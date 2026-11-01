@@ -10,7 +10,7 @@
 //!
 //! Drafts open the way each painted page opens them (stored draft for the
 //! taxpayer and period, else a new one built from the profile), reproduced
-//! here because bir-shell cannot depend on bir-desktop. A Form library
+//! here because bir-shell cannot depend on bir-shell. A Form library
 //! opening (`screen_form_sample`) always builds the new one and shows its
 //! period and date boxes blank; the page never saves it.
 //!
@@ -6099,6 +6099,11 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
 /// queued from the draft itself, after it validates.
 fn screen_form_queue(arguments: &HostArguments) -> HostResult {
     let code = arguments.string(0)?.to_owned();
+    if !bir_core::forms::can_queue_for_submission(&code) {
+        return Err(host_error(format!(
+            "{code} cannot be queued for submission yet"
+        )));
+    }
     let kind = kind_of(&code)?;
     let mut draft = draft_argument(arguments, 1)?;
     refuse_sample(&mut draft, "queued")?;
@@ -7677,6 +7682,17 @@ mod tests {
     #[test]
     fn screen_form_queue_queues_a_saved_draft_and_refuses_the_rest() {
         setup();
+        let unsupported = call(
+            "screen_form_queue",
+            vec!["2200M".into(), crate::bir_module::json(json!({}))],
+        )
+        .unwrap_err();
+        assert!(
+            unsupported
+                .message()
+                .contains("cannot be queued for submission")
+        );
+
         let opened = open("0619E", 7);
         let unsaved = call(
             "screen_form_queue",

@@ -76,7 +76,7 @@ PACKAGING_FILES = {
     PurePosixPath("entitlements.plist"),
     PurePosixPath("entitlements.dev.plist"),
     PurePosixPath("daemon.entitlements.plist"),
-    PurePosixPath("crates/bir-desktop/Cargo.toml"),
+    PurePosixPath("crates/bir-shell/Cargo.toml"),
 }
 PACKAGING_PREFIXES = (
     PurePosixPath(".github/workflows"),

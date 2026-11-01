@@ -5,6 +5,9 @@
 //! live database and the window. Screen changes are queued for the script
 //! (`bir.agent_take`); the TCP thread never touches GPUI.
 
+pub(crate) mod headless;
+mod headless_daemon;
+mod request_log;
 mod session;
 
 pub(crate) use session::send_draft;

@@ -166,7 +166,7 @@ def build_inventory(
     paths = {
         "core_model": [root / f"crates/bir-core/src/forms/form_{slug}.rs"],
         "xml_mapping": [root / f"crates/bir-core/src/forms/form_{slug}_xml.rs"],
-        "desktop_editor": [root / f"crates/bir-desktop/src/views/form_{slug}_view.rs"],
+        "shell_editor": [root / "crates/bir-shell/src/screen_form_module.rs"],
         "html_component": [root / f"packages/form-renderer/src/forms/{component}.tsx"],
         "renderer_tests": sorted(
             {
@@ -222,7 +222,7 @@ def build_inventory(
     expected = (
         "core_model",
         "xml_mapping",
-        "desktop_editor",
+        "shell_editor",
         "core_registry",
         "render_provider",
         "render_provider_registry",

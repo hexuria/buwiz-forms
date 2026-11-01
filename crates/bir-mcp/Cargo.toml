@@ -15,7 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 serde_json = { workspace = true }
-# Workspace pin shared with bir-desktop's `agent` feature.
+# Workspace pin shared with bir-shell's `agent` feature.
 gpui-agent = { workspace = true }
 # Blocking client for the buwiz-server license check. rustls, no OpenSSL.
 reqwest = { workspace = true }

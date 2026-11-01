@@ -22,7 +22,7 @@ pub fn export_profile_data(
     write_profile_zip(db, tin, export_file)
 }
 
-/// The administrator's delete-with-backup export — bir-desktop's
+/// The administrator's delete-with-backup export — bir-shell's
 /// `export_and_delete_profile` is its one caller: the same archive
 /// [`export_profile_data`] writes, without the taxpayer PIN gate, because
 /// that flow already confirmed the administrator's app-lock credential and

@@ -1,4 +1,4 @@
-//! Stored global-show hotkey, same combo language as painted `bir`.
+//! Stored global-show hotkey combo language for the shell app.
 //!
 //! A bare key (`"E"`) means the platform default modifiers: Control+Option on
 //! macOS, Super+Shift elsewhere. The setting is `global_hotkey_key`.

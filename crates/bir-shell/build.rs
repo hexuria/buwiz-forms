@@ -3,7 +3,7 @@
 //! Issue #96 was the painted app's overflow; the shell walks the same
 //! recursive GPUI element tree in `request_layout`, and it additionally runs
 //! QuickJS — JavaScript recursion consumes native stack, so the shipped
-//! binary carries the same 8 MiB main-thread reserve as `bir-desktop`.
+//! binary carries the same 8 MiB main-thread reserve as `bir-shell`.
 //!
 //! Only the `bir-shell` bin gets the flag: `cargo:rustc-link-arg-bin` is
 //! per-binary, so tests and other workspace binaries keep the platform

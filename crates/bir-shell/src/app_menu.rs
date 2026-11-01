@@ -13,7 +13,7 @@
 //!
 //! Cmd+Q / Ctrl+Q quits: the submission worker stops and the database lock is
 //! released. Cmd+H / Ctrl+H hides to the menu-bar status item. That used to
-//! be what Cmd+Q did in the painted app; it is not `cx.hide()` (which keeps
+//! be the desktop app's Cmd+Q behavior; it is not `cx.hide()` (which keeps
 //! the Dock icon).
 
 // gpui-shell re-exports whichever engine the `gpui-fast` feature selected.

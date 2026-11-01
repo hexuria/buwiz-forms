@@ -316,13 +316,13 @@ OpenSSL is vendored — no brew openssl needed; system perl + cc build it.
 To drive the app from the CLI (gpui-agent was installed at the Cargo.lock
 rev): build the host with the agent feature and launch with env vars —
 
-    cargo build --locked --bin bir-desktop --features agent
+    cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --bin bir-headless
     export GPUI_AGENT=1 GPUI_AGENT_TOKEN=dev-secret
-    ./target/debug/bir-desktop &        # then, another shell:
+    ./crates/bir-shell/target/debug/bir-headless &        # then, another shell:
     gpui-agent hello            # protocol, app, platform, ready
     gpui-agent keybindings      # {id, chord, scope, dangerous}
 
-Full contract: crates/bir-desktop/docs/AGENT.md
+Full contract: crates/bir-shell/docs/AGENT.md
 
 EOF
 }

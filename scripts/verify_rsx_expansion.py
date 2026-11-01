@@ -8,9 +8,9 @@ diff. This is the only check that catches layout regressions, since nothing in
 the crate renders an element tree in a test.
 
 Usage:
-  cargo expand -p bir-desktop <module> > baseline.rs   # BEFORE migrating
+  cargo expand -p bir-shell <module> > baseline.rs   # BEFORE migrating
   # ... migrate ...
-  cargo expand -p bir-desktop <module> > after.rs
+  cargo expand -p bir-shell <module> > after.rs
   scripts/verify_rsx_expansion.py baseline.rs after.rs <module>
 """
 import re, sys

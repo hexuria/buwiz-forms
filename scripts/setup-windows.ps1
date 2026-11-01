@@ -161,7 +161,7 @@ $env:Path = (($allPathEntries | Where-Object {
 
 # 6. gpui-agent CLI (client for the agent control plane; the app embeds its
 # own host, so only the CLI is needed -  todo-headless is the demo's daemon).
-# The CLI must match the rev bir-desktop pins in the root Cargo.toml: protocol
+# The CLI must match the rev bir-shell pins in the root Cargo.toml: protocol
 # skew fails closed, so installing unpinned HEAD can break the handshake.
 $manifest = Join-Path (Split-Path $PSScriptRoot -Parent) 'Cargo.toml'
 $manifestText = Get-Content -LiteralPath $manifest -Raw

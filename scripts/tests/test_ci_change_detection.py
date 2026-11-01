@@ -227,7 +227,7 @@ class CiChangeDetectionTests(unittest.TestCase):
                 "docs/plans/x.md",
                 "README.md",
                 "CONTRIBUTING.md",
-                "crates/bir-desktop/docs/AGENT.md",
+                "crates/bir-shell/docs/AGENT.md",
             ),
         )
 
@@ -279,11 +279,11 @@ class CiChangeDetectionTests(unittest.TestCase):
             changed=("scripts/linux_candidate_certification.md",),
         )
 
-    def test_crate_readme_is_app_code(self) -> None:
+    def test_core_manifest_is_app_code(self) -> None:
         self.assert_decisions(
             systems=self.ALL_SYSTEMS,
-            check_reason="app file changed: crates/bir/README.md",
-            changed=("crates/bir/README.md",),
+            check_reason="app file changed: crates/bir-core/Cargo.toml",
+            changed=("crates/bir-core/Cargo.toml",),
         )
 
     def test_ci_workflow_change_tests_everything_and_audits(self) -> None:
@@ -314,10 +314,10 @@ class CiChangeDetectionTests(unittest.TestCase):
     def test_windows_installer_with_app_code_tests_all_three(self) -> None:
         self.assert_decisions(
             systems=self.ALL_SYSTEMS,
-            check_reason="app file changed: crates/bir-desktop/src/gui.rs",
+            check_reason="app file changed: crates/bir-core/src/lib.rs",
             app="true",
             packaging=("windows",),
-            changed=("installer.iss", "crates/bir-desktop/src/gui.rs"),
+            changed=("installer.iss", "crates/bir-core/src/lib.rs"),
         )
 
     def test_linux_packaging_runs_only_the_script_tests(self) -> None:
@@ -346,7 +346,7 @@ class CiChangeDetectionTests(unittest.TestCase):
         )
 
     def test_linux_desktop_entry_is_app_code(self) -> None:
-        # bir-desktop's tests read assets/linux/, so it is not packaging-only.
+        # bir-shell's tests read assets/linux/, so it is not packaging-only.
         self.assert_decisions(
             systems=self.ALL_SYSTEMS,
             check_reason="app file changed: assets/linux/dev.goldcoders.bir.desktop",
@@ -497,7 +497,7 @@ class CiChangeDetectionTests(unittest.TestCase):
         if needs is not None:
             self.assertEqual(
                 [name.strip() for name in needs.group(1).split(",")],
-                ["changes", "check", "shell-check", "scripts", "validation-rules"],
+                ["changes", "check", "shell-check", "scripts", "validation-rules", "legacy-guard"],
             )
         # A skip caused by a failed `changes` must fail the gate.
         self.assertIn('[[ "$CHANGES" == success ]]', gate)
@@ -509,9 +509,8 @@ class CiChangeDetectionTests(unittest.TestCase):
         self.assertRegex(scripts, r"(?m)^    if: needs\.changes\.outputs\.scripts == 'true'\s*$")
         self.assertIn("python -m unittest discover -s scripts/tests -v", scripts)
 
-    def test_windows_smoke_follows_app_changes(self) -> None:
-        smoke = extract_job(self.workflow, "windows-smoke")
-        self.assertRegex(smoke, r"(?m)^    if: needs\.changes\.outputs\.app == 'true'\s*$")
+    def test_painted_windows_smoke_job_is_removed(self) -> None:
+        self.assertNotIn("windows-smoke:", self.workflow)
 
     def test_main_failures_open_an_issue_but_cancellations_do_not(self) -> None:
         report = extract_job(self.workflow, "main-report")

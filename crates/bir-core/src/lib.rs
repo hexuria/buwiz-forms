@@ -56,6 +56,7 @@ pub mod tax_profile;
 pub mod time_utils;
 pub mod transport;
 pub mod validation;
+pub mod validation_summary;
 
 #[cfg(test)]
 mod sftp_loopback;
@@ -116,3 +117,4 @@ pub use profile::{
 pub use receipt::{BirReceiptConfirmation, parse_bir_receipt_email, split_bir_filename};
 pub use time_utils::format_next_run;
 pub use validation::{ValidationError, validate_ph_phone, validate_profile, validate_zip};
+pub use validation_summary::{SummaryIssue, SummaryUnavailable, ValidationSummary};

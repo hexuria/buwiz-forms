@@ -210,31 +210,6 @@ jobs:
     - name: Clippy
       run: cargo clippy --locked --workspace -- -D warnings
 
-    # The Mac App Store variant is a feature configuration nothing else in this
-    # workflow compiles: the step above builds `bir-desktop` with default
-    # features, so every `#[cfg(not(feature = "mas_build"))]` block is taken and
-    # the sandboxed configuration is never type-checked. `mas_build` disables the
-    # `global_hotkey` subsystem - manager, its DB handle, and the event loop -
-    # because App Store sandboxing forbids the entitlements it needs. Without
-    # this step, adding hotkey code without the matching `cfg` compiles green
-    # here and only fails when someone cuts an App Store build.
-    #
-    # macOS only: the variant exists solely to be submitted to Apple, and it is
-    # only ever built from a Mac.
-    - name: Clippy (Mac App Store variant)
-      if: runner.os == 'macOS'
-      run: cargo clippy --locked -p bir-desktop --features mas_build -- -D warnings
-
-    # The agent control plane is off by default, so the two steps above never
-    # compile `src/agent/**` (or the `agent`-gated parts of the views) and never
-    # lint the tests. Lints in that tree therefore only surfaced when someone
-    # ran clippy locally with the feature on. `--all-targets` is what pulls the
-    # unit tests in; the `check` job's `cargo test --locked --workspace` also
-    # builds without `agent`, so this is the only step that type-checks the
-    # control plane at all.
-    - name: Clippy (agent control plane)
-      run: cargo clippy --locked -p bir-desktop --all-targets --features dev-tools,agent -- -D warnings
-
     # One command per line: this job's default shell is pwsh on windows-latest,
     # and bash `\` continuations are a parse error there.
     - name: Frozen HTML inventory and TIN name stamps
@@ -248,15 +223,11 @@ jobs:
 
     # The production-filing boundary stays gating on every PR, whatever the
     # validation-rules jobs below decide. It scans all of bir-core/src and
-    # bir-desktop/src (transport, import, cron, the 2550Q guards), so almost any
+    # bir-shell/src (transport, import, cron, the 2550Q guards), so almost any
     # app change can open it; and it reuses this job's build, so it is cheap.
     # A boundary failure is far more serious than an open validation slice.
     - name: Check validation-rules production boundaries
       run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
-
-    - name: Agent mailbox scheduling regression
-      if: runner.os == 'Windows'
-      run: cargo test --locked -p bir-desktop --features dev-tools,agent --lib agent::drain::tests::agent_mailbox_drains_without_rendering_app_state -- --exact
 
     - name: Install Windows packaging tools
       if: runner.os == 'Windows'
@@ -309,7 +280,7 @@ jobs:
   #     installer files (that leg builds and audits the Setup.exe). None for
   #     docs, macOS or Linux packaging, setup scripts, release workflows and
   #     the Python tests themselves.
-  #   - app: app code changed; windows-smoke follows it.
+  #   - app: app code changed.
   #   - scripts: run the Python script tests on their own because `check`
   #     does not (every `check` leg runs them otherwise).
   #   - linux_pkg / windows_pkg / macos_pkg: that platform's packaging
@@ -317,7 +288,7 @@ jobs:
   #   - validation: whether the validation-rules corpus audits run (below).
   # Schedules, manual runs, empty and unknown change ranges test everything.
   # A class may only list files that no crate, build script or Rust test
-  # reads: assets/linux/ is read by bir-desktop's desktop-entry test, so it
+  # reads: assets/linux/ is read by bir-shell's desktop-entry test, so it
   # stays app code.
   #
   # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
@@ -462,7 +433,7 @@ jobs:
           if [[ "$changed_known" != true ]]; then
             # Unknown range (new branch, force push): fail safe and run.
             run=true; reason="change range unknown"
-          elif grep -qE '^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/|crates/bir-desktop/src/components/form_validation/|evidence/validation-rules/|rust-toolchain|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+          elif grep -qE '^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/|crates/bir-core/src/validation_summary\.rs|evidence/validation-rules/|rust-toolchain|\.github/workflows/ci\.yml$)' <<<"$changed"; then
             run=true; reason="validation-rules paths changed"
           fi
         fi
@@ -647,6 +618,19 @@ jobs:
           [[ "$r" == success || "$r" == skipped ]] || { echo "::error::validation-rules audit $r"; exit 1; }
         done
 
+  # Always-on guard: the painted desktop crate was retired in favour of
+  # crates/bir-shell, and nothing may reference it again (not even docs).
+  # No `needs` on purpose: a docs-only PR must still fail if it brings the
+  # old name back.
+  legacy-guard:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check for retired crate references
+      run: python3 -I scripts/check_no_legacy_desktop.py
+
   # crates/bir-shell is a standalone workspace (its own lockfile), so the
   # root-workspace `check` legs never compile it. Any change under
   # crates/bir-shell/ or the JS app dir gets its own fmt/check/clippy run on
@@ -787,122 +771,14 @@ jobs:
           gh issue create --title "$title" --body "$body"
         fi
 
-  # Rust CI was green while normal Windows use still crashed (#90). This
-  # report-only runtime owner launches the painted app and exercises the
-  # agent-observable preview, tray, and dry-run submit paths. Both fixes have
-  # merged: the §2/#97 WebView fix (#107) and §3/#96 stack fix (#119).
-  # Promotion to a required check is an owner decision; keep continue-on-error.
-  # Hosted runners use WARP, do not exercise real
-  # foreground-window rules, and 2200M is not agent-reachable.
-  windows-smoke:
-    # Only for app code: packaging, docs and script changes cannot change what
-    # the painted app does.
-    needs: changes
-    if: needs.changes.outputs.app == 'true'
-    runs-on: windows-latest
-    timeout-minutes: 60
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: [debug, release]
-    permissions:
-      contents: read
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-
-    - name: Install Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
-
-    - name: Install Rust Toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: 1.99.0
-
-    # Reader only. `check` is the sole writer of workspace-${{ runner.os }};
-    # see the cache ownership comment in that job.
-    - name: Rust Cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: workspace-${{ runner.os }}
-        save-if: false
-
-    - name: Cache OpenSSL
-      uses: actions/cache@v4
-      with:
-        path: |
-          C:\Program Files\OpenSSL
-          C:\Program Files\OpenSSL-Win64
-        key: openssl-${{ runner.os }}-choco-v1
-
-    - name: Install Windows Dependencies
-      shell: pwsh
-      run: |
-        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
-            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
-            Write-Host "OpenSSL restored from cache; skipping choco install"
-        } else {
-            choco install openssl -y
-        }
-        $openssl_dir = ""
-        if (Test-Path "C:\Program Files\OpenSSL\include") {
-            $openssl_dir = "C:\Program Files\OpenSSL"
-        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
-            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
-        } else {
-            Write-Error "OpenSSL include directory not found!"
-            exit 1
-        }
-        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
-        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
-        if ($lib_file) {
-            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
-            if ($lib_file.Name -ne "libcrypto.lib") {
-                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
-            }
-        } else {
-            Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
-        }
-
-    - name: Build bir
-      shell: pwsh
-      run: |
-        $cargo_args = @("build", "--locked", "-p", "bir-desktop", "--bin", "bir-desktop", "--features", "dev-tools,agent")
-        if ("${{ matrix.profile }}" -eq "release") { $cargo_args += "--release" }
-        cargo @cargo_args
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        $target_dir = if ("${{ matrix.profile }}" -eq "release") { "target\release" } else { "target\debug" }
-        python scripts/alias_desktop_bin.py $target_dir
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    - name: Run Windows smoke
-      shell: pwsh
-      run: |
-        $binary = if ("${{ matrix.profile }}" -eq "release") { "target\release\bir.exe" } else { "target\debug\bir.exe" }
-        $work = "windows-smoke\${{ matrix.profile }}"
-        python scripts/windows_smoke.py --bin $binary --work $work --json-out "$work\results.json"
-
-    - name: Upload Windows smoke evidence
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-smoke-${{ matrix.profile }}
-        path: windows-smoke/${{ matrix.profile }}
-        retention-days: 7
-
   # The one required status check (ruleset "Main"). Jobs above are skipped on
   # purpose, and a skipped matrix job reports no per-OS check names, so
   # requiring those names would leave such PRs waiting forever. ci-ok passes
-  # only when `changes` decided, every job it asked for passed, and the
-  # validation-rules summary passed. A job skipped because something it needs
-  # failed is a failure here, not a skip. windows-smoke is report-only and
-  # deliberately not part of it.
+  # only when `changes` decided, every job it asked for passed, the
+  # validation-rules summary passed, and legacy-guard passed. A job skipped
+  # because something it needs failed is a failure here, not a skip.
   ci-ok:
-    needs: [ changes, check, shell-check, scripts, validation-rules ]
+    needs: [ changes, check, shell-check, scripts, validation-rules, legacy-guard ]
     if: always()
     runs-on: ubuntu-22.04
     steps:
@@ -917,9 +793,10 @@ jobs:
         SHELL_CHECK: ${{ needs.shell-check.result }}
         WANT_SHELL: ${{ needs.changes.outputs.shell }}
         VALIDATION: ${{ needs.validation-rules.result }}
+        LEGACY_GUARD: ${{ needs.legacy-guard.result }}
       run: |
         set -euo pipefail
-        echo "changes=$CHANGES check=$CHECK (wanted $WANT_CHECK) scripts=$SCRIPTS (wanted $WANT_SCRIPTS) shell-check=$SHELL_CHECK (wanted $WANT_SHELL) validation-rules=$VALIDATION"
+        echo "changes=$CHANGES check=$CHECK (wanted $WANT_CHECK) scripts=$SCRIPTS (wanted $WANT_SCRIPTS) shell-check=$SHELL_CHECK (wanted $WANT_SHELL) validation-rules=$VALIDATION legacy-guard=$LEGACY_GUARD"
         fail() { echo "::error::$1"; exit 1; }
         [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
         expect() {
@@ -933,3 +810,4 @@ jobs:
         expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
         expect shell-check "$SHELL_CHECK" "$WANT_SHELL"
         [[ "$VALIDATION" == success ]] || fail "validation-rules finished: $VALIDATION"
+        [[ "$LEGACY_GUARD" == success ]] || fail "legacy-guard finished: $LEGACY_GUARD"

@@ -1,6 +1,6 @@
 # Standalone workspace on purpose: `gpui-kit-assets` declares
 # `links = "gpui-kit-default-icons"`, and Cargo allows only one version of a
-# links crate per resolution graph. bir-desktop (gpui-kit 0.6) and this crate
+# links crate per resolution graph. The retired painted app (gpui-kit 0.6) and this crate
 # (gpui-kit 0.7.3) therefore cannot share the repository workspace lockfile.
 # This manifest is its own root; it still path-depends on bir-core.
 [workspace]
@@ -21,6 +21,11 @@ path = "src/lib.rs"
 name = "bir-shell"
 path = "src/main.rs"
 
+[[bin]]
+name = "bir-headless"
+path = "src/bin/headless.rs"
+required-features = ["agent"]
+
 [features]
 # GPUI Fast (https://gpui-kit.com/docs/installation/#optional-gpui-fast-backend):
 # its retained rendering and layout engine in place of upstream GPUI, across
@@ -30,9 +35,10 @@ path = "src/main.rs"
 gpui-fast = ["gpui-kit/gpui-fast", "gpui-shell/gpui-fast", "gpui-component/gpui-fast"]
 # gpui-agent control plane. Off in a normal build. When compiled in, the
 # listener still starts only if `GPUI_AGENT=1` (and a release build also
-# needs `GPUI_AGENT_ALLOW_RELEASE=1`). Same protocol rev as bir-desktop and
+# needs `GPUI_AGENT_ALLOW_RELEASE=1`). Same protocol rev as bir-shell and
 # bir-mcp.
-agent = ["dep:gpui-agent"]
+agent = ["dep:clap", "dep:dotenvy", "dep:gpui-agent", "dep:libc", "dep:socket2"]
+mas_build = ["bir-core/mas_build"]
 
 [dependencies]
 # gpui-shell is published only via the monorepo git (the crates.io `gpui-shell`
@@ -43,7 +49,7 @@ agent = ["dep:gpui-agent"]
 gpui-shell = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
 gpui-kit = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
 gpui-component = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
-# Exact `=` pins: bir-desktop keeps gpui-pre 0.3.4 in the same lockfile, so both
+# Exact `=` pins: bir-shell keeps gpui-pre 0.3.4 in the same lockfile, so both
 # must resolve side by side.
 gpui = { package = "gpui-pre", version = "=0.3.9" }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = [
@@ -66,7 +72,7 @@ anyrender_vello_cpu = { version = "0.18", features = ["multithreading"] }
 peniko = "0.6"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
-# Same tray and global-hotkey crates as painted `bir`. The gtk feature is
+# The shell tray uses these tray and global-hotkey crates. The gtk feature is
 # what tray-icon uses on Linux; it is inert on macOS and Windows.
 tray-icon = { version = "0.24.0", default-features = false, features = ["gtk"] }
 global-hotkey = "0.8"
@@ -75,6 +81,10 @@ smallvec = "1"
 bir-core = { path = "../bir-core" }
 bir-print = { path = "../bir-print" }
 gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+dotenvy = { version = "0.15", optional = true }
+libc = { version = "0.2", optional = true }
+socket2 = { version = "0.6", optional = true }
 
 anyhow = "1"
 chrono = "0.4"
@@ -90,7 +100,7 @@ zip = { version = "2", default-features = false, features = ["deflate", "time"] 
 serde_json = "1"
 tracing = "0.1"
 # The submission worker (`bir_core::background_cron`) runs on its own Tokio
-# runtime, as in painted `bir` and `bir-headless`.
+# runtime, as in the shell GUI and `bir-headless`.
 tokio = { version = "1", features = ["rt-multi-thread"] }
 # Bridges the OS sign-in prompt (run on its own thread) into a host future.
 futures = "0.3"
@@ -101,6 +111,7 @@ totp-rs = "5.7.1"
 temp-env = "0.3"
 # Host tests stage filed returns and failing writes with raw SQL.
 bir-core = { path = "../bir-core", features = ["test-support"] }
+tempfile = "3"
 
 # The monorepo's crates/shell/rquickjs-compat facade (a package named
 # `rquickjs`) routes LLRT stdlib's crates.io rquickjs dependency onto the
@@ -110,7 +121,7 @@ bir-core = { path = "../bir-core", features = ["test-support"] }
 rquickjs = { git = "https://github.com/longbridge/gpui-component", rev = "a0230dbfc47c8a5c6d1f3f099529ff40b1d2e5d2" }
 
 # Admin recovery by OS sign-in (Touch ID / account password, Windows Hello);
-# same crate and version as bir-desktop.
+# same crate and version as bir-shell.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 robius-authentication = { version = "0.1.1", features = ["async"] }
 
@@ -189,10 +200,10 @@ html5ever = { opt-level = 3 }
 
 # Linux system packages. `target/release/bir` resolves inside this workspace's
 # target dir (crates/bir-shell/target/<triple>/release) after
-# scripts/alias_desktop_bin.py names the built bir-shell binary `bir`; `../../`
+# scripts/alias_app_bin.py names the built bir-shell binary `bir`; `../../`
 # reaches the repository root. app/ and print-overrides/ resolve under
 # /usr/share/ebirforms at runtime — see src/packaged.rs. The runtime deps match
-# bir-desktop's list: the shell also links webkit2gtk via lb-wry.
+# bir-shell's list: the shell also links webkit2gtk via lb-wry.
 [package.metadata.deb]
 name = "ebirforms"
 maintainer = "Goldcoders Corp <support@goldcoders.dev>"

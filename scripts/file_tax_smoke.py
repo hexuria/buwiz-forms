@@ -246,25 +246,24 @@ def wait_ready(addr: str, token: str, proc: subprocess.Popen, log: Path) -> None
 
 
 def seed_profile(addr: str, token: str) -> None:
+    """Save the smoke taxpayer through the shell host's confirm-gated profile.save."""
     client = AgentClient(addr, token)
     try:
-        reply = client.request({"op": "invoke", "name": "profile.create", "args": {}})
-        if not reply.get("ok"):
-            raise SmokeError(f"profile.create: {reply}")
-        for target, value in [
-            ("profile-tin", TEST_TIN),
-            ("profile-name", "File Tax Smoke Taxpayer"),
-            ("profile-rdo", "018"),
-            ("profile-lob", "Retail"),
-            ("profile-address", "Manila"),
-            ("profile-zip", "1000"),
-            ("profile-phone", "09170000000"),
-            ("profile-email", "file-tax-smoke@example.com"),
-        ]:
-            reply = client.request({"op": "set_value", "target": target, "value": value})
-            if not reply.get("ok"):
-                raise SmokeError(f"set_value {target}: {reply}")
-        reply = client.request({"op": "invoke", "name": "profile.save", "args": {}})
+        reply = client.request(
+            {
+                "op": "invoke",
+                "name": "profile.save",
+                "args": {
+                    "tin": TEST_TIN,
+                    "name": "File Tax Smoke Taxpayer",
+                    "rdo_code": "018",
+                    "address": "Manila",
+                    "zip": "1000",
+                    "phone": "09170000000",
+                    "email": "file-tax-smoke@example.com",
+                },
+            }
+        )
         if not reply.get("ok"):
             raise SmokeError(f"profile.save: {reply}")
     finally:

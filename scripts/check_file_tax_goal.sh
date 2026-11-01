@@ -2,7 +2,7 @@
 # Done-condition for the /file-tax goal (.claude/GOAL.md, "Done when").
 #
 # Exits 0 only when every item holds:
-#   1. the bir-desktop agent:: lib tests pass, except the three pre-existing
+#   1. the bir-shell agent:: lib tests pass, except the three pre-existing
 #      failures listed under GOAL "Blocked" (one of those passing is fine);
 #   2. each named feature test exists and passes;
 #   3. the bir-mcp tests pass, including the one asserting tools/list has no
@@ -19,6 +19,10 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 2
+
+while IFS= read -r name; do unset "$name"; done < <(compgen -v | rg '^BIR_SFTP_')
+export EBIR_TEST_ENV=1 BIR_SFTP_DRY_RUN=1
+python3 -I scripts/check_no_legacy_desktop.py
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/file-tax-goal.XXXXXX")"
 cleanup() { rm -rf "$WORK"; }
@@ -85,28 +89,28 @@ test_lines() {
 short_name() { echo "${1##*::}"; }
 
 # ---------------------------------------------------------------- 1 + 2
-echo "== 1. bir-desktop agent:: lib tests"
-DESKTOP_LOG="$WORK/desktop-agent-tests.log"
-cargo test --locked -p bir-desktop --features agent --lib agent:: >"$DESKTOP_LOG" 2>&1
-parse_results "$DESKTOP_LOG"
+echo "== 1. bir-shell agent:: lib tests"
+SHELL_LOG="$WORK/shell-agent-tests.log"
+cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent:: >"$SHELL_LOG" 2>&1
+parse_results "$SHELL_LOG"
 if [[ "$RESULT_LINES" -eq 0 ]]; then
-  tail -n 40 "$DESKTOP_LOG" >&2
-  fail "bir-desktop agent:: tests produced no 'test result:' line (build failure?)"
+  tail -n 40 "$SHELL_LOG" >&2
+  fail "bir-shell agent:: tests produced no 'test result:' line (build failure?)"
 else
-  grep -E '^test result: ' "$DESKTOP_LOG"
+  grep -E '^test result: ' "$SHELL_LOG"
   failed_names=()
   while read -r name status; do
     [[ "$status" == "FAILED" ]] && failed_names+=("$name")
-  done < <(test_lines "$DESKTOP_LOG")
+  done < <(test_lines "$SHELL_LOG")
   if [[ "${#failed_names[@]}" -ne "$RESULT_FAILED_TOTAL" ]]; then
-    fail "bir-desktop: ${#failed_names[@]} FAILED lines but 'test result:' reports $RESULT_FAILED_TOTAL failed"
+    fail "bir-shell: ${#failed_names[@]} FAILED lines but 'test result:' reports $RESULT_FAILED_TOTAL failed"
   fi
   unexpected=0
   for name in "${failed_names[@]+"${failed_names[@]}"}"; do
     if contains "$(short_name "$name")" ${ALLOWED_PREEXISTING_FAILURES[@]+"${ALLOWED_PREEXISTING_FAILURES[@]}"}; then
       echo "note: allowed pre-existing failure: $name"
     else
-      fail "bir-desktop test failed: $name"
+      fail "bir-shell test failed: $name"
       unexpected=1
     fi
   done
@@ -121,7 +125,7 @@ for want in "${NAMED_FEATURE_TESTS[@]}"; do
       found="$status"
       [[ "$status" != "ok" ]] && break
     fi
-  done < <(test_lines "$DESKTOP_LOG")
+  done < <(test_lines "$SHELL_LOG")
   case "$found" in
     ok) pass "$want" ;;
     "") fail "named feature test missing: $want" ;;
@@ -170,15 +174,15 @@ if [[ ! -f "$MCP_CRATE_DIR/Cargo.toml" ]]; then
   fail "smoke needs $MCP_CRATE_DIR (increment 6 not landed)"
 else
   BUILD_LOG="$WORK/smoke-build.log"
-  if ! cargo build --locked -p bir-desktop --features agent --bin bir-headless >"$BUILD_LOG" 2>&1 \
+  if ! cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --bin bir-headless >"$BUILD_LOG" 2>&1 \
     || ! cargo build --locked -p bir-mcp >>"$BUILD_LOG" 2>&1; then
     tail -n 40 "$BUILD_LOG" >&2
     fail "smoke: building bir-headless / bir-mcp failed"
   else
-    TARGET_DIR="$(cargo metadata --format-version 1 --no-deps 2>/dev/null \
+    TARGET_DIR="$(cargo metadata --manifest-path crates/bir-shell/Cargo.toml --format-version 1 --no-deps 2>/dev/null \
       | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
     HEADLESS_BIN="$TARGET_DIR/debug/bir-headless"
-    MCP_BIN="$TARGET_DIR/debug/bir-mcp"
+    MCP_BIN="$ROOT/target/debug/bir-mcp"
     if [[ ! -x "$HEADLESS_BIN" || ! -x "$MCP_BIN" ]]; then
       fail "smoke: binaries not found ($HEADLESS_BIN, $MCP_BIN)"
     elif python3 -I "$ROOT/scripts/file_tax_smoke.py" \

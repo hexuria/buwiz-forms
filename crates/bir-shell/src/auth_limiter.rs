@@ -1,8 +1,8 @@
 //! Backoff for wrong sign-in codes, one count per account.
 //!
-//! The wait lengths of the painted app's `components::rate_limiter`: after
+//! The wait lengths of the retired UI host's `components::rate_limiter`: after
 //! every six wrong codes in a row, a wait of 1 minute, then 5, 15, 30, 1 hour
-//! and 24 hours. A right code clears the count. Like the painted app's, the
+//! and 24 hours. A right code clears the count. Like the original limiter, the
 //! count lives in memory, so quitting the app resets it.
 //!
 //! The host checks it rather than the script, so every way the UI asks for a

@@ -28,21 +28,36 @@ use super::{APP, database_kind, tree_from_debug};
 #[derive(Clone)]
 pub(crate) struct UiQueue {
     inner: Arc<Mutex<VecDeque<Value>>>,
+    discard: bool,
 }
 
 impl UiQueue {
     pub(crate) fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(VecDeque::new())),
+            discard: false,
+        }
+    }
+
+    pub(crate) fn discarding() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(VecDeque::new())),
+            discard: true,
         }
     }
 
     pub(crate) fn push(&self, value: Value) {
-        self.inner.lock().expect("agent ui queue").push_back(value);
+        if !self.discard {
+            self.inner.lock().expect("agent ui queue").push_back(value);
+        }
     }
 
     pub(crate) fn pop(&self) -> Option<Value> {
-        self.inner.lock().expect("agent ui queue").pop_front()
+        if self.discard {
+            None
+        } else {
+            self.inner.lock().expect("agent ui queue").pop_front()
+        }
     }
 }
 
@@ -53,6 +68,7 @@ struct OpenForm {
     tin: String,
     draft: Value,
     sources: BTreeMap<String, String>,
+    dirty: bool,
 }
 
 pub(crate) struct Session {
@@ -61,6 +77,7 @@ pub(crate) struct Session {
     selected_tin: Option<String>,
     open: Option<OpenForm>,
     tree: UiTree,
+    platform: PlatformKind,
     quit: bool,
 }
 
@@ -72,8 +89,15 @@ impl Session {
             selected_tin: None,
             open: None,
             tree: tree_from_debug(None),
+            platform: PlatformKind::Desktop,
             quit: false,
         }
+    }
+
+    pub(crate) fn headless() -> Self {
+        let mut session = Self::new(UiQueue::discarding());
+        session.platform = PlatformKind::Headless;
+        session
     }
 
     pub(crate) fn set_db(&mut self, db: Arc<Mutex<Database>>) {
@@ -129,7 +153,7 @@ impl Session {
                 "invoke `{name}` is not allow-listed; queue with form.queue/filing.queue confirm=true, then let cron PUT"
             )),
             "profile.ensure" => Err(
-                "profile.ensure is not implemented; the host will not auto-create a taxpayer. Use profile.create to open the editor; profile.save stays confirm-gated"
+                "profile.ensure is not implemented; the host will not auto-create a taxpayer. Save it explicitly with profile.save (tin, name, rdo_code, ...)"
                     .into(),
             ),
             other => Err(format!("unknown invoke `{other}`")),
@@ -513,6 +537,7 @@ impl Session {
             tin: tin.clone(),
             draft,
             sources: BTreeMap::new(),
+            dirty: false,
         });
         self.commands
             .push(json!({"op": "refresh", "tin_root": root}));
@@ -612,6 +637,7 @@ impl Session {
         drop(db);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
+            open.dirty |= !filled.is_empty();
             for key in &filled {
                 open.sources.insert(key.clone(), source.clone());
             }
@@ -652,6 +678,7 @@ impl Session {
         let needs = agent::needs_you(kind, &map, &errors);
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
+            open.dirty = false;
         }
         Ok(DispatchResult::json(json!({
             "form": kind.form_code(),
@@ -915,6 +942,9 @@ impl Session {
     }
 
     fn form_dismiss(&mut self) -> Result<DispatchResult, String> {
+        if self.open.as_ref().is_some_and(|open| open.dirty) {
+            return Err("the form has unsaved edits; save the draft before dismissing it".into());
+        }
         let Some(open) = self.open.take() else {
             return Err("no form is open to dismiss".into());
         };
@@ -979,7 +1009,7 @@ impl AgentHost for Session {
         HelloInfo {
             protocol: PROTOCOL_VERSION,
             app: APP.into(),
-            platform: PlatformKind::Desktop,
+            platform: self.platform,
             os: gpui_agent::protocol::host_os(),
             ready: true,
             deliveries: vec![DeliveryMode::Semantic],
@@ -1321,6 +1351,10 @@ fn filing_bounds(
 
 /// Queue `draft` after the page's Validate has already passed.
 fn queue_validated(kind: AgentFormKind, db: &Database, draft: &mut Value) -> Result<i64, String> {
+    let code = kind.form_code();
+    if !bir_core::forms::can_queue_for_submission(code) {
+        return Err(format!("{code} cannot be queued for submission yet"));
+    }
     let join = |errors: Vec<(String, String)>| {
         errors
             .iter()
@@ -1467,7 +1501,7 @@ mod tests {
         call(
             session,
             "profile.save",
-            json!({"tin": TIN, "name": "Scratch Taxpayer", "rdo_code": "040"}),
+            json!({"tin": TIN, "name": "TEST", "rdo_code": "040"}),
         )
         .unwrap()
     }
@@ -1516,7 +1550,7 @@ mod tests {
         assert_eq!(mode.as_deref(), Some("solo"));
         let listed = call(&mut session, "profile.list", json!({})).unwrap();
         assert_eq!(listed[0]["tin"], TIN);
-        assert_eq!(listed[0]["name"], "Scratch Taxpayer");
+        assert_eq!(listed[0]["name"], "TEST");
         assert_eq!(listed[0]["rdo"], "040");
         let info = call(&mut session, "app.info", json!({})).unwrap();
         assert_eq!(info["app"], "bir-shell");
@@ -1709,5 +1743,169 @@ mod tests {
         let review = call(&mut session, "form.review_in_app", json!({})).unwrap_err();
         assert!(review.contains("validation error"), "{review}");
         assert!(review.contains("bir_form_validate"), "{review}");
+    }
+
+    #[test]
+    fn one_form_lock_refuses_second_open() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let error = call(
+            &mut session,
+            "form.open",
+            json!({"code": "1601C", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap_err();
+        assert!(error.contains("form already open"), "{error}");
+    }
+
+    #[test]
+    fn dismiss_clean_form_closes_it() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        assert_eq!(
+            call(&mut session, "form.dismiss", json!({})).unwrap()["dismissed"],
+            true
+        );
+        assert!(call(&mut session, "form.fields", json!({})).is_err());
+    }
+
+    #[test]
+    fn agent_dismiss_with_unsaved_edits_is_refused() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1701Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {"frm1701q:txtSheets": "3"}, "source": "document"}),
+        )
+        .unwrap();
+        let error = call(&mut session, "form.dismiss", json!({})).unwrap_err();
+        assert!(error.contains("unsaved edits"), "{error}");
+    }
+
+    #[test]
+    fn fill_records_source_and_never_overwrites_user_box() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1601C", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let key = "frm1601c:CatAgent";
+        let typed = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {key: "P"}, "source": "user", "from_card": true}),
+        )
+        .unwrap();
+        assert_eq!(typed["source"], "user", "{typed}");
+        assert_eq!(typed["filled"], json!([key]), "{typed}");
+        let result = call(
+            &mut session,
+            "form.fill",
+            json!({"fields": {key: "G"}, "source": "document"}),
+        )
+        .unwrap();
+        assert_eq!(result["source"], "document", "{result}");
+        assert_eq!(result["kept_user_boxes"], json!([key]), "{result}");
+        assert_eq!(result["filled"], json!([]), "{result}");
+        let fields = call(&mut session, "form.fields", json!({})).unwrap();
+        let box_ = fields["boxes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|box_| box_["key"] == key)
+            .unwrap_or_else(|| panic!("{fields}"));
+        assert_eq!(box_["source"], "user", "{box_}");
+        assert_eq!(box_["value"], "P", "{box_}");
+    }
+
+    #[test]
+    fn needs_you_lists_required_empty_boxes() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "1601C", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let needs = call(&mut session, "form.needs_you", json!({})).unwrap();
+        assert_eq!(needs["form"], "1601C");
+        assert_eq!(needs["ok"], false);
+        let boxes = needs["boxes"].as_array().unwrap();
+        assert!(!boxes.is_empty(), "{needs}");
+        for item in boxes {
+            assert!(!item["label"].as_str().unwrap().is_empty(), "{item}");
+            assert_eq!(item["required"], true, "{item}");
+            assert_eq!(item["value"], "", "{item}");
+            assert!(item["error"].is_string(), "{item}");
+        }
+        let fields: Vec<&str> = boxes
+            .iter()
+            .map(|item| item["field"].as_str().unwrap())
+            .collect();
+        assert!(fields.contains(&"frm1601c:TaxWithheld"), "{fields:?}");
+        assert!(fields.contains(&"frm1601c:CatAgent"), "{fields:?}");
+        // Pre-filled boxes are not listed.
+        assert!(!fields.contains(&"frm1601c:AmendedRtn"), "{fields:?}");
+        // Profile-backed identity fields are reported as other errors, not boxes.
+        let others: Vec<&str> = needs["other_errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["field"].as_str().unwrap())
+            .collect();
+        assert!(others.contains(&"contact_number"), "{others:?}");
+    }
+
+    #[test]
+    fn validate_returns_field_errors() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let validation = call(&mut session, "form.validate", json!({})).unwrap();
+        assert_eq!(validation["ok"], false);
+        assert!(!validation["field_errors"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn form_context_exposes_profile_and_past_returns() {
+        let mut session = session();
+        save_scratch(&mut session);
+        call(
+            &mut session,
+            "form.open",
+            json!({"code": "2551Q", "year": 2026, "period": 1, "tin": TIN}),
+        )
+        .unwrap();
+        let context = call(&mut session, "form.context", json!({})).unwrap();
+        assert_eq!(context["profile"]["registered_name"], "TEST");
+        assert!(context["past_returns"].as_array().is_some());
     }
 }

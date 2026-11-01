@@ -1,6 +1,6 @@
 //! `bir-shell` — runs the buwiz-forms JavaScript UI on gpui-shell.
 //!
-//! Painted `bir` (`bir-desktop`) is untouched; this binary is the migration
+//! Painted `bir` (`bir-shell`) is untouched; this binary is the migration
 //! target tracked in issue #135.
 
 fn main() {

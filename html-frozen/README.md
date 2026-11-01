@@ -24,8 +24,13 @@ Every value a form's print map carries prints in its box or is listed in
 `writer-cells.json` `not_joined` with the reason it has none (not on the paper
 form, preprinted, printed from a `derived:` key, a row past the printed ones);
 `not_joined_cells` lists the cells no key fills. The coverage gate
-(`bir-desktop` `views::print_coverage`) checks this for every form on the
+(`bir-shell` `views::print_coverage`) checks this for every form on the
 draft a new return opens with and on one with every box filled. One key may
 fill several cells (`html_ids`, `peso_html_ids`/`cent_html_ids`,
 `decimal_html_ids`), so the name, TIN and period repeat in the later pages'
 headers. `date_joins` split one writer date over MM / DD / YYYY combs.
+
+
+## Regeneration and verification
+
+The source bundle is the `v1-frozen` tag in `hexuria/buwiz-forms-html`. Regenerate the committed tree with `python3 .ci-html/tools/formgen/freeze_html.py --out html-frozen --index rules/index.json`, then run the frozen-name stamp checks used by CI. CI verifies that the committed tree is unchanged with `python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json`; do not omit `--verify` in the CI check.

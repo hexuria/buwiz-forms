@@ -13,7 +13,7 @@
 > that application, not implementation paths or architecture claims for this
 > Rust/GPUI repository. Before coding here, produce the repository-specific
 > execution plan required below and remap every ownership boundary to the
-> actual `crates/bir-core`, `crates/bir-desktop`, form registry, Forms Set,
+> actual `crates/bir-core`, `crates/bir-shell`, form registry, Forms Set,
 > calendar, migration, and draft-provenance code. Preserve the regulatory
 > conclusions and fail-closed **Review Required** behavior, but re-audit every
 > code-level assumption.

@@ -107,10 +107,10 @@ there, but nobody has run it on that platform.
   builds a DMG, notarizes it with `notarytool` and checks it with `spctl`.
   It needs the Apple secrets listed in
   [DEVELOPMENT.md](../DEVELOPMENT.md#cicd-secrets--codesigning).
-- `just app` still builds the sandboxed Mac App Store package from the painted
-  `bir-desktop` (feature `mas_build`): the shell has no `mas_build` equivalent
-  or sandboxed JIT entitlement story yet (docs/plans/gpui-shell-migration.md,
-  S7). It needs App Store Connect credentials for the build number.
+- `just app` builds the sandboxed Mac App Store package from the standalone
+  `bir-shell` workspace with `mas_build`, and aliases the UI binary as `bir`.
+  The macOS JIT entitlement combination and App Store build remain unverified
+  until checked on macOS. It needs App Store Connect credentials for the build number.
 - Entitlement files are in `assets/macos/` and at the repository root.
 
 ## Agent control
@@ -118,7 +118,7 @@ there, but nobody has run it on that platform.
 - The gpui-agent build feature is macOS-capable end to end, including
   screenshots (`screencapture -l`). The terminal needs Screen Recording
   permission for that exact binary path. See
-  [AGENT.md](../../crates/bir-desktop/docs/AGENT.md).
+  [AGENT.md](../../crates/bir-shell/docs/AGENT.md).
 
 ## Unverified
 

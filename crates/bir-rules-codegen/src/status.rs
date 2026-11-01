@@ -59,17 +59,22 @@ const GENERATED_MANIFEST_PATH: &str = "crates/bir-rules/src/generated/manifest.j
 const PAYLOAD_PATH: &str = "crates/bir-core/src/form_rules/payload.rs";
 const CORE_FORM_2550Q_PATH: &str = "crates/bir-core/src/forms/form_2550q.rs";
 const CORE_CAPABILITIES_PATH: &str = "crates/bir-core/src/forms/support_level.rs";
-const DESKTOP_FORM_2550Q_PATH: &str = "crates/bir-desktop/src/views/form_2550q_view.rs";
+const SHELL_SCREEN_FORM_PATH: &str = "crates/bir-shell/src/screen_form_module.rs";
+const SHELL_BIR_MODULE_PATH: &str = "crates/bir-shell/src/bir_module.rs";
+const SHELL_AGENT_SESSION_PATH: &str = "crates/bir-shell/src/agent/session.rs";
+const VALIDATION_SUMMARY_PATH: &str = "crates/bir-core/src/validation_summary.rs";
 const V1_VALIDATIONS_PATH: &str = "rules/forms/2550q-v2024/validations.json";
 const SHADOW_PATH: &str = "crates/bir-core/src/form_rules/shadow.rs";
 const REVIEWED_EVIDENCE_PACKET_SET_PATH: &str = "evidence/validation-rules/packets/v1";
 
 /// Files whose structure is itself part of the application freeze, even when
 /// they contain none of the general authority tokens below.
-const FROZEN_PRODUCTION_STRUCTURE_PATHS: [&str; 6] = [
+const FROZEN_PRODUCTION_STRUCTURE_PATHS: [&str; 8] = [
     CORE_2550Q_PATH,
     CORE_FORM_2550Q_PATH,
-    DESKTOP_FORM_2550Q_PATH,
+    SHELL_SCREEN_FORM_PATH,
+    SHELL_BIR_MODULE_PATH,
+    SHELL_AGENT_SESSION_PATH,
     "crates/bir-core/src/background_cron.rs",
     "crates/bir-core/src/official_import.rs",
     "crates/bir-core/src/transport.rs",
@@ -79,7 +84,7 @@ const FROZEN_PRODUCTION_STRUCTURE_PATHS: [&str; 6] = [
 /// literal identifiers. The prefilter may admit comments and strings because
 /// `production_rust_code` removes those later; it must never reject a possible
 /// production match.
-const FROZEN_AUTHORITY_TOKENS: [&str; 21] = [
+const FROZEN_AUTHORITY_TOKENS: [&str; 22] = [
     "reviewed_rule_set_entries",
     "candidate_rule_set_entries",
     "CANDIDATE_RULE_SET_ENTRIES",
@@ -101,6 +106,7 @@ const FROZEN_AUTHORITY_TOKENS: [&str; 21] = [
     "SerializationArtifactTarget",
     "SubmissionPreflightArtifact",
     "setup_repo_default_diagnostic",
+    "Form2550QLiveValidationFacade",
 ];
 
 /// The published occurrence decomposition. Every one of these is quoted as fact
@@ -642,7 +648,7 @@ fn check_all_generated_candidates_test_only(repo_root: &Path, criteria: &mut Vec
 ///
 /// The five direct switches above protect the known 2550Q path. This guard is
 /// intentionally wider: it inventories semantic production call sites across
-/// `bir-core` and `bir-desktop`, while ignoring comments, string literals, and
+/// `bir-core` and `bir-shell`, while ignoring comments, string literals, and
 /// items directly gated by `#[cfg(test)]`. Existing generic scaffolding remains
 /// permitted, but a new provider designation, evaluator caller, serialization
 /// authority, Final Copy caller, or 2550Q queue/release authority breaches a
@@ -690,7 +696,7 @@ impl FrozenApplicationSources {
         let repo_root = canonical_repo_root(repo_root)
             .map_err(|error| format!("cannot canonicalize frozen repository root: {error}"))?;
         let mut files = BTreeMap::new();
-        for relative_root in ["crates/bir-core/src", "crates/bir-desktop/src"] {
+        for relative_root in ["crates/bir-core/src", "crates/bir-shell/src"] {
             let root = resolve_existing_under(&repo_root, relative_root, relative_root).map_err(
                 |error| format!("cannot resolve frozen source root {relative_root}: {error}"),
             )?;
@@ -893,7 +899,7 @@ fn application_freeze_violations(sources: &FrozenApplicationSources) -> Vec<Stri
         &mut violations,
     );
 
-    check_desktop_evaluator_surface(&production, &mut violations);
+    check_shell_evaluator_surface(&production, &mut violations);
     check_closed_2550q_core_surface(&production, &mut violations);
     check_capability_matrix(sources, &mut violations);
     check_2550q_queue_actions(&production, &mut violations);
@@ -928,55 +934,36 @@ fn check_occurrence_inventory(
     }
 }
 
-fn check_desktop_evaluator_surface(
+fn check_shell_evaluator_surface(
     production: &BTreeMap<String, String>,
     violations: &mut Vec<String>,
 ) {
-    let desktop: BTreeMap<String, String> = production
+    let shell: BTreeMap<String, String> = production
         .iter()
-        .filter(|(path, _)| path.starts_with("crates/bir-desktop/src/"))
+        .filter(|(path, _)| path.starts_with("crates/bir-shell/src/"))
         .map(|(path, source)| (path.clone(), source.clone()))
         .collect();
     check_occurrence_inventory(
-        &desktop,
+        &shell,
         r"\b(?:FormRuleEvaluator|Form2550QLiveValidationEvaluator|EvaluationRequest|TrustedEvaluation|evaluate_trusted|evaluate_shadow|evaluate_official_diagnostic|evaluate_filing_safe_trusted|reviewed_rule_set_entries|candidate_rule_set_entries|CheckedSerializationArtifact|CheckedFinalCopyPayload|preflight_active_form_submission|create_form_final_copy|SerializationArtifactTarget|SubmissionPreflightArtifact)\b",
         &[],
-        "desktop trusted-evaluator/serialization API references",
+        "shell trusted-evaluator/serialization API references",
         violations,
     );
     check_occurrence_inventory(
-        &desktop,
+        &shell,
         r"\bForm2550QLiveValidationFacade\s*::\s*setup_repo_default_diagnostic\s*\(",
-        &[(DESKTOP_FORM_2550Q_PATH, 1)],
-        "desktop repository-diagnostic setup calls",
+        &[],
+        "shell repository-diagnostic setup calls",
         violations,
     );
-
-    let Some(view) = production.get(DESKTOP_FORM_2550Q_PATH) else {
-        violations.push(format!("{DESKTOP_FORM_2550Q_PATH} is missing"));
-        return;
-    };
-    let evaluate_calls = Regex::new(r"\.\s*evaluate\s*\(")
-        .expect("diagnostic evaluate regex is valid")
-        .find_iter(view)
-        .count();
-    if evaluate_calls != 1 {
-        violations.push(format!(
-            "{DESKTOP_FORM_2550Q_PATH} must retain exactly one inert diagnostic evaluate call; found {evaluate_calls}"
-        ));
-    }
-    match enum_variants(view, r"\benum\s+Form2550QDiagnosticState\b") {
-        Ok(variants)
-            if variants
-                == ["NotRun", "Unavailable", "Incomplete"]
-                    .into_iter()
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>() => {}
-        Ok(variants) => violations.push(format!(
-            "desktop 2550Q diagnostic state gained authority: {variants:?}"
-        )),
-        Err(error) => violations.push(error),
-    }
+    check_occurrence_inventory(
+        &shell,
+        r"\b(?:Form2550QLiveValidationFacade|Form2550QLiveValidationEvaluator)\b",
+        &[],
+        "shell live-validation diagnostic references",
+        violations,
+    );
 }
 
 fn check_closed_2550q_core_surface(
@@ -1129,10 +1116,8 @@ fn check_capability_matrix(sources: &FrozenApplicationSources, violations: &mut 
 }
 
 /// 2550Q left the application freeze (user approval 2026-10-10) through the
-/// generic `QueueableForm` path only. Pin that shape: the core flag is true,
-/// `transition_to_queued` is exactly the generic `queue` with a GUI grant, and
-/// the desktop action gates on the registry, queues through the generic trait
-/// and persists through `save_queued_queueable` (which revalidates).
+/// generic `QueueableForm` path only. Pin the core flag and each shell queue
+/// entry point's fail-closed capability gate and queue/persistence sequence.
 fn check_2550q_queue_actions(production: &BTreeMap<String, String>, violations: &mut Vec<String>) {
     let Some(core) = production.get(CORE_FORM_2550Q_PATH) else {
         violations.push(format!("{CORE_FORM_2550Q_PATH} is missing"));
@@ -1158,33 +1143,54 @@ fn check_2550q_queue_actions(production: &BTreeMap<String, String>, violations: 
         Err(error) => violations.push(error),
     }
 
-    let Some(desktop) = production.get(DESKTOP_FORM_2550Q_PATH) else {
-        violations.push(format!("{DESKTOP_FORM_2550Q_PATH} is missing"));
-        return;
-    };
-    match braced_body_after_pattern(desktop, r"\bfn\s+mark_submitted\s*\([^)]*\)\s*") {
-        Ok(body) => {
-            let body = compact_rust(body);
-            for (needle, what) in [
-                (
-                    "can_queue_for_submission(FORM_CODE)",
-                    "gate on the capability registry",
-                ),
-                (
-                    "QueueableForm::queue(&mutself.draft,bir_core::filing_queue::QueueAuthSource::Gui",
-                    "queue through the generic QueueableForm path with a GUI grant",
-                ),
-                (
-                    ".save_queued_queueable(&self.draft)",
-                    "persist through save_queued_queueable",
-                ),
-            ] {
-                if !body.contains(needle) {
-                    violations.push(format!("desktop 2550Q mark_submitted must {what}: {body}"));
+    let checks = [
+        (
+            SHELL_SCREEN_FORM_PATH,
+            r"\bfn\s+screen_form_queue\s*\(",
+            &[
+                "can_queue_for_submission(&code)",
+                ".queue(bir_core::filing_queue::QueueAuthSource::Gui)",
+                ".save_queued_queueable(&typed)",
+            ][..],
+            "screen_form_queue",
+        ),
+        (
+            SHELL_BIR_MODULE_PATH,
+            r"\bfn\s+queue_form_draft\s*\(",
+            &[
+                "can_queue_for_submission(&form_code)",
+                ".queue(bir_core::filing_queue::QueueAuthSource::Gui)",
+                ".save_queued_queueable(&draft)",
+            ][..],
+            "queue_form_draft",
+        ),
+        (
+            SHELL_AGENT_SESSION_PATH,
+            r"\bfn\s+queue_validated\s*\(",
+            &[
+                "can_queue_for_submission(code)",
+                "typed.queue(QueueAuthSource::AgentConfirm)",
+                ".save_queued_queueable(&typed)",
+            ][..],
+            "agent queue_validated",
+        ),
+    ];
+    for (path, pattern, needles, label) in checks {
+        let Some(source) = production.get(path) else {
+            violations.push(format!("{path} is missing"));
+            continue;
+        };
+        match braced_body_after_pattern(source, pattern) {
+            Ok(body) => {
+                let body = compact_rust(body);
+                for needle in needles {
+                    if !body.contains(needle) {
+                        violations.push(format!("{label} must retain `{needle}`: {body}"));
+                    }
                 }
             }
+            Err(error) => violations.push(error),
         }
-        Err(error) => violations.push(error),
     }
 }
 
@@ -3088,7 +3094,7 @@ fn check_remaining_plan_deliverables(repo_root: &Path, criteria: &mut Vec<Criter
         repo_root,
         criteria,
         "gpui-validation-summary",
-        "crates/bir-desktop/src/components/form_validation/summary.rs",
+        VALIDATION_SUMMARY_PATH,
         |source| {
             source_matches(
                 source,
@@ -3469,7 +3475,7 @@ mod tests {
 
     use super::{
         CORE_CAPABILITIES_PATH, CORE_FORM_2550Q_PATH, Criterion, CriterionKind,
-        DESKTOP_FORM_2550Q_PATH, FrozenApplicationSources, GENERATED_REGISTRY_PATH, StatusOptions,
+        FrozenApplicationSources, GENERATED_REGISTRY_PATH, SHELL_SCREEN_FORM_PATH, StatusOptions,
         StatusReport, application_freeze_violations, check_application_integration_frozen,
         check_reviewed_registry_empty, generated_candidate_ast_failures, read_text,
         record_reviewed_evidence_packet_set, represented_record_total_met,
@@ -3580,14 +3586,14 @@ mod tests {
                 "production exact-identity constructors",
             ),
             (
-                DESKTOP_FORM_2550Q_PATH,
+                SHELL_SCREEN_FORM_PATH,
                 "\nfn run_trusted(evaluator: &FormRuleEvaluator, request: &EvaluationRequest) { let _ = evaluator.evaluate_trusted(request); }\n",
-                "desktop trusted-evaluator/serialization API references",
+                "shell trusted-evaluator/serialization API references",
             ),
             (
-                DESKTOP_FORM_2550Q_PATH,
+                SHELL_SCREEN_FORM_PATH,
                 "\nfn materialize_payload() { let _ = CheckedFinalCopyPayload::try_new(todo!(), vec![], String::new()); }\n",
-                "desktop trusted-evaluator/serialization API references",
+                "shell trusted-evaluator/serialization API references",
             ),
             (
                 "crates/bir-core/src/db/form_rule_state.rs",
@@ -3657,11 +3663,12 @@ mod tests {
         );
         let source = mutated
             .files
-            .get_mut(DESKTOP_FORM_2550Q_PATH)
-            .expect("2550Q desktop source");
+            .get_mut(SHELL_SCREEN_FORM_PATH)
+            .expect("shell screen-form source");
+        *source = source.replacen(".save_queued_queueable(&typed)", ".save(&self.draft)", 1);
         *source = source.replacen(
-            ".save_queued_queueable(&self.draft)",
-            ".save(&self.draft)",
+            "can_queue_for_submission(&code)",
+            "can_queue_for_submission(\"2550Q\")",
             1,
         );
 
@@ -3669,7 +3676,8 @@ mod tests {
         for expected in [
             "QUEUE_SUBMISSION_SUPPORTED",
             "transition_to_queued no longer delegates to the generic queue",
-            "mark_submitted must persist through save_queued_queueable",
+            "screen_form_queue must retain `.save_queued_queueable(&typed)`",
+            "screen_form_queue must retain `can_queue_for_submission(&code)`",
         ] {
             assert!(
                 violations
@@ -3681,11 +3689,28 @@ mod tests {
     }
 
     #[test]
+    fn application_freeze_rejects_shell_live_validation_diagnostics() {
+        let mut mutated = landed_frozen_sources();
+        append_source(
+            &mut mutated,
+            SHELL_SCREEN_FORM_PATH,
+            "\nfn diagnostic() { let _ = Form2550QLiveValidationFacade::setup_repo_default_diagnostic(); }\n",
+        );
+        let violations = application_freeze_violations(&mutated);
+        assert!(
+            violations.iter().any(|violation| {
+                violation.contains("shell live-validation diagnostic references")
+            }),
+            "shell diagnostic reference was not rejected: {violations:?}"
+        );
+    }
+
+    #[test]
     fn application_freeze_ignores_direct_cfg_test_authority_exercises() {
         let mut sources = landed_frozen_sources();
         append_source(
             &mut sources,
-            DESKTOP_FORM_2550Q_PATH,
+            SHELL_SCREEN_FORM_PATH,
             "\n#[cfg(test)]\nfn test_only_authority_exercise() {\n    let evaluator = FormRuleEvaluator::new(todo!());\n    let _ = evaluator.evaluate_trusted(todo!());\n    let _ = CheckedFinalCopyPayload::try_new(todo!());\n}\n",
         );
         assert_eq!(

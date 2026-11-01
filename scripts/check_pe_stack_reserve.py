@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check a PE binary's SizeOfStackReserve.
 
-Issue #96 regression gate: the shipped bir-desktop.exe must carry the linker
-policy emitted by crates/bir-desktop/build.rs. Reverting that policy must fail
+Issue #96 regression gate: the shipped bir-shell.exe must carry the linker
+policy emitted by crates/bir-shell/build.rs. Reverting that policy must fail
 this check in CI; raising it above the measured minimum without data must fail
 it too.
 
