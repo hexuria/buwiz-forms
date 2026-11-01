@@ -38,7 +38,10 @@ pub(crate) struct FormNotes {
 }
 
 fn key(code: &str) -> String {
-    code.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_ascii_uppercase()
+    code.chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>()
+        .to_ascii_uppercase()
 }
 
 /// The official package's notes of form `code`.
@@ -47,21 +50,34 @@ pub(crate) fn notes(code: &str) -> Option<&'static FormNotes> {
     NOTES
         .get_or_init(|| {
             let raw: BTreeMap<String, FormNotes> =
-                serde_json::from_str(include_str!("form_notes.json")).expect("form_notes.json parses");
-            raw.into_iter().map(|(code, notes)| (key(&code), notes)).collect()
+                serde_json::from_str(include_str!("form_notes.json"))
+                    .expect("form_notes.json parses");
+            raw.into_iter()
+                .map(|(code, notes)| (key(&code), notes))
+                .collect()
         })
         .get(&key(code))
 }
 
 fn check_keys(arguments: &Map<String, Value>, allowed: &[&str]) -> Result<(), String> {
-    match arguments.keys().find(|key| !allowed.contains(&key.as_str())) {
-        Some(key) => Err(format!("unknown argument `{key}` (allowed: {})", allowed.join(", "))),
+    match arguments
+        .keys()
+        .find(|key| !allowed.contains(&key.as_str()))
+    {
+        Some(key) => Err(format!(
+            "unknown argument `{key}` (allowed: {})",
+            allowed.join(", ")
+        )),
         None => Ok(()),
     }
 }
 
 fn text<'a>(arguments: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
-    arguments.get(key).and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty())
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
 }
 
 /// What BIR's tables say the rate of a percentage-tax ATC is (2551Q).
@@ -72,12 +88,21 @@ fn pt_rate(code: &str) -> Option<f64> {
 // ------------------------------------------------------------ form info
 
 /// `bir_form_info {form, ticket?}`.
-pub(crate) fn form_info(db: &Database, arguments: &Map<String, Value>, today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn form_info(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["form", "ticket"])?;
     let raw = text(arguments, "form").ok_or("`form` is required: a form code such as 2551Q")?;
-    let code = taxform::form_code_of(raw).ok_or_else(|| format!("`form` `{raw}` is not a BIR form code"))?;
+    let code = taxform::form_code_of(raw)
+        .ok_or_else(|| format!("`form` `{raw}` is not a BIR form code"))?;
     let def = bir_core::forms::find_form(code).ok_or_else(|| format!("BIR has no form {code}"))?;
-    let mut who: Vec<String> = def.taxpayer_types.iter().map(|kind| format!("{kind:?}").to_lowercase()).collect();
+    let mut who: Vec<String> = def
+        .taxpayer_types
+        .iter()
+        .map(|kind| format!("{kind:?}").to_lowercase())
+        .collect();
     if who.len() > 1 {
         let last = who.pop().unwrap_or_default();
         who = vec![format!("{} and {last}", who.join(", "))];
@@ -99,7 +124,8 @@ pub(crate) fn form_info(db: &Database, arguments: &Map<String, Value>, today: Na
     // For one taxpayer: is it on their forms this year, and the period to start.
     let mut taxpayer = Value::Null;
     if let Some(ticket) = text(arguments, "ticket") {
-        let subject = tickets::subject(db, ticket)?.ok_or("the ticket is not one BIR issued, or it was revoked")?;
+        let subject = tickets::subject(db, ticket)?
+            .ok_or("the ticket is not one BIR issued, or it was revoked")?;
         let branch = resolve::branches(db, Some(&subject.full_tin()))?
             .into_iter()
             .next()
@@ -142,25 +168,44 @@ fn atc_forms(code: &str) -> Vec<&'static str> {
     if atc::find_atc(code).is_some() {
         forms.push("2551Q");
     }
-    if form_1601eq::FORM_1601EQ_ATC_OPTIONS.iter().any(|o| o.code == code) {
+    if form_1601eq::FORM_1601EQ_ATC_OPTIONS
+        .iter()
+        .any(|o| o.code == code)
+    {
         forms.extend(["0619E", "1601EQ"]);
     }
-    if form_1601fq::FORM_1601FQ_PRIVATE_ATCS.iter().chain(form_1601fq::FORM_1601FQ_GOVERNMENT_ATCS).any(|o| o.code == code) {
+    if form_1601fq::FORM_1601FQ_PRIVATE_ATCS
+        .iter()
+        .chain(form_1601fq::FORM_1601FQ_GOVERNMENT_ATCS)
+        .any(|o| o.code == code)
+    {
         forms.extend(["0619F", "1601FQ"]);
     }
-    if form_1600pt::FORM_1600PT_ATC_OPTIONS.iter().any(|o| o.code == code) {
+    if form_1600pt::FORM_1600PT_ATC_OPTIONS
+        .iter()
+        .any(|o| o.code == code)
+    {
         forms.push("1600PT");
     }
-    if form_1600vt::FORM_1600VT_ATC_OPTIONS.iter().any(|o| o.code == code) {
+    if form_1600vt::FORM_1600VT_ATC_OPTIONS
+        .iter()
+        .any(|o| o.code == code)
+    {
         forms.push("1600VT");
     }
-    if form_1600wp::FORM_1600WP_ATC_OPTIONS.iter().any(|o| o.code == code) {
+    if form_1600wp::FORM_1600WP_ATC_OPTIONS
+        .iter()
+        .any(|o| o.code == code)
+    {
         forms.push("1600WP");
     }
     if form_1602q::FORM_1602Q_SCHEDULE2_ATCS.contains(&code) {
         forms.push("1602Q");
     }
-    if form_0605_official::FORM_0605_ATCS.iter().any(|(atc, _)| *atc == code) {
+    if form_0605_official::FORM_0605_ATCS
+        .iter()
+        .any(|(atc, _)| *atc == code)
+    {
         forms.push("0605");
     }
     forms
@@ -175,23 +220,41 @@ fn atc(code: &str) -> Option<(String, Option<f64>)> {
     if let Some(entry) = atc::find_atc(code) {
         return Some((entry.description.to_string(), Some(entry.rate * 100.0)));
     }
-    if let Some(option) = form_1601eq::FORM_1601EQ_ATC_OPTIONS.iter().find(|o| o.code == code) {
-        return Some((option.description.to_string(), option.rate_text.parse().ok()));
+    if let Some(option) = form_1601eq::FORM_1601EQ_ATC_OPTIONS
+        .iter()
+        .find(|o| o.code == code)
+    {
+        return Some((
+            option.description.to_string(),
+            option.rate_text.parse().ok(),
+        ));
     }
     form_1601fq::FORM_1601FQ_PRIVATE_ATCS
         .iter()
         .chain(form_1601fq::FORM_1601FQ_GOVERNMENT_ATCS)
         .find(|o| o.code == code)
-        .map(|option| (option.description.to_string(), option.rate_text.parse().ok()))
+        .map(|option| {
+            (
+                option.description.to_string(),
+                option.rate_text.parse().ok(),
+            )
+        })
 }
 
 /// Tidy BIR's all-caps descriptions for reading.
 fn sentence(text: &str) -> String {
     let squeezed = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if squeezed.chars().filter(|c| c.is_alphabetic()).all(|c| c.is_uppercase()) {
+    if squeezed
+        .chars()
+        .filter(|c| c.is_alphabetic())
+        .all(|c| c.is_uppercase())
+    {
         let lower = squeezed.to_lowercase();
         let mut chars = lower.chars();
-        chars.next().map(|first| first.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+        chars
+            .next()
+            .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
+            .unwrap_or_default()
     } else {
         squeezed
     }
@@ -201,7 +264,10 @@ fn amount(raw: &Value) -> Option<f64> {
     match raw {
         Value::Number(n) => n.as_f64(),
         Value::String(text) => {
-            let clean: String = text.chars().filter(|c| c.is_ascii_digit() || *c == '.').collect();
+            let clean: String = text
+                .chars()
+                .filter(|c| c.is_ascii_digit() || *c == '.')
+                .collect();
             clean.parse().ok()
         }
         _ => None,
@@ -213,20 +279,46 @@ fn cents(value: f64) -> f64 {
 }
 
 /// `bir_lookup {atc? | rdo? | amount and rate (a percent or an ATC)}`.
-pub(crate) fn lookup(db: &Database, arguments: &Map<String, Value>, _today: NaiveDate) -> Result<Value, String> {
+pub(crate) fn lookup(
+    db: &Database,
+    arguments: &Map<String, Value>,
+    _today: NaiveDate,
+) -> Result<Value, String> {
     check_keys(arguments, &["atc", "rdo", "amount", "rate"])?;
     if let Some(raw) = arguments.get("amount") {
         let base = amount(raw).ok_or_else(|| format!("`amount` must be pesos (got {raw})"))?;
-        let rate_raw = text(arguments, "rate").map(str::to_string).or_else(|| arguments.get("rate").and_then(Value::as_f64).map(|r| r.to_string()));
-        let rate_raw = rate_raw.ok_or("`rate` is required with `amount`: a percent (3) or an ATC (PT010)")?;
+        let rate_raw = text(arguments, "rate").map(str::to_string).or_else(|| {
+            arguments
+                .get("rate")
+                .and_then(Value::as_f64)
+                .map(|r| r.to_string())
+        });
+        let rate_raw =
+            rate_raw.ok_or("`rate` is required with `amount`: a percent (3) or an ATC (PT010)")?;
         let upper = rate_raw.trim().to_ascii_uppercase();
-        let (rate, rule, code) = if upper.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
-            let (description, rate) = atc(&upper).ok_or_else(|| format!("`{rate_raw}` is not an ATC BIR knows"))?;
+        let (rate, rule, code) = if upper
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+        {
+            let (description, rate) =
+                atc(&upper).ok_or_else(|| format!("`{rate_raw}` is not an ATC BIR knows"))?;
             let rate = rate.ok_or_else(|| format!("{upper} has no single rate in BIR's tables"))?;
-            (rate, format!("{upper}: {}", sentence(&description)), Some(upper.clone()))
+            (
+                rate,
+                format!("{upper}: {}", sentence(&description)),
+                Some(upper.clone()),
+            )
         } else {
-            let rate: f64 = upper.trim_end_matches('%').trim().parse().map_err(|_| format!("`rate` must be a percent such as 3 (got `{rate_raw}`)"))?;
-            let rate = if rate > 0.0 && rate < 1.0 && upper.contains('.') && !upper.contains('%') { rate * 100.0 } else { rate };
+            let rate: f64 =
+                upper.trim_end_matches('%').trim().parse().map_err(|_| {
+                    format!("`rate` must be a percent such as 3 (got `{rate_raw}`)")
+                })?;
+            let rate = if rate > 0.0 && rate < 1.0 && upper.contains('.') && !upper.contains('%') {
+                rate * 100.0
+            } else {
+                rate
+            };
             let rule = if (rate - 3.0).abs() < 1e-9 {
                 "3% percentage tax on gross sales or receipts (PT010, Sec. 116), the rate for most non-VAT businesses. It was 1% from July 2020 to June 2023."
                     .to_string()
@@ -252,7 +344,8 @@ pub(crate) fn lookup(db: &Database, arguments: &Map<String, Value>, _today: Naiv
     }
     if let Some(raw) = text(arguments, "atc") {
         let code = raw.to_ascii_uppercase().replace([' ', '-'], "");
-        let (description, rate) = atc(&code).ok_or_else(|| format!("`{raw}` is not an ATC in BIR's tables"))?;
+        let (description, rate) =
+            atc(&code).ok_or_else(|| format!("`{raw}` is not an ATC in BIR's tables"))?;
         return Ok(json!({
             "mode": "atc",
             "code": code,
@@ -272,7 +365,10 @@ pub(crate) fn lookup(db: &Database, arguments: &Map<String, Value>, _today: Naiv
             let wanted = raw.to_lowercase();
             bir_core::reference::get_all_rdos()
                 .into_iter()
-                .filter(|rdo| rdo.description.to_lowercase().contains(&wanted) || rdo.code.eq_ignore_ascii_case(raw))
+                .filter(|rdo| {
+                    rdo.description.to_lowercase().contains(&wanted)
+                        || rdo.code.eq_ignore_ascii_case(raw)
+                })
                 .take(8)
                 .collect()
         };
@@ -345,6 +441,9 @@ mod tests {
         assert!(atc_forms("WC158").contains(&"1601EQ"));
         assert_eq!(atc("WC158").unwrap().1, Some(1.0));
         assert!(atc_forms("PT010").contains(&"2551Q"));
-        assert_eq!(sentence("VAT WITHHOLDING  ON  PURCHASE OF GOODS"), "Vat withholding on purchase of goods");
+        assert_eq!(
+            sentence("VAT WITHHOLDING  ON  PURCHASE OF GOODS"),
+            "Vat withholding on purchase of goods"
+        );
     }
 }

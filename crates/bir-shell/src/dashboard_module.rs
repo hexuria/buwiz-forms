@@ -538,7 +538,9 @@ fn object_argument(
     match crate::bir_module::to_json(arguments.value(0)?) {
         Value::Object(map) => Ok(map),
         Value::Null => Ok(serde_json::Map::new()),
-        other => Err(HostError::new(format!("expected an object argument, got {other}"))),
+        other => Err(HostError::new(format!(
+            "expected an object argument, got {other}"
+        ))),
     }
 }
 
@@ -748,10 +750,19 @@ mod tests {
         assert_eq!(row["moved_reason"], "RMC 5-2026");
         let listed = to_json(&deadline_overrides(&object(json!({"year": 2026}))).unwrap());
         assert_eq!(listed["overrides"][0]["periods"][0]["period"], "2026-09");
-        assert_eq!(to_json(&deadline_overrides(&args(&[])).unwrap())["overrides"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            to_json(&deadline_overrides(&args(&[])).unwrap())["overrides"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
         deadline_override_remove(&object(json!({"form": "1601C", "period": "2026-09"}))).unwrap();
         assert_eq!(september().unwrap()["due_date"], "2026-10-12");
-        assert!(deadline_override_remove(&object(json!({"form": "1601C", "period": "2026-09"}))).is_err());
+        assert!(
+            deadline_override_remove(&object(json!({"form": "1601C", "period": "2026-09"})))
+                .is_err()
+        );
     }
 
     #[test]

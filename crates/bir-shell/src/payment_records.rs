@@ -24,7 +24,11 @@ struct PaymentTarget {
 pub(crate) fn recorded_for(db: &Database, tin: &str, form: &str, period: &str) -> bool {
     let branch = |tin: &str| {
         let digits: String = tin.chars().filter(char::is_ascii_digit).collect();
-        if digits.len() == 9 { format!("{digits}00000") } else { digits }
+        if digits.len() == 9 {
+            format!("{digits}00000")
+        } else {
+            digits
+        }
     };
     let tin = branch(tin);
     let Ok(Some(stored)) = db.get_setting(PAYMENTS_KEY) else {

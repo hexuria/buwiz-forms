@@ -663,7 +663,9 @@ impl Session {
         let needs = agent::needs_you(kind, &map, &errors);
         // Whose return, so an answer card can open it (the TIN reaches
         // Rox as a ticket).
-        let tin = agent::identity(kind, &draft).map(|identity| identity.tin).unwrap_or_default();
+        let tin = agent::identity(kind, &draft)
+            .map(|identity| identity.tin)
+            .unwrap_or_default();
         if let Some(open) = self.open.as_mut() {
             open.draft = draft;
         }

@@ -301,11 +301,9 @@ pub(crate) fn app_token(app: &str, props: &Value) -> Option<String> {
     let tin = taxform::tin_digits(props["tin"].as_str()?)?;
     match app {
         "tax-profile" | "calendar" => match props["branch"].as_str() {
-            Some(branch) if !only_digits(branch).trim_start_matches('0').is_empty() => Some(format!(
-                "@bir:branchcode:{}/{:0>5}",
-                &tin[..9],
-                only_digits(branch)
-            )),
+            Some(branch) if !only_digits(branch).trim_start_matches('0').is_empty() => Some(
+                format!("@bir:branchcode:{}/{:0>5}", &tin[..9], only_digits(branch)),
+            ),
             _ => Some(format!("@bir:taxprofile:{}", taxform::token_tin(&tin))),
         },
         "forms" => {
@@ -788,12 +786,7 @@ fn all_form_codes() -> Vec<&'static str> {
 /// case; it may still grow into a longer code) is typed: the forms in their
 /// profile that match, else every other form that does, marked `not in
 /// profile`.
-fn form_choices_for(
-    db: &Database,
-    who: Who<'_>,
-    typing: &str,
-    today: NaiveDate,
-) -> Vec<Value> {
+fn form_choices_for(db: &Database, who: Who<'_>, typing: &str, today: NaiveDate) -> Vec<Value> {
     let prefix = format!("{}/", taxform::token_tin(&who.branch.tin));
     let query = typing.to_lowercase();
     let matches = |code: &str| {
@@ -928,7 +921,12 @@ pub(crate) fn status_detail(db: &Database, filing: Option<&FormDraftSummary>) ->
     let Some(filing) = filing else {
         return "Not started".to_string();
     };
-    let marks = || db.draft_data_json(filing.id).ok().flatten().unwrap_or(Value::Null);
+    let marks = || {
+        db.draft_data_json(filing.id)
+            .ok()
+            .flatten()
+            .unwrap_or(Value::Null)
+    };
     let mark = |marks: &Value, key: &str| {
         marks[key]
             .as_str()
@@ -991,7 +989,9 @@ fn profile_details(db: &Database, who: Who<'_>, today: NaiveDate) -> Value {
     let versions: Vec<Value> = years
         .iter()
         .map(|year| {
-            let of_year = summaries.iter().filter(|summary| summary.taxable_year == *year);
+            let of_year = summaries
+                .iter()
+                .filter(|summary| summary.taxable_year == *year);
             let returns = of_year.clone().count();
             let drafts = of_year
                 .filter(|summary| summary.status == FilingStatus::Draft)
@@ -1029,12 +1029,7 @@ fn profile_details(db: &Database, who: Who<'_>, today: NaiveDate) -> Value {
 
 /// App Details for a return: that form's tax years for the taxpayer, each
 /// opening the forms app on the form and year.
-fn taxform_details(
-    db: &Database,
-    who: Who<'_>,
-    target: &ReturnTarget,
-    today: NaiveDate,
-) -> Value {
+fn taxform_details(db: &Database, who: Who<'_>, target: &ReturnTarget, today: NaiveDate) -> Value {
     let code = target.form;
     let returns = stored_returns(db, &who.branch.tin, code, today);
     let mut years: Vec<u16> = returns.iter().map(|(period, _)| period.year()).collect();
@@ -1064,7 +1059,10 @@ fn taxform_details(
         json!(["Taxpayer", who.name()]),
         json!(["Form", form]),
         json!(["Period", target.period.label()]),
-        json!(["Status", status_detail(db, furthest(&returns, code, target.period))]),
+        json!([
+            "Status",
+            status_detail(db, furthest(&returns, code, target.period))
+        ]),
     ];
     if let Some(due) = super::calendar::due_date(db, &who.branch.tin, code, target.period) {
         facts.push(json!(["Due", TaxPeriod::Day(due).label()]));
@@ -1766,14 +1764,23 @@ mod tests {
         .expect("taxpayer");
     }
 
-    fn with_context(db: &Database, name: &str, args: &str, complete: bool, attached: &[&str]) -> Value {
+    fn with_context(
+        db: &Database,
+        name: &str,
+        args: &str,
+        complete: bool,
+        attached: &[&str],
+    ) -> Value {
         resolve(
             db,
             &Request {
                 name: name.into(),
                 args: args.into(),
                 complete,
-                attached: attached.iter().filter_map(|token| attached_tin(token)).collect(),
+                attached: attached
+                    .iter()
+                    .filter_map(|token| attached_tin(token))
+                    .collect(),
             },
             today(),
         )
@@ -1787,7 +1794,11 @@ mod tests {
         let who = complete(&db, "taxform", "");
         let choices = who["choices"].as_array().unwrap();
         assert_eq!(choices.len(), 2, "{who}");
-        assert_eq!(choices[0]["value"], format!("{ROOT}/"), "the current one first");
+        assert_eq!(
+            choices[0]["value"],
+            format!("{ROOT}/"),
+            "the current one first"
+        );
         assert_eq!(choices[0]["detail"], "Choose who you're filing for");
         assert_eq!(choices[1]["value"], "987654321/");
         // After the pick, that taxpayer's forms; the profile chose two.
@@ -1796,7 +1807,8 @@ mod tests {
             ["2551Q", "1601C"],
             bir_core::forms::FormSetSource::Manual,
         );
-        db.save_per_year_forms("98765432100000", 2026, &set).unwrap();
+        db.save_per_year_forms("98765432100000", 2026, &set)
+            .unwrap();
         let forms = complete(&db, "taxform", "987654321/");
         let values: Vec<&str> = forms["choices"]
             .as_array()
@@ -1825,17 +1837,42 @@ mod tests {
                 .all(|choice| choice["value"].as_str().unwrap().starts_with("987654321/")),
             "{attached}"
         );
-        assert_eq!(attached["choices"].as_array().unwrap().len(), 2, "{attached}");
-        let opened = with_context(&db, "taxform", "1601C 2026-09", false, &["@bir:taxprofile:987654321"]);
+        assert_eq!(
+            attached["choices"].as_array().unwrap().len(),
+            2,
+            "{attached}"
+        );
+        let opened = with_context(
+            &db,
+            "taxform",
+            "1601C 2026-09",
+            false,
+            &["@bir:taxprofile:987654321"],
+        );
         assert_eq!(opened["token"], "@bir:taxform:987654321/1601C-2026-09");
         // A branch token names its branch; an unknown one falls back.
-        assert_eq!(attached_tin("@bir:branchcode:987654321/1").as_deref(), Some("98765432100001"));
+        assert_eq!(
+            attached_tin("@bir:branchcode:987654321/1").as_deref(),
+            Some("98765432100001")
+        );
         assert_eq!(attached_tin("@bir:taxform:987654321/1601C-2026-09"), None);
-        let fallback = with_context(&db, "taxform", "2551Q 2026-Q3", false, &["@bir:taxprofile:555555555"]);
-        assert_eq!(fallback["token"], format!("@bir:taxform:{ROOT}/2551Q-2026-Q3"));
+        let fallback = with_context(
+            &db,
+            "taxform",
+            "2551Q 2026-Q3",
+            false,
+            &["@bir:taxprofile:555555555"],
+        );
+        assert_eq!(
+            fallback["token"],
+            format!("@bir:taxform:{ROOT}/2551Q-2026-Q3")
+        );
         // Resolving the attached taxpayer leaves the current one alone.
         with_context(&db, "taxprofile", "", false, &["@bir:taxprofile:987654321"]);
-        assert_eq!(db.get_setting(CURRENT_TAXPAYER_KEY).unwrap().as_deref(), Some(TIN));
+        assert_eq!(
+            db.get_setting(CURRENT_TAXPAYER_KEY).unwrap().as_deref(),
+            Some(TIN)
+        );
     }
 
     #[test]
@@ -1847,11 +1884,17 @@ mod tests {
         let opened = ask(&db, "taxprofile", ROOT);
         let details = &opened["details"];
         assert_eq!(details["name"], "Galang, Juan");
-        assert_eq!(details["subtitle"], "123-456-788-00000 · Head office · RDO 047");
+        assert_eq!(
+            details["subtitle"],
+            "123-456-788-00000 · Head office · RDO 047"
+        );
         assert_eq!(details["image"], Value::Null);
         assert_eq!(details["versions"][0]["label"], "2026");
         assert_eq!(details["versions"][0]["detail"], "1 return · 1 draft");
-        assert_eq!(props(&details["versions"][0]["open"]), json!({"tin": ROOT, "year": 2026}));
+        assert_eq!(
+            props(&details["versions"][0]["open"]),
+            json!({"tin": ROOT, "year": 2026})
+        );
         assert_eq!(details["facts"][0], json!(["Type", "Individual"]));
         assert!(
             opened["open"]
@@ -1863,11 +1906,9 @@ mod tests {
         assert_eq!(form["details"]["name"], "2551Q · Q2 2026");
         assert_eq!(form["details"]["versions"][0]["label"], "2026");
         assert!(
-            form["details"]["facts"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|fact| fact[0] == "Status" && fact[1].as_str().unwrap().starts_with("Draft · ")),
+            form["details"]["facts"].as_array().unwrap().iter().any(
+                |fact| fact[0] == "Status" && fact[1].as_str().unwrap().starts_with("Draft · ")
+            ),
             "{form}"
         );
         assert!(

@@ -57,7 +57,8 @@ const RECEIPT_MAX_BYTES: u64 = 25 * 1024 * 1024;
 /// Gmail, where Open in Gmail shows a payment's email.
 const GMAIL: &str = "https://mail.google.com";
 /// A return's attachment (a scan or a PDF) or a sales sheet to import.
-const RETURN_FILE_EXTENSIONS: [&str; 7] = [".pdf", ".png", ".jpg", ".jpeg", ".heic", ".xlsx", ".csv"];
+const RETURN_FILE_EXTENSIONS: [&str; 7] =
+    [".pdf", ".png", ".jpg", ".jpeg", ".heic", ".xlsx", ".csv"];
 
 /// `sha256:<hex>` of an app source as served.
 pub(crate) fn fingerprint(source: &str) -> String {
@@ -80,7 +81,10 @@ fn ticket_schema() -> Value {
 
 /// The `bir_app_*` tool of each host function an app calls.
 fn host_tools(functions: &[&str]) -> Vec<String> {
-    functions.iter().map(|name| app_tools::tool_name(name)).collect()
+    functions
+        .iter()
+        .map(|name| app_tools::tool_name(name))
+        .collect()
 }
 
 /// An answer card app (spec 9.8, [`super::super::cards`]): inline, its
@@ -186,60 +190,86 @@ fn specs() -> Vec<AppSpec> {
             id: "deadlines",
             placement: &["inline", "full"],
             // held until its calendar is read (`rox.ready()`)
-            inline: Some(json!({ "width": 480, "height": 320, "min_width": 320, "resizable": true, "wait_ready": true })),
+            inline: Some(
+                json!({ "width": 480, "height": 320, "min_width": 320, "resizable": true, "wait_ready": true }),
+            ),
             props: json!({ "type": "object", "properties": { "ticket": ticket_schema() } }),
             permissions: json!({
                 "tools": ["bir_calendar_get"],
                 "open": { "apps": ["forms", "calendar"] },
             }),
         },
-        card("card-people", json!({
-            "tools": ["bir_find_taxpayer", "bir_taxpayer", "bir_board", "bir_quick_add", "bir_card_add_taxpayer"],
-            "open": { "apps": ["tax-profile", "forms", "register", "deadlines"] },
-            "attach": ["taxprofile"],
-        })),
-        card("card-forms", json!({
-            "tools": [
-                "bir_profile_forms", "bir_returns_list", "bir_form_needs_you", "bir_mark_paid", "bir_form_info",
-                "bir_drafts_list", "bir_outbox", "bir_card_cancel_send", "bir_board",
-            ],
-            "open": { "apps": ["forms", "calendar", "tax-profile"] },
-        })),
-        card("card-dates", json!({
-            "tools": ["bir_calendar_get", "bir_penalty"],
-            "open": { "apps": ["forms", "calendar"] },
-        })),
-        card("card-money", json!({
-            "tools": ["bir_unpaid", "bir_mark_paid", "bir_record_payment", "bir_app_upload", "bir_payments_list", "bir_digest", "bir_payment_receipt"],
-            "open": { "apps": ["forms"], "external": [GMAIL] },
-            // the receipt card's View receipt
-            "preview": {},
-            "pick_file": { "extensions": RECEIPT_EXTENSIONS, "max_bytes": RECEIPT_MAX_BYTES, "multiple": false },
-        })),
-        card("card-help", json!({
-            "tools": ["bir_status"],
-            "open": { "apps": ["register", "forms"] },
-        })),
-        card("card-return", json!({
-            "tools": ["bir_return", "bir_app_upload", "bir_card_attach", "bir_card_import", "bir_card_import_fill"],
-            "open": { "apps": ["forms"] },
-            "pick_file": { "extensions": RETURN_FILE_EXTENSIONS, "max_bytes": RECEIPT_MAX_BYTES, "multiple": false },
-        })),
-        card("card-quick", json!({
-            "tools": [
-                "bir_card_allow_send", "bir_mark_paid", "bir_record_payment", "bir_payments_list", "bir_app_upload", "bir_payment_receipt",
-                "bir_status", "bir_deadline", "bir_deadline_override_set", "bir_deadline_override_remove", "bir_calendar_set",
-            ],
-            "open": { "apps": ["forms", "register", "calendar"] },
-            // Payment found remembers "Not this return"
-            "storage": {},
-            // and shows the receipt once recorded
-            "preview": {},
-            "pick_file": { "extensions": RECEIPT_EXTENSIONS, "max_bytes": RECEIPT_MAX_BYTES, "multiple": false },
-        })),
-        card("card-calc", json!({
-            "tools": ["bir_lookup"],
-        })),
+        card(
+            "card-people",
+            json!({
+                "tools": ["bir_find_taxpayer", "bir_taxpayer", "bir_board", "bir_quick_add", "bir_card_add_taxpayer"],
+                "open": { "apps": ["tax-profile", "forms", "register", "deadlines"] },
+                "attach": ["taxprofile"],
+            }),
+        ),
+        card(
+            "card-forms",
+            json!({
+                "tools": [
+                    "bir_profile_forms", "bir_returns_list", "bir_form_needs_you", "bir_mark_paid", "bir_form_info",
+                    "bir_drafts_list", "bir_outbox", "bir_card_cancel_send", "bir_board",
+                ],
+                "open": { "apps": ["forms", "calendar", "tax-profile"] },
+            }),
+        ),
+        card(
+            "card-dates",
+            json!({
+                "tools": ["bir_calendar_get", "bir_penalty"],
+                "open": { "apps": ["forms", "calendar"] },
+            }),
+        ),
+        card(
+            "card-money",
+            json!({
+                "tools": ["bir_unpaid", "bir_mark_paid", "bir_record_payment", "bir_app_upload", "bir_payments_list", "bir_digest", "bir_payment_receipt"],
+                "open": { "apps": ["forms"], "external": [GMAIL] },
+                // the receipt card's View receipt
+                "preview": {},
+                "pick_file": { "extensions": RECEIPT_EXTENSIONS, "max_bytes": RECEIPT_MAX_BYTES, "multiple": false },
+            }),
+        ),
+        card(
+            "card-help",
+            json!({
+                "tools": ["bir_status"],
+                "open": { "apps": ["register", "forms"] },
+            }),
+        ),
+        card(
+            "card-return",
+            json!({
+                "tools": ["bir_return", "bir_app_upload", "bir_card_attach", "bir_card_import", "bir_card_import_fill"],
+                "open": { "apps": ["forms"] },
+                "pick_file": { "extensions": RETURN_FILE_EXTENSIONS, "max_bytes": RECEIPT_MAX_BYTES, "multiple": false },
+            }),
+        ),
+        card(
+            "card-quick",
+            json!({
+                "tools": [
+                    "bir_card_allow_send", "bir_mark_paid", "bir_record_payment", "bir_payments_list", "bir_app_upload", "bir_payment_receipt",
+                    "bir_status", "bir_deadline", "bir_deadline_override_set", "bir_deadline_override_remove", "bir_calendar_set",
+                ],
+                "open": { "apps": ["forms", "register", "calendar"] },
+                // Payment found remembers "Not this return"
+                "storage": {},
+                // and shows the receipt once recorded
+                "preview": {},
+                "pick_file": { "extensions": RECEIPT_EXTENSIONS, "max_bytes": RECEIPT_MAX_BYTES, "multiple": false },
+            }),
+        ),
+        card(
+            "card-calc",
+            json!({
+                "tools": ["bir_lookup"],
+            }),
+        ),
         AppSpec {
             id: "register",
             placement: &["full"],
@@ -391,8 +421,8 @@ pub(crate) fn served_text(catalog: &Catalog) -> Result<String, String> {
 /// The served manifest, parsed.
 pub(crate) fn served(catalog: &Catalog) -> Result<Value, String> {
     let text = served_text(catalog)?;
-    let value: Value =
-        serde_json::from_str(&text).map_err(|error| format!("the manifest is not JSON: {error}"))?;
+    let value: Value = serde_json::from_str(&text)
+        .map_err(|error| format!("the manifest is not JSON: {error}"))?;
     if !value.is_object() {
         return Err("the manifest is not a JSON object".into());
     }
@@ -467,7 +497,12 @@ mod tests {
         }
         for scope in m["scopes"].as_array().unwrap() {
             assert!(chars(&scope["description"]) <= 120, "{scope}");
-            assert!(chars(&scope["hint"]) <= 1500, "{} is {}", scope["name"], chars(&scope["hint"]));
+            assert!(
+                chars(&scope["hint"]) <= 1500,
+                "{} is {}",
+                scope["name"],
+                chars(&scope["hint"])
+            );
         }
         for routine in m["routines"].as_array().unwrap() {
             assert!(chars(&routine["prompt"]) <= 4000);
@@ -497,8 +532,19 @@ mod tests {
         assert_eq!(
             ids,
             [
-                "forms", "tax-profile", "calendar", "deadlines", "card-people", "card-forms", "card-dates", "card-money", "card-help",
-                "card-return", "card-quick", "card-calc", "register"
+                "forms",
+                "tax-profile",
+                "calendar",
+                "deadlines",
+                "card-people",
+                "card-forms",
+                "card-dates",
+                "card-money",
+                "card-help",
+                "card-return",
+                "card-quick",
+                "card-calc",
+                "register"
             ]
         );
         for app in apps {
@@ -510,15 +556,28 @@ mod tests {
             let source = catalog.find(id).unwrap().unwrap().source;
             assert_eq!(app["fingerprint"], fingerprint(&source));
             let tools = app["permissions"]["tools"].as_array().unwrap();
-            assert!(!tools.is_empty() && tools.len() <= 64, "{id}: {} tools", tools.len());
-            assert!(tools.iter().all(|tool| tool != "bir_call"), "{id} names bir_call");
+            assert!(
+                !tools.is_empty() && tools.len() <= 64,
+                "{id}: {} tools",
+                tools.len()
+            );
+            assert!(
+                tools.iter().all(|tool| tool != "bir_call"),
+                "{id} names bir_call"
+            );
             assert!(app["props"]["properties"].as_object().unwrap().len() <= 16);
         }
         let deadlines = &apps[3];
         assert_eq!(deadlines["placement"], json!(["inline", "full"]));
         assert_eq!(deadlines["inline"]["width"], 480);
-        assert_eq!(deadlines["permissions"]["tools"], json!(["bir_calendar_get"]));
-        assert_eq!(deadlines["permissions"]["open"]["apps"], json!(["forms", "calendar"]));
+        assert_eq!(
+            deadlines["permissions"]["tools"],
+            json!(["bir_calendar_get"])
+        );
+        assert_eq!(
+            deadlines["permissions"]["open"]["apps"],
+            json!(["forms", "calendar"])
+        );
     }
 
     #[test]
@@ -538,8 +597,14 @@ mod tests {
             assert_eq!(has(app_tools::PRINT_PREVIEW), id == "forms", "{id}");
             assert_eq!(has("bir_payment_receipt"), shows, "{id}");
             // Open in Gmail, from the apps that show a payment's email
-            let gmail = permissions["open"]["external"].as_array().is_some_and(|o| o.iter().any(|x| x == GMAIL));
-            assert_eq!(gmail, ["forms", "card-money"].contains(&id), "{id}: open.external");
+            let gmail = permissions["open"]["external"]
+                .as_array()
+                .is_some_and(|o| o.iter().any(|x| x == GMAIL));
+            assert_eq!(
+                gmail,
+                ["forms", "card-money"].contains(&id),
+                "{id}: open.external"
+            );
         }
     }
 

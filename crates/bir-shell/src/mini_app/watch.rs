@@ -64,10 +64,14 @@ impl Watch {
         let forms = list("forms")?
             .iter()
             .map(|form| {
-                taxform::form_code_of(form).ok_or_else(|| format!("`forms`: `{form}` is not a BIR form code"))
+                taxform::form_code_of(form)
+                    .ok_or_else(|| format!("`forms`: `{form}` is not a BIR form code"))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self { taxpayers: list("taxpayers")?, forms })
+        Ok(Self {
+            taxpayers: list("taxpayers")?,
+            forms,
+        })
     }
 
     /// The branches it watches; `None` watches every taxpayer.
@@ -88,7 +92,11 @@ impl Watch {
     }
 
     pub(crate) fn has_form(&self, code: &str) -> bool {
-        self.forms.is_empty() || self.forms.iter().any(|form| form.eq_ignore_ascii_case(code))
+        self.forms.is_empty()
+            || self
+                .forms
+                .iter()
+                .any(|form| form.eq_ignore_ascii_case(code))
     }
 
     /// The forms it watches, for the search's answer (empty: every form).
@@ -97,7 +105,12 @@ impl Watch {
     }
 
     /// Whether a write for `tin`'s `form` stays inside the watch.
-    pub(crate) fn allows(&self, db: &Database, tin: Option<&str>, form: Option<&str>) -> Result<(), String> {
+    pub(crate) fn allows(
+        &self,
+        db: &Database,
+        tin: Option<&str>,
+        form: Option<&str>,
+    ) -> Result<(), String> {
         if !self.forms.is_empty() {
             let code = form.and_then(taxform::form_code_of);
             if !code.is_some_and(|code| self.has_form(code)) {
@@ -108,10 +121,18 @@ impl Watch {
                 ));
             }
         }
-        let Some(branches) = self.branches(db)? else { return Ok(()) };
+        let Some(branches) = self.branches(db)? else {
+            return Ok(());
+        };
         let digits = tin.and_then(taxform::tin_digits);
         let inside = digits.is_some_and(|digits| {
-            branches.iter().any(|branch| if digits.len() == 9 { branch.root == digits } else { branch.tin == digits })
+            branches.iter().any(|branch| {
+                if digits.len() == 9 {
+                    branch.root == digits
+                } else {
+                    branch.tin == digits
+                }
+            })
         });
         if inside {
             Ok(())
@@ -128,28 +149,50 @@ fn matching<'a>(all: &'a [Branch], wanted: &str) -> Result<Vec<&'a Branch>, Stri
     if let Some(digits) = taxform::tin_digits(wanted) {
         let found: Vec<_> = all
             .iter()
-            .filter(|branch| if digits.len() == 9 { branch.root == digits } else { branch.tin == digits })
+            .filter(|branch| {
+                if digits.len() == 9 {
+                    branch.root == digits
+                } else {
+                    branch.tin == digits
+                }
+            })
             .collect();
         return if found.is_empty() {
-            Err(format!("no taxpayer with TIN {}", resolve::format_tin(&digits)))
+            Err(format!(
+                "no taxpayer with TIN {}",
+                resolve::format_tin(&digits)
+            ))
         } else {
             Ok(found)
         };
     }
-    let fold = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let fold = |text: &str| {
+        text.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
     let wanted = fold(wanted);
-    let exact: Vec<_> = all.iter().filter(|branch| fold(&branch.name) == wanted).collect();
+    let exact: Vec<_> = all
+        .iter()
+        .filter(|branch| fold(&branch.name) == wanted)
+        .collect();
     if !exact.is_empty() {
         return Ok(exact);
     }
-    let partial: Vec<_> = all.iter().filter(|branch| fold(&branch.name).contains(&wanted)).collect();
+    let partial: Vec<_> = all
+        .iter()
+        .filter(|branch| fold(&branch.name).contains(&wanted))
+        .collect();
     let mut roots: Vec<&str> = partial.iter().map(|branch| branch.root.as_str()).collect();
     roots.sort_unstable();
     roots.dedup();
     match roots.len() {
         0 => Err(format!("no taxpayer named \"{wanted}\"")),
         1 => Ok(partial),
-        _ => Err(format!("\"{wanted}\" names more than one taxpayer: give the TIN")),
+        _ => Err(format!(
+            "\"{wanted}\" names more than one taxpayer: give the TIN"
+        )),
     }
 }
 
@@ -189,7 +232,10 @@ mod tests {
     }
 
     fn roots(db: &Database, params: Value) -> Option<Vec<String>> {
-        watch(params).branches(db).unwrap().map(|branches| branches.into_iter().map(|branch| branch.root).collect())
+        watch(params)
+            .branches(db)
+            .unwrap()
+            .map(|branches| branches.into_iter().map(|branch| branch.root).collect())
     }
 
     #[test]
@@ -205,13 +251,35 @@ mod tests {
     #[test]
     fn a_taxpayer_is_named_by_tin_or_name() {
         let db = db();
-        assert_eq!(roots(&db, json!({"taxpayers": [MARIA]})), Some(vec![MARIA.to_string()]));
-        assert_eq!(roots(&db, json!({"taxpayers": ["123-456-788"]})), Some(vec![JUAN.to_string()]));
-        assert_eq!(roots(&db, json!({"taxpayers": ["galang,  juan"]})), Some(vec![JUAN.to_string()]));
-        assert_eq!(roots(&db, json!({"taxpayers": ["Maria"]})), Some(vec![MARIA.to_string()]));
+        assert_eq!(
+            roots(&db, json!({"taxpayers": [MARIA]})),
+            Some(vec![MARIA.to_string()])
+        );
+        assert_eq!(
+            roots(&db, json!({"taxpayers": ["123-456-788"]})),
+            Some(vec![JUAN.to_string()])
+        );
+        assert_eq!(
+            roots(&db, json!({"taxpayers": ["galang,  juan"]})),
+            Some(vec![JUAN.to_string()])
+        );
+        assert_eq!(
+            roots(&db, json!({"taxpayers": ["Maria"]})),
+            Some(vec![MARIA.to_string()])
+        );
         // "a" is in both names: give the TIN
-        assert!(watch(json!({"taxpayers": ["a"]})).branches(&db).unwrap_err().contains("more than one"));
-        assert!(watch(json!({"taxpayers": ["Santos"]})).branches(&db).unwrap_err().contains("no taxpayer named"));
+        assert!(
+            watch(json!({"taxpayers": ["a"]}))
+                .branches(&db)
+                .unwrap_err()
+                .contains("more than one")
+        );
+        assert!(
+            watch(json!({"taxpayers": ["Santos"]}))
+                .branches(&db)
+                .unwrap_err()
+                .contains("no taxpayer named")
+        );
     }
 
     #[test]
@@ -219,18 +287,30 @@ mod tests {
         let only = watch(json!({"forms": ["2551q"]}));
         assert_eq!(only.forms(), ["2551Q"]);
         assert!(only.has_form("2551Q") && !only.has_form("1601C"));
-        assert!(Watch::of(json!({"forms": ["*"]}).as_object().unwrap()).unwrap_err().contains("not a BIR form code"));
+        assert!(
+            Watch::of(json!({"forms": ["*"]}).as_object().unwrap())
+                .unwrap_err()
+                .contains("not a BIR form code")
+        );
     }
 
     #[test]
     fn a_write_stays_inside_the_watch() {
         let db = db();
         let maria_2551q = watch(json!({"taxpayers": ["Reyes, Maria"], "forms": ["2551Q"]}));
-        assert!(maria_2551q.allows(&db, Some("98765432100000"), Some("2551Q")).is_ok());
+        assert!(
+            maria_2551q
+                .allows(&db, Some("98765432100000"), Some("2551Q"))
+                .is_ok()
+        );
         assert!(maria_2551q.allows(&db, Some(MARIA), Some("2551q")).is_ok());
-        let other = maria_2551q.allows(&db, Some("12345678800000"), Some("2551Q")).unwrap_err();
+        let other = maria_2551q
+            .allows(&db, Some("12345678800000"), Some("2551Q"))
+            .unwrap_err();
         assert!(other.contains("does not watch this taxpayer"), "{other}");
-        let form = maria_2551q.allows(&db, Some(MARIA), Some("1601C")).unwrap_err();
+        let form = maria_2551q
+            .allows(&db, Some(MARIA), Some("1601C"))
+            .unwrap_err();
         assert!(form.contains("watches only 2551Q"), "{form}");
         assert!(maria_2551q.allows(&db, None, Some("2551Q")).is_err());
     }
@@ -240,7 +320,10 @@ mod tests {
         let db = db();
         let today = NaiveDate::from_ymd_opt(2026, 10, 26).unwrap();
         let params = json!({"taxpayers": ["Maria"], "forms": ["2551Q"]});
-        for search in [super::super::confirm::search, super::super::payments::search] {
+        for search in [
+            super::super::confirm::search,
+            super::super::payments::search,
+        ] {
             let found = search(&db, params.as_object().unwrap(), today).unwrap();
             let query = found["query"].as_str().unwrap();
             assert!(query.contains(MARIA) && !query.contains(JUAN), "{query}");
@@ -253,7 +336,10 @@ mod tests {
         let schema = schema();
         assert_eq!(schema["type"], "object");
         assert_eq!(schema["additionalProperties"], false);
-        assert!(schema.get("required").is_none(), "an instance made before params keeps working");
+        assert!(
+            schema.get("required").is_none(),
+            "an instance made before params keeps working"
+        );
         for name in ["taxpayers", "forms"] {
             let prop = &schema["properties"][name];
             assert_eq!(prop["type"], "array");
