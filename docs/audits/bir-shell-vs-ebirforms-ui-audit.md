@@ -8,6 +8,8 @@ Audit date: **2026-11-01 UTC**. This replaces the provisional shell-only report.
 
 **Matched-size supplement:** reused existing isolated synthetic shell/reference stores, **not another fresh run**. Added exact **1440×900 content PNGs** for shell library All/filter, period chooser, taxpayer Profile/Forms and empty Filings. Cancel dismissed the period chooser without a new save. Added genuine **2560×1856 reference form evidence**, matching original shell12. Existing 22-second recording unchanged; supplemental flows are screenshot evidence.
 
+**Heavy-form follow-up:** [section 9](#9-heavy-annual-forms--1700-family-full-scrolling) adds headed 1700/1701/1702RT/1702MX scrolling and UI draft saves on shell `d65a473c`, with unchanged app code. All four reference annual variants explicitly reject editing; their scrolling remains blocked. A **medium shell form-card clipping issue** is visible with the right panel open. This is not a clean bill of health or a matched annual-editor comparison.
+
 - **Right-panel width is equal, not larger in bir-shell:** both render a fixed **320px** panel. Both left sidebars render **248px**.
 - **The genuine padding delta is 4px per side:** shell taxpayer-panel branch control is **296px** wide with **12px** body padding; reference is **288px** with **16px**. Thus shell controls occupy 8px more width without a wider panel.
 - The reference has an **8px same-background gutter** immediately before its 320px panel. Measuring the whole apparent right-colored region produces 328px; that is not the panel width. Nested group-label inset is also not body padding.
@@ -34,7 +36,7 @@ Read backend README/configuration/smoke script; no backend justfile exists. Buil
 cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell
 ```
 
-Build took 7m45s. Launched the JavaScript application using `app/main.js` and `app/gpui-shell.json`. **`crates/bir-desktop` was neither built nor used.**
+Build took 7m45s. Launched the JavaScript application using `app/main.js` and `app/gpui-shell.json`. **The retired painted target was neither built nor used.**
 
 Fresh HOME `/tmp/bir-shell-ui-audit-20261101/shell-home`, independent DB/account-file paths, private D-Bus and browser profile were absent before first launch: [shell absence log](../../evidence/bir-shell-ui-audit/fresh-state.txt). Fresh backend counts were accounts 0, web_sessions 0, oauth_grants 0, tin_claims 0. Captured genuine auth gate and setup before adding a taxpayer. Used native Create account → local email-code verification → device approval → solo setup; no bypass or fixture.
 
@@ -65,9 +67,9 @@ Weston kiosk-shell allocated the reference **1440×900** visible surface because
 | auth | Fresh gate, genuine local signup/code/device approval | Absent-equivalent; fresh local Home | Expiry/cancel/re-login untested |
 | setup_change | Initial solo setup; change-owner/help-desk choices opened/cancelled | Absent-equivalent | Ownership handover/help-desk completion untested |
 | home | Empty then populated | Fresh empty then populated | Submitted rows untested |
-| form_page | Sample → October 2026 draft → Recent reopen; scroll | Supported 1601-C October 2026 editor; validation; scroll; save toast | Full valid form, calculations, all other editors untested |
+| form_page | Sample → October 2026 draft → Recent reopen; scroll; section 9 adds four annual editors/selected expanded sections | Supported 1601-C October 2026 editor; validation; scroll; save toast; all four annual variants explicitly not editable | Annual reference comparison blocked; all fields simultaneously expanded/calculations untested; shell clipping in section 9 |
 | filings | Empty; local draft not counted as filed | Empty before draft | Submitted tables/long rows untested |
-| periods | Monthly save dialog; October 2026 retained | Start-return monthly modal; October 2026 retained | Other frequencies/duplicates untested |
+| periods | Monthly save dialog; October 2026 retained; section 9 annual TY2026 and year-ended12/2026 saves/reopens | Start-return monthly modal; October 2026 retained; annual TY2026 choices rejected as unsupported | Duplicate/amended period flows and supported reference annual save untested |
 | calendar_page | Empty and populated Nov/Dec/Jan groups | Empty and populated groups; narrow clipping observed | Deadline/holiday correctness untested |
 | recent | Sidebar creation and reopen | Sidebar creation and reopen | Large history/privacy/preference permutations untested |
 | gallery | Components top and bottom scroll | Absent-equivalent | Not a library comparison |
@@ -424,11 +426,122 @@ Genuine equal-size content; editor section/validation state and form columns dif
 
 - **Primary paired annotated recording (22 seconds edited):** `/home/ubuntu/screencasts/bir-shell-ebirforms-paired/bir-shell-ebirforms-paired-edited.mp4`. It shows shell Home/panel, Recent reopening and draft save, then reference Home/panel, Recent reopening/loading and validation. Its final reference annotation conservatively marks the valid-save path incomplete. The later save-toast screenshot proves draft save, not a fully valid return. Narrow/theme/fresh-state/lower-Settings/profile coverage is screenshot evidence, not in this video.
 - **Report:** `/home/ubuntu/repos/buwiz-forms/docs/audits/bir-shell-vs-ebirforms-ui-audit.md`.
-- **Evidence:** `/home/ubuntu/repos/buwiz-forms/evidence/bir-shell-ui-audit/`, with original 33 shell PNGs plus 35 paired/reference PNGs (**68 total**), safe absence/request metadata, corrected geometry/dimension inventory and generated-only diff.
-- **Portable archive:** `/home/ubuntu/bir-shell-ebirforms-ui-audit-20261101.zip`, containing report, evidence and the final comparison recording. No account stores, databases, tokens or raw sensitive auth logs included.
+- **Evidence:** `/home/ubuntu/repos/buwiz-forms/evidence/bir-shell-ui-audit/`, with the original 68 PNGs plus **45 heavy-form PNGs (113 total)**, safe absence/request metadata, geometry/dimension inventories and generated-only diffs.
+- **Portable archive:** `/home/ubuntu/bir-shell-ebirforms-ui-audit-20261101.zip`, containing report, evidence, the original 22-second comparison recording and the new heavy-form recordings. No account stores, databases, tokens or raw sensitive auth logs included.
 
-Remaining **untested**: submitted filings/table column widths, all form versions/calculations/print fidelity, fully valid reference return, full reference profile/address/RDO, ownership transfer/help desk, PIN/TOTP/recovery/lock, updater banners/install, all responsive widths/exact breakpoint/focus traps, restart persistence beyond this preserved-state resume, all settings/jobs/import/export, Windows caption/font parity. **Fresh onboarding remains unmatched 2560×1856 shell versus 1440×900 reference.** Wide 2560×1856 fixed-panel behavior is now observed; no exhaustive wide form-fidelity claim. Source-only observations labeled above.
+Remaining **untested**: submitted filings/table column widths, all form versions/calculations/print fidelity, fully valid reference return, full reference profile/address/RDO, ownership transfer/help desk, PIN/TOTP/recovery/lock, updater banners/install, all responsive widths/exact breakpoint/focus traps, restart persistence beyond this preserved-state resume, all settings/jobs/import/export, Windows caption/font parity. Section 9 closes selected annual scrolling/save gaps, **not every collapsed field/section or complete horizontal-grid traversal**; reference annual editing remains unavailable. **Fresh onboarding remains unmatched 2560×1856 shell versus 1440×900 reference.** Wide 2560×1856 fixed-panel behavior is now observed; no exhaustive wide form-fidelity claim. Source-only observations labeled above.
 
-No comparator clarification or user credential remains needed. Product decisions, not access blockers: whether to standardize taxpayer body padding to 16px and whether to address shared small-label contrast. Both apps/Weston are stopped; generated declarations were restored and application code is unchanged.
+No comparator clarification or user credential remains needed. Product decisions, not access blockers: whether to standardize taxpayer body padding to 16px and whether to address shared small-label contrast. Both apps/Weston are stopped. The original run's generated declarations were restored; the section 9 resume regenerated nine declaration lines, preserved as evidence and left untouched as requested. No intentional application-code edits or git writes were made.
 
-Blueprints were read for both repos. The reference blueprint is Windows-only and lacks the verified Linux Bun/Ubuntu24.04/Wayland compatibility path; the shell blueprint has Linux setup but still contains obsolete Windows `bir-desktop` run guidance that must not be selected for this JavaScript-shell audit. Suggested reusable setup notes are delivered separately; no blueprint or app source was changed.
+Blueprints were read for both repos. The effective reference blueprint now includes the verified Linux Bun/Ubuntu24.04/Wayland compatibility path; the shell blueprint has Linux setup but still contains obsolete Windows painted-target run guidance that must not be selected for this JavaScript-shell audit. The heavy-form resume required no dependency installation or new setup proposal. No blueprint or app source was changed.
+
+## 9. Heavy annual forms — 1700 family, full scrolling
+
+### Scope, geometry and actual outcome
+
+This follow-up reuses the **preserved synthetic stores**, not fresh onboarding. Shell branch `devin/1793507972-heavy-forms-ui-audit`, HEAD `d65a473ce7eed80065d082707923448245bcdc9e`; `app/` and `crates/bir-shell/` are unchanged versus the original `b833bdcc` audit. Reference remains `14fe8efb29e171cac4e794d0d1ee9afaf1069310`. After captures the branch integrated main `5300106d`; evidence describes tested `d65a473c`, not a retest of that later revision. Existing backend3008/Postgres were reused; the existing Ubuntu24.04/Weston reference container was resumed. Launch scripts stripped inherited `BIR_SFTP_*`, set only `BIR_SFTP_DRY_RUN=1`, and left seed/auth bypass unset.
+
+All default heavy PNGs are genuine **1440×900 content**. Shell captures remove only20px shadow on each side of a1480×940 allocation; reference captures exclude compositor decoration. The five narrow1701 PNGs are **800×900** from an840×940 allocation. No screenshot was scaled or reconstructed. Reference rejection toasts were cropped from the **immediate native screenshot**, not a later frame after the toast disappeared. [PNG/geometry inventory](../../evidence/bir-shell-ui-audit/heavy/png-dimensions.tsv) and [observed measurements](../../evidence/bir-shell-ui-audit/heavy/observed-geometry.txt).
+
+Wheel scrolling traversed top→middle→document end→top in each shell editor, with repeated end-scroll producing no further movement. The larger computation/schedule section was selected through part navigation, and additional disclosure headers expanded selected schedules. **Part-nav selection folds other parts**; this is not a claim that all296/946/269/663 fields were simultaneously rendered or every collapsed section inspected. Blank synthetic drafts with profile identity and2026 period were saved through UI, then all four reopened from Recent. No Queue/send/Final Copy or valid-return claim.
+
+| Requested shell schema | Rendered badge / parts | Expanded scrolling exercised | Runtime status / severity |
+|---|---|---|---|
+| `1700-2018` | 2pages,296fields,6parts | Part V Computation of Tax (18items), then Part VI Schedule1 gross compensation | Save TY2026/reopen and scrolling observed; **medium** shared clipping below |
+| `1701-2018` | 4pages,946fields,17parts; **Draft layout** badge | Part V Schedule4 Ordinary Allowable Itemized Deductions (21items), Schedule1 employer grid (2rows), narrow800px pass | Save TY2026/reopen and scrolling observed; **medium** shared clipping; Draft-layout fidelity not established |
+| `1702rt-2018c` | 4pages,269fields,12parts | Part IV Computation of Tax (31items), Schedule III/IIIA NOLCO disclosures | Save year-ended12/2026/reopen and scrolling observed; **medium** shared clipping |
+| `1702mx-2018c` | 4pages,663fields,17parts | Schedule2 income-tax regime computation (19items), expanded Schedule10 special-regime computation | Save year-ended12/2026/reopen and scrolling observed; **medium** shared clipping |
+
+The badge numbers above are read from native-resolution **runtime PNGs**, not estimates from downscaled previews or original HTML file sizes.
+
+**Validation limitation:**1702RT/MX12/2026 retained the visible warning **“Year (Page 1 Item 2) cannot be greater than or equal to current year when filing for Calen…”** (truncated by the UI). Save acknowledged/persisted the draft and Recent reopened it, but these are saved **invalid/incomplete drafts**, not fully valid annual returns. The reference fallback likewise retained incomplete-data validation. No warning was bypassed or submitted.
+
+### Per-form top / middle / bottom / back-top evidence
+
+“Bottom” means the end of the current document with the named section expanded and other sections retained as disclosure headers. Extra expanded-schedule endpoints are linked separately; no collapsed field is implicitly counted as tested.
+
+| Form | Top | Middle | Bottom | Scrolled back to top |
+|---|---|---|---|---|
+| 1700 | [Top/panel open](../../evidence/bir-shell-ui-audit/heavy/shell-1700-top.png) | [Computation rows](../../evidence/bir-shell-ui-audit/heavy/shell-1700-middle.png) | [End after repeated wheel](../../evidence/bir-shell-ui-audit/heavy/shell-1700-bottom.png) | [Back-top](../../evidence/bir-shell-ui-audit/heavy/shell-1700-back-top.png) |
+| 1701 | [Top/panel open](../../evidence/bir-shell-ui-audit/heavy/shell-1701-top.png) | [Schedule4 rows](../../evidence/bir-shell-ui-audit/heavy/shell-1701-middle.png) | [Last Schedule13 disclosure](../../evidence/bir-shell-ui-audit/heavy/shell-1701-bottom.png) | [Back-top](../../evidence/bir-shell-ui-audit/heavy/shell-1701-back-top.png) |
+| 1702RT | [Top/panel open](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-top.png) | [Computation rows](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-middle.png) | [Last Schedule V disclosure](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-bottom.png) | [Back-top](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-back-top.png) |
+| 1702MX | [Top/panel open](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-top.png) | [Schedule2 tax-regime rows](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-middle.png) | [Last Schedule10 disclosure](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-bottom.png) | [Back-top](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-back-top.png) |
+
+Additional state evidence:
+- 1700: [saved TY2026](../../evidence/bir-shell-ui-audit/heavy/shell-1700-saved.png), [gross-compensation grid viewport](../../evidence/bir-shell-ui-audit/heavy/shell-1700-schedule-left.png), [expanded schedule end](../../evidence/bir-shell-ui-audit/heavy/shell-1700-schedule-bottom.png).
+- 1701: [saved TY2026](../../evidence/bir-shell-ui-audit/heavy/shell-1701-saved.png), [Schedule1 two-row employer grid](../../evidence/bir-shell-ui-audit/heavy/shell-1701-schedule.png), [same section/panel closed](../../evidence/bir-shell-ui-audit/heavy/shell-1701-panel-closed.png).
+- 1702RT: [saved2026](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-saved.png), [expanded NOLCO sections](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-schedule.png), [panel closed](../../evidence/bir-shell-ui-audit/heavy/shell-1702rt-panel-closed.png).
+- 1702MX: [saved2026](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-saved.png), [Schedule10 rows](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-schedule.png), [expanded Schedule10 end](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-expanded-bottom.png), [panel closed](../../evidence/bir-shell-ui-audit/heavy/shell-1702mx-panel-closed.png).
+
+### Reference annual variants: actual attempts, not editable
+
+Each exact catalog key was located through the Forms filter, selected for2026, then chosen in **New return → Open form**. All four displayed the explicit toast: **“[code] isn't editable yet — the editor covers1601-C,2551Q and0619-E for now.”** The catalog contains1702MX despite its absence in the initial profile-pack source search.
+
+| Reference annual attempt —1440×900 | Reference annual attempt —1440×900 |
+|---|---|
+| ![1700v2018 rejection](../../evidence/bir-shell-ui-audit/heavy/ref-1700-not-editable.png) | ![1701v2018 rejection](../../evidence/bir-shell-ui-audit/heavy/ref-1701-not-editable.png) |
+| ![1702RTv2018C rejection](../../evidence/bir-shell-ui-audit/heavy/ref-1702rt-not-editable.png) | ![1702MXv2018C rejection](../../evidence/bir-shell-ui-audit/heavy/ref-1702mx-not-editable.png) |
+
+**Status: blocked for annual editor scrolling, draft saving and field-level comparison; audit-blocker, not an inferred shell defect.** There is no next supported annual variant in this reference build. Source confirmation is `apps/desktop/src/app.tsx:611` (three supported codes), `:925–929` (visible unsupported toast/route back) and `:1094` (open guard). Recommendation: only claim matched annual parity after the reference supports annual editors; do not swap an older annual catalog entry silently.
+
+The next supported editor, existing **1601Cv2018 October2026**, was used as an explicitly **non-annual fallback**. Initial “Opening official form…” yielded the populated editor after Validate, as in the prior run; this required interaction is not a clean loading/performance result. Top→middle→end→top and right-panel toggle were exercised; Save draft produced the actual Saved toast. It has70fields, not the annual complexity. Owner: reference `apps/desktop/src/app.tsx:2766–3147` (form surface/actions), `:1164–1168` (save).
+
+| Supported fallback top — not annual | Supported fallback middle — not annual |
+|---|---|
+| ![1601C fallback top](../../evidence/bir-shell-ui-audit/heavy/ref-fallback-1601c-top.png) | ![1601C fallback middle](../../evidence/bir-shell-ui-audit/heavy/ref-fallback-1601c-middle.png) |
+
+[Fallback bottom](../../evidence/bir-shell-ui-audit/heavy/ref-fallback-1601c-bottom.png) · [back-top](../../evidence/bir-shell-ui-audit/heavy/ref-fallback-1601c-back-top.png) · [panel closed](../../evidence/bir-shell-ui-audit/heavy/ref-fallback-1601c-top-closed.png) · [Saved toast](../../evidence/bir-shell-ui-audit/heavy/ref-fallback-1601c-saved.png).
+
+### Concrete deltas, clipping, grids and scrolling
+
+**Medium — shell form cards clipped at the right seam.** With right panel docked at1440px, annual part cards terminate at the main-surface edge without their right-hand rounded border; explanatory text/rows are cut there. Closing the panel restores bounded rounded cards. This occurs across the four annual screenshots and on1701 narrow cards. This is separate from the intentional horizontal viewport inside a wide schedule table. Native1700 comparison below is a **workaround comparison**, not a fix or two different builds.
+
+| Panel open: card/text right seam clipped | Panel closed: complete bounded cards |
+|---|---|
+| ![1700 clipped form column](../../evidence/bir-shell-ui-audit/heavy/shell-1700-top.png) | ![1700 closed panel workaround](../../evidence/bir-shell-ui-audit/heavy/shell-1700-top-panel-closed.png) |
+
+Owner paths: `app/shell/form_page.js:3460–3484` (`drawFormSplit` sizes/body/insets, horizontal overflow hidden), `app/main.js:1722–1734` (viewport/layout arithmetic). Expected: card/content width respects actual scroll viewport and leaves its complete border/padding visible in both panel states. Recommendation: inspect native viewport versus shadow allocation and split-column arithmetic; **root cause not proven** by this audit.
+
+Observed native-coordinate measurements (not all semantically identical fields):
+
+| Measurement | Shell annual | Reference supported fallback | Interpretation |
+|---|---|---|---|
+| Fixed left / right chrome |248 /320px |248 /320px |0px width delta, unchanged from prior audit |
+| Part-nav visible row width |208px (`x282…489`) |208px (`x281…488`) |0px; shell stays pinned while form scrolls |
+| Visible part-card span, panel open |approximately600px (`x518…1117`), right edge clipped |574px (`x505…1078`), bounded |+26px visible span, **not** proof of intended width or annual parity |
+| 1700 part-card span, panel closed |820px (`x569…1388`) |not a matched annual editor |+220px visible span vs shell open; centering changes too |
+| Ordinary text-box height |32px in1700 return year (`y477…508`) |32px fallback year (`y502…533`) |0px on these examples; not a universal row-height equivalence |
+| 1701 employer-grid row pitch |about43px, control30px high; column pitch140px |no annual grid available |No same-grid delta claim; source grid declares140px columns/30px editable controls |
+
+Schedule controls stayed in their visible row cells; selected non-table money fields reflowed into two columns when space allowed. Wide employer grids show only a subset of columns at once. The horizontal-wheel probe also changed vertical page position, so **complete leftmost→rightmost reachability and all end columns remain unverified**. Do not classify cropped table columns alone as a defect or claim a horizontal-scroll pass. Owner for follow-up: `app/shell/form_page.js:2347–2415` (`scheduleTable`,140px columns and internal horizontal scroller).
+
+Shell app chrome and its “On this form” column stayed pinned at1440px; form title/actions scroll away. The long1701/1702MX part list is independently scrollable, not evidence that all sections are expanded. Source `form_page.js:708–729` confirms nav chooses one part while disclosure toggles preserve multiple. In the reference fallback, “On this form” scrolls away with the document; no annual sticky-header comparison exists.
+
+Qualitatively, the exercised shell wheel batches and return-to-top responded without a crash or persistent blank region. **No frame-time/input-latency measurement was taken**, and condensed recordings cannot establish smooth60fps scrolling or a performance delta. First render/validation calculations and all sections expanded at once remain outside coverage.
+
+### 1701 at800×900
+
+The sidebar collapsed and navigator became a wrapped chip list in the single scrolling document. Top→middle→end→top was repeated on Schedule1; right taxpayer panel became a dismissible overlay. Normal numeric fields were usable in this pass, but the right-edge card seam remains clipped and grid end-column reachability is unverified. The reference1701 narrow editor is **blocked by not-editable status**, not silently substituted.
+
+| 800px top: chips and return header | 800px middle: grid and numeric rows |
+|---|---|
+| ![1701 narrow top](../../evidence/bir-shell-ui-audit/heavy/shell-1701-narrow-top.png) | ![1701 narrow middle](../../evidence/bir-shell-ui-audit/heavy/shell-1701-narrow-middle.png) |
+
+[Narrow bottom](../../evidence/bir-shell-ui-audit/heavy/shell-1701-narrow-bottom.png) · [narrow back-top](../../evidence/bir-shell-ui-audit/heavy/shell-1701-narrow-back-top.png) · [right overlay](../../evidence/bir-shell-ui-audit/heavy/shell-1701-narrow-overlay.png). Responsive owners: `app/main.js:257–287,1722–1734`, `app/shell/form_page.js:3281–3349,3460–3484`, `app/shell/chrome.js` panel rendering.
+
+### Recordings, cleanup and remaining coverage
+
+One continuous annotated source recording was made, then four short genuine excerpts were produced:
+
+| Form | Clip path |
+|---|---|
+|1700|`/home/ubuntu/screencasts/heavy-annual-forms/heavy-1700.mp4`|
+|1701|`/home/ubuntu/screencasts/heavy-annual-forms/heavy-1701.mp4`|
+|1702RT|`/home/ubuntu/screencasts/heavy-annual-forms/heavy-1702rt.mp4`|
+|1702MX|`/home/ubuntu/screencasts/heavy-annual-forms/heavy-1702mx.mp4`|
+
+Each clip crops the genuine **raw recording** application region, adds captions **below** it, retains action windows at the original15fps cadence while omitting idle gaps, and appends that form's reference Open-form rejection.1701 includes the narrow allocation inside the same unscaled desktop crop. These are UX evidence, **not timing benchmarks**. Combined viewing file: `/home/ubuntu/screencasts/heavy-annual-forms/heavy-annual-summary.mp4`; full annotated recording: `/home/ubuntu/screencasts/heavy-annual-forms/heavy-annual-forms-edited.mp4`. The archive includes clips, summary, full annotated run and provenance, alongside the unchanged original22-second paired video.
+
+Apps/Weston/reference container stopped. Backend3008/Postgres remain available. No intentional app edits/git writes. Nine runtime-generated declaration lines were restored after shutdown; no app-code diff remains. The [generated diff](../../evidence/bir-shell-ui-audit/heavy/runtime-generated-types.diff) records them.
+
+**Still incomplete:** actual reference annual scrolling/saving and800px1701, all fields/parts simultaneously expanded, every hidden table column and horizontal-scroll mechanism, full valid synthetic returns/calculations/print, precise scroll latency/paint budgets, and baseline security/update/submitted-history limits in section8. No user secret or production action is needed; closing annual comparator coverage requires a reference build implementing annual editors. The shell clipping finding remains unresolved.
