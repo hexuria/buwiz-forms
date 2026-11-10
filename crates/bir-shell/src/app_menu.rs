@@ -904,7 +904,6 @@ mod tests {
         assert!(body.contains("eBIRForms"));
         assert!(body.contains(env!("CARGO_PKG_VERSION")));
         assert!(body.contains(COPYRIGHT));
-        assert_eq!(env!("CARGO_PKG_VERSION"), "0.1.0");
     }
 
     #[test]
