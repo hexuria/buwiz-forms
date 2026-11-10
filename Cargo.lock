@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "bir-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aes 0.8.4",
  "aes-gcm 0.10.3",
@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "bir-mcp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bir-core",
  "gpui-agent",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "bir-print"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bir-core",
  "lopdf",
@@ -446,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "bir-rules"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "num-bigint 0.4.8",
  "serde",
@@ -456,7 +456,7 @@ dependencies = [
 
 [[package]]
 name = "bir-rules-codegen"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bir-rules",
  "bir-rules-platform",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "bir-rules-platform"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "bitflags"
