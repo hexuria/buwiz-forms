@@ -64,6 +64,39 @@ shell-run *args="":
 run-upstream *args="":
     cargo run --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell {{args}}
 
+# Options pass through: `just mock-bir --fail fail-after-store`.
+# Local mock of the BIR SFTP endpoint, loopback only (docs/mock-bir.md).
+mock-bir *args="":
+    cargo run --locked -p bir-core --features mock-bir --bin mock_bir -- {{args}}
+
+# Refuses the live data folder and a mock that is not listening, so the
+# queue can never fall through to the BIR (docs/mock-bir.md).
+# Run an installed app on a database COPY against a running `just mock-bir`.
+[macos]
+mock-bir-app db app="/Applications/eBIRForms.app":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    live_dir="$HOME/Library/Group Containers/group.dev.goldcoders.bir"
+    [ -f "{{db}}" ] || { echo "no database copy at {{db}}"; exit 1; }
+    db="$(cd "$(dirname "{{db}}")" && pwd -P)/$(basename "{{db}}")"
+    case "$db" in
+        "$live_dir"/*) echo "refusing $db: that is the app's live data folder; use a copy elsewhere"; exit 1 ;;
+    esac
+    env_file=target/mock-bir/app.env
+    [ -f "$env_file" ] || { echo "start the mock first: just mock-bir"; exit 1; }
+    unset EBIR_TEST_ENV BIR_SFTP_DRY_RUN BIR_SFTP_LIVE BIR_SFTP_HOST BIR_SFTP_PORT \
+        BIR_SFTP_USERNAME BIR_SFTP_USER BIR_SFTP_PASSWORD BIR_SFTP_FOLDER \
+        BIR_SFTP_HOST_KEY_SHA256 BIR_SFTP_ACCEPT_ANY_HOST_KEY
+    set -a; . "$env_file"; set +a
+    case "$BIR_SFTP_HOST" in
+        127.0.0.1|::1) ;;
+        *) echo "refusing BIR_SFTP_HOST=$BIR_SFTP_HOST: the mock is loopback only"; exit 1 ;;
+    esac
+    nc -z "$BIR_SFTP_HOST" "$BIR_SFTP_PORT" || { echo "nothing listening on $BIR_SFTP_HOST:$BIR_SFTP_PORT: start just mock-bir"; exit 1; }
+    export BIR_DATABASE_PATH="$db"
+    echo "Running {{app}} on $db against the mock at $BIR_SFTP_HOST:$BIR_SFTP_PORT"
+    exec "{{app}}/Contents/MacOS/bir"
+
 shell-ui-test:
     node --experimental-vm-modules tools/test_form_row_invalidation.mjs
     node --experimental-vm-modules tools/test_form_profile_and_sample.mjs
