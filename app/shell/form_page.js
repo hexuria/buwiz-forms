@@ -24,7 +24,6 @@ import {
   Icon,
   AppButton,
   IconButton,
-  Avatar,
   Chip,
   Switch,
   Checkbox,
@@ -37,7 +36,6 @@ import {
   Overlay,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
-import { periodLabel } from "./periods.js";
 
 const VALIDATE_DELAY = 300;
 /** A sample's period is asked about this long after its last change. */
@@ -3120,11 +3118,8 @@ function formContent(cx, app, width) {
   if (!f) {
     return { early: PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." }) };
   }
-  // The return's own TIN and branch decide whose it is; never a name match
-  // or whichever taxpayer happens to be selected.
-  const branch = app.branchFor(s.tin);
-  const tp = branch ? app.taxpayers().find((x) => x.tin_root === branch.tin_root) : null;
-  const branchCode = String(s.tin).slice(9) || "00000";
+  // Whose return it is shows in the title-bar pill: opening a return selects
+  // its taxpayer (main.js `openForm`), so the page repeats no taxpayer card.
   const draftLayout = f.q < 0.8;
 
   // A library sample saves as its period's return (Queue saves it first);
@@ -3153,6 +3148,9 @@ function formContent(cx, app, width) {
   if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
   if (s.amends || s.filedOriginal) chips.child(Chip(cx, "Amended return", "warning"));
   if (s.filedOriginalView) chips.child(Chip(cx, "Filed original · read-only", "success"));
+  if (s.sample) chips.child(Chip(cx, "Sample", "accent"));
+  if (s.loading) chips.child(Chip(cx, "Opening…", "accent"));
+  if (s.agentReview) chips.child(Chip(cx, "Prepared by the assistant — review, then Queue", "accent"));
 
   const head = div()
     .flex()
@@ -3160,6 +3158,7 @@ function formContent(cx, app, width) {
     .flex_wrap()
     .items_start()
     .gap(14)
+    .mb(SPACE[5])
     .child(
       div()
         .flex()
@@ -3179,55 +3178,9 @@ function formContent(cx, app, width) {
         .children(actions),
     );
 
-  const bar = div()
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .items_center()
-    .gap_x(SPACE[3])
-    .gap_y(SPACE[2])
-    .my(SPACE[5])
-    .py(10)
-    .px(SPACE[3])
-    .rounded(RADIUS.card)
-    .border(1)
-    .border_color(t.border)
-    .bg(t.bg);
-  if (tp) {
-    bar
-      .child(Avatar(cx, tp.name, 20, tp.tin_root))
-      .child(Text(cx, "control", tp.name).font_weight(600))
-      .child(Code(cx, formatTin(tp.tin_root, branchCode), "fg2").font_weight(400))
-      .child(Text(cx, "meta", branch ? branch.name : "", "fg2"));
-  } else {
-    bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
-  }
-  bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
-  bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
-  if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
-  if (s.agentReview) bar.child(Chip(cx, "Prepared by the assistant — review, then Queue", "accent"));
-  bar.child(div().flex_1());
-  // Guided mode walks the fields a template marks, so it shows only when this
-  // branch's template for the form marks some.
-  const template = app.store.templates(s.tin).find((x) => x.form_code === s.code);
-  if (template && template.marked > 0) {
-    bar.child(
-      div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(SPACE[2])
-        .child(Text(cx, "meta", "Guided mode", "fg2"))
-        .child(
-          Switch(cx, "fp-guided", s.guided, (v, cx) => {
-            s.guided = v;
-            cx.notify();
-          }, "Guided mode"),
-        ),
-    );
-  }
-
-  const page = div().flex().flex_col().child(head).child(bar);
+  // Template mode (once the Guided mode switch here) is the section pill's
+  // "Template stops" switch.
+  const page = div().flex().flex_col().child(head);
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
   // A draft whose untouched profile boxes followed a later profile change.
   if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());

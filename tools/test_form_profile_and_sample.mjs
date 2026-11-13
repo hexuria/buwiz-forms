@@ -167,7 +167,8 @@ assert.ok(buttons.includes("fp-save") && buttons.includes("fp-queue") && buttons
 // Decided 2026-10-22: no Start a return in a sample's header.
 assert.ok(!buttons.includes("fp-start-return"), `no Start a return on a sample: ${buttons}`);
 assert.ok(texts.some((t) => /Save makes it your return for its period.*Save asks for it.*New return/.test(t)), "the sample says what Save does");
-assert.ok(texts.includes("Sample from the Form library"), "no period in the taxpayer bar");
+// The taxpayer card is gone (pick 9 C): a sample shows no period and no card; its "Sample" chip sits in the chip row.
+assert.ok(!texts.some((t) => t === "Sample from the Form library" || /^For Q\d \d{4}$/.test(t)), "no period and no taxpayer card on a sample");
 assert.ok(texts.includes("Shows once the period is typed"), "a locked blank box says what it waits for");
 assert.ok(texts.includes("Set when you start a return"), "a shut radio group says what it waits for");
 
