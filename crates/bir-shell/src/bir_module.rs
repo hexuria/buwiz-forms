@@ -21,6 +21,10 @@ thread_local! {
     /// The handle holds an in-memory placeholder because [`reset_database`]
     /// let go of the live file; the next call reopens the file into it.
     static RELEASED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The read-only connection behind [`with_reader`], opened with the
+    /// writer and dropped with it. Only this thread reads through it, so it
+    /// needs no mutex: that is what keeps its reads off the worker's lock.
+    static READER: RefCell<Option<std::rc::Rc<Database>>> = const { RefCell::new(None) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
@@ -41,14 +45,16 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
         let mut slot = slot.borrow_mut();
         match slot.as_ref() {
             None => {
-                let (database, _path, _recovered) =
+                let (mut database, _path, _recovered) =
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+                install_reader(&mut database);
                 let handle = std::sync::Arc::new(std::sync::Mutex::new(database));
                 *slot = Some(handle);
             }
             Some(handle) if RELEASED.get() => {
-                let (database, _path, _recovered) =
+                let (mut database, _path, _recovered) =
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+                install_reader(&mut database);
                 *bir_core::lock_timing::lock(handle)
                     .map_err(|_| HostError::new("database lock poisoned"))? = database;
                 RELEASED.set(false);
@@ -57,6 +63,24 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
         }
         Ok(slot.as_ref().expect("database opened").clone())
     })
+}
+
+/// Open the read-only connection for `database`, just opened, in place of
+/// any earlier one. One that fails to open is logged, and reads wait on the
+/// writer's lock as they did before there was a reader.
+fn install_reader(database: &mut Database) {
+    let reader = database.open_reader().unwrap_or_else(|error| {
+        tracing::error!(
+            %error,
+            "read-only connection not opened; reads wait on the submission worker's lock"
+        );
+        None
+    });
+    READER.with(|slot| *slot.borrow_mut() = reader.map(std::rc::Rc::new));
+}
+
+fn drop_reader() {
+    READER.with(|slot| slot.borrow_mut().take());
 }
 
 /// The shared handle behind [`with_database`]. Refuses while the Buwiz
@@ -131,6 +155,7 @@ pub(crate) fn shutdown_for_quit() {
 }
 
 fn release_database() {
+    drop_reader();
     DATABASE.with(|slot| {
         let Some(handle) = slot.borrow_mut().take() else {
             OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -241,6 +266,7 @@ pub(crate) fn wake_submission_worker() {
 ///
 /// The submission worker shares this connection's lock, so a call here can
 /// wait on it; a wait or hold past 250 ms is logged with the caller's line.
+/// Reads that need not wait go through [`with_reader`].
 #[track_caller]
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
@@ -261,11 +287,42 @@ pub(crate) fn with_account_database<R>(
     f(&guard)
 }
 
+/// A read on the read-only connection, so it does not wait for the
+/// submission worker: WAL lets it read the last committed state while the
+/// worker holds the writer. `f` runs in one read transaction, so it sees
+/// one state across its queries, and after this thread's own committed
+/// writes. Only for functions that read: the connection is `query_only`,
+/// and a write sent to it fails rather than falling back to the writer.
+///
+/// With no reader, `f` runs on the writer under its lock, as every read did
+/// before: an in-memory database (the tests' `use_ephemeral_database`) has
+/// no file for a second connection, and a reader that failed to open was
+/// logged by [`install_reader`].
+#[track_caller]
+pub(crate) fn with_reader<R>(
+    f: impl FnOnce(&Database) -> Result<R, HostError>,
+) -> Result<R, HostError> {
+    crate::account_gate::ensure_unlocked()?;
+    // Opens the database, or reopens it after an import, with its reader.
+    let handle = open_database_slot()?;
+    match READER.with(|slot| slot.borrow().clone()) {
+        Some(reader) => {
+            bir_core::lock_timing::time(|| reader.read_snapshot(f)).map_err(db_error)?
+        }
+        None => {
+            let guard = bir_core::lock_timing::lock(&handle)
+                .map_err(|_| HostError::new("database lock poisoned"))?;
+            f(&guard)
+        }
+    }
+}
+
 /// Tests install a fresh ephemeral database in this thread's slot, so each
 /// test (one thread each) runs against its own scratch data and never opens
 /// the live database through `BIR_DATABASE_PATH`.
 #[cfg(test)]
 pub(crate) fn use_ephemeral_database() {
+    drop_reader();
     DATABASE.with(|slot| {
         *slot.borrow_mut() = Some(std::sync::Arc::new(std::sync::Mutex::new(
             Database::open_ephemeral().expect("ephemeral database opens"),
@@ -1730,7 +1787,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
 /// queued filing submission — same two sources, same label via
 /// `FilingJobLabel`.
 fn list_background_jobs() -> HostResult {
-    with_database(|db| {
+    with_reader(|db| {
         let mut items: Vec<serde_json::Value> = db
             .list_jobs()
             .map_err(|error| HostError::new(error.to_string()))?
@@ -2106,6 +2163,8 @@ fn reset_database() -> Result<(), HostError> {
         let Some(handle) = slot.as_ref() else {
             return Ok(());
         };
+        // The reader holds the file open too; the reopen opens a new one.
+        drop_reader();
         let placeholder = Database::open_ephemeral().map_err(db_error)?;
         *bir_core::lock_timing::lock(handle)
             .map_err(|_| HostError::new("database lock poisoned"))? = placeholder;
