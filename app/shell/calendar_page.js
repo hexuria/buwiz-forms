@@ -92,7 +92,12 @@ export class CalendarFilters {
     const today = new Date();
     this.gridYear = today.getFullYear();
     this.gridMonth = today.getMonth();
-    /** The day the Month view lists, as an ISO date. */
+    /**
+     * The day the Month view lists, as an ISO date, or null when none is
+     * chosen. Moving to another month moves it to today when that month holds
+     * today and clears it otherwise (`showMonth`), so the panel never lists a
+     * day the grid no longer shows.
+     */
     this.day = isoDate(today);
     this.tpCombo = createMultiCombo(
       cx,
@@ -126,6 +131,14 @@ export class CalendarFilters {
   /** Esc: close the open combo box; false when none was open. */
   dismiss(cx) {
     return this.tpCombo.close(cx);
+  }
+
+  /** Show a month (0-11) of a year in the grid; the chosen day follows (see `day`). */
+  showMonth(year, month) {
+    const today = new Date();
+    this.gridYear = year;
+    this.gridMonth = month;
+    this.day = today.getFullYear() === year && today.getMonth() === month ? isoDate(today) : null;
   }
 }
 
@@ -397,8 +410,7 @@ function monthView(cx, app, f, width, page) {
       m = 0;
       yy += 1;
     }
-    f.gridMonth = m;
-    f.gridYear = yy;
+    f.showMonth(yy, m);
     cx.notify();
   };
   page.child(
@@ -418,9 +430,7 @@ function monthView(cx, app, f, width, page) {
           size: "sm",
           onClick: (_e, cx) => {
             const today = new Date();
-            f.gridYear = today.getFullYear();
-            f.gridMonth = today.getMonth();
-            f.day = isoDate(today);
+            f.showMonth(today.getFullYear(), today.getMonth());
             cx.notify();
           },
         }),
@@ -495,21 +505,25 @@ function monthView(cx, app, f, width, page) {
     grid.child(week);
   }
 
-  const [sy, sm, sd] = f.day.split("-").map(Number);
-  const picked = new Date(sy, sm - 1, sd);
-  const dayItems = byDay.get(f.day) || [];
-  const side = div()
-    .id("calendar-day")
-    .flex()
-    .flex_col()
-    .child(Text(cx, "emph", `${WEEKDAYS[picked.getDay()]}, ${MONTHS_LONG[picked.getMonth()]} ${picked.getDate()}`).mb(SPACE[2]))
-    .child(
-      ListGroup(
-        cx,
-        "calendar-day-list",
-        dayItems.length ? dayItems.map((d) => dayRow(cx, app, d)) : [EmptyRow(cx, "calendar-day-empty", "Nothing due this day.")],
-      ),
-    );
+  const side = div().id("calendar-day").flex().flex_col();
+  if (f.day) {
+    const [sy, sm, sd] = f.day.split("-").map(Number);
+    const picked = new Date(sy, sm - 1, sd);
+    const dayItems = byDay.get(f.day) || [];
+    side
+      .child(Text(cx, "emph", `${WEEKDAYS[picked.getDay()]}, ${MONTHS_LONG[picked.getMonth()]} ${picked.getDate()}`).mb(SPACE[2]))
+      .child(
+        ListGroup(
+          cx,
+          "calendar-day-list",
+          dayItems.length ? dayItems.map((d) => dayRow(cx, app, d)) : [EmptyRow(cx, "calendar-day-empty", "Nothing due this day.")],
+        ),
+      );
+  } else {
+    side
+      .child(Text(cx, "emph", `${MONTHS_LONG[mo]} ${y}`).mb(SPACE[2]))
+      .child(ListGroup(cx, "calendar-day-list", [EmptyRow(cx, "calendar-day-none", "Pick a day to see what is due.")]));
+  }
   const body = div().flex().gap(SPACE[4]).mt(SPACE[3]);
   if (width >= 760) body.flex_row().items_start().child(grid).child(side.w(280).flex_none());
   else body.flex_col().child(grid).child(side.w_full());

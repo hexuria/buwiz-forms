@@ -269,6 +269,14 @@ assert.deepEqual(made.map((m) => m.id), ["calendar-taxpayers", "filings-taxpayer
 const label = (tree, id) => text(one(tree, `${id}-trigger`)).trim();
 {
   let tree = cal();
+  // First open: the List view of every taxpayer, with the year stepper.
+  assert.deepEqual([f.view, f.tps, f.freq], ["list", null, "all"], "Calendar starts on List, all taxpayers");
+  assert.equal(byId(tree, "calendar-year").length, 1, "List shows the year stepper");
+  assert.equal(byId(tree, "calendar-grid").length, 0, "no month grid at first");
+  // A taxpayer chosen on Filings stays on Filings.
+  g.tps = new Set([JUANA.tin_root]);
+  assert.equal(label(cal(), "calendar-taxpayers"), "All taxpayers", "Filings' choice does not narrow the Calendar");
+  g.tps = null;
   assert.equal(label(tree, "calendar-taxpayers"), "All taxpayers");
   assert.equal(byId(tree, "calendar-taxpayers-pop").length, 0, "closed at first");
 
@@ -429,6 +437,7 @@ const due = (who, code, year, period) => `due-${who.tin}-${code}-${year}-${perio
   hostCalls.length = 0;
   tree = cal();
   assert.equal(byId(tree, "calendar-year").length, 0, "no year stepper on the grid");
+  assert.match(text(one(tree, "calendar-month-title")), new RegExp(`April ${Y}`), "the grid names its month and year");
   const cells = nodes(tree).filter((m) => m.id && /^calendar-day-\d{4}-\d{2}-\d{2}$/.test(m.id));
   assert.equal(cells.length, 42, "six weeks");
   assert.equal(cells[0].id, `calendar-day-${mods["./store.js"].namespace.isoDate(new Date(Y, 3, 1 - new Date(Y, 3, 1).getDay()))}`, "starts on the Sunday on or before the 1st");
@@ -445,11 +454,34 @@ const due = (who, code, year, period) => `due-${who.tin}-${code}-${year}-${perio
   assert.deepEqual(opened.pop(), { tin: JUANA.tin, code: "2551Q", year: Y, period: 1 }, "the day's row opens its return");
   click(tree, `calendar-day-${Y}-04-26`);
   assert.match(text(one(cal(), "calendar-day-list")), /Nothing due this day\./);
+  // Another month: the chosen day does not linger in the panel. It moves to
+  // today when the month holds today, and is cleared otherwise.
+  const { isoDate } = mods["./store.js"].namespace;
+  const todayIso = isoDate(new Date());
+  const dayIn = (month) => (new Date().getMonth() === month ? todayIso : null);
+  const panel = () => text(one(cal(), "calendar-day")).trim();
   click(cal(), "calendar-next-month");
   assert.deepEqual([f.gridYear, f.gridMonth], [Y, 4]);
+  assert.equal(f.day, dayIn(4), "next month: April 26 is no longer the chosen day");
+  if (!f.day) {
+    assert.match(panel(), new RegExp(`^May ${Y} Pick a day to see what is due\\.`), `a neutral prompt: ${panel()}`);
+    assert.doesNotMatch(panel(), /April 26/);
+  }
+  click(cal(), "calendar-prev-month");
+  click(cal(), "calendar-prev-month");
+  assert.deepEqual([f.gridYear, f.gridMonth], [Y, 2]);
+  assert.equal(f.day, dayIn(2), "previous month: the same rule");
+  for (let i = 0; i < 10; i++) click(cal(), "calendar-next-month");
+  assert.deepEqual([f.gridYear, f.gridMonth], [Y + 1, 0], "across the year end");
+  assert.equal(f.day, null);
+  click(cal(), `calendar-day-${Y + 1}-01-12`);
+  assert.match(panel(), /January 12/);
   click(cal(), "calendar-today");
   tree = cal();
+  assert.equal(f.day, todayIso, "Today chooses today");
   assert.equal(byId(tree, "calendar-today-ring").length, 1, "today is ringed once");
+  const now2 = new Date();
+  assert.match(panel(), new RegExp(`${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][now2.getMonth()]} ${now2.getDate()}`), "the panel lists today");
   // The grid keeps the taxpayer and How often filters.
   f.gridMonth = 3;
   f.tps = new Set([SARI.tin_root]);
