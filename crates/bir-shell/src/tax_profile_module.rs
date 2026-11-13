@@ -8,7 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use bir_core::db::Database;
 use bir_core::forms::agent::template_stops::TemplateStops;
 use bir_core::forms::registry::canonical_form_code;
-use bir_core::profile::{EmailAuthMethod, IncomeTaxElection, TaxpayerProfile, TaxpayerType};
+use bir_core::profile::{
+    EmailAuthMethod, IncomeTaxElection, TaxClassification, TaxpayerProfile, TaxpayerType,
+};
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
     ResolvedBranch, StarterPack, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
@@ -111,6 +113,23 @@ export function template_stops(tin: string, form_code: string): TemplateStops | 
 export function set_template_stop(tin: string, form_code: string, key: string, on: boolean): TemplateStops;
 /** The annual income-tax election for one taxable year, on the tax profile; refused for a year with no self-employed or mixed-income registration. */
 export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
+export type IncomeTaxElectionGap = "ready" | "no_confirmed_registration" | "timeline_needs_review" | "not_individual" | "not_business_income";
+export type IndividualIncomeType = "PurelyCompensation" | "SelfEmployed" | "MixedIncome";
+/** Whether record_income_tax_election would accept the year, and if not what the tax profile lacks. A read. */
+export interface IncomeTaxElectionReadiness {
+    taxable_year: number;
+    gap: IncomeTaxElectionGap;
+    taxpayer_type: Taxpayer["taxpayer_type"] | null;
+    classification: string | null;
+    /** YYYY-MM-DD: when that registration took effect. */
+    since: string | null;
+    /** YYYY-MM-DD: a new confirmed registration must start after this. */
+    new_registration_after: string | null;
+    issues: string[];
+}
+export function income_tax_election_readiness(tin: string, year: number): IncomeTaxElectionReadiness;
+/** An individual's income type from `effective_from` (YYYY-MM-DD), as a new confirmed profile version (reviewed plan). */
+export function confirm_income_registration(tin: string, income_type: IndividualIncomeType, effective_from: string): boolean;
 export interface RdoOption { code: string; description: string; }
 export function list_rdos(): RdoOption[];
 export function list_zip_codes(): string[];
@@ -196,6 +215,11 @@ pub fn register(module: HostModule) -> HostModule {
         .function("template_stops", template_stops)
         .function("set_template_stop", set_template_stop)
         .function("record_income_tax_election", record_income_tax_election)
+        .function(
+            "income_tax_election_readiness",
+            income_tax_election_readiness,
+        )
+        .function("confirm_income_registration", confirm_income_registration)
         .function("list_rdos", |_| list_rdos())
         .function("list_zip_codes", |_| list_zip_codes())
         .function("inbox_state", inbox_state)
@@ -791,7 +815,55 @@ fn record_income_tax_election(arguments: &HostArguments) -> HostResult {
     };
     with_database(|db| {
         db.record_income_tax_election(tin, year, election)
-            .map_err(|error| HostError::new(error.to_string()))?;
+            .map_err(plain_db_error)?;
+        Ok(HostValue::Bool(true))
+    })
+}
+
+/// A refusal in bir-core's own words: `DbError::Other` prints as
+/// "Other error: …", which is no part of what the filer needs to read.
+fn plain_db_error(error: bir_core::db::DbError) -> HostError {
+    match error {
+        bir_core::db::DbError::Other(text) => HostError::new(text),
+        error => HostError::new(error.to_string()),
+    }
+}
+
+/// Whether `record_income_tax_election` would accept the year, and if not
+/// what the tax profile lacks (bir-core `income_tax_election_readiness`).
+/// A read: the form page asks it before it offers the election.
+fn income_tax_election_readiness(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    with_reader(|db| {
+        let readiness = db
+            .income_tax_election_readiness(tin, year)
+            .map_err(plain_db_error)?;
+        crate::bir_module::serialize(&readiness)
+    })
+}
+
+/// An individual's income type from a date, as a new confirmed profile
+/// version saved with its reviewed confirmation plan (bir-core
+/// `confirm_income_registration`). The taxpayer page's Registration section.
+fn confirm_income_registration(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let classification = match arguments.string(1)? {
+        "PurelyCompensation" => TaxClassification::PurelyCompensation,
+        "SelfEmployed" => TaxClassification::SelfEmployed,
+        "MixedIncome" => TaxClassification::MixedIncome,
+        other => {
+            return Err(HostError::new(format!(
+                "`{other}` is not an individual's income type; use PurelyCompensation, SelfEmployed or MixedIncome"
+            )));
+        }
+    };
+    let raw = arguments.string(2)?;
+    let effective_from = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .map_err(|_| HostError::new(format!("`{raw}` is not a date (YYYY-MM-DD)")))?;
+    with_database(|db| {
+        db.confirm_income_registration(tin, classification, effective_from)
+            .map_err(plain_db_error)?;
         Ok(HostValue::Bool(true))
     })
 }
