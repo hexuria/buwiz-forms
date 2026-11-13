@@ -71,6 +71,10 @@ uiExports.EmptyRow = (_cx, id, text) => el({ empty: id, text });
 uiExports.PageHeader = (_cx, { title, lede }) => el({ header: title, lede });
 uiExports.SectionTitle = (_cx, label) => el({ section: label });
 uiExports.Segmented = (_cx, id) => el({ segmented: id });
+// The Calendar's filter bar (tested in test_calendar_filings_filters.mjs).
+Object.assign(uiExports, { SIZE: {}, RADIUS: {}, Line: uiExports.Text, Avatar: () => el(), initials: () => "", Chip: () => el() });
+uiExports.IconButton = (_cx, id) => el({ button: id });
+uiExports.createMultiCombo = (_cx, props) => ({ entity: el({ combo: props.id }), refresh() {}, close: () => false, isOpen: () => false });
 
 // The host: what deadlines_between and as_needed_forms answer.
 const calls = [];
@@ -86,6 +90,7 @@ const birExports = {
   },
   list_returns: () => [],
   list_taxpayers: () => [],
+  tax_year_bounds: () => ({ min: 2010, max: new Date().getFullYear() + 1 }),
 };
 
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, Math, Number, String, Proxy, WeakMap });
@@ -110,7 +115,7 @@ for (const m of [storeMod, dashboardMod, homeMod, calendarMod]) await m.link((s)
 await calendarMod.evaluate();
 const { Store, isoDate, addDays } = storeMod.namespace;
 const { renderHome } = homeMod.namespace;
-const { renderCalendar } = calendarMod.namespace;
+const { renderCalendar, CalendarFilters } = calendarMod.namespace;
 
 const TIN = "12345678800000";
 const today = new Date();
@@ -130,7 +135,7 @@ host.asNeeded = [
 const opened = [];
 const started = [];
 function makeApp() {
-  return {
+  const app = {
     store: new Store(),
     isFresh: () => false,
     taxpayer: () => null,
@@ -143,6 +148,8 @@ function makeApp() {
       started.push({ code, root: this.selRoot, branch: this.selCode, year: this.selYear });
     },
   };
+  app.calendarUi = new CalendarFilters(app, {});
+  return app;
 }
 const cx = {};
 

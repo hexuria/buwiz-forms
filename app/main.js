@@ -33,8 +33,8 @@ import { shellChromeVisible } from "./shell/chrome_gate.js";
 import { renderHome } from "./shell/home.js";
 import { recentEntry } from "./shell/recent.js";
 import { renderLibrary } from "./shell/library.js";
-import { renderCalendar } from "./shell/calendar_page.js";
-import { renderFilings } from "./shell/filings.js";
+import { renderCalendar, CalendarFilters } from "./shell/calendar_page.js";
+import { renderFilings, FilingsFilters } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
 import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
@@ -187,6 +187,8 @@ class BirApp extends View {
     this.newReturn = { code: null, period: null, periodOpen: false };
     this.library = { query: InputState.new({ placeholder: "Find a form, like 1601C or VAT" }), freq: "All" };
     this.library.query.on("change", (_e, cx) => cx.notify());
+    this.calendarUi = new CalendarFilters(this, cx);
+    this.filingsUi = new FilingsFilters(this, cx);
     this.taxpayerUi = new TaxpayerActions(this);
     this.formUi = new FormPageActions(this);
 
@@ -697,6 +699,8 @@ class BirApp extends View {
       this.forward = [];
       this.enterView(view, cx);
     }
+    // A Home tile's filter preset applies once, as Filings opens.
+    if (view === "filings") this.filingsUi?.applyPreset(this, cx);
     this.closeTransient();
     cx.notify();
   }
@@ -790,6 +794,7 @@ class BirApp extends View {
 
   /** Esc: the topmost thing closes — an overlay, a menu, Settings, then a panel. */
   dismiss(cx) {
+    if (this.calendarUi?.dismiss(cx) || this.filingsUi?.dismiss(cx)) return;
     if (this.overlay) return this.closeOverlay(cx);
     if (this.accountMenu) {
       this.accountMenu = false;
