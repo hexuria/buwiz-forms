@@ -612,7 +612,7 @@ const filCount = (tree) => text(one(tree, "filings-count")).trim();
       assert.equal(row.kids.length, 2, "no spacer stretched between them");
       assert.ok(has(chip, "flex_none"), "the chip keeps its size");
       assert.ok(has(date, "whitespace_nowrap") && has(date, "flex_none") && has(date, "ml_auto"), "the date stays whole, right-aligned on its line");
-      assert.ok(!nodes(row).some((m) => has(m, "flex_1")), "nothing in the row grows past the card");
+      assert.ok(!nodes2(row).some((m) => has(m, "flex_1")), "nothing in the row grows past the card");
     }
   }
 }
