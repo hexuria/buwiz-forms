@@ -1003,6 +1003,13 @@ class BirApp extends View {
     cx.notify();
   }
 
+  /** A notification is about a filed return: read it, and show Filings. */
+  openNotification(id, cx) {
+    this.readIds.add(id);
+    this.writeLocal(READ_KEY, [...this.readIds]);
+    this.go("filings", cx);
+  }
+
   // ---------------------------------------------------------------- toast
 
   /**

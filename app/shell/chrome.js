@@ -413,7 +413,9 @@ function notificationsPanel(cx, app, full) {
         .py(10)
         .px(SPACE[2])
         .rounded(RADIUS.row)
+        .cursor_pointer()
         .hover((s) => s.bg(t.hover))
+        .on_click((_e, cx) => app.openNotification(n.id, cx))
         .child(div().flex().flex_none().items_center().justify_center().size(28).rounded(RADIUS.full).bg(tone.bg).child(Icon(cx, n.icon, { color: tone.fg })))
         .child(
           div()
