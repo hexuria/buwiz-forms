@@ -63,6 +63,8 @@ pub mod validation_summary;
 /// only; the shipped app never enables it.
 #[cfg(any(test, feature = "mock-bir"))]
 pub mod mock_bir;
+#[cfg(test)]
+mod mock_bir_e2e;
 
 // Re-export core types
 pub use bir_rules::{
