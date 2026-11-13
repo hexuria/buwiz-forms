@@ -45,6 +45,7 @@ We follow a "less is better" philosophy. You only need to remember a few core co
 **Quality & Testing:**
 - `just check` — Run code formatting (`cargo fmt`), linting (`cargo clippy`), and type checking (`cargo check`) across the workspace.
 - `just test` — Run all unit and integration test suites.
+- `just mock-bir` / `just mock-bir-app <database copy>` — A local mock of the BIR SFTP endpoint, and the installed app run against it on a copy of the database. See [mock-bir.md](mock-bir.md).
 
 **Frozen HTML:**
 - Product CI checks out `hexuria/buwiz-forms-html` and runs `freeze_html.py --verify` plus `stamp_frozen_names.py --check-all`.

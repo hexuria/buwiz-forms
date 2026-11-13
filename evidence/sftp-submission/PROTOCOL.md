@@ -58,6 +58,9 @@ merge PR #42’s “no BOM” wrap as the production path.
 
 ## Loopback test
 
-In-crate `sftp_loopback` (adapted from PR #42’s evidence harness) PUTs through
-`submit_iaf_with_endpoint` against an in-process russh server. It is not a
-standalone evidence crate.
+In-crate `mock_bir` (grown from PR #42’s evidence harness, formerly
+`sftp_loopback`) PUTs through `submit_iaf_with_endpoint` against an
+in-process russh server, and `mock_bir_e2e` runs the queue worker against it
+over the `BIR_SFTP_*` lab-host path. The same server is the `mock_bir`
+binary behind the non-default `mock-bir` feature (`just mock-bir`,
+`docs/mock-bir.md`). It is not a standalone evidence crate.
