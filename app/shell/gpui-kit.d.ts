@@ -27874,13 +27874,13 @@ declare module "bir" {
   export interface ImportResult {
       kind: "database" | "profile" | "invalid" | "cancelled";
   }
-  export function import_archive(): ImportResult;
+  export function import_archive(): Promise<ImportResult>;
   export interface ExportResult {
       kind: "exported" | "cancelled";
       path?: string;
   }
   /** The taxpayer's profile archive under the host's save dialog. A taxpayer with a PIN needs it as `pin`; the page never passes a path — the host chooses the file. */
-  export function export_profile(tin: string, pin?: string | null): ExportResult;
+  export function export_profile(tin: string, pin?: string | null): Promise<ExportResult>;
   export interface PrintPreview {
       path: string;
   }

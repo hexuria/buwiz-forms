@@ -96,6 +96,8 @@ class BirApp extends View {
     this.booted = false;
     this.cloudLocked = true;
     this.gateBusy = false;
+    /** The import file panel is open or the archive is being read. */
+    this.importBusy = false;
     this.gateError = null;
     this.gateDetail = "";
     this.gatePhase = "welcome";
@@ -1594,17 +1596,25 @@ class BirApp extends View {
 
   // ---------------------------------------------------------------- settings actions (retained)
 
+  /** The file panel answers after the click returns; Import stays disabled until then. */
   runImport(cx) {
-    try {
-      const result = this.store.write("import_archive");
-      if (result.kind === "database") this.toast("Database imported.", cx, "upload");
-      else if (result.kind === "profile") this.toast("Taxpayer data restored.", cx, "upload");
-      else if (result.kind === "invalid") {
-        this.toast("That zip has no taxpayer or database export in it.", cx, "triangle-alert");
-      } else cx.notify();
-    } catch (e) {
-      this.toast(`Import failed: ${e}`, cx, "triangle-alert");
-    }
+    if (this.importBusy) return;
+    this.importBusy = true;
+    cx.notify();
+    cx.spawn(async (acx) => {
+      try {
+        const result = await this.store.writeAsync("import_archive");
+        if (result.kind === "database") this.toast("Database imported.", acx, "upload");
+        else if (result.kind === "profile") this.toast("Taxpayer data restored.", acx, "upload");
+        else if (result.kind === "invalid") {
+          this.toast("That zip has no taxpayer or database export in it.", acx, "triangle-alert");
+        }
+      } catch (e) {
+        this.toast(`Import failed: ${e}`, acx, "triangle-alert");
+      }
+      this.importBusy = false;
+      acx.notify();
+    });
   }
 
   // ---------------------------------------------------------------- background tasks (retained page)

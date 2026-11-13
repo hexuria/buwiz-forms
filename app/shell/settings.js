@@ -459,7 +459,7 @@ function transferCards(cx, app, rows) {
             "settings-import",
             "Import data",
             "Restore a taxpayer or database export (.zip)",
-            AppButton(cx, "settings-import-btn", "Import", { size: "sm", icon: "upload", onClick: (_e, cx) => app.runImport(cx) }),
+            AppButton(cx, "settings-import-btn", "Import", { size: "sm", icon: "upload", disabled: app.importBusy, onClick: (_e, cx) => app.runImport(cx) }),
           ),
         ]),
       ),

@@ -660,6 +660,12 @@ fn show_about(cx: &mut App) {
         let _ = cx;
         let body = about_body();
         std::thread::spawn(move || {
+            // Not inside a GPUI update: from this thread rfd hands the alert
+            // to the main queue, where no `App` borrow is held.
+            #[allow(
+                clippy::disallowed_methods,
+                reason = "shown from its own thread, never inside a GPUI update"
+            )]
             let _ = rfd::MessageDialog::new()
                 .set_title("About eBIRForms")
                 .set_description(&body)
