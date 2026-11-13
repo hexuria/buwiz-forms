@@ -4495,3 +4495,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod reader_tests;
