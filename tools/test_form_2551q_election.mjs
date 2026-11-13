@@ -162,6 +162,7 @@ const errors = () => {
 };
 const calls = [];
 const toasts = [];
+const bumped = [];
 const store = {
   templates: () => [],
   call(name, ...args) {
@@ -199,6 +200,8 @@ const app = {
   branchFor: () => ({ tin: TIN, code: "00000", name: "Head office" }),
   invalidate() { rootDirty = true; },
   toast(text) { toasts.push(text); rootDirty = true; },
+  // BirApp.bumpRecent: a changed and saved return goes to the top of Recent.
+  bumpRecent(opts) { bumped.push(JSON.parse(JSON.stringify(opts))); },
 };
 app.formUi = new FormPageActions(app);
 const cx = context();
@@ -266,6 +269,7 @@ assert.ok(texts(one(frame(), "fp-election-saved")).includes("Saved to the tax pr
 assert.equal(byId(frame(), "fp-nav-attention").length, 0, "the attention line is gone");
 assert.equal(app.formUi.partErrors(Number(ITEM13.split(":")[0])), 0, "the part's badge is gone");
 assert.ok(toasts.includes("Saved to Juana Santos's tax profile for 2026."), `toasts: ${toasts}`);
+assert.deepEqual(bumped, [{ tin: TIN, code: "2551Q", year: 2026, period: 3 }], "the saved return goes to the top of Recent");
 assert.deepEqual([...new Set(traces)], [`fp-item-${ITEM13}`], "the save rebuilds only Item 13");
 // The pill's red count clears too.
 const pill = app.formUi.pillView();
