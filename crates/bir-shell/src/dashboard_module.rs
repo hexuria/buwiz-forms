@@ -22,7 +22,7 @@ use chrono::NaiveDate;
 use gpui_shell::{HostError, HostModule, HostResult};
 use serde_json::{Value, json};
 
-use crate::bir_module::{serialize, with_database};
+use crate::bir_module::{serialize, with_reader};
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -430,13 +430,13 @@ fn as_needed_forms(arguments: &gpui_shell::HostArguments) -> HostResult {
     let year = arguments.integer(0)?;
     let year =
         u16::try_from(year).map_err(|_| HostError::new(format!("a tax year, got {year}")))?;
-    with_database(|db| serialize(&as_needed_form_rows(db, year)?))
+    with_reader(|db| serialize(&as_needed_form_rows(db, year)?))
 }
 
 fn deadlines_between(arguments: &gpui_shell::HostArguments) -> HostResult {
     let from = parse_date(arguments.string(0)?)?;
     let to = parse_date(arguments.string(1)?)?;
-    with_database(|db| serialize(&deadline_rows(db, from, to)?))
+    with_reader(|db| serialize(&deadline_rows(db, from, to)?))
 }
 
 /// Saved (Draft) and/or filed (anything past Draft) returns across every
@@ -503,13 +503,13 @@ fn current_year() -> u16 {
 
 fn list_returns(arguments: &gpui_shell::HostArguments) -> HostResult {
     let which = arguments.string(0)?.to_owned();
-    with_database(|db| serialize(&return_rows(db, &which)?))
+    with_reader(|db| serialize(&return_rows(db, &which)?))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bir_module::{to_json, use_ephemeral_database};
+    use crate::bir_module::{to_json, use_ephemeral_database, with_database};
     use bir_core::profile::TaxpayerType;
     use bir_core::tax_profile::{BranchFacts, NewTaxpayer};
     use gpui_shell::HostArguments;

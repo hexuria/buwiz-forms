@@ -1,4 +1,5 @@
 use crate::db::{BirNotice, Database, NoticeSourceKind, NoticeType};
+use crate::lock_timing;
 use anyhow::Result;
 use rss::Channel;
 use serde::Deserialize;
@@ -65,7 +66,7 @@ impl NoticeFetcher {
             self.providers.len()
         );
 
-        if let Ok(db_lock) = self.db.lock() {
+        if let Ok(db_lock) = lock_timing::lock(&self.db) {
             for provider in &self.providers {
                 match provider.fetch(&self.client) {
                     Ok(notices) => {

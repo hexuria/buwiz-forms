@@ -3,7 +3,9 @@
 // taxpayer_auth reports has_pin; Export sends export_profile(branch tin,
 // pin|null); a typed PIN is cleared from the cells after every attempt and
 // never kept in page state; success toasts "Profile exported.", a host
-// refusal toasts its message, and a cancelled dialog is quiet.
+// refusal toasts its message, and a cancelled dialog is quiet. The verb
+// answers a promise (the save panel opens after the click returns): Export
+// is disabled while it is pending and a second click opens nothing.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -41,7 +43,7 @@ const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [
 uiExports.Text = (_cx, _v, text) => el({ text: String(text) });
 uiExports.Code = (_cx, code) => el({ code });
 uiExports.Icon = () => el();
-uiExports.AppButton = (_cx, id, label, opts = {}) => el({ button: id, label, onClick: opts.onClick });
+uiExports.AppButton = (_cx, id, label, opts = {}) => el({ button: id, label, disabled: Boolean(opts.disabled), onClick: opts.onClick });
 uiExports.Avatar = () => el();
 uiExports.Chip = (_cx, chip) => el({ chip });
 uiExports.Segmented = (_cx, id) => el({ segmented: id });
@@ -149,13 +151,19 @@ const { TaxpayerActions, renderTaxpayerPage, profileExportCard } = taxpayerMod.n
 
 const TIN = "12345678800000";
 const ROOT = "123456788";
-const cx = { notify: () => {}, write_to_clipboard: () => {} };
+/** Tasks `cx.spawn` started; `settle()` waits for them all. */
+const tasks = [];
+const cx = { notify: () => {}, write_to_clipboard: () => {}, spawn: (f) => tasks.push(f(cx)) };
+const settle = async () => {
+  while (tasks.length) await tasks.shift();
+};
 
 /**
  * An app showing one head-office taxpayer; `export_profile` is recorded and
- * answers `exportResult`, or throws `exportError`.
+ * answers `exportResult` (or the promise `exportPending`), or rejects with
+ * `exportError`.
  */
-function makeApp({ hasPin, exportResult, exportError }) {
+function makeApp({ hasPin, exportResult, exportError, exportPending }) {
   const calls = [];
   const toasts = [];
   const t = { name: "Example Trading Corp", tin_root: ROOT, taxpayer_type: "Corporation", archived: false, branches: [{ is_head_office: true }] };
@@ -183,8 +191,9 @@ function makeApp({ hasPin, exportResult, exportError }) {
       inboxState: () => ({ auth_method: "GoogleOAuth", oauth_connected: false, tracking_enabled: false, last_check_at: null }),
       sendGrants: () => [],
       yearlyForms: () => [],
-      write: (name, ...args) => {
+      writeAsync: async (name, ...args) => {
         calls.push([name, ...args]);
+        if (exportPending) return exportPending;
         if (exportError) throw exportError;
         return exportResult;
       },
@@ -215,6 +224,7 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   const btn = exportBtn(tree);
   assert.ok(btn, "Export button rendered");
   click(btn);
+  await settle();
   assert.deepEqual(calls, [["export_profile", TIN, null]]);
   assert.deepEqual(toasts.map((x) => x.msg), ["Profile exported."]);
 }
@@ -226,6 +236,7 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   assert.equal(pinCells(tree).length, 1, "PIN cells render when has_pin");
   app.taxpayerUi.exportOtp.set_value("4321");
   click(exportBtn(tree));
+  await settle();
   assert.deepEqual(calls, [["export_profile", TIN, "4321"]]);
   assert.equal(app.taxpayerUi.exportOtp.value(), "", "PIN cells cleared after the attempt");
   assert.deepEqual(toasts.map((x) => x.msg), ["Profile exported."]);
@@ -238,6 +249,7 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   assert.equal(pinCells(tree).length, 1);
   app.taxpayerUi.exportOtp.set_value("0000");
   click(exportBtn(tree));
+  await settle();
   assert.deepEqual(calls, [["export_profile", TIN, "0000"]]);
   assert.equal(app.taxpayerUi.exportOtp.value(), "", "PIN cells cleared after a refusal");
   assert.deepEqual(toasts.map((x) => x.msg), ["Wrong PIN."]);
@@ -250,6 +262,7 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   exportTree(app);
   app.taxpayerUi.exportOtp.set_value("12");
   app.taxpayerUi.exportProfile(cx);
+  await settle();
   assert.equal(calls.length, 0, "partial PIN never reaches the host");
   assert.equal(app.taxpayerUi.exportOtp.value(), "");
   assert.deepEqual(toasts.map((x) => x.msg), ["Type all 4 digits of the profile PIN first."]);
@@ -260,8 +273,27 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   const { app, calls, toasts } = makeApp({ hasPin: false, exportResult: { kind: "cancelled" } });
   const tree = exportTree(app);
   click(exportBtn(tree));
+  await settle();
   assert.deepEqual(calls, [["export_profile", TIN, null]]);
   assert.equal(toasts.length, 0, "cancelled dialog makes no toast");
+  assert.equal(exportBtn(exportTree(app)).info.disabled, false, "Export enabled again after a cancel");
+}
+
+// While the save panel is open: Export is disabled, a second click opens
+// nothing, and the button comes back once the panel answers.
+{
+  let answer;
+  const exportPending = new Promise((resolve) => (answer = resolve));
+  const { app, calls, toasts } = makeApp({ hasPin: false, exportPending });
+  assert.equal(exportBtn(exportTree(app)).info.disabled, false, "Export enabled before the click");
+  click(exportBtn(exportTree(app)));
+  assert.equal(exportBtn(exportTree(app)).info.disabled, true, "Export disabled while the panel is open");
+  app.taxpayerUi.exportProfile(cx);
+  assert.equal(calls.length, 1, "no second panel while one is open");
+  answer({ kind: "exported", path: "/tmp/p.zip" });
+  await settle();
+  assert.deepEqual(toasts.map((x) => x.msg), ["Profile exported."]);
+  assert.equal(exportBtn(exportTree(app)).info.disabled, false, "Export enabled after the panel answers");
 }
 
 console.log("test_taxpayer_export: ok");

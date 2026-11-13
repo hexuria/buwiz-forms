@@ -133,6 +133,18 @@ export class Store {
     }
   }
 
+  /** `write` for a host verb that answers a promise: bumps once it settles. */
+  async writeAsync(name, ...args) {
+    try {
+      return await this.call(name, ...args);
+    } catch (e) {
+      this.logScreen("error", `bir.${name}: ${errorText(e)}`);
+      throw e;
+    } finally {
+      this.bump();
+    }
+  }
+
   // ------------------------------------------------------------ reads
 
   systemInfo() {

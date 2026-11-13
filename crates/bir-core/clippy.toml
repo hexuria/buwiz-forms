@@ -1,0 +1,6 @@
+# `lock_timing::TimedGuard` wraps the database `MutexGuard`, and
+# `await_holding_lock` does not see through the wrapper: name it here so
+# `await_holding_invalid_type` refuses one held across an `.await`.
+await-holding-invalid-types = [
+    { path = "bir_core::lock_timing::TimedGuard", reason = "the UI thread waits on the database lock; release it before awaiting" },
+]

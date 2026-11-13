@@ -10,6 +10,11 @@ build = "build.rs"
 [lints.rust]
 unexpected_cfgs = "allow"
 
+# The worker shares the UI thread's database lock: never hold it across an await.
+[lints.clippy]
+await_holding_lock = "deny"
+await_holding_invalid_type = "deny"
+
 [features]
 # Mac App Store build, enabled by `bir-shell/mas_build`. Compiles out the
 # `sh -c` runner for user cron jobs (arbitrary code execution is rejected by

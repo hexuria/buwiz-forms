@@ -4,6 +4,7 @@
 //! module for the actual search → fetch → parse → confirm workflow.
 
 use crate::db::{Database, SubmissionReceipt};
+use crate::lock_timing;
 use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
 use chrono::Datelike;
@@ -50,7 +51,7 @@ fn overlay_shared_inbox_credentials(
     profile: &TaxpayerProfile,
     db: &std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> TaxpayerProfile {
-    let Ok(db_guard) = db.lock() else {
+    let Ok(db_guard) = lock_timing::lock(db) else {
         return profile.clone();
     };
     match resolve_inbox_fetch_profile(&db_guard, profile.inbox_email()) {
@@ -141,7 +142,7 @@ fn fetch_with_auth(
     // Save the new access token if it was refreshed. Fan-out so siblings and
     // the inbox-keyed row do not keep a stale access token beside a live refresh.
     if let Some(token) = new_access_token
-        && let Ok(db_guard) = db.lock()
+        && let Ok(db_guard) = lock_timing::lock(&db)
     {
         let _ = db_guard.update_inbox_oauth_access_token(profile.inbox_email(), &token);
     }
@@ -197,7 +198,7 @@ fn fetch_with_auth(
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
                         let mut pending_notice: Option<(String, String)> = None;
-                        if let Ok(db_guard) = db.lock()
+                        if let Ok(db_guard) = lock_timing::lock(&db)
                             && let Ok((submission_receipt, _is_new)) = db_guard
                                 .save_submission_receipt_with_email_date(
                                     &receipt,
@@ -315,7 +316,7 @@ pub fn fetch_and_process_emails_for_address(
     db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> (bool, bool, Option<String>) {
     let (profile, still_pending) = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
             Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
         };
@@ -334,7 +335,7 @@ pub fn fetch_and_process_emails_for_address(
         profile.email_tracking_enabled = true;
         match fetch_and_process_emails(&profile, db.clone()) {
             Ok(_) => {
-                let db_guard = match db.lock() {
+                let db_guard = match lock_timing::lock(&db) {
                     Ok(g) => g,
                     Err(_) => return (false, true, Some("DB lock failed after fetch".to_string())),
                 };
@@ -363,21 +364,23 @@ pub fn fetch_and_process_emails_for_address(
                 let err_msg = format!("{}", e);
                 tracing::warn!("Email polling failed for {}: {}", email_address, err_msg);
 
-                const TITLE: &str = "Email confirmation checking has stopped";
                 // A missing refresh is "not connected", not a failed refresh.
                 // Reconnect nags belong to a grant Google actually rejected.
-                if profile.has_usable_oauth_refresh()
-                    && let Ok(db_guard) = db.lock()
-                    && let Ok(outcome) = db_guard.record_alert(
-                        Some(&profile.tin.full()),
-                        crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
-                        crate::db::AlertSeverity::Error,
-                        TITLE,
+                let recorded = if profile.has_usable_oauth_refresh() {
+                    lock_timing::lock(&db)
+                        .ok()
+                        .and_then(|db_guard| record_poll_failure(&db_guard, &profile, &err_msg))
+                } else {
+                    None
+                };
+                // After the guard above is dropped: the banner can spawn a
+                // process, and the UI thread waits on this lock.
+                if let Some(outcome) = recorded {
+                    crate::notification::notify_alert_if_newly_active(
+                        outcome,
+                        POLL_FAILURE_TITLE,
                         &err_msg,
-                        crate::db::AlertAction::ReconnectGoogleAccount,
-                    )
-                {
-                    crate::notification::notify_alert_if_newly_active(outcome, TITLE, &err_msg);
+                    );
                 }
                 (false, still_pending, Some(err_msg))
             }
@@ -391,5 +394,71 @@ pub fn fetch_and_process_emails_for_address(
                 email_address
             )),
         )
+    }
+}
+
+const POLL_FAILURE_TITLE: &str = "Email confirmation checking has stopped";
+
+/// Record that polling `profile`'s confirmation inbox failed. Returns what
+/// the record did; the caller decides on the banner once it has let go of
+/// `db`'s lock, because posting one can spawn a process.
+fn record_poll_failure(
+    db: &Database,
+    profile: &TaxpayerProfile,
+    err_msg: &str,
+) -> Option<crate::db::AlertRecordOutcome> {
+    db.record_alert(
+        Some(&profile.tin.full()),
+        crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,
+        crate::db::AlertSeverity::Error,
+        POLL_FAILURE_TITLE,
+        err_msg,
+        crate::db::AlertAction::ReconnectGoogleAccount,
+    )
+    .ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::AlertRecordOutcome;
+
+    fn juana() -> TaxpayerProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": null,
+            "full_name": "Juana Santos",
+            "tin": {"segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000"},
+            "rdo_code": "040",
+            "line_of_business": "Retail",
+            "registered_address": "1 Example Street, Pasig",
+            "zip_code": "1600",
+            "phone": "0280000000",
+            "email": "juana@example.com",
+            "default_form_type": "2551Qv2018",
+            "taxpayer_type": "Individual"
+        }))
+        .unwrap()
+    }
+
+    /// T4: recording a failed poll posts nothing itself. It hands the
+    /// outcome back so the banner goes out after the guard is dropped, and
+    /// only the first report of a standing failure is news.
+    #[test]
+    fn a_failed_poll_is_recorded_and_its_banner_left_to_the_caller() {
+        let db = Database::open_ephemeral().unwrap();
+        let profile = juana();
+        assert_eq!(
+            record_poll_failure(&db, &profile, "invalid_grant"),
+            Some(AlertRecordOutcome::Created)
+        );
+        assert_eq!(
+            record_poll_failure(&db, &profile, "invalid_grant"),
+            Some(AlertRecordOutcome::StillActive)
+        );
+        let alerts = db.list_active_alerts(Some(&profile.tin.full())).unwrap();
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].title, POLL_FAILURE_TITLE);
+        assert_eq!(alerts[0].detail, "invalid_grant");
+        assert_eq!(alerts[0].occurrences, 2);
     }
 }

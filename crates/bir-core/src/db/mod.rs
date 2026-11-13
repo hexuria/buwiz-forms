@@ -34,6 +34,7 @@ mod notices;
 mod profiles;
 mod providers;
 mod queueable;
+mod reader;
 mod receipts;
 pub use queueable::{AmendmentBase, ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
@@ -306,6 +307,11 @@ pub struct Database {
     /// Sidecar exclusive lock for painted `bir` / `bir-headless serve`.
     /// `None` for ephemeral fixtures and `Database::open` test helpers.
     _owner_lock: Option<File>,
+    /// The key [`Database::open`] read, kept so [`Database::open_reader`]
+    /// can key a second connection without reading the keychain again.
+    /// That call drops it; zeroed on drop. Never logged: `Database` has no
+    /// `Debug`.
+    reader_key: Option<zeroize::Zeroizing<String>>,
 }
 
 /// The filing period a Tax Form Library selection (`FileForm { form_code,
@@ -484,6 +490,7 @@ impl Database {
         Ok(Self {
             conn,
             _owner_lock: None,
+            reader_key: None,
         })
     }
 
@@ -522,10 +529,13 @@ impl Database {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, DbError> {
         let conn = Connection::open(path)?;
 
-        let key_hex = Self::get_or_create_master_key()?;
+        let key_hex = zeroize::Zeroizing::new(Self::get_or_create_master_key()?);
 
         // Initialize SQLCipher transparent encryption
-        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", key_hex))?;
+        conn.execute_batch(&zeroize::Zeroizing::new(format!(
+            "PRAGMA key = \"x'{}'\";",
+            key_hex.as_str()
+        )))?;
 
         // Improve concurrency and wait for locks instead of failing immediately (fixes UI freezes)
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
@@ -570,6 +580,7 @@ impl Database {
         Ok(Self {
             conn,
             _owner_lock: None,
+            reader_key: Some(key_hex),
         })
     }
 
@@ -609,6 +620,7 @@ impl Database {
         Ok(Self {
             conn,
             _owner_lock: None,
+            reader_key: None,
         })
     }
 
@@ -867,7 +879,9 @@ impl Database {
 
     /// Consume self and close cleanly after a WAL checkpoint.
     pub fn close(self) -> Result<(), DbError> {
-        let Database { conn, _owner_lock } = self;
+        let Database {
+            conn, _owner_lock, ..
+        } = self;
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         let result = conn.close().map_err(|(_, e)| DbError::Sqlite(e));
         drop(_owner_lock);

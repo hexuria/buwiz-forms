@@ -96,6 +96,8 @@ class BirApp extends View {
     this.booted = false;
     this.cloudLocked = true;
     this.gateBusy = false;
+    /** The import file panel is open or the archive is being read. */
+    this.importBusy = false;
     this.gateError = null;
     this.gateDetail = "";
     this.gatePhase = "welcome";
@@ -1003,6 +1005,13 @@ class BirApp extends View {
     cx.notify();
   }
 
+  /** A notification is about a filed return: read it, and show Filings. */
+  openNotification(id, cx) {
+    this.readIds.add(id);
+    this.writeLocal(READ_KEY, [...this.readIds]);
+    this.go("filings", cx);
+  }
+
   // ---------------------------------------------------------------- toast
 
   /**
@@ -1594,17 +1603,25 @@ class BirApp extends View {
 
   // ---------------------------------------------------------------- settings actions (retained)
 
+  /** The file panel answers after the click returns; Import stays disabled until then. */
   runImport(cx) {
-    try {
-      const result = this.store.write("import_archive");
-      if (result.kind === "database") this.toast("Database imported.", cx, "upload");
-      else if (result.kind === "profile") this.toast("Taxpayer data restored.", cx, "upload");
-      else if (result.kind === "invalid") {
-        this.toast("That zip has no taxpayer or database export in it.", cx, "triangle-alert");
-      } else cx.notify();
-    } catch (e) {
-      this.toast(`Import failed: ${e}`, cx, "triangle-alert");
-    }
+    if (this.importBusy) return;
+    this.importBusy = true;
+    cx.notify();
+    cx.spawn(async (acx) => {
+      try {
+        const result = await this.store.writeAsync("import_archive");
+        if (result.kind === "database") this.toast("Database imported.", acx, "upload");
+        else if (result.kind === "profile") this.toast("Taxpayer data restored.", acx, "upload");
+        else if (result.kind === "invalid") {
+          this.toast("That zip has no taxpayer or database export in it.", acx, "triangle-alert");
+        }
+      } catch (e) {
+        this.toast(`Import failed: ${e}`, acx, "triangle-alert");
+      }
+      this.importBusy = false;
+      acx.notify();
+    });
   }
 
   // ---------------------------------------------------------------- background tasks (retained page)
@@ -1724,13 +1741,16 @@ class BirApp extends View {
     const narrow = this.narrow();
     const sidebarDocked = this.sidebarOpen && !narrow;
     const panelDocked = Boolean(this.panel) && !narrow;
+    // On a phone-width window a fixed-width overlay leaves a strip of page
+    // too thin to use: the sidebar and the panel fill the window instead.
+    const fullOverlay = narrow && vp.width < BREAK.phone;
     const left = sidebarDocked ? SIZE.sidebar : SIZE.mainInset;
     const right = panelDocked ? SIZE.panel : SIZE.mainInset;
     const mainWidth = Math.max(240, vp.width - left - right - 2);
     const wide = this.view === "form" || this.view === "library";
     const padX = mainWidth < BREAK.narrowContent ? 16 : 32;
     const column = Math.min(wide ? 1120 : SIZE.contentMax, mainWidth) - padX * 2;
-    return { vp, narrow, sidebarDocked, panelDocked, mainWidth, padX, column: Math.max(200, column) };
+    return { vp, narrow, fullOverlay, sidebarDocked, panelDocked, mainWidth, padX, column: Math.max(200, column) };
   }
 
   render(cx) {
@@ -1839,32 +1859,38 @@ class BirApp extends View {
       .child(body);
 
     // Below 860 px the sidebar and the panel float over the main surface.
+    // Below the phone break they fill it, and the title bar's toggles close
+    // them: there is no page beside them left to click.
     if (!settingsOpen && L.narrow && (this.sidebarOpen || this.panel)) {
-      root.child(
-        div()
-          .id("overlay-scrim")
-          .absolute()
-          .top(SIZE.titleBar)
-          .left(0)
-          .right(0)
-          .bottom(0)
-          .bg(t.scrim)
-          .on_mouse_down("left", (_e, cx) => {
-            this.sidebarOpen = false;
-            this.panel = null;
-            cx.notify();
-          }),
-      );
+      const full = L.fullOverlay;
+      if (!full) {
+        root.child(
+          div()
+            .id("overlay-scrim")
+            .absolute()
+            .top(SIZE.titleBar)
+            .left(0)
+            .right(0)
+            .bottom(0)
+            .bg(t.scrim)
+            .on_mouse_down("left", (_e, cx) => {
+              this.sidebarOpen = false;
+              this.panel = null;
+              cx.notify();
+            }),
+        );
+      }
       if (this.sidebarOpen) {
         root.child(
           div()
             .absolute()
             .top(SIZE.titleBar)
             .left(0)
+            .when(full, (el) => el.right(0))
             .bottom(0)
             .bg(t.bg)
-            .shadow_xl()
-            .child(renderSidebar(cx, this)),
+            .when(!full, (el) => el.shadow_xl())
+            .child(renderSidebar(cx, this, full)),
         );
       }
       if (this.panel) {
@@ -1872,11 +1898,12 @@ class BirApp extends View {
           div()
             .absolute()
             .top(SIZE.titleBar)
+            .when(full, (el) => el.left(0))
             .right(0)
             .bottom(0)
             .bg(t.bg)
-            .shadow_xl()
-            .child(renderRightPanel(cx, this)),
+            .when(!full, (el) => el.shadow_xl())
+            .child(renderRightPanel(cx, this, full)),
         );
       }
     }

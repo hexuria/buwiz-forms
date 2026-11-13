@@ -21,6 +21,10 @@ thread_local! {
     /// The handle holds an in-memory placeholder because [`reset_database`]
     /// let go of the live file; the next call reopens the file into it.
     static RELEASED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The read-only connection behind [`with_reader`], opened with the
+    /// writer and dropped with it. Only this thread reads through it, so it
+    /// needs no mutex: that is what keeps its reads off the worker's lock.
+    static READER: RefCell<Option<std::rc::Rc<Database>>> = const { RefCell::new(None) };
 }
 
 /// The shared handle behind [`with_database`], exposed for host functions
@@ -41,16 +45,17 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
         let mut slot = slot.borrow_mut();
         match slot.as_ref() {
             None => {
-                let (database, _path, _recovered) =
+                let (mut database, _path, _recovered) =
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
+                install_reader(&mut database);
                 let handle = std::sync::Arc::new(std::sync::Mutex::new(database));
                 *slot = Some(handle);
             }
             Some(handle) if RELEASED.get() => {
-                let (database, _path, _recovered) =
+                let (mut database, _path, _recovered) =
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
-                *handle
-                    .lock()
+                install_reader(&mut database);
+                *bir_core::lock_timing::lock(handle)
                     .map_err(|_| HostError::new("database lock poisoned"))? = database;
                 RELEASED.set(false);
             }
@@ -58,6 +63,24 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
         }
         Ok(slot.as_ref().expect("database opened").clone())
     })
+}
+
+/// Open the read-only connection for `database`, just opened, in place of
+/// any earlier one. One that fails to open is logged, and reads wait on the
+/// writer's lock as they did before there was a reader.
+fn install_reader(database: &mut Database) {
+    let reader = database.open_reader().unwrap_or_else(|error| {
+        tracing::error!(
+            %error,
+            "read-only connection not opened; reads wait on the submission worker's lock"
+        );
+        None
+    });
+    READER.with(|slot| *slot.borrow_mut() = reader.map(std::rc::Rc::new));
+}
+
+fn drop_reader() {
+    READER.with(|slot| slot.borrow_mut().take());
 }
 
 /// The shared handle behind [`with_database`]. Refuses while the Buwiz
@@ -132,6 +155,7 @@ pub(crate) fn shutdown_for_quit() {
 }
 
 fn release_database() {
+    drop_reader();
     DATABASE.with(|slot| {
         let Some(handle) = slot.borrow_mut().take() else {
             OWNER_LOCK_RELEASED.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -170,7 +194,7 @@ fn release_database() {
 #[cfg(not(feature = "mas_build"))]
 pub(crate) fn stored_global_hotkey() -> Option<String> {
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
-    let db = handle.lock().ok()?;
+    let db = bir_core::lock_timing::lock(&handle).ok()?;
     db.get_setting("global_hotkey_key")
         .ok()
         .flatten()
@@ -196,8 +220,11 @@ pub(crate) fn open_database_at_launch() {
     match open_database_slot() {
         Ok(handle) => {
             start_submission_worker(handle.clone());
-            if let Ok(guard) = handle.lock() {
-                let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), &guard);
+            let days = bir_core::lock_timing::lock(&handle)
+                .ok()
+                .map(|guard| bir_core::log_files::retention_days(&guard));
+            if let Some(days) = days {
+                let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
             }
             #[cfg(not(test))]
             bir_core::log_files::spawn_retention(handle);
@@ -236,6 +263,11 @@ pub(crate) fn wake_submission_worker() {
 
 /// One connection for the process — the same owner-lock discipline as painted
 /// `bir` (a second app instance cannot take it while we hold it).
+///
+/// The submission worker shares this connection's lock, so a call here can
+/// wait on it; a wait or hold past 250 ms is logged with the caller's line.
+/// Reads that need not wait go through [`with_reader`].
+#[track_caller]
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
@@ -245,14 +277,44 @@ pub(crate) fn with_database<R>(
 
 /// Database access for the Buwiz account itself: the server URL and nothing
 /// that names a taxpayer. Allowed while the filing UI is locked.
+#[track_caller]
 pub(crate) fn with_account_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
     let handle = open_database_slot()?;
-    let guard = handle
-        .lock()
+    let guard = bir_core::lock_timing::lock(&handle)
         .map_err(|_| HostError::new("database lock poisoned"))?;
     f(&guard)
+}
+
+/// A read on the read-only connection, so it does not wait for the
+/// submission worker: WAL lets it read the last committed state while the
+/// worker holds the writer. `f` runs in one read transaction, so it sees
+/// one state across its queries, and after this thread's own committed
+/// writes. Only for functions that read: the connection is `query_only`,
+/// and a write sent to it fails rather than falling back to the writer.
+///
+/// With no reader, `f` runs on the writer under its lock, as every read did
+/// before: an in-memory database (the tests' `use_ephemeral_database`) has
+/// no file for a second connection, and a reader that failed to open was
+/// logged by [`install_reader`].
+#[track_caller]
+pub(crate) fn with_reader<R>(
+    f: impl FnOnce(&Database) -> Result<R, HostError>,
+) -> Result<R, HostError> {
+    crate::account_gate::ensure_unlocked()?;
+    // Opens the database, or reopens it after an import, with its reader.
+    let handle = open_database_slot()?;
+    match READER.with(|slot| slot.borrow().clone()) {
+        Some(reader) => {
+            bir_core::lock_timing::time(|| reader.read_snapshot(f)).map_err(db_error)?
+        }
+        None => {
+            let guard = bir_core::lock_timing::lock(&handle)
+                .map_err(|_| HostError::new("database lock poisoned"))?;
+            f(&guard)
+        }
+    }
 }
 
 /// Tests install a fresh ephemeral database in this thread's slot, so each
@@ -260,6 +322,7 @@ pub(crate) fn with_account_database<R>(
 /// the live database through `BIR_DATABASE_PATH`.
 #[cfg(test)]
 pub(crate) fn use_ephemeral_database() {
+    drop_reader();
     DATABASE.with(|slot| {
         *slot.borrow_mut() = Some(std::sync::Arc::new(std::sync::Mutex::new(
             Database::open_ephemeral().expect("ephemeral database opens"),
@@ -323,7 +386,7 @@ fn computer_snapshot() -> (Option<String>, u32) {
     let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) else {
         return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
     };
-    let Ok(db) = handle.lock() else {
+    let Ok(db) = bir_core::lock_timing::lock(&handle) else {
         return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
     };
     let hotkey = db
@@ -416,13 +479,14 @@ fn set_log_retention(arguments: &gpui_shell::HostArguments) -> HostResult {
             bir_core::log_files::MAX_RETENTION_DAYS
         )));
     }
-    with_database(|db| {
+    let days = with_database(|db| {
         db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())
-            .map(|_| HostValue::Null)
             .map_err(|error| HostError::new(error.to_string()))?;
-        let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), db);
-        Ok(HostValue::Null)
-    })
+        Ok(bir_core::log_files::retention_days(db))
+    })?;
+    // File work, after the lock: the worker waits on it.
+    let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
+    Ok(HostValue::Null)
 }
 
 fn update_status() -> HostResult {
@@ -1723,7 +1787,7 @@ fn cancel_queued(arguments: &gpui_shell::HostArguments) -> HostResult {
 /// queued filing submission — same two sources, same label via
 /// `FilingJobLabel`.
 fn list_background_jobs() -> HostResult {
-    with_database(|db| {
+    with_reader(|db| {
         let mut items: Vec<serde_json::Value> = db
             .list_jobs()
             .map_err(|error| HostError::new(error.to_string()))?
@@ -2099,33 +2163,90 @@ fn reset_database() -> Result<(), HostError> {
         let Some(handle) = slot.as_ref() else {
             return Ok(());
         };
+        // The reader holds the file open too; the reopen opens a new one.
+        drop_reader();
         let placeholder = Database::open_ephemeral().map_err(db_error)?;
-        *handle
-            .lock()
+        *bir_core::lock_timing::lock(handle)
             .map_err(|_| HostError::new("database lock poisoned"))? = placeholder;
         RELEASED.set(true);
         Ok(())
     })
 }
 
+/// Open a native path panel through GPUI and run `work` on the main thread
+/// with the path the user picked.
+///
+/// A host call runs inside a GPUI `App` update, with the `AppCell` borrowed.
+/// A blocking panel (`rfd::FileDialog`) spins a nested modal run loop there;
+/// that loop resumes pending GPUI foreground tasks, the first one to borrow
+/// the `AppCell` panics, and the app aborts. GPUI's prompts open the panel
+/// from a foreground task after the current update and answer through a
+/// channel, so nothing nests. `work` runs in a foreground task too, outside
+/// any `App` borrow, on the thread that owns the database slot. The promise
+/// answers `{ kind: "cancelled" }` when the panel is dismissed.
+fn after_path_prompt<P, E, C, R>(
+    prompt: impl FnOnce(&mut gpui_kit::App) -> R,
+    work: impl FnOnce(P) -> HostResult + 'static,
+) -> Result<gpui_shell::host_modules::HostFuture, HostError>
+where
+    R: std::future::Future<Output = Result<Result<Option<P>, E>, C>> + 'static,
+    P: 'static,
+    E: std::fmt::Display + 'static,
+    C: 'static,
+{
+    let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
+    gpui_shell::with_current_app(move |cx| {
+        let answer = prompt(cx);
+        cx.foreground_executor()
+            .spawn(async move {
+                let result = match answer.await {
+                    Ok(Ok(Some(path))) => work(path),
+                    // Dismissed, or the panel went away without answering.
+                    Ok(Ok(None)) | Err(_) => {
+                        Ok(HostObject::new().field("kind", "cancelled").into())
+                    }
+                    Ok(Err(error)) => Err(HostError::new(format!(
+                        "The file dialog could not open: {error}"
+                    ))),
+                };
+                let _ = sender.send(result);
+            })
+            .detach();
+    })
+    .ok_or_else(|| HostError::new("no app is running to open the file dialog"))?;
+    Ok(Box::pin(async move {
+        receiver
+            .await
+            .unwrap_or_else(|_| Err(HostError::new("the file dialog ended without an answer")))
+    }))
+}
+
 /// The page's import. The host always opens the file dialog (the script has
 /// none), so the page cannot choose the file: a call that passes any
 /// argument is refused before anything opens. Tests and scripted imports
 /// call [`import_archive_from`] instead.
-fn import_archive(arguments: &gpui_shell::HostArguments) -> HostResult {
+fn import_archive(
+    arguments: &gpui_shell::HostArguments,
+) -> Result<gpui_shell::host_modules::HostFuture, HostError> {
     if !arguments.is_empty() {
         return Err(HostError::new(
             "import_archive takes no path; the host opens the file dialog",
         ));
     }
-    let Some(path) = rfd::FileDialog::new()
-        .set_title("Select an exported .zip archive")
-        .add_filter("Export Archive", &["zip"])
-        .pick_file()
-    else {
-        return Ok(HostObject::new().field("kind", "cancelled").into());
-    };
-    import_archive_from(&path)
+    after_path_prompt(
+        |cx| {
+            cx.prompt_for_paths(gpui_kit::PathPromptOptions {
+                files: true,
+                directories: false,
+                multiple: false,
+                prompt: Some("Import".into()),
+            })
+        },
+        |paths: Vec<std::path::PathBuf>| match paths.first() {
+            Some(path) => import_archive_from(path),
+            None => Ok(HostObject::new().field("kind", "cancelled").into()),
+        },
+    )
 }
 
 /// Import the archive at `path`; not a verb. Archive handling stays
@@ -2201,7 +2322,9 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
 /// happens before the dialog, so no archive exists without authorization.
 /// A taxpayer without a PIN exports ungated; an authenticator alone is not
 /// a PIN.
-fn export_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
+fn export_profile(
+    arguments: &gpui_shell::HostArguments,
+) -> Result<gpui_shell::host_modules::HostFuture, HostError> {
     if arguments.len() > 2 {
         return Err(HostError::new(
             "export_profile takes no path; the host opens the save dialog",
@@ -2245,15 +2368,12 @@ fn export_profile(arguments: &gpui_shell::HostArguments) -> HostResult {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0);
-    let Some(path) = rfd::FileDialog::new()
-        .set_title("Save the profile archive")
-        .set_file_name(format!("BIR_Profile_{}_{}.zip", tin, timestamp))
-        .add_filter("Export Archive", &["zip"])
-        .save_file()
-    else {
-        return Ok(HostObject::new().field("kind", "cancelled").into());
-    };
-    export_profile_to(&tin, pin.as_deref(), &path)
+    let file_name = format!("BIR_Profile_{}_{}.zip", tin, timestamp);
+    let directory = std::env::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+    after_path_prompt(
+        move |cx| cx.prompt_for_new_path(&directory, Some(file_name.as_str())),
+        move |path: std::path::PathBuf| export_profile_to(&tin, pin.as_deref(), &path),
+    )
 }
 
 /// Write `tin`'s profile archive to `path`; not a verb. The PIN gate is
@@ -2517,8 +2637,8 @@ pub fn module() -> HostModule {
         .function("queue_form_draft", queue_form_draft)
         .function("cancel_queued", cancel_queued)
         .function("list_deadlines", |_| list_deadlines())
-        .function("import_archive", import_archive)
-        .function("export_profile", export_profile)
+        .async_function("import_archive", import_archive)
+        .async_function("export_profile", export_profile)
         .function("form_print_html", form_print_html)
         .function("list_background_jobs", |_| list_background_jobs())
         .function("delete_background_job", delete_background_job)
@@ -2711,13 +2831,13 @@ export function list_deadlines(): TaxDeadline[];
 export interface ImportResult {
     kind: "database" | "profile" | "invalid" | "cancelled";
 }
-export function import_archive(): ImportResult;
+export function import_archive(): Promise<ImportResult>;
 export interface ExportResult {
     kind: "exported" | "cancelled";
     path?: string;
 }
 /** The taxpayer's profile archive under the host's save dialog. A taxpayer with a PIN needs it as `pin`; the page never passes a path — the host chooses the file. */
-export function export_profile(tin: string, pin?: string | null): ExportResult;
+export function export_profile(tin: string, pin?: string | null): Promise<ExportResult>;
 export interface PrintPreview {
     path: string;
 }
@@ -4103,7 +4223,7 @@ mod tests {
             HostValue::Null,
             HostValue::Bool(true),
         ] {
-            match module.call("import_archive", &args(vec![argument])) {
+            match module.begin("import_archive", &args(vec![argument])) {
                 Ok(_) => panic!("import_archive answered a call with an argument"),
                 Err(refusal) => assert_eq!(
                     refusal.message(),
@@ -4451,11 +4571,34 @@ mod tests {
                 json(serde_json::json!({"path": "/tmp/chosen.zip"})),
             ]),
         ] {
-            match module.call("export_profile", &call) {
+            match module.begin("export_profile", &call) {
                 Ok(_) => panic!("export_profile answered a call with a path"),
                 Err(refusal) => assert_eq!(
                     refusal.message(),
                     "export_profile takes no path; the host opens the save dialog"
+                ),
+            }
+        }
+    }
+
+    /// Past the argument checks, both verbs hand the panel to GPUI, never to
+    /// a blocking dialog: with no running app there is nothing to open it on,
+    /// so the call refuses at once instead of spinning a modal run loop, and
+    /// nothing is written or imported.
+    #[test]
+    fn file_dialog_verbs_need_a_running_app() {
+        setup();
+        let module = module();
+        for (verb, call) in [
+            ("export_profile", args(vec![s(TIN)])),
+            ("import_archive", args(vec![])),
+        ] {
+            assert!(module.is_async(verb), "{verb} answers a promise");
+            match module.begin(verb, &call) {
+                Ok(_) => panic!("{verb} started without an app"),
+                Err(refusal) => assert_eq!(
+                    refusal.message(),
+                    "no app is running to open the file dialog"
                 ),
             }
         }
@@ -4469,8 +4612,9 @@ mod tests {
     fn export_profile_wrong_pins_share_the_taxpayer_lockout() {
         setup();
         set_taxpayer_pin(&args(vec![s(ROOT), s("0817")])).unwrap();
-        let attempt = |pin: &str| export_profile(&args(vec![s(TIN), s(pin)]));
-        let none = || export_profile(&args(vec![s(TIN)]));
+        // `map(drop)`: the future is not `Debug`; only the refusal matters.
+        let attempt = |pin: &str| export_profile(&args(vec![s(TIN), s(pin)])).map(drop);
+        let none = || export_profile(&args(vec![s(TIN)])).map(drop);
 
         assert_eq!(
             none().unwrap_err().message(),
@@ -4495,3 +4639,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod reader_tests;

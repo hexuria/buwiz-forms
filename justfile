@@ -84,6 +84,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_taxpayer_export.mjs
     node --experimental-vm-modules tools/test_settings_window.mjs
     node --experimental-vm-modules tools/test_shell_chrome.mjs
+    node --experimental-vm-modules tools/test_shell_overlays.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check

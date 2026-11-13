@@ -17,7 +17,7 @@ use chrono::Datelike as _;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
 use serde_json::Value;
 
-use crate::bir_module::{database_handle, to_json, with_database};
+use crate::bir_module::{database_handle, to_json, with_database, with_reader};
 
 /// TypeScript appended to the `bir` module's declarations.
 pub const DECLARATIONS: &str = r#"
@@ -689,7 +689,7 @@ fn starter_packs(arguments: &HostArguments) -> HostResult {
 
 fn list_form_templates(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
-    with_database(|db| {
+    with_reader(|db| {
         let templates = db.list_form_templates(tin).map_err(host_error)?;
         Ok(HostValue::Array(
             templates.iter().map(template_record).collect(),
