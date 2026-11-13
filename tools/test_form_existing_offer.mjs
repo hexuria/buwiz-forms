@@ -113,16 +113,17 @@ const app = {
   overlay: null, existingOffer: null, fastLane: { drafts: false }, undo: null, undos: [],
   invalidate() {}, toast(text) { toasts.push(text); }, go() {}, startNewReturn() { calls.push(["startNewReturn"]); }, templates: () => [],
   toastUndo(message, undo) { this.undos.push(message); this.undo = undo; },
-  // As main.js openForm: open, then push a Recent entry (the real recentEntry).
+  // As main.js openForm: open, then add a Recent entry (the real addRecent);
+  // a save moves it up (the real bumpRecent).
   recent: [], isMac: true, accountMenu: false, view: "form", session: { kind: "open" },
   isFresh: () => false, openPalette() {}, authState: () => ({}), isAdmin: () => false, isHelpdesk: () => false,
   openForm(opts, cx, keep, then) {
     calls.push(["openForm", opts]);
     this.formUi.open(opts, cx, keep, then);
-    if (!opts.sample) {
-      const entry = recentMod.namespace.recentEntry(opts);
-      this.recent = [entry, ...this.recent.filter((r) => r.key !== entry.key)];
-    }
+    if (!opts.sample) this.recent = recentMod.namespace.addRecent(this.recent, opts);
+  },
+  bumpRecent(opts) {
+    this.recent = recentMod.namespace.bumpRecent(this.recent, opts);
   },
   store: {
     screenIndex: () => [],
@@ -327,8 +328,12 @@ undoAfterEdit(cx);
 await settle();
 assert.equal(ui.state, amendment, "Undo refuses while an edit is not saved");
 assert.match(toasts.at(-1), /Undo would lose edits you have not saved/);
+// A changed and saved return goes to the top of Recent (main.js bumpRecent).
+const savedKey = recentMod.namespace.recentKey(ui.state);
+assert.notEqual(app.recent[0]?.key, savedKey);
 ui.save(cx);
 assert.equal(ui.state.saved, true);
+assert.equal(app.recent[0].key, savedKey, "the saved amendment is on top of Recent");
 undoAfterEdit(cx);
 await settle();
 assert.equal(ui.state, sample, "after the save, Undo returns to the sample");

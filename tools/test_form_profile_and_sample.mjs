@@ -120,7 +120,7 @@ const opened = (sample) => ({
 let validateErrors = [];
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
-  invalidate: () => { rootDirty = true; }, toast(text) { toasts.push(text); rootDirty = true; },
+  invalidate: () => { rootDirty = true; }, toast(text) { toasts.push(text); rootDirty = true; }, bumpRecent() {},
   startNewReturn(_cx, code) { calls.push(["startNewReturn", code]); },
   store: {
     templates: () => [],

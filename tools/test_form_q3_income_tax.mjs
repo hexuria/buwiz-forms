@@ -151,7 +151,7 @@ let offeredNotes = [];
 const seenKeys = new Set();
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
-  invalidate() {}, toast() {}, startNewReturn() {},
+  invalidate() {}, toast() {}, startNewReturn() {}, bumpRecent() {},
   toastState: null,
   toastUndo(what, run) { this.toastState = { text: what, action: { run } }; },
   store: {

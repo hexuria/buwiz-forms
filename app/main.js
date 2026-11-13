@@ -31,7 +31,7 @@ import {
 } from "./shell/chrome.js";
 import { shellChromeVisible } from "./shell/chrome_gate.js";
 import { renderHome } from "./shell/home.js";
-import { recentEntry } from "./shell/recent.js";
+import { recentEntry, loadRecent, addRecent, bumpRecent } from "./shell/recent.js";
 import { renderLibrary } from "./shell/library.js";
 import { renderCalendar } from "./shell/calendar_page.js";
 import { renderFilings } from "./shell/filings.js";
@@ -162,7 +162,7 @@ class BirApp extends View {
     this.selYear = null;
     // An entry always has a text id (one written with a number by an earlier
     // build is rebuilt).
-    this.recent = this.readLocal(RECENT_KEY, []).map((r) => (typeof r.key === "string" ? r : recentEntry(r)));
+    this.recent = loadRecent(this.readLocal(RECENT_KEY, []));
     // First run against this database: what already happened is not news.
     this.readIds = new Set();
     const storedRead = this.readLocal(READ_KEY, null);
@@ -868,9 +868,17 @@ class BirApp extends View {
     this.writeLocal(RECENT_KEY, this.recent);
   }
 
+  /** Opening a return never reorders Recent; a return not listed joins at the top. */
   pushRecent(opts) {
-    const entry = recentEntry(opts);
-    this.recent = [entry, ...this.recent.filter((r) => r.key !== entry.key)].slice(0, 4);
+    const next = addRecent(this.recent, opts);
+    if (next === this.recent) return;
+    this.recent = next;
+    this.writeLocal(RECENT_KEY, this.recent);
+  }
+
+  /** A return was changed and saved: it moves to the top of Recent. */
+  bumpRecent(opts) {
+    this.recent = bumpRecent(this.recent, opts);
     this.writeLocal(RECENT_KEY, this.recent);
   }
 

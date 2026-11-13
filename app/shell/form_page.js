@@ -1829,6 +1829,7 @@ export class FormPageActions {
     // Take whatever is staged before saving, without waiting for the debounce.
     let edits = s.pending;
     s.pending = {};
+    const changed = s.dirty || Object.keys(edits).length > 0;
     try {
       if (Object.keys(edits).length) {
         this.retireRemovalUndo();
@@ -1852,6 +1853,8 @@ export class FormPageActions {
       s.status = r.status;
       s.dirty = false;
       s.saved = true;
+      // A changed and saved return goes to the top of Recent; opening one never moves it.
+      if (changed) this.app.bumpRecent({ tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.returnKey != null ? { returnKey: s.returnKey } : {}) });
       this.app.toast("Draft saved.", cx, "save");
       this.validate(cx);
     } catch (e) {

@@ -180,7 +180,7 @@ const opened = () => ({
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
-  invalidate() {}, toast() {}, startNewReturn() {},
+  invalidate() {}, toast() {}, startNewReturn() {}, bumpRecent() {},
   store: {
     templates: () => [],
     write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },
