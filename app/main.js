@@ -53,6 +53,13 @@ const RECENT_KEY = "redesign.recent";
 const SELECTION_KEY = "redesign.selection";
 const READ_KEY = "redesign.read_notifications";
 const PREFS_KEY = "redesign.prefs";
+/**
+ * A toast's distance from the window's bottom on the form page: above the
+ * section pill (form_page.js drawPill: 56 px tall, 16 px over the main
+ * surface's bottom, which sits SIZE.mainInset over the window's) with 12 px
+ * between them.
+ */
+const TOAST_OVER_PILL = SIZE.mainInset + 16 + 56 + 12;
 
 /** First launch, "Just me": the new-taxpayer form with no filing chrome. */
 function renderPendingTaxpayer(cx, app) {
@@ -1958,8 +1965,13 @@ class BirApp extends View {
     if (this.overlay === "sample-period") root.child(renderSamplePeriod(cx, this));
     if (this.toastState) {
       const st = this.toastState;
+      // The form page's section pill sits where a toast would, at every width:
+      // the toast goes above it (the pill's 56 px over its 16 px inset and
+      // the main surface's margin, and 12 px of air).
+      const overPill = !settingsOpen && this.view === "form" && !this.isFresh() && Boolean(this.formUi.pillView?.());
+      const bottom = overPill ? TOAST_OVER_PILL : undefined;
       root.child(
-        Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress } : {}),
+        Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress, bottom } : { bottom }),
       );
     }
     return renderUpdatePrompt(cx, this, root);

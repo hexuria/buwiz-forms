@@ -1607,10 +1607,13 @@ export function SidePanel(cx, id, opts) {
 /**
  * A toast. `opts.action` ({label, onClick}) adds a button (Undo), and
  * `opts.progress` (1 to 0) a bar counting down the time left to use it.
+ * `opts.bottom` lifts it off the window edge (20 px by default), above
+ * something that floats there (the form page's section pill).
  */
 export function Toast(cx, message, icon = "circle-check", opts = {}) {
   const t = tokens(cx);
   const width = 440;
+  const bottom = opts.bottom ?? 20;
   const body = div()
     .flex()
     .flex_row()
@@ -1639,7 +1642,7 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
     return div()
       .id("toast")
       .absolute()
-      .bottom(20)
+      .bottom(bottom)
       .left(0)
       .right(0)
       .flex()
@@ -1661,7 +1664,7 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
   return div()
     .id("toast")
     .absolute()
-    .bottom(20)
+    .bottom(bottom)
     .left(0)
     .right(0)
     .flex()

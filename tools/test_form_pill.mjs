@@ -266,6 +266,24 @@ function frame(app) {
 }
 const pillEntity = (app) => app.formUi.state.pill.entity;
 /**
+ * A toast on the form page clears the pill: the pill's top (its bottom
+ * inset plus its 56 px height, over the main surface's 8 px margin) is
+ * under the toast's bottom. Elsewhere the toast keeps its 20 px.
+ */
+function assertToastClearsPill(app) {
+  app.toast("Saved", cx);
+  rootDirty = true;
+  const t = frame(app);
+  const toast = one(t, "toast");
+  const bottom = toast.calls.find((c) => c[0] === "bottom")[1];
+  const layer = one(t, "fp-pill-layer");
+  const inset = layer.calls.find((c) => c[0] === "bottom")?.[1] ?? 0;
+  const pill = one(t, "fp-pill");
+  const height = pill.calls.find((c) => c[0] === "h")[1];
+  assert.ok(bottom >= 8 + inset + height + 8, `the toast (bottom ${bottom}) sits above the pill (top ${8 + inset + height})`);
+  app.toastState = null;
+}
+/**
  * The sheet or popover lays out in the real toolkit: it has no height of its
  * own (it sizes to its content), so its scrolled list needs a definite max
  * height and must not be a flex_1 / zero-basis item, which the toolkit gives
@@ -344,6 +362,8 @@ function assertListLaysOut(app, room) {
   assert.ok(texts(one(t, "fp-pill-count")).includes("1"), "one section needs attention");
   assert.ok(texts(one(t, "fp-pill")).includes("Return details") && texts(one(t, "fp-pill")).includes("Page 1 · 1 of 4"), "the pill names the open section");
   assert.ok(has(one(t, "fp-pill-prev"), "disabled", true), "‹ waits at the first section");
+  assertToastClearsPill(app);
+  t = frame(app);
 
   // The list: only the pill redraws.
   const rows = [...app.formUi.state.rowViews.values()];
@@ -403,6 +423,8 @@ for (const width of [1200, 1240]) {
   const layer = one(t, "fp-pill-layer");
   assert.ok(has(layer, "absolute") && has(layer, "bottom", 16), "at the bottom of the form");
   assert.ok(layer.calls.some((c) => c[0] === "left" && c[1] > 208), "beside the side list");
+  assertToastClearsPill(app);
+  t = frame(app);
   click(t, "fp-pill-main");
   t = frame(app);
   assert.equal(byId(t, "fp-sections-scrim").length, 0, "wide: a popover, no scrim");
@@ -483,6 +505,16 @@ for (const width of [1200, 1240]) {
   assert.equal(s.stopAt, null);
   template = null;
   stops = null;
+}
+
+// Off the form page the toast keeps its place at the window's edge.
+{
+  const app = makeApp(1200);
+  app.toast("Saved", cx);
+  rootDirty = true;
+  const t = frame(app);
+  assert.equal(byId(t, "fp-pill").length, 0);
+  assert.ok(has(one(t, "toast"), "bottom", 20), "no pill: 20 px");
 }
 
 console.log("PASS: no taxpayer card; openForm selects the taxpayer; the section pill at 500, 1200 and 1240 px, its list, ‹ › and the template stops.");
