@@ -313,7 +313,17 @@ const D = (code, due, p = null) => DEMO.deadlines.find((d) => d.form_code === co
   assert.deepEqual(tile(home, "week"), ["Due in 7 days", "3", "by Nov 20"]);
   assert.deepEqual(tile(home, "drafts"), ["Drafts", "2", "started, not queued"]);
   assert.deepEqual(tile(home, "waiting"), ["Waiting to send", "1", "queued to send"]);
-  assert.deepEqual(tile(home, "filed"), ["Filed this month", "2", "submitted in November"]);
+  assert.deepEqual(tile(home, "filed"), ["Filed this month", "2", "submitted in Nov"]);
+  // A tile's label and caption wrap instead of being cut ("submitted in
+  // Nove…"): five tiles across get 121 to 156 px, less 34 px of padding.
+  for (const key of ["overdue", "week", "drafts", "waiting", "filed"]) {
+    const words = sub(one(home, `home-tile-${key}`)).filter((m) => m.kids.some((k) => typeof k === "string") && m.calls.some((c) => c[0] === "text_size" || c[0] === "font_weight" || c[0] === "text_color"));
+    assert.equal(words.length, 3, `${key}: label, number and caption`);
+    for (const m of words) {
+      assert.ok(!has(m, "truncate"), `${key}: "${m.kids.find((k) => typeof k === "string")}" is not cut`);
+      assert.ok(has(m, "whitespace_normal") || /^\d+$/.test(m.kids.find((k) => typeof k === "string")), `${key}: "${m.kids.find((k) => typeof k === "string")}" wraps`);
+    }
+  }
 
   // The named host calls, and only those, feed the numbers.
   assert.equal(count("deadlines_between", "2025-11-12", "2026-11-20"), 1, "Overdue and Due in 7 days: today − 366 to today + 7");
@@ -357,6 +367,18 @@ const D = (code, due, p = null) => DEMO.deadlines.find((d) => d.form_code === co
   assert.deepEqual(tones("2026-11-13"), ["#2557d6"]);
   assert.deepEqual(tones("2026-11-16"), ["#a5520a"]);
   assert.deepEqual(tones("2026-12-10"), ["#71717a", "#71717a"]);
+
+  // Nothing picked, nothing looks picked: no day is filled, and a hover only
+  // outlines one (GPUI keeps a hover under a pointer that has not moved).
+  for (const day of days) {
+    assert.ok(!has(day, "bg"), `${day.id} is not filled before a pick`);
+    const hover = day.calls.find((c) => c[0] === "hover");
+    assert.ok(hover, `${day.id} answers a hover`);
+    const styled = [];
+    const style = new Proxy({}, { get: (_o, k) => (...a) => (styled.push(k), style) });
+    hover[1](style);
+    assert.ok(!styled.includes("bg"), `${day.id}: a hover does not fill the day`);
+  }
 
   // With nothing picked the list shows every open deadline in the strip.
   assert.deepEqual(dueRows(home), [

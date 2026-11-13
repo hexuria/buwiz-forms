@@ -127,7 +127,9 @@ export function loadDashboard(app) {
 
 function tileSpecs(data) {
   const [, m, d] = data.in7.split("-").map(Number);
-  const monthName = MONTHS_LONG[Number(data.today.split("-")[1]) - 1];
+  // Short month: a tile is 121 to 156 px wide (five across from 640 to the
+  // 816 px column), "submitted in September" is not.
+  const monthName = MONTHS[Number(data.today.split("-")[1]) - 1];
   return [
     { key: "overdue", label: "Overdue", sub: "past the due date", tone: "danger", icon: "triangle-alert", n: data.overdue.length },
     { key: "week", label: "Due in 7 days", sub: `by ${MONTHS[m - 1]} ${d}`, tone: "warning", icon: "calendar", n: data.week.length },
@@ -166,7 +168,7 @@ export function statusTiles(cx, app, data, width) {
       .gap(6)
       .w_full()
       .child(Icon(cx, spec.icon, { color: spec.tone }))
-      .child(Line(cx, "meta", spec.label, "fg2").flex_1());
+      .child(Text(cx, "meta", spec.label, "fg2").flex_1().min_w(0).whitespace_normal());
     if (on) head.child(Icon(cx, "x", { size: SIZE.iconSmall, color: "fg3" }));
     row.child(
       div()
@@ -190,7 +192,8 @@ export function statusTiles(cx, app, data, width) {
         .on_click((_e, cx) => tileClick(app, spec.key, data, cx))
         .child(head)
         .child(Text(cx, "page", String(spec.n)))
-        .child(Line(cx, "meta", spec.sub, "fg3")),
+        // The caption wraps rather than clip on the narrowest tiles.
+        .child(Text(cx, "meta", spec.sub, "fg3").w_full().min_w(0).whitespace_normal()),
     );
   }
   return row;
@@ -230,6 +233,8 @@ export function deadlineStrip(cx, app, data, width) {
       .h_full()
       .pb(SPACE[2])
       .rounded(RADIUS.ctl)
+      .border(1)
+      .border_color("#00000000")
       .cursor_pointer()
       .accessibility_label(label)
       .tooltip(label)
@@ -241,8 +246,11 @@ export function deadlineStrip(cx, app, data, width) {
         }
         cx.notify();
       });
+    // Only a picked day is filled. Hover outlines a day instead: GPUI keeps a
+    // hover under a pointer that has not moved since the page drew, and a
+    // filled hover on arrival looked like a day already picked.
     if (sel) col.bg(t.selected);
-    else col.hover((s) => s.bg(t.hover));
+    else col.hover((s) => s.border_color(t.border));
     col.child(
       everyDay || i % 7 === 0
         ? Text(cx, "cap", String(day.date.getDate()), i === 0 ? "fg" : "fg3")
