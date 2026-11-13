@@ -55,7 +55,7 @@ These have no platform code and behave the same in the shared Rust code:
 - The statuses Draft, Queued, Submitted, Confirmed and Paid, and Revert to Draft.
 - Profiles, the PIN and authenticator-app lock, the calendar and the
   notifications drawer.
-- The light and dark theme (Cmd/Ctrl+Shift+T).
+- The light and dark theme (Cmd/Ctrl+T).
 - Dry-run and live sending (`BIR_SFTP_DRY_RUN`, `BIR_SFTP_LIVE`).
 - The frozen printed sheets.
 

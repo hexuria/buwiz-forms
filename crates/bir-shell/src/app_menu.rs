@@ -47,6 +47,8 @@ gpui::actions!(
         NewReturn,
         CloseWindow,
         ToggleSidebar,
+        ToggleTaxProfile,
+        ToggleNotifications,
         ToggleTheme,
         OpenCommandPalette,
         ToggleFullScreen,
@@ -555,6 +557,8 @@ fn register_actions(cx: &mut App) {
         .on_action(|_: &OpenSettings, cx| dispatch_if_unlocked("open-settings", cx))
         .on_action(|_: &NewReturn, cx| dispatch_if_unlocked("new-return", cx))
         .on_action(|_: &ToggleSidebar, cx| dispatch_if_unlocked("toggle-sidebar", cx))
+        .on_action(|_: &ToggleTaxProfile, cx| dispatch_if_unlocked("toggle-profile", cx))
+        .on_action(|_: &ToggleNotifications, cx| dispatch_if_unlocked("toggle-notifications", cx))
         .on_action(|_: &ToggleTheme, cx| dispatch_if_unlocked("toggle-theme", cx))
         .on_action(|_: &OpenCommandPalette, cx| dispatch_if_unlocked("open-palette", cx))
         .on_action(|_: &SignOut, cx| dispatch_if_unlocked("cloud-sign-out", cx))
@@ -624,9 +628,9 @@ fn target_window(cx: &App) -> Option<gpui_shell::gpui::AnyWindowHandle> {
 ///
 /// A menu click dispatches its action from inside the window update the popup
 /// deferred into. Updating that same window again finds it taken out of the
-/// map and logs `window not found`, so the click does nothing. Keyboard
-/// shortcuts never take this path: the script binds them itself. Deferring
-/// lands the call once the window is back in the map.
+/// map and logs `window not found`, so the click does nothing. A chord from
+/// `bind_global_keys` arrives the same way, from inside the window's key
+/// dispatch. Deferring lands the call once the window is back in the map.
 fn with_window(cx: &mut App, f: impl FnOnce(&mut Window, &mut App) + 'static) {
     let Some(handle) = target_window(cx) else {
         tracing::warn!("menu action had no window");
@@ -699,6 +703,9 @@ fn bind(cx: &mut App, key: &str, action: impl Action + Clone) {
     ]);
 }
 
+/// These chords are bound here only: the script (`bindShortcuts` in
+/// app/main.js) binds none of them, so one press is one action. Their labels
+/// in the app are the SHORTCUTS table in app/shell/ui.js.
 fn bind_global_keys(cx: &mut App) {
     bind(cx, "q", QuitApplication);
     bind(cx, "h", HideToTray);
@@ -706,7 +713,9 @@ fn bind_global_keys(cx: &mut App) {
     bind(cx, ",", OpenSettings);
     bind(cx, "n", NewReturn);
     bind(cx, "b", ToggleSidebar);
-    bind(cx, "shift-t", ToggleTheme);
+    bind(cx, "shift-b", ToggleTaxProfile);
+    bind(cx, "shift-n", ToggleNotifications);
+    bind(cx, "t", ToggleTheme);
     bind(cx, "k", OpenCommandPalette);
     #[cfg(target_os = "macos")]
     {
@@ -818,6 +827,8 @@ fn edit_menu(settings_at_end: bool) -> Menu {
 fn view_menu(platform: MenuPlatform) -> Menu {
     let mut items = vec![
         MenuItem::action("Toggle Sidebar", ToggleSidebar),
+        MenuItem::action("Toggle Tax Profile", ToggleTaxProfile),
+        MenuItem::action("Toggle Notifications", ToggleNotifications),
         MenuItem::action("Toggle Theme", ToggleTheme),
         MenuItem::separator(),
         MenuItem::action("Command Palette…", OpenCommandPalette),
@@ -1071,6 +1082,9 @@ mod tests {
                 "Command Palette…",
                 "Check for Updates…",
                 "Toggle Sidebar",
+                "Toggle Tax Profile",
+                "Toggle Notifications",
+                "Toggle Theme",
             ] {
                 assert!(
                     !flat.iter().any(|title| title == banned),
@@ -1085,6 +1099,42 @@ mod tests {
         );
         assert!(mac.iter().all(|item| item.name.as_ref() != "File"));
         assert!(titles(menu(&mac, "Edit")).contains(&"Paste".to_string()));
+    }
+
+    /// Each chrome toggle has its own item, so the menu shows its key
+    /// (bind_global_keys) and a click runs the same script action.
+    #[test]
+    fn view_menu_has_one_item_per_chrome_toggle() {
+        for platform in [
+            MenuPlatform::Macos,
+            MenuPlatform::Linux,
+            MenuPlatform::Windows,
+        ] {
+            let menus = app_menus(platform, true);
+            let view = menu(&menus, "View");
+            assert_eq!(
+                titles(view)[..6].to_vec(),
+                [
+                    "Toggle Sidebar",
+                    "Toggle Tax Profile",
+                    "Toggle Notifications",
+                    "Toggle Theme",
+                    "-",
+                    "Command Palette…",
+                ],
+                "{platform:?}"
+            );
+            assert!(is_action::<ToggleSidebar>(named(view, "Toggle Sidebar")));
+            assert!(is_action::<ToggleTaxProfile>(named(
+                view,
+                "Toggle Tax Profile"
+            )));
+            assert!(is_action::<ToggleNotifications>(named(
+                view,
+                "Toggle Notifications"
+            )));
+            assert!(is_action::<ToggleTheme>(named(view, "Toggle Theme")));
+        }
     }
 
     #[test]
