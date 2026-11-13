@@ -125,6 +125,8 @@ const base = mock("gpui-base", { InputState, CalendarState, Popup: { new: elemen
 const components = mock("gpui-component", { Spinner: { new: element } });
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;
+// form_page.js makes its floating pill take the pointer; the element is unchanged here.
+uiExports.takesPointer = (el) => el;
 const dropdowns = new Map();
 uiExports.AppButton = (_cx, id, _label, opts = {}) => { const el = element(); el.id(id); if (opts.onClick) el.on_click(opts.onClick); return el; };
 uiExports.IconButton = (_cx, id, _icon, opts = {}) => { const el = element(); el.id(id); if (opts.onClick) el.on_click(opts.onClick); return el; };
@@ -180,7 +182,7 @@ const opened = () => ({
 });
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
-  invalidate() {}, toast() {}, startNewReturn() {},
+  invalidate() {}, toast() {}, startNewReturn() {}, bumpRecent() {},
   store: {
     templates: () => [],
     write(name, ...args) { calls.push([name, ...args]); return { id: 7, status: "Draft", draft: args[1] }; },

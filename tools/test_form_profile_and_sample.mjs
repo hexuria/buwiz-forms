@@ -79,6 +79,8 @@ const base = mock("gpui-base", { InputState, CalendarState: {}, Popup: { new: el
 const components = mock("gpui-component", { Spinner: { new: element } });
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel"]) uiExports[n] = element;
+// form_page.js makes its floating pill take the pointer; the element is unchanged here.
+uiExports.takesPointer = (el) => el;
 uiExports.AppButton = (_cx, id, _label, opts = {}) => { buttons.push(id); const el = element(); el.id(id); if (opts.onClick) el.on_click(opts.onClick); return el; };
 uiExports.Text = (_cx, _variant, text) => { texts.push(String(text)); return element(); };
 uiExports.Line = uiExports.Text;
@@ -120,7 +122,7 @@ const opened = (sample) => ({
 let validateErrors = [];
 const app = {
   prefs: {}, branchFor: () => null, taxpayers: () => [], layout: () => ({ column: 1056 }),
-  invalidate: () => { rootDirty = true; }, toast(text) { toasts.push(text); rootDirty = true; },
+  invalidate: () => { rootDirty = true; }, toast(text) { toasts.push(text); rootDirty = true; }, bumpRecent() {},
   startNewReturn(_cx, code) { calls.push(["startNewReturn", code]); },
   store: {
     templates: () => [],
@@ -167,7 +169,8 @@ assert.ok(buttons.includes("fp-save") && buttons.includes("fp-queue") && buttons
 // Decided 2026-10-22: no Start a return in a sample's header.
 assert.ok(!buttons.includes("fp-start-return"), `no Start a return on a sample: ${buttons}`);
 assert.ok(texts.some((t) => /Save makes it your return for its period.*Save asks for it.*New return/.test(t)), "the sample says what Save does");
-assert.ok(texts.includes("Sample from the Form library"), "no period in the taxpayer bar");
+// The taxpayer card is gone (pick 9 C): a sample shows no period and no card; its "Sample" chip sits in the chip row.
+assert.ok(!texts.some((t) => t === "Sample from the Form library" || /^For Q\d \d{4}$/.test(t)), "no period and no taxpayer card on a sample");
 assert.ok(texts.includes("Shows once the period is typed"), "a locked blank box says what it waits for");
 assert.ok(texts.includes("Set when you start a return"), "a shut radio group says what it waits for");
 

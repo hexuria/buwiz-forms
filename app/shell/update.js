@@ -5,7 +5,7 @@
 
 import { div } from "gpui-kit";
 import * as bir from "bir";
-import { tokens, RADIUS, Text, AppButton } from "./ui.js";
+import { tokens, RADIUS, Text, AppButton, takesPointer } from "./ui.js";
 
 export function pollUpdateStatus(app) {
   let next;
@@ -39,8 +39,8 @@ export function installReadyUpdate() {
 }
 
 function banner(cx, t, message, buttons) {
-  const row = div()
-    .id("update-banner")
+  // Floats over the page: a press on it stays on it.
+  const row = takesPointer(div().id("update-banner"))
     .absolute()
     .bottom(16)
     .left(16)

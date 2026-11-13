@@ -62,6 +62,13 @@ const ADDRESS_FIELDS = [
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** An individual's income types, as bir-core names them, with what the filer reads. */
+const INCOME_TYPES = [
+  ["SelfEmployed", "Self-employed"],
+  ["MixedIncome", "Mixed income"],
+  ["PurelyCompensation", "Compensation only"],
+];
+
 /**
  * What is wrong with an RDO, ZIP code or email as typed, or null. Empty is
  * fine: none of them is required to create a taxpayer or branch.
@@ -86,7 +93,7 @@ function factState(app, field, value) {
 export class TaxpayerActions {
   constructor(app) {
     this.app = app;
-    this.open = { taxpayer: true, branch: true, address: true, inbox: true };
+    this.open = { taxpayer: true, branch: true, registration: true, address: true, inbox: true };
     this.editSec = null;
     this.inputs = {};
     this.inherit = {};
@@ -96,6 +103,8 @@ export class TaxpayerActions {
     /** Per-field RDO, ZIP and email errors of the section being edited. @type {Record<string, string>} */
     this.factErrors = {};
     this.panelEdit = null;
+    /** The Registration section's edit (`startRegistration`), or null. */
+    this.reg = null;
     // Confirmation inbox (P2-5): staged credentials edit + verify/check status.
     this.inbox = null;
     this.inboxMsg = null;
@@ -196,8 +205,85 @@ export class TaxpayerActions {
     });
   }
 
+  // ------------------------------------------------------------ registration
+
+  /**
+   * Open the Registration section's edit for one branch and tax year: the
+   * Profile tab, the section open, nothing chosen yet. `fromForm`: the
+   * 2551Q card sent the filer here, so a saved registration goes back to
+   * the return, whose card asks again.
+   */
+  startRegistration({ tin, year, fromForm = false }, cx) {
+    const app = this.app;
+    const owner = app.branchFor?.(tin);
+    if (owner && app.branch()?.tin !== tin) {
+      app.selRoot = String(tin).slice(0, 9);
+      app.selCode = owner.code;
+      app.writeLocal?.(SELECTION_KEY, { root: app.selRoot, code: app.selCode });
+    }
+    app.go("profile", cx);
+    this.editSec = null;
+    this.open.registration = true;
+    const ready = app.store.electionReadiness(tin, year);
+    this.reg = {
+      tin,
+      year,
+      fromForm,
+      after: ready?.new_registration_after || null,
+      type: INCOME_TYPES.some(([v]) => v === ready?.classification) ? ready.classification : null,
+      from: InputState.new({ placeholder: "YYYY-MM-DD" }),
+      error: null,
+    };
+    cx.notify();
+  }
+
+  pickIncomeType(value, cx) {
+    if (!this.reg) return;
+    this.reg.type = value;
+    this.reg.error = null;
+    cx.notify();
+  }
+
+  cancelRegistration(cx) {
+    this.reg = null;
+    cx.notify();
+  }
+
+  /**
+   * Save the income type from the date typed, through bir-core's reviewed
+   * confirmation (`confirm_income_registration`). The date is the filer's:
+   * nothing is filled in for them. Checked here only for shape and for the
+   * rules bir-core would refuse anyway, so the message is in plain words.
+   */
+  saveRegistration(cx) {
+    const app = this.app;
+    const r = this.reg;
+    if (!r) return;
+    const name = app.taxpayer()?.name || "the taxpayer";
+    const from = r.from.value().trim();
+    const [y, m, d] = from.split("-").map(Number);
+    const real = /^\d{4}-\d{2}-\d{2}$/.test(from) && new Date(y, m - 1, d).getDate() === d && new Date(y, m - 1, d).getMonth() === m - 1;
+    if (!r.type) r.error = `Choose how ${name} is registered.`;
+    else if (!real) r.error = "Type the date it took effect as YYYY-MM-DD, like 2026-01-01.";
+    else if (from > `${r.year}-12-31`) r.error = `To cover ${r.year}, it must take effect by December 31, ${r.year}.`;
+    else if (r.after && from <= r.after) r.error = `It must take effect after ${shortDate(r.after)}, when the registration already on file started.`;
+    else r.error = null;
+    if (r.error) return cx.notify();
+    try {
+      app.store.write("confirm_income_registration", r.tin, r.type, from);
+    } catch (e) {
+      r.error = message(e).replace(/^Other error:\s*/, "");
+      return cx.notify();
+    }
+    this.reg = null;
+    app.toast(`Registration confirmed from ${shortDate(from)}.`, cx);
+    if (r.fromForm && app.history?.at(-1) === "form") app.goBack(cx);
+    else cx.notify();
+  }
+
   /** Taxpayer or branch switched: drop every edit in progress. */
   reset() {
+    this.reg = null;
     this.deleteArmed = false;
     this.editSec = null;
     this.tinError = null;
@@ -216,6 +302,7 @@ export class TaxpayerActions {
   }
 
   leaveView() {
+    this.reg = null;
     this.editSec = null;
     this.tinError = null;
     this.forms = null;
@@ -227,6 +314,7 @@ export class TaxpayerActions {
   toggleSection(id, cx) {
     this.open[id] = !this.open[id];
     if (!this.open[id] && this.editSec === id) this.editSec = null;
+    if (!this.open[id] && id === "registration") this.reg = null;
     cx.notify();
   }
 
@@ -1081,6 +1169,7 @@ function profileTab(cx, app, width) {
   const group = DisclosureGroup(cx, "tp-profile", [
     section("taxpayer", "Taxpayer", "Shared by every branch", taxpayerBody, true),
     section("branch", "Branch", b.is_head_office ? "Head office" : `Branch ${b.code}`, branchBody, true),
+    ...(t.taxpayer_type === "Individual" ? [registrationSection(cx, app, b)] : []),
     section(
       "address",
       "Address and contact",
@@ -1094,6 +1183,76 @@ function profileTab(cx, app, width) {
   const out = div().flex().flex_col().child(group);
   if (ui.canRemove()) out.child(removeCard(cx, app, t));
   return out;
+}
+
+/**
+ * The branch's registered income type for a tax year (an individual's:
+ * self-employed, mixed income or compensation only), as the confirmed tax
+ * profile has it (`income_tax_election_readiness`). The 2551Q card's
+ * income-tax rate needs self-employed or mixed income for the return's
+ * year; this is where the filer confirms it, from the Certificate of
+ * Registration, through bir-core's reviewed confirmation. Nothing here is
+ * filled in for the filer: the type and the date are theirs.
+ */
+function registrationSection(cx, app, b) {
+  const ui = app.taxpayerUi;
+  const r = ui.reg && ui.reg.tin === b.tin ? ui.reg : null;
+  const year = r ? r.year : app.year();
+  const ready = year ? app.store.electionReadiness(b.tin, year) : null;
+  const typeLabel = (v) => (INCOME_TYPES.find(([k]) => k === v) || [])[1] || null;
+  const shown = ready && ready.gap !== "no_confirmed_registration" && ready.gap !== "timeline_needs_review" ? typeLabel(ready.classification) : null;
+  const meta = !year
+    ? "Add a tax year first"
+    : shown
+      ? `${shown} in ${year}`
+      : ready?.gap === "timeline_needs_review"
+        ? `${year} needs review`
+        : `Not confirmed for ${year}`;
+  const body = div().flex().flex_col();
+  if (!r) {
+    const value = shown ? `${shown}${ready.since ? ` · since ${shortDate(ready.since)}` : ""}` : ready?.gap === "timeline_needs_review" ? (ready.issues || [])[0] || "Needs review" : null;
+    body.child(Field(cx, `Income type in ${year || "this year"}`, { value }));
+    body.child(
+      Text(cx, "meta", "As on the Certificate of Registration (BIR Form 2303). A 2551Q's income-tax rate choice needs self-employed or mixed income for its year.", "fg3")
+        .mt(SPACE[3])
+        .whitespace_normal(),
+    );
+  } else {
+    body.child(
+      Field(cx, `Income type from the date below`, {
+        input: Segmented(cx, "tp-reg-type", INCOME_TYPES.map(([value, label]) => ({ value, label })), r.type, (v, cx) => ui.pickIncomeType(v, cx), {
+          label: "Income type",
+          wrap: true,
+        }),
+      }),
+    );
+    body.child(
+      div()
+        .mt(SPACE[4])
+        .max_w(260)
+        .child(Field(cx, "Took effect on", { input: TextField(cx, r.from, { id: "tp-reg-from", label: "Took effect on (YYYY-MM-DD)", error: Boolean(r.error) }), error: r.error })),
+    );
+    body.child(
+      Text(
+        cx,
+        "meta",
+        `Copy it from the Certificate of Registration (BIR Form 2303), or the date the registration changed. It must cover ${r.year}${r.after ? ` and come after ${shortDate(r.after)}, when the registration on file started` : ""}. The registration on file ends the day before; earlier years keep it.`,
+        "fg3",
+      )
+        .mt(SPACE[3])
+        .whitespace_normal(),
+    );
+    body.child(FormActions(cx, "tp-reg", (_e, cx) => ui.cancelRegistration(cx), (_e, cx) => ui.saveRegistration(cx), "Confirm registration"));
+  }
+  return Disclosure(cx, "tp-sec-registration", {
+    title: "Registration",
+    meta,
+    open: Boolean(ui.open.registration) || Boolean(r),
+    editing: Boolean(r),
+    onToggle: (_e, cx) => ui.toggleSection("registration", cx),
+    onEdit: year ? (_e, cx) => ui.startRegistration({ tin: b.tin, year }, cx) : null,
+    body,
+  });
 }
 
 /**

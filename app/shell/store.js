@@ -17,6 +17,9 @@ import * as bir from "bir";
  */
 const FAILED_READ_RETRY_MS = 2000;
 
+/** The cache key of `savedReturns()`; not a `returns:` key, so the poll keeps it. */
+export const SAVED_RETURNS_KEY = "saved_returns";
+
 /** The text of a host error: "`bir.fn`: text" arrives; the person needs only the text. */
 export function errorText(e) {
   return String(e && e.message ? e.message : e)
@@ -222,6 +225,14 @@ export class Store {
         })
       : null;
   }
+  /**
+   * Whether the tax profile can record `year`'s income-tax election, and if
+   * not what it lacks (`income_tax_election_readiness`); null when the read
+   * failed. Kept until the next write, so confirming a registration re-asks.
+   */
+  electionReadiness(tin, year) {
+    return tin && year ? this.read(`election_ready:${tin}:${year}`, "income_tax_election_readiness", [tin, year], null) : null;
+  }
   deadlines(from, to) {
     return this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], []).filter((d) => this.canSee(d.tin_root));
   }
@@ -254,6 +265,15 @@ export class Store {
   }
   returns(which) {
     return this.read(`returns:${which}`, "list_returns", [which], []).filter((r) => this.canSee(r.tin_root));
+  }
+  /**
+   * The saved (Draft) returns, for Home's Drafts count. `list_returns("saved")`
+   * asks every branch for each tax year, so its key is outside the 30 s
+   * poll's `returns:` sweep: Home reads it once per visit (`main.js`
+   * `enterView` forgets it on entering Home) and again after a write.
+   */
+  savedReturns() {
+    return this.read(SAVED_RETURNS_KEY, "list_returns", ["saved"], []).filter((r) => this.canSee(r.tin_root));
   }
   authState() {
     return this.read("auth_state", "auth_state", [], {

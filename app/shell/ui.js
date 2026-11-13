@@ -9,7 +9,7 @@
 // `id` first; that id is the element id the gpui-agent tooling addresses, so
 // it must not depend on list position or render order.
 
-import { div, svg } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { Input, InputState, Popup, OtpInput, OtpState } from "gpui-base";
 
 // ---------------------------------------------------------------- tokens
@@ -134,6 +134,33 @@ export const BREAK = {
 };
 
 /**
+ * The chrome's keyboard shortcuts, the one table the title-bar tooltips and
+ * the ⌘K list read. Cmd on macOS, Ctrl elsewhere; both are bound. Each chord
+ * has one owner: the native menu binds it (bind_global_keys in
+ * crates/bir-shell/src/app_menu.rs, which shows it on the menu item) and
+ * dispatches `action` to the script, so the script binds none of these.
+ */
+export const SHORTCUTS = {
+  sidebar: { chord: "b", action: "toggle-sidebar" },
+  theme: { chord: "t", action: "toggle-theme" },
+  profile: { chord: "shift-b", action: "toggle-profile" },
+  notifs: { chord: "shift-n", action: "toggle-notifications" },
+};
+
+/** A shortcut as the keyboard shows it: "⌘⇧B" on macOS, "Ctrl Shift B" elsewhere. */
+export function shortcutLabel(id, mac) {
+  const parts = SHORTCUTS[id].chord.split("-");
+  const key = parts.pop().toUpperCase();
+  const shift = parts.includes("shift");
+  return mac ? `⌘${shift ? "⇧" : ""}${key}` : `Ctrl ${shift ? "Shift " : ""}${key}`;
+}
+
+/** A tooltip with its shortcut: "Hide sidebar (⌘B)". */
+export function withShortcut(label, id, mac) {
+  return `${label} (${shortcutLabel(id, mac)})`;
+}
+
+/**
  * The current palette, resolved from the live theme.
  * @returns {Palette}
  */
@@ -194,6 +221,30 @@ export function Text(cx, style, content, color) {
     .font_weight(s.weight)
     .text_color(t[color || "fg"] || t.fg)
     .child(content == null ? "" : String(content));
+}
+
+/**
+ * Make a floating element take the pointer, so a press on it never reaches
+ * what is painted beneath it.
+ *
+ * GPUI hands a mouse press to every hitbox under the pointer, not only the
+ * topmost: capture listeners back to front, then bubble listeners front to
+ * back (the last painted first) until one calls `stop_propagation()`. A
+ * click arms on the bubble-phase press when its element is under the
+ * pointer and fires on the release. A script cannot call `occlude()` (only
+ * gpui-base's Popup, Dialog and Sheet do, inside), so a floating element
+ * stops the press and the release itself: its own children paint after it
+ * and have had theirs; everything painted before it gets nothing.
+ * `on_mouse_down_out` listens in the capture phase and still closes
+ * popovers elsewhere.
+ * @template T
+ * @param {T} el
+ * @returns {T}
+ */
+export function takesPointer(el) {
+  return /** @type {any} */ (el)
+    .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+    .on_mouse_up("left", (_e, cx) => cx.stop_propagation());
 }
 
 /** One-line text that truncates with an ellipsis inside its box. */
@@ -548,7 +599,8 @@ export function StatusChip(cx, status, days) {
 
 /**
  * Segmented: 2 px track padding on `hover`, 24 px segments, 12/500, the
- * selected segment on `raised`. options: [{value, label, icon?}].
+ * selected segment on `raised`. options: [{value, label, icon?}]. `opts.wrap`
+ * lets a long row (twelve month chips) wrap on a narrow window.
  */
 export function Segmented(cx, id, options, selected, onChange, opts = {}) {
   const t = tokens(cx);
@@ -562,6 +614,7 @@ export function Segmented(cx, id, options, selected, onChange, opts = {}) {
     .rounded(RADIUS.row)
     .bg(t.hover)
     .accessibility_label(opts.label || id);
+  if (opts.wrap) track.flex_wrap();
   for (const option of options) {
     const on = option.value === selected;
     const seg = div()
@@ -879,6 +932,301 @@ export function ComboField(cx, state, opts = {}) {
     popup.content(list);
   }
   return popup;
+}
+
+// ---------------------------------------------------------------- multi combo
+
+/**
+ * One choice of a {@link createMultiCombo} filter.
+ * @typedef {Object} MultiComboOption
+ * @property {string} value
+ * @property {string} label
+ * @property {string} [sub]  second line: a TIN, a form's title, "3 returns"
+ * @property {(cx: any) => any} [lead]  builds the leading element (an Avatar, a status dot); called at render
+ */
+
+/**
+ * @typedef {Object} MultiComboProps
+ * @property {string} id  stable element id; its parts are `<id>-trigger`, `<id>-pop`, `<id>-search`,
+ *   `<id>-all`, `<id>-clear` and `<id>-opt-<value>`
+ * @property {string} all  "All forms": the label with every value on
+ * @property {string} nouns  "forms": "3 forms", "No forms"
+ * @property {string} [icon]  the closed trigger's leading icon
+ * @property {string} [placeholder]  the search box's placeholder, "Find a form"
+ * @property {number} [width]  popover width, default 340
+ * @property {() => { options: MultiComboOption[], selected: Set<string> | null }} source
+ *   read on every render of the combo. The page owns `selected`; null means every value,
+ *   including values that appear later (a new taxpayer).
+ * @property {(selected: Set<string> | null, cx: any) => void} onChange
+ *   the new selection, null once every option is checked
+ */
+
+/**
+ * What a page holds for one combo box: the retained entity to mount with
+ * `.child(combo.entity)`, and the calls a page makes from its own handlers.
+ * @typedef {Object} MultiComboHandle
+ * @property {any} entity
+ * @property {() => boolean} isOpen
+ * @property {(cx: any) => boolean} close  closes it; false when it was not open
+ * @property {(cx: any) => void} refresh  redraw after the page changed `selected` itself
+ */
+
+/** The closed summary: "All taxpayers", "Juana Santos", "3 taxpayers", "No taxpayers". */
+export function multiComboLabel(props, options, selected) {
+  const total = options.length;
+  const on = selected === null ? options : options.filter((o) => selected.has(o.value));
+  if (on.length === total) return props.all;
+  if (on.length === 0) return `No ${props.nouns}`;
+  if (on.length === 1) return on[0].label;
+  return `${on.length} ${props.nouns}`;
+}
+
+/** Options whose label and second line hold every typed word. */
+export function multiComboMatches(options, text) {
+  const words = String(text || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return options;
+  return options.filter((o) => {
+    const hay = `${o.label} ${o.sub || ""}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+
+/** The one open combo box, so opening another or Esc closes it. @type {MultiComboHandle | null} */
+let openCombo = null;
+
+/**
+ * A press outside the popover closes it on mouse-down; the click that
+ * follows on the trigger must not open it again.
+ */
+const REOPEN_GUARD_MS = 400;
+
+/**
+ * The multi-select filter: a summary trigger and, while open, a popover
+ * with search, Select all, Clear and a checkbox row per value. Open state
+ * and the search text live here, so opening, closing and typing redraw this
+ * view only; a changed selection goes to the page through `onChange`.
+ */
+export class MultiCombo extends View {
+  init(props) {
+    this.props = props;
+    this.open = false;
+    this.closedAt = 0;
+    this.search = InputState.new({ placeholder: props.placeholder || "Search" });
+    this.search.on("change", (_e, cx) => this.redraw(cx));
+    props.handle.view = this;
+  }
+
+  update(props) {
+    this.props = { ...props, handle: this.props.handle };
+  }
+
+  redraw(cx) {
+    cx.notify(this.props.handle.entity);
+  }
+
+  setOpen(open, cx) {
+    if (open === this.open) return;
+    const handle = this.props.handle;
+    if (open && openCombo && openCombo !== handle) openCombo.close(cx);
+    this.open = open;
+    if (open) openCombo = handle;
+    else {
+      if (openCombo === handle) openCombo = null;
+      if (this.search.value()) this.search.set_value("");
+    }
+    this.redraw(cx);
+  }
+
+  toggleOpen(cx) {
+    if (!this.open && Date.now() - this.closedAt < REOPEN_GUARD_MS) return;
+    this.setOpen(!this.open, cx);
+  }
+
+  outside(cx) {
+    this.closedAt = Date.now();
+    this.setOpen(false, cx);
+  }
+
+  /** Hand the page a selection, null when it holds every option. */
+  choose(next, options, cx) {
+    const all = options.every((o) => next.has(o.value));
+    this.props.onChange(all ? null : next, cx);
+    this.redraw(cx);
+  }
+
+  current(options, selected) {
+    return new Set(selected === null ? options.map((o) => o.value) : selected);
+  }
+
+  toggle(value, cx) {
+    const { options, selected } = this.props.source();
+    const next = this.current(options, selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    this.choose(next, options, cx);
+  }
+
+  /** Select all, or every match while a search is typed. */
+  selectAll(cx) {
+    const { options, selected } = this.props.source();
+    const next = this.current(options, selected);
+    for (const o of multiComboMatches(options, this.search.value())) next.add(o.value);
+    this.choose(next, options, cx);
+  }
+
+  /** Clear, or clear the matches while a search is typed. */
+  clear(cx) {
+    const { options, selected } = this.props.source();
+    const next = this.current(options, selected);
+    for (const o of multiComboMatches(options, this.search.value())) next.delete(o.value);
+    this.choose(next, options, cx);
+  }
+
+  render(cx) {
+    return multiComboElement(cx, this);
+  }
+}
+
+const idPart = (value) => String(value).replace(/[^A-Za-z0-9_-]+/g, "-");
+
+function multiComboElement(cx, combo) {
+  const t = tokens(cx);
+  const p = combo.props;
+  const { options, selected } = p.source();
+  const label = multiComboLabel(p, options, selected);
+  const on = selected === null ? options : options.filter((o) => selected.has(o.value));
+  const narrowed = on.length !== options.length;
+  const lead = on.length === 1 && narrowed && on[0].lead ? on[0].lead(cx) : p.icon ? Icon(cx, p.icon) : null;
+  const trigger = div()
+    .id(`${p.id}-trigger`)
+    .flex()
+    .flex_row()
+    .flex_none()
+    .items_center()
+    .gap(SPACE[2])
+    .h(SIZE.control)
+    .max_w(220)
+    .min_w(0)
+    .pl(10)
+    .pr(SPACE[2])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(narrowed || combo.open ? t.fg3 : t.borderStrong)
+    .bg(t.surface)
+    .cursor_pointer()
+    .hover((s) => s.bg(t.hover))
+    .accessibility_label(`${p.all}: ${label}`)
+    .on_click((_e, cx) => combo.toggleOpen(cx));
+  if (lead) trigger.child(lead);
+  trigger.child(Line(cx, "body", label)).child(Icon(cx, "chevron-down", { size: SIZE.iconSmall, color: "fg3" }));
+  const popup = Popup.new(p.id, trigger).anchor("top_left");
+  if (!combo.open) return popup;
+
+  const panel = div()
+    .id(`${p.id}-pop`)
+    .flex()
+    .flex_col()
+    .gap(2)
+    .mt(SPACE[1])
+    .p(SPACE[1])
+    .w(p.width || 340)
+    .rounded(RADIUS.card)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.raised)
+    .shadow_lg()
+    .accessibility_label(p.all)
+    .on_mouse_down_out((_e, cx) => combo.outside(cx));
+  panel.child(
+    div()
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[1])
+      .p(2)
+      .pb(SPACE[1])
+      .mb(2)
+      .border_b(1)
+      .border_color(t.border)
+      .child(
+        div()
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(6)
+          .flex_1()
+          .min_w(0)
+          .h(SIZE.controlSm)
+          .pl(SPACE[2])
+          .rounded(RADIUS.ctl)
+          .border(1)
+          .border_color(t.borderStrong)
+          .bg(t.surface)
+          .child(Icon(cx, "search", { size: SIZE.iconSmall, color: "fg3" }))
+          .child(
+            TextField(cx, combo.search, { id: `${p.id}-search`, label: p.placeholder || "Search" })
+              .border(0)
+              .h(26)
+              .px(0)
+              .flex_1(),
+          ),
+      )
+      .child(AppButton(cx, `${p.id}-all`, "Select all", { variant: "ghost", size: "sm", onClick: (_e, cx) => combo.selectAll(cx) }))
+      .child(AppButton(cx, `${p.id}-clear`, "Clear", { variant: "ghost", size: "sm", onClick: (_e, cx) => combo.clear(cx) })),
+  );
+  const found = multiComboMatches(options, combo.search.value());
+  const list = div().id(`${p.id}-list`).flex().flex_col().gap(2).max_h(300).overflow_y_scroll();
+  if (!found.length) list.child(div().p(SPACE[2]).child(Text(cx, "meta", "Nothing matches.", "fg3")));
+  for (const o of found) {
+    const checked = selected === null || selected.has(o.value);
+    const rowId = `${p.id}-opt-${idPart(o.value)}`;
+    const row = div()
+      .id(rowId)
+      .flex()
+      .flex_row()
+      .items_center()
+      .gap(SPACE[2])
+      .min_h(o.sub ? 36 : SIZE.controlSm)
+      .flex_shrink(0)
+      .px(SPACE[2])
+      .rounded(RADIUS.ctl)
+      .cursor_pointer()
+      .hover((s) => s.bg(t.selected))
+      .accessibility_label(o.label)
+      .on_click((_e, cx) => combo.toggle(o.value, cx))
+      .child(Checkbox(cx, `${rowId}-box`, checked, (_v, cx) => combo.toggle(o.value, cx), o.label));
+    if (o.lead) row.child(o.lead(cx));
+    row.child(NameCell(cx, o.label, o.sub));
+    list.child(row);
+  }
+  return popup.content(panel.child(list));
+}
+
+/**
+ * Make a multi-select combo box. Call from `init`, `boot` or a handler (a
+ * retained view cannot be made during render), keep the handle, and mount
+ * `handle.entity` where the trigger goes.
+ * @param {any} cx
+ * @param {Omit<MultiComboProps, "handle">} props
+ * @returns {MultiComboHandle}
+ */
+export function createMultiCombo(cx, props) {
+  /** @type {any} */
+  const handle = {
+    view: null,
+    entity: null,
+    isOpen: () => Boolean(handle.view && handle.view.open),
+    close(cx) {
+      if (!handle.isOpen()) return false;
+      handle.view.setOpen(false, cx);
+      return true;
+    },
+    refresh(cx) {
+      cx.notify(handle.entity);
+    },
+  };
+  handle.entity = cx.new(MultiCombo, { ...props, handle });
+  return handle;
 }
 
 // ---------------------------------------------------------------- field
@@ -1283,10 +1631,13 @@ export function SidePanel(cx, id, opts) {
 /**
  * A toast. `opts.action` ({label, onClick}) adds a button (Undo), and
  * `opts.progress` (1 to 0) a bar counting down the time left to use it.
+ * `opts.bottom` lifts it off the window edge (20 px by default), above
+ * something that floats there (the form page's section pill).
  */
 export function Toast(cx, message, icon = "circle-check", opts = {}) {
   const t = tokens(cx);
   const width = 440;
+  const bottom = opts.bottom ?? 20;
   const body = div()
     .flex()
     .flex_row()
@@ -1315,14 +1666,14 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
     return div()
       .id("toast")
       .absolute()
-      .bottom(20)
+      .bottom(bottom)
       .left(0)
       .right(0)
       .flex()
       .flex_row()
       .justify_center()
       .child(
-        div()
+        takesPointer(div().id("toast-card"))
           .flex()
           .flex_col()
           .w(width)
@@ -1337,14 +1688,14 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
   return div()
     .id("toast")
     .absolute()
-    .bottom(20)
+    .bottom(bottom)
     .left(0)
     .right(0)
     .flex()
     .flex_row()
     .justify_center()
     .child(
-      div()
+      takesPointer(div().id("toast-card"))
         .flex()
         .flex_row()
         .items_center()
@@ -1381,12 +1732,16 @@ export function Overlay(cx, id, card, onDismiss, opts = {}) {
     .px(SPACE[4])
     .pb(SPACE[4])
     .bg(t.scrim)
-    .on_mouse_down("left", (_e, cx) => onDismiss(cx));
+    // The press that dismisses stays on the scrim: nothing under it clicks.
+    .on_mouse_down("left", (_e, cx) => {
+      cx.stop_propagation();
+      onDismiss(cx);
+    })
+    .on_mouse_up("left", (_e, cx) => cx.stop_propagation());
   if (opts.top) scrim.pt(64);
   else scrim.justify_center().pt(SPACE[4]);
   return scrim.child(
-    div()
-      .id(`${id}-card`)
+    takesPointer(div().id(`${id}-card`))
       .flex()
       .flex_col()
       .w_full()
@@ -1398,7 +1753,6 @@ export function Overlay(cx, id, card, onDismiss, opts = {}) {
       .bg(t.surface)
       .shadow_xl()
       .overflow_hidden()
-      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .child(card),
   );
 }

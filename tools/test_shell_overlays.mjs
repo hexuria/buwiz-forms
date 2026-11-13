@@ -42,6 +42,20 @@ const one = (tree, id) => {
   return all[0];
 };
 const has = (m, name, ...args) => m.calls.some((c) => c[0] === name && args.every((a, i) => c[i + 1] === a));
+/**
+ * A floating element takes the pointer: its left press and release call
+ * stop_propagation(), so GPUI (whose hitboxes do not occlude; the bubble
+ * phase runs last-painted first until stopped) never arms a click beneath it.
+ */
+function assertTakesPointer(m, what) {
+  for (const name of ["on_mouse_down", "on_mouse_up"]) {
+    const c = m.calls.find((x) => x[0] === name && x[1] === "left");
+    assert.ok(c, `${what} has ${name}`);
+    let stopped = false;
+    c[2]({}, { ...cx, notify() {}, stop_propagation() { stopped = true; } });
+    assert.ok(stopped, `${what}: ${name} stops propagation`);
+  }
+}
 // A node's own styling, without callbacks (they differ per render).
 const style = (m) => JSON.stringify(m.calls.map((c) => c.map((a) => (typeof a === "function" ? "fn" : a))));
 const ids = (m, out = []) => {
@@ -95,8 +109,8 @@ const linked = {
   bir: mock("bir", {}),
   "./shell/home.js": mock("home", { renderHome: stub }),
   "./shell/library.js": mock("library", { renderLibrary: stub }),
-  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub }),
-  "./shell/filings.js": mock("filings", { renderFilings: stub }),
+  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub, CalendarFilters: stubClass }),
+  "./shell/filings.js": mock("filings", { renderFilings: stub, FilingsFilters: stubClass }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
   "./shell/form_page.js": mock("form_page", {
@@ -245,6 +259,12 @@ for (const width of [500, 700]) {
     const box = overlayBox(tree, which);
     const panel = box.parent;
     assert.ok(has(panel, "top", 40) && has(panel, "bottom", 0), `${which} at ${width} sits under the title bar`);
+    // A press on the overlay never reaches the scrim or the page beneath it.
+    assertTakesPointer(panel, `${which} at ${width}`);
+    if (width >= 600) {
+      assertTakesPointer(one(tree, "overlay-scrim"), `the scrim at ${width}`);
+      OPEN[which](app);
+    }
     if (width < 600) {
       assert.equal(byId(tree, "overlay-scrim").length, 0, `no scrim at ${width}`);
       assert.ok(has(panel, "left", 0) && has(panel, "right", 0), `${which} at ${width} spans the window`);
@@ -326,6 +346,22 @@ for (const [which, id, view] of navigations) {
   assert.equal(app.view, "filings");
   assert.ok(app.sidebarOpen && app.panel === "notifs", "docked chrome stays open on a wide window");
   assert.ok(app.readIds.has("return:7:submitted"), "opening a notification reads it");
+}
+
+// The account menu lies over the sidebar's Recent rows: it takes the pointer.
+{
+  const app = makeApp(1000);
+  app.accountMenu = true;
+  assertTakesPointer(one(app.paint(cx), "account-menu"), "the account menu");
+  app.accountMenu = false;
+  // A dialog over a scrim (Overlay: the palette, New return): the card and
+  // the scrim that dismisses both keep their press.
+  app.palette = { input: { value: () => "", on() {} }, index: 0 };
+  app.newReturn = { code: null, period: null, periodOpen: false };
+  app.overlay = "palette";
+  const tree = app.paint(cx);
+  assertTakesPointer(one(tree, "palette-card"), "the palette card");
+  assertTakesPointer(one(tree, "palette"), "the palette's scrim");
 }
 
 console.log("test_shell_overlays: ok");

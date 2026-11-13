@@ -54,7 +54,10 @@ const contextVM = vm.createContext({ console, Map, Set, JSON, Date, window: { vi
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel", "NavRow", "GroupLabel", "Kbd", "StepCircle", "ContextPill", "SidePanel", "DigitCells"]) uiExports[n] = element;
+// form_page.js makes its floating pill take the pointer; the element is unchanged here.
+uiExports.takesPointer = (el) => el;
 uiExports.Text = (_cx, _v, text) => { texts.push(String(text)); return element(); };
+uiExports.withShortcut = (label) => label;
 // A choice's hint is drawn inside its button, under the label.
 uiExports.AppButton = (_cx, id, label, opts = {}) => { buttons.set(id, { label, variant: opts.variant, onClick: opts.onClick, block: opts.block, hint: opts.hint }); if (opts.hint) texts.push(opts.hint); return element(); };
 const overlays = new Map();
@@ -113,16 +116,17 @@ const app = {
   overlay: null, existingOffer: null, fastLane: { drafts: false }, undo: null, undos: [],
   invalidate() {}, toast(text) { toasts.push(text); }, go() {}, startNewReturn() { calls.push(["startNewReturn"]); }, templates: () => [],
   toastUndo(message, undo) { this.undos.push(message); this.undo = undo; },
-  // As main.js openForm: open, then push a Recent entry (the real recentEntry).
+  // As main.js openForm: open, then add a Recent entry (the real addRecent);
+  // a save moves it up (the real bumpRecent).
   recent: [], isMac: true, accountMenu: false, view: "form", session: { kind: "open" },
   isFresh: () => false, openPalette() {}, authState: () => ({}), isAdmin: () => false, isHelpdesk: () => false,
   openForm(opts, cx, keep, then) {
     calls.push(["openForm", opts]);
     this.formUi.open(opts, cx, keep, then);
-    if (!opts.sample) {
-      const entry = recentMod.namespace.recentEntry(opts);
-      this.recent = [entry, ...this.recent.filter((r) => r.key !== entry.key)];
-    }
+    if (!opts.sample) this.recent = recentMod.namespace.addRecent(this.recent, opts);
+  },
+  bumpRecent(opts) {
+    this.recent = recentMod.namespace.bumpRecent(this.recent, opts);
   },
   store: {
     screenIndex: () => [],
@@ -327,8 +331,12 @@ undoAfterEdit(cx);
 await settle();
 assert.equal(ui.state, amendment, "Undo refuses while an edit is not saved");
 assert.match(toasts.at(-1), /Undo would lose edits you have not saved/);
+// A changed and saved return goes to the top of Recent (main.js bumpRecent).
+const savedKey = recentMod.namespace.recentKey(ui.state);
+assert.notEqual(app.recent[0]?.key, savedKey);
 ui.save(cx);
 assert.equal(ui.state.saved, true);
+assert.equal(app.recent[0].key, savedKey, "the saved amendment is on top of Recent");
 undoAfterEdit(cx);
 await settle();
 assert.equal(ui.state, sample, "after the save, Undo returns to the sample");

@@ -32,9 +32,11 @@ import {
   Dropdown,
   TextField,
   DigitCells,
+  withShortcut,
+  takesPointer,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
-import { recentOpenOptions } from "./recent.js";
+import { recentOpenOptions, recentKey } from "./recent.js";
 import { formatTin, shortDate } from "./store.js";
 import { periodOptions, periodLabel, frequencyOf } from "./periods.js";
 
@@ -76,14 +78,63 @@ function captionButtons(cx) {
     );
 }
 
+/** The theme button: the one title-bar control Settings keeps. */
+function themeButton(cx, app) {
+  return IconButton(cx, "tb-theme", themeIcon(app.themePref), {
+    tooltip: withShortcut(`Theme: ${app.themePref}, click to change`, "theme", app.isMac),
+    onClick: (_e, cx) => app.cycleTheme(cx),
+  });
+}
+
+/**
+ * Settings covers the sidebar and the right panel, so its title bar keeps
+ * only the window buttons, Back to the app and the theme button.
+ */
+function renderSettingsTitleBar(cx, app) {
+  const left = div().flex().flex_row().flex_1().flex_basis(0).min_w(0).items_center().gap(SPACE[1]).pl(10);
+  if (app.isMac) left.child(div().w(52 + 14).flex_none()); // traffic lights (system-drawn)
+  left.child(
+    IconButton(cx, "tb-back", "arrow-left", {
+      tooltip: "Back to app",
+      onClick: (_e, cx) => app.closeSettings(cx),
+    }),
+  );
+  const right = div()
+    .flex()
+    .flex_row()
+    .flex_1()
+    .flex_basis(0)
+    .min_w(0)
+    .justify_end()
+    .items_center()
+    .gap(SPACE[1])
+    .h_full()
+    .when(app.isMac, (el) => el.pr(10))
+    .child(themeButton(cx, app));
+  if (!app.isMac && !app.isLinux) right.child(captionButtons(cx));
+  return div()
+    .id("title-bar")
+    .flex()
+    .flex_row()
+    .flex_none()
+    .items_center()
+    .w_full()
+    .h(SIZE.titleBar)
+    .window_control_area("drag")
+    .child(left)
+    .child(right);
+}
+
 /** Title bar: left controls, the context pill centred, notifications + theme right. */
 export function renderTitleBar(cx, app, L) {
+  if (app.view === "settings") return renderSettingsTitleBar(cx, app);
   const compact = L.vp.width < BREAK.compactPill;
+  const mac = app.isMac;
   const left = div().flex().flex_row().flex_1().flex_basis(0).min_w(0).items_center().gap(SPACE[1]).pl(10);
   if (app.isMac) left.child(div().w(52 + 14).flex_none()); // traffic lights (system-drawn)
   left.child(
     IconButton(cx, "tb-sidebar", "panel-left", {
-      tooltip: app.sidebarOpen ? "Hide sidebar" : "Show sidebar",
+      tooltip: withShortcut(app.sidebarOpen ? "Hide sidebar" : "Show sidebar", "sidebar", mac),
       pressed: false,
       onClick: (_e, cx) => app.toggleSidebar(cx),
     }),
@@ -137,23 +188,19 @@ export function renderTitleBar(cx, app, L) {
     .when(app.isMac, (el) => el.pr(10))
     .child(
       IconButton(cx, "tb-notifications", "bell", {
-        tooltip: "Notifications",
+        tooltip: withShortcut("Notifications", "notifs", mac),
         pressed: app.panel === "notifs",
         dot: unread,
         onClick: (_e, cx) => app.togglePanel("notifs", cx),
       }),
     )
-    .child(
-      IconButton(cx, "tb-theme", themeIcon(app.themePref), {
-        tooltip: `Theme: ${app.themePref} (click to change)`,
-        onClick: (_e, cx) => app.cycleTheme(cx),
-      }),
-    )
+    .child(themeButton(cx, app))
     .child(
       IconButton(cx, "tb-panel", "panel-right", {
+        // The panel it would hide or show, with that panel's own key.
         tooltip: app.panel
-          ? `Hide ${app.panel === "notifs" ? "notifications" : "tax profile"}`
-          : `Show ${app.lastPanel === "notifs" ? "notifications" : "tax profile"}`,
+          ? withShortcut(`Hide ${app.panel === "notifs" ? "notifications" : "tax profile"}`, app.panel, mac)
+          : withShortcut(`Show ${app.lastPanel === "notifs" ? "notifications" : "tax profile"}`, app.lastPanel, mac),
         pressed: Boolean(app.panel),
         onClick: (_e, cx) => app.toggleRightPanel(cx),
       }),
@@ -271,12 +318,16 @@ export function renderSidebar(cx, app, full = false) {
   const recent = app.recent.filter((r) => app.branchFor(r.tin));
   if (app.prefs.showRecent && !app.isFresh() && recent.length) {
     nav.child(GroupLabel(cx, "Recent"));
+    // The return on screen is marked where it is; opening it never moves it.
+    const form = app.view === "form" ? app.formUi?.state : null;
+    const openKey = form && !form.sample && !form.filedOriginal ? recentKey(form) : null;
     recent.forEach((r) => {
       const name = (app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9)) || {}).name || "";
       const label = `${r.code} ${periodLabel(frequencyOf(app.store.screenIndex(), r.code), r.year, r.period, true)} · ${name}`;
       nav.child(
         NavRow(cx, `recent-${String(r.key).replace(/[^A-Za-z0-9]/g, "-")}`, "file-text", label, {
           tooltip: label,
+          current: r.key === openKey,
           onClick: (_e, cx) => app.openForm(recentOpenOptions(r), cx),
         }),
       );
@@ -358,8 +409,9 @@ function accountRow(cx, app) {
   if (app.accountMenu) {
     // Paints above everything in the sidebar footer, Settings included.
     wrap.child(
-      div()
-        .id("account-menu")
+      // Its rows lie over the sidebar's Recent rows: a press on one must not
+      // also open the return beneath it (takesPointer).
+      takesPointer(div().id("account-menu"))
         .absolute()
         .bottom(56 + 4)
         .left(0)

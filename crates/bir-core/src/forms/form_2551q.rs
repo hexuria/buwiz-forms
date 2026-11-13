@@ -3086,6 +3086,45 @@ mod tests {
         }));
     }
 
+    /// A Draft keeps the taxpayer type it was built with (only a non-Draft
+    /// return is marked `profile_snapshot_stale`), so a later-quarter draft
+    /// built for an individual still asks for the election after the profile
+    /// became a corporation's. Bringing it up to date with the profile (the
+    /// page's `screen_form_use_profile`, which calls `sync_with_profile`)
+    /// makes it the corporation's: the election and Item 13 messages go, and
+    /// the sync itself marks Item 13 Not applicable.
+    #[test]
+    fn a_draft_built_for_an_individual_drops_the_election_once_synced_to_a_corporation() {
+        let individual = test_profile();
+        let mut draft = Form2551QDraft::new_from_profile(&individual, 2026, 3);
+        let asks = |draft: &Form2551QDraft| {
+            draft
+                .validate()
+                .into_iter()
+                .filter(|(field, _)| {
+                    field == "annual_income_tax_election" || field == "item_13_election"
+                })
+                .count()
+        };
+        assert_eq!(draft.taxpayer_type, Some(TaxpayerType::Individual));
+        assert!(
+            asks(&draft) > 0,
+            "precondition: the individual's draft asks"
+        );
+
+        let mut corporation = test_profile();
+        corporation.taxpayer_type = TaxpayerType::Corporation;
+        assert!(
+            !draft.profile_snapshot_stale,
+            "a Draft is not flagged when the profile moves on"
+        );
+
+        draft.sync_with_profile(&corporation);
+        assert_eq!(draft.taxpayer_type, Some(TaxpayerType::Corporation));
+        assert_eq!(draft.item_13_election, Item13Election::NotApplicable);
+        assert_eq!(asks(&draft), 0, "{:?}", draft.validate());
+    }
+
     #[test]
     fn profile_sync_marks_later_quarter_item_13_not_applicable_after_recorded_election() {
         let mut profile = test_profile();

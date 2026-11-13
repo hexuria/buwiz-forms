@@ -80,11 +80,17 @@ shell-ui-test:
     node tools/test_font_advances.mjs
     node --experimental-vm-modules tools/test_form_radio_untick.mjs
     node --experimental-vm-modules tools/test_form_decisions_round_3.mjs
+    node --experimental-vm-modules tools/test_calendar_filings_filters.mjs
+    node --experimental-vm-modules tools/test_form_2551q_election.mjs
+    node --experimental-vm-modules tools/test_form_pill.mjs
     node --experimental-vm-modules tools/test_home_calendar_as_needed.mjs
+    node --experimental-vm-modules tools/test_home_dashboard.mjs
     node --experimental-vm-modules tools/test_taxpayer_export.mjs
     node --experimental-vm-modules tools/test_settings_window.mjs
     node --experimental-vm-modules tools/test_shell_chrome.mjs
     node --experimental-vm-modules tools/test_shell_overlays.mjs
+    node --experimental-vm-modules tools/test_recent_order.mjs
+    node --experimental-vm-modules tools/test_shell_keys.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check

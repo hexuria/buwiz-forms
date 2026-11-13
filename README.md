@@ -224,7 +224,7 @@ in your default browser. Export what you want to keep.
 and receipts. It closes when you change page.
 
 **Theme.** Switch between light and dark with the theme button in the top bar,
-or Cmd/Ctrl+Shift+T.
+or Cmd/Ctrl+T.
 
 **Dev Mode (debug builds only).** Debug builds have a Dev Mode panel with
 switches for submission mode, test SFTP server, showing uncertified forms and a
