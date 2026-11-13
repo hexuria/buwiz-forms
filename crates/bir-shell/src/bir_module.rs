@@ -49,8 +49,7 @@ fn open_database_slot() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, Ho
             Some(handle) if RELEASED.get() => {
                 let (database, _path, _recovered) =
                     db::open_live_database().map_err(|error| HostError::new(error.to_string()))?;
-                *handle
-                    .lock()
+                *bir_core::lock_timing::lock(handle)
                     .map_err(|_| HostError::new("database lock poisoned"))? = database;
                 RELEASED.set(false);
             }
@@ -170,7 +169,7 @@ fn release_database() {
 #[cfg(not(feature = "mas_build"))]
 pub(crate) fn stored_global_hotkey() -> Option<String> {
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
-    let db = handle.lock().ok()?;
+    let db = bir_core::lock_timing::lock(&handle).ok()?;
     db.get_setting("global_hotkey_key")
         .ok()
         .flatten()
@@ -239,6 +238,10 @@ pub(crate) fn wake_submission_worker() {
 
 /// One connection for the process — the same owner-lock discipline as painted
 /// `bir` (a second app instance cannot take it while we hold it).
+///
+/// The submission worker shares this connection's lock, so a call here can
+/// wait on it; a wait or hold past 250 ms is logged with the caller's line.
+#[track_caller]
 pub(crate) fn with_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
@@ -248,12 +251,12 @@ pub(crate) fn with_database<R>(
 
 /// Database access for the Buwiz account itself: the server URL and nothing
 /// that names a taxpayer. Allowed while the filing UI is locked.
+#[track_caller]
 pub(crate) fn with_account_database<R>(
     f: impl FnOnce(&Database) -> Result<R, HostError>,
 ) -> Result<R, HostError> {
     let handle = open_database_slot()?;
-    let guard = handle
-        .lock()
+    let guard = bir_core::lock_timing::lock(&handle)
         .map_err(|_| HostError::new("database lock poisoned"))?;
     f(&guard)
 }
@@ -326,7 +329,7 @@ fn computer_snapshot() -> (Option<String>, u32) {
     let Some(handle) = DATABASE.with(|slot| slot.borrow().clone()) else {
         return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
     };
-    let Ok(db) = handle.lock() else {
+    let Ok(db) = bir_core::lock_timing::lock(&handle) else {
         return (None, bir_core::log_files::DEFAULT_RETENTION_DAYS);
     };
     let hotkey = db
@@ -2104,8 +2107,7 @@ fn reset_database() -> Result<(), HostError> {
             return Ok(());
         };
         let placeholder = Database::open_ephemeral().map_err(db_error)?;
-        *handle
-            .lock()
+        *bir_core::lock_timing::lock(handle)
             .map_err(|_| HostError::new("database lock poisoned"))? = placeholder;
         RELEASED.set(true);
         Ok(())
