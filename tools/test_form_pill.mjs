@@ -125,6 +125,26 @@ const stubClass = class {
     return new Proxy(this, { get: (o, k) => (k in o ? o[k] : () => null) });
   }
 };
+// The Calendar and Filings filter bars as main.js uses them: Esc closes an
+// open combo first, and Filings takes a Home tile's preset once.
+class CalendarFilters {
+  constructor() {
+    this.open = false;
+  }
+  dismiss(cx) {
+    if (!this.open) return false;
+    this.open = false;
+    cx.notify();
+    return true;
+  }
+}
+class FilingsFilters extends CalendarFilters {
+  applyPreset(app) {
+    if (!app.filingsPreset) return;
+    this.preset = app.filingsPreset;
+    app.filingsPreset = null;
+  }
+}
 const InputState = { new({ value = "" } = {}) { let text = value; return { value: () => text, set_value: (v) => { text = v; }, on() {}, release() { return true; } }; } };
 const real = {
   "./shell/store.js": source("app/shell/store.js"),
@@ -143,8 +163,8 @@ const linked = {
   bir: mock("bir", {}),
   "./shell/home.js": mock("home", { renderHome: stub }),
   "./shell/library.js": mock("library", { renderLibrary: stub }),
-  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub }),
-  "./shell/filings.js": mock("filings", { renderFilings: stub }),
+  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub, CalendarFilters }),
+  "./shell/filings.js": mock("filings", { renderFilings: stub, FilingsFilters }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
   "./shell/gallery.js": mock("gallery", { renderGallery: stub }),
@@ -228,6 +248,7 @@ function makeApp(width) {
     session: { kind: "open" }, selRoot: "000555666", selCode: "00000", selYear: 2026, wasNarrow: width < 860,
     focusRoot: { focus() {} }, taxpayerUi: { panelEdit: null, reset() {}, leaveView() {}, leaveYear() {} },
     security: { leave() {} }, setupChange: { leave() {} },
+    calendarUi: new CalendarFilters(), filingsUi: new FilingsFilters(),
     invalidate() { invalidations += 1; rootDirty = true; },
   });
   app.formUi = new FormPageActions(app);
