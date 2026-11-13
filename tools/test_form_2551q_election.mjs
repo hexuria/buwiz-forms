@@ -151,17 +151,23 @@ const TIN = "00012345300000";
 const ELECTION = "This later-quarter Section 116 return needs the taxpayer profile's recorded annual income-tax election; save the election for this taxable year before filing";
 const ITEM13_BLANK = "Choose the applicable Item 13 income-tax-rate election or explicitly select Not applicable";
 let profileElection = null;
-let draft = { id: 9, taxable_year: 2026, quarter: 3, item_13_election: "unanswered", annual_income_tax_election: "unrecorded" };
+let draft = { id: 9, taxable_year: 2026, quarter: 3, taxpayer_type: "Individual", item_13_election: "unanswered", annual_income_tax_election: "unrecorded" };
+// What sync_with_profile makes of the draft: the profile's taxpayer type, and
+// (bir-core) Item 13 Not applicable for a non-individual unless `syncAnswers` is off.
+let profileType = "Individual";
+let syncAnswers = true;
 let values = { [R1]: "false", [R2]: "false", [K("txt16")]: "0.00" };
 const errors = () => {
   const out = [];
   // errors_json: bir-core's ERROR_ALIASES names Item 13's radios for this field.
-  if (draft.annual_income_tax_election === "unrecorded") out.push({ field: "annual_income_tax_election", keys: [R1, R2], message: ELECTION });
+  // later_period_requires_recorded_annual_election: an individual's later quarter.
+  if (draft.taxpayer_type === "Individual" && draft.annual_income_tax_election === "unrecorded") out.push({ field: "annual_income_tax_election", keys: [R1, R2], message: ELECTION });
   if (draft.item_13_election === "unanswered") out.push({ field: "item_13_election", keys: [R1, R2], message: ITEM13_BLANK });
   return out;
 };
 const calls = [];
 const toasts = [];
+let refuseElection = null;
 const bumped = [];
 // bir-core income_tax_election_readiness: the profile can take 2026's election.
 const READY = { taxable_year: 2026, gap: "ready", taxpayer_type: "Individual", classification: "SelfEmployed", since: "2026-01-01", new_registration_after: "2026-01-01", issues: [] };
@@ -179,7 +185,8 @@ const store = {
     if (name === "screen_form_open") return Promise.resolve({ draft, status: "Draft", editable: true, values: { ...values }, locks: {}, errors: errors() });
     if (name === "screen_form_use_profile") {
       // sync_with_profile: the profile's election; Item 13 stays for the filer.
-      draft = { ...args[3], annual_income_tax_election: profileElection, item_13_election: "unanswered" };
+      const individual = profileType === "Individual";
+      draft = { ...args[3], taxpayer_type: profileType, annual_income_tax_election: individual ? profileElection : "unrecorded", item_13_election: individual || !syncAnswers ? "unanswered" : "not_applicable" };
       return { draft, values: { ...values }, options: {}, rejected: {} };
     }
     if (name === "screen_form_fill") {
@@ -193,6 +200,7 @@ const store = {
   write(name, ...args) {
     calls.push([name, ...args]);
     if (name === "record_income_tax_election") {
+      if (refuseElection) throw Error(refuseElection);
       profileElection = args[2];
       return true;
     }
@@ -333,12 +341,12 @@ assert.ok(texts(one(frame(), "fp-election")).includes("Which income-tax rate did
 
 // A refusal that still comes (the profile changed in between): plain words,
 // and the card falls back to what the profile lacks.
-store.write = (name) => {
-  if (name === "record_income_tax_election") {
-    readiness = { ...READY, gap: "no_confirmed_registration", classification: null };
-    throw Error("Other error: The tax profile has no confirmed self-employed or mixed-income registration for 2026");
-  }
-  throw Error(name);
+refuseElection = "Other error: The tax profile has no confirmed self-employed or mixed-income registration for 2026";
+readiness = { ...READY };
+const realElectionWrite = store.write;
+store.write = (name, ...args) => {
+  if (name === "record_income_tax_election") readiness = { ...READY, gap: "no_confirmed_registration", classification: null };
+  return realElectionWrite.call(store, name, ...args);
 };
 click(frame(), "fp-election-graduated");
 frame();
@@ -349,4 +357,70 @@ assert.ok(toasts.at(-1).startsWith("The tax profile has no confirmed self-employ
 assert.equal(byId(frame(), "fp-election").length, 1, "the card stays");
 assert.equal(byId(frame(), "fp-election-save").length, 0, "and stops offering the Save");
 assert.equal(byId(frame(), "fp-election-register").length, 1, "it offers the registration instead");
-console.log("PASS: the 2551Q election is asked and answered at Item 13, never offered when the profile would refuse it, and clears in place.");
+store.write = realElectionWrite;
+refuseElection = null;
+
+// ---- a return built while the profile said individual; the profile is now a
+// corporation's. The draft's snapshot (taxpayer_type) still says individual,
+// so validation asks for the rate, and the profile, rightly, cannot take one.
+// The card offers the way out: bring the return up to date with the profile.
+profileType = "Corporation";
+readiness = { ...READY, gap: "not_individual", taxpayer_type: "Corporation", classification: null, since: "2026-01-01" };
+draft = { ...draft, taxpayer_type: "Individual", annual_income_tax_election: "unrecorded", item_13_election: "unanswered" };
+s.draft = { ...s.draft, ...draft };
+app.formUi.validate(cx);
+await settle();
+frame();
+let card = texts(one(frame(), "fp-election")).join(" ");
+assert.ok(card.includes("This return still treats Juana Santos as an individual, but the tax profile registers Juana Santos as a corporation in 2026."), card);
+assert.ok(!/Other error/.test(card));
+assert.equal(byId(frame(), "fp-election-save").length + byId(frame(), "fp-election-register").length, 0, "no rate, no registration: neither can help");
+calls.length = 0;
+traces.length = 0;
+click(frame(), "fp-election-follow");
+await settle();
+frame();
+const followed = calls.map((c) => c[0]);
+const took = followed.indexOf("screen_form_use_profile");
+assert.ok(took >= 0, `the return takes the profile: ${followed}`);
+assert.ok(followed.indexOf("screen_form_save") > took && followed.lastIndexOf("screen_form_validate") > took, `then it is saved and checked: ${followed}`);
+assert.ok(!followed.includes("record_income_tax_election"), "nothing goes on the profile");
+assert.ok(!calls.some((c) => c[0] === "screen_form_fill" && (R1 in c[3] || R2 in c[3])), "Item 13 is not ticked by the page");
+assert.equal(draft.taxpayer_type, "Corporation");
+assert.equal(s.messages[ITEM13], undefined, "the election and Item 13 messages are gone");
+assert.equal(byId(frame(), "fp-election").length, 0, "and the card with them");
+assert.equal(toasts.at(-1), "This return now follows Juana Santos's tax profile.");
+
+// The same, where the sync leaves Item 13 unanswered: the toast says what it needs.
+syncAnswers = false;
+s.profileRefreshed = false;
+draft = { ...draft, taxpayer_type: "Individual", annual_income_tax_election: "unrecorded", item_13_election: "unanswered" };
+s.draft = { ...s.draft, ...draft };
+app.formUi.validate(cx);
+await settle();
+frame();
+click(frame(), "fp-election-follow");
+await settle();
+frame();
+assert.equal(toasts.at(-1), "This return now follows Juana Santos's tax profile. Item 13 still needs an answer: choose Not applicable.");
+assert.ok(s.messages[ITEM13].includes(ITEM13_BLANK) && !s.messages[ITEM13].includes(ELECTION), "only Item 13's own message is left");
+assert.equal(byId(frame(), "fp-election").length, 0);
+syncAnswers = true;
+
+// Updated, and the quarter still resolves to an individual: no loop, the card
+// says the profile's dates disagree.
+profileType = "Individual";
+profileElection = "unrecorded";
+s.profileRefreshed = false;
+draft = { ...draft, taxpayer_type: "Individual", annual_income_tax_election: "unrecorded", item_13_election: "unanswered" };
+s.draft = { ...s.draft, ...draft };
+app.formUi.validate(cx);
+await settle();
+frame();
+click(frame(), "fp-election-follow");
+await settle();
+frame();
+card = texts(one(frame(), "fp-election")).join(" ");
+assert.ok(card.includes("still an individual's registration"), card);
+assert.equal(byId(frame(), "fp-election-follow").length, 0, "the update is not offered again");
+console.log("PASS: the 2551Q election is asked and answered at Item 13, never offered when the profile would refuse it, a return the profile has moved past is brought up to date, and it clears in place.");

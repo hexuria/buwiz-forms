@@ -668,7 +668,7 @@ export class FormPageActions {
       it.from ? s.values[it.from.k] ?? "" : null,
       // Item 13's question and its answer, the "Stop here" switch and a template step's mark.
       s.electionAt === id || s.electionSavedAt === id
-        ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || "", s.electionAt === id ? this.electionReadiness() : null]
+        ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || "", s.electionAt === id ? [this.electionReadiness(), s.draft?.taxpayer_type ?? null, Boolean(s.profileRefreshed)] : null]
         : null,
       s.stops ? [s.guided && s.stops.markable.has(id), s.stops.marked.has(id)] : null,
       s.stopAt === id,
@@ -2024,6 +2024,47 @@ export class FormPageActions {
     this.app.taxpayerUi?.startRegistration?.({ tin: s.tin, year: this.taxYear(), fromForm: true }, cx);
   }
 
+  /**
+   * Item 13's card when the return still treats the taxpayer as an
+   * individual and the tax profile no longer does: bring the return up to
+   * date with the profile (`screen_form_use_profile`, which re-syncs a 2551Q
+   * with `sync_with_profile`, the path "Use profile values" takes), then save
+   * and check it again. The sync sets Item 13 itself (Not applicable for a
+   * non-individual); nothing is ticked here. If Item 13 is still unanswered
+   * afterwards, the toast says to choose Not applicable.
+   */
+  followProfile(cx) {
+    const s = this.state;
+    if (!s?.draft || !s.editable) return;
+    this.flush(cx);
+    const before = s.values;
+    try {
+      const r = this.app.store.call("screen_form_use_profile", s.code, s.year, s.period, s.draft);
+      s.draft = r.draft;
+      s.values = this.shown(r.values);
+      s.options = r.options || s.options;
+      if (r.pools) s.poolTexts = r.pools;
+      if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+    } catch (e) {
+      return this.app.toast(plainRefusal(message(e)), cx, "triangle-alert");
+    }
+    s.profileDiffers = [];
+    s.profileRefreshed = true;
+    s.dirty = true;
+    this.syncComputed();
+    this.syncChanged(before, {});
+    const name = this.taxpayerName();
+    const item13 = s.draft.item_13_election === "unanswered" ? " Item 13 still needs an answer: choose Not applicable." : "";
+    const done = `This return now follows ${name}'s tax profile.${item13}`;
+    if (s.sample || (s.amends && !s.saved)) {
+      this.flush(cx);
+    } else {
+      this.save(cx);
+    }
+    this.refreshRows();
+    this.app.toast(done, cx, "circle-check");
+  }
+
   /** The form page is shown again: what another page changed (a registration) reaches the rows. */
   reenter() {
     this.refreshRows();
@@ -3021,6 +3062,21 @@ function electionBlockedCard(cx, ui, ready) {
   } else if (ready.gap === "timeline_needs_review") {
     title = `${name}'s tax profile has registration dates for ${year} that need review.`;
     body = `${(ready.issues || [])[0] || "Two confirmed registrations overlap or one has no start date"}. A new registration ${cor} replaces them from its date.`;
+  } else if (ui.state.draft?.taxpayer_type === "Individual" && !ui.state.profileRefreshed) {
+    // The return was built while the profile said individual; a Draft keeps
+    // that snapshot until it is brought up to date (bir-core marks only a
+    // non-Draft return stale). Only an individual's later quarter asks for
+    // the rate, so updating the return from the profile ends the question.
+    const type = ready.taxpayer_type ? ready.taxpayer_type.toLowerCase() : "non-individual";
+    title = `This return still treats ${name} as an individual, but the tax profile registers ${name} as a ${type} in ${year}.`;
+    body = `Only individuals choose this income-tax rate. Update this return from the tax profile: it then follows the ${type} registration, and the rate question goes away.`;
+    action = { id: "fp-election-follow", label: "Update from tax profile", run: (cx) => ui.followProfile(cx) };
+  } else if (ui.state.draft?.taxpayer_type === "Individual") {
+    // Updated, and the return's quarter still resolves to an individual's
+    // registration: the dates on the profile disagree with the year's latest.
+    title = `This quarter of ${name}'s tax profile is still an individual's registration, while ${year}'s latest is a ${ready.taxpayer_type ? ready.taxpayer_type.toLowerCase() : "non-individual"}'s.`;
+    body = "Check the registration dates on the tax profile. Until they agree, this return asks for the income-tax rate and the profile cannot record one.";
+    action = null;
   } else {
     title = `${name}'s tax profile is registered as ${ready.taxpayer_type ? `a ${ready.taxpayer_type}` : "a non-individual"} in ${year}.`;
     body = "Only individuals choose this income-tax rate. If that registration is wrong, correct it on the tax profile.";
