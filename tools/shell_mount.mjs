@@ -91,6 +91,26 @@ const InputState = {
   },
 };
 class View {}
+// The Calendar and Filings filter bars as main.js uses them: Esc closes an
+// open combo first, and Filings takes a Home tile's preset once.
+class CalendarFilters {
+  constructor() {
+    this.open = false;
+  }
+  dismiss(cx) {
+    if (!this.open) return false;
+    this.open = false;
+    cx.notify();
+    return true;
+  }
+}
+class FilingsFilters extends CalendarFilters {
+  applyPreset(app) {
+    if (!app.filingsPreset) return;
+    this.preset = app.filingsPreset;
+    app.filingsPreset = null;
+  }
+}
 
 const real = {
   "./shell/store.js": source("app/shell/store.js"),
@@ -108,8 +128,8 @@ const linked = {
   bir: mock("bir", {}),
   "./shell/home.js": mock("home", { renderHome: stub }),
   "./shell/library.js": mock("library", { renderLibrary: stub }),
-  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub }),
-  "./shell/filings.js": mock("filings", { renderFilings: stub }),
+  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub, CalendarFilters }),
+  "./shell/filings.js": mock("filings", { renderFilings: stub, FilingsFilters }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
   "./shell/form_page.js": mock("form_page", {
@@ -172,6 +192,11 @@ const store = {
   templates: () => [],
   screenIndex: () => [{ c: "1601C", freq: "Monthly" }, { c: "2551Q", freq: "Quarterly" }],
   logScreen() {},
+  // Cached reads main.js drops (Home's Drafts count on each visit).
+  forgotten: [],
+  forget(key) {
+    this.forgotten.push(key);
+  },
   call() {},
   write() {},
 };
@@ -224,6 +249,8 @@ export function makeApp({ width = 1000, os = "windows", view = "home", recentLis
     },
     security: { leave() {} },
     setupChange: { leave() {} },
+    calendarUi: new CalendarFilters(),
+    filingsUi: new FilingsFilters(),
   });
   return app;
 }
