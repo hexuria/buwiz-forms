@@ -661,6 +661,34 @@ impl TaxpayerProfile {
             .map(|history| history.election.clone())
     }
 
+    /// Record the income-tax election for one taxable year: that year's
+    /// entries (one, or a conflicting pair) give way to this one, and every
+    /// other year is kept. A graduated answer over a year already recorded as
+    /// graduated keeps the recorded entry, so a deduction method a later
+    /// return refined (OSD or itemized) is not lost.
+    pub fn set_income_tax_election(&mut self, year: u16, election: IncomeTaxElection) {
+        let same = |recorded: &IncomeTaxElection| match election {
+            IncomeTaxElection::EightPercent => *recorded == IncomeTaxElection::EightPercent,
+            _ => *recorded != IncomeTaxElection::EightPercent,
+        };
+        let mut that_year = self
+            .tax_elections
+            .iter()
+            .filter(|history| history.taxable_year == year)
+            .peekable();
+        if that_year.peek().is_some() && that_year.all(|history| same(&history.election)) {
+            return;
+        }
+        self.tax_elections
+            .retain(|history| history.taxable_year != year);
+        self.tax_elections.push(TaxElectionHistory {
+            taxable_year: year,
+            election,
+            elected_at: chrono::Utc::now().naive_utc(),
+            source_form: "profile_manager".to_string(),
+        });
+    }
+
     /// Whether the taxpayer may manage an annual income-tax election
     /// (8% flat rate, graduated + OSD, …) for the given taxable year.
     ///
@@ -1623,6 +1651,55 @@ mod tests {
         assert!(!profile.eligible_for_income_tax_election_in_year(2026));
         // Years before any confirmed segment fail closed.
         assert!(!profile.eligible_for_income_tax_election_in_year(2019));
+    }
+
+    #[test]
+    fn setting_a_years_election_replaces_only_that_year() {
+        let mut profile = test_profile();
+        let entry = |year, election| TaxElectionHistory {
+            taxable_year: year,
+            election,
+            elected_at: chrono::NaiveDateTime::default(),
+            source_form: "test_fixture".into(),
+        };
+        profile.tax_elections = vec![
+            entry(2025, IncomeTaxElection::GraduatedOsd),
+            entry(2026, IncomeTaxElection::EightPercent),
+            entry(2026, IncomeTaxElection::GraduatedItemized),
+        ];
+
+        // A conflicting pair gives way to the one answer.
+        profile.set_income_tax_election(2026, IncomeTaxElection::GraduatedUnspecified);
+        assert_eq!(
+            profile.income_tax_election_for_year(2026),
+            Some(IncomeTaxElection::GraduatedUnspecified)
+        );
+        assert_eq!(
+            profile
+                .tax_elections
+                .iter()
+                .filter(|h| h.taxable_year == 2026)
+                .count(),
+            1
+        );
+        // Other years are kept.
+        assert_eq!(
+            profile.income_tax_election_for_year(2025),
+            Some(IncomeTaxElection::GraduatedOsd)
+        );
+
+        // Graduated over a recorded graduated year keeps its deduction method.
+        profile.set_income_tax_election(2025, IncomeTaxElection::GraduatedUnspecified);
+        assert_eq!(
+            profile.income_tax_election_for_year(2025),
+            Some(IncomeTaxElection::GraduatedOsd)
+        );
+        // A new year and a changed answer are written.
+        profile.set_income_tax_election(2024, IncomeTaxElection::EightPercent);
+        profile.set_income_tax_election(2025, IncomeTaxElection::EightPercent);
+        assert!(profile.has_8_percent_election(2024));
+        assert!(profile.has_8_percent_election(2025));
+        assert_eq!(profile.tax_elections.len(), 3);
     }
 
     #[test]
