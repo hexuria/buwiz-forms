@@ -855,6 +855,10 @@ class BirApp extends View {
     if (!this.branchFor(opts.tin)) {
       return this.toast("That return belongs to a taxpayer that is not in this database.", cx, "triangle-alert");
     }
+    // The title-bar pill names whose return this is (the form page has no
+    // taxpayer card): opening a return selects its taxpayer and branch.
+    const owner = this.branchFor(opts.tin);
+    if (this.branch()?.tin !== owner.tin) this.selectTaxpayer(String(opts.tin).slice(0, 9), cx, { quiet: true, code: owner.code });
     this.overlay = null;
     this.formUi.open(opts, cx, keep, then);
     // A library sample is no return, so it is not a recent one.
