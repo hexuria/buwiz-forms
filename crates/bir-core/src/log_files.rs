@@ -134,12 +134,13 @@ pub fn retention_days(db: &Database) -> u32 {
         .unwrap_or(DEFAULT_RETENTION_DAYS)
 }
 
-/// Adopt the legacy file, then prune to the stored retention. One call at
-/// startup and one a few times a day is enough; rotation itself is the
-/// appender's job.
-pub fn maintain(dir: &Path, db: &Database) -> Vec<PathBuf> {
+/// Adopt the legacy file, then prune to `retention_days` (read it with
+/// [`retention_days`], then release the database before calling: this is
+/// file work). One call at startup and one a few times a day is enough;
+/// rotation itself is the appender's job.
+pub fn maintain(dir: &Path, retention_days: u32) -> Vec<PathBuf> {
     let _ = adopt_legacy_log(dir);
-    prune_rotated_logs(dir, retention_days(db), chrono::Utc::now().date_naive())
+    prune_rotated_logs(dir, retention_days, chrono::Utc::now().date_naive())
 }
 
 /// Re-check retention every six hours so a long-running process crosses
@@ -154,8 +155,11 @@ pub fn spawn_retention(db: std::sync::Arc<std::sync::Mutex<Database>>) {
             .spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
-                    if let Ok(guard) = lock_timing::lock(&db) {
-                        let _ = maintain(&log_dir(), &guard);
+                    let days = lock_timing::lock(&db)
+                        .ok()
+                        .map(|guard| retention_days(&guard));
+                    if let Some(days) = days {
+                        let _ = maintain(&log_dir(), days);
                     }
                 }
             });

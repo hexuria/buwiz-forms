@@ -196,8 +196,11 @@ pub(crate) fn open_database_at_launch() {
     match open_database_slot() {
         Ok(handle) => {
             start_submission_worker(handle.clone());
-            if let Ok(guard) = handle.lock() {
-                let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), &guard);
+            let days = bir_core::lock_timing::lock(&handle)
+                .ok()
+                .map(|guard| bir_core::log_files::retention_days(&guard));
+            if let Some(days) = days {
+                let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
             }
             #[cfg(not(test))]
             bir_core::log_files::spawn_retention(handle);
@@ -416,13 +419,14 @@ fn set_log_retention(arguments: &gpui_shell::HostArguments) -> HostResult {
             bir_core::log_files::MAX_RETENTION_DAYS
         )));
     }
-    with_database(|db| {
+    let days = with_database(|db| {
         db.set_setting(bir_core::log_files::RETENTION_SETTING, &days.to_string())
-            .map(|_| HostValue::Null)
             .map_err(|error| HostError::new(error.to_string()))?;
-        let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), db);
-        Ok(HostValue::Null)
-    })
+        Ok(bir_core::log_files::retention_days(db))
+    })?;
+    // File work, after the lock: the worker waits on it.
+    let _ = bir_core::log_files::maintain(&bir_core::log_files::log_dir(), days);
+    Ok(HostValue::Null)
 }
 
 fn update_status() -> HostResult {
