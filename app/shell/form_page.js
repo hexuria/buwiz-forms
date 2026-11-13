@@ -2782,6 +2782,12 @@ function scheduleTable(cx, ui, it, width) {
     .border(1)
     .border_color(t.border)
     .overflow_hidden()
+    // A sideways swipe over the table is the table's: the page behind it is
+    // an up-and-down scroll area and would take the same travel as its own.
+    // The table's scroller, painted inside this box, has scrolled already.
+    .on_scroll_wheel((e, cx) => {
+      if (Math.abs(e.delta?.x ?? 0) > Math.abs(e.delta?.y ?? 0)) cx.stop_propagation();
+    })
     .child(
       div()
         .id(`fp-table-scroll-${it.keys[0][0]}`)
