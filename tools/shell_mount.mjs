@@ -135,6 +135,7 @@ const linked = {
   "./shell/form_page.js": mock("form_page", {
     renderFormPage: stub,
     renderFormSplit: () => null,
+    formColumnBox: () => null,
     renderExistingOffer: stub,
     renderRemovalConfirm: stub,
     renderSamplePeriod: stub,

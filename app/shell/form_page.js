@@ -898,6 +898,28 @@ export class FormPageActions {
     cx.notify();
   }
 
+  /** Every part is open: the toggle beside "On this form" folds them all. */
+  allPartsOpen() {
+    const s = this.state;
+    return s.schema.parts.every((_p, i) => s.openParts.has(i));
+  }
+
+  /**
+   * Expand all / Collapse all (the side list's heading and the pill's
+   * list): open every part, or fold every part when all are open already.
+   * The pill keeps naming the section it was on.
+   */
+  toggleAllParts(cx) {
+    const s = this.state;
+    if (this.allPartsOpen()) s.openParts = new Set();
+    else {
+      s.schema.parts.forEach((_p, i) => this.ensureInputs(i, cx));
+      s.openParts = new Set(s.schema.parts.map((_p, i) => i));
+    }
+    this.refreshRows();
+    cx.notify();
+  }
+
   /**
    * Navigator and pill: open the chosen part and fold the others, so it
    * sits near the top (a new open does not scroll the page: scripts get no
@@ -3143,6 +3165,28 @@ class FormItemView extends View {
   }
 }
 
+/** Expand all / Collapse all: one icon button, which says what a press does. */
+function partsToggle(cx, ui, id, run) {
+  const all = ui.allPartsOpen();
+  return IconButton(cx, id, all ? "chevrons-down-up" : "chevrons-up-down", {
+    tooltip: all ? "Collapse all parts" : "Expand all parts",
+    onClick: (_e, cx) => run(cx),
+  });
+}
+
+/**
+ * Where the form's own column sits inside the main surface on a wide window
+ * (drawFormSplit): past the pinned side list and the body's 22 px, as wide
+ * as the parts. `null` below the side-list width, where the form is the
+ * page's centred column. The section pill, its popover and a toast centre
+ * on this box, not on the pane (the form's column is not centred in it).
+ */
+export function formColumnBox(L) {
+  if (L.column < BREAK.formNav) return null;
+  const edge = Math.max(L.padX ?? 0, Math.floor(((L.mainWidth ?? L.column) - L.column) / 2));
+  return { left: edge + 208 + 6 + 22, width: L.column - 208 - 28 };
+}
+
 /** A part's place in the pill and its list: "Part II" and "Computation of Tax". */
 function sectionNames(p, i) {
   const name = partName(p, i);
@@ -3175,6 +3219,8 @@ class FormPill extends View {
   }
 }
 
+/** The pill at most (px); its popover is as wide, so their edges line up. */
+const PILL_W = 488;
 /** The pill's popover at most (px), and what its list leaves for the header and template rows. */
 const PILL_POPOVER_MAX = 440;
 const PILL_LIST_HEAD = 64;
@@ -3267,7 +3313,7 @@ function drawPill(cx, ui, view) {
     .items_center()
     .gap(6)
     .w_full()
-    .max_w(488)
+    .max_w(PILL_W)
     .h(56)
     .p(5)
     .rounded(22)
@@ -3374,12 +3420,29 @@ function drawPill(cx, ui, view) {
       .child(
         div()
           .flex()
-          .flex_col()
-          .px(SPACE[5])
+          .flex_row()
+          .items_start()
+          .gap(SPACE[2])
+          .pl(SPACE[5])
+          .pr(SPACE[3])
           .pt(6)
           .pb(10)
-          .child(Text(cx, "meta", "On this form", "fg2"))
-          .child(Text(cx, "title", `${parts.length} section${parts.length > 1 ? "s" : ""}${bad ? ` · ${bad} need${bad > 1 ? "" : "s"} attention` : ""}`).whitespace_normal()),
+          .child(
+            div()
+              .flex()
+              .flex_col()
+              .flex_1()
+              .min_w(0)
+              .child(Text(cx, "meta", "On this form", "fg2"))
+              .child(Text(cx, "title", `${parts.length} section${parts.length > 1 ? "s" : ""}${bad ? ` · ${bad} need${bad > 1 ? "" : "s"} attention` : ""}`).whitespace_normal()),
+          )
+          // The list stays open: the page behind it shows what the press did.
+          .child(
+            partsToggle(cx, ui, "fp-sections-toggle", (cx) => {
+              ui.toggleAllParts(cx);
+              ui.redrawPage(cx);
+            }),
+          ),
       )
       .child(div().id("fp-sections-list").flex().flex_col().flex_none().max_h(listMax).px(SPACE[2]).overflow_y_scroll().children(rows));
     // The branch's template for the form: ‹ and › stop on what it marks.
@@ -3466,14 +3529,15 @@ function drawPill(cx, ui, view) {
           .child(list(room)),
       );
   }
-  // At the bottom, centred over the form (beside the side list when wide);
-  // the popover opens above it and a click outside closes it.
-  const left = wide ? Math.max(L.padX ?? 0, Math.floor(((L.mainWidth ?? L.column) - L.column) / 2)) + 208 + 6 : 0;
+  // At the bottom, centred over the form's own column (formColumnBox: wide,
+  // that is beside the side list and narrower than the pane); the popover
+  // opens above it and a click outside closes it.
+  const box = formColumnBox(L);
   const layer = div()
     .id("fp-pill-layer")
     .absolute()
-    .left(left)
-    .right(0)
+    .when(Boolean(box), (el) => el.left(box.left).w(box.width))
+    .when(!box, (el) => el.left(0).right(0))
     .bottom(SPACE[4])
     .flex()
     .flex_col()
@@ -3488,8 +3552,8 @@ function drawPill(cx, ui, view) {
       takesPointer(div().id("fp-sections"))
         .flex()
         .flex_col()
-        .w(420)
-        .max_w_full()
+        .w_full()
+        .max_w(PILL_W)
         .pt(SPACE[1])
         .pb(SPACE[2])
         .rounded(RADIUS.dialog)
@@ -4147,9 +4211,11 @@ function formContent(cx, app, width) {
     .items_center()
     .px(SPACE[2])
     .pb(6)
+    .gap(SPACE[1])
     .child(Text(cx, "metaStrong", "On this form", "fg3"))
     .child(div().flex_1())
-    .child(Text(cx, "meta", openOne >= 0 ? `${openOne + 1} of ${f.parts.length}` : `${f.parts.length} parts`, "fg3"));
+    .child(Text(cx, "meta", openOne >= 0 ? `${openOne + 1} of ${f.parts.length}` : `${f.parts.length} parts`, "fg3"))
+    .child(partsToggle(cx, ui, "fp-parts-toggle", (cx) => ui.toggleAllParts(cx)));
   const needing = f.parts.map((_p, i) => i).filter((i) => errorsIn(i) > 0);
   const attn = needing.length
     ? div()

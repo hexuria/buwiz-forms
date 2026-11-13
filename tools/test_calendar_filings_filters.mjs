@@ -573,49 +573,71 @@ const filCount = (tree) => text(one(tree, "filings-count")).trim();
   assert.equal(label(tree, "filings-statuses"), "All statuses");
   assert.equal(byId(tree, "filings-clear").length, 0);
 
-  // The actions a row had are on the cards.
-  for (const id of [1, 2, 3, 4, 5, 6, 7]) one(tree, `return-${id}-open`);
+  // A card is its return. A click opens it, so it has no Open button; "Use
+  // as template" is not a board action; the column says the status.
+  assert.equal(
+    nodes(tree).filter((m) => m.id && (m.id.endsWith("-open") || m.id.endsWith("-use-template"))).length,
+    0,
+    "no Open and no Use as template on a card",
+  );
+  assert.equal(text(one(tree, "return-6-head")).trim(), `2551Q Q1 ${Y}`, "a quarterly return: code, quarter, year");
+  assert.equal(text(one(tree, "return-1-head")).trim(), `1601C Jan ${Y}`, "a monthly return: code, short month, year");
+  assert.equal(text(one(tree, "return-7-head")).trim(), `1701 TY ${Y}`, "an annual return: code and tax year");
+  assert.deepEqual(
+    nodes(tree).filter((m) => m.id && m.id.endsWith("-status")).map((m) => m.id),
+    ["return-3-status"],
+    "a card names its status only where the column's title is not it (Paid, in Confirmed)",
+  );
+  assert.match(text(one(tree, "return-3-head")), /Paid/);
+  assert.match(text(one(tree, "return-6-meta")), /^Saved [A-Z][a-z]{2} \d{1,2}, \d{4}/, "a draft's date is its last save");
+  assert.match(text(one(tree, "return-1-meta")), /^Updated [A-Z][a-z]{2} \d{1,2}, \d{4}/, "a filed return's date is its last change");
+  assert.match(text(one(tree, "return-1")), /Juana Santos/);
+
+  // Head office is the taxpayer itself, however many branches it has: only
+  // another branch is named, on a line of its own (never cut into the name).
+  const first = FILED[0];
+  Object.assign(first, { branch_count: 2 });
+  assert.ok(!text(one(fil(), "return-1")).includes("Head office"), "Head office is not named");
+  Object.assign(first, { branch_code: "00001", branch_name: "Cebu branch" });
+  assert.match(text(one(fil(), "return-1")), /Juana Santos\s+Cebu branch/, "another branch is named under the taxpayer");
+  Object.assign(first, { branch_code: "00000", branch_name: "Head office", branch_count: 1 });
+  tree = fil();
+
+  // Cancel queue stays: a click on the card cannot stand for it.
   assert.deepEqual(byId(tree, "return-4-cancel").length, 1, "Cancel queue on the Queued card");
   assert.equal(nodes(tree).filter((m) => m.id && m.id.endsWith("-cancel")).length, 1);
-  assert.deepEqual(
-    nodes(tree).filter((m) => m.id && m.id.endsWith("-use-template")).map((m) => m.id).sort(),
-    ["return-1-use-template", "return-2-use-template", "return-3-use-template"],
-    "Use as template on filed returns without one (Lakbay keeps a 1601EQ template)",
-  );
   const stopped = cx.stopped;
   click(tree, "return-4-cancel");
   assert.deepEqual(cancelled.pop(), { tin: LAKBAY.tin, form_code: "1601EQ", taxable_year: Y, quarter: 2 });
-  click(tree, "return-1-use-template");
-  assert.equal(templated.pop(), 1);
-  click(tree, "return-6-open");
-  assert.deepEqual(opened.pop(), { tin: JUANA.tin, code: "2551Q", year: Y, period: 1, returnKey: 106 });
-  assert.equal(cx.stopped, stopped + 3, "a card's buttons keep their click off the card");
+  assert.equal(cx.stopped, stopped + 1, "Cancel queue keeps its click off the card");
+  click(tree, "return-6");
+  assert.deepEqual(opened.pop(), { tin: JUANA.tin, code: "2551Q", year: Y, period: 1, returnKey: 106 }, "the card opens its return");
   click(tree, "return-2");
-  assert.deepEqual(opened.pop(), { tin: JUANA.tin, code: "1601C", year: Y - 1, period: 12, returnKey: 102 }, "the card opens its return");
+  assert.deepEqual(opened.pop(), { tin: JUANA.tin, code: "1601C", year: Y - 1, period: 12, returnKey: 102 });
 
   // Narrow: the columns stack.
   const narrow = one(fil(500), "filings-board");
   assert.ok(narrow.calls.some((c) => c[0] === "flex_col"));
 
-  // A card's status and date cannot run past its edge. The columns the
-  // board really gets: 816 px of content at 1800 and 1200 px windows (the
-  // 880 px content cap less 32 px padding each side) and 578 px at 900
-  // (stacked). Four columns of 816 leave a card (816 - 3 * 12) / 4 - 2 * 10
-  // - 2 * 12 - 2 = 149 px inside; the status chip with its icon and
-  // "Nov 13, 2026" need about 160, so the row must wrap, its parts must not
-  // shrink, and nothing may stretch between them.
+  // The board fills whatever width the page gives it (the shell gives the
+  // Filings page the whole pane): four equal columns, each card as wide as
+  // its column. On the thinnest four-column board (720 px) a card has
+  // (720 - 3 * 12) / 4 - 2 * 10 - 2 * 12 - 2 = 125 px inside, less than the
+  // date and Cancel queue need side by side: the row wraps, its parts keep
+  // their size, and nothing stretches between them.
   const has = (m, name, ...args) => m.calls.some((c) => c[0] === name && args.every((a, i) => c[i + 1] === a));
-  const inside = (816 - 3 * 12) / 4 - 2 * 10 - 2 * 12 - 2;
-  assert.ok(inside < 160, `precondition: one line cannot hold both at ${inside} px`);
-  for (const width of [816, 578]) {
+  for (const width of [1500, 720, 578]) {
     const t2 = fil(width);
+    const columns = ["draft", "queued", "submitted", "confirmed"].map((id) => one(t2, `filings-col-${id}`));
+    if (width >= 720) assert.ok(columns.every((c) => has(c, "flex_1") && has(c, "flex_basis", 0)), `${width}: four equal columns share the width`);
+    assert.ok(has(one(t2, "filings-board"), "w_full"), `${width}: the board takes the page's width`);
     for (const id of [1, 2, 3, 4, 5, 6, 7]) {
+      assert.ok(has(one(t2, `return-${id}`), "w_full"), `return ${id}: as wide as its column at ${width}`);
       const row = one(t2, `return-${id}-meta`);
-      assert.ok(has(row, "flex_wrap") && has(row, "min_w", 0), `return ${id}: the status and date row wraps at ${width}`);
-      const [chip, date] = row.kids.map((k) => meta.get(k));
-      assert.equal(row.kids.length, 2, "no spacer stretched between them");
-      assert.ok(has(chip, "flex_none"), "the chip keeps its size");
-      assert.ok(has(date, "whitespace_nowrap") && has(date, "flex_none") && has(date, "ml_auto"), "the date stays whole, right-aligned on its line");
+      assert.ok(has(row, "flex_wrap") && has(row, "min_w", 0), `return ${id}: the date row wraps at ${width}`);
+      const date = meta.get(row.kids[0]);
+      assert.ok(has(date, "whitespace_nowrap") && has(date, "flex_none"), "the date stays whole");
+      assert.equal(row.kids.length, id === 4 ? 2 : 1, "the date, and Cancel queue on the Queued card");
       assert.ok(!nodes2(row).some((m) => has(m, "flex_1")), "nothing in the row grows past the card");
     }
   }

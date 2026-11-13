@@ -1,9 +1,11 @@
 // Filings: every return, saved or filed, on a board with one column per
 // status group: Draft, Queued, Submitted and Confirmed (a Paid return sits
 // in Confirmed, marked Paid). Above it a search box, four combo boxes
-// (taxpayers, forms, periods, statuses), Clear filters and a count. Each card
-// opens its return, and keeps the actions the list had: Cancel queue for a
-// Queued return, "Use as template" (D17) for a filed one.
+// (taxpayers, forms, periods, statuses), Clear filters and a count. The board
+// takes the whole width of the page. A card is its return: "2551Q Q3 2026",
+// whose it is, and when it last changed; a click opens it. The column says
+// the status, so a card repeats it only where the two differ (Paid). The
+// one button a card keeps is Cancel queue, which a click cannot stand for.
 //
 // The rows are the two cached reads Home also makes, `list_returns("filed")`
 // and `list_returns("saved")`, both served from the read-only connection, so
@@ -17,7 +19,6 @@ import {
   RADIUS,
   Text,
   Line,
-  Code,
   Icon,
   Chip,
   AppButton,
@@ -28,7 +29,7 @@ import {
   createMultiCombo,
 } from "./ui.js";
 import { MONTHS, shortDate } from "./store.js";
-import { frequencyOf } from "./periods.js";
+import { frequencyOf, periodLabel } from "./periods.js";
 import { taxpayerComboProps } from "./calendar_page.js";
 
 /** The real statuses, in board order, with their dot tone. */
@@ -209,7 +210,19 @@ export class FilingsFilters {
   }
 }
 
-const whoLine = (r) => (r.branch_count > 1 ? `${r.taxpayer_name} · ${r.branch_name}` : r.taxpayer_name);
+/** Head office is the taxpayer itself: only another branch is worth naming. */
+const namedBranch = (r) => (/^0*$/.test(String(r.branch_code || "")) ? "" : r.branch_name || "");
+const whoLine = (r) => (namedBranch(r) ? `${r.taxpayer_name} · ${namedBranch(r)}` : r.taxpayer_name);
+
+/** "2551Q Q3 2026", "1601C Jan 2026", "1702RT TY 2026": a return as Recent names it. */
+export function returnTitle(index, r) {
+  const freq = frequencyOf(index, r.form_code);
+  const period = freq === "As needed" ? r.period_label : periodLabel(freq, r.taxable_year, r.period, true);
+  return `${r.form_code} ${period}`;
+}
+
+/** A draft's date is its last save; any other return's is its last change. */
+const dateLine = (r) => `${r.status === "Draft" ? "Saved" : "Updated"} ${shortDate(r.updated_at)}`;
 
 function statusChip(cx, status) {
   if (status === "Paid") return Chip(cx, "Paid", "success", "check");
@@ -225,38 +238,45 @@ function openReturn(app, r, cx) {
   app.openForm({ tin: r.tin, code: r.form_code, year: r.taxable_year, period: r.period, ...(r.return_key != null ? { returnKey: r.return_key } : {}) }, cx);
 }
 
-/** A button inside a card: its click stays off the card's own Open. */
-const own = (run) => (e, cx) => {
-  cx.stop_propagation();
-  run(e, cx);
-};
-
-/** One return on the board: code and period, taxpayer, status and date, its actions. */
-function boardCard(cx, app, r) {
+/**
+ * One return on the board, in the column titled `column`: its name, whose
+ * it is, and its date. The whole card opens it.
+ */
+function boardCard(cx, app, r, column) {
   const t = tokens(cx);
-  const filed = r.status === "Submitted" || r.status === "Confirmed" || r.status === "Paid";
-  const actions = div().flex().flex_row().flex_wrap().gap(SPACE[1]).mt(2);
+  const branch = namedBranch(r);
+  // The name, and the status only where the column's title is not it.
+  const head = div().id(`return-${r.id}-head`).flex().flex_row().items_center().gap(6).min_w(0).child(Line(cx, "emph", returnTitle(app.store.screenIndex(), r)).flex_1());
+  if (r.status !== column) head.child(div().id(`return-${r.id}-status`).flex_none().child(statusChip(cx, r.status)));
+  // The date, whole; Cancel queue beside it, or under it on a thin card.
+  const foot = div()
+    .id(`return-${r.id}-meta`)
+    .flex()
+    .flex_row()
+    .flex_wrap()
+    .items_center()
+    .gap_x(6)
+    .gap_y(2)
+    .min_w(0)
+    .child(Text(cx, "cap", dateLine(r), "fg3").whitespace_nowrap().flex_none());
   if (r.status === "Queued") {
-    actions.child(
-      AppButton(cx, `return-${r.id}-cancel`, "Cancel queue", {
-        variant: "ghost",
-        size: "sm",
-        onClick: own((_e, cx) =>
-          app.cancelQueuedEntry({ tin: r.tin, form_code: r.form_code, taxable_year: r.taxable_year, quarter: r.period || null }, cx),
+    foot.child(
+      div()
+        .flex_none()
+        .ml_auto()
+        .child(
+          AppButton(cx, `return-${r.id}-cancel`, "Cancel queue", {
+            variant: "ghost",
+            size: "sm",
+            // The card's own click opens the return: this one stays here.
+            onClick: (_e, cx) => {
+              cx.stop_propagation();
+              app.cancelQueuedEntry({ tin: r.tin, form_code: r.form_code, taxable_year: r.taxable_year, quarter: r.period || null }, cx);
+            },
+          }),
         ),
-      }),
     );
   }
-  if (filed && !app.store.templates(r.tin).some((tpl) => tpl.form_code === r.form_code)) {
-    actions.child(
-      AppButton(cx, `return-${r.id}-use-template`, "Use as template", {
-        size: "sm",
-        icon: "layout-template",
-        onClick: own((_e, cx) => app.taxpayerUi.useAsTemplate(r, cx)),
-      }),
-    );
-  }
-  actions.child(AppButton(cx, `return-${r.id}-open`, "Open", { variant: "ghost", size: "sm", onClick: own((_e, cx) => openReturn(app, r, cx)) }));
   return div()
     .id(`return-${r.id}`)
     .flex()
@@ -271,30 +291,12 @@ function boardCard(cx, app, r) {
     .bg(t.surface)
     .cursor_pointer()
     .hover((s) => s.border_color(t.borderStrong))
-    .accessibility_label(`${r.form_code} ${r.period_label}, ${whoLine(r)}, ${r.status}`)
+    .accessibility_label(`${r.form_code} ${r.period_label}, ${whoLine(r)}, ${r.status}. Open`)
     .on_click((_e, cx) => openReturn(app, r, cx))
-    .child(div().flex().flex_row().items_center().gap(6).min_w(0).child(Code(cx, r.form_code)).child(Line(cx, "meta", r.period_label, "fg2")))
-    .child(Line(cx, "meta", whoLine(r), "fg3"))
-    // Status and date. A board column leaves a card about 147 px inside at
-    // 1200 px and wider (816 px over four columns, less their 10 px padding
-    // and the card's 12 px): "Submitted" with its icon and "Nov 13, 2026"
-    // need more, so the row wraps and the date takes its own line, right
-    // aligned, rather than running past the card's edge.
-    .child(
-      div()
-        .id(`return-${r.id}-meta`)
-        .flex()
-        .flex_row()
-        .flex_wrap()
-        .items_center()
-        .gap_x(6)
-        .gap_y(2)
-        .mt(2)
-        .min_w(0)
-        .child(div().flex_none().child(statusChip(cx, r.status)))
-        .child(Text(cx, "cap", shortDate(r.updated_at), "fg3").whitespace_nowrap().flex_none().ml_auto()),
-    )
-    .child(actions);
+    .child(head)
+    .child(Line(cx, "meta", r.taxpayer_name, "fg2"))
+    .when(Boolean(branch), (el) => el.child(Line(cx, "meta", branch, "fg3")))
+    .child(foot);
 }
 
 function board(cx, app, rows, width) {
@@ -327,7 +329,7 @@ function board(cx, app, rows, width) {
           .child(Chip(cx, String(list.length))),
       );
     if (wide) col.flex_1().flex_basis(0);
-    if (list.length) for (const r of list) col.child(boardCard(cx, app, r));
+    if (list.length) for (const r of list) col.child(boardCard(cx, app, r, title));
     else col.child(Text(cx, "meta", "Nothing here.", "fg3").px(2).py(SPACE[2]));
     cols.child(col);
   }
@@ -371,7 +373,7 @@ export function renderFilings(cx, app, width) {
     .child(
       PageHeader(cx, {
         title: "Filings",
-        lede: "Every return, from draft to confirmed. Filed returns stay exactly as submitted. Use one as a template to prefill the next period.",
+        lede: "Every return, from draft to confirmed. Filed returns stay exactly as submitted.",
       }),
     )
     .child(bar);
