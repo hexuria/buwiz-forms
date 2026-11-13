@@ -11,7 +11,7 @@
 import { View, div } from "gpui-kit";
 import process from "process";
 import { InputState, OtpState } from "gpui-base";
-import { Store, errorText } from "./shell/store.js";
+import { Store, errorText, SAVED_RETURNS_KEY } from "./shell/store.js";
 import {
   applyThemePreference,
   nextThemePreference,
@@ -726,6 +726,8 @@ class BirApp extends View {
       this.setupChange.leave(cx);
     }
     this.view = view;
+    // Home's Drafts count is read once per visit, not on every poll.
+    if (view === "home") this.store.forget(SAVED_RETURNS_KEY);
     this.taxpayerUi.leaveView();
   }
 
