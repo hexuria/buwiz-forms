@@ -4368,7 +4368,10 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
 
 /// "Use profile values" (see [`use_profile_values`]): the draft the page
 /// holds with every unedited profile box at the profile's value, answered
-/// like a fill. Nothing is saved: the page saves it.
+/// like a fill. Nothing is saved: the page saves it. A 2551Q also takes
+/// the profile's annual income-tax election for its taxable year
+/// (`Form2551QDraft::sync_with_profile`): the page's Item 13 question calls
+/// this right after `record_income_tax_election` writes it.
 fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
     let kind = kind_of(arguments.string(0)?)?;
     let year =
@@ -4381,14 +4384,24 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         return Err(host_error("this return is no longer a draft"));
     }
     let tin = agent::identity(kind, &draft).map_err(host_error)?.tin;
-    let from_profile = with_database(|db| {
+    let (profile, from_profile) = with_database(|db| {
         let profile = db
             .get_profile_by_tin(&tin)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
-        load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)
+        let from_profile =
+            load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
+        Ok((profile, from_profile))
     })?;
     use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
+    if kind == AgentFormKind::Form2551Q {
+        draft = out_of_line(|| {
+            let mut typed: bir_core::forms::form_2551q::Form2551QDraft =
+                serde_json::from_value(draft).map_err(|error| host_error(error.to_string()))?;
+            typed.sync_with_profile(&profile);
+            serde_json::to_value(typed).map_err(|error| host_error(error.to_string()))
+        })?;
+    }
     agent::compute(kind, &mut draft).map_err(host_error)?;
     let values = values_json(kind, &draft).map_err(host_error)?;
     let options = catalogs::options(kind, &draft);
