@@ -24,7 +24,6 @@ import {
   Icon,
   AppButton,
   IconButton,
-  Avatar,
   Chip,
   Switch,
   Checkbox,
@@ -37,7 +36,6 @@ import {
   Overlay,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
-import { periodLabel } from "./periods.js";
 
 const VALIDATE_DELAY = 300;
 /** A sample's period is asked about this long after its last change. */
@@ -200,6 +198,18 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
  */
 const SAMPLE_NOTE = "A sample from the Form library. Save makes it your return for its period, with what you typed; if the period is not set yet, Save asks for it, and if that period already has a return, you choose what to do with it. New return (the + button or Cmd/Ctrl+N) starts a blank one.";
 
+/**
+ * 2551Q's message for a later-quarter Section 116 return whose taxable year
+ * has no income-tax election on the tax profile (form_2551q.rs `validate`,
+ * field `annual_income_tax_election`). Item 13 asks it (`electionCard`).
+ */
+const ELECTION_UNRECORDED = /needs the taxpayer profile's recorded annual income-tax election/;
+
+/** The Item 13 radio for each answer of the election, per form. */
+const ELECTION_RADIOS = {
+  "2551Q": { graduated: "frm2551Qv2018:taxRate1", eight_percent: "frm2551Qv2018:taxRate2" },
+};
+
 /** A sample's period parts in the period modal, labelled. */
 const PERIOD_PART_LABELS = {
   year: "Year (YYYY)",
@@ -279,6 +289,7 @@ export class FormPageActions {
     for (const input of state?.inputs?.values() || []) input.release();
     for (const handle of state?.editFocus?.values() || []) handle.release();
     state?.checkButton?.entity.release();
+    state?.pill?.entity.release();
   }
 
   /**
@@ -345,6 +356,8 @@ export class FormPageActions {
       formErrors: [],
       checking: false,
       openParts: new Set([0]),
+      // The section the pill names: the one opened last (`jumpTo`, `togglePart`).
+      current: 0,
       inputs: new Map(),
       rowViews: new Map(),
       pending: {},
@@ -352,13 +365,26 @@ export class FormPageActions {
       saved: false,
       openSelect: null,
       moreOpen: new Set(),
+      // Template mode: ‹ and › stop on the boxes the branch's template marks
+      // (`stops`, from `loadStops`), and each box it may mark has "Stop here".
       guided: false,
+      stops: null,
+      // The row a template step marked (a step opens its section; it cannot scroll to it).
+      stopAt: null,
+      // 2551Q Item 13's question (`electionCard`): the row it is on, the
+      // answer picked, and the row that says it was saved.
+      electionAt: null,
+      electionPick: null,
+      electionSavedAt: null,
     };
     if (!schema) return;
     this.state.checkButton = {
       entity: cx.new(FormCheckButton, { ui: this, state: this.state }),
       checking: false,
     };
+    // The section pill is its own view: opening its list or stepping
+    // redraws it, never a form row.
+    this.state.pill = { entity: cx.new(FormPill, { ui: this, state: this.state }), snapshot: null };
     cx.spawn(async (acx) => {
       try {
         const key = opts.returnKey ?? null;
@@ -373,6 +399,7 @@ export class FormPageActions {
         const s = this.state;
         s.loading = false;
         this.takeOpened(r);
+        this.loadStops();
         // Every part already open (one picked while the return was still
         // opening, too) gets its inputs now that the draft is here.
         for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
@@ -638,6 +665,10 @@ export class FormPageActions {
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
       it.from ? s.values[it.from.k] ?? "" : null,
+      // Item 13's question and its answer, the "Stop here" switch and a template step's mark.
+      s.electionAt === id || s.electionSavedAt === id ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || ""] : null,
+      s.stops ? [s.guided && s.stops.markable.has(id), s.stops.marked.has(id)] : null,
+      s.stopAt === id,
       keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
     ]);
   }
@@ -676,6 +707,153 @@ export class FormPageActions {
       row.snapshot = snapshot;
       row.entity.set_props(props);
     }
+    this.refreshPill();
+  }
+
+  /**
+   * The section pill redraws (its own view, rule 2) only when what it shows
+   * changes: the open section, each section's messages, the template stops
+   * and the window's side of the side-list width.
+   */
+  refreshPill() {
+    const s = this.state;
+    const pill = s?.pill;
+    if (!pill || !s.schema) return;
+    const L = this.app.layout();
+    const snapshot = JSON.stringify([
+      L.column >= BREAK.formNav, L.vp?.height ?? 0, L.mainWidth ?? 0, L.padX ?? 0,
+      s.current, [...s.openParts], s.schema.parts.map((_p, i) => this.partErrors(i)),
+      s.guided, s.stops ? [...s.stops.marked.keys()] : null, s.stopAt, s.loading, s.error,
+    ]);
+    if (snapshot === pill.snapshot) return;
+    pill.snapshot = snapshot;
+    pill.entity.set_props({ ui: this, state: s });
+  }
+
+  /** The section pill to float over the form, or null (no sections to show). */
+  pillView() {
+    const s = this.state;
+    return s?.pill && s.schema && !s.error ? s.pill.entity : null;
+  }
+
+  /** How many items of part `pi` have a validation message. */
+  partErrors(pi) {
+    return Object.keys(this.state.messages).filter((id) => id.startsWith(`${pi}:`)).length;
+  }
+
+  /** A change made from the pill's own view: the page (the open part) redraws too. */
+  redrawPage(cx) {
+    if (this.app.invalidate) this.app.invalidate();
+    else cx.notify();
+  }
+
+  /**
+   * The branch's template for this form (Tax profile > Templates): the
+   * fields it marks are the pill's stops, and every box it may mark gets
+   * "Stop here". Template mode starts on when it marks any (D13). Only
+   * forms with a field registry (2551Q, 1601C) can have one.
+   */
+  loadStops() {
+    const s = this.state;
+    s.stops = null;
+    const template = this.app.store.templates(s.tin).find((x) => x.form_code === s.code);
+    if (!template) return;
+    let r = null;
+    try {
+      r = this.app.store.call("template_stops", s.tin, s.code);
+    } catch (_e) {
+      return;
+    }
+    if (!r) return;
+    this.takeStops(r);
+    s.guided = s.stops.order.length > 0;
+  }
+
+  /** The host's stop keys as page rows (`pi:ii`), each with the key that stands for it. */
+  takeStops(r) {
+    const s = this.state;
+    const rows = (keys) => {
+      const out = new Map();
+      for (const k of keys || []) {
+        const id = this.itemIdForKey(k);
+        if (id && !out.has(id)) out.set(id, k);
+      }
+      return out;
+    };
+    const marked = rows(r.stops);
+    const order = [...marked.keys()].sort((a, b) => {
+      const [ap, ai] = a.split(":").map(Number);
+      const [bp, bi] = b.split(":").map(Number);
+      return ap - bp || ai - bi;
+    });
+    s.stops = { marked, markable: rows(r.markable), order };
+    if (s.stopAt && !marked.has(s.stopAt)) s.stopAt = null;
+  }
+
+  /** The rows ‹ and › stop on: the template's stops in template mode, else none (they step by section). */
+  stopIds() {
+    const s = this.state;
+    return s.guided && s.stops ? s.stops.order : [];
+  }
+
+  /** Template mode on or off (the pill's list). */
+  setGuided(on, cx) {
+    const s = this.state;
+    s.guided = on;
+    if (!on) s.stopAt = null;
+    this.refreshRows();
+    cx.notify();
+  }
+
+  /** "Stop here": mark or unmark the field row `id` writes in the template. */
+  setStop(id, on, cx) {
+    const s = this.state;
+    const key = on ? s.stops?.markable.get(id) : s.stops?.marked.get(id);
+    if (!key) return;
+    let r;
+    try {
+      r = this.app.store.write("set_template_stop", s.tin, s.code, key, on);
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    this.takeStops(r);
+    this.refreshRows();
+  }
+
+  /**
+   * Where ‹ (`dir` -1) or › (1) goes: the previous or next section, or in
+   * template mode the previous or next stop (from the open section when no
+   * stop is marked yet). Null at either end.
+   */
+  stepTarget(dir) {
+    const s = this.state;
+    if (!s?.schema) return null;
+    const stops = this.stopIds();
+    if (stops.length) {
+      const partOf = (id) => Number(id.split(":")[0]);
+      const at = s.stopAt ? stops.indexOf(s.stopAt) : -1;
+      const next = at >= 0
+        ? stops[at + dir]
+        : dir > 0
+          ? stops.find((id) => partOf(id) >= s.current)
+          : [...stops].reverse().find((id) => partOf(id) < s.current);
+      return next ? { part: partOf(next), stop: next } : null;
+    }
+    const part = s.current + dir;
+    return part >= 0 && part < s.schema.parts.length ? { part, stop: null } : null;
+  }
+
+  /**
+   * ‹ and ›. A template stop opens its section and marks its row: the
+   * toolkit gives scripts no scroll offset to set on a plain scroll area and
+   * no way to focus a text input, so the filer scrolls to the marked row and
+   * clicks into it.
+   */
+  step(dir, cx) {
+    const target = this.stepTarget(dir);
+    if (!target) return;
+    this.jumpTo(target.part, cx, target.stop);
+    this.redrawPage(cx);
   }
 
   refreshLayout() {
@@ -711,16 +889,23 @@ export class FormPageActions {
     else {
       this.ensureInputs(i, cx);
       s.openParts.add(i);
+      s.current = i;
     }
     this.refreshRows();
     cx.notify();
   }
 
-  /** Navigator: open the chosen part and fold the others, so it sits near the top. */
-  jumpTo(i, cx) {
+  /**
+   * Navigator and pill: open the chosen part and fold the others, so it
+   * sits near the top (a new open does not scroll the page: scripts get no
+   * scroll offset). `stop`: the row a template step marks.
+   */
+  jumpTo(i, cx, stop = null) {
     const s = this.state;
     this.ensureInputs(i, cx);
     s.openParts = new Set([i]);
+    s.current = i;
+    s.stopAt = stop;
     this.refreshRows();
     cx.notify();
   }
@@ -1754,6 +1939,7 @@ export class FormPageActions {
     s.errors = (errors || []).filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
     s.checkable = {};
+    s.electionAt = null;
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
     const words = (t) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
@@ -1789,7 +1975,85 @@ export class FormPageActions {
       if (id) s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
       // A notice the filer may mark checked without changing anything.
       if (id && e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
+      // The row the host put the year's missing income-tax election on (Item 13) asks it.
+      if (id && e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
     }
+  }
+
+  /** The return's taxable year (a fiscal 2551Q's too), else the year it opened for. */
+  taxYear() {
+    const s = this.state;
+    return Number(s.draft?.taxable_year ?? s.year);
+  }
+
+  /** The return's taxpayer by its own TIN, or the TIN when it is not in this database. */
+  taxpayerName() {
+    const root = String(this.state.tin).slice(0, 9);
+    const tp = this.app.taxpayers().find((x) => x.tin_root === root);
+    return tp ? tp.name : formatTin(root, String(this.state.tin).slice(9) || "00000");
+  }
+
+  /** Item 13's question: an answer picked (only that row redraws). */
+  pickElection(value) {
+    this.state.electionPick = value;
+    this.refreshRows();
+  }
+
+  /**
+   * Item 13's question on a later-quarter 2551Q (pick 1 B). The answer goes
+   * on the tax profile for the return's own taxable year
+   * (`record_income_tax_election`), the open draft takes it from the profile
+   * (`screen_form_use_profile`), and the return is saved and checked again,
+   * so the message, its part's badge and the attention count go where they
+   * are. Where the profile leaves Item 13 unanswered (a later quarter with
+   * no commencement date: the filer's own Item 13 stands), it is ticked to
+   * the same answer.
+   */
+  recordElection(cx) {
+    const s = this.state;
+    const pick = s?.electionPick;
+    if (!s?.draft || !s.editable || !pick) return;
+    const year = this.taxYear();
+    const at = s.electionAt;
+    try {
+      this.app.store.write("record_income_tax_election", s.tin, year, pick);
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    const before = s.values;
+    try {
+      const r = this.app.store.call("screen_form_use_profile", s.code, s.year, s.period, s.draft);
+      s.draft = r.draft;
+      s.values = this.shown(r.values);
+      s.options = r.options || s.options;
+      if (r.pools) s.poolTexts = r.pools;
+      if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+      return this.validate(cx);
+    }
+    const radios = ELECTION_RADIOS[s.code];
+    if (radios && s.draft.item_13_election === "unanswered") {
+      for (const [choice, k] of Object.entries(radios)) {
+        const v = choice === pick ? "true" : "false";
+        s.pending[k] = v;
+        s.values[k] = v;
+      }
+    }
+    s.dirty = true;
+    s.electionPick = null;
+    s.electionSavedAt = at;
+    this.syncComputed();
+    this.syncChanged(before, {});
+    const saved = `Saved to ${this.taxpayerName()}'s tax profile for ${year}.`;
+    // A sample is saved by its own Save (it asks for the period), and an
+    // amendment not saved yet by the filer's choice: those are checked only.
+    if (s.sample || (s.amends && !s.saved)) {
+      this.flush(cx);
+      return this.app.toast(saved, cx, "circle-check");
+    }
+    this.save(cx);
+    if (!s.dirty) this.app.toast(saved, cx, "circle-check");
   }
 
   /** Mark a notice checked (the host records it; the return is not changed), then check again. */
@@ -2614,6 +2878,70 @@ function datePicker(cx, ui, id, date, row = id) {
   return popup.content(card);
 }
 
+/**
+ * Item 13's question (pick 1 B): a later-quarter 2551Q needs the taxpayer's
+ * income-tax election for its taxable year, which the tax profile holds;
+ * answered here once, it is saved there and every later return reuses it.
+ */
+function electionCard(cx, ui) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const choice = (value, label, hint) => {
+    const on = s.electionPick === value;
+    return div()
+      .id(`fp-election-${value}`)
+      .flex()
+      .flex_col()
+      .flex_1()
+      .min_w(160)
+      .gap(2)
+      .py(SPACE[2])
+      .px(10)
+      .rounded(RADIUS.ctl)
+      .border(1)
+      .border_color(on ? t.accent : t.borderStrong)
+      .bg(on ? t.accentSoft : t.surface)
+      .cursor_pointer()
+      .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
+      .accessibility_label(on ? `${label}, chosen` : label)
+      .on_click((_e, cx) => ui.pickElection(value, cx))
+      .child(Text(cx, "control", label))
+      .child(Text(cx, "meta", hint, "fg2").whitespace_normal());
+  };
+  return div()
+    .id("fp-election")
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .py(10)
+    .px(SPACE[3])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.surface)
+    .shadow_xs()
+    .child(Text(cx, "control", `Which income-tax rate did ${ui.taxpayerName()} choose for ${ui.taxYear()}?`).font_weight(600).whitespace_normal())
+    .child(Text(cx, "meta", "We save it on the tax profile, so you answer once a year.", "fg2").mt(2).whitespace_normal())
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .gap(SPACE[2])
+        .mt(SPACE[3])
+        .child(choice("graduated", "Graduated rates", "Tax on net taxable income"))
+        .child(choice("eight_percent", "8% flat rate", "8% of gross sales or receipts")),
+    )
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .justify_end()
+        .mt(SPACE[3])
+        .child(AppButton(cx, "fp-election-save", "Save to tax profile", { variant: "primary", size: "sm", disabled: !s.electionPick, onClick: (_e, cx) => ui.recordElection(cx) })),
+    );
+}
+
 class FormCheckButton extends View {
   init(props) { this.props = props; }
   update(props) { this.props = props; }
@@ -2639,6 +2967,341 @@ class FormItemView extends View {
     if (ii > 0) row.border_t(1).border_color(tokens(cx).border);
     return row;
   }
+}
+
+/** A part's place in the pill and its list: "Part II" and "Computation of Tax". */
+function sectionNames(p, i) {
+  const name = partName(p, i);
+  const strip = (text) => text.replace(/\s*\((?:attach|if graduated|except)[^)]*\)/gi, "").trim() || text;
+  const at = name.indexOf(" · ");
+  if (at < 0) return { tag: name === p.n ? `Section ${i + 1}` : p.n, short: strip(name) };
+  return { tag: name.slice(0, at), short: strip(name.slice(at + 3)) };
+}
+
+/**
+ * The section pill (pick 8 C): it floats at the bottom of the form at every
+ * width, names the open section (the toolkit gives scripts no scroll
+ * offset, so it follows what is open, not what is scrolled to), counts in
+ * red the sections that need attention, and steps with ‹ and ›. Its list of
+ * sections is a bottom sheet below the side-list width and a popover above
+ * it. A retained view: opening the list redraws only the pill.
+ */
+class FormPill extends View {
+  init(props) {
+    this.props = props;
+    this.listOpen = false;
+  }
+  update(props) {
+    this.props = props;
+  }
+  render(cx) {
+    const { ui, state: s } = this.props;
+    if (s !== ui.state || !s.schema) return div();
+    return drawPill(cx, ui, this);
+  }
+}
+
+function drawPill(cx, ui, view) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const L = ui.app.layout();
+  const wide = L.column >= BREAK.formNav;
+  const parts = s.schema.parts;
+  const cur = Math.min(Math.max(s.current, 0), parts.length - 1);
+  const here = sectionNames(parts[cur], cur);
+  const needing = parts.map((_p, i) => i).filter((i) => ui.partErrors(i) > 0);
+  const stops = ui.stopIds();
+  const toggle = (cx) => {
+    view.listOpen = !view.listOpen;
+    cx.notify();
+  };
+  const close = (cx) => {
+    if (!view.listOpen) return;
+    view.listOpen = false;
+    cx.notify();
+  };
+
+  const step = (dir) => {
+    const target = ui.stepTarget(dir);
+    const label = stops.length ? (dir < 0 ? "Previous template stop" : "Next template stop") : dir < 0 ? "Previous section" : "Next section";
+    const btn = div()
+      .id(dir < 0 ? "fp-pill-prev" : "fp-pill-next")
+      .flex()
+      .flex_none()
+      .items_center()
+      .justify_center()
+      .w(36)
+      .h(44)
+      .rounded(14)
+      .bg(t.hover)
+      .tooltip(label)
+      .accessibility_label(label)
+      .child(Icon(cx, dir < 0 ? "chevron-left" : "chevron-right", { size: 18, color: target ? "fg2" : "fg3" }));
+    if (!target) return btn.opacity(0.35).disabled(true);
+    return btn
+      .cursor_pointer()
+      .hover((st) => st.bg(t.selected))
+      .on_click((_e, cx) => {
+        view.listOpen = false;
+        ui.step(dir, cx);
+      });
+  };
+
+  // What the pill says: the open section, or in template mode the stop it is on.
+  let small = `${here.tag} · ${cur + 1} of ${parts.length}`;
+  let big = here.short;
+  if (stops.length) {
+    const at = s.stopAt ? stops.indexOf(s.stopAt) : -1;
+    if (at >= 0) {
+      const [pi, ii] = s.stopAt.split(":").map(Number);
+      const it = parts[pi].items[ii];
+      small = `Stop ${at + 1} of ${stops.length} · ${sectionNames(parts[pi], pi).tag}`;
+      big = it.no ? `Item ${it.no} · ${it.l}` : it.l;
+    } else {
+      small = `${stops.length} template stop${stops.length > 1 ? "s" : ""} · ${here.tag}`;
+    }
+  }
+  const count = needing.length
+    ? div()
+        .id("fp-pill-count")
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .h(22)
+        .min_w(22)
+        .px(6)
+        .rounded(RADIUS.full)
+        .bg(t.danger)
+        .accessibility_label(`${needing.length} section${needing.length > 1 ? "s" : ""} need${needing.length > 1 ? "" : "s"} attention`)
+        .child(Text(cx, "num", String(needing.length), "primaryFg").text_color(t.surface))
+    : null;
+  const listLabel = `All sections${view.listOpen ? ", shown" : ""}`;
+  const pill = div()
+    .id("fp-pill")
+    .flex()
+    .flex_row()
+    .items_center()
+    .gap(6)
+    .w_full()
+    .max_w(488)
+    .h(56)
+    .p(5)
+    .rounded(22)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.raised)
+    .shadow_lg()
+    .accessibility_label("Jump to a section")
+    .child(step(-1))
+    .child(
+      div()
+        .id("fp-pill-list")
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(44)
+        .rounded(16)
+        .bg(t.selected)
+        .cursor_pointer()
+        .hover((st) => st.bg(t.borderStrong))
+        .tooltip("All sections")
+        .accessibility_label(listLabel)
+        .on_click((_e, cx) => toggle(cx))
+        .child(Icon(cx, "list", { size: 18, color: "fg" })),
+    )
+    .child(
+      div()
+        .id("fp-pill-main")
+        .flex()
+        .flex_row()
+        .flex_1()
+        .min_w(0)
+        .items_center()
+        .gap(10)
+        .h_full()
+        .pl(6)
+        .pr(10)
+        .rounded(14)
+        .cursor_pointer()
+        .hover((st) => st.bg(t.hover))
+        .accessibility_label(listLabel)
+        .on_click((_e, cx) => toggle(cx))
+        .child(div().flex().flex_col().flex_1().min_w(0).child(Line(cx, "cap", small, "fg2")).child(Line(cx, "emph", big)))
+        .when(Boolean(count), (el) => el.child(count)),
+    )
+    .child(step(1));
+
+  // The list: every section, the ones to fix in red; the open one marked.
+  const list = () => {
+    const bad = needing.length;
+    const rows = parts.map((p, i) => {
+      const names = sectionNames(p, i);
+      const errors = ui.partErrors(i);
+      const on = i === cur && s.openParts.has(i);
+      return div()
+        .id(`fp-section-${i}`)
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(SPACE[3])
+        .w_full()
+        .py(10)
+        .px(SPACE[3])
+        .rounded(RADIUS.card)
+        .cursor_pointer()
+        .when(on, (el) => el.bg(t.selected))
+        .hover((st) => st.bg(t.selected))
+        .accessibility_label(partName(p, i))
+        .on_click((_e, cx) => {
+          view.listOpen = false;
+          ui.jumpTo(i, cx);
+          ui.redrawPage(cx);
+        })
+        .child(div().w(3).h(28).flex_none().rounded(RADIUS.full).bg(on ? t.accent : "#00000000"))
+        .child(
+          div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .size(18)
+            .rounded(RADIUS.full)
+            .when(errors > 0, (el) => el.bg(t.danger).child(Text(cx, "cap", "!", "primaryFg").text_color(t.surface)))
+            .when(errors === 0, (el) => el.border(2).border_color(t.borderStrong)),
+        )
+        .child(div().flex().flex_col().flex_1().min_w(0).child(Line(cx, "emph", names.short)).child(Line(cx, "meta", names.tag, "fg2")))
+        .child(
+          errors > 0
+            ? Text(cx, "metaStrong", `Fix · ${errors}`, "danger").flex_none()
+            : Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg2").flex_none(),
+        );
+    });
+    const body = div()
+      .flex()
+      .flex_col()
+      .min_h(0)
+      .child(
+        div()
+          .flex()
+          .flex_col()
+          .px(SPACE[5])
+          .pt(6)
+          .pb(10)
+          .child(Text(cx, "meta", "On this form", "fg2"))
+          .child(Text(cx, "title", `${parts.length} section${parts.length > 1 ? "s" : ""}${bad ? ` · ${bad} need${bad > 1 ? "" : "s"} attention` : ""}`).whitespace_normal()),
+      )
+      .child(div().id("fp-sections-list").flex().flex_col().flex_1().min_h(0).px(SPACE[2]).overflow_y_scrollbar().children(rows));
+    // The branch's template for the form: ‹ and › stop on what it marks.
+    if (s.stops) {
+      body.child(
+        div()
+          .flex()
+          .flex_row()
+          .items_center()
+          .gap(SPACE[3])
+          .mx(SPACE[2])
+          .mt(SPACE[2])
+          .pt(SPACE[3])
+          .px(SPACE[3])
+          .border_t(1)
+          .border_color(t.border)
+          .child(Icon(cx, "layout-template", { color: "fg2" }))
+          .child(
+            div()
+              .flex()
+              .flex_col()
+              .flex_1()
+              .min_w(0)
+              .child(Text(cx, "control", "Template stops"))
+              .child(
+                Text(cx, "meta", s.stops.order.length ? `‹ and › stop on the ${s.stops.order.length} item${s.stops.order.length > 1 ? "s" : ""} the template marks` : "Turn on, then mark items with Stop here", "fg2").whitespace_normal(),
+              ),
+          )
+          .child(Switch(cx, "fp-guided", s.guided, (v, cx) => ui.setGuided(v, cx), "Template stops")),
+      );
+    }
+    return body;
+  };
+
+  if (view.listOpen && !wide) {
+    // Narrow: a bottom sheet over the page; the scrim or its handle closes it.
+    const height = Math.round(((L.vp?.height ?? 800) - SIZE.titleBar) * 0.84);
+    return div()
+      .id("fp-pill-layer")
+      .absolute()
+      .inset_0()
+      .child(div().id("fp-sections-scrim").absolute().inset_0().bg(t.scrim).on_mouse_down("left", (_e, cx) => close(cx)))
+      .child(
+        div()
+          .id("fp-sections")
+          .absolute()
+          .left(0)
+          .right(0)
+          .bottom(0)
+          .flex()
+          .flex_col()
+          .w_full()
+          .max_h(height)
+          .pb(SPACE[4])
+          .rounded_t(22)
+          .border_t(1)
+          .border_color(t.borderStrong)
+          .bg(t.raised)
+          .shadow_xl()
+          .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+          .child(
+            div()
+              .id("fp-sections-handle")
+              .flex()
+              .flex_row()
+              .justify_center()
+              .pt(SPACE[2])
+              .pb(6)
+              .cursor_pointer()
+              .accessibility_label("Close the sections")
+              .on_click((_e, cx) => close(cx))
+              .child(div().w(36).h(5).rounded(RADIUS.full).bg(t.borderStrong)),
+          )
+          .child(list()),
+      );
+  }
+  // At the bottom, centred over the form (beside the side list when wide);
+  // the popover opens above it and a click outside closes it.
+  const left = wide ? Math.max(L.padX ?? 0, Math.floor(((L.mainWidth ?? L.column) - L.column) / 2)) + 208 + 6 : 0;
+  const layer = div()
+    .id("fp-pill-layer")
+    .absolute()
+    .left(left)
+    .right(0)
+    .bottom(SPACE[4])
+    .flex()
+    .flex_col()
+    .items_center()
+    .gap(SPACE[2])
+    .px(SPACE[4]);
+  if (view.listOpen) {
+    layer.on_mouse_down_out((_e, cx) => close(cx));
+    layer.child(
+      div()
+        .id("fp-sections")
+        .flex()
+        .flex_col()
+        .w(420)
+        .max_w_full()
+        .max_h(440)
+        .pt(SPACE[1])
+        .pb(SPACE[2])
+        .rounded(RADIUS.dialog)
+        .border(1)
+        .border_color(t.borderStrong)
+        .bg(t.raised)
+        .shadow_xl()
+        .child(list()),
+    );
+  }
+  return layer.child(pill);
 }
 
 function itemRow(cx, ui, it, pi, ii, width) {
@@ -2675,7 +3338,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
   // Rule 8: the penalties show what is computed; one Edit opens all three.
   const penalty = s.editable ? fs.map((f) => ui.penaltyGroupOf(f.k)).find((g) => g && g.applies) : null;
   const penaltyOpen = Boolean(penalty) && (penalty.edited || penalty.keys.some((k) => s.penaltyOpen.has(k)));
-  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0) + (penalty ? (penaltyOpen ? 210 : 130) : 0);
+  // Template mode: a box the template may mark has "Stop here" (‹ and › stop on it).
+  const stoppable = Boolean(s.guided && s.stops?.markable.has(id));
+  const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0) + (penalty ? (penaltyOpen ? 210 : 130) : 0) + (stoppable ? 100 : 0);
   const label = div()
     .flex()
     .flex_row()
@@ -2738,6 +3403,19 @@ function itemRow(cx, ui, it, pi, ii, width) {
       });
     }
     label.child(edit);
+  }
+  if (stoppable) {
+    label.child(
+      div()
+        .flex()
+        .flex_none()
+        .flex_row()
+        .items_center()
+        .gap(6)
+        .h(22)
+        .child(Text(cx, "meta", "Stop here", "fg2"))
+        .child(Switch(cx, `fp-stop-${id}`, s.stops.marked.has(id), (v, cx) => ui.setStop(id, v, cx), "Stop here")),
+    );
   }
 
   // Rule 6: what turns the item's faded boxes on.
@@ -2828,6 +3506,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .pb(SPACE[2])
     .pl(SPACE[3])
     .when(allCalc, (el) => el.bg(t.bg))
+    // The row a template step went to: its section opened, but the page
+    // cannot scroll to it, so it is marked.
+    .when(s.stopAt === id, (el) => el.bg(t.accentSoft))
     // The pointer over a profile item turns its mark into Edit.
     .when(hasEdit, (el) =>
       el.on_hover((hovered, cx) => {
@@ -2870,8 +3551,24 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .children(fromHint(cx, ui, it, id))
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
-        // Reserved 18 px validation line, present with or without a message.
-        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " ")))
+        // Reserved 18 px validation line, present with or without a message;
+        // a long message wraps onto more lines rather than being cut.
+        .child(div().min_h(SIZE.validationLine).mt(SPACE[1]).child(Text(cx, "meta", msg, "danger").whitespace_normal()))
+        // 2551Q Item 13: the year's income-tax election, asked where the message is.
+        .when(s.editable && s.electionAt === id, (el) => el.child(electionCard(cx, ui)))
+        .when(s.electionSavedAt === id && s.electionAt !== id, (el) =>
+          el.child(
+            div()
+              .id("fp-election-saved")
+              .flex()
+              .flex_row()
+              .items_center()
+              .gap(6)
+              .mt(SPACE[1])
+              .child(Icon(cx, "circle-check", { size: 14, color: "success" }))
+              .child(Text(cx, "meta", `Saved to the tax profile for ${ui.taxYear()}. Later returns reuse it.`, "success").whitespace_normal()),
+          ),
+        )
         // A notice the filer may mark checked: one button each, nothing on the return changes.
         .children(
           (s.editable ? s.checkable?.[id] || [] : []).map((c) =>
@@ -3123,11 +3820,8 @@ function formContent(cx, app, width) {
   if (!f) {
     return { early: PageHeader(cx, { title: `Form ${s.code}`, lede: s.error || "This form has no on-screen layout." }) };
   }
-  // The return's own TIN and branch decide whose it is; never a name match
-  // or whichever taxpayer happens to be selected.
-  const branch = app.branchFor(s.tin);
-  const tp = branch ? app.taxpayers().find((x) => x.tin_root === branch.tin_root) : null;
-  const branchCode = String(s.tin).slice(9) || "00000";
+  // Whose return it is shows in the title-bar pill: opening a return selects
+  // its taxpayer (main.js `openForm`), so the page repeats no taxpayer card.
   const draftLayout = f.q < 0.8;
 
   // A library sample saves as its period's return (Queue saves it first);
@@ -3156,6 +3850,9 @@ function formContent(cx, app, width) {
   if (s.status !== "Draft") chips.child(Chip(cx, s.editable ? s.status : `${s.status} · read-only`, s.status === "Queued" ? "accent" : "success"));
   if (s.amends || s.filedOriginal) chips.child(Chip(cx, "Amended return", "warning"));
   if (s.filedOriginalView) chips.child(Chip(cx, "Filed original · read-only", "success"));
+  if (s.sample) chips.child(Chip(cx, "Sample", "accent"));
+  if (s.loading) chips.child(Chip(cx, "Opening…", "accent"));
+  if (s.agentReview) chips.child(Chip(cx, "Prepared by the assistant — review, then Queue", "accent"));
 
   const head = div()
     .flex()
@@ -3163,6 +3860,7 @@ function formContent(cx, app, width) {
     .flex_wrap()
     .items_start()
     .gap(14)
+    .mb(SPACE[5])
     .child(
       div()
         .flex()
@@ -3182,55 +3880,9 @@ function formContent(cx, app, width) {
         .children(actions),
     );
 
-  const bar = div()
-    .flex()
-    .flex_row()
-    .flex_wrap()
-    .items_center()
-    .gap_x(SPACE[3])
-    .gap_y(SPACE[2])
-    .my(SPACE[5])
-    .py(10)
-    .px(SPACE[3])
-    .rounded(RADIUS.card)
-    .border(1)
-    .border_color(t.border)
-    .bg(t.bg);
-  if (tp) {
-    bar
-      .child(Avatar(cx, tp.name, 20, tp.tin_root))
-      .child(Text(cx, "control", tp.name).font_weight(600))
-      .child(Code(cx, formatTin(tp.tin_root, branchCode), "fg2").font_weight(400))
-      .child(Text(cx, "meta", branch ? branch.name : "", "fg2"));
-  } else {
-    bar.child(Code(cx, formatTin(String(s.tin).slice(0, 9), branchCode), "fg2").font_weight(400));
-  }
-  bar.child(div().size(3).rounded(RADIUS.full).bg(t.fg3));
-  bar.child(Text(cx, "meta", s.sample ? "Sample from the Form library" : `For ${periodLabel(f.freq, s.year, s.period)}`, "fg2"));
-  if (s.loading) bar.child(Chip(cx, "Opening…", "accent"));
-  if (s.agentReview) bar.child(Chip(cx, "Prepared by the assistant — review, then Queue", "accent"));
-  bar.child(div().flex_1());
-  // Guided mode walks the fields a template marks, so it shows only when this
-  // branch's template for the form marks some.
-  const template = app.store.templates(s.tin).find((x) => x.form_code === s.code);
-  if (template && template.marked > 0) {
-    bar.child(
-      div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(SPACE[2])
-        .child(Text(cx, "meta", "Guided mode", "fg2"))
-        .child(
-          Switch(cx, "fp-guided", s.guided, (v, cx) => {
-            s.guided = v;
-            cx.notify();
-          }, "Guided mode"),
-        ),
-    );
-  }
-
-  const page = div().flex().flex_col().child(head).child(bar);
+  // Template mode (once the Guided mode switch here) is the section pill's
+  // "Template stops" switch.
+  const page = div().flex().flex_col().child(head);
   if (s.sample) page.child(Text(cx, "meta", SAMPLE_NOTE, "fg2").mb(SPACE[4]).whitespace_normal());
   // A draft whose untouched profile boxes followed a later profile change.
   if (s.profileUpdates?.length) page.child(Text(cx, "meta", profileUpdatesNote(s.profileUpdates), "fg2").mb(SPACE[4]).whitespace_normal());
@@ -3268,12 +3920,13 @@ function formContent(cx, app, width) {
     return { page: page.child(div().py(40).flex().justify_center().child(Text(cx, "body", `Opening ${f.c}…`, "fg3"))) };
   }
 
-  // Part navigator: 208 px beside the parts, a chip row below 760 px. Labels
-  // wrap instead of truncating; each part shows its item count and, in red,
-  // how many of its items have a validation message.
+  // Part navigator: 208 px beside the parts from 760 px; below that the
+  // section pill alone (its list is every part). Labels wrap instead of
+  // truncating; each part shows its item count and, in red, how many of its
+  // items have a validation message.
   const sideNav = width >= BREAK.formNav;
   const partsW = sideNav ? width - 208 - 28 : width;
-  const errorsIn = (pi) => Object.keys(s.messages).filter((id) => id.startsWith(`${pi}:`)).length;
+  const errorsIn = (pi) => ui.partErrors(pi);
   const badge = (text, danger) =>
     div()
       .flex()
@@ -3286,7 +3939,7 @@ function formContent(cx, app, width) {
       .rounded(RADIUS.full)
       .bg(danger ? t.danger : t.hover)
       .child(Text(cx, "cap", text, danger ? "primaryFg" : "fg2").when(danger, (el) => el.text_color(t.surface)));
-  const nav = sideNav ? div().flex().flex_col().gap(2).w(208).flex_none() : div().flex().flex_row().flex_wrap().gap(SPACE[1]).mb(SPACE[4]);
+  const nav = div().flex().flex_col().gap(2).w(208).flex_none();
   // Heading: where you are, and a link to the next part with something to fix.
   const openOne = s.openParts.size === 1 ? [...s.openParts][0] : -1;
   const navHead = div()
@@ -3342,19 +3995,6 @@ function formContent(cx, app, width) {
         )
         .child(div().flex().flex_row().flex_none().gap(SPACE[1]).when(errors > 0, (el) => el.child(badge(String(errors), true))).child(badge(String(p.items.length), false)));
       navRows.push(row);
-    } else {
-      nav.child(
-        div()
-          .id(`fp-nav-${i}`)
-          .flex()
-          .flex_row()
-          .items_center()
-          .gap(SPACE[1])
-          .cursor_pointer()
-          .on_click((_e, cx) => ui.jumpTo(i, cx))
-          .child(Chip(cx, `${partName(p, i)} · ${p.items.length}`, s.openParts.has(i) ? "accent" : "neutral"))
-          .when(errors > 0, (el) => el.child(badge(String(errors), true))),
-      );
     }
   });
 
@@ -3445,7 +4085,9 @@ function drawFormPage(cx, app, width) {
     for (const row of c.navRows) c.nav.child(row);
     return c.page.child(div().flex().flex_row().items_start().gap(28).child(c.nav).child(c.parts));
   }
-  return c.page.child(c.nav).child(c.parts);
+  // Narrow: no wrapped chip row; the section pill (main.js floats it over
+  // main-scroll) lists and steps the parts.
+  return c.page.child(c.parts);
 }
 
 /**
@@ -3478,10 +4120,12 @@ function drawFormSplit(cx, app, L) {
       .when(Boolean(c.attn), (el) => el.child(c.attn))
       .child(div().id("fp-nav-list").flex().flex_col().gap(2).flex_1().min_h(0).w(navW).overflow_y_scrollbar().children(c.navRows));
   }
-  const body = div().flex().flex_col().w_full().max_w(formW + 52).min_w(0).pl(22).pr(30).pt(28).pb(56).child(c.page);
+  // Room under the last part for the pill floating over it.
+  const body = div().flex().flex_col().w_full().max_w(formW + 52).min_w(0).pl(22).pr(30).pt(28).pb(110).child(c.page);
   if (c.parts) body.child(c.parts);
-  return div()
+  const split = div()
     .id("fp-split")
+    .relative()
     .flex()
     .flex_row()
     .flex_1()
@@ -3489,4 +4133,9 @@ function drawFormSplit(cx, app, L) {
     .w_full()
     .child(navCol)
     .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
+  // A wide window keeps the side list and has the pill too (the owner's
+  // note on pick 8): it floats over fp-scroll.
+  const pill = c.parts ? app.formUi.pillView() : null;
+  if (pill) split.child(pill);
+  return split;
 }

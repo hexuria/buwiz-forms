@@ -15,6 +15,8 @@ use serde_json::Value;
 
 use super::{Database, DbError};
 use crate::forms::FilingStatus;
+use crate::forms::agent::AgentFormKind;
+use crate::forms::agent::template_stops::{self, TemplateStops};
 use crate::forms::forms_set::{FormSetEntry, FormSetSource, PerYearFormsSet};
 use crate::forms::registry::canonical_form_code;
 use crate::profile::{TaxpayerProfile, TaxpayerType};
@@ -499,6 +501,16 @@ impl TemplateRow {
             updated_at: self.updated_at,
         })
     }
+}
+
+/// The on-screen form a template's stops are drawn on, and its canonical code.
+fn page_form(form_code: &str) -> Result<(AgentFormKind, String)> {
+    let form_code = canonical_form_code(form_code);
+    let kind = AgentFormKind::from_code(&form_code)
+        .ok_or_else(|| TaxProfileError::NotFound(format!("No on-screen form {form_code}")))?;
+    field_kinds_for(&form_code)
+        .ok_or_else(|| TemplateFieldError::FormNotClassified(form_code.clone()))?;
+    Ok((kind, form_code))
 }
 
 fn query_template(conn: &Connection, tin: &str, form_code: &str) -> Result<Option<FormTemplate>> {
@@ -1750,6 +1762,51 @@ impl Database {
             .ok_or_else(|| TaxProfileError::NotFound(form_code))
     }
 
+    /// The form page's template stops for this branch's template of
+    /// `form_code` (the section pill's ‹ and ›), as page keys; `None` when
+    /// the branch has no template for the form.
+    pub fn template_stops(&self, tin: &str, form_code: &str) -> Result<Option<TemplateStops>> {
+        let (kind, form_code) = page_form(form_code)?;
+        Ok(query_template(&self.conn, tin, &form_code)?
+            .map(|template| template_stops::page_stops(kind, &template)))
+    }
+
+    /// "Stop here" on the form page: mark (`on`) or unmark the field the box
+    /// `key` writes in this branch's template of `form_code`. A field the
+    /// template keeps a value for is not turned into a stop.
+    pub fn set_template_stop(
+        &self,
+        tin: &str,
+        form_code: &str,
+        key: &str,
+        on: bool,
+    ) -> Result<TemplateStops> {
+        let (kind, form_code) = page_form(form_code)?;
+        let field = template_stops::field_of_key(kind, key).ok_or_else(|| {
+            TaxProfileError::Invalid(format!("`{key}` cannot be a template stop on {form_code}"))
+        })?;
+        let template = query_template(&self.conn, tin, &form_code)?.ok_or_else(|| {
+            TaxProfileError::NotFound(format!("Branch {tin} has no {form_code} template"))
+        })?;
+        let mut fields = template.fields;
+        let marked = match fields.get(&field) {
+            Some(TemplateField::Kept { .. }) => {
+                return Err(TaxProfileError::Invalid(format!(
+                    "The {form_code} template keeps an answer for `{field}`; it is filled in, not a stop"
+                )));
+            }
+            Some(TemplateField::Marked) => true,
+            None => false,
+        };
+        if on && !marked {
+            fields.insert(field, TemplateField::Marked);
+        } else if !on && marked {
+            fields.remove(&field);
+        }
+        let template = self.update_form_template_fields(tin, &form_code, fields)?;
+        Ok(template_stops::page_stops(kind, &template))
+    }
+
     /// Returns whether a template was deleted.
     pub fn delete_form_template(&self, tin: &str, form_code: &str) -> Result<bool> {
         Ok(self.conn.execute(
@@ -2381,6 +2438,46 @@ mod tests {
             &choices(&[("item_13_election", TemplateChoice::Keep)]),
         );
         assert!(matches!(unfiled, Err(TaxProfileError::Invalid(_))));
+    }
+
+    #[test]
+    fn stop_here_marks_and_unmarks_the_field_a_page_box_writes() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        assert_eq!(db.template_stops(HEAD, "2551Q").unwrap(), None);
+        db.create_blank_form_template(HEAD, "2551Q", &[]).unwrap();
+        let none = db.template_stops(HEAD, "2551Q").unwrap().unwrap();
+        assert!(none.stops.is_empty());
+        let item_13 = "frm2551Qv2018:taxRate2";
+        assert!(none.markable.iter().any(|key| key == item_13));
+
+        let marked = db.set_template_stop(HEAD, "2551Q", item_13, true).unwrap();
+        assert!(marked.stops.iter().any(|key| key == item_13));
+        assert_eq!(
+            db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields["item_13_election"],
+            TemplateField::Marked
+        );
+        // The other Item 13 radio writes the same field: one stop, both keys.
+        assert!(
+            marked
+                .stops
+                .iter()
+                .any(|key| key == "frm2551Qv2018:taxRate1")
+        );
+
+        let unmarked = db.set_template_stop(HEAD, "2551Q", item_13, false).unwrap();
+        assert!(unmarked.stops.is_empty());
+        assert!(
+            db.get_form_template(HEAD, "2551Q")
+                .unwrap()
+                .unwrap()
+                .fields
+                .is_empty()
+        );
+        // An Auto box (the profile's RDO) is never a stop.
+        assert!(matches!(
+            db.set_template_stop(HEAD, "2551Q", "frm2551Qv2018:txtRDOCode", true),
+            Err(TaxProfileError::Invalid(_))
+        ));
     }
 
     #[test]

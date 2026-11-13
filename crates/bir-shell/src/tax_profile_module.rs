@@ -6,8 +6,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use bir_core::db::Database;
+use bir_core::forms::agent::template_stops::TemplateStops;
 use bir_core::forms::registry::canonical_form_code;
-use bir_core::profile::{EmailAuthMethod, TaxpayerProfile, TaxpayerType};
+use bir_core::profile::{EmailAuthMethod, IncomeTaxElection, TaxpayerProfile, TaxpayerType};
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
     ResolvedBranch, StarterPack, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
@@ -102,6 +103,14 @@ export function list_form_templates(tin: string): FormTemplateSummary[];
 export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
 export function create_template_from_return(draft_id: number): FormTemplateSummary;
 export function delete_form_template(tin: string, form_code: string): boolean;
+/** The form page's template stops, as page keys: `stops` write a field the template marks, `markable` may be marked ("Stop here"). */
+export interface TemplateStops { stops: string[]; markable: string[]; }
+/** null when the branch has no template for the form. */
+export function template_stops(tin: string, form_code: string): TemplateStops | null;
+/** Mark (`on`) or unmark the template field the page box `key` writes. */
+export function set_template_stop(tin: string, form_code: string, key: string, on: boolean): TemplateStops;
+/** The annual income-tax election for one taxable year, on the tax profile; refused for a year with no self-employed or mixed-income registration. */
+export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
 export interface RdoOption { code: string; description: string; }
 export function list_rdos(): RdoOption[];
 export function list_zip_codes(): string[];
@@ -184,6 +193,9 @@ pub fn register(module: HostModule) -> HostModule {
         .function("create_template_from_latest", create_template_from_latest)
         .function("create_template_from_return", create_template_from_return)
         .function("delete_form_template", delete_form_template)
+        .function("template_stops", template_stops)
+        .function("set_template_stop", set_template_stop)
+        .function("record_income_tax_election", record_income_tax_election)
         .function("list_rdos", |_| list_rdos())
         .function("list_zip_codes", |_| list_zip_codes())
         .function("inbox_state", inbox_state)
@@ -727,6 +739,60 @@ fn delete_form_template(arguments: &HostArguments) -> HostResult {
         db.delete_form_template(tin, form_code)
             .map(HostValue::Bool)
             .map_err(host_error)
+    })
+}
+
+fn stops_record(stops: &TemplateStops) -> HostValue {
+    HostObject::new()
+        .field("stops", strings(stops.stops.iter().cloned()))
+        .field("markable", strings(stops.markable.iter().cloned()))
+        .into()
+}
+
+fn template_stops(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let form_code = arguments.string(1)?;
+    with_reader(|db| {
+        let stops = db.template_stops(tin, form_code).map_err(host_error)?;
+        Ok(stops.as_ref().map_or(HostValue::Null, stops_record))
+    })
+}
+
+fn set_template_stop(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let form_code = arguments.string(1)?;
+    let key = arguments.string(2)?;
+    let on = arguments.boolean(3)?;
+    with_database(|db| {
+        let stops = db
+            .set_template_stop(tin, form_code, key, on)
+            .map_err(host_error)?;
+        Ok(stops_record(&stops))
+    })
+}
+
+// ---------- income-tax election ----------
+
+/// The 2551Q page's Item 13 question: the election for the return's own
+/// taxable year, written to the tax profile (bir-core checks the year is
+/// one the confirmed profile may elect in). The page then re-syncs its open
+/// draft with `screen_form_use_profile`.
+fn record_income_tax_election(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let election = match arguments.string(2)? {
+        "graduated" => IncomeTaxElection::GraduatedUnspecified,
+        "eight_percent" => IncomeTaxElection::EightPercent,
+        other => {
+            return Err(HostError::new(format!(
+                "`{other}` is not an income-tax election; use graduated or eight_percent"
+            )));
+        }
+    };
+    with_database(|db| {
+        db.record_income_tax_election(tin, year, election)
+            .map_err(|error| HostError::new(error.to_string()))?;
+        Ok(HostValue::Bool(true))
     })
 }
 

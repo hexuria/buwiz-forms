@@ -4,8 +4,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::{Database, DbError};
 use crate::profile::{
-    TaxProfileVersion, TaxProfileVersionConfirmationPlan, TaxProfileVersionSource,
-    TaxProfileVersionStatus, TaxpayerProfile,
+    IncomeTaxElection, TaxProfileVersion, TaxProfileVersionConfirmationPlan,
+    TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
 };
 
 /// See [`Database::confirm_initial_profile_year`]. `conn` may be an open
@@ -709,6 +709,29 @@ impl Database {
         self.get_profile(tin)
     }
 
+    /// The filer's answer to the annual income-tax election for taxable year
+    /// `year` (the 2551Q page asks it at Item 13 of a later quarter): written
+    /// to the profile's election ledger for that year only
+    /// ([`TaxpayerProfile::set_income_tax_election`]). Refused for a year the
+    /// confirmed profile has no Self-Employed or Mixed Income segment in.
+    pub fn record_income_tax_election(
+        &self,
+        tin: &str,
+        year: u16,
+        election: IncomeTaxElection,
+    ) -> Result<TaxpayerProfile, DbError> {
+        let mut profile = self
+            .get_profile(tin)?
+            .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))?;
+        if !profile.eligible_for_income_tax_election_in_year(year) {
+            return Err(DbError::Other(format!(
+                "The tax profile has no confirmed self-employed or mixed-income registration for {year}, so it cannot record an income-tax election for that year"
+            )));
+        }
+        profile.set_income_tax_election(year, election);
+        self.save_profile(profile)
+    }
+
     /// Delete a profile by TIN.
     pub fn delete_profile(&self, tin: &str) -> Result<(), DbError> {
         if self.get_profile_calendar_link(tin)?.is_some() {
@@ -767,6 +790,82 @@ mod tests {
             "business_start_date": "2020-01-01"
         }))
         .unwrap()
+    }
+
+    /// The 2551Q page's Item 13 question writes the election for the
+    /// return's own taxable year; a later-quarter return built from the
+    /// profile then passes the election check it failed before.
+    #[test]
+    fn a_recorded_election_is_read_back_for_its_year_and_clears_the_2551q_check() {
+        use crate::forms::form_2551q::Form2551QDraft;
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        let mut profile = listing_test_profile("111");
+        profile.tax_classification = Some(crate::profile::TaxClassification::SelfEmployed);
+        let tin = db.save_profile(profile).unwrap().tin.full();
+        let election_error = |profile: &TaxpayerProfile| {
+            Form2551QDraft::new_from_profile(profile, 2026, 3)
+                .filing_errors()
+                .into_iter()
+                .any(|(field, _)| field == "annual_income_tax_election")
+        };
+        let before = db.get_profile(&tin).unwrap().unwrap();
+        assert!(
+            before.eligible_for_income_tax_election_in_year(2026),
+            "precondition"
+        );
+        assert!(
+            election_error(&before),
+            "precondition: Q3 needs the election"
+        );
+
+        db.record_income_tax_election(&tin, 2026, IncomeTaxElection::EightPercent)
+            .unwrap();
+        db.record_income_tax_election(&tin, 2025, IncomeTaxElection::GraduatedUnspecified)
+            .unwrap();
+        let after = db.get_profile(&tin).unwrap().unwrap();
+        assert_eq!(
+            after.income_tax_election_for_year(2026),
+            Some(IncomeTaxElection::EightPercent)
+        );
+        assert_eq!(
+            after.income_tax_election_for_year(2025),
+            Some(IncomeTaxElection::GraduatedUnspecified)
+        );
+        assert_eq!(after.income_tax_election_for_year(2024), None);
+        assert!(
+            !election_error(&after),
+            "the recorded 2026 election clears Q3"
+        );
+
+        // Changing 2026's answer keeps 2025's.
+        db.record_income_tax_election(&tin, 2026, IncomeTaxElection::GraduatedUnspecified)
+            .unwrap();
+        let changed = db.get_profile(&tin).unwrap().unwrap();
+        assert_eq!(
+            changed.income_tax_election_for_year(2026),
+            Some(IncomeTaxElection::GraduatedUnspecified)
+        );
+        assert_eq!(
+            changed.income_tax_election_for_year(2025),
+            Some(IncomeTaxElection::GraduatedUnspecified)
+        );
+
+        // A year before any confirmed registration is refused, unwritten.
+        assert!(
+            db.record_income_tax_election(&tin, 2019, IncomeTaxElection::EightPercent)
+                .is_err()
+        );
+        assert_eq!(
+            db.get_profile(&tin)
+                .unwrap()
+                .unwrap()
+                .income_tax_election_for_year(2019),
+            None
+        );
+        assert!(
+            db.record_income_tax_election("999456789000", 2026, IncomeTaxElection::EightPercent)
+                .is_err()
+        );
     }
 
     /// Reproduces the failure that hid every taxpayer profile in the sidebar.

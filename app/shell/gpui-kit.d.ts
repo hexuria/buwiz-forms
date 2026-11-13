@@ -28031,6 +28031,14 @@ declare module "bir" {
   export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
   export function create_template_from_return(draft_id: number): FormTemplateSummary;
   export function delete_form_template(tin: string, form_code: string): boolean;
+  /** The form page's template stops, as page keys: `stops` write a field the template marks, `markable` may be marked ("Stop here"). */
+  export interface TemplateStops { stops: string[]; markable: string[]; }
+  /** null when the branch has no template for the form. */
+  export function template_stops(tin: string, form_code: string): TemplateStops | null;
+  /** Mark (`on`) or unmark the template field the page box `key` writes. */
+  export function set_template_stop(tin: string, form_code: string, key: string, on: boolean): TemplateStops;
+  /** The annual income-tax election for one taxable year, on the tax profile; refused for a year with no self-employed or mixed-income registration. */
+  export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
   export interface RdoOption { code: string; description: string; }
   export function list_rdos(): RdoOption[];
   export function list_zip_codes(): string[];
