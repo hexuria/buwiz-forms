@@ -25,6 +25,15 @@ mas_build = []
 # connection, to stage a filed return or force a failing write. Never on in
 # a build that ships.
 test-support = []
+# The local mock BIR SFTP server (`mock_bir` binary, `just mock-bir`). Never
+# on in a build that ships: the app does not enable it, so no listening code
+# is linked into it.
+mock-bir = []
+
+[[bin]]
+name = "mock_bir"
+path = "src/bin/mock_bir.rs"
+required-features = ["mock-bir"]
 
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.2.0" }

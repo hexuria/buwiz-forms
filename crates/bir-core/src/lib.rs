@@ -59,8 +59,10 @@ pub mod transport;
 pub mod validation;
 pub mod validation_summary;
 
-#[cfg(test)]
-mod sftp_loopback;
+/// Local mock of the BIR SFTP endpoint. Tests and the `mock-bir` feature
+/// only; the shipped app never enables it.
+#[cfg(any(test, feature = "mock-bir"))]
+pub mod mock_bir;
 
 // Re-export core types
 pub use bir_rules::{
