@@ -3118,6 +3118,14 @@ class FormPill extends View {
   }
 }
 
+/** The pill's popover at most (px), and what its list leaves for the header and template rows. */
+const PILL_POPOVER_MAX = 440;
+const PILL_LIST_HEAD = 64;
+const PILL_LIST_STOPS = 72;
+const PILL_SHEET_HANDLE = 24;
+/** The list shows at least about three rows, however short the window. */
+const PILL_LIST_MIN = 150;
+
 function drawPill(cx, ui, view) {
   const s = ui.state;
   const t = tokens(cx);
@@ -3251,8 +3259,14 @@ function drawPill(cx, ui, view) {
     .child(step(1));
 
   // The list: every section, the ones to fix in red; the open one marked.
-  const list = () => {
+  // `room` is the most the sheet or popover may take. The popover and the
+  // sheet size to their content (no definite height of their own), so the
+  // scrolled list gets a definite max height here, as the combo boxes' lists
+  // do: a flex_1 / min_h(0) scroll area in an auto-height box gets no height
+  // from the toolkit and draws no row (the first build's empty popover).
+  const list = (room) => {
     const bad = needing.length;
+    const listMax = Math.max(PILL_LIST_MIN, room - PILL_LIST_HEAD - (s.stops ? PILL_LIST_STOPS : 0));
     const rows = parts.map((p, i) => {
       const names = sectionNames(p, i);
       const errors = ui.partErrors(i);
@@ -3261,6 +3275,7 @@ function drawPill(cx, ui, view) {
         .id(`fp-section-${i}`)
         .flex()
         .flex_row()
+        .flex_shrink(0)
         .items_center()
         .gap(SPACE[3])
         .w_full()
@@ -3298,7 +3313,6 @@ function drawPill(cx, ui, view) {
     const body = div()
       .flex()
       .flex_col()
-      .min_h(0)
       .child(
         div()
           .flex()
@@ -3309,7 +3323,7 @@ function drawPill(cx, ui, view) {
           .child(Text(cx, "meta", "On this form", "fg2"))
           .child(Text(cx, "title", `${parts.length} section${parts.length > 1 ? "s" : ""}${bad ? ` · ${bad} need${bad > 1 ? "" : "s"} attention` : ""}`).whitespace_normal()),
       )
-      .child(div().id("fp-sections-list").flex().flex_col().flex_1().min_h(0).px(SPACE[2]).overflow_y_scrollbar().children(rows));
+      .child(div().id("fp-sections-list").flex().flex_col().flex_none().max_h(listMax).px(SPACE[2]).overflow_y_scroll().children(rows));
     // The branch's template for the form: ‹ and › stop on what it marks.
     if (s.stops) {
       body.child(
@@ -3345,6 +3359,7 @@ function drawPill(cx, ui, view) {
   if (view.listOpen && !wide) {
     // Narrow: a bottom sheet over the page; the scrim or its handle closes it.
     const height = Math.round(((L.vp?.height ?? 800) - SIZE.titleBar) * 0.84);
+    const room = height - PILL_SHEET_HANDLE - SPACE[4];
     return div()
       .id("fp-pill-layer")
       .absolute()
@@ -3360,7 +3375,6 @@ function drawPill(cx, ui, view) {
           .flex()
           .flex_col()
           .w_full()
-          .max_h(height)
           .pb(SPACE[4])
           .rounded_t(22)
           .border_t(1)
@@ -3381,7 +3395,7 @@ function drawPill(cx, ui, view) {
               .on_click((_e, cx) => close(cx))
               .child(div().w(36).h(5).rounded(RADIUS.full).bg(t.borderStrong)),
           )
-          .child(list()),
+          .child(list(room)),
       );
   }
   // At the bottom, centred over the form (beside the side list when wide);
@@ -3399,6 +3413,8 @@ function drawPill(cx, ui, view) {
     .gap(SPACE[2])
     .px(SPACE[4]);
   if (view.listOpen) {
+    // Above the pill (56), its 16 px inset and the 8 px gap, under the title bar.
+    const room = Math.min(PILL_POPOVER_MAX, (L.vp?.height ?? 800) - SIZE.titleBar - 56 - SPACE[4] - SPACE[2] - SPACE[4]) - SPACE[1] - SPACE[2];
     layer.on_mouse_down_out((_e, cx) => close(cx));
     layer.child(
       div()
@@ -3407,7 +3423,6 @@ function drawPill(cx, ui, view) {
         .flex_col()
         .w(420)
         .max_w_full()
-        .max_h(440)
         .pt(SPACE[1])
         .pb(SPACE[2])
         .rounded(RADIUS.dialog)
@@ -3415,7 +3430,7 @@ function drawPill(cx, ui, view) {
         .border_color(t.borderStrong)
         .bg(t.raised)
         .shadow_xl()
-        .child(list()),
+        .child(list(room)),
     );
   }
   return layer.child(pill);

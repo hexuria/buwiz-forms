@@ -265,6 +265,30 @@ function frame(app) {
   return tree;
 }
 const pillEntity = (app) => app.formUi.state.pill.entity;
+/**
+ * The sheet or popover lays out in the real toolkit: it has no height of its
+ * own (it sizes to its content), so its scrolled list needs a definite max
+ * height and must not be a flex_1 / zero-basis item, which the toolkit gives
+ * no height there (the first build drew the header and no row). Every
+ * section is a row directly in that list, in the pill's own view, and a row
+ * never shrinks.
+ */
+function assertListLaysOut(app, room) {
+  const tree = pillEntity(app).tree;
+  const sections = one(tree, "fp-sections");
+  assert.ok(!sections.calls.some((c) => c[0] === "h" || c[0] === "flex_1"), "the sheet or popover sizes to its content");
+  const list = one(tree, "fp-sections-list");
+  const max = list.calls.find((c) => c[0] === "max_h");
+  assert.ok(max && typeof max[1] === "number" && max[1] >= 150 && max[1] <= room, `the list has a definite max height within ${room}: ${max}`);
+  for (const bad of ["flex_1", "flex_grow", "flex_basis", "min_h", "size_full", "h_full", "overflow_y_scrollbar"]) {
+    assert.ok(!has(list, bad), `the list is not ${bad}()`);
+  }
+  assert.ok(has(list, "flex_none") && has(list, "overflow_y_scroll"), "a fixed item that scrolls, like the combo lists");
+  const rows = list.kids.map((k) => meta.get(k)?.id);
+  const parts = app.formUi.state.schema.parts;
+  assert.deepEqual(rows, parts.map((_p, i) => `fp-section-${i}`), "every section is a row of the list");
+  for (const k of list.kids) assert.ok(has(meta.get(k), "flex_shrink", 0), "a row keeps its height");
+}
 
 // ---- opening a return selects its taxpayer; the card is gone
 {
@@ -333,6 +357,7 @@ const pillEntity = (app) => app.formUi.state.pill.entity;
   assert.equal(byId(t, "fp-sections-scrim").length, 1, "narrow: a bottom sheet over a scrim");
   assert.ok(has(one(t, "fp-sections"), "bottom", 0) && has(one(t, "fp-sections"), "rounded_t", 22), "anchored to the bottom, rounded on top");
   assert.ok(texts(one(t, "fp-section-2")).includes("Fix · 1"), "the section to fix says so");
+  assertListLaysOut(app, Math.round((800 - 40) * 0.84));
   // The scrim closes it.
   fire(one(t, "fp-sections-scrim").down);
   t = frame(app);
@@ -382,6 +407,7 @@ for (const width of [1200, 1240]) {
   t = frame(app);
   assert.equal(byId(t, "fp-sections-scrim").length, 0, "wide: a popover, no scrim");
   assert.equal(byId(one(t, "fp-pill-layer"), "fp-sections").length, 1, "above the pill");
+  assertListLaysOut(app, 440);
   fire(one(t, "fp-pill-layer").out);
   t = frame(app);
   assert.equal(byId(t, "fp-sections").length, 0, "a click outside closes it");
@@ -443,6 +469,8 @@ for (const width of [1200, 1240]) {
   t = frame(app);
   click(t, "fp-pill-list");
   t = frame(app);
+  // With the template row under it, the list leaves it room.
+  assertListLaysOut(app, 440 - 72);
   fire(one(t, "fp-guided").click);
   t = frame(app);
   assert.equal(s.guided, false);
