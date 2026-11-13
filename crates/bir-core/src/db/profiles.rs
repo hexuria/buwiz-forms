@@ -732,6 +732,42 @@ impl Database {
         self.save_profile(profile)
     }
 
+    /// Whether [`Self::record_income_tax_election`] would accept `year`, and
+    /// if not, what the profile lacks. Only reads.
+    pub fn income_tax_election_readiness(
+        &self,
+        tin: &str,
+        year: u16,
+    ) -> Result<crate::profile::IncomeTaxElectionReadiness, DbError> {
+        let profile = self
+            .get_profile(tin)?
+            .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))?;
+        Ok(profile.income_tax_election_readiness(year))
+    }
+
+    /// An individual's income type from `effective_from`, as a new confirmed
+    /// profile version ([`TaxpayerProfile::confirm_income_registration`]),
+    /// saved with its reviewed confirmation plan so the save checks the
+    /// timeline change again.
+    pub fn confirm_income_registration(
+        &self,
+        tin: &str,
+        classification: crate::profile::TaxClassification,
+        effective_from: chrono::NaiveDate,
+    ) -> Result<TaxpayerProfile, DbError> {
+        let mut profile = self
+            .get_profile(tin)?
+            .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))?;
+        let plan = profile
+            .confirm_income_registration(
+                classification,
+                effective_from,
+                chrono::Local::now().date_naive(),
+            )
+            .map_err(DbError::Other)?;
+        self.save_profile_with_confirmation_plan(profile, &plan)
+    }
+
     /// Delete a profile by TIN.
     pub fn delete_profile(&self, tin: &str) -> Result<(), DbError> {
         if self.get_profile_calendar_link(tin)?.is_some() {
@@ -864,6 +900,67 @@ mod tests {
         );
         assert!(
             db.record_income_tax_election("999456789000", 2026, IncomeTaxElection::EightPercent)
+                .is_err()
+        );
+    }
+
+    /// A taxpayer added in the app has no income type, so its 2026 election
+    /// is refused: readiness says so before any write, and confirming the
+    /// registration (a reviewed version, through the checked save) is what
+    /// lets the unchanged election rule accept the year.
+    #[test]
+    fn confirming_the_registration_lets_the_unchanged_election_rule_accept_the_year() {
+        use crate::profile::{IncomeTaxElectionGap, TaxClassification};
+        let db = Database::open_in_memory_for_tests().expect("in-memory db");
+        let profile = listing_test_profile("111");
+        assert_eq!(profile.tax_classification, None, "precondition");
+        let tin = db.save_profile(profile).unwrap().tin.full();
+
+        let readiness = db.income_tax_election_readiness(&tin, 2026).unwrap();
+        assert_eq!(readiness.gap, IncomeTaxElectionGap::NotBusinessIncome);
+        assert!(
+            db.record_income_tax_election(&tin, 2026, IncomeTaxElection::EightPercent)
+                .is_err(),
+            "the rule refuses what readiness reported"
+        );
+
+        let date = |y, m, d| chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        db.confirm_income_registration(&tin, TaxClassification::SelfEmployed, date(2026, 1, 1))
+            .unwrap();
+        let stored = db.get_profile(&tin).unwrap().unwrap();
+        assert!(stored.eligible_for_income_tax_election_in_year(2026));
+        assert!(!stored.eligible_for_income_tax_election_in_year(2025));
+        assert!(
+            db.income_tax_election_readiness(&tin, 2026)
+                .unwrap()
+                .is_ready()
+        );
+        db.record_income_tax_election(&tin, 2026, IncomeTaxElection::EightPercent)
+            .unwrap();
+        assert!(
+            db.get_profile(&tin)
+                .unwrap()
+                .unwrap()
+                .has_8_percent_election(2026)
+        );
+
+        // The same start again is refused by the timeline rule, unwritten.
+        let versions = stored.profile_versions.len();
+        let refused = db
+            .confirm_income_registration(&tin, TaxClassification::MixedIncome, date(2026, 1, 1))
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("must start after"), "{refused}");
+        assert_eq!(
+            db.get_profile(&tin)
+                .unwrap()
+                .unwrap()
+                .profile_versions
+                .len(),
+            versions
+        );
+        assert!(
+            db.income_tax_election_readiness("999456789000", 2026)
                 .is_err()
         );
     }

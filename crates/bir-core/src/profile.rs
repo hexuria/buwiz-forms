@@ -403,6 +403,50 @@ impl ResolvedTaxProfileForYear {
     }
 }
 
+/// The first fact a taxable year lacks before its income-tax election can
+/// be recorded ([`TaxpayerProfile::eligible_for_income_tax_election_in_year`]).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum IncomeTaxElectionGap {
+    /// The year has a confirmed self-employed or mixed-income segment.
+    Ready,
+    /// No confirmed profile version covers any day of the year.
+    NoConfirmedRegistration,
+    /// The confirmed versions touching the year are undated or overlap.
+    TimelineNeedsReview,
+    /// The year's confirmed segments are not an individual's.
+    NotIndividual,
+    /// An individual, but registered for the year with no business income
+    /// (purely compensation, or no income type recorded).
+    NotBusinessIncome,
+}
+
+/// What a screen needs to say before it offers the annual income-tax
+/// election for one taxable year.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IncomeTaxElectionReadiness {
+    pub taxable_year: u16,
+    pub gap: IncomeTaxElectionGap,
+    /// The taxpayer type of the year's latest confirmed segment (an
+    /// individual's when there is one).
+    pub taxpayer_type: Option<TaxpayerType>,
+    /// That segment's income type, when it records one.
+    pub classification: Option<TaxClassification>,
+    /// When that segment took effect.
+    pub since: Option<NaiveDate>,
+    /// A new confirmed registration must start after this date: the latest
+    /// start of a confirmed version (any year). `None` when none is confirmed.
+    pub new_registration_after: Option<NaiveDate>,
+    /// The year's timeline problems, in the resolver's words.
+    pub issues: Vec<String>,
+}
+
+impl IncomeTaxElectionReadiness {
+    pub fn is_ready(&self) -> bool {
+        self.gap == IncomeTaxElectionGap::Ready
+    }
+}
+
 /// One confirmed profile segment resolved for an exact filing period.
 ///
 /// Forms must consume this result instead of the compatibility fields on
@@ -711,6 +755,144 @@ impl TaxpayerProfile {
                     Some(TaxClassification::SelfEmployed) | Some(TaxClassification::MixedIncome)
                 )
         })
+    }
+
+    /// Why [`Self::eligible_for_income_tax_election_in_year`] answers as it
+    /// does, for a screen that must not offer an election it would refuse.
+    /// `gap` is [`IncomeTaxElectionGap::Ready`] exactly when the year is
+    /// eligible; otherwise it names the first missing fact. Read-only.
+    pub fn income_tax_election_readiness(&self, year: u16) -> IncomeTaxElectionReadiness {
+        let resolved = self.resolve_tax_profile_for_year(year);
+        let shown = resolved
+            .effective_segments
+            .iter()
+            .rev()
+            .find(|segment| segment.taxpayer_type == TaxpayerType::Individual)
+            .or(resolved.effective_segments.last());
+        let gap = if self.eligible_for_income_tax_election_in_year(year) {
+            IncomeTaxElectionGap::Ready
+        } else if resolved.has_blocking_issues() {
+            IncomeTaxElectionGap::TimelineNeedsReview
+        } else if resolved.effective_segments.is_empty() {
+            IncomeTaxElectionGap::NoConfirmedRegistration
+        } else if shown.is_none_or(|segment| segment.taxpayer_type != TaxpayerType::Individual) {
+            IncomeTaxElectionGap::NotIndividual
+        } else {
+            IncomeTaxElectionGap::NotBusinessIncome
+        };
+        IncomeTaxElectionReadiness {
+            taxable_year: year,
+            gap,
+            taxpayer_type: shown.map(|segment| segment.taxpayer_type.clone()),
+            classification: shown.and_then(|segment| segment.tax_classification.clone()),
+            since: shown.and_then(|segment| segment.effective_from),
+            new_registration_after: self
+                .confirmed_profile_versions()
+                .iter()
+                .filter_map(|version| version.effective_from)
+                .max(),
+            issues: resolved
+                .issues
+                .into_iter()
+                .map(|issue| issue.message)
+                .collect(),
+        }
+    }
+
+    /// Record an individual's income type (purely compensation,
+    /// self-employed or mixed income) as a new profile version effective
+    /// from `effective_from`, confirmed through the reviewed workflow: the
+    /// returned plan is the one applied here, and the caller saves the
+    /// profile with it ([`crate::db::Database::save_profile_with_confirmation_plan`]),
+    /// which checks it again. The new version copies every other fact from
+    /// the confirmed version in effect that day (else from the flat
+    /// profile); an open earlier version ends the day before. Confirmed
+    /// versions are never rewritten, so a new one must start after the
+    /// latest confirmed start. `today` decides whether the flat
+    /// compatibility field follows. Refused, with the profile unchanged,
+    /// for a non-individual or a classification that is not an
+    /// individual's.
+    pub fn confirm_income_registration(
+        &mut self,
+        classification: TaxClassification,
+        effective_from: NaiveDate,
+        today: NaiveDate,
+    ) -> Result<TaxProfileVersionConfirmationPlan, String> {
+        let label = match classification {
+            TaxClassification::PurelyCompensation => "Compensation income only",
+            TaxClassification::SelfEmployed => "Self-employed",
+            TaxClassification::MixedIncome => "Mixed income",
+            _ => {
+                return Err(format!(
+                    "{classification:?} is not an individual's income type; choose compensation only, self-employed or mixed income"
+                ));
+            }
+        };
+        if let Some(latest) = self
+            .confirmed_profile_versions()
+            .iter()
+            .filter_map(|version| version.effective_from)
+            .max()
+            .filter(|latest| *latest >= effective_from)
+        {
+            return Err(format!(
+                "The tax profile already has a confirmed registration from {}; a new one must start after that date",
+                latest.format("%B %-d, %Y")
+            ));
+        }
+        let base = self
+            .confirmed_profile_versions()
+            .into_iter()
+            .rfind(|version| {
+                version
+                    .effective_from
+                    .is_some_and(|start| start <= effective_from)
+                    && version
+                        .effective_until
+                        .is_none_or(|end| end >= effective_from)
+            })
+            .unwrap_or_else(|| TaxProfileVersion::from_profile_backfill(self));
+        if base.taxpayer_type != TaxpayerType::Individual
+            || self.taxpayer_type != TaxpayerType::Individual
+        {
+            return Err(format!(
+                "Only an individual's tax profile records an income type; this one is registered as {:?}",
+                base.taxpayer_type
+            ));
+        }
+        let stem = format!("income-type-{effective_from}");
+        let mut id = stem.clone();
+        let mut n = 1;
+        while self.profile_versions.iter().any(|version| version.id == id) {
+            n += 1;
+            id = format!("{stem}-{n}");
+        }
+        let mut version = base;
+        version.id = id.clone();
+        version.label = format!("{label} from {}", effective_from.format("%B %-d, %Y"));
+        version.status = TaxProfileVersionStatus::Draft;
+        version.source = TaxProfileVersionSource::UserOverride;
+        version.effective_from = Some(effective_from);
+        version.effective_until = None;
+        version.needs_effective_date_review = false;
+        version.tax_classification = Some(classification.clone());
+        // The documents behind the earlier version do not attest this one.
+        version.evidence = Vec::new();
+
+        let mut next = self.clone();
+        next.profile_versions.push(version);
+        let plan = next
+            .profile_version_confirmation_plan(&id, effective_from)
+            .ok_or_else(|| "The new registration could not be planned".to_string())?;
+        if !next.apply_profile_version_confirmation_plan(&plan) {
+            return Err("The new registration could not be confirmed".to_string());
+        }
+        next.validate_confirmed_profile_timeline()?;
+        if effective_from <= today {
+            next.tax_classification = Some(classification);
+        }
+        *self = next;
+        Ok(plan)
     }
 
     /// Returns true if email tracking is active.
@@ -1774,6 +1956,177 @@ mod tests {
         // Overlapping confirmed versions are a timeline conflict; the year
         // must not claim eligibility until the conflict is resolved.
         assert!(!profile.eligible_for_income_tax_election_in_year(2026));
+        let readiness = profile.income_tax_election_readiness(2026);
+        assert_eq!(readiness.gap, IncomeTaxElectionGap::TimelineNeedsReview);
+        assert!(!readiness.issues.is_empty());
+    }
+
+    /// The readiness a screen reads before it offers the election agrees
+    /// with the rule the write applies, year by year, and names the gap.
+    #[test]
+    fn election_readiness_is_ready_exactly_when_the_year_is_eligible() {
+        let date = |y, m, d| NaiveDate::from_ymd_opt(y, m, d);
+        let mut profile = test_profile();
+        profile.taxpayer_type = TaxpayerType::Individual;
+        let mut unclassified = confirmed_version(
+            &profile,
+            "none",
+            "No type",
+            date(2020, 1, 1),
+            date(2022, 12, 31),
+        );
+        unclassified.tax_classification = None;
+        let mut compensation = confirmed_version(
+            &profile,
+            "comp",
+            "Compensation",
+            date(2023, 1, 1),
+            date(2024, 12, 31),
+        );
+        compensation.tax_classification = Some(TaxClassification::PurelyCompensation);
+        let mut self_employed = confirmed_version(
+            &profile,
+            "se",
+            "Self-employed",
+            date(2025, 1, 1),
+            date(2025, 12, 31),
+        );
+        self_employed.tax_classification = Some(TaxClassification::SelfEmployed);
+        let mut corporation =
+            confirmed_version(&profile, "corp", "Corporation", date(2026, 1, 1), None);
+        corporation.taxpayer_type = TaxpayerType::Corporation;
+        corporation.tax_classification = None;
+        profile.profile_versions = vec![unclassified, compensation, self_employed, corporation];
+
+        for year in 2018..=2027 {
+            let readiness = profile.income_tax_election_readiness(year);
+            assert_eq!(
+                readiness.is_ready(),
+                profile.eligible_for_income_tax_election_in_year(year),
+                "{year}"
+            );
+            assert_eq!(readiness.new_registration_after, date(2026, 1, 1));
+        }
+        let gap = |year| profile.income_tax_election_readiness(year).gap;
+        assert_eq!(gap(2019), IncomeTaxElectionGap::NoConfirmedRegistration);
+        assert_eq!(gap(2021), IncomeTaxElectionGap::NotBusinessIncome);
+        assert_eq!(gap(2024), IncomeTaxElectionGap::NotBusinessIncome);
+        assert_eq!(gap(2025), IncomeTaxElectionGap::Ready);
+        assert_eq!(gap(2026), IncomeTaxElectionGap::NotIndividual);
+        let compensation_year = profile.income_tax_election_readiness(2024);
+        assert_eq!(
+            compensation_year.classification,
+            Some(TaxClassification::PurelyCompensation)
+        );
+        assert_eq!(compensation_year.since, date(2023, 1, 1));
+    }
+
+    /// The registration control: a new confirmed version, planned and
+    /// applied by the reviewed workflow, closes the open one the day before
+    /// and makes the year eligible; it never rewrites a confirmed version.
+    #[test]
+    fn confirming_an_income_type_adds_a_reviewed_version_and_keeps_earlier_years() {
+        let date = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        let mut profile = test_profile();
+        profile.taxpayer_type = TaxpayerType::Individual;
+        let mut current = confirmed_version(&profile, "cor", "COR", Some(date(2020, 3, 1)), None);
+        current.tax_classification = None;
+        current.is_vat_registered = false;
+        profile.profile_versions = vec![current.clone()];
+        assert_eq!(
+            profile.income_tax_election_readiness(2026).gap,
+            IncomeTaxElectionGap::NotBusinessIncome
+        );
+
+        let before = profile.clone();
+        let plan = profile
+            .confirm_income_registration(
+                TaxClassification::SelfEmployed,
+                date(2026, 1, 1),
+                date(2026, 11, 13),
+            )
+            .unwrap();
+        assert_eq!(plan.effective_from, date(2026, 1, 1));
+        assert_eq!(plan.auto_close_consequences.len(), 1);
+        assert_eq!(
+            plan.auto_close_consequences[0].effective_until,
+            date(2025, 12, 31)
+        );
+        assert!(profile.eligible_for_income_tax_election_in_year(2026));
+        assert!(profile.income_tax_election_readiness(2026).is_ready());
+        // Earlier years keep the registration they had.
+        assert!(!profile.eligible_for_income_tax_election_in_year(2025));
+        let added = profile.profile_versions.last().unwrap();
+        assert_eq!(added.status, TaxProfileVersionStatus::Confirmed);
+        assert_eq!(added.source, TaxProfileVersionSource::UserOverride);
+        assert_eq!(
+            added.tax_classification,
+            Some(TaxClassification::SelfEmployed)
+        );
+        assert_eq!(
+            added.cor.rdo_code, current.cor.rdo_code,
+            "other facts carry over"
+        );
+        assert_eq!(
+            profile.tax_classification,
+            Some(TaxClassification::SelfEmployed)
+        );
+        // The plan is the one the reviewed save recomputes from the stored timeline.
+        let mut replay = before.clone();
+        replay.profile_versions.push({
+            let mut v = added.clone();
+            v.status = TaxProfileVersionStatus::Draft;
+            v
+        });
+        assert_eq!(
+            replay.profile_version_confirmation_plan(&added.id, date(2026, 1, 1)),
+            Some(plan)
+        );
+
+        // A date on or before a confirmed start is refused, unchanged.
+        let kept = profile.clone();
+        let refused = profile
+            .confirm_income_registration(
+                TaxClassification::MixedIncome,
+                date(2026, 1, 1),
+                date(2026, 11, 13),
+            )
+            .unwrap_err();
+        assert!(refused.contains("must start after"), "{refused}");
+        assert_eq!(profile.profile_versions.len(), kept.profile_versions.len());
+
+        // Not an individual's income type, or not an individual: refused.
+        assert!(
+            profile
+                .confirm_income_registration(
+                    TaxClassification::Corporation,
+                    date(2026, 6, 1),
+                    date(2026, 11, 13)
+                )
+                .is_err()
+        );
+        let mut corp = test_profile();
+        corp.taxpayer_type = TaxpayerType::Corporation;
+        assert!(
+            corp.confirm_income_registration(
+                TaxClassification::SelfEmployed,
+                date(2026, 1, 1),
+                date(2026, 11, 13)
+            )
+            .is_err()
+        );
+        assert!(corp.profile_versions.is_empty());
+
+        // A future date leaves the flat field alone.
+        let mut later = before;
+        later
+            .confirm_income_registration(
+                TaxClassification::MixedIncome,
+                date(2027, 1, 1),
+                date(2026, 11, 13),
+            )
+            .unwrap();
+        assert_eq!(later.tax_classification, None);
     }
 
     #[test]
