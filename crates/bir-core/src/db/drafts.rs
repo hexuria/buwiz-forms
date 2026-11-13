@@ -3491,6 +3491,7 @@ mod tests {
         Database {
             conn,
             _owner_lock: None,
+            reader_key: None,
         }
     }
 
