@@ -100,6 +100,8 @@ export class TaxpayerActions {
     this.inbox = null;
     this.inboxMsg = null;
     this.inboxBusy = false;
+    /** The save panel is open or the archive is being written. */
+    this.exportBusy = false;
     this.forms = null; // staged Set while editing forms
     this.formsQuery = InputState.new({ placeholder: "Find a form, like 1601C or VAT" });
     this.formsQuery.on("change", (_e, cx) => cx.notify());
@@ -165,9 +167,11 @@ export class TaxpayerActions {
    * Export this profile through the host's save dialog. The archive never
    * carries credentials; when the taxpayer has a PIN the typed cells gate the
    * export and are cleared after every attempt, so the PIN never sits in page
-   * state. A cancelled dialog is quiet.
+   * state. A cancelled dialog is quiet. The panel answers after the click
+   * returns, so the wait runs in a task; Export stays disabled until then.
    */
   exportProfile(cx) {
+    if (this.exportBusy) return;
     const app = this.app;
     const t = app.taxpayer();
     const hasPin = Boolean(app.taxpayerCreds(t.tin_root).has_pin);
@@ -177,12 +181,19 @@ export class TaxpayerActions {
       return app.toast("Type all 4 digits of the profile PIN first.", cx, "lock");
     }
     this.exportOtp.set_value("");
-    try {
-      const r = app.store.write("export_profile", app.branch().tin, pin);
-      if (r.kind === "exported") app.toast("Profile exported.", cx, "download");
-    } catch (e) {
-      app.toast(message(e), cx, "triangle-alert");
-    }
+    const tin = app.branch().tin;
+    this.exportBusy = true;
+    cx.notify();
+    cx.spawn(async (acx) => {
+      try {
+        const r = await app.store.writeAsync("export_profile", tin, pin);
+        if (r.kind === "exported") app.toast("Profile exported.", acx, "download");
+      } catch (e) {
+        app.toast(message(e), acx, "triangle-alert");
+      }
+      this.exportBusy = false;
+      acx.notify();
+    });
   }
 
   /** Taxpayer or branch switched: drop every edit in progress. */
@@ -1260,7 +1271,7 @@ export function profileExportCard(cx, app, tp) {
         .items_center()
         .gap(SPACE[2])
         .when(hasPin, (el) => el.child(PinCells(cx, ui.exportOtp, "tp-export-pin")))
-        .child(AppButton(cx, "tp-export-btn", "Export", { size: "sm", icon: "download", onClick: (_e, cx) => ui.exportProfile(cx) })),
+        .child(AppButton(cx, "tp-export-btn", "Export", { size: "sm", icon: "download", disabled: ui.exportBusy, onClick: (_e, cx) => ui.exportProfile(cx) })),
     ),
   ]);
 }
