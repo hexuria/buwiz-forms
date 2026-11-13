@@ -36,7 +36,7 @@ import {
   takesPointer,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
-import { recentOpenOptions, recentKey } from "./recent.js";
+import { recentOpenOptions, sameReturn } from "./recent.js";
 import { formatTin, shortDate } from "./store.js";
 import { periodOptions, periodLabel, frequencyOf } from "./periods.js";
 
@@ -320,14 +320,14 @@ export function renderSidebar(cx, app, full = false) {
     nav.child(GroupLabel(cx, "Recent"));
     // The return on screen is marked where it is; opening it never moves it.
     const form = app.view === "form" ? app.formUi?.state : null;
-    const openKey = form && !form.sample && !form.filedOriginal ? recentKey(form) : null;
+    const open = form && !form.sample && !form.filedOriginal ? recentOpenOptions(form) : null;
     recent.forEach((r) => {
       const name = (app.taxpayers().find((x) => x.tin_root === String(r.tin).slice(0, 9)) || {}).name || "";
       const label = `${r.code} ${periodLabel(frequencyOf(app.store.screenIndex(), r.code), r.year, r.period, true)} · ${name}`;
       nav.child(
         NavRow(cx, `recent-${String(r.key).replace(/[^A-Za-z0-9]/g, "-")}`, "file-text", label, {
           tooltip: label,
-          current: r.key === openKey,
+          current: Boolean(open) && sameReturn(r, open),
           onClick: (_e, cx) => app.openForm(recentOpenOptions(r), cx),
         }),
       );

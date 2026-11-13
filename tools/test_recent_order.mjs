@@ -64,10 +64,28 @@ assert.deepEqual(order(app), ["1701Q 2026 2", "1601EQ 2026 1", "1601C 2026 1", "
 app.bumpRecent(C);
 assert.deepEqual(order(app), ["2551Q 2026 1", "1701Q 2026 2", "1601EQ 2026 1", "1601C 2026 1"]);
 
-// A stored return's exact key is its own entry.
+// A listed return opened with its exact key (a Filings card) is the same
+// return: the entry takes the key where it is, and nothing is listed twice.
+const before = order(app);
 app.openForm({ ...C, returnKey: 7 }, cx);
-assert.equal(app.recent[0].key, `${TIN}|2551Q|2026|1|7`);
+assert.equal(app.recent[0].key, `${TIN}|2551Q|2026|1|7`, "the entry learned its exact key");
 assert.equal(app.recent.length, 4);
+assert.deepEqual(order(app).map((k) => k.replace(/ 7$/, "")), before, "in place: no second row, no move");
+assert.deepEqual(current(app), [rowId(app.recent[0])], "and it is the current row");
+// Opened again without the key (the form list): still that one row.
+app.openForm(C, cx);
+assert.equal(app.recent.filter((r) => r.code === "2551Q").length, 1, "one return, one row");
+assert.deepEqual(current(app), [rowId(app.recent[0])], "the row is current whichever way it was opened");
+app.bumpRecent(C);
+assert.equal(app.recent[0].key, `${TIN}|2551Q|2026|1|7`, "a save keeps the exact key");
+assert.equal(app.recent.filter((r) => r.code === "2551Q").length, 1);
+// A different exact key for the same period is another return.
+app.openForm({ ...C, returnKey: 8 }, cx);
+assert.deepEqual(host(app.recent.slice(0, 2).map((r) => r.key)), [`${TIN}|2551Q|2026|1|8`, `${TIN}|2551Q|2026|1|7`], "two exact keys, two rows");
+// A list an earlier build stored with one return twice reads back once.
+const twice = [recent.recentEntry({ ...A, returnKey: 3 }), recent.recentEntry(A), recent.recentEntry(B), recent.recentEntry(A)];
+assert.deepEqual(host(recent.loadRecent(twice).map((r) => r.key)), [`${TIN}|1601C|2026|1|3`, `${TIN}|1601C|2026|2`], "a doubled return keeps its first place");
+assert.deepEqual(host(recent.loadRecent([recent.recentEntry(A), recent.recentEntry({ ...A, returnKey: 3 })]).map((r) => r.key)), [`${TIN}|1601C|2026|1|3`], "and its exact key");
 
 // What is stored is the list as shown; a restart reads the same order.
 const stored = JSON.parse(storage.get(STORED));
