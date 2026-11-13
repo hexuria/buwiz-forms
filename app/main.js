@@ -740,6 +740,8 @@ class BirApp extends View {
 
   toggleSidebar(cx) {
     if (!this.shellChromeOpen()) return;
+    // Settings covers the sidebar: a toggle there would only show up later.
+    if (this.view === "settings") return;
     this.sidebarOpen = !this.sidebarOpen;
     if (this.sidebarOpen && this.narrow()) this.panel = null;
     this.accountMenu = false;
@@ -749,6 +751,8 @@ class BirApp extends View {
   /** A panel closes from its own trigger (the pill or the bell) and Esc. */
   togglePanel(which, cx) {
     if (!this.shellChromeOpen()) return;
+    // Settings covers the panel: one opened there must not pop open on return.
+    if (this.view === "settings") return;
     this.panel = this.panel === which ? null : which;
     if (this.panel) this.lastPanel = this.panel;
     if (this.panel && this.narrow()) this.sidebarOpen = false;
@@ -1140,20 +1144,23 @@ class BirApp extends View {
         items.push({ group: "Forms", label: `${f.c} · ${f.t}`, icon: "file-text", run: (cx) => this.startNewReturn(cx, f.c) });
       }
     }
-    items.push({
-      group: "Actions",
-      label: "Toggle sidebar",
-      icon: "panel-left",
-      hint: this.isMac ? "⌘B" : "Ctrl B",
-      run: (cx) => this.toggleSidebar(cx),
-    });
-    items.push({
-      group: "Actions",
-      label: this.panel ? "Hide right panel" : "Show right panel",
-      icon: "panel-right",
-      hint: this.isMac ? "⌘⌥B" : "Ctrl Alt B",
-      run: (cx) => this.toggleRightPanel(cx),
-    });
+    // Settings covers the sidebar and the panel: their toggles are not offered there.
+    if (this.view !== "settings") {
+      items.push({
+        group: "Actions",
+        label: "Toggle sidebar",
+        icon: "panel-left",
+        hint: this.isMac ? "⌘B" : "Ctrl B",
+        run: (cx) => this.toggleSidebar(cx),
+      });
+      items.push({
+        group: "Actions",
+        label: this.panel ? "Hide right panel" : "Show right panel",
+        icon: "panel-right",
+        hint: this.isMac ? "⌘⌥B" : "Ctrl Alt B",
+        run: (cx) => this.toggleRightPanel(cx),
+      });
+    }
     items.push({ group: "Actions", label: "Change theme", icon: "moon", run: (cx) => this.cycleTheme(cx) });
     items.push({ group: "Actions", label: "Components", icon: "layout-template", run: (cx) => this.go("gallery", cx) });
     if (!q) return items;

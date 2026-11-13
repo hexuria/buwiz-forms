@@ -76,8 +76,56 @@ function captionButtons(cx) {
     );
 }
 
+/** The theme button: the one title-bar control Settings keeps. */
+function themeButton(cx, app) {
+  return IconButton(cx, "tb-theme", themeIcon(app.themePref), {
+    tooltip: `Theme: ${app.themePref} (click to change)`,
+    onClick: (_e, cx) => app.cycleTheme(cx),
+  });
+}
+
+/**
+ * Settings covers the sidebar and the right panel, so its title bar keeps
+ * only the window buttons, Back to the app and the theme button.
+ */
+function renderSettingsTitleBar(cx, app) {
+  const left = div().flex().flex_row().flex_1().flex_basis(0).min_w(0).items_center().gap(SPACE[1]).pl(10);
+  if (app.isMac) left.child(div().w(52 + 14).flex_none()); // traffic lights (system-drawn)
+  left.child(
+    IconButton(cx, "tb-back", "arrow-left", {
+      tooltip: "Back to app",
+      onClick: (_e, cx) => app.closeSettings(cx),
+    }),
+  );
+  const right = div()
+    .flex()
+    .flex_row()
+    .flex_1()
+    .flex_basis(0)
+    .min_w(0)
+    .justify_end()
+    .items_center()
+    .gap(SPACE[1])
+    .h_full()
+    .when(app.isMac, (el) => el.pr(10))
+    .child(themeButton(cx, app));
+  if (!app.isMac && !app.isLinux) right.child(captionButtons(cx));
+  return div()
+    .id("title-bar")
+    .flex()
+    .flex_row()
+    .flex_none()
+    .items_center()
+    .w_full()
+    .h(SIZE.titleBar)
+    .window_control_area("drag")
+    .child(left)
+    .child(right);
+}
+
 /** Title bar: left controls, the context pill centred, notifications + theme right. */
 export function renderTitleBar(cx, app, L) {
+  if (app.view === "settings") return renderSettingsTitleBar(cx, app);
   const compact = L.vp.width < BREAK.compactPill;
   const left = div().flex().flex_row().flex_1().flex_basis(0).min_w(0).items_center().gap(SPACE[1]).pl(10);
   if (app.isMac) left.child(div().w(52 + 14).flex_none()); // traffic lights (system-drawn)
@@ -143,12 +191,7 @@ export function renderTitleBar(cx, app, L) {
         onClick: (_e, cx) => app.togglePanel("notifs", cx),
       }),
     )
-    .child(
-      IconButton(cx, "tb-theme", themeIcon(app.themePref), {
-        tooltip: `Theme: ${app.themePref} (click to change)`,
-        onClick: (_e, cx) => app.cycleTheme(cx),
-      }),
-    )
+    .child(themeButton(cx, app))
     .child(
       IconButton(cx, "tb-panel", "panel-right", {
         tooltip: app.panel
