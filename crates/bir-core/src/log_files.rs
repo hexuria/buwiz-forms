@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use chrono::NaiveDate;
 
 use crate::db::Database;
+use crate::lock_timing;
 
 pub const LOG_FILE_PREFIX: &str = "ebirforms";
 pub const LOG_FILE_SUFFIX: &str = "log";
@@ -153,7 +154,7 @@ pub fn spawn_retention(db: std::sync::Arc<std::sync::Mutex<Database>>) {
             .spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(6 * 60 * 60));
-                    if let Ok(guard) = db.lock() {
+                    if let Ok(guard) = lock_timing::lock(&db) {
                         let _ = maintain(&log_dir(), &guard);
                     }
                 }

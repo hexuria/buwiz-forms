@@ -4,6 +4,7 @@
 //! module for the actual search → fetch → parse → confirm workflow.
 
 use crate::db::{Database, SubmissionReceipt};
+use crate::lock_timing;
 use crate::profile::{EmailAuthMethod, TaxpayerProfile, inbox_emails_match};
 use crate::receipt::parse_bir_receipt_email;
 use chrono::Datelike;
@@ -50,7 +51,7 @@ fn overlay_shared_inbox_credentials(
     profile: &TaxpayerProfile,
     db: &std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> TaxpayerProfile {
-    let Ok(db_guard) = db.lock() else {
+    let Ok(db_guard) = lock_timing::lock(db) else {
         return profile.clone();
     };
     match resolve_inbox_fetch_profile(&db_guard, profile.inbox_email()) {
@@ -141,7 +142,7 @@ fn fetch_with_auth(
     // Save the new access token if it was refreshed. Fan-out so siblings and
     // the inbox-keyed row do not keep a stale access token beside a live refresh.
     if let Some(token) = new_access_token
-        && let Ok(db_guard) = db.lock()
+        && let Ok(db_guard) = lock_timing::lock(&db)
     {
         let _ = db_guard.update_inbox_oauth_access_token(profile.inbox_email(), &token);
     }
@@ -197,7 +198,7 @@ fn fetch_with_auth(
                 match parse_bir_receipt_email(&text_content, safe_html) {
                     Ok(receipt) => {
                         let mut pending_notice: Option<(String, String)> = None;
-                        if let Ok(db_guard) = db.lock()
+                        if let Ok(db_guard) = lock_timing::lock(&db)
                             && let Ok((submission_receipt, _is_new)) = db_guard
                                 .save_submission_receipt_with_email_date(
                                     &receipt,
@@ -315,7 +316,7 @@ pub fn fetch_and_process_emails_for_address(
     db: std::sync::Arc<std::sync::Mutex<Database>>,
 ) -> (bool, bool, Option<String>) {
     let (profile, still_pending) = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
             Err(e) => return (false, false, Some(format!("DB lock failed: {}", e))),
         };
@@ -334,7 +335,7 @@ pub fn fetch_and_process_emails_for_address(
         profile.email_tracking_enabled = true;
         match fetch_and_process_emails(&profile, db.clone()) {
             Ok(_) => {
-                let db_guard = match db.lock() {
+                let db_guard = match lock_timing::lock(&db) {
                     Ok(g) => g,
                     Err(_) => return (false, true, Some("DB lock failed after fetch".to_string())),
                 };
@@ -367,7 +368,7 @@ pub fn fetch_and_process_emails_for_address(
                 // A missing refresh is "not connected", not a failed refresh.
                 // Reconnect nags belong to a grant Google actually rejected.
                 if profile.has_usable_oauth_refresh()
-                    && let Ok(db_guard) = db.lock()
+                    && let Ok(db_guard) = lock_timing::lock(&db)
                     && let Ok(outcome) = db_guard.record_alert(
                         Some(&profile.tin.full()),
                         crate::db::alert_kinds::GOOGLE_OAUTH_REFRESH_FAILED,

@@ -3,6 +3,7 @@
 use crate::calendar_rules::{DeadlineKind, DeadlinePeriod, DeadlineResolver};
 use crate::db::{CalendarEventLink, Database, ProfileCalendarLink};
 use crate::forms::{FilingStatus, FormDraftSummary};
+use crate::lock_timing;
 use crate::profile::TaxpayerProfile;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -204,8 +205,7 @@ pub fn google_calendar_connection_from_db(db: &Database) -> GoogleCalendarConnec
 pub fn connect_google_calendar_account(db: Arc<Mutex<Database>>) -> Result<String, anyhow::Error> {
     let credentials = start_calendar_oauth_flow()?;
     save_credentials(&credentials)?;
-    let persist_result = db
-        .lock()
+    let persist_result = lock_timing::lock(&db)
         .map_err(|_| anyhow::anyhow!("Database lock poisoned"))
         .and_then(|db| {
             db.set_setting(CONNECTED_EMAIL_SETTING, &credentials.email)
@@ -226,8 +226,7 @@ pub fn connect_google_calendar_account(db: Arc<Mutex<Database>>) -> Result<Strin
 pub fn disconnect_google_calendar_account(db: Arc<Mutex<Database>>) -> Result<(), anyhow::Error> {
     let credentials = load_credentials().ok();
     delete_credentials()?;
-    let delete_result = db
-        .lock()
+    let delete_result = lock_timing::lock(&db)
         .map_err(|_| anyhow::anyhow!("Database lock poisoned"))
         .and_then(|db| {
             db.delete_setting(CONNECTED_EMAIL_SETTING)
@@ -270,9 +269,7 @@ pub fn create_profile_calendar(
     requested_name: Option<&str>,
 ) -> Result<CalendarSyncReport, anyhow::Error> {
     let profile = {
-        let db = db
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+        let db = lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         if db.get_profile_calendar_link(tin)?.is_some() {
             return Err(anyhow::anyhow!(
                 "This profile already has a linked Google Calendar"
@@ -298,9 +295,7 @@ pub fn create_profile_calendar(
         last_error: None,
     };
     let save_result = {
-        let db = db
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+        let db = lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         db.save_profile_calendar_link(&link)
     };
     if let Err(error) = save_result {
@@ -316,8 +311,7 @@ pub fn create_profile_calendar(
         Ok(report) => Ok(report),
         Err(error) => {
             let rollback_remote = client.delete_calendar(&link.google_calendar_id);
-            let rollback_local = db
-                .lock()
+            let rollback_local = lock_timing::lock(&db)
                 .map_err(|_| anyhow::anyhow!("Database lock poisoned"))
                 .and_then(|db| db.delete_profile_calendar_link(tin).map_err(Into::into));
             match (rollback_remote, rollback_local) {
@@ -333,18 +327,14 @@ pub fn create_profile_calendar(
 }
 
 pub fn unlink_profile_calendar(db: Arc<Mutex<Database>>, tin: &str) -> Result<(), anyhow::Error> {
-    let db = db
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+    let db = lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
     db.delete_profile_calendar_link(tin)?;
     Ok(())
 }
 
 pub fn delete_profile_calendar(db: Arc<Mutex<Database>>, tin: &str) -> Result<(), anyhow::Error> {
     let link = {
-        let db = db
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+        let db = lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         db.get_profile_calendar_link(tin)?
             .ok_or_else(|| anyhow::anyhow!("No linked Google Calendar"))?
     };
@@ -360,7 +350,7 @@ pub fn delete_profile_calendar(db: Arc<Mutex<Database>>, tin: &str) -> Result<()
 pub fn sync_all_profile_calendars(
     db: Arc<Mutex<Database>>,
 ) -> Vec<(String, Result<CalendarSyncReport, String>)> {
-    let tins = match db.lock() {
+    let tins = match lock_timing::lock(&db) {
         Ok(db) => db
             .list_profile_calendar_links()
             .unwrap_or_default()
@@ -383,9 +373,8 @@ pub fn sync_profile_calendar(
     tin: &str,
 ) -> Result<CalendarSyncReport, anyhow::Error> {
     let (link, desired, existing, excluded_undated) = {
-        let db_guard = db
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+        let db_guard =
+            lock_timing::lock(&db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         let link = db_guard
             .get_profile_calendar_link(tin)?
             .ok_or_else(|| anyhow::anyhow!("No linked Google Calendar"))?;
@@ -398,7 +387,7 @@ pub fn sync_profile_calendar(
     };
 
     let result = sync_snapshot(&db, &link, desired, existing, excluded_undated);
-    if let Ok(db_guard) = db.lock() {
+    if let Ok(db_guard) = lock_timing::lock(&db) {
         let error = result.as_ref().err().map(|error| error.to_string());
         let _ = db_guard.set_profile_calendar_sync_result(tin, error.as_deref());
     }
@@ -479,9 +468,7 @@ fn sync_snapshot(
         {
             return Err(error);
         }
-        let db = db
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+        let db = lock_timing::lock(db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
         db.delete_calendar_event_link(&link.profile_tin, key)?;
         report.deleted += 1;
     }
@@ -495,9 +482,7 @@ fn save_event_mapping(
     event: &DesiredCalendarEvent,
     google_event_id: &str,
 ) -> Result<(), anyhow::Error> {
-    let db = db
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
+    let db = lock_timing::lock(db).map_err(|_| anyhow::anyhow!("Database lock poisoned"))?;
     db.save_calendar_event_link(&CalendarEventLink {
         profile_tin: tin.to_string(),
         obligation_key: event.obligation_key.clone(),

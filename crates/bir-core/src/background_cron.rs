@@ -4,6 +4,7 @@ use crate::forms::form_2551q::Form2551QDraft;
 use crate::forms::queueable::{QueueableForm, QueueableKind};
 use crate::forms::{FilingStatus, FormDraftSummary};
 use crate::job_display::{FilingJobLabel, known_job_email};
+use crate::lock_timing;
 use crate::profile::TaxpayerProfile;
 use chrono::Utc;
 use std::collections::HashSet;
@@ -136,7 +137,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
     // Ensure we don't hold the DB lock across async network calls.
     // First, fetch profiles that have background cron enabled.
     let (profiles, global_cron_enabled) = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(guard) => guard,
             Err(e) => {
                 error!("Failed to lock database for cron: {}", e);
@@ -163,7 +164,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
         const TITLE: &str = "BIR Vault Daemon";
         const BODY: &str = "Hello! The background cron is active.";
         // The painted app delivers alert rows itself; headless posts directly.
-        if let Ok(db_guard) = db.lock() {
+        if let Ok(db_guard) = lock_timing::lock(&db) {
             let _ = db_guard.record_alert(
                 None,
                 crate::db::alert_kinds::CRON_HEARTBEAT,
@@ -197,7 +198,7 @@ pub async fn run_queue_tick(db: Arc<Mutex<Database>>) {
 async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
     const SIX_HOURS: i64 = 6 * 60 * 60;
     let should_sync = {
-        let db = match db.lock() {
+        let db = match lock_timing::lock(&db) {
             Ok(db) => db,
             Err(_) => return,
         };
@@ -247,7 +248,7 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
         }
     };
     if results.is_empty() {
-        if let Ok(db) = db.lock() {
+        if let Ok(db) = lock_timing::lock(&db) {
             let _ = db.set_setting(
                 "google_calendar_last_sync_unix",
                 &Utc::now().timestamp().to_string(),
@@ -266,7 +267,7 @@ async fn process_google_calendar_sync(db: Arc<Mutex<Database>>) {
         }
     }
     let all_succeeded = results.iter().all(|(_, result)| result.is_ok());
-    if let Ok(db) = db.lock() {
+    if let Ok(db) = lock_timing::lock(&db) {
         if !all_succeeded {
             let _ = db.set_setting("google_calendar_sync_requested", "true");
             return;
@@ -502,7 +503,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         return;
     };
     let loaded_draft = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(guard) => guard,
             Err(_) => return,
         };
@@ -516,7 +517,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
         || loaded_draft.submission_claimed_at.is_some()
     {
         let recovered = {
-            let db_guard = match db.lock() {
+            let db_guard = match lock_timing::lock(&db) {
                 Ok(guard) => guard,
                 Err(_) => return,
             };
@@ -538,7 +539,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             return;
         }
         let recovered_draft = {
-            let db_guard = match db.lock() {
+            let db_guard = match lock_timing::lock(&db) {
                 Ok(guard) => guard,
                 Err(_) => return,
             };
@@ -570,7 +571,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                 draft.period_code(),
                 reason
             );
-            if let Ok(db_guard) = db.lock() {
+            if let Ok(db_guard) = lock_timing::lock(&db) {
                 let _ = db_guard.replace_unclaimed_queued_1601c_submission(
                     &draft,
                     &revision.fingerprint,
@@ -598,7 +599,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                 "Submission blocked because queued retry metadata is invalid; review and queue the return again"
                     .to_string(),
             );
-            if let Ok(db_guard) = db.lock() {
+            if let Ok(db_guard) = lock_timing::lock(&db) {
                 let _ = db_guard.replace_unclaimed_queued_1601c_submission(
                     &draft,
                     &queue_revision.fingerprint,
@@ -625,7 +626,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             draft.submission_error = Some(format!(
                 "Submission blocked at XML generation boundary: {reason}"
             ));
-            if let Ok(db_guard) = db.lock() {
+            if let Ok(db_guard) = lock_timing::lock(&db) {
                 let _ = db_guard.replace_unclaimed_queued_1601c_submission(
                     &draft,
                     &queue_revision.fingerprint,
@@ -673,7 +674,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     // Claim only after the SFTP session is open, immediately before PUT.
     // Connect/login timeouts stay unclaimed and use the existing retry CAS.
     let claim_result = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(guard) => guard,
             Err(_) => return,
         };
@@ -724,7 +725,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
     let session_source = transport.session_source(&session);
     let skip_email_poll = session_source.is_dry_run();
     let put_marked = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(guard) => guard,
             Err(_) => return,
         };
@@ -771,7 +772,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             // amendment can later snapshot what BIR received.
             draft.submitted_payload = Some(xml_payload);
             draft.transition_to_submitted(filename);
-            if let Ok(db_guard) = db.lock() {
+            if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
                     Ok(_) => {
                         record_submission_alert(
@@ -859,7 +860,7 @@ fn replace_queueable<F: QueueableForm>(
     draft: &F,
     generation: &QueueGeneration,
 ) {
-    if let Ok(db_guard) = db.lock() {
+    if let Ok(db_guard) = lock_timing::lock(db) {
         match db_guard.replace_unclaimed_queued_queueable(
             draft,
             &generation.fingerprint,
@@ -924,7 +925,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
 ) {
     let period = i64::from(summary.month.or(summary.quarter).unwrap_or(0));
     let load = |db: &Arc<Mutex<Database>>| -> Option<F> {
-        let db_guard = db.lock().ok()?;
+        let db_guard = lock_timing::lock(db).ok()?;
         db_guard
             .get_queueable_draft::<F>(&summary.tin, summary.taxable_year, period)
             .ok()
@@ -936,8 +937,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
 
     // A held claim is only recoverable when its lease expired before PUT.
     let loaded = if !loaded.lifecycle().is_unclaimed() {
-        let recovered = db
-            .lock()
+        let recovered = lock_timing::lock(&db)
             .ok()
             .and_then(|db_guard| {
                 db_guard
@@ -1060,7 +1060,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
 
     // Claim only after the session is open, immediately before PUT.
     let claim = {
-        let Ok(db_guard) = db.lock() else {
+        let Ok(db_guard) = lock_timing::lock(&db) else {
             return;
         };
         db_guard.claim_queued_queueable::<F>(
@@ -1112,8 +1112,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
 
     let session_source = transport.session_source(&session);
     let skip_email_poll = session_source.is_dry_run();
-    let put_marked = db
-        .lock()
+    let put_marked = lock_timing::lock(&db)
         .ok()
         .and_then(|db_guard| {
             db_guard
@@ -1167,7 +1166,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             // amendment can later snapshot what BIR received.
             draft.lifecycle_mut().submitted_payload = Some(payload);
             draft.lifecycle_mut().transition_to_submitted(filename);
-            if let Ok(db_guard) = db.lock() {
+            if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {
                     Ok(_) => {
                         record_submission_alert(
@@ -1253,7 +1252,7 @@ fn submission_queue_year_at<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) ->
 
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
     let summaries = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
             Err(_) => return,
         };
@@ -1301,7 +1300,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
             if summary.form_code == "2551Q" {
                 let (loaded_draft, current_profile) = {
-                    let db_guard = match db_clone.lock() {
+                    let db_guard = match lock_timing::lock(&db_clone) {
                         Ok(g) => g,
                         Err(_) => return,
                     };
@@ -1324,7 +1323,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                     || loaded_draft.submission_claimed_at.is_some()
                 {
                     let recovered = {
-                        let db_guard = match db_clone.lock() {
+                        let db_guard = match lock_timing::lock(&db_clone) {
                             Ok(guard) => guard,
                             Err(_) => return,
                         };
@@ -1362,7 +1361,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                                 draft.period_code(),
                                 reason
                             );
-                            if let Ok(db_guard) = db_clone.lock() {
+                            if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                                 let _ = db_guard.replace_unclaimed_queued_2551q_submission(
                                     &draft,
                                     &revision.fingerprint,
@@ -1390,7 +1389,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                             "Submission blocked because queued retry metadata is invalid; review and queue the return again"
                                 .to_string(),
                         );
-                        if let Ok(db_guard) = db_clone.lock() {
+                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                             let _ = db_guard.replace_unclaimed_queued_2551q_submission(
                                 &draft,
                                 &queue_revision.fingerprint,
@@ -1427,7 +1426,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         draft.last_error = Some(format!(
                             "Submission blocked at XML generation boundary: {reason}"
                         ));
-                        if let Ok(db_guard) = db_clone.lock() {
+                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                             let _ = db_guard.replace_unclaimed_queued_2551q_submission(
                                 &draft,
                                 &queue_revision.fingerprint,
@@ -1485,7 +1484,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
                 // Claim only after the SFTP session is open, immediately before PUT.
                 let claim_result = {
-                    let db_guard = match db_clone.lock() {
+                    let db_guard = match lock_timing::lock(&db_clone) {
                         Ok(guard) => guard,
                         Err(_) => return,
                     };
@@ -1540,7 +1539,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
 
                 let session_source = session.source();
                 let put_marked = {
-                    let db_guard = match db_clone.lock() {
+                    let db_guard = match lock_timing::lock(&db_clone) {
                         Ok(guard) => guard,
                         Err(_) => return,
                     };
@@ -1583,7 +1582,7 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         // Keep the exact bytes that were encrypted for PUT.
                         draft.submitted_payload = Some(xml_payload);
                         draft.transition_to_submitted(filename.clone());
-                        if let Ok(db_guard) = db_clone.lock() {
+                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                             match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
                                 Ok(_) => {
                                     record_submission_alert(
@@ -1792,7 +1791,7 @@ pub fn schedule_email_poll(
     taxable_year: u16,
     month: Option<u8>,
     quarter: Option<u8>,
-    db_guard: &std::sync::MutexGuard<Database>,
+    db_guard: &Database,
 ) {
     if !profile.is_email_tracking_active() {
         return;
@@ -1858,7 +1857,7 @@ fn fail_draft_2551q(
         info!("Cron: Next retry scheduled in {} mins", delay_mins);
     }
 
-    if let Ok(db_guard) = db.lock() {
+    if let Ok(db_guard) = lock_timing::lock(&db) {
         match db_guard.replace_unclaimed_queued_2551q_submission(
             draft,
             &revision.fingerprint,
@@ -1891,7 +1890,7 @@ fn fail_draft_1601c(
         error_message
     );
     draft.record_submission_failure(error_message);
-    if let Ok(db_guard) = db.lock() {
+    if let Ok(db_guard) = lock_timing::lock(&db) {
         match db_guard.replace_unclaimed_queued_1601c_submission(
             draft,
             &revision.fingerprint,
@@ -1947,7 +1946,7 @@ fn mark_shell_job_unavailable(job: &mut crate::db::Job) -> bool {
 
 async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
     let jobs = {
-        let db_guard = match db.lock() {
+        let db_guard = match lock_timing::lock(&db) {
             Ok(g) => g,
             Err(_) => return,
         };
@@ -1967,7 +1966,7 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                     "Cron: job '{}' runs a shell command, which this build does not support",
                     job.name
                 );
-                if let Ok(db_guard) = db.lock() {
+                if let Ok(db_guard) = lock_timing::lock(&db) {
                     let _ = db_guard.save_job(job.clone());
                 }
             }
@@ -1982,7 +1981,7 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
             if job.status == "Failed" {
                 job.status = "Queued".to_string();
             }
-            if let Ok(db_guard) = db.lock() {
+            if let Ok(db_guard) = lock_timing::lock(&db) {
                 let _ = db_guard.save_job(job.clone());
             }
         }
@@ -2003,7 +2002,7 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                             && let Some(next_run) = schedule.upcoming(Utc).next()
                         {
                             job.next_run_at = Some(next_run.to_rfc3339());
-                            if let Ok(db_guard) = db.lock() {
+                            if let Ok(db_guard) = lock_timing::lock(&db) {
                                 let _ = db_guard.save_job(job.clone());
                             }
                         }
@@ -2025,7 +2024,7 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
 
         // Set status to Running
         job.status = "Running".to_string();
-        if let Ok(db_guard) = db.lock() {
+        if let Ok(db_guard) = lock_timing::lock(&db) {
             let _ = db_guard.save_job(job.clone());
         }
 
@@ -2131,19 +2130,19 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
                         warn!("Cron: Invalid cron expression for job '{}'", job.name);
                         job.status = "Failed".to_string();
                     }
-                    if let Ok(db_guard) = db_clone.lock() {
+                    if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                         let _ = db_guard.save_job(job.clone());
                     }
                 } else {
                     // Treated as one-off if empty string
                     if success {
-                        if let Ok(db_guard) = db_clone.lock() {
+                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                             let _ = db_guard.delete_job(job.id.unwrap());
                         }
                     } else {
                         job.retries += 1;
                         job.status = "Failed".to_string();
-                        if let Ok(db_guard) = db_clone.lock() {
+                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                             let _ = db_guard.save_job(job.clone());
                         }
                     }
@@ -2151,13 +2150,13 @@ async fn process_generic_jobs(db: Arc<Mutex<Database>>) {
             } else {
                 // One-off job
                 if success {
-                    if let Ok(db_guard) = db_clone.lock() {
+                    if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                         let _ = db_guard.delete_job(job.id.unwrap());
                     }
                 } else {
                     job.retries += 1;
                     job.status = "Failed".to_string();
-                    if let Ok(db_guard) = db_clone.lock() {
+                    if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                         let _ = db_guard.save_job(job.clone());
                     }
                 }
