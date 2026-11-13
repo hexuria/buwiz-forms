@@ -1930,20 +1930,31 @@ pub fn error_keys(kind: AgentFormKind, field: &str) -> Vec<String> {
 
 /// Error names that are neither a draft field nor its parent, with the
 /// fields the form's own check reads (reviewed against its `validate`).
-const ERROR_ALIASES: &[(&str, &str, &[&str])] = &[(
-    // form_1701ms.rs Item 31: "Item 31 is mandatory because Item 30 is has
-    // negative value." / "The total amount in Item 31 must equal ...".
-    "1701MS",
-    "overpayment",
-    &[
-        "/to_be_refunded",
-        "/to_be_issued_tcc",
-        "/to_be_carried_over",
-        "/refund_amount",
-        "/tcc_amount",
-        "/carry_over_amount",
-    ],
-)];
+const ERROR_ALIASES: &[(&str, &str, &[&str])] = &[
+    (
+        // form_1701ms.rs Item 31: "Item 31 is mandatory because Item 30 is has
+        // negative value." / "The total amount in Item 31 must equal ...".
+        "1701MS",
+        "overpayment",
+        &[
+            "/to_be_refunded",
+            "/to_be_issued_tcc",
+            "/to_be_carried_over",
+            "/refund_amount",
+            "/tcc_amount",
+            "/carry_over_amount",
+        ],
+    ),
+    (
+        // form_2551q.rs `validate`: the annual income-tax election snapshot
+        // (missing, conflicting, or unrecorded on a later-quarter Section 116
+        // return) is the election Item 13 asks. Without this the message
+        // fell to the page's label words and sat under Item 16.
+        "2551Q",
+        "annual_income_tax_election",
+        &["/item_13_election"],
+    ),
+];
 
 fn aliased_error_keys(kind: AgentFormKind, def: &AgentFormDef, field: &str) -> Vec<String> {
     let Some((_, _, paths)) = ERROR_ALIASES
@@ -2206,6 +2217,26 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// 2551Q's annual-election message names a field no box binds; it is
+    /// the election Item 13 asks, so it lands on Item 13's radios and
+    /// never on Item 16 (whose label shares its words).
+    #[test]
+    fn the_2551q_annual_election_message_names_item_13() {
+        let kind = AgentFormKind::Form2551Q;
+        let keys = error_keys(kind, "annual_income_tax_election");
+        for radio in ["frm2551Qv2018:taxRate1", "frm2551Qv2018:taxRate2"] {
+            assert!(keys.iter().any(|key| key == radio), "{radio} in {keys:?}");
+        }
+        let def = kind.definition();
+        assert!(
+            keys.iter()
+                .all(|key| def.box_def(key).is_some_and(|entry| entry.item == "13")),
+            "only Item 13 boxes: {keys:?}"
+        );
+        // The alias is the 2551Q's own: another form's field of that name is untouched.
+        assert!(error_keys(AgentFormKind::Form1601C, "annual_income_tax_election").is_empty());
     }
 
     #[test]
