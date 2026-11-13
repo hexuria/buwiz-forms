@@ -198,6 +198,18 @@ const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 1201202
  */
 const SAMPLE_NOTE = "A sample from the Form library. Save makes it your return for its period, with what you typed; if the period is not set yet, Save asks for it, and if that period already has a return, you choose what to do with it. New return (the + button or Cmd/Ctrl+N) starts a blank one.";
 
+/**
+ * 2551Q's message for a later-quarter Section 116 return whose taxable year
+ * has no income-tax election on the tax profile (form_2551q.rs `validate`,
+ * field `annual_income_tax_election`). Item 13 asks it (`electionCard`).
+ */
+const ELECTION_UNRECORDED = /needs the taxpayer profile's recorded annual income-tax election/;
+
+/** The Item 13 radio for each answer of the election, per form. */
+const ELECTION_RADIOS = {
+  "2551Q": { graduated: "frm2551Qv2018:taxRate1", eight_percent: "frm2551Qv2018:taxRate2" },
+};
+
 /** A sample's period parts in the period modal, labelled. */
 const PERIOD_PART_LABELS = {
   year: "Year (YYYY)",
@@ -359,6 +371,11 @@ export class FormPageActions {
       stops: null,
       // The row a template step marked (a step opens its section; it cannot scroll to it).
       stopAt: null,
+      // 2551Q Item 13's question (`electionCard`): the row it is on, the
+      // answer picked, and the row that says it was saved.
+      electionAt: null,
+      electionPick: null,
+      electionSavedAt: null,
     };
     if (!schema) return;
     this.state.checkButton = {
@@ -648,6 +665,8 @@ export class FormPageActions {
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
       it.from ? s.values[it.from.k] ?? "" : null,
+      // Item 13's question and its answer, the "Stop here" switch and a template step's mark.
+      s.electionAt === id || s.electionSavedAt === id ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || ""] : null,
       s.stops ? [s.guided && s.stops.markable.has(id), s.stops.marked.has(id)] : null,
       s.stopAt === id,
       keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
@@ -1920,6 +1939,7 @@ export class FormPageActions {
     s.errors = (errors || []).filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
     s.checkable = {};
+    s.electionAt = null;
     const items = [];
     s.schema.parts.forEach((p, pi) => p.items.forEach((it, ii) => items.push({ id: `${pi}:${ii}`, it })));
     const words = (t) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
@@ -1955,7 +1975,85 @@ export class FormPageActions {
       if (id) s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
       // A notice the filer may mark checked without changing anything.
       if (id && e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
+      // The row the host put the year's missing income-tax election on (Item 13) asks it.
+      if (id && e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
     }
+  }
+
+  /** The return's taxable year (a fiscal 2551Q's too), else the year it opened for. */
+  taxYear() {
+    const s = this.state;
+    return Number(s.draft?.taxable_year ?? s.year);
+  }
+
+  /** The return's taxpayer by its own TIN, or the TIN when it is not in this database. */
+  taxpayerName() {
+    const root = String(this.state.tin).slice(0, 9);
+    const tp = this.app.taxpayers().find((x) => x.tin_root === root);
+    return tp ? tp.name : formatTin(root, String(this.state.tin).slice(9) || "00000");
+  }
+
+  /** Item 13's question: an answer picked (only that row redraws). */
+  pickElection(value) {
+    this.state.electionPick = value;
+    this.refreshRows();
+  }
+
+  /**
+   * Item 13's question on a later-quarter 2551Q (pick 1 B). The answer goes
+   * on the tax profile for the return's own taxable year
+   * (`record_income_tax_election`), the open draft takes it from the profile
+   * (`screen_form_use_profile`), and the return is saved and checked again,
+   * so the message, its part's badge and the attention count go where they
+   * are. Where the profile leaves Item 13 unanswered (a later quarter with
+   * no commencement date: the filer's own Item 13 stands), it is ticked to
+   * the same answer.
+   */
+  recordElection(cx) {
+    const s = this.state;
+    const pick = s?.electionPick;
+    if (!s?.draft || !s.editable || !pick) return;
+    const year = this.taxYear();
+    const at = s.electionAt;
+    try {
+      this.app.store.write("record_income_tax_election", s.tin, year, pick);
+    } catch (e) {
+      return this.app.toast(message(e), cx, "triangle-alert");
+    }
+    const before = s.values;
+    try {
+      const r = this.app.store.call("screen_form_use_profile", s.code, s.year, s.period, s.draft);
+      s.draft = r.draft;
+      s.values = this.shown(r.values);
+      s.options = r.options || s.options;
+      if (r.pools) s.poolTexts = r.pools;
+      if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+    } catch (e) {
+      this.app.toast(message(e), cx, "triangle-alert");
+      return this.validate(cx);
+    }
+    const radios = ELECTION_RADIOS[s.code];
+    if (radios && s.draft.item_13_election === "unanswered") {
+      for (const [choice, k] of Object.entries(radios)) {
+        const v = choice === pick ? "true" : "false";
+        s.pending[k] = v;
+        s.values[k] = v;
+      }
+    }
+    s.dirty = true;
+    s.electionPick = null;
+    s.electionSavedAt = at;
+    this.syncComputed();
+    this.syncChanged(before, {});
+    const saved = `Saved to ${this.taxpayerName()}'s tax profile for ${year}.`;
+    // A sample is saved by its own Save (it asks for the period), and an
+    // amendment not saved yet by the filer's choice: those are checked only.
+    if (s.sample || (s.amends && !s.saved)) {
+      this.flush(cx);
+      return this.app.toast(saved, cx, "circle-check");
+    }
+    this.save(cx);
+    if (!s.dirty) this.app.toast(saved, cx, "circle-check");
   }
 
   /** Mark a notice checked (the host records it; the return is not changed), then check again. */
@@ -2777,6 +2875,70 @@ function datePicker(cx, ui, id, date, row = id) {
   return popup.content(card);
 }
 
+/**
+ * Item 13's question (pick 1 B): a later-quarter 2551Q needs the taxpayer's
+ * income-tax election for its taxable year, which the tax profile holds;
+ * answered here once, it is saved there and every later return reuses it.
+ */
+function electionCard(cx, ui) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const choice = (value, label, hint) => {
+    const on = s.electionPick === value;
+    return div()
+      .id(`fp-election-${value}`)
+      .flex()
+      .flex_col()
+      .flex_1()
+      .min_w(160)
+      .gap(2)
+      .py(SPACE[2])
+      .px(10)
+      .rounded(RADIUS.ctl)
+      .border(1)
+      .border_color(on ? t.accent : t.borderStrong)
+      .bg(on ? t.accentSoft : t.surface)
+      .cursor_pointer()
+      .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
+      .accessibility_label(on ? `${label}, chosen` : label)
+      .on_click((_e, cx) => ui.pickElection(value, cx))
+      .child(Text(cx, "control", label))
+      .child(Text(cx, "meta", hint, "fg2").whitespace_normal());
+  };
+  return div()
+    .id("fp-election")
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .py(10)
+    .px(SPACE[3])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.surface)
+    .shadow_xs()
+    .child(Text(cx, "control", `Which income-tax rate did ${ui.taxpayerName()} choose for ${ui.taxYear()}?`).font_weight(600).whitespace_normal())
+    .child(Text(cx, "meta", "We save it on the tax profile, so you answer once a year.", "fg2").mt(2).whitespace_normal())
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .gap(SPACE[2])
+        .mt(SPACE[3])
+        .child(choice("graduated", "Graduated rates", "Tax on net taxable income"))
+        .child(choice("eight_percent", "8% flat rate", "8% of gross sales or receipts")),
+    )
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .justify_end()
+        .mt(SPACE[3])
+        .child(AppButton(cx, "fp-election-save", "Save to tax profile", { variant: "primary", size: "sm", disabled: !s.electionPick, onClick: (_e, cx) => ui.recordElection(cx) })),
+    );
+}
+
 class FormCheckButton extends View {
   init(props) { this.props = props; }
   update(props) { this.props = props; }
@@ -3386,8 +3548,24 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .children(fromHint(cx, ui, it, id))
         // A shut box that shows blank says why, in the filer's words.
         .children(ui.lockNotesFor(it).map((note) => Text(cx, "meta", note, "fg3").mt(SPACE[1]).whitespace_normal()))
-        // Reserved 18 px validation line, present with or without a message.
-        .child(div().h(SIZE.validationLine).mt(SPACE[1]).overflow_hidden().child(Line(cx, "meta", msg, "danger").tooltip(msg || " ")))
+        // Reserved 18 px validation line, present with or without a message;
+        // a long message wraps onto more lines rather than being cut.
+        .child(div().min_h(SIZE.validationLine).mt(SPACE[1]).child(Text(cx, "meta", msg, "danger").whitespace_normal()))
+        // 2551Q Item 13: the year's income-tax election, asked where the message is.
+        .when(s.editable && s.electionAt === id, (el) => el.child(electionCard(cx, ui)))
+        .when(s.electionSavedAt === id && s.electionAt !== id, (el) =>
+          el.child(
+            div()
+              .id("fp-election-saved")
+              .flex()
+              .flex_row()
+              .items_center()
+              .gap(6)
+              .mt(SPACE[1])
+              .child(Icon(cx, "circle-check", { size: 14, color: "success" }))
+              .child(Text(cx, "meta", `Saved to the tax profile for ${ui.taxYear()}. Later returns reuse it.`, "success").whitespace_normal()),
+          ),
+        )
         // A notice the filer may mark checked: one button each, nothing on the return changes.
         .children(
           (s.editable ? s.checkable?.[id] || [] : []).map((c) =>
