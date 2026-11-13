@@ -2768,6 +2768,11 @@ function scheduleTable(cx, ui, it, width) {
     body.child(tr);
   });
   // The one sideways scroller in the app: a schedule wider than its box.
+  // `overflow_x_scrollbar`, not `overflow_x_scroll`: a plain one-axis scroll
+  // area takes the wheel's up-and-down travel as sideways travel, so the
+  // table slid left and right while the page was scrolled over it. The
+  // scrollbar kind keeps to its own axis (the page scrolls on), and its bar
+  // shows that columns are off to one side.
   return div()
     .id(`fp-table-${it.keys[0][0]}`)
     .w_full()
@@ -2776,9 +2781,15 @@ function scheduleTable(cx, ui, it, width) {
     .rounded(RADIUS.row)
     .border(1)
     .border_color(t.border)
-    .overflow_x_scroll()
-    .overflow_y_hidden()
-    .child(div().flex().flex_col().w(tableW).child(head).child(body));
+    .overflow_hidden()
+    .child(
+      div()
+        .id(`fp-table-scroll-${it.keys[0][0]}`)
+        .w_full()
+        .min_w(0)
+        .overflow_x_scrollbar()
+        .child(div().flex().flex_col().w(tableW).child(head).child(body)),
+    );
 }
 
 /**

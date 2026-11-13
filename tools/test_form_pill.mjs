@@ -167,7 +167,6 @@ const linked = {
   "./shell/filings.js": mock("filings", { renderFilings: stub, FilingsFilters }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
-  "./shell/gallery.js": mock("gallery", { renderGallery: stub }),
   "./shell/auth.js": mock("auth", { renderSignIn: stub, renderSetup: stub }),
   "./shell/gate.js": mock("gate", { renderAccountGate: stub }),
   "./shell/update.js": mock("update", { installReadyUpdate() {}, pollUpdateStatus: () => false, renderUpdatePrompt: (_cx, _app, page) => page, setAutoUpdateDownload() {} }),

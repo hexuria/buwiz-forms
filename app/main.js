@@ -38,7 +38,6 @@ import { renderFilings, FilingsFilters } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
 import { renderFormPage, renderFormSplit, formColumnBox, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
-import { renderGallery } from "./shell/gallery.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { renderAccountGate } from "./shell/gate.js";
 import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
@@ -1193,7 +1192,6 @@ class BirApp extends View {
       });
     }
     items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: shortcutLabel("theme", this.isMac), run: (cx) => this.cycleTheme(cx) });
-    items.push({ group: "Actions", label: "Components", icon: "layout-template", run: (cx) => this.go("gallery", cx) });
     if (!q) return items;
     return items.filter((x) => x.match || `${x.label} ${x.hint || ""}`.toLowerCase().includes(q));
   }
@@ -1772,8 +1770,6 @@ class BirApp extends View {
         return renderNewTaxpayer(cx, this, width);
       case "form":
         return renderFormPage(cx, this, width);
-      case "gallery":
-        return renderGallery(cx, this, width);
       case "cron_tasks":
         return renderCronTasksPage(cx, this, width);
       default:
