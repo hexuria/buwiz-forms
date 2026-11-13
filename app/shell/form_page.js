@@ -666,7 +666,9 @@ export class FormPageActions {
       s.hoverItem === id,
       it.from ? s.values[it.from.k] ?? "" : null,
       // Item 13's question and its answer, the "Stop here" switch and a template step's mark.
-      s.electionAt === id || s.electionSavedAt === id ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || ""] : null,
+      s.electionAt === id || s.electionSavedAt === id
+        ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || "", s.electionAt === id ? this.electionReadiness() : null]
+        : null,
       s.stops ? [s.guided && s.stops.markable.has(id), s.stops.marked.has(id)] : null,
       s.stopAt === id,
       keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
@@ -2000,6 +2002,33 @@ export class FormPageActions {
   }
 
   /**
+   * Whether the tax profile can record this return's election (bir-core
+   * `income_tax_election_readiness`, a cached read the next write clears),
+   * or null when it could not be read. The card offers Save only when ready.
+   */
+  electionReadiness() {
+    const s = this.state;
+    if (!s?.tin) return null;
+    return this.app.store.electionReadiness?.(s.tin, this.taxYear()) ?? null;
+  }
+
+  /**
+   * Item 13's card when the profile cannot take the election: open the
+   * taxpayer's Registration section for the return's year. Coming back to
+   * the form (`main.js` `enterView`) re-asks, and the card follows.
+   */
+  confirmRegistration(cx) {
+    const s = this.state;
+    if (!s?.tin) return;
+    this.app.taxpayerUi?.startRegistration?.({ tin: s.tin, year: this.taxYear(), fromForm: true }, cx);
+  }
+
+  /** The form page is shown again: what another page changed (a registration) reaches the rows. */
+  reenter() {
+    this.refreshRows();
+  }
+
+  /**
    * Item 13's question on a later-quarter 2551Q (pick 1 B). The answer goes
    * on the tax profile for the return's own taxable year
    * (`record_income_tax_election`), the open draft takes it from the profile
@@ -2013,12 +2042,17 @@ export class FormPageActions {
     const s = this.state;
     const pick = s?.electionPick;
     if (!s?.draft || !s.editable || !pick) return;
+    // Never send what the profile will refuse: the card shows why instead.
+    if (this.electionReadiness()?.gap !== "ready") return this.refreshRows();
     const year = this.taxYear();
     const at = s.electionAt;
     try {
       this.app.store.write("record_income_tax_election", s.tin, year, pick);
     } catch (e) {
-      return this.app.toast(message(e), cx, "triangle-alert");
+      // The write cleared the cached readiness: the card re-asks and says
+      // what the profile lacks; the toast carries the refusal in plain words.
+      this.refreshRows();
+      return this.app.toast(plainRefusal(message(e)), cx, "triangle-alert");
     }
     const before = s.values;
     try {
@@ -2886,6 +2920,8 @@ function datePicker(cx, ui, id, date, row = id) {
 function electionCard(cx, ui) {
   const s = ui.state;
   const t = tokens(cx);
+  const ready = ui.electionReadiness();
+  if (ready?.gap !== "ready") return electionBlockedCard(cx, ui, ready);
   const choice = (value, label, hint) => {
     const on = s.electionPick === value;
     return div()
@@ -2939,6 +2975,87 @@ function electionCard(cx, ui) {
         .justify_end()
         .mt(SPACE[3])
         .child(AppButton(cx, "fp-election-save", "Save to tax profile", { variant: "primary", size: "sm", disabled: !s.electionPick, onClick: (_e, cx) => ui.recordElection(cx) })),
+    );
+}
+
+/** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */
+function plainRefusal(text) {
+  return String(text).replace(/^Other error:\s*/, "");
+}
+
+/**
+ * Item 13's card when the tax profile cannot take the year's election
+ * (`income_tax_election_readiness`): what is missing and for which year, and
+ * the way to supply it (the taxpayer's Registration section). It offers no
+ * rate and no Save, since the profile would refuse them.
+ */
+function electionBlockedCard(cx, ui, ready) {
+  const t = tokens(cx);
+  const name = ui.taxpayerName();
+  const year = ui.taxYear();
+  const cor = "as on the Certificate of Registration (BIR Form 2303)";
+  let title;
+  let body;
+  let action = { id: "fp-election-register", label: "Confirm registration", run: (cx) => ui.confirmRegistration(cx) };
+  if (!ready) {
+    title = `Buwiz could not read ${name}'s tax profile for ${year}.`;
+    body = "Try again in a moment. The rate can be chosen once the profile is read.";
+    action = {
+      id: "fp-election-retry",
+      label: "Try again",
+      run: () => {
+        ui.app.store.forget?.(`election_ready:${ui.state.tin}:${year}`);
+        ui.refreshRows();
+      },
+    };
+  } else if (ready.gap === "no_confirmed_registration") {
+    title = `${name}'s tax profile has no confirmed registration for ${year}.`;
+    body = `Choosing an income-tax rate needs one. Confirm whether ${name} is self-employed or has mixed income in ${year}, ${cor}; then come back here to choose the rate.`;
+  } else if (ready.gap === "not_business_income") {
+    title =
+      ready.classification === "PurelyCompensation"
+        ? `${name}'s tax profile has ${name} registered for compensation income only in ${year}.`
+        : `${name}'s tax profile does not say whether ${name} is self-employed or has mixed income in ${year}.`;
+    body = `The income-tax rate is chosen by self-employed and mixed-income earners. Confirm ${name}'s registration for ${year}, ${cor}; then come back here to choose the rate.`;
+  } else if (ready.gap === "timeline_needs_review") {
+    title = `${name}'s tax profile has registration dates for ${year} that need review.`;
+    body = `${(ready.issues || [])[0] || "Two confirmed registrations overlap or one has no start date"}. A new registration ${cor} replaces them from its date.`;
+  } else {
+    title = `${name}'s tax profile is registered as ${ready.taxpayer_type ? `a ${ready.taxpayer_type}` : "a non-individual"} in ${year}.`;
+    body = "Only individuals choose this income-tax rate. If that registration is wrong, correct it on the tax profile.";
+    action = null;
+  }
+  return div()
+    .id("fp-election")
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .py(10)
+    .px(SPACE[3])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.surface)
+    .shadow_xs()
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .items_start()
+        .gap(SPACE[2])
+        .child(Icon(cx, "info", { size: 16, color: "fg2" }).mt(2))
+        .child(Text(cx, "control", title).font_weight(600).whitespace_normal().flex_1().min_w(0)),
+    )
+    .child(Text(cx, "meta", body, "fg2").mt(SPACE[1]).whitespace_normal())
+    .when(Boolean(action), (el) =>
+      el.child(
+        div()
+          .flex()
+          .flex_row()
+          .justify_end()
+          .mt(SPACE[3])
+          .child(AppButton(cx, action.id, action.label, { variant: "primary", size: "sm", onClick: (_e, cx) => action.run(cx) })),
+      ),
     );
 }
 

@@ -733,6 +733,9 @@ class BirApp extends View {
       this.setupChange.leave(cx);
     }
     this.view = view;
+    // Back on a return: what another page changed (a registration the 2551Q
+    // card sent the filer to confirm) reaches its rows.
+    if (view === "form") this.formUi?.reenter?.();
     // Home's Drafts count is read once per visit, not on every poll.
     if (view === "home") this.store.forget(SAVED_RETURNS_KEY);
     this.taxpayerUi.leaveView();

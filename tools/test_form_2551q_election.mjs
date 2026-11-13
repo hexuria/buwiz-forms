@@ -163,8 +163,16 @@ const errors = () => {
 const calls = [];
 const toasts = [];
 const bumped = [];
+// bir-core income_tax_election_readiness: the profile can take 2026's election.
+const READY = { taxable_year: 2026, gap: "ready", taxpayer_type: "Individual", classification: "SelfEmployed", since: "2026-01-01", new_registration_after: "2026-01-01", issues: [] };
+let readiness = READY;
+const readinessAsked = [];
 const store = {
   templates: () => [],
+  electionReadiness(tin, year) {
+    readinessAsked.push([tin, year]);
+    return readiness;
+  },
   call(name, ...args) {
     calls.push([name, ...args]);
     if (name === "screen_form_schema") return schema;
@@ -277,14 +285,59 @@ draw(pill);
 assert.equal(byId(pill.tree, "fp-pill-count").length, 0, "no section needs attention");
 console.log(JSON.stringify({ item13: ITEM13, item16: ITEM16, rowBuildsOnSave: traces.length, hostCalls: names }));
 
-// A recorded election the host refuses keeps the question and says why.
+// ---- a profile that cannot take the election (a taxpayer added in the app:
+// no income type confirmed for 2026). The card knows before any press: no
+// rate, no Save, what is missing and for which year, and the way to supply it.
 draft = { ...draft, annual_income_tax_election: "unrecorded" };
+readiness = { ...READY, gap: "not_business_income", classification: null, since: "2020-01-01", new_registration_after: "2020-01-01" };
+const writesBefore = calls.filter((c) => c[0] === "record_income_tax_election").length;
 app.formUi.validate(cx);
 await settle();
 frame();
-assert.equal(byId(frame(), "fp-election").length, 1, "asked again");
+assert.equal(byId(frame(), "fp-election").length, 1, "Item 13 still has its card");
+assert.deepEqual(readinessAsked.at(-1), [TIN, 2026], "readiness is asked for the return's own TIN and year");
+assert.equal(byId(frame(), "fp-election-save").length, 0, "no Save the profile would refuse");
+assert.equal(byId(frame(), "fp-election-graduated").length + byId(frame(), "fp-election-eight_percent").length, 0, "no rate to pick");
+const blocked = texts(one(frame(), "fp-election")).join(" ");
+assert.ok(blocked.includes("Juana Santos's tax profile does not say whether Juana Santos is self-employed or has mixed income in 2026."), blocked);
+assert.ok(blocked.includes("Certificate of Registration"), "it says where the fact comes from");
+assert.ok(!/Other error/.test(blocked), "no raw host text");
+// recordElection itself refuses to send it, even if called.
+s.electionPick = "graduated";
+app.formUi.recordElection(cx);
+assert.equal(calls.filter((c) => c[0] === "record_income_tax_election").length, writesBefore, "nothing is sent while the profile cannot take it");
+s.electionPick = null;
+// No confirmed registration at all, and a compensation-only one, say so too.
+for (const [gap, classification, words] of [
+  ["no_confirmed_registration", null, "has no confirmed registration for 2026"],
+  ["not_business_income", "PurelyCompensation", "registered for compensation income only in 2026"],
+]) {
+  readiness = { ...readiness, gap, classification };
+  app.formUi.refreshRows();
+  assert.ok(texts(one(frame(), "fp-election")).join(" ").includes(words), `${gap}: ${words}`);
+}
+// "Confirm registration" opens the taxpayer's Registration section for 2026.
+const opened = [];
+app.taxpayerUi = { startRegistration: (opts) => opened.push(opts) };
+click(frame(), "fp-election-register");
+assert.equal(JSON.stringify(opened), JSON.stringify([{ tin: TIN, year: 2026, fromForm: true }]), "the Registration section, for the return's branch and year");
+// The filer confirms it there and comes back: the card asks again, and only Item 13 rebuilds.
+readiness = READY;
+traces.length = 0;
+app.formUi.reenter();
+frame();
+assert.deepEqual([...new Set(traces)], [`fp-item-${ITEM13}`], "coming back rebuilds only Item 13");
+assert.equal(byId(frame(), "fp-election-register").length, 0);
+assert.equal(byId(frame(), "fp-election-graduated").length, 1, "the rates are offered now");
+assert.ok(texts(one(frame(), "fp-election")).includes("Which income-tax rate did Juana Santos choose for 2026?"));
+
+// A refusal that still comes (the profile changed in between): plain words,
+// and the card falls back to what the profile lacks.
 store.write = (name) => {
-  if (name === "record_income_tax_election") throw Error("The tax profile has no confirmed self-employed or mixed-income registration for 2026");
+  if (name === "record_income_tax_election") {
+    readiness = { ...READY, gap: "no_confirmed_registration", classification: null };
+    throw Error("Other error: The tax profile has no confirmed self-employed or mixed-income registration for 2026");
+  }
   throw Error(name);
 };
 click(frame(), "fp-election-graduated");
@@ -292,6 +345,8 @@ frame();
 click(frame(), "fp-election-save");
 await settle();
 frame();
-assert.ok(toasts.at(-1).includes("no confirmed self-employed"), "the refusal is shown");
-assert.equal(byId(frame(), "fp-election").length, 1, "the question stays");
-console.log("PASS: the 2551Q election is asked and answered at Item 13, and clears in place.");
+assert.ok(toasts.at(-1).startsWith("The tax profile has no confirmed self-employed"), `the refusal is shown, plainly: ${toasts.at(-1)}`);
+assert.equal(byId(frame(), "fp-election").length, 1, "the card stays");
+assert.equal(byId(frame(), "fp-election-save").length, 0, "and stops offering the Save");
+assert.equal(byId(frame(), "fp-election-register").length, 1, "it offers the registration instead");
+console.log("PASS: the 2551Q election is asked and answered at Item 13, never offered when the profile would refuse it, and clears in place.");

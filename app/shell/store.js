@@ -225,6 +225,14 @@ export class Store {
         })
       : null;
   }
+  /**
+   * Whether the tax profile can record `year`'s income-tax election, and if
+   * not what it lacks (`income_tax_election_readiness`); null when the read
+   * failed. Kept until the next write, so confirming a registration re-asks.
+   */
+  electionReadiness(tin, year) {
+    return tin && year ? this.read(`election_ready:${tin}:${year}`, "income_tax_election_readiness", [tin, year], null) : null;
+  }
   deadlines(from, to) {
     return this.read(`deadlines:${from}:${to}`, "deadlines_between", [from, to], []).filter((d) => this.canSee(d.tin_root));
   }

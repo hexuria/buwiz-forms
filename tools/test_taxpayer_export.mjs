@@ -296,4 +296,64 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   assert.equal(exportBtn(exportTree(app)).info.disabled, false, "Export enabled after the panel answers");
 }
 
+// ---- Registration: where the 2551Q card sends a filer whose profile has no
+// self-employed or mixed-income registration for the return's year. Only an
+// individual has it; nothing is filled in for the filer; the save goes
+// through bir-core's reviewed confirmation and then back to the return.
+{
+  const { app, toasts } = makeApp({ hasPin: false });
+  const disclosures = (tree) => find(tree, (i) => i.disclosure).map((m) => m.info.disclosure);
+  assert.ok(!disclosures(renderTaxpayerPage(cx, app, "profile", 900)).includes("tp-sec-registration"), "a corporation has no income type to confirm");
+
+  app.taxpayer().taxpayer_type = "Individual";
+  const writes = [];
+  const went = [];
+  const readiness = { taxable_year: 2026, gap: "not_business_income", taxpayer_type: "Individual", classification: null, since: "2020-01-01", new_registration_after: "2020-01-01", issues: [] };
+  let refuse = null;
+  app.store.electionReadiness = () => readiness;
+  app.store.write = (name, ...args) => {
+    writes.push([name, ...args]);
+    if (refuse) throw new Error(refuse);
+    return true;
+  };
+  app.branchFor = () => app.branch();
+  app.history = ["home", "form"];
+  app.go = (view) => went.push(["go", view]);
+  app.goBack = () => went.push(["back"]);
+  let page = renderTaxpayerPage(cx, app, "profile", 900);
+  assert.ok(disclosures(page).includes("tp-sec-registration"), "an individual has the Registration section");
+  assert.ok(find(page, (i) => i.field === "Income type in 2026").length === 1, "it shows the year's income type");
+
+  const ui = app.taxpayerUi;
+  ui.startRegistration({ tin: TIN, year: 2026, fromForm: true }, cx);
+  assert.deepEqual(went, [["go", "profile"]], "the card opens the Profile tab");
+  assert.equal(ui.reg.type, null, "no income type is chosen for the filer");
+  assert.equal(ui.reg.from.value(), "", "and no date is filled in");
+  page = renderTaxpayerPage(cx, app, "profile", 900);
+  assert.equal(find(page, (i) => i.segmented === "tp-reg-type").length, 1, "the income-type choice");
+  assert.equal(find(page, (i) => i.field === "tp-reg-from").length, 1, "the date it took effect");
+  assert.equal(find(page, (i) => i.formActions === "tp-reg").length, 1, "Cancel and Confirm registration");
+
+  const tryDate = (date) => {
+    ui.reg.from.set_value(date);
+    ui.saveRegistration(cx);
+    return ui.reg?.error;
+  };
+  assert.match(tryDate("2026-01-01"), /Choose how Example Trading Corp is registered/);
+  ui.pickIncomeType("SelfEmployed", cx);
+  assert.match(tryDate("2026-02-30"), /YYYY-MM-DD/);
+  assert.match(tryDate("2027-01-01"), /by December 31, 2026/);
+  assert.match(tryDate("2020-01-01"), /after 2020-01-01/);
+  assert.equal(writes.length, 0, "nothing bir-core would refuse is sent");
+
+  refuse = "Other error: The tax profile already has a confirmed registration from January 1, 2026; a new one must start after that date";
+  assert.equal(tryDate("2026-01-01"), "The tax profile already has a confirmed registration from January 1, 2026; a new one must start after that date", "a refusal in plain words");
+  refuse = null;
+  tryDate("2026-03-01");
+  assert.deepEqual(writes.at(-1), ["confirm_income_registration", TIN, "SelfEmployed", "2026-03-01"]);
+  assert.equal(ui.reg, null, "the edit closes");
+  assert.equal(toasts.at(-1).msg, "Registration confirmed from 2026-03-01.");
+  assert.deepEqual(went.at(-1), ["back"], "back to the return, whose card asks again");
+}
+
 console.log("test_taxpayer_export: ok");
