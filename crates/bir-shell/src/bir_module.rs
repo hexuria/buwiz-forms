@@ -2187,7 +2187,7 @@ fn reset_database() -> Result<(), HostError> {
 fn after_path_prompt<P, E, C, R>(
     prompt: impl FnOnce(&mut gpui_kit::App) -> R,
     work: impl FnOnce(P) -> HostResult + 'static,
-) -> Result<gpui_shell::HostFuture, HostError>
+) -> Result<gpui_shell::host_modules::HostFuture, HostError>
 where
     R: std::future::Future<Output = Result<Result<Option<P>, E>, C>> + 'static,
     P: 'static,
@@ -2227,7 +2227,7 @@ where
 /// call [`import_archive_from`] instead.
 fn import_archive(
     arguments: &gpui_shell::HostArguments,
-) -> Result<gpui_shell::HostFuture, HostError> {
+) -> Result<gpui_shell::host_modules::HostFuture, HostError> {
     if !arguments.is_empty() {
         return Err(HostError::new(
             "import_archive takes no path; the host opens the file dialog",
@@ -2324,7 +2324,7 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
 /// a PIN.
 fn export_profile(
     arguments: &gpui_shell::HostArguments,
-) -> Result<gpui_shell::HostFuture, HostError> {
+) -> Result<gpui_shell::host_modules::HostFuture, HostError> {
     if arguments.len() > 2 {
         return Err(HostError::new(
             "export_profile takes no path; the host opens the save dialog",
