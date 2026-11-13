@@ -19,6 +19,7 @@
 
 pub mod draft_locks;
 pub mod probe;
+pub mod template_stops;
 
 pub use draft_locks::{draft_locks, live_locks};
 
