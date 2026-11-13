@@ -7,7 +7,8 @@
 // Checks: each tile's number and the host call it comes from (zero and
 // overdue cases included), the 30-day strip's days and counts, the
 // per-taxpayer progress and next deadline, navigation from the tiles, the
-// strip and the rows, the empty state of a new install, and that the 30 s
+// strip and the rows, the three Filings tiles' presets reaching the real
+// Filings filters through main.js go(), the empty state of a new install, and that the 30 s
 // poll does not ask list_returns("saved") again while a visit to Home does.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -175,6 +176,15 @@ const stubClass = class {
 };
 const InputState = { new: () => ({ value: () => "", set_value() {}, on() {} }) };
 class View {}
+// A popover holds its trigger, as the host's does.
+const Popup = {
+  new: (id, trigger) => {
+    const e = el();
+    e.id(id);
+    meta.get(e).kids.push(trigger);
+    return e;
+  },
+};
 
 const real = {
   "./shell/store.js": source("app/shell/store.js"),
@@ -185,15 +195,16 @@ const real = {
   "./shell/recent.js": source("app/shell/recent.js"),
   "./shell/home.js": source("app/shell/home.js"),
   "./shell/dashboard.js": source("app/shell/dashboard.js"),
+  // Filings takes the tiles' presets; Calendar is made beside it at boot.
+  "./shell/calendar_page.js": source("app/shell/calendar_page.js"),
+  "./shell/filings.js": source("app/shell/filings.js"),
 };
 const linked = {
   "gpui-kit": mock("gpui-kit", { View, div: el, svg: el }),
-  "gpui-base": mock("gpui-base", { Input: { new: stub }, InputState, Popup: { new: stub }, OtpInput: { new: stub }, OtpState: InputState, set_theme() {} }),
+  "gpui-base": mock("gpui-base", { Input: { new: stub }, InputState, Popup, OtpInput: { new: stub }, OtpState: InputState, set_theme() {} }),
   process: mock("process", { default: { env: {} } }),
   bir: mock("bir", birExports),
   "./shell/library.js": mock("library", { renderLibrary: stub }),
-  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub }),
-  "./shell/filings.js": mock("filings", { renderFilings: stub }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
   "./shell/form_page.js": mock("form_page", {
@@ -226,6 +237,8 @@ await main.link((s) => {
 await main.evaluate();
 const { Store } = real["./shell/store.js"].namespace;
 const { renderHome } = real["./shell/home.js"].namespace;
+const { CalendarFilters } = real["./shell/calendar_page.js"].namespace;
+const { FilingsFilters, renderFilings } = real["./shell/filings.js"].namespace;
 
 let BirApp = null;
 new main.namespace.default().init({}, { new: (Class) => (BirApp = Class) });
@@ -238,6 +251,13 @@ const cx = {
   },
   theme: () => ({ is_dark: false }),
   timer: { after() {}, every() {} },
+  stop_propagation() {},
+  // The filter bars' combo boxes are retained views.
+  new(Class, props) {
+    const view = new Class();
+    view.init(props, cx);
+    return { __view: view, set_props: (p) => view.update?.(p), release: () => true };
+  },
 };
 
 const opened = [];
@@ -269,6 +289,9 @@ function makeApp(data) {
       opened.push({ opts: JSON.parse(JSON.stringify(opts)), root: this.selRoot, code: this.selCode });
     },
   });
+  // As boot() makes them.
+  app.calendarUi = new CalendarFilters(app, cx);
+  app.filingsUi = new FilingsFilters(app, cx);
   return app;
 }
 const click = (tree, id) => {
@@ -385,17 +408,39 @@ const D = (code, due, p = null) => DEMO.deadlines.find((d) => d.form_code === co
   click(home, "home-tile-week");
   assert.equal(app.homePick, null);
 
-  // The other three open Filings with a preset for its filters.
-  for (const [key, preset] of [
-    ["drafts", { statuses: ["Draft"] }],
-    ["waiting", { statuses: ["Queued"] }],
-    ["filed", { statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11" }],
+  // The other three open Filings through main.js go(), which hands their
+  // preset to the Filings filters once.
+  const cards = (statuses, month = null) =>
+    [...DEMO.saved, ...DEMO.filed]
+      .filter((r) => statuses.includes(r.status) && (!month || r.updated_at.startsWith(month)))
+      .map((r) => `return-${r.id}`)
+      .sort();
+  const shown = (tree) =>
+    nodes(tree)
+      .map((m) => m.id)
+      .filter((id) => id && /^return-\d+$/.test(id))
+      .sort();
+  const statusLabel = () => texts(one(app.filingsUi.statusCombo.entity.__view.render(cx), "filings-statuses-trigger")).join(" ");
+  for (const [key, preset, summary, chip] of [
+    ["drafts", { statuses: ["Draft"] }, "Draft", null],
+    ["waiting", { statuses: ["Queued"] }, "Queued", null],
+    ["filed", { statuses: ["Submitted", "Confirmed", "Paid"], updatedMonth: "2026-11" }, "3 statuses", "Changed in Nov 2026"],
   ]) {
     app.view = "home";
     app.filingsPreset = null;
     click(renderHome(cx, app, 1000), `home-tile-${key}`);
     assert.equal(app.view, "filings", `${key} opens Filings`);
-    assert.deepEqual(JSON.parse(JSON.stringify(app.filingsPreset)), preset, `${key} preset`);
+    assert.equal(app.filingsPreset, null, `${key}: Filings used the preset once`);
+    const f = app.filingsUi;
+    assert.deepEqual([...f.statuses], preset.statuses, `${key} statuses`);
+    assert.equal(f.updatedMonth, preset.updatedMonth ?? null, `${key} month`);
+    const page = renderFilings(cx, app, 1000);
+    assert.deepEqual(shown(page), cards(preset.statuses, preset.updatedMonth), `${key}: the board shows the preset's returns`);
+    assert.ok(shown(page).length > 0, `${key}: some return matches`);
+    assert.ok(statusLabel().includes(summary), `${key}: status summary ${statusLabel()}`);
+    const chips = byId(page, "filings-month-chip");
+    assert.equal(chips.length, chip ? 1 : 0, `${key}: month chip`);
+    if (chip) assert.ok(texts(chips[0]).includes(chip), texts(chips[0]).join(" | "));
   }
 }
 
