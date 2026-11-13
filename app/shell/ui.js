@@ -134,6 +134,33 @@ export const BREAK = {
 };
 
 /**
+ * The chrome's keyboard shortcuts, the one table the title-bar tooltips and
+ * the ⌘K list read. Cmd on macOS, Ctrl elsewhere; both are bound. Each chord
+ * has one owner: the native menu binds it (bind_global_keys in
+ * crates/bir-shell/src/app_menu.rs, which shows it on the menu item) and
+ * dispatches `action` to the script, so the script binds none of these.
+ */
+export const SHORTCUTS = {
+  sidebar: { chord: "b", action: "toggle-sidebar" },
+  theme: { chord: "t", action: "toggle-theme" },
+  profile: { chord: "shift-b", action: "toggle-profile" },
+  notifs: { chord: "shift-n", action: "toggle-notifications" },
+};
+
+/** A shortcut as the keyboard shows it: "⌘⇧B" on macOS, "Ctrl Shift B" elsewhere. */
+export function shortcutLabel(id, mac) {
+  const parts = SHORTCUTS[id].chord.split("-");
+  const key = parts.pop().toUpperCase();
+  const shift = parts.includes("shift");
+  return mac ? `⌘${shift ? "⇧" : ""}${key}` : `Ctrl ${shift ? "Shift " : ""}${key}`;
+}
+
+/** A tooltip with its shortcut: "Hide sidebar (⌘B)". */
+export function withShortcut(label, id, mac) {
+  return `${label} (${shortcutLabel(id, mac)})`;
+}
+
+/**
  * The current palette, resolved from the live theme.
  * @returns {Palette}
  */

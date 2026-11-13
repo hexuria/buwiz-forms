@@ -158,7 +158,7 @@ for (const os of ["macos", "windows", "linux"]) {
   app.go("settings", cx);
   const before = JSON.stringify({ sidebar: app.sidebarOpen, panel: app.panel, last: app.lastPanel });
   const tree = app.paint(cx);
-  for (const action of ["toggle-sidebar", "toggle-right-panel"]) {
+  for (const action of ["toggle-sidebar", "toggle-profile", "toggle-notifications"]) {
     assert.ok(dispatch(tree, action, cx), `${action} reaches the app root`);
   }
   app.toggleSidebar(cx);

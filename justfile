@@ -86,6 +86,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_shell_chrome.mjs
     node --experimental-vm-modules tools/test_shell_overlays.mjs
     node --experimental-vm-modules tools/test_recent_order.mjs
+    node --experimental-vm-modules tools/test_shell_keys.mjs
 
 shell-check: shell-ui-test
     cargo fmt --manifest-path crates/bir-shell/Cargo.toml -- --check

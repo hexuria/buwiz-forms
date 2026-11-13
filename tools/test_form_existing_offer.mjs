@@ -55,6 +55,7 @@ function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel", "NavRow", "GroupLabel", "Kbd", "StepCircle", "ContextPill", "SidePanel", "DigitCells"]) uiExports[n] = element;
 uiExports.Text = (_cx, _v, text) => { texts.push(String(text)); return element(); };
+uiExports.withShortcut = (label) => label;
 // A choice's hint is drawn inside its button, under the label.
 uiExports.AppButton = (_cx, id, label, opts = {}) => { buttons.set(id, { label, variant: opts.variant, onClick: opts.onClick, block: opts.block, hint: opts.hint }); if (opts.hint) texts.push(opts.hint); return element(); };
 const overlays = new Map();

@@ -32,6 +32,7 @@ import {
   Dropdown,
   TextField,
   DigitCells,
+  withShortcut,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
 import { recentOpenOptions, recentKey } from "./recent.js";
@@ -79,7 +80,7 @@ function captionButtons(cx) {
 /** The theme button: the one title-bar control Settings keeps. */
 function themeButton(cx, app) {
   return IconButton(cx, "tb-theme", themeIcon(app.themePref), {
-    tooltip: `Theme: ${app.themePref} (click to change)`,
+    tooltip: withShortcut(`Theme: ${app.themePref}, click to change`, "theme", app.isMac),
     onClick: (_e, cx) => app.cycleTheme(cx),
   });
 }
@@ -127,11 +128,12 @@ function renderSettingsTitleBar(cx, app) {
 export function renderTitleBar(cx, app, L) {
   if (app.view === "settings") return renderSettingsTitleBar(cx, app);
   const compact = L.vp.width < BREAK.compactPill;
+  const mac = app.isMac;
   const left = div().flex().flex_row().flex_1().flex_basis(0).min_w(0).items_center().gap(SPACE[1]).pl(10);
   if (app.isMac) left.child(div().w(52 + 14).flex_none()); // traffic lights (system-drawn)
   left.child(
     IconButton(cx, "tb-sidebar", "panel-left", {
-      tooltip: app.sidebarOpen ? "Hide sidebar" : "Show sidebar",
+      tooltip: withShortcut(app.sidebarOpen ? "Hide sidebar" : "Show sidebar", "sidebar", mac),
       pressed: false,
       onClick: (_e, cx) => app.toggleSidebar(cx),
     }),
@@ -185,7 +187,7 @@ export function renderTitleBar(cx, app, L) {
     .when(app.isMac, (el) => el.pr(10))
     .child(
       IconButton(cx, "tb-notifications", "bell", {
-        tooltip: "Notifications",
+        tooltip: withShortcut("Notifications", "notifs", mac),
         pressed: app.panel === "notifs",
         dot: unread,
         onClick: (_e, cx) => app.togglePanel("notifs", cx),
@@ -194,9 +196,10 @@ export function renderTitleBar(cx, app, L) {
     .child(themeButton(cx, app))
     .child(
       IconButton(cx, "tb-panel", "panel-right", {
+        // The panel it would hide or show, with that panel's own key.
         tooltip: app.panel
-          ? `Hide ${app.panel === "notifs" ? "notifications" : "tax profile"}`
-          : `Show ${app.lastPanel === "notifs" ? "notifications" : "tax profile"}`,
+          ? withShortcut(`Hide ${app.panel === "notifs" ? "notifications" : "tax profile"}`, app.panel, mac)
+          : withShortcut(`Show ${app.lastPanel === "notifs" ? "notifications" : "tax profile"}`, app.lastPanel, mac),
         pressed: Boolean(app.panel),
         onClick: (_e, cx) => app.toggleRightPanel(cx),
       }),

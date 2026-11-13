@@ -197,7 +197,8 @@ sudo apt-get install -y \
 
 ## Keyboard shortcuts
 
-Ctrl+Enter, Ctrl+B, Ctrl+Shift+B, Ctrl+F, Ctrl+N, Ctrl+Shift+T (theme),
+Ctrl+Enter, Ctrl+B (sidebar), Ctrl+Shift+B (tax profile), Ctrl+Shift+N
+(notifications), Ctrl+F, Ctrl+N, Ctrl+T (theme),
 Ctrl+Shift+X (cron tasks), Ctrl+, (Settings), Ctrl+K (command palette), F1
 (global dashboard), Ctrl+Q, Alt+F4, Ctrl+W, F11, Ctrl+=, Ctrl+- and Ctrl+0
 (zoom).

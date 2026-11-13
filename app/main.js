@@ -20,7 +20,7 @@ import {
   themePreferenceFromEnv,
   THEME_PREF_KEY,
 } from "./shell/theme.js";
-import { tokens, SIZE, BREAK, RADIUS, Toast, DigitEntry } from "./shell/ui.js";
+import { tokens, SIZE, BREAK, RADIUS, Toast, DigitEntry, SHORTCUTS, shortcutLabel } from "./shell/ui.js";
 import {
   renderTitleBar,
   renderSidebar,
@@ -289,15 +289,18 @@ class BirApp extends View {
       cx.notify();
     });
 
-    // Shortcuts use Cmd on macOS and Ctrl elsewhere; both chords are bound
-    // so the keymap is the same on every platform.
+    this.bindShortcuts(cx);
+  }
+
+  /**
+   * The chords only the script owns. Cmd on macOS and Ctrl elsewhere; both
+   * are bound so the keymap is the same on every platform. Chords with a
+   * menu item (⌘B, ⌘T, ⌘⇧B, ⌘⇧N in SHORTCUTS, and ⌘K, ⌘N, ⌘,) are bound
+   * once, by the native menu, which dispatches the same action here: a
+   * second binding would be a second owner for one press.
+   */
+  bindShortcuts(cx) {
     const chords = [
-      ["b", "toggle-sidebar"],
-      ["k", "open-palette"],
-      ["n", "new-return"],
-      ["shift-t", "toggle-theme"],
-      ["alt-b", "toggle-right-panel"],
-      [",", "open-settings"],
       ["l", "lock-app"],
       ["[", "go-back"],
       ["]", "go-forward"],
@@ -760,7 +763,7 @@ class BirApp extends View {
     cx.notify();
   }
 
-  /** The title-bar panel button (⌘⌥B): hide the panel, or reopen the last one. */
+  /** The title-bar panel button: hide the panel, or reopen the last one. */
   toggleRightPanel(cx) {
     this.togglePanel(this.panel || this.lastPanel, cx);
   }
@@ -1150,18 +1153,25 @@ class BirApp extends View {
         group: "Actions",
         label: "Toggle sidebar",
         icon: "panel-left",
-        hint: this.isMac ? "⌘B" : "Ctrl B",
+        hint: shortcutLabel("sidebar", this.isMac),
         run: (cx) => this.toggleSidebar(cx),
       });
       items.push({
         group: "Actions",
-        label: this.panel ? "Hide right panel" : "Show right panel",
+        label: this.panel === "profile" ? "Hide tax profile" : "Show tax profile",
         icon: "panel-right",
-        hint: this.isMac ? "⌘⌥B" : "Ctrl Alt B",
-        run: (cx) => this.toggleRightPanel(cx),
+        hint: shortcutLabel("profile", this.isMac),
+        run: (cx) => this.togglePanel("profile", cx),
+      });
+      items.push({
+        group: "Actions",
+        label: this.panel === "notifs" ? "Hide notifications" : "Show notifications",
+        icon: "bell",
+        hint: shortcutLabel("notifs", this.isMac),
+        run: (cx) => this.togglePanel("notifs", cx),
       });
     }
-    items.push({ group: "Actions", label: "Change theme", icon: "moon", run: (cx) => this.cycleTheme(cx) });
+    items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: shortcutLabel("theme", this.isMac), run: (cx) => this.cycleTheme(cx) });
     items.push({ group: "Actions", label: "Components", icon: "layout-template", run: (cx) => this.go("gallery", cx) });
     if (!q) return items;
     return items.filter((x) => x.match || `${x.label} ${x.hint || ""}`.toLowerCase().includes(q));
@@ -1854,11 +1864,12 @@ class BirApp extends View {
       .bg(t.bg)
       .text_color(t.fg)
       .track_focus(this.focusRoot)
-      .on_action("toggle-sidebar", (_e, cx) => this.toggleSidebar(cx))
+      .on_action(SHORTCUTS.sidebar.action, (_e, cx) => this.toggleSidebar(cx))
       .on_action("open-palette", (_e, cx) => this.openPalette(cx))
       .on_action("new-return", (_e, cx) => this.startNewReturn(cx))
-      .on_action("toggle-theme", (_e, cx) => this.cycleTheme(cx))
-      .on_action("toggle-right-panel", (_e, cx) => this.toggleRightPanel(cx))
+      .on_action(SHORTCUTS.theme.action, (_e, cx) => this.cycleTheme(cx))
+      .on_action(SHORTCUTS.profile.action, (_e, cx) => this.togglePanel("profile", cx))
+      .on_action(SHORTCUTS.notifs.action, (_e, cx) => this.togglePanel("notifs", cx))
       .on_action("open-settings", (_e, cx) => this.openSettings(cx))
       .on_action("lock-app", (_e, cx) => this.lockApp(cx))
       .on_action("cloud-sign-out", (_e, cx) => {
