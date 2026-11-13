@@ -222,7 +222,8 @@ export function renderLockedFrame(cx, app, body) {
 
 // ---------------------------------------------------------------- sidebar
 
-export function renderSidebar(cx, app) {
+/** `full`: fill the window under the title bar (the phone-width overlay). */
+export function renderSidebar(cx, app, full = false) {
   const t = tokens(cx);
   const kbd = app.isMac ? "⌘K" : "Ctrl K";
   const search = div()
@@ -291,7 +292,8 @@ export function renderSidebar(cx, app) {
     .flex()
     .flex_col()
     .flex_none()
-    .w(SIZE.sidebar)
+    .when(full, (el) => el.w_full())
+    .when(!full, (el) => el.w(SIZE.sidebar))
     .h_full()
     .min_h(0)
     .pt(SPACE[1])
@@ -386,11 +388,12 @@ function accountRow(cx, app) {
 
 // ---------------------------------------------------------------- right panel
 
-export function renderRightPanel(cx, app) {
-  return app.panel === "notifs" ? notificationsPanel(cx, app) : profilePanel(cx, app);
+/** `full`: fill the window under the title bar (the phone-width overlay). */
+export function renderRightPanel(cx, app, full = false) {
+  return app.panel === "notifs" ? notificationsPanel(cx, app, full) : profilePanel(cx, app, full);
 }
 
-function notificationsPanel(cx, app) {
+function notificationsPanel(cx, app, full) {
   const list = app.notifications();
   const body = div().flex().flex_col().gap(2);
   if (!list.length) {
@@ -433,10 +436,11 @@ function notificationsPanel(cx, app) {
       onClick: (_e, cx) => app.markAllRead(cx),
     }),
     body,
+    full,
   });
 }
 
-function profilePanel(cx, app) {
+function profilePanel(cx, app, full) {
   const t = tokens(cx);
   const tp = app.taxpayer();
   if (!tp) {
@@ -472,7 +476,7 @@ function profilePanel(cx, app) {
           }).mt(SPACE[2]),
         ),
       );
-    return SidePanel(cx, "panel-profile", { body });
+    return SidePanel(cx, "panel-profile", { body, full });
   }
   const b = app.branch();
   const ui = app.taxpayerUi;
@@ -588,7 +592,7 @@ function profilePanel(cx, app) {
   }
   body.child(NavRow(cx, "panel-add-branch", "plus", "Add branch", { onClick: (_e, cx) => ui.openNewBranch(cx) }));
   // Only the admin switches taxpayers; anyone else has just their own.
-  if (!app.isAdmin()) return SidePanel(cx, "panel-profile", { body });
+  if (!app.isAdmin()) return SidePanel(cx, "panel-profile", { body, full });
   const others = app.taxpayers().filter((x) => x.tin_root !== tp.tin_root);
   if (others.length) body.child(GroupLabel(cx, "Switch taxpayer"));
   for (const x of others) {
@@ -600,7 +604,7 @@ function profilePanel(cx, app) {
     );
   }
   if (app.canAddTaxpayer()) body.child(NavRow(cx, "panel-new-tp", "plus", "New taxpayer", { onClick: (_e, cx) => ui.openNewTaxpayer(cx) }));
-  return SidePanel(cx, "panel-profile", { body });
+  return SidePanel(cx, "panel-profile", { body, full });
 }
 
 // ---------------------------------------------------------------- palette

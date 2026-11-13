@@ -130,6 +130,7 @@ export const BREAK = {
   compactPill: 600, // pill shows avatar + branch code, back/forward hidden
   narrowContent: 640, // content padding 20 × 16, one-column field grids
   formNav: 760, // part navigator becomes a chip row
+  phone: 600, // sidebar and panel overlays fill the window under the title bar
 };
 
 /**
@@ -1223,7 +1224,8 @@ export function Tabs(cx, id, tabs, current, onSelect) {
 /**
  * SidePanel: 320 wide on `bg`, a 40 px header with a 14/600 title and at
  * most one ghost action, no close button (the trigger closes it). The body
- * scrolls vertically only.
+ * scrolls vertically only. `opts.full` fills its container instead (the
+ * full-screen overlay on a phone-width window).
  */
 export function SidePanel(cx, id, opts) {
   const t = tokens(cx);
@@ -1232,7 +1234,8 @@ export function SidePanel(cx, id, opts) {
     .flex()
     .flex_col()
     .flex_none()
-    .w(SIZE.panel)
+    .when(Boolean(opts.full), (el) => el.w_full())
+    .when(!opts.full, (el) => el.w(SIZE.panel))
     .h_full()
     .min_h(0)
     .bg(t.bg);
@@ -1265,7 +1268,8 @@ export function SidePanel(cx, id, opts) {
           .flex()
           .flex_col()
           .gap(2)
-          .w(SIZE.panel)
+          .when(Boolean(opts.full), (el) => el.w_full())
+          .when(!opts.full, (el) => el.w(SIZE.panel))
           .px(SPACE[3])
           .pb(SPACE[3])
           .pt(opts.title ? 0 : SPACE[1])
