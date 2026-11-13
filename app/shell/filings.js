@@ -275,16 +275,24 @@ function boardCard(cx, app, r) {
     .on_click((_e, cx) => openReturn(app, r, cx))
     .child(div().flex().flex_row().items_center().gap(6).min_w(0).child(Code(cx, r.form_code)).child(Line(cx, "meta", r.period_label, "fg2")))
     .child(Line(cx, "meta", whoLine(r), "fg3"))
+    // Status and date. A board column leaves a card about 147 px inside at
+    // 1200 px and wider (816 px over four columns, less their 10 px padding
+    // and the card's 12 px): "Submitted" with its icon and "Nov 13, 2026"
+    // need more, so the row wraps and the date takes its own line, right
+    // aligned, rather than running past the card's edge.
     .child(
       div()
+        .id(`return-${r.id}-meta`)
         .flex()
         .flex_row()
+        .flex_wrap()
         .items_center()
-        .gap(6)
+        .gap_x(6)
+        .gap_y(2)
         .mt(2)
-        .child(statusChip(cx, r.status))
-        .child(div().flex_1())
-        .child(Text(cx, "cap", shortDate(r.updated_at), "fg3").whitespace_nowrap()),
+        .min_w(0)
+        .child(div().flex_none().child(statusChip(cx, r.status)))
+        .child(Text(cx, "cap", shortDate(r.updated_at), "fg3").whitespace_nowrap().flex_none().ml_auto()),
     )
     .child(actions);
 }

@@ -592,6 +592,29 @@ const filCount = (tree) => text(one(tree, "filings-count")).trim();
   // Narrow: the columns stack.
   const narrow = one(fil(500), "filings-board");
   assert.ok(narrow.calls.some((c) => c[0] === "flex_col"));
+
+  // A card's status and date cannot run past its edge. The columns the
+  // board really gets: 816 px of content at 1800 and 1200 px windows (the
+  // 880 px content cap less 32 px padding each side) and 578 px at 900
+  // (stacked). Four columns of 816 leave a card (816 - 3 * 12) / 4 - 2 * 10
+  // - 2 * 12 - 2 = 149 px inside; the status chip with its icon and
+  // "Nov 13, 2026" need about 160, so the row must wrap, its parts must not
+  // shrink, and nothing may stretch between them.
+  const has = (m, name, ...args) => m.calls.some((c) => c[0] === name && args.every((a, i) => c[i + 1] === a));
+  const inside = (816 - 3 * 12) / 4 - 2 * 10 - 2 * 12 - 2;
+  assert.ok(inside < 160, `precondition: one line cannot hold both at ${inside} px`);
+  for (const width of [816, 578]) {
+    const t2 = fil(width);
+    for (const id of [1, 2, 3, 4, 5, 6, 7]) {
+      const row = one(t2, `return-${id}-meta`);
+      assert.ok(has(row, "flex_wrap") && has(row, "min_w", 0), `return ${id}: the status and date row wraps at ${width}`);
+      const [chip, date] = row.kids.map((k) => meta.get(k));
+      assert.equal(row.kids.length, 2, "no spacer stretched between them");
+      assert.ok(has(chip, "flex_none"), "the chip keeps its size");
+      assert.ok(has(date, "whitespace_nowrap") && has(date, "flex_none") && has(date, "ml_auto"), "the date stays whole, right-aligned on its line");
+      assert.ok(!nodes(row).some((m) => has(m, "flex_1")), "nothing in the row grows past the card");
+    }
+  }
 }
 
 // ---------------------------------------------------------------- Home's presets
