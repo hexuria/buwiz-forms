@@ -3,7 +3,7 @@
 // mocked `bir` host: Home lists the as-needed forms the taxpayers file in an
 // "As needed" section, each with "Start a return", and under each the saved
 // returns that hold no trigger date yet, with "Open"; a return that holds its
-// trigger date is a dated row in "Due in the next 30 days" and on the
+// trigger date is a dated row in Home's "Next 30 days" list and on the
 // Calendar, with its computed due date, and opens exactly that return. The
 // Calendar never shows the undated list. With no as-needed forms, Home has
 // no "As needed" section.
@@ -46,8 +46,15 @@ const one = (tree, pred, what) => {
   return all[0];
 };
 
-const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24, 28, 32] };
+const uiExports = {
+  tokens: () => new Proxy({}, { get: () => "#000" }),
+  SPACE: [0, 4, 8, 12, 16, 20, 24, 28, 32],
+  RADIUS: { ctl: 6, row: 8, card: 12, full: 9999 },
+  SIZE: { iconSmall: 14 },
+};
 uiExports.Text = (_cx, _v, text) => el({ text: String(text) });
+uiExports.Line = uiExports.Text;
+uiExports.Avatar = () => el();
 uiExports.Code = (_cx, code) => el({ code });
 uiExports.Icon = () => el();
 uiExports.StepCircle = () => el();
@@ -78,6 +85,7 @@ const birExports = {
     return host.asNeeded;
   },
   list_returns: () => [],
+  list_taxpayers: () => [],
 };
 
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, Math, Number, String, Proxy, WeakMap });
@@ -89,14 +97,16 @@ const source = (path) => new vm.SourceTextModule(fs.readFileSync(new URL(path, r
 const storeMod = source("app/shell/store.js");
 const homeMod = source("app/shell/home.js");
 const calendarMod = source("app/shell/calendar_page.js");
+const dashboardMod = source("app/shell/dashboard.js");
 const linked = {
   "gpui-kit": mock("gpui-kit", { div: () => el() }),
   bir: mock("bir", birExports),
   "./ui.js": mock("./ui.js", uiExports),
   "./store.js": storeMod,
   "./home.js": homeMod,
+  "./dashboard.js": dashboardMod,
 };
-for (const m of [storeMod, homeMod, calendarMod]) await m.link((s) => linked[s]);
+for (const m of [storeMod, dashboardMod, homeMod, calendarMod]) await m.link((s) => linked[s]);
 await calendarMod.evaluate();
 const { Store, isoDate, addDays } = storeMod.namespace;
 const { renderHome } = homeMod.namespace;
@@ -142,7 +152,7 @@ const cx = {};
   const home = renderHome(cx, app, 1000);
   assert.ok(calls.some((c) => c[0] === "as_needed_forms" && c[1] === year), "asks for this year's as-needed forms");
   const sections = find(home, (i) => i.section).map((m) => m.info.section);
-  assert.deepEqual(sections, ["Due in the next 30 days", "As needed", "Recently filed"]);
+  assert.deepEqual(sections, ["Next 30 days", "Each taxpayer at a glance", "As needed", "Recently filed"]);
 
   // The dated as-needed returns are deadline rows, each its own row.
   const due = one(home, (i) => i.group === "home-due", "home-due group");
@@ -197,7 +207,7 @@ const cx = {};
   const saved = host.asNeeded;
   host.asNeeded = [];
   const home = renderHome(cx, makeApp(), 1000);
-  assert.deepEqual(find(home, (i) => i.section).map((m) => m.info.section), ["Due in the next 30 days", "Recently filed"]);
+  assert.deepEqual(find(home, (i) => i.section).map((m) => m.info.section), ["Next 30 days", "Each taxpayer at a glance", "Recently filed"]);
   assert.equal(find(home, (i) => i.group === "home-as-needed").length, 0);
   host.asNeeded = saved;
 }

@@ -1,6 +1,7 @@
-// Home: the greeting, returns due in the next 30 days, the as-needed forms
-// the taxpayers file (each with Start a return), recently filed — or,
-// on a fresh install, the welcome with three numbered steps
+// Home: the greeting, the dashboard (status tiles, the next 30 days' strip
+// and the deadlines it picks, each taxpayer at a glance: dashboard.js), the
+// as-needed forms the taxpayers file (each with Start a return), recently
+// filed — or, on a fresh install, the welcome with three numbered steps
 // (DESIGN_SYSTEM.md "Empty state"). Shared row renderers for Calendar and
 // Filings live here too.
 
@@ -21,7 +22,8 @@ import {
   SectionTitle,
   StepCircle,
 } from "./ui.js";
-import { isoDate, addDays, daysUntil, MONTHS, shortDate } from "./store.js";
+import { daysUntil, MONTHS, shortDate } from "./store.js";
+import { loadDashboard, statusTiles, deadlineStrip, pickedDeadlines, pickedHeader, taxpayerRows } from "./dashboard.js";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -223,30 +225,27 @@ function welcome(cx, app) {
 
 export function renderHome(cx, app, width) {
   if (app.isFresh()) return welcome(cx, app);
-  const today = new Date();
-  const soon = app.store
-    .deadlines(isoDate(addDays(today, -30)), isoDate(addDays(today, 30)))
-    .filter((d) => daysUntil(d.due_date) >= 0 || d.status === "Not started" || d.status === "Draft");
+  const data = loadDashboard(app);
+  const picked = pickedDeadlines(app, data);
   const filed = app.store.returns("filed").slice(0, 3);
-  const asNeeded = app.store.asNeeded(today.getFullYear());
-  const taxpayerCount = new Set(soon.map((d) => d.tin_root)).size;
-  const lede = soon.length
-    ? `${soon.length} return${soon.length === 1 ? " is" : "s are"} due in the next 30 days across ${taxpayerCount} taxpayer${taxpayerCount === 1 ? "" : "s"}. ${longToday()}.`
-    : `Nothing is due in the next 30 days. ${longToday()}.`;
+  const asNeeded = app.store.asNeeded(new Date().getFullYear());
   const page = div()
     .flex()
     .flex_col()
-    .child(PageHeader(cx, { title: greeting(), lede }))
-    .child(div().mt(28).child(SectionTitle(cx, "Due in the next 30 days", true)))
+    .child(PageHeader(cx, { title: greeting(), lede: `${longToday()}.` }))
+    .child(div().mt(24).child(statusTiles(cx, app, data, width)))
+    .child(div().mt(28).child(SectionTitle(cx, "Next 30 days", true)))
+    .child(deadlineStrip(cx, app, data, width))
+    .child(pickedHeader(cx, app, picked))
     .child(
       ListGroup(
         cx,
         "home-due",
-        soon.length
-          ? soon.map((d) => dueRow(cx, app, d, width))
-          : [EmptyRow(cx, "home-due-empty", "Deadlines show here once a taxpayer has forms for a tax year.")],
+        picked.rows.length ? picked.rows.map((d) => dueRow(cx, app, d, width)) : [EmptyRow(cx, "home-due-empty", picked.empty)],
       ),
-    );
+    )
+    .child(SectionTitle(cx, "Each taxpayer at a glance"))
+    .child(ListGroup(cx, "home-taxpayers", taxpayerRows(cx, app, data, width)));
   // Filed when something happens (a removal, a withholding, a sale): no
   // deadline until a return holds that date.
   if (asNeeded.length) {
@@ -264,4 +263,3 @@ export function renderHome(cx, app, width) {
       ),
     );
 }
-
