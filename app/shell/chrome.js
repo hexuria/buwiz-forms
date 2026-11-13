@@ -33,6 +33,7 @@ import {
   TextField,
   DigitCells,
   withShortcut,
+  takesPointer,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
 import { recentOpenOptions, recentKey } from "./recent.js";
@@ -408,8 +409,9 @@ function accountRow(cx, app) {
   if (app.accountMenu) {
     // Paints above everything in the sidebar footer, Settings included.
     wrap.child(
-      div()
-        .id("account-menu")
+      // Its rows lie over the sidebar's Recent rows: a press on one must not
+      // also open the return beneath it (takesPointer).
+      takesPointer(div().id("account-menu"))
         .absolute()
         .bottom(56 + 4)
         .left(0)

@@ -223,6 +223,30 @@ export function Text(cx, style, content, color) {
     .child(content == null ? "" : String(content));
 }
 
+/**
+ * Make a floating element take the pointer, so a press on it never reaches
+ * what is painted beneath it.
+ *
+ * GPUI hands a mouse press to every hitbox under the pointer, not only the
+ * topmost: capture listeners back to front, then bubble listeners front to
+ * back (the last painted first) until one calls `stop_propagation()`. A
+ * click arms on the bubble-phase press when its element is under the
+ * pointer and fires on the release. A script cannot call `occlude()` (only
+ * gpui-base's Popup, Dialog and Sheet do, inside), so a floating element
+ * stops the press and the release itself: its own children paint after it
+ * and have had theirs; everything painted before it gets nothing.
+ * `on_mouse_down_out` listens in the capture phase and still closes
+ * popovers elsewhere.
+ * @template T
+ * @param {T} el
+ * @returns {T}
+ */
+export function takesPointer(el) {
+  return /** @type {any} */ (el)
+    .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+    .on_mouse_up("left", (_e, cx) => cx.stop_propagation());
+}
+
 /** One-line text that truncates with an ellipsis inside its box. */
 export function Line(cx, style, content, color) {
   return Text(cx, style, content, color).min_w(0).truncate();
@@ -1649,7 +1673,7 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
       .flex_row()
       .justify_center()
       .child(
-        div()
+        takesPointer(div().id("toast-card"))
           .flex()
           .flex_col()
           .w(width)
@@ -1671,7 +1695,7 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
     .flex_row()
     .justify_center()
     .child(
-      div()
+      takesPointer(div().id("toast-card"))
         .flex()
         .flex_row()
         .items_center()
@@ -1708,12 +1732,16 @@ export function Overlay(cx, id, card, onDismiss, opts = {}) {
     .px(SPACE[4])
     .pb(SPACE[4])
     .bg(t.scrim)
-    .on_mouse_down("left", (_e, cx) => onDismiss(cx));
+    // The press that dismisses stays on the scrim: nothing under it clicks.
+    .on_mouse_down("left", (_e, cx) => {
+      cx.stop_propagation();
+      onDismiss(cx);
+    })
+    .on_mouse_up("left", (_e, cx) => cx.stop_propagation());
   if (opts.top) scrim.pt(64);
   else scrim.justify_center().pt(SPACE[4]);
   return scrim.child(
-    div()
-      .id(`${id}-card`)
+    takesPointer(div().id(`${id}-card`))
       .flex()
       .flex_col()
       .w_full()
@@ -1725,7 +1753,6 @@ export function Overlay(cx, id, card, onDismiss, opts = {}) {
       .bg(t.surface)
       .shadow_xl()
       .overflow_hidden()
-      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .child(card),
   );
 }

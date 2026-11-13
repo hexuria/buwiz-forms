@@ -34,6 +34,7 @@ import {
   PageHeader,
   MetaLine,
   Overlay,
+  takesPointer,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
 
@@ -3202,8 +3203,9 @@ function drawPill(cx, ui, view) {
         .child(Text(cx, "num", String(needing.length), "primaryFg").text_color(t.surface))
     : null;
   const listLabel = `All sections${view.listOpen ? ", shown" : ""}`;
-  const pill = div()
-    .id("fp-pill")
+  // The pill, its popover and its sheet float over the form: a press on
+  // them must not also open a section header painted beneath (takesPointer).
+  const pill = takesPointer(div().id("fp-pill"))
     .flex()
     .flex_row()
     .items_center()
@@ -3364,10 +3366,21 @@ function drawPill(cx, ui, view) {
       .id("fp-pill-layer")
       .absolute()
       .inset_0()
-      .child(div().id("fp-sections-scrim").absolute().inset_0().bg(t.scrim).on_mouse_down("left", (_e, cx) => close(cx)))
       .child(
         div()
-          .id("fp-sections")
+          .id("fp-sections-scrim")
+          .absolute()
+          .inset_0()
+          .bg(t.scrim)
+          // The press that closes the sheet stays on the scrim (takesPointer).
+          .on_mouse_down("left", (_e, cx) => {
+            cx.stop_propagation();
+            close(cx);
+          })
+          .on_mouse_up("left", (_e, cx) => cx.stop_propagation()),
+      )
+      .child(
+        takesPointer(div().id("fp-sections"))
           .absolute()
           .left(0)
           .right(0)
@@ -3381,7 +3394,6 @@ function drawPill(cx, ui, view) {
           .border_color(t.borderStrong)
           .bg(t.raised)
           .shadow_xl()
-          .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
           .child(
             div()
               .id("fp-sections-handle")
@@ -3417,8 +3429,7 @@ function drawPill(cx, ui, view) {
     const room = Math.min(PILL_POPOVER_MAX, (L.vp?.height ?? 800) - SIZE.titleBar - 56 - SPACE[4] - SPACE[2] - SPACE[4]) - SPACE[1] - SPACE[2];
     layer.on_mouse_down_out((_e, cx) => close(cx));
     layer.child(
-      div()
-        .id("fp-sections")
+      takesPointer(div().id("fp-sections"))
         .flex()
         .flex_col()
         .w(420)

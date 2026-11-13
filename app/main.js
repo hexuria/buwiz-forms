@@ -20,7 +20,7 @@ import {
   themePreferenceFromEnv,
   THEME_PREF_KEY,
 } from "./shell/theme.js";
-import { tokens, SIZE, BREAK, RADIUS, Toast, DigitEntry, SHORTCUTS, shortcutLabel } from "./shell/ui.js";
+import { tokens, SIZE, BREAK, RADIUS, Toast, DigitEntry, SHORTCUTS, shortcutLabel, takesPointer } from "./shell/ui.js";
 import {
   renderTitleBar,
   renderSidebar,
@@ -1924,16 +1924,21 @@ class BirApp extends View {
             .right(0)
             .bottom(0)
             .bg(t.scrim)
+            // The press that closes the overlays stays on the scrim.
             .on_mouse_down("left", (_e, cx) => {
+              cx.stop_propagation();
               this.sidebarOpen = false;
               this.panel = null;
               cx.notify();
-            }),
+            })
+            .on_mouse_up("left", (_e, cx) => cx.stop_propagation()),
         );
       }
+      // The overlays take the pointer: a press on them never reaches the
+      // scrim or the page beneath (takesPointer), full-window or not.
       if (this.sidebarOpen) {
         root.child(
-          div()
+          takesPointer(div().id("sidebar-overlay"))
             .absolute()
             .top(SIZE.titleBar)
             .left(0)
@@ -1946,7 +1951,7 @@ class BirApp extends View {
       }
       if (this.panel) {
         root.child(
-          div()
+          takesPointer(div().id("panel-overlay"))
             .absolute()
             .top(SIZE.titleBar)
             .when(full, (el) => el.left(0))

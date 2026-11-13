@@ -54,6 +54,8 @@ const contextVM = vm.createContext({ console, Map, Set, JSON, Date, window: { vi
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel", "NavRow", "GroupLabel", "Kbd", "StepCircle", "ContextPill", "SidePanel", "DigitCells"]) uiExports[n] = element;
+// form_page.js makes its floating pill take the pointer; the element is unchanged here.
+uiExports.takesPointer = (el) => el;
 uiExports.Text = (_cx, _v, text) => { texts.push(String(text)); return element(); };
 uiExports.withShortcut = (label) => label;
 // A choice's hint is drawn inside its button, under the label.

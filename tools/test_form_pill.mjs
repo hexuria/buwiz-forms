@@ -265,6 +265,68 @@ function frame(app) {
   return tree;
 }
 const pillEntity = (app) => app.formUi.state.pill.entity;
+
+/**
+ * A press and release as GPUI dispatches them (gpui-pre 0.3.9, the same in
+ * gpui-fast: window.rs `dispatch_mouse_event`, elements/div.rs
+ * `Interactivity::paint` / `paint_mouse_listeners`):
+ * - listeners are registered in paint order; an element registers its own
+ *   (its `on_mouse_down`s, then its click's arming) before its children paint;
+ * - hitboxes do not occlude one another (a script cannot call `occlude()`),
+ *   so every element the pointer is over hears the press;
+ * - the bubble phase runs the listeners last-registered first and ends when
+ *   one calls `stop_propagation()`;
+ * - a click arms on the bubble-phase press of an element under the pointer
+ *   and fires on the release.
+ * `over` lists the elements the pointer is over, by id: the one pressed on
+ * the pill and one painted beneath it; their ancestors are over it too.
+ * Returns the ids whose clicks fired.
+ */
+function press(tree, over) {
+  const walk = [];
+  const visit = (node, parent) => {
+    if (node?.view) return node.tree ? visit(node.tree, parent) : undefined;
+    const m = meta.get(node);
+    if (!m) return;
+    walk.push([m, parent]);
+    for (const k of m.kids) visit(k, m);
+  };
+  visit(tree, null);
+  const parentOf = new Map(walk);
+  const under = new Set();
+  for (const id of over) {
+    const hits = walk.filter(([m]) => m.id === id);
+    assert.equal(hits.length, 1, `exactly one #${id} under the pointer`);
+    for (let m = hits[0][0]; m; m = parentOf.get(m)) under.add(m);
+  }
+  const listeners = [];
+  for (const [m] of walk) {
+    for (const c of m.calls) if (c[0] === "on_mouse_down" && c[1] === "left") listeners.push([m, "down", c[2]]);
+    if (m.click) listeners.push([m, "arm"]);
+  }
+  let stopped = false;
+  // A handler gets the context of the view that drew its element.
+  const pcx = (m) => ({ ...context(m.down?.entity ?? null), stop_propagation() { stopped = true; } });
+  const armed = [];
+  for (const [m, kind, fn] of listeners.reverse()) {
+    if (!under.has(m)) continue;
+    if (kind === "arm") armed.push(m);
+    else fn({}, pcx(m));
+    if (stopped) break;
+  }
+  for (const m of armed) fire(m.click);
+  return armed.map((m) => m.id);
+}
+/** A floating element takes the pointer: its press and release stop there. */
+function assertTakesPointer(m, what) {
+  for (const name of ["on_mouse_down", "on_mouse_up"]) {
+    const c = m.calls.find((x) => x[0] === name && x[1] === "left");
+    assert.ok(c, `${what} has ${name}`);
+    let stopped = false;
+    c[2]({}, { ...context(null), stop_propagation() { stopped = true; } });
+    assert.ok(stopped, `${what}: ${name} stops propagation`);
+  }
+}
 /**
  * A toast on the form page clears the pill: the pill's top (its bottom
  * inset plus its 56 px height, over the main surface's 8 px margin) is
@@ -515,6 +577,50 @@ for (const width of [1200, 1240]) {
   const t = frame(app);
   assert.equal(byId(t, "fp-pill").length, 0);
   assert.ok(has(one(t, "toast"), "bottom", 20), "no pill: 20 px");
+}
+
+// ---- a press on the pill does not reach a section header painted beneath it
+// (the re-test: a header under the pill toggled with the press).
+for (const width of [1200, 500]) {
+  const app = makeApp(width);
+  app.openForm({ tin: TIN, code: "1601C", year: 2026, period: 3 }, cx);
+  await settle();
+  rootDirty = true;
+  let t = frame(app);
+  const s = app.formUi.state;
+  const under = "fp-part-3-toggle";
+  assertTakesPointer(one(t, "fp-pill"), `${width}: the pill`);
+  const before = [...s.openParts];
+  // The middle opens the list and nothing else.
+  assert.deepEqual(press(t, ["fp-pill-main", under]), ["fp-pill-main"], `${width}: only the pill's own click fires`);
+  t = frame(app);
+  assert.deepEqual([...s.openParts], before, `${width}: the header beneath did not toggle`);
+  assert.equal(byId(t, "fp-sections").length, 1, `${width}: the list is open`);
+  assertTakesPointer(one(t, "fp-sections"), `${width}: the ${width >= 760 ? "popover" : "sheet"}`);
+  if (width < 760) assertTakesPointer(one(t, "fp-sections-scrim"), `${width}: the scrim`);
+  // A row of the list opens its section, and only that.
+  const fired = press(t, ["fp-section-1", under, ...(width < 760 ? ["fp-sections-scrim"] : [])]);
+  assert.deepEqual(fired, ["fp-section-1"], `${width}: a row's press stays on the row`);
+  assert.deepEqual([...s.openParts], [1], `${width}: the chosen section opens, the one beneath does not toggle`);
+  t = frame(app);
+  // › steps once; the header beneath stays as it is.
+  assert.deepEqual(press(t, ["fp-pill-next", under]), ["fp-pill-next"]);
+  assert.deepEqual([...s.openParts], [2], `${width}: › opened the next section only`);
+  if (width < 760) {
+    // The scrim closes the sheet; the header beneath it does not toggle.
+    t = frame(app);
+    click(t, "fp-pill-list");
+    t = frame(app);
+    assert.deepEqual(press(t, ["fp-sections-scrim", under]), [], `${width}: the scrim's press reaches nothing beneath`);
+    t = frame(app);
+    assert.equal(byId(t, "fp-sections").length, 0, "the scrim closed the sheet");
+    assert.deepEqual([...s.openParts], [2]);
+  }
+  // A toast over the form takes the pointer too.
+  app.toast("Saved", cx);
+  rootDirty = true;
+  assertTakesPointer(one(frame(app), "toast-card"), `${width}: the toast`);
+  app.toastState = null;
 }
 
 console.log("PASS: no taxpayer card; openForm selects the taxpayer; the section pill at 500, 1200 and 1240 px, its list, ‹ › and the template stops.");

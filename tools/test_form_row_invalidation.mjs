@@ -48,6 +48,8 @@ const base=mock("gpui-base",{InputState,CalendarState:{},Popup:{new:element}});
 const components=mock("gpui-component",{Spinner:{new:element}});
 const uiExports={tokens:()=>new Proxy({},{get:()=>"#000"}),SPACE:[0,4,8,12,16,20,24],RADIUS:{},SIZE:{validationLine:18},BREAK:{formNav:760}};
 for(const n of ["Text","Line","Code","Icon","AppButton","IconButton","Avatar","Chip","Switch","Checkbox","TextField","Dropdown","PageHeader","MetaLine","Overlay","CheckboxLabel"])uiExports[n]=element;
+// form_page.js makes its floating pill take the pointer; the element is unchanged here.
+uiExports.takesPointer = (el) => el;
 uiExports.AppButton=(_cx,id,label,opts={})=>{
  if(id==="fp-check")checkButtons.push({label,ariaLabel:opts.ariaLabel,leading:opts.leading});
  return element();

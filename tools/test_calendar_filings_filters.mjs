@@ -288,6 +288,10 @@ const label = (tree, id) => text(one(tree, `${id}-trigger`)).trim();
   assert.deepEqual(cx.notified, [f.tpCombo.entity], "opening redraws the combo alone");
   tree = cal();
   const pop = one(tree, "calendar-taxpayers-pop");
+  // The open list is the gpui-base Popup's content, which the toolkit paints
+  // deferred and `occlude()`s: a press on an option never reaches a Filings
+  // card or a Calendar row beneath it.
+  assert.ok(one(tree, "calendar-taxpayers").kids.some((k) => meta.get(k)?.id === "calendar-taxpayers-pop"), "the list is the Popup's content");
   assert.deepEqual(idsUnder(pop, "calendar-taxpayers-opt-").filter((id) => !id.endsWith("-box")), [
     "calendar-taxpayers-opt-000123453",
     "calendar-taxpayers-opt-000777888",
