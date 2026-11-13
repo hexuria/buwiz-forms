@@ -392,8 +392,10 @@ fn load_taxpayer(db: &Database, tin_root: &str) -> Result<TaxpayerWithBranches, 
 
 // ---------- taxpayers ----------
 
+/// Polled with every page's reads (Home's taxpayer rows), so it does not
+/// wait on the submission worker: every query under it is a SELECT.
 fn list_taxpayers() -> HostResult {
-    with_database(|db| {
+    with_reader(|db| {
         let taxpayers = db.list_taxpayers().map_err(host_error)?;
         Ok(HostValue::Array(
             taxpayers.iter().map(taxpayer_record).collect(),

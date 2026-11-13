@@ -186,6 +186,7 @@ fn polled_reads() -> Vec<(&'static str, Vec<Value>)> {
         ("as_needed_forms", vec![json!(YEAR)]),
         ("list_form_templates", vec![json!(HEAD)]),
         ("list_background_jobs", vec![]),
+        ("list_taxpayers", vec![]),
     ]
 }
 
@@ -259,6 +260,9 @@ fn reads_see_the_main_threads_writes() {
             }
         };
         create_juana(&bir);
+        let (taxpayers, took) = while_held(&bir, true, "list_taxpayers", &[]);
+        assert_eq!(taxpayers[0]["name"], "Juana Santos", "the new taxpayer");
+        check("list_taxpayers", took);
 
         ok(
             &bir,
@@ -326,6 +330,19 @@ fn reads_see_the_main_threads_writes() {
             .collect();
         assert_eq!(tins, [&json!(RESTORED_HEAD)], "the imported database");
         check("as_needed_forms after import", took);
+        let (taxpayers, took) = while_held(&bir, false, "list_taxpayers", &[]);
+        let names: Vec<&Value> = taxpayers
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| &row["name"])
+            .collect();
+        assert_eq!(
+            names,
+            [&json!("Restored Holdings Inc")],
+            "the imported taxpayers"
+        );
+        check("list_taxpayers after import", took);
 
         assert!(slow.is_empty(), "reads that waited on the writer: {slow:?}");
     });
