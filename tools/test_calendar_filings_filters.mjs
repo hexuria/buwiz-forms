@@ -215,6 +215,7 @@ const mods = {
   "./ui.js": source("app/shell/ui.js"),
   "./store.js": source("app/shell/store.js"),
   "./home.js": source("app/shell/home.js"),
+  "./dashboard.js": source("app/shell/dashboard.js"),
   "./periods.js": source("app/shell/periods.js"),
   "./calendar_page.js": source("app/shell/calendar_page.js"),
   "./filings.js": source("app/shell/filings.js"),
@@ -225,7 +226,9 @@ const linked = {
   "gpui-base": mock("gpui-base", { Input, InputState, Popup, OtpInput: { new: el }, OtpState: InputState }),
   bir: mock("bir", birExports),
 };
-for (const m of Object.values(mods)) await m.link((s) => linked[s]);
+// A module's link links what it imports, so one an earlier module already
+// pulled in (dashboard.js through home.js) is skipped here.
+for (const m of Object.values(mods)) if (m.status === "unlinked") await m.link((s) => linked[s]);
 for (const m of Object.values(mods)) await m.evaluate();
 const { MultiCombo } = mods["./ui.js"].namespace;
 const { Store } = mods["./store.js"].namespace;
