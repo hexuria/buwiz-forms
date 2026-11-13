@@ -95,8 +95,8 @@ const linked = {
   bir: mock("bir", {}),
   "./shell/home.js": mock("home", { renderHome: stub }),
   "./shell/library.js": mock("library", { renderLibrary: stub }),
-  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub }),
-  "./shell/filings.js": mock("filings", { renderFilings: stub }),
+  "./shell/calendar_page.js": mock("calendar", { renderCalendar: stub, CalendarFilters: stubClass }),
+  "./shell/filings.js": mock("filings", { renderFilings: stub, FilingsFilters: stubClass }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
   "./shell/form_page.js": mock("form_page", {
