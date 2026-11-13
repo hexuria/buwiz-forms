@@ -1784,10 +1784,13 @@ class BirApp extends View {
     // navigator pinned beside the form); everything else scrolls as one.
     const settingsOpen = this.view === "settings";
     const formSplit = !settingsOpen && this.view === "form" && !this.isFresh() ? renderFormSplit(cx, this, L) : null;
+    // A form's section pill floats over main-scroll (the split layout floats it itself).
+    const formPill = !settingsOpen && !formSplit && this.view === "form" && !this.isFresh() ? this.formUi.pillView?.() : null;
     const main = settingsOpen
       ? null
       : div()
           .id("main-surface")
+          .relative()
           .flex()
           .flex_col()
           .flex_1()
@@ -1817,7 +1820,7 @@ class BirApp extends View {
                   .w_full()
                   .px(L.padX)
                   .pt(L.mainWidth < BREAK.narrowContent ? 20 : 28)
-                  .pb(56)
+                  .pb(formPill ? 110 : 56)
                   // Fill the pane, capped by the settled column. A pixel `w()` from the
                   // last poll stays wider than the pane during a drag and, centred,
                   // paints under the sidebar. `w_full` tracks the pane every frame;
@@ -1825,6 +1828,7 @@ class BirApp extends View {
                   .child(div().flex().flex_col().w_full().max_w(L.column).min_w(0).child(this.renderView(cx, L.column))),
               ),
           ));
+    if (main && formPill) main.child(formPill);
     const body = div().flex().flex_row().flex_1().min_h(0).w_full();
     if (settingsOpen) {
       body.child(renderSettings(cx, this, L.vp.width, L.vp.height - SIZE.titleBar));
