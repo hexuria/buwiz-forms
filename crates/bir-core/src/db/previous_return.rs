@@ -25,7 +25,7 @@ pub struct PreviousReturn {
 
 /// A row's place in time and its rank (year, period, filed rank, id), with
 /// its status and stored draft.
-type Candidate = ((u16, u32, u8, i64), FilingStatus, String);
+type Candidate = ((u16, u32, u8, i64), FilingStatus);
 
 /// A period's place within its year: the month, the quarter, the entry
 /// number, 0 for the year.
@@ -64,7 +64,7 @@ impl Database {
     ) -> Result<Option<PreviousReturn>, DbError> {
         let code = canonical_form_code(form_code);
         let mut stmt = self.conn.prepare(
-            "SELECT id, form_code, taxable_year, quarter, period_key, status, data_json
+            "SELECT id, form_code, taxable_year, quarter, period_key, status
              FROM form_drafts WHERE tin = ?1 AND taxable_year <= ?2",
         )?;
         let rows = stmt.query_map(params![tin, i64::from(year)], |row| {
@@ -75,12 +75,11 @@ impl Database {
                 row.get::<_, Option<i64>>(3)?,
                 row.get::<_, Option<String>>(4)?,
                 row.get::<_, String>(5)?,
-                row.get::<_, String>(6)?,
             ))
         })?;
         let mut best: Option<Candidate> = None;
         for row in rows {
-            let (id, row_code, row_year, quarter, period_key, status, data_json) = row?;
+            let (id, row_code, row_year, quarter, period_key, status) = row?;
             if canonical_form_code(&row_code) != code {
                 continue;
             }
@@ -101,13 +100,19 @@ impl Database {
             }
             let status = filing_status_from_db(&status);
             let order = (row_year, row_period, filed_rank(&status), id);
-            if best.as_ref().is_none_or(|(current, _, _)| order > *current) {
-                best = Some((order, status, data_json));
+            if best.as_ref().is_none_or(|(current, _)| order > *current) {
+                best = Some((order, status));
             }
         }
-        let Some(((taxable_year, period, _, id), status, data_json)) = best else {
+        let Some(((taxable_year, period, _, id), status)) = best else {
             return Ok(None);
         };
+        // Only the chosen return's answers are read, not every return's.
+        let data_json: String = self.conn.query_row(
+            "SELECT data_json FROM form_drafts WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )?;
         Ok(Some(PreviousReturn {
             id,
             taxable_year,

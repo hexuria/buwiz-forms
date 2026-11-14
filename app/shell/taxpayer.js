@@ -397,7 +397,9 @@ export class TaxpayerActions {
   afterApply(r, ask, cx) {
     const kept = (r.kept || []).filter((f) => !(f === "income_tax_election" && r.election_locked));
     const templates = r.templates_kept || [];
-    this.replaceAsk = kept.length || templates.length ? { ...ask, kept, templates } : null;
+    // Forms on the list that the setup does not have: they stay until the user says Replace.
+    const forms = r.forms_kept || [];
+    this.replaceAsk = kept.length || templates.length || forms.length ? { ...ask, kept, templates, forms } : null;
     const n = (r.forms || []).length;
     let text = `${ask.label}: ${n} form${n === 1 ? "" : "s"} for ${ask.year}.`;
     if (r.election_locked && (r.kept || []).includes("income_tax_election")) {
@@ -1449,8 +1451,12 @@ function replaceBanner(cx, app) {
   const a = ui.replaceAsk;
   const names = a.kept.map((f) => FACT_LABELS[f]);
   if (a.templates.length) names.push(`the ${joinNames(a.templates)} template${a.templates.length === 1 ? "" : "s"}`);
+  const forms = a.forms || [];
+  const lines = [];
+  if (names.length) lines.push(`${joinNames(names)} ${isAre(names.length)} already set. ${a.label} has something else.`);
+  if (forms.length) lines.push(`${joinNames(forms)} ${isAre(forms.length)} on your forms list and not in ${a.label}; ${forms.length === 1 ? "it stays" : "they stay"} unless you replace.`);
   return Banner(cx, "tp-replace", [
-    Text(cx, "body", `${joinNames(names)} ${isAre(names.length)} already set. ${a.label} has something else. Replace what is set?`).flex_1().whitespace_normal(),
+    Text(cx, "body", `${lines.join(" ")} Replace what is set?`).flex_1().whitespace_normal(),
     AppButton(cx, "tp-replace-keep", "Keep mine", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.keepSet(cx) }),
     AppButton(cx, "tp-replace-yes", "Replace", { variant: "primary", size: "sm", onClick: (_e, cx) => ui.confirmReplace(cx) }),
   ]);

@@ -111,6 +111,8 @@ export interface SetupApplied {
     templates_copied: string[];
     /** Templates the target already had and kept (copy_setup_from only). */
     templates_kept: string[];
+    /** Forms that were on the list, are not in the setup, and stay on it: without `replace` a setup only adds forms. Empty after a replace. */
+    forms_kept: string[];
 }
 export interface FormTemplateSummary {
     form_code: string;

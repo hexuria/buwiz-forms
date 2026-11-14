@@ -117,7 +117,10 @@ pub struct YearFacts {
 
 impl YearFacts {
     /// The facts a record takes from the flat profile fields. The election
-    /// is not one of them: it is per year ([`flat_election`]).
+    /// is not one of them: it is per year ([`flat_election`]). The old
+    /// government-entity flag was a plain `false` for everybody nobody ever
+    /// asked: only a `true` is an answer, so a `false` is "not set" and the
+    /// form that needs it asks.
     pub fn from_flat_profile(profile: &TaxpayerProfile) -> Self {
         Self {
             tax_classification: profile.tax_classification.clone(),
@@ -126,7 +129,9 @@ impl YearFacts {
             eopt_tier: profile.eopt_tier.clone(),
             business_start_date: profile.business_start_date,
             line_of_business: non_blank(&profile.line_of_business),
-            is_government_withholding_entity: Some(profile.is_government_withholding_entity),
+            is_government_withholding_entity: profile
+                .is_government_withholding_entity
+                .then_some(true),
             atc_codes: profile.atc_codes.clone(),
         }
     }
@@ -154,10 +159,9 @@ impl YearFacts {
             if let Some(line) = non_blank(&version.cor.line_of_business_description) {
                 facts.line_of_business = Some(line);
             }
-            facts.is_government_withholding_entity = Some(
-                version.is_government_withholding_entity
-                    || profile.is_government_withholding_entity,
-            );
+            facts.is_government_withholding_entity = (version.is_government_withholding_entity
+                || profile.is_government_withholding_entity)
+                .then_some(true);
         }
         facts
     }
@@ -497,6 +501,25 @@ mod tests {
             ]
         }))
         .unwrap()
+    }
+
+    /// The old government-entity flag was `false` for everybody nobody
+    /// asked: only `true` is an answer.
+    #[test]
+    fn the_old_government_flag_counts_as_an_answer_only_when_true() {
+        let mut flat = profile();
+        let facts = YearFacts::from_flat_profile(&flat);
+        assert_eq!(facts.is_government_withholding_entity, None);
+        assert!(!facts.is_set(Fact::IsGovernmentWithholdingEntity));
+        assert_eq!(
+            YearFacts::backfill(&flat, 2026).is_government_withholding_entity,
+            None
+        );
+        flat.is_government_withholding_entity = true;
+        assert_eq!(
+            YearFacts::from_flat_profile(&flat).is_government_withholding_entity,
+            Some(true)
+        );
     }
 
     #[test]

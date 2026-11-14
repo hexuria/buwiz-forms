@@ -212,6 +212,32 @@ fn a_year_without_a_record_reads_the_last_one_and_a_new_year_copies_it() {
 }
 
 #[test]
+fn an_earlier_year_added_later_never_takes_a_later_years_facts() {
+    let db = db();
+    db.add_tax_year(HEAD, 2026, false).unwrap();
+    db.set_year_facts(HEAD, 2026, &patch(json!({"eopt_tier": "Large"})))
+        .unwrap();
+    // 2024 comes before the only year the branch has: nothing to copy.
+    db.add_tax_year(HEAD, 2024, false).unwrap();
+    assert!(
+        db.year_facts(HEAD, 2024).unwrap().is_none(),
+        "no record is written from a later year"
+    );
+    assert_ne!(
+        db.effective_year_facts(HEAD, 2024).unwrap().facts.eopt_tier,
+        Some(EoptTier::Large)
+    );
+    // 2025 sits between them: it copies 2024 (the year before it), not 2026.
+    db.set_year_facts(HEAD, 2024, &patch(json!({"eopt_tier": "Micro"})))
+        .unwrap();
+    db.add_tax_year(HEAD, 2025, false).unwrap();
+    assert_eq!(
+        db.effective_year_facts(HEAD, 2025).unwrap().facts.eopt_tier,
+        Some(EoptTier::Micro)
+    );
+}
+
+#[test]
 fn a_filed_return_locks_nothing_while_no_choice_is_recorded() {
     let db = db();
     db.set_year_facts(
@@ -587,6 +613,9 @@ fn the_view_says_which_forms_read_each_fact_and_what_is_not_set() {
             Fact::EoptTier,
             Fact::BusinessStartDate,
             Fact::LineOfBusiness,
+            // 0619E reads it, and nobody answered: the old flag's plain
+            // false is not an answer.
+            Fact::IsGovernmentWithholdingEntity,
             Fact::AtcCodes,
         ]
     );

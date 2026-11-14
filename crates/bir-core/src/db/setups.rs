@@ -31,6 +31,9 @@ pub struct SetupApplied {
     pub templates_copied: Vec<String>,
     /// Templates the target already had and kept (a copy only).
     pub templates_kept: Vec<String>,
+    /// Forms that were on the list, are not in the setup, and stay on it:
+    /// without `replace` a setup only adds forms. Empty after a replace.
+    pub forms_kept: Vec<String>,
 }
 
 fn taxpayer_type_label(taxpayer_type: &TaxpayerType) -> &'static str {
@@ -100,11 +103,14 @@ impl Database {
         found.ok_or_else(|| TaxProfileError::NotFound("That setup no longer exists.".to_string()))
     }
 
-    /// Apply `setup` to `tin`'s `year`: the forms list (replaced, or added
-    /// to for an adding setup), then the facts the setup holds. A fact
-    /// already set to something else is kept unless `replace`; a locked
-    /// 8% or graduated choice is always kept. Name, TIN, address and
-    /// contact are never touched.
+    /// Apply `setup` to `tin`'s `year`: its forms, then the facts it holds.
+    /// Nothing the user picked or set goes without `replace`: the setup's
+    /// forms are ADDED to the list (the forms it does not have stay, and
+    /// are named in `forms_kept`), and a fact already set to something else
+    /// is kept (`kept`). With `replace` the list becomes the setup's (an
+    /// adding setup still only adds) and those facts are replaced. A locked
+    /// 8% or graduated choice is always kept. Name, TIN, address and contact
+    /// are never touched.
     fn apply_setup_value(
         &self,
         tin: &str,
@@ -121,11 +127,28 @@ impl Database {
                 taxpayer_type_label(&taxpayer_type)
             )));
         }
-        let mut forms: Vec<String> = if setup.adds_forms {
-            self.active_form_codes_for_year(tin, year)?
+        let existing: Vec<String> = self
+            .active_form_codes_for_year(tin, year)?
+            .iter()
+            .map(|code| canonical_form_code(code))
+            .collect();
+        let in_setup = |code: &String| {
+            setup
+                .forms
+                .iter()
+                .any(|have| canonical_form_code(have) == *code)
+        };
+        let keeps = setup.adds_forms || !replace;
+        let forms_kept: Vec<String> = if keeps && !setup.adds_forms {
+            existing
+                .iter()
+                .filter(|code| !in_setup(code))
+                .cloned()
+                .collect()
         } else {
             Vec::new()
         };
+        let mut forms: Vec<String> = if keeps { existing } else { Vec::new() };
         for code in &setup.forms {
             let code = canonical_form_code(code);
             if !forms.iter().any(|have| canonical_form_code(have) == code) {
@@ -144,6 +167,7 @@ impl Database {
             set: plan.set,
             kept: plan.kept,
             election_locked: locked,
+            forms_kept,
             ..SetupApplied::default()
         })
     }
@@ -387,10 +411,19 @@ mod tests {
     fn applying_a_setup_replaces_or_adds_the_forms_and_sets_the_facts() {
         let db = db();
         db.set_yearly_forms(HEAD, 2026, &["0605"]).unwrap();
+        // Without the user's yes a setup only adds: the form already picked
+        // stays, and is named so the page can ask.
         let applied = db
             .apply_setup(HEAD, 2026, "non_vat_professional", false)
             .unwrap();
-        assert_eq!(applied.forms, ["1701", "1701Q", "2551Q"], "replaced");
+        assert_eq!(applied.forms, ["0605", "1701", "1701Q", "2551Q"], "added");
+        assert_eq!(applied.forms_kept, ["0605"]);
+        // With it, the list becomes the setup's.
+        let replaced = db
+            .apply_setup(HEAD, 2026, "non_vat_professional", true)
+            .unwrap();
+        assert_eq!(replaced.forms, ["1701", "1701Q", "2551Q"], "replaced");
+        assert!(replaced.forms_kept.is_empty());
         assert_eq!(
             db.effective_year_facts(HEAD, 2026)
                 .unwrap()
@@ -464,7 +497,41 @@ mod tests {
     }
 
     #[test]
-    fn a_locked_election_is_kept_even_when_replacing() {
+    fn a_copy_never_drops_the_targets_forms_or_brings_a_rate_choice() {
+        let db = db();
+        db.set_yearly_forms(HEAD, 2026, &["2551Q"]).unwrap();
+        db.set_year_facts(
+            HEAD,
+            2026,
+            &patch(serde_json::json!({
+                "tax_classification": "SelfEmployed",
+                "income_tax_election": "EightPercent",
+            })),
+        )
+        .unwrap();
+        taxpayer(&db, OTHER_ROOT, "Pedro Reyes", TaxpayerType::Individual);
+        db.set_yearly_forms(OTHER, 2026, &["2550Q", "1701Q"])
+            .unwrap();
+
+        let copied = db.copy_setup_from(HEAD, OTHER, 2026, false).unwrap();
+        assert_eq!(copied.forms, ["1701Q", "2550Q", "2551Q"], "added to");
+        assert_eq!(copied.forms_kept, ["1701Q", "2550Q"]);
+        // The source's 8% is the source's: the target chooses its own.
+        assert_eq!(
+            db.effective_year_facts(OTHER, 2026)
+                .unwrap()
+                .facts
+                .income_tax_election,
+            None
+        );
+        // Asked and answered Replace: the list becomes the source's.
+        let replaced = db.copy_setup_from(HEAD, OTHER, 2026, true).unwrap();
+        assert_eq!(replaced.forms, ["2551Q"]);
+        assert!(replaced.forms_kept.is_empty());
+    }
+
+    #[test]
+    fn a_setup_never_holds_or_changes_the_years_rate_choice() {
         let db = db();
         db.set_yearly_forms(HEAD, 2026, &["2551Q"]).unwrap();
         db.set_year_facts(
@@ -484,7 +551,15 @@ mod tests {
             &patch(serde_json::json!({"income_tax_election": "GraduatedOsd"})),
         )
         .unwrap();
+        // The 8% or graduated choice is each taxpayer's own, made on the
+        // year's first return: a saved setup does not hold it ...
         let saved = db.save_setup(HEAD, 2025, "Graduated").unwrap();
+        assert_eq!(saved.facts.income_tax_election, None);
+        // ... so applying one, even replacing, leaves the year's choice as
+        // it is, whether or not a filed return has locked it.
+        let applied = db.apply_setup(HEAD, 2026, &saved.id, true).unwrap();
+        assert!(!applied.set.contains(&Fact::IncomeTaxElection));
+        assert!(!applied.kept.contains(&Fact::IncomeTaxElection));
         db.conn
             .execute(
                 "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
@@ -494,7 +569,7 @@ mod tests {
             .unwrap();
         let applied = db.apply_setup(HEAD, 2026, &saved.id, true).unwrap();
         assert!(applied.election_locked);
-        assert!(applied.kept.contains(&Fact::IncomeTaxElection));
+        assert!(!applied.set.contains(&Fact::IncomeTaxElection));
         assert_eq!(
             db.effective_year_facts(HEAD, 2026)
                 .unwrap()

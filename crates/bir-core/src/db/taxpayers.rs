@@ -1886,12 +1886,17 @@ impl Database {
             replace_yearly_forms(&tx, tin, year, &codes)?;
         }
         record_tax_year(&tx, tin, year)?;
-        // Decision 5: a new year starts from the latest year's facts (its
-        // forms only when asked). The election is chosen each year.
+        // Decision 5: a new year starts from the facts of the year before
+        // it (its forms only when asked): the nearest EARLIER year the
+        // branch has, never a later one, so adding 2024 to a branch that has
+        // 2026 does not give 2024 the facts of 2026. The election is chosen
+        // each year.
         if read_year_facts(&tx, tin, year)?.is_none()
             && let Some(facts) = years
-                .last()
-                .map(|latest| read_year_facts(&tx, tin, *latest))
+                .iter()
+                .rev()
+                .find(|have| **have < year)
+                .map(|earlier| read_year_facts(&tx, tin, *earlier))
                 .transpose()?
                 .flatten()
         {
@@ -2763,8 +2768,15 @@ mod tests {
             .unwrap();
         assert_eq!(
             db.active_form_codes_for_year(HEAD, 2026).unwrap(),
+            ["0605", "1702Q", "1702RT", "2550Q"],
+            "without the user's yes a setup only adds to the list"
+        );
+        db.apply_setup(HEAD, 2026, "vat_business_corporation", true)
+            .unwrap();
+        assert_eq!(
+            db.active_form_codes_for_year(HEAD, 2026).unwrap(),
             ["1702Q", "1702RT", "2550Q"],
-            "a setup that does not add replaces the list"
+            "with it, a setup that does not add replaces the list"
         );
         db.set_yearly_forms(HEAD, 2026, &["0605"]).unwrap();
         db.apply_setup(HEAD, 2026, "employer", false).unwrap();

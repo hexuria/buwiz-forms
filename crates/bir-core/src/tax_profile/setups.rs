@@ -78,11 +78,14 @@ pub fn user_setup_row(id: &str) -> Option<i64> {
 }
 
 /// The facts a setup may hold: `facts` without the start date, the line of
-/// business or where the election was made.
+/// business, and the year's 8% or graduated choice. That choice is each
+/// taxpayer's own, made on the year's first return: a saved setup or a copy
+/// from another taxpayer must never record it for somebody else.
 pub fn setup_facts(facts: &YearFacts) -> YearFacts {
     YearFacts {
         business_start_date: None,
         line_of_business: None,
+        income_tax_election: None,
         election_source: None,
         ..facts.clone()
     }
