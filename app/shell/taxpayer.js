@@ -1445,6 +1445,20 @@ function profileTab(cx, app, width) {
   return out;
 }
 
+/** Two annual income tax returns of one kind on a year's list: a warning, never a removal. */
+function annualConflictBanner(cx, group, year) {
+  return Banner(cx, `tp-annual-conflict-${group.join("-")}`, [
+    Icon(cx, "triangle-alert", { color: "warning" }),
+    Text(
+      cx,
+      "body",
+      `${joinNames(group)} are ${group.length === 2 ? "both" : "all"} annual income tax returns. A taxpayer files only one of them for ${year}. Keep the one on your Certificate of Registration and remove the ${group.length === 2 ? "other" : "others"}.`,
+    )
+      .flex_1()
+      .whitespace_normal(),
+  ]);
+}
+
 /** "Replace what is set?": the one question after a setup or copy kept facts already set. */
 function replaceBanner(cx, app) {
   const ui = app.taxpayerUi;
@@ -2036,6 +2050,10 @@ function formsTab(cx, app, width) {
   const page = div().flex().flex_col().child(toolbar);
   if (ui.addYear) page.child(addYearBand(cx, app));
   if (ui.replaceAsk) page.child(replaceBanner(cx, app));
+  // Two annual income tax returns of one kind (1701 and 1701A, say): the
+  // list is the user's, so nothing is removed; the page says so, saved or
+  // while editing.
+  for (const group of app.store.annualConflicts(edit || app.yearForms())) page.child(annualConflictBanner(cx, group, year));
   const index = app.store.screenIndex();
 
   if (!edit) {

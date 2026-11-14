@@ -211,6 +211,11 @@ export class Store {
   yearFacts(tin, year) {
     return tin && year ? this.read(`year_facts:${tin}:${year}`, "year_facts", [tin, year], null) : null;
   }
+  /** Annual income tax returns among `codes` that stand for one another, as groups (`annual_return_conflicts`). */
+  annualConflicts(codes) {
+    const list = [...codes].sort();
+    return list.length > 1 ? this.read(`annual_conflicts:${list.join(",")}`, "annual_return_conflicts", [list], []) : [];
+  }
   /** The tax types the year's forms list gives, as chips (`tax_types_for_year`). */
   taxTypes(tin, year) {
     return tin && year ? this.read(`tax_types:${tin}:${year}`, "tax_types_for_year", [tin, year], []) : [];

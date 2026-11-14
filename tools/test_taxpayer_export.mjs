@@ -197,6 +197,7 @@ function makeApp({ hasPin, exportResult, exportError, exportPending }) {
       yearlyForms: () => [],
       yearFacts: () => null,
       taxTypes: () => [],
+      annualConflicts: () => [],
       screenIndex: () => [],
       writeAsync: async (name, ...args) => {
         calls.push([name, ...args]);

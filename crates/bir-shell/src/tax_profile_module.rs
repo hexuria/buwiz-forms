@@ -211,6 +211,8 @@ export function set_year_facts(tin: string, year: number, patch: Partial<YearFac
 export interface TaxTypeChip { type: string; label: string; forms: string[]; }
 /** The chips: the tax types the year's forms list gives. */
 export function tax_types_for_year(tin: string, year: number): TaxTypeChip[];
+/** Groups of two or more annual income tax returns among `codes` that stand for one another (1700, 1701, 1701A, 1701MS; 1702, 1702RT, 1702EX, 1702MX): a taxpayer files one of a group for a year. The forms list keeps whatever the user picks; the page only warns. */
+export function annual_return_conflicts(codes: string[]): string[][];
 export interface RdoOption { code: string; description: string; }
 export function list_rdos(): RdoOption[];
 export function list_zip_codes(): string[];
@@ -308,6 +310,7 @@ pub fn register(module: HostModule) -> HostModule {
         .function("year_facts", year_facts)
         .function("set_year_facts", set_year_facts)
         .function("tax_types_for_year", tax_types_for_year)
+        .function("annual_return_conflicts", annual_return_conflicts)
         .function("list_rdos", |_| list_rdos())
         .function("list_zip_codes", |_| list_zip_codes())
         .function("inbox_state", inbox_state)
@@ -1070,6 +1073,26 @@ fn tax_types_for_year(arguments: &HostArguments) -> HostResult {
         let chips = db.tax_types_for_year(tin, year).map_err(host_error)?;
         crate::bir_module::serialize(&chips)
     })
+}
+
+/// The annual income tax returns among the given codes that stand for one
+/// another. Nothing is removed from a forms list (decision 1): the Forms
+/// tab shows a warning and the user decides.
+fn annual_return_conflicts(arguments: &HostArguments) -> HostResult {
+    let codes = arguments
+        .value(0)?
+        .as_array()
+        .ok_or_else(|| HostError::new("argument 1 must be a list of form codes"))?
+        .iter()
+        .map(|code| {
+            code.as_str()
+                .map(canonical_form_code)
+                .ok_or_else(|| HostError::new("every form code must be a string"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::bir_module::serialize(
+        &bir_core::integration::validation::conflicting_annual_itr_code_groups(&codes),
+    )
 }
 
 // ---------- confirmation inbox ----------
@@ -2685,6 +2708,19 @@ mod tests {
         );
         assert_eq!(
             ok(tax_types_for_year, vec![json!(branch), json!(2024)]),
+            json!([])
+        );
+
+        // Two annual income tax returns of one kind are named, for a warning.
+        assert_eq!(
+            ok(
+                annual_return_conflicts,
+                vec![json!(["1701", "1701A", "2551Q", "1702RT"])]
+            ),
+            json!([["1701", "1701A"]])
+        );
+        assert_eq!(
+            ok(annual_return_conflicts, vec![json!(["1701", "1701Q"])]),
             json!([])
         );
     }

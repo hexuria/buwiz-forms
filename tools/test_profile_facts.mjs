@@ -240,6 +240,11 @@ function makeApp({ forms = ["2551Q", "1701Q", "1701"], usedBy = {}, notSet = [],
       yearFacts: () => view,
       taxTypes: () => [{ type: "percentage_tax", label: "Percentage tax", forms: ["2551Q"] }, { type: "income_tax", label: "Income tax", forms: ["1701", "1701Q"] }],
       electionReadiness: () => readiness,
+      // The host's rule (`annual_return_conflicts`): two or more annual income tax returns of one kind.
+      annualConflicts: (codes) =>
+        [["1700", "1701", "1701A", "1701MS"], ["1702", "1702RT", "1702EX", "1702MX"]]
+          .map((group) => [...codes].filter((c) => group.includes(c)).sort())
+          .filter((hits) => hits.length > 1),
       setups: (ty) => setups.filter((s) => s.taxpayer_types.includes(ty)),
       screenIndex: () => [
         { c: "2551Q", t: "Quarterly Percentage Tax Return", freq: "Quarterly" },
@@ -450,6 +455,28 @@ const page = (app) => renderTaxpayerPage(cx, app, "profile", 900);
   ui.saveSection("branch", cx);
   assert.deepEqual(writes.at(-1), ["set_year_facts", HEAD, 2026, { business_start_date: "2020-01-06" }], "only what changed, for the year");
   assert.equal(writes.at(-2)[0], "update_branch");
+}
+
+// ---------------------------------------------------------------- two annual income tax returns: a warning, never a removal
+{
+  const { app, writes } = makeApp({ forms: ["2551Q", "1701", "1701A"] });
+  const ui = app.taxpayerUi;
+  let tree = renderTaxpayerPage(cx, app, "forms", 900);
+  const banner = one(tree, "tp-annual-conflict-1701-1701A");
+  assert.match(texts(banner).join(" "), /1701 and 1701A are both annual income tax returns\. A taxpayer files only one of them for 2026\./);
+  assert.equal(writes.length, 0, "the list is the user's: showing the warning writes nothing");
+  // While editing it follows what is ticked, before any save.
+  ui.editForms(cx);
+  ui.toggleForm("1701A", false, cx);
+  tree = renderTaxpayerPage(cx, app, "forms", 900);
+  assert.equal(byId(tree, "tp-annual-conflict-1701-1701A").length, 0, "unticked: the warning goes");
+  ui.toggleForm("1701A", true, cx);
+  tree = renderTaxpayerPage(cx, app, "forms", 900);
+  one(tree, "tp-annual-conflict-1701-1701A");
+  ui.cancelForms(cx);
+  // One annual return and its quarterly returns: nothing to say.
+  const fine = makeApp({ forms: ["2551Q", "1701Q", "1701"] });
+  assert.equal(find(renderTaxpayerPage(cx, fine.app, "forms", 900), (i) => String(i.banner || "").startsWith("tp-annual-conflict")).length, 0);
 }
 
 // ---------------------------------------------------------------- setups on the Forms tab and Save as a setup

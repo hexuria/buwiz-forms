@@ -175,6 +175,7 @@ const store = {
   yearlyForms: () => ["1601C"],
   templates: () => [],
   taxTypes: () => [],
+  annualConflicts: () => [],
   yearFacts: () => null,
   electionReadiness: () => null,
   screenIndex: () => [{ c: "1601C", freq: "Monthly" }],
