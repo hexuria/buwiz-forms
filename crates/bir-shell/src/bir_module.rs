@@ -1662,6 +1662,8 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     // Validate (`filing_errors`).
                     let _ = draft.reconcile_with_effective_profile(&profile);
                 }
+                // A tax fact not set that changes what it files (decision 3).
+                crate::screen_form_module::refuse_unset_facts_of(db, "2551Q", &draft)?;
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
                         errors
@@ -1681,6 +1683,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     .get_1601c_draft(&tin, year, month)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+                crate::screen_form_module::refuse_unset_facts_of(db, "1601C", &draft)?;
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
                         errors
@@ -1704,6 +1707,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                         .ok_or_else(|| {
                             HostError::new(format!("No saved {form_code} draft for that period"))
                         })?;
+                    crate::screen_form_module::refuse_unset_facts_of(db, &form_code, &draft)?;
                     draft
                         .queue(bir_core::filing_queue::QueueAuthSource::Gui)
                         .map_err(|errors| {

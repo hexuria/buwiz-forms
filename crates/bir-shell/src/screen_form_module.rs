@@ -45,6 +45,7 @@ use crate::bir_module::{json, to_json, with_database};
 mod catalogs;
 mod combs;
 mod conditions;
+pub(crate) mod fact_asks;
 mod penalties;
 mod rows_1604;
 mod rows_1700;
@@ -136,6 +137,27 @@ export interface ScreenFormOpened {
     /** One-time notes this opening offers (`key`, `text`); show the ones `screen_form_notes_seen` records. */
     notes?: { key: string; text: string }[];
     errors: ScreenFormError[];
+    /** A Draft's tax facts that are not set and change what it files: messages on the row of the fact's card (Queue refuses while any is here). */
+    fact_errors?: ScreenFormError[];
+    /** A Draft's cards: one per fact its form reads that the tax profile has not set for its year. */
+    asks?: ScreenFormAsk[];
+    /** The filled profile boxes Edit may open that "Save to profile too" can write back, with the field and a note for the row. */
+    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business"; label: string; note: string }>;
+    /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
+    profile_changed?: string[];
+}
+export type ScreenFormFact = "birth_date" | "tax_classification" | "income_tax_election" | "eopt_tier"
+    | "business_start_date" | "line_of_business" | "is_government_withholding_entity" | "atc_codes";
+export interface ScreenFormAsk {
+    fact: ScreenFormFact;
+    /** The box the card sits at; null: the top of the first part. */
+    key: string | null;
+    label: string;
+    control: "date" | "choice" | "text";
+    /** A choice card's answers: `value` is what `set_year_facts` takes. */
+    choices: { value: unknown; label: string }[] | null;
+    /** The card's sentence: what is asked, and that the answer goes to the tax profile for every later return. */
+    note: string;
 }
 export interface ScreenFormPeriodPart {
     key: string;
@@ -202,6 +224,8 @@ export interface ScreenFormValidated {
     pools: Record<string, string>;
     /** A sample's boxes still blank (null for a return). */
     blank?: string[] | null;
+    /** A Draft's tax facts that are not set and change what it files (see `ScreenFormOpened.fact_errors`). */
+    fact_errors?: ScreenFormError[];
 }
 export interface ScreenFormOption {
     value: string;
@@ -234,8 +258,8 @@ export function screen_form_filed_original(form_code: string, snapshot_id: numbe
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
-/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`): every profile box the filer did not edit takes the profile's value, and they follow later profile changes. Nothing is saved; save the draft. */
-export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object): ScreenFormFilled;
+/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; the boxes they fill take the answer. Nothing is saved; save the draft. `asks`: the cards still asked. */
+export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 /** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
 export function screen_form_save(form_code: string, draft: object): ScreenFormSaved;
@@ -245,6 +269,10 @@ export function screen_form_print(form_code: string, draft: object): { path: str
 export function screen_form_print_sample(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): { path: string };
 /** Live sync: re-fill the open print preview for this form from the draft plus staged edits (in memory). No-op when no preview is open. */
 export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
+/** What Queue does with the tax facts this return reads that are not set: `blocks` stop it (validation messages on the row of the fact's card), `warns` are said once in the Queue confirmation. Queue itself refuses while anything blocks. */
+export function screen_form_queue_check(form_code: string, draft: object): { blocks: ScreenFormError[]; warns: string[] };
+/** "Save to profile too": the profile boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the boxes equal the profile again and the return is saved. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
+export function screen_form_save_to_profile(form_code: string, year: number, period: number, draft: object, keys: string[]): { draft: object; values: Record<string, string>; pools: Record<string, string>; saved: string[]; notes: string[] };
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
@@ -271,6 +299,8 @@ pub fn register(module: HostModule) -> HostModule {
         .function("screen_form_print", screen_form_print)
         .function("screen_form_print_sample", screen_form_print_sample)
         .function("screen_form_preview_sync", screen_form_preview_sync)
+        .function("screen_form_queue_check", screen_form_queue_check)
+        .function("screen_form_save_to_profile", screen_form_save_to_profile)
         .function("screen_form_queue", screen_form_queue)
         .function("screen_form_cancel_queue", screen_form_cancel_queue)
         .function("screen_form_notes_seen", screen_form_notes_seen)
@@ -2415,6 +2445,9 @@ enum NoteStyle {
     /// It differs from the profile, which was not applied: "RDO 039
     /// (profile 043)".
     Differs,
+    /// A filed return keeps what was filed while the profile moved on:
+    /// "RDO 039 (profile now 043)".
+    Filed,
 }
 
 /// How a profile box reads in a note at the top of a draft: its item's
@@ -2457,6 +2490,7 @@ fn profile_change_note(
         return Some(match style {
             NoteStyle::Followed => format!("{caption} → {picked}"),
             NoteStyle::Differs => format!("{caption} (profile {picked})"),
+            NoteStyle::Filed => format!("{caption} (profile now {picked})"),
         });
     }
     let shown = |text: &str| {
@@ -2469,6 +2503,7 @@ fn profile_change_note(
     Some(match style {
         NoteStyle::Followed => format!("{caption} {} → {}", shown(&was), shown(&now)),
         NoteStyle::Differs => format!("{caption} {} (profile {})", shown(&was), shown(&now)),
+        NoteStyle::Filed => format!("{caption} {} (profile now {})", shown(&was), shown(&now)),
     })
 }
 
@@ -2485,9 +2520,13 @@ fn profile_paths(kind: AgentFormKind) -> BTreeSet<&'static str> {
 
 /// What the profile makes in each of those fields (`from_profile`: the
 /// draft the profile alone builds): a draft's `profile_baseline`.
+/// The draft fields the year's facts fill follow too
+/// ([`fact_asks::fact_fields`]: a birth date, an ATC, a withholding
+/// agent's category).
 fn profile_values(kind: AgentFormKind, from_profile: &Value) -> Map<String, Value> {
     profile_paths(kind)
         .into_iter()
+        .chain(fact_asks::fact_fields(kind))
         .filter_map(|path| Some((path.to_string(), from_profile.pointer(path)?.clone())))
         .collect()
 }
@@ -2518,6 +2557,24 @@ fn profile_box_keys(kind: AgentFormKind) -> Vec<&'static String> {
         .filter(|entry| agent::is_profile_box(def, entry))
         .map(|entry| &entry.key)
         .collect()
+}
+
+/// The boxes a profile note may name: the profile boxes, and the boxes
+/// that show a draft field a fact fills ([`fact_asks::fact_fields`]).
+fn followed_box_keys(kind: AgentFormKind) -> Vec<&'static String> {
+    let def = kind.definition();
+    let facts = fact_asks::fact_fields(kind);
+    let mut keys = profile_box_keys(kind);
+    for entry in &def.boxes {
+        if !keys.contains(&&entry.key)
+            && bound_paths(def, &entry.key)
+                .iter()
+                .any(|path| facts.contains(path))
+        {
+            keys.push(&entry.key);
+        }
+    }
+    keys
 }
 
 /// The draft fields of the profile boxes the filer edited on this return
@@ -2563,7 +2620,7 @@ fn profile_notes(
     agent::compute(kind, &mut after)?;
     let after = values_json(kind, &after)?;
     let mut notes: Vec<String> = Vec::new();
-    for key in profile_box_keys(kind) {
+    for key in followed_box_keys(kind) {
         if before[key.as_str()] == after[key.as_str()] {
             continue;
         }
@@ -2578,12 +2635,33 @@ fn profile_notes(
 
 /// The draft with every profile box the filer did not edit set to what the
 /// profile makes now (`from_profile`), and whether any value changed.
+/// A draft field a fact fills is the filer's own once it holds anything
+/// but what the profile made (its baseline), or anything at all with no
+/// baseline: it is never replaced.
 fn with_profile_values(kind: AgentFormKind, draft: &Value, from_profile: &Value) -> (Value, bool) {
     let kept = edited_profile_paths(kind, draft);
     let now = profile_values(kind, from_profile);
+    let facts = fact_asks::fact_fields(kind);
+    let baseline = draft
+        .pointer(&lifecycle_pointer(draft, "profile_baseline"))
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
     let mut next = draft.clone();
     let mut moved = false;
     for (path, want) in now.iter().filter(|(path, _)| !kept.contains(path.as_str())) {
+        if facts.contains(path.as_str()) {
+            let here = next.pointer(path);
+            let untouched = match baseline.get(path) {
+                Some(was) => here == Some(was),
+                None => here.is_none_or(|value| {
+                    value.is_null() || value.as_str().is_some_and(|text| text.trim().is_empty())
+                }),
+            };
+            if !untouched {
+                continue;
+            }
+        }
         if next.pointer(path) != Some(want) {
             set_draft_path(&mut next, path, want.clone());
             moved = true;
@@ -3247,6 +3325,13 @@ fn open_screen_form(
                 consumed,
             ))
         })?;
+    // The tax facts this return reads that are not set (decision 3): read
+    // apart from the open above, and never in the way of opening.
+    let facts = if sample {
+        None
+    } else {
+        with_database(|db| Ok(fact_asks::context_of(db, kind, &draft))).unwrap_or(None)
+    };
     Ok(async move {
         let mut opened = on_large_stack(move || {
             opened_json(kind, year, period, draft, from_profile, build, checked)
@@ -3260,6 +3345,24 @@ fn open_screen_form(
         opened["filed_original"] = filed_original;
         opened["profile_updates"] = json!(followed);
         opened["notes"] = json!(notes);
+        // The cards, the blocking messages and the "Save to profile too"
+        // switches of a Draft (decisions 3 and 8).
+        let (asks, fact_errors, profile_save) = match &facts {
+            Some(facts) if opened["status"] == "Draft" => {
+                let fields = fact_asks::error_fields(&opened["errors"]);
+                let checks =
+                    fact_asks::checks(kind, facts, &opened["draft"], &opened["values"], &fields);
+                (
+                    fact_asks::asks(kind, facts),
+                    fact_asks::block_errors(&checks),
+                    fact_asks::profile_save(kind, &opened["profile_edit"], facts),
+                )
+            }
+            _ => (json!([]), json!([]), json!({})),
+        };
+        opened["asks"] = asks;
+        opened["fact_errors"] = fact_errors;
+        opened["profile_save"] = profile_save;
         Ok(json(opened))
     })
 }
@@ -3572,6 +3675,8 @@ fn opened_json(
         "period_parts": period_parts,
         "period_set": sample.as_ref().is_some_and(|build| build.other.is_none()),
         "profile_differs": differs,
+        // A filed return: what the tax profile changed after it (decision 5).
+        "profile_changed": fact_asks::filed_changes(kind, &status, &draft, &from_profile.draft),
         "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
         "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
         "errors": errors,
@@ -4387,16 +4492,31 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         return Err(host_error("this return is no longer a draft"));
     }
     let tin = agent::identity(kind, &draft).map_err(host_error)?.tin;
-    let (profile, from_profile) = with_database(|db| {
+    // Facts the page just answered from its cards: the boxes they fill take
+    // the profile's answer, whoever wrote them before.
+    let answered: Vec<bir_core::tax_profile::Fact> = match arguments.get(4).map(to_json) {
+        Some(Value::Array(facts)) => facts
+            .iter()
+            .filter_map(|fact| serde_json::from_value(fact.clone()).ok())
+            .collect(),
+        _ => Vec::new(),
+    };
+    let (profile, from_profile, facts) = with_database(|db| {
         let profile = db
             .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
-        Ok((profile, from_profile))
+        // The penalties take the year's EOPT tier as it is now.
+        if !answered.is_empty() {
+            reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
+        }
+        let facts = fact_asks::context_of(db, kind, &draft);
+        Ok((profile, from_profile, facts))
     })?;
     use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
+    fact_asks::take_facts(&mut draft, &from_profile, &answered);
     if kind == AgentFormKind::Form2551Q {
         draft = out_of_line(|| {
             let mut typed: bir_core::forms::form_2551q::Form2551QDraft =
@@ -4410,6 +4530,11 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
     let options = catalogs::options(kind, &draft);
     let penalty_groups = penalties::json(kind, &draft);
     let pool_texts = combs::pool_texts(kind, &draft);
+    // What the cards still ask once the profile is as it is now.
+    let asks = match (&sample, &facts) {
+        (None, Some(facts)) => fact_asks::asks(kind, facts),
+        _ => json!([]),
+    };
     put_sample_mark(&mut draft, sample.as_ref());
     put_amendment_mark(&mut draft, amendment);
     Ok(json(json!({
@@ -4419,6 +4544,7 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         "rejected": {},
         "penalties": penalty_groups,
         "pools": pool_texts,
+        "asks": asks,
     })))
 }
 
@@ -5341,7 +5467,14 @@ fn screen_form_validate(
     let sample = take_sample_mark(&mut draft);
     let amendment = take_amendment_mark(&mut draft);
     // Read here, on the host's thread: the evaluation runs on its own.
-    let rows_checked = with_database(|db| Ok(rows_1604::checked_rows(db, kind, &draft)))?;
+    let (rows_checked, facts) = with_database(|db| {
+        let facts = if sample.is_some() {
+            None
+        } else {
+            fact_asks::context_of(db, kind, &draft)
+        };
+        Ok((rows_1604::checked_rows(db, kind, &draft), facts))
+    })?;
     Ok(async move {
         let checked = on_large_stack(move || -> Result<Value, String> {
             let mut draft = draft;
@@ -5349,6 +5482,17 @@ fn screen_form_validate(
             if let Some(mark) = &sample {
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
+            // A fact not set that changes what this return files: a message
+            // on the row its card is on (decision 3).
+            let fact_errors = match &facts {
+                Some(facts) if status == FilingStatus::Draft => {
+                    let fields = fact_asks::error_fields(&errors);
+                    fact_asks::block_errors(&fact_asks::checks(
+                        kind, facts, &draft, &values, &fields,
+                    ))
+                }
+                _ => json!([]),
+            };
             let options = catalogs::options(kind, &draft);
             let off = if status == FilingStatus::Draft {
                 conditions::off_boxes(kind, &draft, &values)
@@ -5365,6 +5509,7 @@ fn screen_form_validate(
                 "values": values,
                 "options": options,
                 "errors": errors,
+                "fact_errors": fact_errors,
                 "off": off,
                 "penalties": penalty_groups,
                 "pools": pool_texts,
@@ -6113,6 +6258,252 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
 /// Queue the saved draft the page holds for background submission. 1601C and
 /// 2551Q use their own queue path (`queue_form_draft`); every other form is
 /// queued from the draft itself, after it validates.
+/// What a fact not set does to Queue on `draft` (decision 3): the blocking
+/// ones and the warnings, decided from the form's own required flags and
+/// the return's state ([`fact_asks::checks`]). The draft is computed and
+/// validated on a copy.
+pub(crate) fn fact_queue_checks(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<Vec<fact_asks::Check>, String> {
+    let Some(facts) = fact_asks::context_of(db, kind, draft) else {
+        return Ok(Vec::new());
+    };
+    if agent::identity(kind, draft)?.status != FilingStatus::Draft {
+        return Ok(Vec::new());
+    }
+    let checked = rows_1604::checked_rows(db, kind, draft);
+    let mut draft = draft.clone();
+    let (draft, values, errors) = on_large_stack(move || {
+        evaluate_here(kind, &mut draft, &checked).map(|(values, errors, _)| (draft, values, errors))
+    })??;
+    let fields = fact_asks::error_fields(&errors);
+    Ok(fact_asks::checks(kind, &facts, &draft, &values, &fields))
+}
+
+/// Refuse to queue `draft` while a fact not set changes what it files.
+pub(crate) fn refuse_unset_facts(
+    db: &Database,
+    kind: AgentFormKind,
+    draft: &Value,
+) -> Result<(), HostError> {
+    let blocks: Vec<String> = fact_queue_checks(db, kind, draft)
+        .map_err(host_error)?
+        .into_iter()
+        .filter(|check| check.blocks)
+        .map(|check| check.message)
+        .collect();
+    if blocks.is_empty() {
+        Ok(())
+    } else {
+        Err(host_error(blocks.join(" ")))
+    }
+}
+
+/// [`refuse_unset_facts`] for a stored typed draft (`queue_form_draft`).
+pub(crate) fn refuse_unset_facts_of<T: serde::Serialize>(
+    db: &Database,
+    form_code: &str,
+    draft: &T,
+) -> Result<(), HostError> {
+    let kind = kind_of(form_code)?;
+    let draft = serde_json::to_value(draft).map_err(|error| host_error(error.to_string()))?;
+    refuse_unset_facts(db, kind, &draft)
+}
+
+/// The page's Queue asks first: `blocks` (the messages, on their rows, that
+/// stop Queue) and `warns` (said once in the Queue confirmation).
+fn screen_form_queue_check(arguments: &HostArguments) -> HostResult {
+    let kind = kind_of(arguments.string(0)?)?;
+    let mut draft = draft_argument(arguments, 1)?;
+    if take_sample_mark(&mut draft).is_some() {
+        return Ok(json(json!({ "blocks": [], "warns": [] })));
+    }
+    take_amendment_mark(&mut draft);
+    let checks = with_database(|db| {
+        settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+        reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
+        fact_queue_checks(db, kind, &draft).map_err(host_error)
+    })?;
+    let warns: Vec<&str> = checks
+        .iter()
+        .filter(|check| !check.blocks)
+        .map(|check| check.message.as_str())
+        .collect();
+    Ok(json(json!({
+        "blocks": fact_asks::block_errors(&checks),
+        "warns": warns,
+    })))
+}
+
+/// "Save to profile too" (decision 8): the profile boxes `keys` of a saved
+/// Draft go to the tax profile through the function that owns each field
+/// (the name: `update_taxpayer`; RDO, address, ZIP, phone, email:
+/// `update_branch`, as this branch's own value; the line of business:
+/// `set_year_facts`). Those boxes then equal the profile again: they are
+/// no longer edited on this return, and the return is saved. A box with no
+/// safe write path is refused, and nothing is written.
+fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
+    use bir_core::tax_profile::{BranchUpdate, FieldSetting, TaxpayerUpdate, YearFactsPatch};
+    use fact_asks::ProfileField;
+    let kind = kind_of(arguments.string(0)?)?;
+    let year =
+        u16::try_from(arguments.integer(1)?).map_err(|_| host_error("year is out of range"))?;
+    let period = page_period(kind.form_code(), arguments.integer(2)?).map_err(host_error)?;
+    let mut draft = draft_argument(arguments, 3)?;
+    refuse_sample(&mut draft, "saved to the tax profile")?;
+    if take_amendment_mark(&mut draft).is_some() {
+        return Err(host_error(
+            "an amended return's boxes are not saved to the tax profile; change them there",
+        ));
+    }
+    let keys: Vec<String> = unlocked_argument(arguments, 4).into_iter().collect();
+    let identity = agent::identity(kind, &draft).map_err(host_error)?;
+    if identity.status != FilingStatus::Draft {
+        return Err(host_error("this return is no longer a draft"));
+    }
+    if draft["id"].is_null() {
+        return Err(host_error("Save the return first."));
+    }
+    let mut fields: Vec<(String, ProfileField)> = Vec::new();
+    for key in &keys {
+        let field = fact_asks::profile_field(kind, key).ok_or_else(|| {
+            host_error(format!(
+                "{key} cannot be saved to the tax profile from here"
+            ))
+        })?;
+        if !fields.iter().any(|(_, known)| *known == field) {
+            fields.push((key.clone(), field));
+        }
+    }
+    let text = |path: &str| {
+        draft
+            .pointer(path)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let address = ProfileField::Branch(bir_core::tax_profile::BranchField::RegisteredAddress);
+    let writes: Vec<(ProfileField, String)> = fields
+        .iter()
+        .map(|(_, field)| {
+            let first = text(field.path());
+            let second = text("/registered_address_2");
+            let value = if *field == address && !second.is_empty() {
+                format!("{first} {second}").trim().to_string()
+            } else {
+                first
+            };
+            (*field, value)
+        })
+        .collect();
+    let tin = identity.tin.clone();
+    let saved = with_database(|db| {
+        let mut branch = BTreeMap::new();
+        let mut notes = Vec::new();
+        let inherited = fact_asks::context(db, &tin, year)
+            .map(|facts| facts.inherited)
+            .unwrap_or_default();
+        for (field, value) in writes {
+            match field {
+                ProfileField::Name => {
+                    db.update_taxpayer(
+                        &tin[..tin.len().min(9)],
+                        TaxpayerUpdate {
+                            name: Some(value),
+                            taxpayer_type: None,
+                            birth_date: None,
+                        },
+                    )
+                    .map_err(|error| host_error(error.to_string()))?;
+                }
+                ProfileField::Branch(which) => {
+                    if inherited.contains(&which) {
+                        notes.push(format!(
+                            "This branch used the head office's {}; it now has its own.",
+                            field.label()
+                        ));
+                    }
+                    branch.insert(which, FieldSetting::Override(value));
+                }
+                ProfileField::LineOfBusiness => {
+                    let patch = YearFactsPatch {
+                        line_of_business: Some(Some(value)),
+                        ..YearFactsPatch::default()
+                    };
+                    db.set_year_facts(&tin, year, &patch)
+                        .map_err(|error| host_error(error.to_string()))?;
+                }
+            }
+        }
+        if !branch.is_empty() {
+            db.update_branch(
+                &tin,
+                BranchUpdate {
+                    name: None,
+                    fields: branch,
+                },
+            )
+            .map_err(|error| host_error(error.to_string()))?;
+        }
+        // The boxes equal the profile again: not edited on this return, at
+        // the profile's value, and the baseline the profile as it is now.
+        let profile = db
+            .get_profile_for_year(&tin, year)
+            .map_err(|error| host_error(error.to_string()))?
+            .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
+        let from_profile =
+            load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
+        let def = kind.definition();
+        let mut paths: BTreeSet<&str> = fields.iter().map(|(_, field)| field.path()).collect();
+        if paths.contains("/registered_address") {
+            paths.insert("/registered_address_2");
+        }
+        let pools = combs::pools(kind.form_code());
+        let written = |key: &str| {
+            bound_paths(def, key)
+                .iter()
+                .any(|path| paths.contains(path))
+                || pools.values().any(|pool| {
+                    pool.keys.iter().any(|k| k == key)
+                        && pool
+                            .keys
+                            .iter()
+                            .any(|k| bound_paths(def, k).iter().any(|path| paths.contains(path)))
+                })
+        };
+        let edits: Vec<String> = profile_edits(&draft)
+            .into_iter()
+            .filter(|key| !written(key))
+            .collect();
+        let pointer = profile_edits_pointer(&draft);
+        set_draft_path(&mut draft, &pointer, json!(edits));
+        for path in &paths {
+            if let (Some(want), Some(_)) = (from_profile.pointer(path), draft.pointer(path)) {
+                set_draft_path(&mut draft, path, want.clone());
+            }
+        }
+        set_profile_baseline(kind, &mut draft, &from_profile);
+        settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
+        reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
+        refuse_replacing_a_stored_return(db, kind, &draft).map_err(host_error)?;
+        agent::save_draft(kind, db, &mut draft).map_err(host_error)?;
+        Ok(notes)
+    })?;
+    agent::compute(kind, &mut draft).map_err(host_error)?;
+    let values = values_json(kind, &draft).map_err(host_error)?;
+    let pool_texts = combs::pool_texts(kind, &draft);
+    Ok(json(json!({
+        "draft": draft,
+        "values": values,
+        "pools": pool_texts,
+        "saved": fields.iter().map(|(_, field)| field.label()).collect::<Vec<_>>(),
+        "notes": saved,
+    })))
+}
+
 fn screen_form_queue(arguments: &HostArguments) -> HostResult {
     let code = arguments.string(0)?.to_owned();
     if !bir_core::forms::can_queue_for_submission(&code) {
@@ -6132,6 +6523,9 @@ fn screen_form_queue(arguments: &HostArguments) -> HostResult {
     let queued = with_database(|db| {
         settle_trigger_flag(db, kind, &mut draft).map_err(host_error)?;
         reapply_penalty_context(db, kind, &mut draft).map_err(host_error)?;
+        if !draft["id"].is_null() {
+            refuse_unset_facts(db, kind, &draft)?;
+        }
         bir_core::with_queueable_kind!(queueable, F => out_of_line(|| {
             let mut typed: F = serde_json::from_value(draft.clone())
                 .map_err(|error| host_error(error.to_string()))?;
@@ -6225,6 +6619,9 @@ mod tests {
     mod radio_untick_rule;
     // PR 15: the shared effective-lock table pinned core-side (P4-19).
     mod agent_locks;
+    // Tax facts a return asks for, Queue's rule, "Save to profile too" and
+    // a filed return's profile line (decisions 3, 5 and 8).
+    mod fact_asks;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -7658,6 +8055,8 @@ mod tests {
         setup();
         let saved = save("0619E", &open("0619E", 7)["draft"]);
         let start = wakes();
+        // A late return queues once its EOPT tier is set (decision 3).
+        set_eopt_tier_for_a_late_queue(&saved["draft"]);
 
         call(
             "screen_form_queue",
@@ -7695,6 +8094,35 @@ mod tests {
         assert_eq!(wakes(), start + 4, "a refused queue wakes nothing");
     }
 
+    /// The fixture's July 0619E is late, so Queue refuses it while the
+    /// year's EOPT tier is not set (decision 3: the tier sets its penalty
+    /// rates); set it, and Queue goes on.
+    fn set_eopt_tier_for_a_late_queue(draft: &Value) {
+        let refused = call(
+            "screen_form_queue",
+            vec!["0619E".into(), json(draft.clone())],
+        )
+        .unwrap_err();
+        assert!(
+            refused.message().contains("EOPT tier is not set"),
+            "{}",
+            refused.message()
+        );
+        with_database(|db| {
+            db.set_year_facts(
+                TIN,
+                2026,
+                &bir_core::tax_profile::YearFactsPatch {
+                    eopt_tier: Some(Some(bir_core::profile::EoptTier::Micro)),
+                    ..Default::default()
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap();
+    }
+
     #[test]
     fn screen_form_queue_queues_a_saved_draft_and_refuses_the_rest() {
         setup();
@@ -7719,6 +8147,7 @@ mod tests {
         );
         assert!(unsaved.unwrap_err().message().contains("Save the draft"));
         let saved = save("0619E", &opened["draft"]);
+        set_eopt_tier_for_a_late_queue(&saved["draft"]);
         let queued = call(
             "screen_form_queue",
             vec![
