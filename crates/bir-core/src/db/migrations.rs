@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 23;
+const CURRENT_MIGRATION_VERSION: i32 = 24;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -361,6 +361,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // v23: The tax facts of each branch per tax year, in their own table
         // (`year_facts`), filled once from the profiles (Rust-side).
         "SELECT 1; -- v23 marker: year facts (Rust-side)",
+        // v24: The user's own setups (owner decision 14): a name and a body
+        // of forms and facts, never a date or anything personal.
+        SETUPS_TABLE,
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -483,8 +486,21 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // backfill runs once, at v23, so a record removed since is not refilled.
     ensure_year_facts_table(conn)?;
 
+    // Heal a database whose v24 table is missing. Idempotent.
+    conn.execute_batch(SETUPS_TABLE)?;
+
     Ok(())
 }
+
+/// v24: the `setups` table.
+const SETUPS_TABLE: &str = "
+    CREATE TABLE IF NOT EXISTS setups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        body_json TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+";
 
 fn ensure_year_facts_table(conn: &Connection) -> Result<(), DbError> {
     conn.execute_batch(
@@ -4054,7 +4070,7 @@ mod tests {
         let version: i32 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 23);
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
 
         let record = |tin: &str, year: i64| -> Option<YearFacts> {
             conn.query_row(
@@ -4137,5 +4153,41 @@ mod tests {
         .unwrap();
         migrate_database(&conn).unwrap();
         assert_eq!(years(head), vec![2024, 2025, 2026]);
+    }
+
+    /// v24 on a v23 database: the `setups` table appears, empty, and the
+    /// year facts already stored stay as they were.
+    #[test]
+    fn test_v24_adds_the_setups_table_on_a_v23_database() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        conn.execute_batch(
+            "DROP TABLE setups;
+             INSERT INTO year_facts (tin, taxable_year, facts_json) VALUES ('00012345300000', 2026, '{}');
+             PRAGMA user_version = 23;",
+        )
+        .unwrap();
+        migrate_database(&conn).unwrap();
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 24);
+        let setups: i64 = conn
+            .query_row("SELECT count(*) FROM setups", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(setups, 0);
+        conn.execute(
+            "INSERT INTO setups (name, body_json) VALUES ('Mine', '{}')",
+            [],
+        )
+        .unwrap();
+        let created: String = conn
+            .query_row("SELECT created_at FROM setups", [], |r| r.get(0))
+            .unwrap();
+        assert!(!created.is_empty());
+        let facts: i64 = conn
+            .query_row("SELECT count(*) FROM year_facts", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(facts, 1, "v23's records are kept");
     }
 }
