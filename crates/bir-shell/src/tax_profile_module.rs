@@ -14,7 +14,7 @@ use bir_core::profile::{
 };
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
-    ResolvedBranch, StarterPack, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
+    ResolvedBranch, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
     format_tin_root, tax_year_bounds,
 };
 use chrono::Datelike as _;
@@ -79,7 +79,39 @@ export interface BranchUpdateInput {
 export interface TaxYearBounds { min: number; max: number; }
 export interface AddedTaxYear { year: number; copied_from: number | null; forms: string[]; }
 export interface YearlyFormsChange { added: string[]; removed: string[]; forms: string[]; }
-export interface StarterPackInfo { id: string; label: string; forms: string[]; }
+/** A setup (decision 14): the forms of a year and the facts they read. Never a date, a line of business or anything personal. */
+export interface Setup {
+    /** A built-in id such as "non_vat_professional", or "user-<n>" for one the user saved. */
+    id: string;
+    name: string;
+    taxpayer_types: Taxpayer["taxpayer_type"][];
+    forms: string[];
+    facts: {
+        tax_classification: YearFactsView["facts"]["tax_classification"];
+        income_tax_election: YearFactsView["facts"]["income_tax_election"];
+        eopt_tier: YearFactsView["facts"]["eopt_tier"];
+        business_start_date: null;
+        line_of_business: null;
+        is_government_withholding_entity: boolean | null;
+        atc_codes: string[];
+    };
+    built_in: boolean;
+    /** The forms are added to the year's list instead of replacing it (Employer). */
+    adds_forms: boolean;
+}
+export interface SetupApplied {
+    /** The year's forms list afterwards. */
+    forms: string[];
+    /** Facts written. */
+    set: Fact[];
+    /** Facts already set to something else and left as they are (without `replace`, or a locked 8% or graduated choice). */
+    kept: Fact[];
+    election_locked: boolean;
+    /** Templates copied (copy_setup_from only). */
+    templates_copied: string[];
+    /** Templates the target already had and kept (copy_setup_from only). */
+    templates_kept: string[];
+}
 export interface FormTemplateSummary {
     form_code: string;
     updated_at: string;
@@ -105,7 +137,16 @@ export function list_tax_years(tin: string): number[];
 export function add_tax_year(tin: string, year: number, copy_forms: boolean): AddedTaxYear;
 export function yearly_forms(tin: string, year: number): string[];
 export function set_yearly_forms(tin: string, year: number, form_codes: string[]): YearlyFormsChange;
-export function starter_packs(tin: string): StarterPackInfo[];
+/** The setups for a taxpayer type: the built-in ones, then the user's. */
+export function list_setups(taxpayer_type: Taxpayer["taxpayer_type"]): Setup[];
+/** Set the year's forms (replaced, or added to for an `adds_forms` setup) and the setup's facts. A fact already set to something else is kept unless `replace`; a locked 8% or graduated choice always is. Never touches name, TIN, address or contact. */
+export function apply_setup(tin: string, year: number, setup_id: string, replace?: boolean): SetupApplied;
+/** Save the branch's year as a setup: its forms and facts, no dates, no line of business, nothing personal. */
+export function save_setup(tin: string, year: number, name: string): Setup;
+/** Delete one of the user's setups; a built-in one is refused. */
+export function delete_setup(id: string): boolean;
+/** Start `to_tin`'s year from `from_tin`'s: templates of its forms, its forms list and the facts a setup would hold. What the target already has is kept unless `replace`. */
+export function copy_setup_from(from_tin: string, to_tin: string, year: number, replace?: boolean): SetupApplied;
 export function list_form_templates(tin: string): FormTemplateSummary[];
 export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
 export function create_template_from_return(draft_id: number): FormTemplateSummary;
@@ -245,7 +286,11 @@ pub fn register(module: HostModule) -> HostModule {
         .function("add_tax_year", add_tax_year)
         .function("yearly_forms", yearly_forms)
         .function("set_yearly_forms", set_yearly_forms)
-        .function("starter_packs", starter_packs)
+        .function("list_setups", list_setups)
+        .function("apply_setup", apply_setup)
+        .function("save_setup", save_setup)
+        .function("delete_setup", delete_setup)
+        .function("copy_setup_from", copy_setup_from)
         .function("list_form_templates", list_form_templates)
         .function("create_template_from_latest", create_template_from_latest)
         .function("create_template_from_return", create_template_from_return)
@@ -741,33 +786,61 @@ fn set_yearly_forms(arguments: &HostArguments) -> HostResult {
     })
 }
 
-fn starter_packs(arguments: &HostArguments) -> HostResult {
+// ---------- setups ----------
+
+fn optional_flag(arguments: &HostArguments, index: usize) -> bool {
+    arguments
+        .get(index)
+        .and_then(HostValue::as_bool)
+        .unwrap_or(false)
+}
+
+fn list_setups(arguments: &HostArguments) -> HostResult {
+    let raw = arguments.string(0)?;
+    let taxpayer_type: TaxpayerType = serde_json::from_value(Value::String(raw.to_string()))
+        .map_err(|_| HostError::new(format!("`{raw}` is not a taxpayer type")))?;
+    with_reader(|db| {
+        let setups = db.list_setups(&taxpayer_type).map_err(host_error)?;
+        crate::bir_module::serialize(&setups)
+    })
+}
+
+fn apply_setup(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let id = arguments.string(2)?;
+    let replace = optional_flag(arguments, 3);
     with_database(|db| {
-        let branch = db
-            .get_branch(tin)
-            .map_err(host_error)?
-            .ok_or_else(|| HostError::new(format!("No branch with TIN {tin}")))?;
-        let taxpayer = load_taxpayer(db, &branch.tin_root)?.taxpayer;
-        Ok(HostValue::Array(
-            StarterPack::ALL
-                .into_iter()
-                .map(|pack| {
-                    HostObject::new()
-                        .field("id", field_string(serde_json::to_value(pack).ok()))
-                        .field("label", pack.label())
-                        .field(
-                            "forms",
-                            strings(
-                                pack.form_codes(&taxpayer.taxpayer_type)
-                                    .iter()
-                                    .map(|code| code.to_string()),
-                            ),
-                        )
-                        .into()
-                })
-                .collect(),
-        ))
+        let applied = db.apply_setup(tin, year, id, replace).map_err(host_error)?;
+        crate::bir_module::serialize(&applied)
+    })
+}
+
+fn save_setup(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let name = arguments.string(2)?;
+    with_database(|db| {
+        let setup = db.save_setup(tin, year, name).map_err(host_error)?;
+        crate::bir_module::serialize(&setup)
+    })
+}
+
+fn delete_setup(arguments: &HostArguments) -> HostResult {
+    let id = arguments.string(0)?;
+    with_database(|db| db.delete_setup(id).map(HostValue::Bool).map_err(host_error))
+}
+
+fn copy_setup_from(arguments: &HostArguments) -> HostResult {
+    let from_tin = arguments.string(0)?;
+    let to_tin = arguments.string(1)?;
+    let year = year_argument(arguments, 2)?;
+    let replace = optional_flag(arguments, 3);
+    with_database(|db| {
+        let applied = db
+            .copy_setup_from(from_tin, to_tin, year, replace)
+            .map_err(host_error)?;
+        crate::bir_module::serialize(&applied)
     })
 }
 
@@ -1807,14 +1880,93 @@ mod tests {
     }
 
     #[test]
-    fn starter_packs_follow_the_taxpayer_type() {
+    fn setups_follow_the_taxpayer_type_and_round_trip_through_the_host() {
         setup();
-        let packs = ok(starter_packs, vec![json!(HEAD)]);
-        let packs = packs.as_array().unwrap();
-        assert_eq!(packs.len(), 4);
-        assert_eq!(packs[1]["id"], "VatBusiness");
-        assert_eq!(packs[1]["label"], "VAT business");
-        assert_eq!(packs[1]["forms"], json!(["2550Q", "1702Q", "1702RT"]));
+        let listed = ok(list_setups, vec![json!("Corporation")]);
+        let ids: Vec<&str> = listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|setup| setup["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "vat_business_corporation",
+                "corporation_non_vat",
+                "employer"
+            ]
+        );
+        assert_eq!(listed[0]["name"], "VAT business");
+        assert_eq!(listed[0]["forms"], json!(["2550Q", "1702Q", "1702RT"]));
+        assert_eq!(listed[0]["built_in"], true);
+        assert_eq!(listed[2]["adds_forms"], true);
+        assert!(
+            call(list_setups, vec![json!("Robot")])
+                .unwrap_err()
+                .contains("not a taxpayer type")
+        );
+
+        let applied = ok(
+            apply_setup,
+            vec![json!(HEAD), json!(2026), json!("corporation_non_vat")],
+        );
+        assert_eq!(applied["forms"], json!(["1702Q", "1702RT", "2551Q"]));
+        assert_eq!(applied["set"], json!(["tax_classification"]));
+        assert_eq!(applied["kept"], json!([]));
+        let added = ok(
+            apply_setup,
+            vec![json!(HEAD), json!(2026), json!("employer"), json!(false)],
+        );
+        assert_eq!(
+            added["forms"],
+            json!(["1601C", "1604C", "1702Q", "1702RT", "2551Q"])
+        );
+
+        ok(
+            set_year_facts,
+            vec![json!(HEAD), json!(2026), json!({"eopt_tier": "Medium"})],
+        );
+        let saved = ok(
+            save_setup,
+            vec![json!(HEAD), json!(2026), json!("Our shop")],
+        );
+        assert_eq!(saved["name"], "Our shop");
+        assert_eq!(saved["built_in"], false);
+        assert_eq!(saved["facts"]["eopt_tier"], "Medium");
+        assert_eq!(saved["facts"]["business_start_date"], Value::Null);
+        let id = saved["id"].as_str().unwrap().to_string();
+        assert!(id.starts_with("user-"));
+
+        ok(
+            set_year_facts,
+            vec![json!(HEAD), json!(2026), json!({"eopt_tier": "Large"})],
+        );
+        let kept = ok(apply_setup, vec![json!(HEAD), json!(2026), json!(&id)]);
+        assert_eq!(kept["kept"], json!(["eopt_tier"]), "asks before replacing");
+        let replaced = ok(
+            apply_setup,
+            vec![json!(HEAD), json!(2026), json!(&id), json!(true)],
+        );
+        assert_eq!(replaced["set"], json!(["eopt_tier"]));
+
+        add_branch("00001");
+        let copied = ok(
+            copy_setup_from,
+            vec![json!(HEAD), json!("12345678800001"), json!(2026)],
+        );
+        assert_eq!(
+            copied["forms"],
+            json!(["1601C", "1604C", "1702Q", "1702RT", "2551Q"])
+        );
+        assert_eq!(copied["templates_copied"], json!([]));
+
+        assert_eq!(ok(delete_setup, vec![json!(&id)]), json!(true));
+        assert!(
+            call(delete_setup, vec![json!("employer")])
+                .unwrap_err()
+                .contains("built-in")
+        );
     }
 
     #[test]

@@ -38,8 +38,10 @@ mod providers;
 mod queueable;
 mod reader;
 mod receipts;
+mod setups;
 pub use queueable::{AmendmentBase, ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
+pub use setups::SetupApplied;
 mod submissions;
 pub(crate) mod taxpayers;
 #[cfg(test)]

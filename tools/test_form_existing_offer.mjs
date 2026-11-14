@@ -78,6 +78,7 @@ const linked = {
   "./ui.js": mock("./ui.js", uiExports),
   "./theme.js": mock("./theme.js", { themeIcon: () => "sun" }),
   "./recent.js": recentMod,
+  "./facts.js": source("app/shell/facts.js"),
   "./store.js": mock("./store.js", { formatTin: (x) => x, shortDate: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) }),
   "./todo.js": todoModule,
   "./periods.js": mock("./periods.js", { periodLabel: () => "Q1 2024", periodOptions: () => [], frequencyOf: () => "quarterly" }),

@@ -12,6 +12,7 @@
 //!   ZIP, phone and email from the head office (`00000`) unless the field is
 //!   overridden (D2). Inheritance resolves on read.
 
+pub mod setups;
 pub mod tax_types;
 pub mod templates;
 pub mod year_facts;
@@ -24,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use crate::db::DbError;
 use crate::profile::TaxpayerType;
 
+pub use setups::{FactsPlan, Setup, SetupBody, built_in_setups, plan_facts};
 pub use tax_types::{TaxTypeChip, facts_used_by, tax_type_of, tax_types_for_year};
 pub use templates::{
     FormTemplate, TemplateField, TemplateFieldError, TemplateSource, validate_template_fields,
@@ -397,86 +399,9 @@ pub struct AddedTaxYear {
     pub forms: Vec<String>,
 }
 
-/// D5 starter packs. Each adds its forms to a branch's yearly list.
-///
-/// Contents for the maintainer to review (official codes from
-/// `forms::registry::FORM_REGISTRY`):
-///
-/// | Pack | Individual / estate / trust | Corporation / partnership / cooperative |
-/// | --- | --- | --- |
-/// | Non-VAT business | 2551Q, 1701Q, 1701 | 2551Q, 1702Q, 1702RT |
-/// | VAT business | 2550Q, 1701Q, 1701 | 2550Q, 1702Q, 1702RT |
-/// | Employer | 1601C, 0619E, 1601EQ, 1604C, 1604E | same |
-/// | Professional | 2551Q, 1701Q, 1701A | 2551Q, 1702Q, 1702RT |
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum StarterPack {
-    NonVatBusiness,
-    VatBusiness,
-    Employer,
-    Professional,
-}
-
-impl StarterPack {
-    pub const ALL: [Self; 4] = [
-        Self::NonVatBusiness,
-        Self::VatBusiness,
-        Self::Employer,
-        Self::Professional,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::NonVatBusiness => "Non-VAT business",
-            Self::VatBusiness => "VAT business",
-            Self::Employer => "Employer",
-            Self::Professional => "Professional",
-        }
-    }
-
-    pub fn form_codes(self, taxpayer_type: &TaxpayerType) -> &'static [&'static str] {
-        let individual = matches!(
-            taxpayer_type,
-            TaxpayerType::Individual | TaxpayerType::Estate | TaxpayerType::Trust
-        );
-        match (self, individual) {
-            (Self::NonVatBusiness, true) => &["2551Q", "1701Q", "1701"],
-            (Self::NonVatBusiness, false) | (Self::Professional, false) => {
-                &["2551Q", "1702Q", "1702RT"]
-            }
-            (Self::VatBusiness, true) => &["2550Q", "1701Q", "1701"],
-            (Self::VatBusiness, false) => &["2550Q", "1702Q", "1702RT"],
-            (Self::Employer, _) => &["1601C", "0619E", "1601EQ", "1604C", "1604E"],
-            (Self::Professional, true) => &["2551Q", "1701Q", "1701A"],
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn starter_packs_name_current_registry_forms_for_every_taxpayer_type() {
-        for pack in StarterPack::ALL {
-            for taxpayer_type in [
-                TaxpayerType::Individual,
-                TaxpayerType::Corporation,
-                TaxpayerType::Partnership,
-                TaxpayerType::Cooperative,
-                TaxpayerType::Estate,
-                TaxpayerType::Trust,
-            ] {
-                for code in pack.form_codes(&taxpayer_type) {
-                    let form = crate::forms::find_form(code)
-                        .unwrap_or_else(|| panic!("{pack:?}: {code} is not in the registry"));
-                    assert!(
-                        form.deprecation_year().is_none(),
-                        "{pack:?}: {code} is deprecated"
-                    );
-                }
-            }
-        }
-    }
 
     #[test]
     fn tax_year_bound_is_2010_to_next_year() {

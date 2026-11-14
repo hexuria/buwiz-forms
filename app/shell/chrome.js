@@ -31,13 +31,13 @@ import {
   Overlay,
   Dropdown,
   TextField,
-  DigitCells,
   withShortcut,
   takesPointer,
 } from "./ui.js";
 import { themeIcon } from "./theme.js";
 import { recentOpenOptions, sameReturn } from "./recent.js";
 import { formatTin, shortDate } from "./store.js";
+import { notSetForForm, notSetSentence } from "./facts.js";
 import { periodOptions, periodLabel, frequencyOf } from "./periods.js";
 
 // ---------------------------------------------------------------- title bar
@@ -536,93 +536,61 @@ function profilePanel(cx, app, full) {
   const ui = app.taxpayerUi;
   const body = div().flex().flex_col().gap(2);
 
-  if (ui.panelEdit) {
-    const e = ui.panelEdit;
-    const label = (text, el, err) => {
-      const box = div().flex().flex_col().gap(SPACE[1]).child(Text(cx, "meta", text, "fg2")).child(el);
-      if (err) box.child(Text(cx, "meta", err, "danger"));
-      return box;
-    };
-    body.child(
-      div()
-        .id("panel-edit")
-        .flex()
-        .flex_col()
-        .gap(SPACE[3])
-        .pt(SPACE[1])
-        .px(SPACE[2])
-        .pb(SPACE[2])
-        .child(label("Registered name", TextField(cx, e.name, { id: "pe-name", label: "Registered name" })))
-        .child(
-          label(
-            "Branch code",
-            b.is_head_office ? Code(cx, b.code, "fg2").font_weight(400) : DigitCells(cx, e.code, "pe-code", { error: Boolean(e.error) }),
-            e.error,
-          ),
-        )
-        .child(label("Branch name", TextField(cx, e.branchName, { id: "pe-bname", label: "Branch name" })))
-        .child(label("Registered address", TextField(cx, e.address, { id: "pe-address", label: "Registered address" })))
-        .child(
-          div()
-            .flex()
-            .flex_row()
-            .justify_end()
-            .gap(SPACE[2])
-            .mt(SPACE[1])
-            .child(AppButton(cx, "pe-cancel", "Cancel", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.cancelPanelEdit(cx) }))
-            .child(AppButton(cx, "pe-save", "Save", { variant: "primary", size: "sm", onClick: (_e, cx) => ui.savePanelEdit(cx) })),
-        ),
-    );
-  } else {
-    body.child(
-      div()
-        .relative()
-        .flex()
-        .flex_col()
-        .items_center()
-        .gap(SPACE[2])
-        .pt(SPACE[3])
-        .px(SPACE[2])
-        .pb(SPACE[4])
-        .child(Avatar(cx, tp.name, 56, tp.tin_root))
-        .child(Text(cx, "title", tp.name).text_center().mt(SPACE[1]).whitespace_normal())
-        .child(Code(cx, formatTin(tp.tin_root, b.code), "fg2").font_weight(400))
-        .child(
-          div()
-            .absolute()
-            .top(SPACE[2])
-            .right(0)
-            .child(
-              IconButton(cx, "panel-edit-btn", "pencil", {
-                tooltip: "Edit name, branch and address",
-                onClick: (_e, cx) => ui.startPanelEdit(cx),
-              }),
-            ),
-        ),
-    );
-    const fact = (icon, label, value) =>
-      div()
-        .flex()
-        .flex_row()
-        .gap(SPACE[3])
-        .child(div().flex().flex_row().items_center().gap(6).w(84).flex_none().child(Icon(cx, icon, { size: SIZE.iconSmall, color: "fg3" })).child(Text(cx, "meta", label, "fg3")))
-        .child(div().flex_1().min_w(0).child(typeof value === "string" ? Text(cx, "body", value).whitespace_normal() : value));
-    body.child(
-      div()
-        .flex()
-        .flex_col()
-        .gap(SPACE[2])
-        .mx(SPACE[2])
-        .mb(SPACE[1])
-        .py(SPACE[3])
-        .border_t(1)
-        .border_b(1)
-        .border_color(t.border)
-        .child(fact("git-branch", "Branch", div().flex().flex_row().gap(SPACE[1]).child(Code(cx, b.code)).child(Text(cx, "body", `· ${b.name}`))))
-        .child(fact("map-pin", "Address", b.facts.registered_address || "Not set"))
-        .child(fact("building", "RDO", b.facts.rdo_code || "Not set")),
-    );
+  // A read-only summary (decision 13): every edit is on the Profile tab.
+  body.child(
+    div()
+      .flex()
+      .flex_col()
+      .items_center()
+      .gap(SPACE[2])
+      .pt(SPACE[3])
+      .px(SPACE[2])
+      .pb(SPACE[4])
+      .child(Avatar(cx, tp.name, 56, tp.tin_root))
+      .child(Text(cx, "title", tp.name).text_center().mt(SPACE[1]).whitespace_normal())
+      .child(Code(cx, formatTin(tp.tin_root, b.code), "fg2").font_weight(400)),
+  );
+  const fact = (icon, label, value) =>
+    div()
+      .flex()
+      .flex_row()
+      .gap(SPACE[3])
+      .child(div().flex().flex_row().items_center().gap(6).w(84).flex_none().child(Icon(cx, icon, { size: SIZE.iconSmall, color: "fg3" })).child(Text(cx, "meta", label, "fg3")))
+      .child(div().flex_1().min_w(0).child(typeof value === "string" ? Text(cx, "body", value).whitespace_normal() : value));
+  const year = app.year();
+  const summary = div()
+    .id("panel-summary")
+    .flex()
+    .flex_col()
+    .gap(SPACE[2])
+    .mx(SPACE[2])
+    .mb(SPACE[1])
+    .py(SPACE[3])
+    .border_t(1)
+    .border_b(1)
+    .border_color(t.border)
+    .child(fact("git-branch", "Branch", div().flex().flex_row().gap(SPACE[1]).child(Code(cx, b.code)).child(Text(cx, "body", `· ${b.name}`))))
+    .child(fact("map-pin", "Address", b.facts.registered_address || "Not set"))
+    .child(fact("building", "RDO", b.facts.rdo_code || "Not set"));
+  if (year) {
+    const chips = app.store.taxTypes(b.tin, year);
+    const row = div().id("panel-tax-types").flex().flex_row().flex_wrap().gap(SPACE[1]);
+    for (const c of chips) row.child(Chip(cx, c.label));
+    summary.child(fact("calendar", String(year), chips.length ? row : "No forms yet"));
+    const view = app.store.yearFacts(b.tin, year);
+    const readiness = app.store.electionReadiness(b.tin, year);
+    const missing = (view?.not_set || []).filter((f) => f !== "income_tax_election" || readiness?.gap === "ready");
+    if (missing.length) {
+      summary.child(fact("triangle-alert", "Facts", div().id("panel-not-set").child(Chip(cx, `${missing.length} not set`, "warning"))));
+    }
   }
+  body.child(summary);
+  body.child(
+    div()
+      .px(SPACE[2])
+      .pt(SPACE[2])
+      .child(AppButton(cx, "panel-edit-profile", "Edit in profile", { size: "sm", icon: "pencil", onClick: (_e, cx) => app.go("profile", cx) })),
+  );
 
   body.child(GroupLabel(cx, "Open"));
   const open = [
@@ -748,6 +716,8 @@ export function renderNewReturn(cx, app) {
   const options = periodOptions(nr.code, entry(nr.code).freq, year);
   if (!options.some((o) => o.value === nr.period)) nr.period = options.length ? options[0].value : 0;
   const tpl = app.templates().find((x) => x.form_code === nr.code);
+  // Decision 3: a fact this form reads that is not set is named, never blocks.
+  const notSet = notSetSentence(notSetForForm(app.store.yearFacts(b.tin, year), nr.code, app.store.electionReadiness(b.tin, year)));
 
   const list = div().id("new-return-list").flex().flex_col().gap(2).p(SPACE[3]).max_h(360).overflow_y_scroll().overflow_x_hidden();
   for (const code of forms) {
@@ -799,6 +769,31 @@ export function renderNewReturn(cx, app) {
         ),
     )
     .child(list)
+    .when(Boolean(notSet), (el) =>
+      el.child(
+        div()
+          .id("new-return-not-set")
+          .flex()
+          .flex_row()
+          .flex_wrap()
+          .items_center()
+          .gap(SPACE[2])
+          .px(SPACE[5])
+          .pb(SPACE[3])
+          .child(Icon(cx, "triangle-alert", { size: SIZE.iconSmall, color: "warning" }))
+          .child(Text(cx, "meta", notSet, "fg2").flex_1().whitespace_normal())
+          .child(
+            AppButton(cx, "new-return-profile", "Open the profile", {
+              variant: "ghost",
+              size: "sm",
+              onClick: (_e, cx) => {
+                app.closeOverlay(cx);
+                app.go("profile", cx);
+              },
+            }),
+          ),
+      ),
+    )
     .child(
       div()
         .flex()

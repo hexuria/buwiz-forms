@@ -791,7 +791,6 @@ class BirApp extends View {
     this.panel = this.panel === which ? null : which;
     if (this.panel) this.lastPanel = this.panel;
     if (this.panel && this.narrow()) this.sidebarOpen = false;
-    this.taxpayerUi.panelEdit = null;
     cx.notify();
   }
 

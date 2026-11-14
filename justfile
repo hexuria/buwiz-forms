@@ -120,6 +120,8 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_home_calendar_as_needed.mjs
     node --experimental-vm-modules tools/test_home_dashboard.mjs
     node --experimental-vm-modules tools/test_taxpayer_export.mjs
+    node --experimental-vm-modules tools/test_profile_facts.mjs
+    node --experimental-vm-modules tools/test_profile_panel.mjs
     node --experimental-vm-modules tools/test_settings_window.mjs
     node --experimental-vm-modules tools/test_shell_chrome.mjs
     node --experimental-vm-modules tools/test_shell_overlays.mjs

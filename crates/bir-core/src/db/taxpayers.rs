@@ -25,7 +25,7 @@ use crate::tax_profile::templates::{
 use crate::tax_profile::{AddedTaxYear, check_tax_year, format_tin_root};
 use crate::tax_profile::{
     BranchFacts, BranchField, BranchName, BranchSettings, BranchUpdate, FieldSetting, FormTemplate,
-    GroupingReview, NewBranch, NewTaxpayer, ResolvedBranch, StarterPack, TaxProfileError, Taxpayer,
+    GroupingReview, NewBranch, NewTaxpayer, ResolvedBranch, TaxProfileError, Taxpayer,
     TaxpayerData, TaxpayerUpdate, TaxpayerWithBranches, TemplateField, TemplateSource,
     default_branch_name, is_head_office_code, normalize_branch_code, parse_tin_root, resolve_facts,
     validate_template_fields,
@@ -1825,26 +1825,6 @@ impl Database {
         self.set_yearly_forms::<&str>(tin, year, &[])
     }
 
-    /// Add a starter pack's forms (for the taxpayer's type) to the list.
-    pub fn apply_starter_pack(
-        &self,
-        tin: &str,
-        year: u16,
-        pack: StarterPack,
-    ) -> Result<PerYearFormsSet> {
-        check_tax_year(year)?;
-        let root = root_of(tin)?;
-        let taxpayer = load_taxpayer(&self.conn, &root)?
-            .ok_or_else(|| TaxProfileError::NotFound(format!("No taxpayer {root}")))?;
-        let mut codes = self.active_form_codes_for_year(tin, year)?;
-        codes.extend(
-            pack.form_codes(&taxpayer.taxpayer_type)
-                .iter()
-                .map(|code| code.to_string()),
-        );
-        self.set_yearly_forms(tin, year, &codes)
-    }
-
     /// D9 "Copy 2026 forms to 2027?": add `from_year`'s forms to `to_year`.
     pub fn copy_yearly_forms(
         &self,
@@ -2742,17 +2722,28 @@ mod tests {
     }
 
     #[test]
-    fn starter_packs_and_year_copy_add_to_the_list() {
+    fn setups_and_year_copy_add_to_the_list() {
         let db = db_with_taxpayer(TaxpayerType::Corporation);
         db.set_yearly_forms(HEAD, 2026, &["0605"]).unwrap();
-        db.apply_starter_pack(HEAD, 2026, StarterPack::VatBusiness)
+        db.apply_setup(HEAD, 2026, "vat_business_corporation", false)
             .unwrap();
-        let mut expected = vec!["0605", "1702Q", "1702RT", "2550Q"];
-        assert_eq!(db.active_form_codes_for_year(HEAD, 2026).unwrap(), expected);
+        assert_eq!(
+            db.active_form_codes_for_year(HEAD, 2026).unwrap(),
+            ["1702Q", "1702RT", "2550Q"],
+            "a setup that does not add replaces the list"
+        );
+        db.set_yearly_forms(HEAD, 2026, &["0605"]).unwrap();
+        db.apply_setup(HEAD, 2026, "employer", false).unwrap();
+        let mut expected = vec!["0605", "1601C", "1604C"];
+        assert_eq!(
+            db.active_form_codes_for_year(HEAD, 2026).unwrap(),
+            expected,
+            "Employer adds to the list"
+        );
 
-        db.set_yearly_forms(HEAD, 2027, &["1601C"]).unwrap();
+        db.set_yearly_forms(HEAD, 2027, &["2550Q"]).unwrap();
         db.copy_yearly_forms(HEAD, 2026, 2027).unwrap();
-        expected.insert(1, "1601C");
+        expected.push("2550Q");
         assert_eq!(db.active_form_codes_for_year(HEAD, 2027).unwrap(), expected);
         assert!(matches!(
             db.copy_yearly_forms(HEAD, 2023, 2024),
@@ -3160,7 +3151,7 @@ mod tests {
             );
             assert_eq!(year_error(db.clear_yearly_forms(HEAD, year)), expected);
             assert_eq!(
-                year_error(db.apply_starter_pack(HEAD, year, StarterPack::Employer)),
+                year_error(db.apply_setup(HEAD, year, "employer", false)),
                 expected
             );
             assert_eq!(year_error(db.copy_yearly_forms(HEAD, max, year)), expected);

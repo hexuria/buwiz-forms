@@ -1,13 +1,16 @@
 // The taxpayer page (DESIGN_SYSTEM.md "Main area for a taxpayer" and "Tax
 // profile: tax years, forms, TIN and templates"): a header with Copy TIN and
-// New return, and the Profile, Forms and Templates tabs. Also the New
-// taxpayer and New branch pages, and the right panel's in-place edit.
+// New return, and the Profile, Forms and Templates tabs. The Profile tab is
+// laid out like the Certificate of Registration (owner decision 13) and
+// shows, for the selected tax year, the facts the year's forms read
+// (decision 3). Also the New taxpayer and New branch pages, and setups
+// (decision 14).
 //
 // The rules that must hold for every caller live in bir-core, not here: the
 // tax-year bound (2010 to next year) and the one-transaction TIN move. This
 // file only shapes input and reports what the data layer answers.
 
-import { div } from "gpui-kit";
+import { View, div } from "gpui-kit";
 import { InputState, OtpState } from "gpui-base";
 import {
   tokens,
@@ -15,7 +18,9 @@ import {
   RADIUS,
   Text,
   Code,
+  Line,
   Icon,
+  IconButton,
   AppButton,
   Avatar,
   Chip,
@@ -49,6 +54,17 @@ import {
 } from "./ui.js";
 import { errorText as message, formatTin, shortDate, daysUntil } from "./store.js";
 import { searchText } from "./library.js";
+import {
+  FACT_LABELS,
+  ROW_FACTS,
+  EOPT_TIERS,
+  ELECTION_CHOICES,
+  incomeTypeChoices,
+  factValue,
+  electionSourceText,
+  readerChips,
+  joinNames,
+} from "./facts.js";
 
 const SELECTION_KEY = "redesign.selection";
 const TAXPAYER_TYPES = ["Individual", "Corporation", "Partnership", "Cooperative", "Estate", "Trust"];
@@ -62,12 +78,40 @@ const ADDRESS_FIELDS = [
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** An individual's income types, as bir-core names them, with what the filer reads. */
-const INCOME_TYPES = [
-  ["SelfEmployed", "Self-employed"],
-  ["MixedIncome", "Mixed income"],
-  ["PurelyCompensation", "Compensation only"],
-];
+/** "YYYY-MM-DD" that names a real day. */
+function realDate(text) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const [y, m, d] = text.split("-").map(Number);
+  const day = new Date(y, m - 1, d);
+  return day.getFullYear() === y && day.getMonth() === m - 1 && day.getDate() === d;
+}
+
+/** Today as "YYYY-MM-DD", in local time. */
+function todayText() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** What is wrong with a typed date that must not be after today, or null. Empty is fine. */
+function pastDateError(text) {
+  if (!text) return null;
+  if (!realDate(text)) return "Type the date as YYYY-MM-DD, like 1990-05-17.";
+  if (text > todayText()) return "That date is in the future.";
+  return null;
+}
+
+/** ATC codes as typed ("wc160, WI010"): the codes, upper case, or null when one is not a code. */
+function parseAtcCodes(text) {
+  const codes = text
+    .split(/[\s,;]+/)
+    .map((c) => c.trim().toUpperCase())
+    .filter(Boolean);
+  return codes.every((c) => /^[A-Z]{2}\d{3}[A-Z0-9]*$/.test(c)) ? codes : null;
+}
+
+/** "is" or "are" for a list of names. */
+const isAre = (n) => (n === 1 ? "is" : "are");
 
 /**
  * What is wrong with an RDO, ZIP code or email as typed, or null. Empty is
@@ -93,7 +137,7 @@ function factState(app, field, value) {
 export class TaxpayerActions {
   constructor(app) {
     this.app = app;
-    this.open = { taxpayer: true, branch: true, registration: true, address: true, inbox: true };
+    this.open = { taxpayer: true, branch: true, taxtypes: true, facts: true, address: true, inbox: true };
     this.editSec = null;
     this.inputs = {};
     this.inherit = {};
@@ -102,9 +146,22 @@ export class TaxpayerActions {
     this.tinError = null;
     /** Per-field RDO, ZIP and email errors of the section being edited. @type {Record<string, string>} */
     this.factErrors = {};
-    this.panelEdit = null;
-    /** The Registration section's edit (`startRegistration`), or null. */
-    this.reg = null;
+    /**
+     * The fact row being edited: `{ fact, tin, year, value, input, error,
+     * fromForm }`, or null. One row at a time.
+     */
+    this.factEdit = null;
+    /**
+     * Retained views of the fact rows being edited (rule 2 of
+     * docs/ui-performance-rules.md): a pick or an error redraws that row
+     * only. Made when an edit opens, released when it closes.
+     * @type {Map<string, { entity: any }>}
+     */
+    this.factViews = new Map();
+    /** Facts a setup or a copy left as they were: `{ kind, tin, year, id?, from?, label, kept, templates }`, or null. */
+    this.replaceAsk = null;
+    /** "Save as a setup": `{ name: InputState, error }`, or null. */
+    this.saveSetupEdit = null;
     // Confirmation inbox (P2-5): staged credentials edit + verify/check status.
     this.inbox = null;
     this.inboxMsg = null;
@@ -205,13 +262,102 @@ export class TaxpayerActions {
     });
   }
 
-  // ------------------------------------------------------------ registration
+  // ------------------------------------------------------------ facts
+
+  /** The branch's facts for the selected year (`year_facts`), or null. */
+  yearFacts() {
+    const app = this.app;
+    const b = app.branch();
+    const year = app.year();
+    return b && year ? app.store.yearFacts(b.tin, year) : null;
+  }
 
   /**
-   * Open the Registration section's edit for one branch and tax year: the
-   * Profile tab, the section open, nothing chosen yet. `fromForm`: the
-   * 2551Q card sent the filer here, so a saved registration goes back to
-   * the return, whose card asks again.
+   * Open one fact row's edit for the selected branch and year. The row gets
+   * its own retained view, so what happens inside it redraws it alone.
+   */
+  startFactEdit(fact, cx, opts = {}) {
+    const app = this.app;
+    const b = app.branch();
+    const year = app.year();
+    const view = this.yearFacts();
+    if (!b || !year || !view) return;
+    this.releaseFactViews();
+    const current = view.facts[fact];
+    this.factEdit = {
+      fact,
+      tin: b.tin,
+      year,
+      value: current === undefined ? null : current,
+      input: fact === "atc_codes" ? InputState.new({ value: (current || []).join(", "), placeholder: "WC160, WI010" }) : null,
+      error: null,
+      fromForm: Boolean(opts.fromForm),
+    };
+    this.open.facts = true;
+    if (typeof cx.new === "function") this.factViews.set(fact, { entity: cx.new(FactRowView, { app, fact }) });
+    cx.notify();
+  }
+
+  /** Redraw the row being edited: its own view when it has one. */
+  redrawFact(cx) {
+    const row = this.factEdit && this.factViews.get(this.factEdit.fact);
+    if (row) cx.notify(row.entity);
+    else cx.notify();
+  }
+
+  pickFact(value, cx) {
+    const e = this.factEdit;
+    if (!e) return;
+    // "Graduated rates" keeps a deduction method already chosen.
+    e.value = value === "GraduatedUnspecified" && /^Graduated/.test(String(e.value || "")) ? e.value : value;
+    e.error = null;
+    this.redrawFact(cx);
+  }
+
+  releaseFactViews() {
+    for (const row of this.factViews.values()) row.entity?.release?.();
+    this.factViews.clear();
+  }
+
+  cancelFactEdit(cx) {
+    this.factEdit = null;
+    this.releaseFactViews();
+    cx.notify();
+  }
+
+  /** Save the edited fact for the year (`set_year_facts`). */
+  saveFactEdit(cx) {
+    const app = this.app;
+    const e = this.factEdit;
+    if (!e) return;
+    let value = e.value;
+    if (e.fact === "atc_codes") {
+      value = parseAtcCodes(e.input.value());
+      if (!value) {
+        e.error = "Type ATC codes like WC160 or PT010, with commas between them.";
+        return this.redrawFact(cx);
+      }
+    } else if (value === null || value === undefined) {
+      e.error = "Choose one first.";
+      return this.redrawFact(cx);
+    }
+    try {
+      app.store.write("set_year_facts", e.tin, e.year, { [e.fact]: value });
+    } catch (err) {
+      e.error = message(err).replace(/^Other error:\s*/, "");
+      return this.redrawFact(cx);
+    }
+    this.factEdit = null;
+    this.releaseFactViews();
+    app.toast(`${FACT_LABELS[e.fact]} saved for ${e.year}.`, cx);
+    if (e.fromForm && app.history?.at(-1) === "form") app.goBack(cx);
+    else cx.notify();
+  }
+
+  /**
+   * The 2551Q card sends a filer here when the year's income type does not
+   * let them choose a rate: the Profile tab for that branch and year, with
+   * the income type open. A save goes back to the return, which asks again.
    */
   startRegistration({ tin, year, fromForm = false }, cx) {
     const app = this.app;
@@ -221,73 +367,113 @@ export class TaxpayerActions {
       app.selCode = owner.code;
       app.writeLocal?.(SELECTION_KEY, { root: app.selRoot, code: app.selCode });
     }
+    if (year) app.selYear = year;
     app.go("profile", cx);
     this.editSec = null;
-    this.open.registration = true;
-    const ready = app.store.electionReadiness(tin, year);
-    this.reg = {
-      tin,
-      year,
-      fromForm,
-      after: ready?.new_registration_after || null,
-      type: INCOME_TYPES.some(([v]) => v === ready?.classification) ? ready.classification : null,
-      from: InputState.new({ placeholder: "YYYY-MM-DD" }),
-      error: null,
-    };
-    cx.notify();
+    this.startFactEdit("tax_classification", cx, { fromForm });
   }
 
-  pickIncomeType(value, cx) {
-    if (!this.reg) return;
-    this.reg.type = value;
-    this.reg.error = null;
-    cx.notify();
-  }
-
-  cancelRegistration(cx) {
-    this.reg = null;
-    cx.notify();
-  }
+  // ------------------------------------------------------------ setups
 
   /**
-   * Save the income type from the date typed, through bir-core's reviewed
-   * confirmation (`confirm_income_registration`). The date is the filer's:
-   * nothing is filled in for them. Checked here only for shape and for the
-   * rules bir-core would refuse anyway, so the message is in plain words.
+   * Apply a setup to the selected branch's year (`apply_setup`): the forms
+   * and the facts it holds. Facts already set are kept; the page then asks
+   * once whether to replace them.
    */
-  saveRegistration(cx) {
+  applySetup(setup, cx) {
     const app = this.app;
-    const r = this.reg;
-    if (!r) return;
-    const name = app.taxpayer()?.name || "the taxpayer";
-    const from = r.from.value().trim();
-    const [y, m, d] = from.split("-").map(Number);
-    const real = /^\d{4}-\d{2}-\d{2}$/.test(from) && new Date(y, m - 1, d).getDate() === d && new Date(y, m - 1, d).getMonth() === m - 1;
-    if (!r.type) r.error = `Choose how ${name} is registered.`;
-    else if (!real) r.error = "Type the date it took effect as YYYY-MM-DD, like 2026-01-01.";
-    else if (from > `${r.year}-12-31`) r.error = `To cover ${r.year}, it must take effect by December 31, ${r.year}.`;
-    else if (r.after && from <= r.after) r.error = `It must take effect after ${shortDate(r.after)}, when the registration already on file started.`;
-    else r.error = null;
-    if (r.error) return cx.notify();
+    const tin = app.branch().tin;
+    const year = app.year();
     try {
-      app.store.write("confirm_income_registration", r.tin, r.type, from);
+      const r = app.store.write("apply_setup", tin, year, setup.id, false);
+      this.forms = null;
+      this.afterApply(r, { kind: "setup", tin, year, id: setup.id, label: setup.name }, cx);
     } catch (e) {
-      r.error = message(e).replace(/^Other error:\s*/, "");
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  /** Toast what a setup or copy did, and keep the question when it left set facts as they were. */
+  afterApply(r, ask, cx) {
+    const kept = (r.kept || []).filter((f) => !(f === "income_tax_election" && r.election_locked));
+    const templates = r.templates_kept || [];
+    this.replaceAsk = kept.length || templates.length ? { ...ask, kept, templates } : null;
+    const n = (r.forms || []).length;
+    let text = `${ask.label}: ${n} form${n === 1 ? "" : "s"} for ${ask.year}.`;
+    if (r.election_locked && (r.kept || []).includes("income_tax_election")) {
+      text += ` The 8% or graduated choice for ${ask.year} stays: a return that carries it was filed.`;
+    }
+    this.app.toast(text, cx, "layout-template");
+  }
+
+  /** "Replace what is set?" answered Replace: the same setup or copy again, replacing. */
+  confirmReplace(cx) {
+    const app = this.app;
+    const a = this.replaceAsk;
+    if (!a) return;
+    this.replaceAsk = null;
+    try {
+      if (a.kind === "copy") app.store.write("copy_setup_from", a.from, a.tin, a.year, true);
+      else app.store.write("apply_setup", a.tin, a.year, a.id, true);
+      app.toast(`Replaced with ${a.label}.`, cx);
+    } catch (e) {
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  keepSet(cx) {
+    this.replaceAsk = null;
+    cx.notify();
+  }
+
+  deleteSetup(setup, cx) {
+    const app = this.app;
+    try {
+      app.store.write("delete_setup", setup.id);
+      app.toast(`Setup ${setup.name} deleted.`, cx, "trash");
+    } catch (e) {
+      app.toast(message(e), cx, "triangle-alert");
+    }
+  }
+
+  openSaveSetup(cx) {
+    this.saveSetupEdit = { name: InputState.new({ placeholder: "Like: Bookkeeping clients" }), error: null };
+    cx.notify();
+  }
+
+  cancelSaveSetup(cx) {
+    this.saveSetupEdit = null;
+    cx.notify();
+  }
+
+  /** Save the branch's year as a setup (`save_setup`): forms and facts, nothing personal. */
+  saveSetupNow(cx) {
+    const app = this.app;
+    const e = this.saveSetupEdit;
+    if (!e) return;
+    const name = e.name.value().trim();
+    if (!name) {
+      e.error = "Type a name for the setup.";
       return cx.notify();
     }
-    this.reg = null;
-    app.toast(`Registration confirmed from ${shortDate(from)}.`, cx);
-    if (r.fromForm && app.history?.at(-1) === "form") app.goBack(cx);
-    else cx.notify();
+    try {
+      app.store.write("save_setup", app.branch().tin, app.year(), name);
+      this.saveSetupEdit = null;
+      app.toast(`Saved as the setup ${name}. Pick it when you add a taxpayer.`, cx, "layout-template");
+    } catch (err) {
+      e.error = message(err);
+      cx.notify();
+    }
   }
 
   /** Taxpayer or branch switched: drop every edit in progress. */
   reset() {
-    this.reg = null;
+    this.endFactEdit();
+    this.replaceAsk = null;
+    this.saveSetupEdit = null;
     this.deleteArmed = false;
     this.editSec = null;
     this.tinError = null;
-    this.panelEdit = null;
     this.forms = null;
     this.addYear = false;
     this.inbox = null;
@@ -297,12 +483,22 @@ export class TaxpayerActions {
 
   /** Year switched: staged form edits and the add-year band are dropped. */
   leaveYear() {
+    this.endFactEdit();
+    this.replaceAsk = null;
+    this.saveSetupEdit = null;
     this.forms = null;
     this.addYear = false;
   }
 
+  /** Drop the fact edit and its retained row, without a redraw. */
+  endFactEdit() {
+    this.factEdit = null;
+    this.releaseFactViews();
+  }
+
   leaveView() {
-    this.reg = null;
+    this.endFactEdit();
+    this.saveSetupEdit = null;
     this.editSec = null;
     this.tinError = null;
     this.forms = null;
@@ -314,7 +510,7 @@ export class TaxpayerActions {
   toggleSection(id, cx) {
     this.open[id] = !this.open[id];
     if (!this.open[id] && this.editSec === id) this.editSec = null;
-    if (!this.open[id] && id === "registration") this.reg = null;
+    if (!this.open[id] && id === "facts") this.endFactEdit();
     cx.notify();
   }
 
@@ -329,6 +525,7 @@ export class TaxpayerActions {
     if (sec === "taxpayer") {
       this.inputs.name = InputState.new({ value: t.name });
       this.inputs.tin = new DigitEntry([3, 3, 3], t.tin_root);
+      if (t.taxpayer_type === "Individual") this.inputs.birth_date = InputState.new({ value: t.birth_date || "", placeholder: "YYYY-MM-DD" });
       this.typeValue = t.taxpayer_type;
       this.typeOpen = false;
     } else if (sec === "branch") {
@@ -337,6 +534,12 @@ export class TaxpayerActions {
       this.inputs.name = InputState.new({ value: b.name });
       this.inputs.rdo_code = factState(this.app, "rdo_code", b.facts.rdo_code || "");
       this.inherit.rdo_code = (b.inherited || []).includes("rdo_code");
+      // The registered activity is the year's (`set_year_facts`).
+      const view = this.yearFacts();
+      if (view) {
+        this.inputs.line_of_business = InputState.new({ value: view.facts.line_of_business || "", placeholder: "As on the Certificate of Registration" });
+        this.inputs.business_start_date = InputState.new({ value: view.facts.business_start_date || "", placeholder: "YYYY-MM-DD" });
+      }
     } else if (sec === "address") {
       for (const [f] of ADDRESS_FIELDS) {
         this.inputs[f] = factState(this.app, f, b.facts[f] || "");
@@ -363,6 +566,10 @@ export class TaxpayerActions {
       const error = factError(f, state);
       if (error) this.factErrors[f] = error;
     }
+    for (const f of ["birth_date", "business_start_date"]) {
+      const error = this.inputs[f] ? pastDateError(this.inputs[f].value().trim()) : null;
+      if (error) this.factErrors[f] = error;
+    }
     if (Object.keys(this.factErrors).length) return cx.notify();
     try {
       if (sec === "taxpayer") {
@@ -376,7 +583,12 @@ export class TaxpayerActions {
         // Name and type first, under the TIN they were opened with: the move
         // is the step a TIN in use refuses, and a refusal must not leave a
         // moved TIN with the rest unsaved.
-        app.store.write("update_taxpayer", t.tin_root, { name: name || t.name, taxpayer_type: this.typeValue || t.taxpayer_type });
+        const update = { name: name || t.name, taxpayer_type: this.typeValue || t.taxpayer_type };
+        if (this.inputs.birth_date) {
+          const born = this.inputs.birth_date.value().trim() || null;
+          if (born !== (t.birth_date || null)) update.birth_date = born;
+        }
+        app.store.write("update_taxpayer", t.tin_root, update);
         if (digits !== t.tin_root) {
           // One transaction in bir-core: branches, tax years, returns and
           // templates move together; a TIN in use is refused there.
@@ -408,6 +620,15 @@ export class TaxpayerActions {
         if (!current.is_head_office && this.inherit.rdo_code) fields.rdo_code = null;
         else fields.rdo_code = this.inputs.rdo_code.value().trim();
         app.store.write("update_branch", current.tin, { name: this.inputs.name.value().trim() || current.name, fields });
+        const view = this.yearFacts();
+        if (view && this.inputs.line_of_business) {
+          const patch = {};
+          const line = this.inputs.line_of_business.value().trim() || null;
+          const start = this.inputs.business_start_date.value().trim() || null;
+          if (line !== (view.facts.line_of_business || null)) patch.line_of_business = line;
+          if (start !== (view.facts.business_start_date || null)) patch.business_start_date = start;
+          if (Object.keys(patch).length) app.store.write("set_year_facts", current.tin, view.year, patch);
+        }
       } else if (sec === "address") {
         const fields = {};
         for (const [f] of ADDRESS_FIELDS) {
@@ -432,21 +653,6 @@ export class TaxpayerActions {
     cx.notify();
   }
 
-  // ------------------------------------------------------------ right panel edit
-
-  startPanelEdit(cx) {
-    const t = this.app.taxpayer();
-    const b = this.app.branch();
-    this.panelEdit = {
-      name: InputState.new({ value: t.name }),
-      code: new DigitEntry([5], b.code),
-      branchName: InputState.new({ value: b.name }),
-      address: InputState.new({ value: b.facts.registered_address || "" }),
-      error: null,
-    };
-    cx.notify();
-  }
-
   /**
    * Move the selected branch to a new 5-digit code (returns, years and
    * templates move with it in one bir-core transaction). Returns an error
@@ -465,39 +671,6 @@ export class TaxpayerActions {
     app.selCode = code;
     app.writeLocal(SELECTION_KEY, { root: app.selRoot, code });
     return null;
-  }
-
-  cancelPanelEdit(cx) {
-    this.panelEdit = null;
-    cx.notify();
-  }
-
-  savePanelEdit(cx) {
-    const app = this.app;
-    const t = app.taxpayer();
-    const b = app.branch();
-    const e = this.panelEdit;
-    try {
-      if (!b.is_head_office) {
-        const error = this.moveBranchCode(e.code.value());
-        if (error) {
-          e.error = error;
-          return cx.notify();
-        }
-      }
-      const name = e.name.value().trim();
-      if (name && name !== t.name) app.store.write("update_taxpayer", t.tin_root, { name });
-      const fields = {};
-      const address = e.address.value().trim();
-      const current = app.branch();
-      if (address !== (current.facts.registered_address || "")) fields.registered_address = address;
-      app.store.write("update_branch", current.tin, { name: e.branchName.value().trim() || current.name, fields });
-      this.panelEdit = null;
-      app.toast("Tax profile saved", cx);
-    } catch (err) {
-      e.error = message(err);
-      cx.notify();
-    }
   }
 
   // ------------------------------------------------------------ confirmation inbox (P2-5)
@@ -707,11 +880,6 @@ export class TaxpayerActions {
     cx.notify();
   }
 
-  applyPack(pack, cx) {
-    for (const code of pack.forms) this.forms.add(code);
-    this.app.toast(`${pack.label} forms selected. Save to keep them.`, cx);
-  }
-
   saveForms(cx) {
     const app = this.app;
     const year = app.year();
@@ -784,6 +952,11 @@ export class TaxpayerActions {
       rdo_code: factState(app, "rdo_code", ""),
       phone: InputState.new({}),
       email: InputState.new({ placeholder: "name@example.com" }),
+      /** "Start from": "none", "setup:<id>" or "copy" (with `from`, a branch TIN). */
+      start: "none",
+      startOpen: false,
+      from: null,
+      fromOpen: false,
       error: null,
       // A field shows its error once it was left (or filled, for the TIN),
       // and every field does after the first Create.
@@ -831,6 +1004,7 @@ export class TaxpayerActions {
       if (taken) e.tin = `TIN ${formatTin(digits)} is already ${taken.name}.`;
     }
     if (!n.name.value().trim()) e.name = "Type the registered name.";
+    if (n.start === "copy" && !n.from) e.from = "Choose the taxpayer and branch to copy.";
     for (const f of ["zip_code", "rdo_code", "email"]) {
       const error = factError(f, n[f]);
       if (error) e[f] = error;
@@ -880,6 +1054,12 @@ export class TaxpayerActions {
       app.selYear = null;
       app.writeLocal(SELECTION_KEY, { root: digits, code: "00000" });
       this.reset();
+      const start = this.startFrom(n, `${digits}00000`, name, cx);
+      if (start) {
+        app.selYear = start.year;
+        app.go("forms", cx);
+        return;
+      }
       this.addYear = true;
       app.go("forms", cx);
       app.toast(`${name} added. Add a tax year to choose its forms.`, cx);
@@ -888,6 +1068,43 @@ export class TaxpayerActions {
       if (/\bTIN\b/i.test(text)) n.hostErrors.tin = text;
       else n.error = text;
       cx.notify();
+    }
+  }
+
+  /** The tax year a new taxpayer starts in: this year, or the copied branch's latest when it lacks this year. */
+  startYear(n) {
+    const now = new Date().getFullYear();
+    if (n.start !== "copy" || !n.from) return now;
+    const ys = this.app.store.taxYears(n.from);
+    return ys.includes(now) || !ys.length ? now : ys[ys.length - 1];
+  }
+
+  /**
+   * A new taxpayer's "Start from" (decision 14): apply the chosen setup to
+   * the head office's year, or copy another taxpayer's (forms, facts and
+   * templates). Never the name, TIN or address. Null when it starts empty
+   * or the step failed (the taxpayer is made either way).
+   */
+  startFrom(n, headTin, name, cx) {
+    const app = this.app;
+    if (n.start === "none") return null;
+    const year = this.startYear(n);
+    try {
+      if (n.start === "copy") {
+        const source = app.taxpayers().find((t) => t.tin_root === n.from.slice(0, 9));
+        const label = `Same as ${source ? source.name : "the taxpayer"}`;
+        const r = app.store.write("copy_setup_from", n.from, headTin, year, false);
+        this.afterApply(r, { kind: "copy", tin: headTin, year, from: n.from, label }, cx);
+      } else {
+        const id = n.start.replace(/^setup:/, "");
+        const setup = app.store.setups(n.type).find((x) => x.id === id);
+        const r = app.store.write("apply_setup", headTin, year, id, false);
+        this.afterApply(r, { kind: "setup", tin: headTin, year, id, label: setup ? setup.name : "The setup" }, cx);
+      }
+      return { year };
+    } catch (e) {
+      app.toast(`${name} added, but it did not start from your choice: ${message(e)}`, cx, "triangle-alert");
+      return null;
     }
   }
 
@@ -999,9 +1216,14 @@ function profileTab(cx, app, width) {
   const head = t.branches.find((x) => x.is_head_office);
   const inner = width - 36 - 20 - 2; // disclosure body padding (36 left, 20 right) and borders
   const inherited = (f) => !b.is_head_office && (b.inherited || []).includes(f);
+  const year = app.year();
+  const view = ui.yearFacts();
+  const notSet = new Set(view?.not_set || []);
+  /** "Needed by 1701Q": a fact a form on the list reads, not set. */
+  const flag = (fact) => (notSet.has(fact) ? `Needed by ${joinNames(readerChips(fact, view.used_by[fact]))}` : null);
 
   const field = (sec, f, label, value, opts = {}) => {
-    const editing = ui.editSec === sec && !opts.readonly;
+    const editing = ui.editSec === sec && !opts.readonly && Boolean(ui.inputs[f]);
     const inheritable = opts.inheritable && !b.is_head_office && head;
     let input = null;
     if (editing && ui.inputs[f] instanceof DigitEntry) {
@@ -1021,18 +1243,20 @@ function profileTab(cx, app, width) {
         error: (f === "tin" && Boolean(ui.tinError)) || (editing && Boolean(ui.factErrors[f])),
       });
     }
+    const el = Field(cx, label, {
+      value,
+      input,
+      error: f === "tin" || f === "code" ? ui.tinError : editing ? ui.factErrors[f] || null : null,
+      inherited: !editing && inheritable && inherited(f),
+      inheritSwitch:
+        editing && inheritable
+          ? Switch(cx, `tp-inherit-${f}`, Boolean(ui.inherit[f]), (v, cx) => ui.setInherit(f, v, cx), `${label}: same as head office`)
+          : null,
+    });
+    const needed = !editing && opts.flag ? opts.flag : null;
     return {
       full: opts.full,
-      el: Field(cx, label, {
-        value,
-        input,
-        error: f === "tin" || f === "code" ? ui.tinError : editing ? ui.factErrors[f] || null : null,
-        inherited: !editing && inheritable && inherited(f),
-        inheritSwitch:
-          editing && inheritable
-            ? Switch(cx, `tp-inherit-${f}`, Boolean(ui.inherit[f]), (v, cx) => ui.setInherit(f, v, cx), `${label}: same as head office`)
-            : null,
-      }),
+      el: needed ? div().flex().flex_col().gap(SPACE[1]).child(el).child(div().flex().flex_row().child(Chip(cx, needed, "warning", "triangle-alert"))) : el,
     };
   };
 
@@ -1061,32 +1285,39 @@ function profileTab(cx, app, width) {
           }),
         }
       : { el: Field(cx, "Taxpayer type", { value: t.taxpayer_type }) };
-  const taxpayerBody = div()
-    .flex()
-    .flex_col()
-    .child(
-      FieldGrid(cx, inner, [
-        field("taxpayer", "name", "Registered name", t.name, { full: true }),
-        field("taxpayer", "tin", "TIN", formatTin(t.tin_root)),
-        typeCell,
-      ]),
-    );
+  const taxpayerCells = [
+    field("taxpayer", "name", "Registered name", t.name, { full: true }),
+    field("taxpayer", "tin", "TIN", formatTin(t.tin_root)),
+    typeCell,
+  ];
+  if (t.taxpayer_type === "Individual") {
+    taxpayerCells.push(field("taxpayer", "birth_date", "Birth date", t.birth_date ? shortDate(t.birth_date) : null, { flag: flag("birth_date") }));
+  }
+  const taxpayerBody = div().flex().flex_col().child(FieldGrid(cx, inner, taxpayerCells));
   if (ui.editSec === "taxpayer") {
     taxpayerBody.child(Text(cx, "meta", "Changing the TIN moves every branch, tax year, return and template to the new number.", "fg3").mt(SPACE[4]).whitespace_normal());
   }
   taxpayerBody.child(editAction("taxpayer"));
 
-  const branchBody = div()
-    .flex()
-    .flex_col()
-    .child(
-      FieldGrid(cx, inner, [
-        field("branch", "code", "Branch code", b.code, { readonly: b.is_head_office }),
-        field("branch", "name", "Branch name", b.name),
-        field("branch", "rdo_code", "RDO", b.facts.rdo_code, { inheritable: true }),
-      ]),
-    )
-    .child(editAction("branch"));
+  // Registered activity (this branch): the COR's branch block, and the
+  // year's line of business and start date.
+  const startLabel = t.taxpayer_type === "Individual" ? "Business start date" : "Date of incorporation";
+  const activityCells = [
+    field("branch", "code", "Branch code", b.code, { readonly: b.is_head_office }),
+    field("branch", "name", "Branch name", b.name),
+    field("branch", "rdo_code", "RDO", b.facts.rdo_code, { inheritable: true }),
+  ];
+  if (view) {
+    activityCells.push(
+      field("branch", "line_of_business", "Line of business", view.facts.line_of_business, { full: true, flag: flag("line_of_business") }),
+      field("branch", "business_start_date", startLabel, view.facts.business_start_date ? shortDate(view.facts.business_start_date) : null, {
+        flag: flag("business_start_date"),
+      }),
+    );
+  }
+  const branchBody = div().flex().flex_col().child(FieldGrid(cx, inner, activityCells));
+  if (!view) branchBody.child(Text(cx, "meta", "Add a tax year to record the line of business and the start date.", "fg3").mt(SPACE[3]).whitespace_normal());
+  branchBody.child(editAction("branch"));
 
   const inhCount = ADDRESS_FIELDS.filter(([f]) => inherited(f)).length;
   const addressBody = div()
@@ -1164,10 +1395,26 @@ function profileTab(cx, app, width) {
         ? `Connected · ${ib.inbox_email || ib.oauth_inbox_email || ""}`
         : "Not connected"
     : "Not connected";
+  const forms = app.yearForms();
+  const shownFacts = view ? ROW_FACTS.filter((f) => (view.used_by[f] || []).length) : [];
+  const factsNotSet = shownFacts.filter((f) => rowFlagged(app, view, f)).length;
   const group = DisclosureGroup(cx, "tp-profile", [
     section("taxpayer", "Taxpayer", "Shared by every branch", taxpayerBody, true),
-    section("branch", "Branch", b.is_head_office ? "Head office" : `Branch ${b.code}`, branchBody, true),
-    ...(t.taxpayer_type === "Individual" ? [registrationSection(cx, app, b)] : []),
+    section("branch", "Registered activity", `${b.is_head_office ? "Head office" : `Branch ${b.code}`}${year ? ` · ${year}` : ""}`, branchBody, true),
+    section(
+      "taxtypes",
+      year ? `Tax types · your forms for ${year}` : "Tax types · your forms",
+      year ? `${forms.length} form${forms.length === 1 ? "" : "s"}` : "Add a tax year first",
+      taxTypesBody(cx, app, year, forms),
+      false,
+    ),
+    section(
+      "facts",
+      "Facts your forms use",
+      !view ? "Add a tax year first" : !shownFacts.length ? "No form on your list reads one" : factsNotSet ? `${factsNotSet} not set` : "All set",
+      factsBody(cx, app, view, shownFacts),
+      false,
+    ),
     section(
       "address",
       "Address and contact",
@@ -1178,79 +1425,249 @@ function profileTab(cx, app, width) {
     section("inbox", "Confirmation inbox", inboxMeta, inboxBody(cx, app, inner), false),
     section("agent", "Agent filing", agentFilingMeta(app, b), agentFilingBody(cx, app, b), false),
   ]);
-  const out = div().flex().flex_col().child(group);
+  const out = div().flex().flex_col();
+  const ys = app.years();
+  if (ys.length) {
+    out.child(
+      div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .mb(SPACE[4])
+        .child(Segmented(cx, "tp-profile-years", ys.map((y) => ({ value: y, label: String(y) })), year, (v, cx) => app.selectYear(v, cx), { label: "Tax year" })),
+    );
+  }
+  if (ui.replaceAsk) out.child(replaceBanner(cx, app));
+  out.child(group);
   if (ui.canRemove()) out.child(removeCard(cx, app, t));
   return out;
 }
 
-/**
- * The branch's registered income type for a tax year (an individual's:
- * self-employed, mixed income or compensation only), as the confirmed tax
- * profile has it (`income_tax_election_readiness`). The 2551Q card's
- * income-tax rate needs self-employed or mixed income for the return's
- * year; this is where the filer confirms it, from the Certificate of
- * Registration, through bir-core's reviewed confirmation. Nothing here is
- * filled in for the filer: the type and the date are theirs.
- */
-function registrationSection(cx, app, b) {
+/** "Replace what is set?": the one question after a setup or copy kept facts already set. */
+function replaceBanner(cx, app) {
   const ui = app.taxpayerUi;
-  const r = ui.reg && ui.reg.tin === b.tin ? ui.reg : null;
-  const year = r ? r.year : app.year();
-  const ready = year ? app.store.electionReadiness(b.tin, year) : null;
-  const typeLabel = (v) => (INCOME_TYPES.find(([k]) => k === v) || [])[1] || null;
-  const shown = ready && ready.gap !== "no_confirmed_registration" && ready.gap !== "timeline_needs_review" ? typeLabel(ready.classification) : null;
-  const meta = !year
-    ? "Add a tax year first"
-    : shown
-      ? `${shown} in ${year}`
-      : ready?.gap === "timeline_needs_review"
-        ? `${year} needs review`
-        : `Not confirmed for ${year}`;
-  const body = div().flex().flex_col();
-  if (!r) {
-    const value = shown ? `${shown}${ready.since ? ` · since ${shortDate(ready.since)}` : ""}` : ready?.gap === "timeline_needs_review" ? (ready.issues || [])[0] || "Needs review" : null;
-    body.child(Field(cx, `Income type in ${year || "this year"}`, { value }));
-    body.child(
-      Text(cx, "meta", "As on the Certificate of Registration (BIR Form 2303). A 2551Q's income-tax rate choice needs self-employed or mixed income for its year.", "fg3")
-        .mt(SPACE[3])
-        .whitespace_normal(),
+  const a = ui.replaceAsk;
+  const names = a.kept.map((f) => FACT_LABELS[f]);
+  if (a.templates.length) names.push(`the ${joinNames(a.templates)} template${a.templates.length === 1 ? "" : "s"}`);
+  return Banner(cx, "tp-replace", [
+    Text(cx, "body", `${joinNames(names)} ${isAre(names.length)} already set. ${a.label} has something else. Replace what is set?`).flex_1().whitespace_normal(),
+    AppButton(cx, "tp-replace-keep", "Keep mine", { variant: "ghost", size: "sm", onClick: (_e, cx) => ui.keepSet(cx) }),
+    AppButton(cx, "tp-replace-yes", "Replace", { variant: "primary", size: "sm", onClick: (_e, cx) => ui.confirmReplace(cx) }),
+  ]);
+}
+
+/**
+ * Tax types · your forms for the year (decision 2): the year's forms with
+ * their frequency, Change (the Forms tab), the tax types the list gives as
+ * chips, and a quiet "Save as a setup".
+ */
+function taxTypesBody(cx, app, year, forms) {
+  const ui = app.taxpayerUi;
+  const b = app.branch();
+  const body = div().flex().flex_col().gap(SPACE[3]);
+  if (!year) {
+    return body
+      .child(Text(cx, "meta", `${b.name} has no tax year yet. Add one to choose the forms it files.`, "fg2").whitespace_normal())
+      .child(
+        div()
+          .flex()
+          .flex_row()
+          .child(
+            AppButton(cx, "tp-taxtypes-add-year", "Add year", {
+              size: "sm",
+              icon: "plus",
+              onClick: (_e, cx) => {
+                ui.addYear = true;
+                app.go("forms", cx);
+              },
+            }),
+          ),
+      );
+  }
+  const index = app.store.screenIndex();
+  const entry = (code) => index.find((f) => f.c === code) || { c: code, t: code, freq: "" };
+  const list = div().id("tp-taxtypes-forms").flex().flex_col().gap(SPACE[1]);
+  if (!forms.length) list.child(Text(cx, "body", `No forms for ${year} yet.`, "fg3"));
+  for (const code of forms) {
+    const f = entry(code);
+    list.child(
+      div()
+        .id(`tp-taxtypes-form-${code}`)
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(SPACE[3])
+        .min_h(24)
+        .child(Code(cx, code).w(68).flex_none())
+        .child(Line(cx, "body", f.t).flex_1().min_w(0))
+        .child(f.freq ? Chip(cx, f.freq) : div()),
     );
-  } else {
-    body.child(
-      Field(cx, `Income type from the date below`, {
-        input: Segmented(cx, "tp-reg-type", INCOME_TYPES.map(([value, label]) => ({ value, label })), r.type, (v, cx) => ui.pickIncomeType(v, cx), {
-          label: "Income type",
-          wrap: true,
-        }),
-      }),
-    );
+  }
+  body.child(list);
+  const chips = app.store.taxTypes(b.tin, year);
+  if (chips.length) {
+    const row = div().id("tp-taxtypes-chips").flex().flex_row().flex_wrap().gap(6);
+    for (const c of chips) row.child(Chip(cx, `${c.label} · from ${c.forms.join(", ")}`, "accent"));
+    body.child(row);
+  }
+  const actions = div()
+    .flex()
+    .flex_row()
+    .flex_wrap()
+    .items_center()
+    .gap(SPACE[2])
+    .child(AppButton(cx, "tp-taxtypes-change", forms.length ? "Change" : "Choose forms", { size: "sm", icon: "pencil", onClick: (_e, cx) => ui.editForms(cx) }));
+  if (forms.length && !ui.saveSetupEdit) {
+    actions.child(AppButton(cx, "tp-save-setup-open", "Save as a setup", { variant: "ghost", size: "sm", icon: "layout-template", onClick: (_e, cx) => ui.openSaveSetup(cx) }));
+  }
+  body.child(actions);
+  if (ui.saveSetupEdit) {
+    const e = ui.saveSetupEdit;
     body.child(
       div()
-        .mt(SPACE[4])
-        .max_w(260)
-        .child(Field(cx, "Took effect on", { input: TextField(cx, r.from, { id: "tp-reg-from", label: "Took effect on (YYYY-MM-DD)", error: Boolean(r.error) }), error: r.error })),
+        .flex()
+        .flex_col()
+        .max_w(360)
+        .child(
+          Field(cx, "Setup name", {
+            input: TextField(cx, e.name, { id: "tp-save-setup-name", label: "Setup name", error: Boolean(e.error) }),
+            error: e.error,
+          }),
+        )
+        .child(Text(cx, "meta", `Keeps the ${year} forms and the facts they use. Never a name, TIN, address, date or line of business.`, "fg3").mt(SPACE[2]).whitespace_normal())
+        .child(FormActions(cx, "tp-save-setup", (_e, cx) => ui.cancelSaveSetup(cx), (_e, cx) => ui.saveSetupNow(cx), "Save setup")),
     );
+  }
+  return body;
+}
+
+/** Whether a fact row is flagged "Not set": the rate only when the taxpayer chooses one. */
+function rowFlagged(app, view, fact) {
+  if (!(view.not_set || []).includes(fact)) return false;
+  if (fact !== "income_tax_election") return true;
+  return app.store.electionReadiness(view.tin, view.year)?.gap === "ready";
+}
+
+/**
+ * Facts your forms use (decision 3): one row per fact a form on the year's
+ * list reads, and one quiet line for the facts none of them reads.
+ */
+function factsBody(cx, app, view, shown) {
+  const ui = app.taxpayerUi;
+  const body = div().flex().flex_col();
+  if (!view) return body.child(Text(cx, "meta", "Add a tax year to see the facts its forms use.", "fg3").whitespace_normal());
+  shown.forEach((fact, i) => {
+    const retained = ui.factViews.get(fact);
+    const row = retained ? retained.entity : factRow(cx, app, fact);
+    body.child(i > 0 ? div().border_t(1).border_color(tokens(cx).border).child(row) : div().child(row));
+  });
+  const hidden = ROW_FACTS.length - shown.length;
+  if (hidden) {
     body.child(
       Text(
         cx,
         "meta",
-        `Copy it from the Certificate of Registration (BIR Form 2303), or the date the registration changed. It must cover ${r.year}${r.after ? ` and come after ${shortDate(r.after)}, when the registration on file started` : ""}. The registration on file ends the day before; earlier years keep it.`,
+        hidden === 1 ? "1 fact is not shown: no form on your list uses it." : `${hidden} facts are not shown: no form on your list uses them.`,
         "fg3",
       )
-        .mt(SPACE[3])
+        .id("tp-facts-hidden")
+        .mt(shown.length ? SPACE[3] : 0)
         .whitespace_normal(),
     );
-    body.child(FormActions(cx, "tp-reg", (_e, cx) => ui.cancelRegistration(cx), (_e, cx) => ui.saveRegistration(cx), "Confirm registration"));
   }
-  return Disclosure(cx, "tp-sec-registration", {
-    title: "Registration",
-    meta,
-    open: Boolean(ui.open.registration) || Boolean(r),
-    editing: Boolean(r),
-    onToggle: (_e, cx) => ui.toggleSection("registration", cx),
-    onEdit: year ? (_e, cx) => ui.startRegistration({ tin: b.tin, year }, cx) : null,
-    body,
-  });
+  return body;
+}
+
+/** One fact row; drawn inline, or by its own `FactRowView` while it is edited. */
+function factRow(cx, app, fact) {
+  const ui = app.taxpayerUi;
+  const t = app.taxpayer();
+  const b = app.branch();
+  const view = ui.yearFacts();
+  const row = div().id(`tp-fact-${fact}`).flex().flex_col().gap(SPACE[1]).py(SPACE[3]);
+  if (!view) return row;
+  const year = view.year;
+  const edit = ui.factEdit && ui.factEdit.fact === fact ? ui.factEdit : null;
+  const readiness = fact === "income_tax_election" ? app.store.electionReadiness(b.tin, year) : null;
+  const chooses = fact !== "income_tax_election" || readiness?.gap === "ready";
+  const locked = fact === "income_tax_election" && view.election_locked;
+  const flagged = rowFlagged(app, view, fact);
+  let value = factValue(fact, view.facts, year);
+  if (!value && !chooses) value = readiness?.gap === "not_individual" ? "Does not apply" : "Not chosen";
+
+  const head = div().flex().flex_row().items_center().gap(SPACE[2]).child(Field(cx, FACT_LABELS[fact], { value }).flex_1());
+  if (flagged && !edit) head.child(Chip(cx, "Not set", "warning", "triangle-alert"));
+  if (!edit && chooses && !locked) {
+    head.child(
+      AppButton(cx, `tp-fact-${fact}-edit`, value ? "Change" : "Set", { variant: "ghost", size: "sm", icon: "pencil", onClick: (_e, cx) => ui.startFactEdit(fact, cx) }),
+    );
+  }
+  row.child(head);
+
+  const readers = div().id(`tp-fact-${fact}-forms`).flex().flex_row().flex_wrap().items_center().gap(6).child(Text(cx, "cap", "Read by", "fg3"));
+  for (const label of readerChips(fact, view.used_by[fact])) readers.child(Chip(cx, label));
+  row.child(readers);
+
+  const note = (text, id) => row.child(Text(cx, "meta", text, "fg3").id(id).whitespace_normal());
+  if (fact === "income_tax_election") {
+    const source = electionSourceText(view.election_source);
+    if (source && value) note(source, "tp-fact-election-source");
+    if (locked) note(`A ${year} return that carries it was filed, so it cannot change for ${year}.`, "tp-fact-election-locked");
+    else if (!chooses) {
+      note(
+        readiness?.gap === "not_individual"
+          ? "Only an individual chooses between 8% and graduated rates."
+          : "Only a self-employed or mixed-income individual chooses between 8% and graduated rates. Set the income type first.",
+        "tp-fact-election-why",
+      );
+    }
+  }
+  if (view.owner[fact] === "head_office" && !b.is_head_office) {
+    note("Held by the head office. A change here changes it for every branch.", `tp-fact-${fact}-owner`);
+  }
+
+  if (edit) {
+    const box = div().flex().flex_col().mt(SPACE[2]);
+    if (fact === "atc_codes") {
+      box.child(div().max_w(360).child(TextField(cx, edit.input, { id: "tp-fact-atc_codes-input", label: FACT_LABELS[fact], error: Boolean(edit.error) })));
+    } else {
+      const choices =
+        fact === "tax_classification"
+          ? incomeTypeChoices(t.taxpayer_type)
+          : fact === "income_tax_election"
+            ? ELECTION_CHOICES
+            : fact === "eopt_tier"
+              ? EOPT_TIERS
+              : [
+                  [true, "Yes"],
+                  [false, "No"],
+                ];
+      const selected = fact === "income_tax_election" && /^Graduated/.test(String(edit.value || "")) ? "GraduatedUnspecified" : edit.value;
+      box.child(
+        Segmented(cx, `tp-fact-${fact}-choice`, choices.map(([v, label]) => ({ value: v, label })), selected, (v, cx) => ui.pickFact(v, cx), {
+          label: FACT_LABELS[fact],
+          wrap: true,
+        }),
+      );
+    }
+    if (edit.error) box.child(Text(cx, "meta", edit.error, "danger").mt(SPACE[1]).whitespace_normal());
+    box.child(FormActions(cx, `tp-fact-${fact}`, (_e, cx) => ui.cancelFactEdit(cx), (_e, cx) => ui.saveFactEdit(cx), `Save for ${year}`));
+    row.child(box);
+  }
+  return row;
+}
+
+/** A fact row's own view while it is edited: a pick or an error redraws it alone. */
+class FactRowView extends View {
+  init(props) {
+    this.props = props;
+  }
+  update(props) {
+    this.props = props;
+  }
+  render(cx) {
+    return factRow(cx, this.props.app, this.props.fact);
+  }
 }
 
 /**
@@ -1612,6 +2029,7 @@ function formsTab(cx, app, width) {
 
   const page = div().flex().flex_col().child(toolbar);
   if (ui.addYear) page.child(addYearBand(cx, app));
+  if (ui.replaceAsk) page.child(replaceBanner(cx, app));
   const index = app.store.screenIndex();
 
   if (!edit) {
@@ -1672,12 +2090,19 @@ function formsTab(cx, app, width) {
         ),
       ),
   );
-  // Starter packs appear only in edit mode, and only ever add.
-  const packs = div().flex().flex_row().flex_wrap().items_center().gap(6).mb(SPACE[4]).child(Text(cx, "meta", "Starter packs", "fg3").mr(2));
-  for (const pack of app.store.starterPacks(b.tin)) {
-    packs.child(AppButton(cx, `tp-pack-${pack.id}`, pack.label, { size: "sm", onClick: (_e, cx) => ui.applyPack(pack, cx) }));
+  // Setups (decision 14) take the starter packs' place: a setup sets the
+  // year's forms (Employer adds to them) and the facts it holds.
+  const setups = app.store.setups(app.taxpayer().taxpayer_type);
+  if (setups.length) {
+    const row = div().id("tp-setups").flex().flex_row().flex_wrap().items_center().gap(6).mb(SPACE[4]).child(Text(cx, "meta", "Setups", "fg3").mr(2));
+    for (const setup of setups) {
+      row.child(AppButton(cx, `tp-setup-${setup.id}`, setup.name, { size: "sm", onClick: (_e, cx) => ui.applySetup(setup, cx) }));
+      if (!setup.built_in) {
+        row.child(IconButton(cx, `tp-setup-${setup.id}-delete`, "trash", { tooltip: `Delete the setup ${setup.name}`, onClick: (_e, cx) => ui.deleteSetup(setup, cx) }));
+      }
+    }
+    page.child(row);
   }
-  page.child(packs);
   const q = ui.formsQuery.value().trim().toLowerCase();
   const list = index.filter((f) => (ui.formsFreq === "All" || f.freq === ui.formsFreq) && (!q || searchText(f).includes(q)));
   if (!list.length) {
@@ -1813,12 +2238,16 @@ export function renderNewTaxpayer(cx, app, width) {
           },
           onChange: (v, cx) => {
             n.type = v;
+            // A setup or a taxpayer of the old type does not fit the new one.
+            n.start = "none";
+            n.from = null;
             cx.notify();
           },
         }),
       }),
     },
     { ...input("name", "Registered name"), full: true },
+    ...startFromCells(cx, app, n, errors),
     { ...input("registered_address", "Head-office address"), full: true },
     input("zip_code", "ZIP code"),
     input("rdo_code", "RDO"),
@@ -1859,6 +2288,87 @@ export function renderNewTaxpayer(cx, app, width) {
           ),
         ),
     );
+}
+
+/**
+ * "Start from" on the New taxpayer page: nothing, a setup for the chosen
+ * taxpayer type (built-in or the user's), or "Same as a taxpayer I have…"
+ * with the taxpayer and branch to copy.
+ */
+function startFromCells(cx, app, n, errors) {
+  const ui = app.taxpayerUi;
+  const setups = app.store.setups(n.type);
+  const branches = [];
+  for (const t of app.taxpayers()) {
+    if (t.taxpayer_type !== n.type) continue;
+    for (const b of t.branches) branches.push({ value: b.tin, label: t.branches.length > 1 ? `${t.name} · ${b.name}` : t.name });
+  }
+  const options = [
+    { value: "none", label: "Nothing yet: I choose the forms" },
+    ...setups.map((s) => ({ value: `setup:${s.id}`, label: s.built_in ? s.name : `${s.name} (yours)` })),
+  ];
+  if (branches.length) options.push({ value: "copy", label: "Same as a taxpayer I have…" });
+  if (!options.some((o) => o.value === n.start)) n.start = "none";
+  const year = ui.startYear(n);
+  const chosen = n.start.startsWith("setup:") ? setups.find((s) => `setup:${s.id}` === n.start) : null;
+  const hint = chosen
+    ? `${chosen.adds_forms ? "Adds" : "Starts"} ${year} with ${chosen.forms.join(", ")} and the facts they use.`
+    : n.start === "copy"
+      ? `Copies the forms, facts and templates of ${year}. Never the name, TIN or address.`
+      : "Add a tax year after, and choose its forms.";
+  const cells = [
+    {
+      full: true,
+      el: div()
+        .flex()
+        .flex_col()
+        .child(
+          Field(cx, "Start from", {
+            input: Dropdown(cx, "new-tp-start", {
+              label: "Start from",
+              width: 300,
+              options,
+              value: n.start,
+              open: n.startOpen,
+              onOpenChange: (open, cx) => {
+                n.startOpen = open;
+                cx.notify();
+              },
+              onChange: (v, cx) => {
+                n.start = v;
+                if (v !== "copy") n.from = null;
+                cx.notify();
+              },
+            }),
+          }),
+        )
+        .child(Text(cx, "meta", hint, "fg3").mt(SPACE[1]).whitespace_normal()),
+    },
+  ];
+  if (n.start === "copy") {
+    cells.push({
+      full: true,
+      el: Field(cx, "Copy from", {
+        input: Dropdown(cx, "new-tp-from", {
+          label: "Copy from",
+          width: 300,
+          options: branches,
+          value: n.from,
+          open: n.fromOpen,
+          onOpenChange: (open, cx) => {
+            n.fromOpen = open;
+            cx.notify();
+          },
+          onChange: (v, cx) => {
+            n.from = v;
+            cx.notify();
+          },
+        }),
+        error: errors.from,
+      }),
+    });
+  }
+  return cells;
 }
 
 function renderNewBranch(cx, app, width) {
