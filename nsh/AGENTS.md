@@ -70,12 +70,28 @@ buffer console crypto fs/promises net os path process url websocket zlib. Screen
 - A static unknown class warns in `nsh build`; a class built in a template literal is only logged once at run time (grep the `-v` test output for "unknown").
 
 ## The Rust bridge
-Specifier `ebirforms/native` (crate `nsh-app-ebirforms`, `src/lib.rs`). Today: `Bridge.ping(): string` (`"pong"`), used by `screens/base/ThemePage.tsx`, tested in
+Specifier `ebirforms/native` (crate `nsh-app-ebirforms`, `src/lib.rs`). Today: `Door` (next section) and `Bridge.ping(): string` (`"pong"`), used by `screens/base/ThemePage.tsx`, tested in
 `ThemePage.test.tsx` and `src/lib.rs`. Types are generated into `.nsh/types/ebirforms/native.d.ts` by `nsh check` from the Rust signatures and doc comments.
 - Rust signature decides the call: plain `fn` = synchronous, runs in the TSX call, `Result` Err becomes a thrown Error; `async fn` = Promise; `cx: &mut ModuleCx` = op.
   `#[module] struct` + `#[module] impl`, register in `#[native_module]` with `registry.module::<T>()`. Doc-comment every export (`///` on the struct, never on the impl block).
 - Rust state is invisible to the reactive graph: mirror what a screen shows in a signal and update it from the return value.
 - `nsh-base` is NOT a dependency now (unused-dependency warning); add it to Cargo.toml only when Rust code uses it. All `nsh-*` deps are PATH deps on the one checkout.
+
+## The door (`bir/`, `src/door.rs`): how a screen reaches the Rust brain
+Import ONLY from `bir` (relative, e.g. `import { bir, type Taxpayer } from "../../bir"`; a directory import works). Never import `Door` from `ebirforms/native` in a screen.
+- `bir.<host_function>(...)`: 116 typed wrappers, named exactly as the Rust host functions and the old app's `bir.<name>(` (snake_case). Sync ones return the value, async ones a Promise
+  (`screen_form_open`, `screen_form_validate`, `import_archive`, `export_profile`, `cloud_account_*`, inbox ones). A host error is a thrown Error whose `message` is the host's sentence, unchanged
+  (the old `errorText` regex is not needed). Every type (`Taxpayer`, `ScreenFormOpened`, ...) is exported from `bir` too. `doorStatus()` = `{ sending: "dry_run" | "mock" | "refused", databasePath, testEnvironment }`.
+- 18 host functions the old app never calls are NOT wrapped (`NOT_WRAPPED` in `bir/functions.ts`). Need one? Add its name to `bir/extra-functions.txt` and run the script below. Generated files (never edit): `bir/types.d.ts` (from the Rust declarations; a Rust test fails while it is stale) and `bir/functions.ts`.
+  Regenerate with `bash nsh/bir/regenerate.sh` after bir-app-api's declarations change.
+- Tests: `import { createDemoTaxpayer, DEMO } from "bir/testing"` (relative) gives Juana Santos (`DEMO.tin` = "00012345300000" as host functions take it). In a test environment (`EBIR_TEST_ENV=1`, which every recipe sets) the
+  door makes a fresh scratch database in the temp folder per engine thread: each `open()` and each test FILE starts EMPTY, tests inside one file share it. `useDatabase(path)` names a file instead (before the first call; guarded).
+  Real data: `BIR_DATABASE_PATH=~/BuwizNsh/agents/<track>.db` (raw `nsh test` / `nsh run`; `just nsh-test` unsets it). `bir/DoorProbe.tsx` + `.test.tsx` is the pattern for a mounted component calling the door.
+- The door boots itself on the first call of an engine thread (old host's order: hooks, send guard, database guard, `prepare_launch`, database + submission worker, updater hook). Send guard: `BIR_SFTP_DRY_RUN=1` forced,
+  `BIR_SFTP_LIVE` removed, worker refused otherwise; the only exception is the mock BIR server on a listening loopback `BIR_SFTP_HOST`. Database guard: no path inside the owner's Group Container, `~/BuwizNsh/data`,
+  `~/BuwizNsh/migration` (symlinks and `..` resolved), checked before every call. `EBIR_TEST_ENV` also forces `BUWIZ_NO_KEYCHAIN=1`. `shutdown()` (from `bir`) is the quit path (stops the worker, checkpoints): call it once on quit and use the door no more (a retention thread keeps the database and its owner lock until exit, as in the old host).
+- Hooks (`src/hooks.rs`): file panels are NSH's own dialogs (real). Not available yet, each answers honestly (wave 4): app menu and chrome (D4), updater (`update_status` says so; D4), print preview window (D3: the file is
+  written, no window, `print_preview_has_live` false), OS sign-in prompt (`os_authenticate` false; D2), agent send (`Err`; D6).
 
 ## Tests
 Files: `*.test.tsx` / `*.test.ts` anywhere (hidden dirs skipped). Only that suffix counts: `nsh test x.tsx` on any other name runs it as an app entry from stdin.
@@ -122,3 +138,14 @@ macos, cli. API: `website/modules/{nsh,nsh-base,nsh-desktop,style-reference,tail
 7. Unused imports are dropped by TS; a font or asset imported for its side effect must be a bare `import "./x.woff2"`.
 8. Do not run a long `nsh run` inside a script you await: it never ends. Start it detached and stop it with SIGINT to the `nsh run` pid (it closes the window).
 9. The `ThemePage` is a throwaway preview: B3's frame replaces `App.tsx`'s root; keep `shots/`, `theme/` and the Rust bridge.
+10. Date code takes the clock as a parameter (`daysUntil(iso, now)`, `periodOptions(..., now)`, `loadDashboard(store, at)`). Tests build local dates with `new Date(y, m, d)` and SQLite timestamps at midday UTC, so they pass in every time zone (the old code reads those timestamps as UTC and shows the local day).
+11. A sync host call blocks the engine: the first `screen_forms_index()` builds the form library (about 1 s in a debug build). `app.press` can return before a slow press handler ends: `await app.waitFor("text:...")`, never `expect(app.texts())` right after.
+12. Host functions take JSON: `undefined` arrives as `null` (so `get_setting(undefined)` says "got null"), amounts and ids are numbers, the draft is an opaque `object` you pass back unchanged from `screen_form_open`/`screen_form_fill`.
+13. The database slot is per engine thread, and one database file has one owner lock per process: two engines on the SAME `BIR_DATABASE_PATH` in one test run refuse each other. Leave it unset and let each test get a scratch file.
+14. UI kit (`ui/`): screens import from `ui/index.ts`, never nsh/base. Gallery and states: `screens/base/KitPage.tsx` (App.tsx "UI kit"). `TOUCH` (`!platform.desktop`) picks 44-pt targets.
+15. nsh/base's Select/Combobox list filters by ONE run of text in the title (crates/nsh-base/src/listbox.rs), even with a controlled `query`: "east mak" matches, "050 makati" does not.
+16. A Select's/Menu's/Combobox's `testID` names the base view, not what a press opens: give the trigger element its own testID (`kit-dropdown-trigger`).
+17. State variants: `hover:` and `focus:` beat `selected:`; keep a selected fill with `selected:hover:bg-x selected:focus:bg-x`. A Calendar/DatePicker without `renderItem` shows weekdays as 0-6.
+18. Headless: `keyboard.press("left")` does not move an input's caret, Escape does not close a Dialog (use `app.back()`): test mid-text edits on the pure mask (`ui/mask.ts`).
+19. `app.scroll` throws past the end ("at X of Y"); real-window tests over 30 s need `test(name, fn, 120_000)`. `just nsh-test x` paths are relative to nsh/; a `--filter` with spaces is split by just.
+20. Never spread props into a kit component (`{...props}`): pass each prop (`label={props.label}`) or the props object itself, so reads stay live.

@@ -11,3 +11,17 @@ publish = false
 # Never mix sources: a version or source mismatch is a cargo error. See nsh/AGENTS.md.
 [dependencies]
 nsh-core = { path = "/Volumes/goldcoders/features/nsh-tsx/nsh/crates/nsh-core" }
+
+# The door: the UI-free host functions of the Rust brain, in plain SQLite (no sqlcipher, no database key).
+# default-features = false is what keeps SQLCipher out; the gate is
+# `cargo tree -e features -i libsqlite3-sys --manifest-path nsh/Cargo.toml` (no bundled-sqlcipher).
+bir-app-api = { path = "../crates/bir-app-api", default-features = false }
+bir-core = { path = "../crates/bir-core", default-features = false }
+# Object keys keep their order (the host functions rely on it); bir-app-api turns it on, this states it.
+serde_json = { version = "1", features = ["preserve_order"] }
+tracing = "0.1"
+
+[dev-dependencies]
+futures = "0.3"
+temp-env = "0.3"
+tempfile = "3"
