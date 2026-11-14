@@ -107,7 +107,10 @@ fn a_second_month_starts_with_the_first_months_answers() {
     assert!(!stoppable.contains("frm1601c:txtRDOCode"), "a profile box");
     // A radio item may be a stop under each radio the page draws, not under its group box.
     assert!(stoppable.contains("frm1601c:AmendedRtn_1"), "{stoppable:?}");
-    assert!(!stoppable.contains("frm1601c:AmendedRtn"), "the page draws no group box");
+    assert!(
+        !stoppable.contains("frm1601c:AmendedRtn"),
+        "the page draws no group box"
+    );
     first_month();
     // The profile changes before the next month: the profile box follows it.
     set_rdo("040");
