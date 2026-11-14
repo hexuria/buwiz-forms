@@ -21,6 +21,10 @@ bir-core = { path = "../crates/bir-core", default-features = false }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing = "0.1"
 
+# The database guard asks the password database (getpwuid_r) for the account's home folder, never $HOME.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 futures = "0.3"
 temp-env = "0.3"

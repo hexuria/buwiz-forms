@@ -1,7 +1,7 @@
 // The base screen at phone size (the default viewport, 390 x 844) and at a desktop size, and the Rust bridge through it.
 import { expect, open, test } from "nsh/test";
 
-const ENTRY = "../../App.tsx";
+const ENTRY = "../../BasePreview.tsx";
 
 test("phone: narrow layout, and the Rust bridge answers", async () => {
   const app = await open(ENTRY); // 390 x 844, platform "ios", light

@@ -1,0 +1,712 @@
+// The form page: one renderer for all 43 forms (old app/shell/form_page.js). The session (./session.ts) owns the
+// state; this file draws it from nsh/ui parts and the field controls of ./controls.
+//
+// Layout. Wide (the page 760 points and up): the pinned 208-point "On this form" navigator beside the form, which
+// scrolls on its own. Narrow: one scroll, rows stacked. At every width the floating pill steps the to-dos (‹ ›,
+// Cmd/Ctrl+Left/Right); its section list is a popover when wide and a bottom sheet under 600.
+// Part titles stick to the top of the scroll while their part shows (class "sticky": NSH's position sticky, which
+// keeps a view at the top of the scroll view around it while its parent is in view; website/modules/tailwind-reference.md).
+// Rendering cost: parts mount lazily (only open parts mount their rows; the old page's behaviour), in a plain Scroll:
+// a form is bounded content (at most 157 items, 380 boxes), and List would recycle rows that hold focused inputs and
+// sticky parents (website/docs/lists.md: Scroll and Each for bounded content).
+import type { Accessor, ScrollRef, ViewRef } from "nsh";
+import { cleanup, effect, keymap, Scroll, signal, untracked, View, windowSize } from "nsh";
+import { BREAK } from "../../theme/tokens";
+import {
+  AppButton,
+  Checkbox,
+  Chip,
+  Code,
+  Dialog,
+  Icon,
+  type IconName,
+  IconButton,
+  ICONS,
+  ListRow,
+  MetaLine,
+  NavRow,
+  Popover,
+  Sheet,
+  Spinner,
+  Text,
+  TextField,
+  toast as kitToast,
+} from "../../ui";
+import { ItemRow, ProfileFold } from "./rows";
+import { existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
+import { FormSession, type FormTarget, type Overlay, type SessionHooks, type ToastAction } from "./session";
+
+export type { FormTarget } from "./session";
+
+/** What the frame mounts. The frame's Toaster should sit above the pill while this page shows (bottom 96). */
+export interface FormPageProps {
+  tin: string;
+  formCode: string;
+  year: number;
+  period: number;
+  /** The stored return's exact key (a transaction's MMDD, 2553's quarter). */
+  key?: number | null;
+  mode: FormTarget["mode"];
+  /** filed_original: the history snapshot. */
+  snapshotId?: number;
+  /** The page wants to go (nothing calls it yet: the frame's own back does). */
+  onClose?: () => void;
+  /** The page now shows another return (a sample became its return, an offer loaded one): the frame follows it. */
+  onOpenReturn?: (target: FormTarget) => void;
+  /** Open the taxpayer's profile (the frame's panel). */
+  onOpenProfile?: () => void;
+  /** A toast; the kit's toast (needs a Toaster mounted) when not given. */
+  toast?: (message: string, options?: { icon?: string; action?: ToastAction }) => void;
+  /** A changed return was saved (Recent). */
+  onSaved?: (target: FormTarget) => void;
+  /** Tests: the session the page made. */
+  onSession?: (session: FormSession) => void;
+}
+
+const PILL_W = 488;
+
+function kitIcon(name: string | undefined): IconName | undefined {
+  return name && name in ICONS ? (name as IconName) : undefined;
+}
+
+export function FormPage(props: FormPageProps) {
+  const hooks: SessionHooks = {
+    toast: (message, o) => {
+      if (props.toast) return props.toast(message, o);
+      kitToast(message, { icon: kitIcon(o?.icon), action: o?.action });
+    },
+    onSaved: (t) => props.onSaved?.(t),
+    onRetarget: (t) => props.onOpenReturn?.(t),
+    onQueueChanged: () => {},
+  };
+  const s = new FormSession(
+    { tin: props.tin, formCode: props.formCode, year: props.year, period: props.period, key: props.key ?? null, mode: props.mode, snapshotId: props.snapshotId },
+    hooks,
+  );
+  props.onSession?.(s);
+  void s.open().then(() => s.notesDrawn());
+  cleanup(() => s.dispose());
+
+  const width = signal(untracked(() => windowSize().width));
+  const wide = () => width() >= BREAK.formNav;
+  const narrow = () => width() < BREAK.phone;
+
+  keymap.bind("mod+left", () => s.step(-1), { when: "always" });
+  keymap.bind("mod+right", () => s.step(1), { when: "always" });
+
+  // A step: once its row is drawn, scroll it near the top (under the sticky title) and put the keyboard in it.
+  const rowRefs = new Map<string, ViewRef>();
+  let scrollRef: ScrollRef | undefined;
+  let scrollY = 0;
+  effect(() => {
+    const r = s.reveal();
+    if (r) untracked(() => void reveal(r.row, r.seq));
+  });
+  async function reveal(row: string, seq: number) {
+    for (let tries = 0; tries < 10; tries++) {
+      await new Promise((done) => setTimeout(done, 50));
+      if (s.reveal()?.seq !== seq) return;
+      const ref = rowRefs.get(row);
+      if (!ref || !scrollRef) continue;
+      const [m, area] = await Promise.all([ref.measure(), scrollRef.measure()]);
+      if (!m || !area) continue;
+      scrollRef.scrollTo({ y: Math.max(0, scrollY + m.pagePosition.y - area.pagePosition.y - 72), animated: true });
+      s.focusRow(row);
+      return;
+    }
+  }
+
+  const schema = s.schema;
+  return (
+    <View testID="form-page" class="min-h-0 flex-1 flex-row bg-background" onLayout={(e) => width.set(e.bounds.size.width)}>
+      <If when={wide() && schema && !s.header().error && !s.header().loading}>
+        <Navigator s={s} />
+      </If>
+      <View class="min-h-0 min-w-0 flex-1">
+        <Scroll
+          ref={(r: ScrollRef) => (scrollRef = r)}
+          testID="form-scroll"
+          class="min-h-0 flex-1"
+          contentClass={narrow() ? "px-4 pt-5 pb-32" : "px-6 pt-7 pb-28"}
+          onScroll={(e) => (scrollY = e.offset.y)}
+          scrollEventThrottle={50}
+        >
+          <View class="w-full self-center" style={{ maxWidth: 920 }}>
+            <Header s={s} narrow={narrow} />
+            <Notes s={s} />
+            <If when={schema && !s.header().loading && !s.header().error}>
+              <View class="gap-4">
+                {(schema?.parts || []).map((_p, pi) => (
+                  <PartCard s={s} pi={pi} narrow={narrow} onRef={(id, ref) => rowRefs.set(id, ref)} />
+                ))}
+              </View>
+            </If>
+            <If when={s.header().loading && schema}>
+              <View class="items-center py-10">
+                <Text tone="fg3">{`Opening ${props.formCode}…`}</Text>
+              </View>
+            </If>
+            <If when={s.header().error}>
+              <View testID="fp-error" class="rounded-(--radius-card) bg-danger-soft p-4">
+                <Text tone="danger">{s.header().error}</Text>
+              </View>
+            </If>
+          </View>
+        </Scroll>
+        <If when={schema && !s.header().error && !s.header().loading}>
+          <Pill s={s} wide={wide} narrow={narrow} />
+        </If>
+      </View>
+      <Dialogs s={s} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- header
+
+function SaveLine(props: { s: FormSession }) {
+  const st = () => props.s.saveState();
+  const text = () => {
+    const v = st();
+    if (v.state === "saving") return "Saving…";
+    if (v.state === "saved") return "✓ Saved";
+    if (v.state === "failed") return v.message;
+    if (v.state === "manual") return v.message;
+    return "";
+  };
+  return (
+    <Text testID="fp-save-state" variant="meta" tone={st().state === "failed" ? "danger" : st().state === "saved" ? "success" : "fg3"} lines={2} class="max-w-80">
+      {text()}
+    </Text>
+  );
+}
+
+function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
+  const s = props.s;
+  const f = s.schema;
+  const h = () => s.header();
+  if (!f) {
+    return (
+      <View class="mb-5 gap-1">
+        <Text variant="page">{`Form ${s.target().formCode}`}</Text>
+      </View>
+    );
+  }
+  const statusLabel = () => (h().editable ? h().status : `${h().status} · read-only`);
+  return (
+    <View testID="fp-header" class="mb-5 flex-row flex-wrap items-start gap-3.5">
+      <View class="min-w-0 flex-1" style={{ minWidth: props.narrow() ? 0 : 420 }}>
+        <MetaLine parts={[<Code>{`BIR Form ${f.c}`}</Code>, `Revision ${f.rev}`]} />
+        <Text variant="page" class="mt-1">{f.t}</Text>
+        <View class="mt-2 flex-row flex-wrap items-center gap-2">
+          <Chip label={f.freq} />
+          <Chip label={`${f.pages} page${f.pages > 1 ? "s" : ""}`} />
+          <Chip label={`${f.n} fields`} />
+          {f.q < 0.8 ? <Chip label="Draft layout" tone="warning" icon="triangle-alert" /> : null}
+          <If when={h().status !== "Draft"}>
+            <Chip testID="fp-status" label={statusLabel()} tone={h().status === "Queued" ? "accent" : "success"} />
+          </If>
+          <If when={h().amends}>
+            <Chip label="Amended return" tone="warning" />
+          </If>
+          <If when={h().filedOriginalView}>
+            <Chip label="Filed original · read-only" tone="success" />
+          </If>
+          <If when={h().sample}>
+            <Chip label="Sample" tone="accent" />
+          </If>
+          <If when={h().loading}>
+            <Chip label="Opening…" tone="accent" />
+          </If>
+        </View>
+      </View>
+      <View class="items-end gap-1.5" classList={{ "w-full items-start": props.narrow() }}>
+        <View class="flex-row flex-wrap items-center gap-2">
+          <AppButton testID="fp-print" size="sm" icon="printer" label="Print preview" disabled={h().loading} onPress={() => s.print()} />
+          <If when={h().filedOriginal}>
+            <AppButton testID="fp-filed-original" size="sm" icon="history" label="View the filed original" onPress={() => s.openFiledOriginal()} />
+          </If>
+          <If when={h().filedOriginalView}>
+            <AppButton testID="fp-back-to-amendment" size="sm" label="Back to the amendment" onPress={() => s.backToAmendment()} />
+          </If>
+          <If when={h().editable && !h().filedOriginalView}>
+            <AppButton
+              testID="fp-check"
+              size="sm"
+              label="Check"
+              accessibilityLabel={s.checking() ? "Check — validation in progress" : "Check"}
+              leading={
+                <View class="size-4 items-center justify-center">
+                  <If when={s.checking()} else={<Icon name="circle-check" />}>
+                    <Spinner size={14} tone="fg2" label="Checking" />
+                  </If>
+                </View>
+              }
+              onPress={() => s.check()}
+            />
+            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" disabled={h().loading} onPress={() => s.queue()} />
+          </If>
+          <If when={h().status === "Queued" && !h().sample}>
+            <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
+          </If>
+          <If when={h().editable && h().sample && !h().periodSet}>
+            <AppButton testID="fp-save" variant="primary" size="sm" label="Save as return…" onPress={() => s.saveNow()} />
+          </If>
+          <If when={h().amendUnsaved}>
+            <AppButton testID="fp-save" variant="primary" size="sm" label="Save amendment" onPress={() => s.saveNow()} />
+          </If>
+        </View>
+        <SaveLine s={s} />
+      </View>
+    </View>
+  );
+}
+
+/** The lines under the header: the sample note, profile changes, one-time notes, amendment and filed strips. */
+function Notes(props: { s: FormSession }) {
+  const s = props.s;
+  const h = () => s.header();
+  return (
+    <View class="gap-4" classList={{ "mb-4": Boolean(h()) }}>
+      <If when={h().sample}>
+        <Text variant="meta" tone="fg2">{SAMPLE_NOTE}</Text>
+      </If>
+      <If when={h().profileUpdates.length}>
+        <Text variant="meta" tone="fg2">{profileUpdatesNote(h().profileUpdates)}</Text>
+      </If>
+      <Each of={h().notes}>{(note) => <Text variant="meta" tone="fg2">{note()}</Text>}</Each>
+      <If when={h().profileDiffers.length}>
+        <View class="flex-row flex-wrap items-center gap-2">
+          <Text variant="meta" tone="fg2">{profileDiffersNote(h().profileDiffers)}</Text>
+          <AppButton testID="fp-use-profile" size="sm" variant="ghost" label="Use profile values" onPress={() => s.useProfileValues()} />
+        </View>
+      </If>
+      <If when={h().amends}>
+        <Text variant="meta" tone="fg2">{`This return amends a filed one. ${FILED_KEPT}`}</Text>
+      </If>
+      <If when={h().filedOriginalView}>{(v) => <Text variant="meta" tone="fg2">{filedOriginalStrip(v())}</Text>}</If>
+      <If when={h().profileChanged.length}>
+        <View testID="fp-profile-changed" class="gap-0.5">
+          <Text variant="meta" tone="fg2">{PROFILE_CHANGED_NOTE}</Text>
+          <Each of={h().profileChanged}>{(c) => <Text variant="meta" tone="fg3">{`· ${c()}`}</Text>}</Each>
+        </View>
+      </If>
+      <If when={h().submittedLine}>
+        <Text variant="meta" tone="fg2">{h().submittedLine}</Text>
+      </If>
+      <Each of={h().formErrors}>{(e) => <Text variant="meta" tone="danger">{e()}</Text>}</Each>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- parts
+
+function PartCard(props: { s: FormSession; pi: number; narrow: Accessor<boolean>; onRef: (id: string, ref: ViewRef) => void }) {
+  const s = props.s;
+  const p = s.schema!.parts[props.pi];
+  const info = s.part(props.pi);
+  const pi = props.pi;
+  return (
+    <View testID={`fp-part-${pi}`} class="rounded-(--radius-card) border border-border bg-card">
+      <View class="sticky top-0 z-10 rounded-t-(--radius-card) bg-card" classList={{ "rounded-b-(--radius-card)": !info().open, "border-b border-border": info().open }}>
+        <ListRow testID={`fp-part-${pi}-toggle`} accessibilityLabel={partName(p, pi)} onPress={() => s.togglePart(pi)}>
+          <Icon name={info().open ? "chevron-down" : "chevron-right"} tone="fg3" />
+          <Text variant="control" class="min-w-0 flex-1 font-semibold">{partName(p, pi)}</Text>
+          <Text variant="meta" tone="fg3">{`${p.items.length} item${p.items.length > 1 ? "s" : ""}`}</Text>
+        </ListRow>
+      </View>
+      <If when={info().open}>
+        <View>
+          {p.items.map((it, ii) => {
+            const id = `${pi}:${ii}`;
+            const row = s.row(id);
+            return (
+              <View>
+                <If when={info().fold?.first === ii}>
+                  <ProfileFold s={s} pi={pi} />
+                </If>
+                <If when={!row().tucked}>
+                  <ItemRow s={s} id={id} it={it} narrow={props.narrow} onRef={props.onRef} />
+                </If>
+              </View>
+            );
+          })}
+        </View>
+      </If>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- navigator (wide)
+
+function Badge(props: { text: string; danger?: boolean }) {
+  return (
+    <View class="h-4.5 min-w-4.5 items-center justify-center rounded-full px-1.25" classList={{ "bg-danger": Boolean(props.danger), "bg-hover": !props.danger }}>
+      <Text variant="cap" tone={props.danger ? "primaryFg" : "fg2"} class={props.danger ? "text-card" : undefined}>{props.text}</Text>
+    </View>
+  );
+}
+
+function Navigator(props: { s: FormSession }) {
+  const s = props.s;
+  const parts = s.schema!.parts;
+  const infos = parts.map((_p, i) => s.part(i));
+  const openOne = () => {
+    const open = infos.map((f, i) => (f().open ? i : -1)).filter((i) => i >= 0);
+    return open.length === 1 ? open[0] : -1;
+  };
+  const needing = () => infos.filter((f) => f().errors > 0).length;
+  return (
+    <View testID="fp-nav" class="shrink-0 pt-7 pb-4 pl-4" style={{ width: 208 + 6 + 16 }}>
+      <View class="flex-row items-center gap-1 px-2 pb-1.5" style={{ width: 208 }}>
+        <Text variant="metaStrong" tone="fg3">On this form</Text>
+        <View class="flex-1" />
+        <Text variant="meta" tone="fg3" testID="fp-nav-count">{openOne() >= 0 ? `${openOne() + 1} of ${parts.length}` : `${parts.length} parts`}</Text>
+        <IconButton
+          testID="fp-parts-toggle"
+          icon={s.allPartsOpen() ? "chevrons-down-up" : "chevrons-up-down"}
+          tooltip={s.allPartsOpen() ? "Collapse all parts" : "Expand all parts"}
+          onPress={() => s.toggleAllParts()}
+        />
+      </View>
+      <If when={needing() > 0}>
+        <View class="px-1 pb-1.5" style={{ width: 208 }}>
+          <AppButton
+            testID="fp-nav-attention"
+            size="sm"
+            variant="danger"
+            label={`${needing()} need${needing() > 1 ? "" : "s"} attention · next ↓`}
+            accessibilityLabel="Go to the next part that needs attention"
+            onPress={() => {
+              const next = s.nextNeedingPart();
+              if (next !== null) s.jumpTo(next);
+            }}
+          />
+        </View>
+      </If>
+      <Scroll testID="fp-nav-list" class="min-h-0 flex-1" contentClass="gap-0.5 pr-1.5" style={{ width: 208 + 6 }}>
+        {parts.map((p, i) => (
+          <NavRow
+            testID={`fp-nav-${i}`}
+            label={partName(p, i)}
+            tooltip={partName(p, i)}
+            current={openOne() === i}
+            trailing={
+              <View class="flex-row gap-1">
+                <If when={infos[i]().errors > 0}>
+                  <Badge text={String(infos[i]().errors)} danger />
+                </If>
+                <Badge text={String(p.items.length)} />
+              </View>
+            }
+            onPress={() => s.jumpTo(i)}
+          />
+        ))}
+      </Scroll>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- the pill
+
+function SectionsList(props: { s: FormSession; onPick: () => void; maxHeight: number }) {
+  const s = props.s;
+  const parts = s.schema!.parts;
+  const needing = () => parts.filter((_p, i) => s.part(i)().errors > 0).length;
+  return (
+    <View testID="fp-sections" class="gap-1">
+      <View class="flex-row items-start gap-2 pr-1 pb-2 pl-2">
+        <View class="min-w-0 flex-1">
+          <Text variant="meta" tone="fg2">On this form</Text>
+          <Text variant="title">{`${parts.length} section${parts.length > 1 ? "s" : ""}${needing() ? ` · ${needing()} need${needing() > 1 ? "" : "s"} attention` : ""}`}</Text>
+        </View>
+        <IconButton
+          testID="fp-sections-toggle"
+          icon={s.allPartsOpen() ? "chevrons-down-up" : "chevrons-up-down"}
+          tooltip={s.allPartsOpen() ? "Collapse all parts" : "Expand all parts"}
+          onPress={() => s.toggleAllParts()}
+        />
+      </View>
+      <Scroll testID="fp-sections-list" style={{ maxHeight: props.maxHeight }} contentClass="gap-0.5">
+        {parts.map((p, i) => {
+          const names = sectionNames(p, i);
+          const info = s.part(i);
+          return (
+            <ListRow
+              testID={`fp-section-${i}`}
+              accessibilityLabel={partName(p, i)}
+              onPress={() => {
+                props.onPick();
+                s.jumpTo(i);
+              }}
+            >
+              <View class="h-7 w-0.75 rounded-full" classList={{ "bg-accent-blue": s.current() === i && info().open }} />
+              <View class="size-4.5 items-center justify-center rounded-full" classList={{ "bg-danger": info().errors > 0, "border-2 border-border-strong": info().errors === 0 }}>
+                <If when={info().errors > 0}>
+                  <Text variant="cap" class="text-card">!</Text>
+                </If>
+              </View>
+              <View class="min-w-0 flex-1">
+                <Text variant="emph" lines={1}>{names.short}</Text>
+                <Text variant="meta" tone="fg2" lines={1}>{names.tag}</Text>
+              </View>
+              <Text variant="metaStrong" tone={info().errors > 0 ? "danger" : "fg2"}>
+                {info().errors > 0 ? `Fix · ${info().errors}` : info().todo > 0 ? `${info().todo} to do` : `${p.items.length} item${p.items.length > 1 ? "s" : ""}`}
+              </Text>
+            </ListRow>
+          );
+        })}
+      </Scroll>
+    </View>
+  );
+}
+
+function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor<boolean> }) {
+  const s = props.s;
+  const parts = s.schema!.parts;
+  const listOpen = signal(false);
+  const cur = () => Math.min(Math.max(s.current(), 0), parts.length - 1);
+  const todo = () => s.todo();
+  const flagged = () => todo().filter((r) => r.reason === "message").length;
+  const needingParts = () => parts.filter((_p, i) => s.part(i)().errors > 0).length;
+  const small = () => {
+    const ids = todo().map((r) => r.id);
+    const here = sectionNames(parts[cur()], cur());
+    if (!ids.length) return `${here.tag} · ${cur() + 1} of ${parts.length}`;
+    const at = s.stepAt() ? ids.indexOf(s.stepAt()!) : -1;
+    if (at >= 0) {
+      const pi = Number(s.stepAt()!.split(":")[0]);
+      return `${at + 1} of ${ids.length} to do · ${sectionNames(parts[pi], pi).tag}`;
+    }
+    return `${ids.length} to do · ${here.tag}`;
+  };
+  const big = () => {
+    const ids = todo().map((r) => r.id);
+    const at = s.stepAt() && ids.includes(s.stepAt()!) ? s.stepAt()! : null;
+    if (at) {
+      const it = s.item(at)!;
+      return it.no ? `Item ${it.no} · ${it.l}` : it.l;
+    }
+    return sectionNames(parts[cur()], cur()).short;
+  };
+  const red = () => (todo().length ? flagged() : needingParts());
+  const redLabel = () => {
+    const n = red();
+    return todo().length ? `${n} item${n > 1 ? "s" : ""} need${n > 1 ? "" : "s"} attention` : `${n} section${n > 1 ? "s" : ""} need${n > 1 ? "" : "s"} attention`;
+  };
+  const target = (dir: number) => {
+    todo();
+    s.stepAt();
+    s.current();
+    return s.stepTarget(dir);
+  };
+  const stepLabel = (dir: number) => {
+    const t = target(dir);
+    if (t && "check" in t) return "Check";
+    return todo().length ? (dir < 0 ? "Previous to do" : "Next to do") : dir < 0 ? "Previous section" : "Next section";
+  };
+  const main = (
+    <View testID="fp-pill-main" class="h-full min-w-0 flex-1 flex-row items-center gap-2.5 rounded-[14px] pr-2.5 pl-1.5" accessibilityLabel={`All sections${listOpen() ? ", shown" : ""}`}>
+      <View class="min-w-0 flex-1">
+        <Text variant="cap" tone="fg2" lines={1} testID="fp-pill-small">{small()}</Text>
+        <Text variant="emph" lines={1} testID="fp-pill-big">{big()}</Text>
+      </View>
+      <If when={red() > 0}>
+        <View testID="fp-pill-count" accessibilityLabel={redLabel()} class="h-5.5 min-w-5.5 items-center justify-center rounded-full bg-danger px-1.5">
+          <Text variant="num" class="text-card">{String(red())}</Text>
+        </View>
+      </If>
+    </View>
+  );
+  return (
+    <View style={{ pointerEvents: "box-none" }} class="absolute inset-x-0 bottom-4 items-center px-4">
+      <View testID="fp-pill" class="w-full flex-row items-center gap-1.5 rounded-[22px] border border-border-strong bg-raised p-1.5 shadow-lg" style={{ maxWidth: PILL_W, height: props.narrow() ? 60 : 56 }}>
+        <IconButton testID="fp-pill-prev" icon="chevron-left" tooltip={stepLabel(-1)} disabled={!target(-1)} onPress={() => s.step(-1)} />
+        <If
+          when={props.wide()}
+          else={
+            <View class="h-full min-w-0 flex-1 flex-row items-center">
+              <IconButton testID="fp-pill-list" icon="list" tooltip="All sections" pressed={listOpen()} onPress={() => listOpen.set(!listOpen())} />
+              <View class="min-w-0 flex-1">
+                <ListRow testID="fp-pill-open" accessibilityLabel="All sections" onPress={() => listOpen.set(true)}>
+                  {main}
+                </ListRow>
+              </View>
+              <Sheet testID="fp-sections-sheet" open={listOpen()} onOpenChange={(o) => listOpen.set(o)}>
+                <View class="px-2 pb-4">
+                  <SectionsList s={s} onPick={() => listOpen.set(false)} maxHeight={Math.round(windowSize().height * 0.6)} />
+                </View>
+              </Sheet>
+            </View>
+          }
+        >
+          <View class="h-full min-w-0 flex-1 flex-row items-center">
+            <Popover
+              testID="fp-sections-popover"
+              placement="top"
+              open={listOpen()}
+              onOpenChange={(o) => listOpen.set(o)}
+              width={PILL_W - 12}
+              trigger={<IconButton testID="fp-pill-list" icon="list" tooltip="All sections" pressed={listOpen()} />}
+            >
+              <SectionsList s={s} onPick={() => listOpen.set(false)} maxHeight={Math.min(440, windowSize().height - 200)} />
+            </Popover>
+            <View class="min-w-0 flex-1">
+              <ListRow testID="fp-pill-open" accessibilityLabel="All sections" onPress={() => listOpen.set(!listOpen())}>
+                {main}
+              </ListRow>
+            </View>
+          </View>
+        </If>
+        <IconButton
+          testID="fp-pill-next"
+          icon={(() => {
+            const t = target(1);
+            return t && "check" in t ? "circle-check" : "chevron-right";
+          })()}
+          tooltip={stepLabel(1)}
+          disabled={!target(1)}
+          onPress={() => s.step(1)}
+        />
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------- dialogs
+
+function Dialogs(props: { s: FormSession }) {
+  const s = props.s;
+  const o = () => s.overlay();
+  const kind = (k: NonNullable<Overlay>["kind"]) => o()?.kind === k;
+  const removal = () => {
+    const v = o();
+    return v?.kind === "removal" ? v : null;
+  };
+  const existing = () => {
+    const v = o();
+    return v?.kind === "existing" ? existingOfferFor(v.existing) : null;
+  };
+  const warns = () => {
+    const v = o();
+    return v?.kind === "queue-confirm" ? v.warns : [];
+  };
+  const period = () => {
+    const v = o();
+    return v?.kind === "sample-period" ? v : null;
+  };
+  const fast = signal(false);
+  // The period dialog's boxes and quarter, filled when it opens.
+  const parts = signal<Record<string, string>>({});
+  effect(() => {
+    const p = period();
+    if (p) untracked(() => parts.set(Object.fromEntries(p.parts.map((x) => [x.key, x.value]))));
+  });
+  const savePeriod = () => {
+    const p = period();
+    if (!p) return;
+    const v = parts();
+    s.takeSamplePeriod(Object.fromEntries(p.parts.map((x) => [x.key, x.part === "quarter" ? String(v[x.key] === "true") : (v[x.key] ?? "").trim()])));
+  };
+  return (
+    <>
+      <Dialog testID="removal-confirm" width={420} open={kind("removal")} onOpenChange={(open) => !open && s.cancelRemoval()}>
+        <View class="gap-3 p-5">
+          <Text variant="title">{removal()?.message ?? ""}</Text>
+          <AppButton testID="removal-continue" variant="primary" block label="Continue" onPress={() => s.confirmRemoval()} />
+          <AppButton testID="removal-cancel" block label="Cancel" onPress={() => s.cancelRemoval()} />
+        </View>
+      </Dialog>
+      <Dialog testID="existing-offer" width={420} open={kind("existing")} onOpenChange={(open) => !open && s.takeExisting("keep")}>
+        <If when={existing()}>
+          {(offer) => (
+            <View class="gap-3 p-5">
+              <View class="gap-0.5">
+                <Text variant="title">{offer().title}</Text>
+                <If when={offer().subtitle}>
+                  <Text variant="meta" tone="fg2">{offer().subtitle}</Text>
+                </If>
+              </View>
+              <Each of={offer().choices}>
+                {(c) => <AppButton testID={`existing-${c().id}`} block variant={c().variant} label={c().label} hint={c().hint} onPress={() => s.takeExisting(c().id)} />}
+              </Each>
+              <If when={offer().fastLane}>
+                <View class="flex-row items-center gap-2">
+                  <Checkbox
+                    testID="existing-fast-lane"
+                    label="Don't ask again for drafts (this session)"
+                    checked={fast()}
+                    onChange={(on) => {
+                      fast.set(on);
+                      s.setFastLane(on);
+                    }}
+                  />
+                  <Text variant="meta">Don't ask again for drafts (this session)</Text>
+                </View>
+              </If>
+            </View>
+          )}
+        </If>
+      </Dialog>
+      <Dialog testID="queue-confirm" width={420} open={kind("queue-confirm")} onOpenChange={(open) => !open && s.cancelQueueConfirm()}>
+        <View class="gap-3 p-5">
+          <Text variant="title">Queue this return?</Text>
+          <Each of={warns()}>{(w, n) => <Text variant="control" testID={`queue-warn-${n()}`}>{w()}</Text>}</Each>
+          <AppButton testID="queue-continue" variant="primary" block label="Continue" onPress={() => s.confirmQueue()} />
+          <AppButton testID="queue-cancel" block label="Cancel" onPress={() => s.cancelQueueConfirm()} />
+        </View>
+      </Dialog>
+      <Dialog testID="sample-period" width={420} open={kind("sample-period")} onOpenChange={(open) => !open && s.closeSamplePeriod()}>
+        <If when={period()}>
+          {(p) => (
+            <View class="gap-3 p-5">
+              <View class="gap-0.5">
+                <Text variant="title">Which period is this return for?</Text>
+                <Text variant="meta" tone="fg2">Save makes this sample your return for that period.</Text>
+              </View>
+              <Each of={p().parts.filter((x) => x.part !== "quarter")}>
+                {(x) => (
+                  <TextField
+                    testID={`sample-period-${x().part}`}
+                    label={PERIOD_PART_LABELS[x().part] || x().part}
+                    value={parts()[x().key] ?? ""}
+                    onChange={(v) => parts.set({ ...parts(), [x().key]: v })}
+                  />
+                )}
+              </Each>
+              <If when={p().parts.some((x) => x.part === "quarter")}>
+                <View class="gap-1">
+                  <Text variant="meta" tone="fg2">{PERIOD_PART_LABELS.quarter}</Text>
+                  <View class="flex-row flex-wrap gap-2">
+                    <Each of={p().parts.filter((x) => x.part === "quarter")}>
+                      {(x) => (
+                        <AppButton
+                          testID={`sample-period-q${x().quarter}`}
+                          size="sm"
+                          variant={parts()[x().key] === "true" ? "primary" : "secondary"}
+                          label={`Q${x().quarter}`}
+                          onPress={() => {
+                            const next: Record<string, string> = { ...parts() };
+                            for (const q of p().parts) if (q.part === "quarter") next[q.key] = q.key === x().key ? "true" : "false";
+                            parts.set(next);
+                          }}
+                        />
+                      )}
+                    </Each>
+                  </View>
+                </View>
+              </If>
+              <If when={p().error}>
+                <Text variant="meta" tone="danger">{p().error}</Text>
+              </If>
+              <View class="flex-row justify-end gap-2">
+                <AppButton testID="sample-period-cancel" variant="ghost" label="Cancel" onPress={() => s.closeSamplePeriod()} />
+                <AppButton testID="sample-period-save" variant="primary" label="Save" onPress={savePeriod} />
+              </View>
+            </View>
+          )}
+        </If>
+      </Dialog>
+    </>
+  );
+}

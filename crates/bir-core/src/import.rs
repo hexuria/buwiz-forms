@@ -4,7 +4,7 @@ use crate::profile::{ProfileCredentials, TaxpayerProfile};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::info;
 use zip::ZipArchive;
 
@@ -354,7 +354,85 @@ fn provider_ids(db: &Database, tin: &str) -> Result<BTreeSet<String>, DbError> {
     Ok(ids)
 }
 
-pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
+/// A database taken out of a backup archive, checked, and not yet installed.
+///
+/// Staging touches nothing live: the archive's `bir_data.db` is written to a
+/// temporary file and must pass [`check_restorable_database`]. Only
+/// [`StagedDatabase::install`] replaces the live file, so a caller can do its
+/// own work between the two (a safety copy, closing its connection) knowing
+/// the archive is good. Dropping it, installed or not, removes the temporary
+/// file.
+#[derive(Debug)]
+pub struct StagedDatabase {
+    staged: PathBuf,
+    target: PathBuf,
+}
+
+impl StagedDatabase {
+    /// The temporary file the archive's database was extracted to.
+    pub fn path(&self) -> &Path {
+        &self.staged
+    }
+
+    /// Replace the database at the target path with the staged one.
+    ///
+    /// Plain build: the stale `-wal`, `-shm` and `-journal` files of the
+    /// replaced database go first (a log left behind would be replayed into the
+    /// new file), then one rename puts the staged file over the live one, so
+    /// the live path holds the old database or the new one and never a
+    /// half-written file. A failure leaves the old database where it was.
+    pub fn install(self) -> Result<(), DbError> {
+        install_staged_database(&self.staged, &self.target)
+    }
+}
+
+impl Drop for StagedDatabase {
+    fn drop(&mut self) {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            let _ = fs::remove_file(with_suffix(&self.staged, suffix));
+        }
+    }
+}
+
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut raw = path.as_os_str().to_os_string();
+    raw.push(suffix);
+    PathBuf::from(raw)
+}
+
+/// Where an archive's database is extracted, unique per call. The plain build
+/// stages next to the file it will replace, so the final rename never crosses
+/// a file system.
+fn staging_path(out_db_path: &Path) -> PathBuf {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static SEQUENCE: AtomicU32 = AtomicU32::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    let unique = format!(
+        "{}-{nanos}-{}",
+        std::process::id(),
+        SEQUENCE.fetch_add(1, Ordering::SeqCst)
+    );
+    #[cfg(feature = "sqlcipher")]
+    {
+        let _ = out_db_path;
+        std::env::temp_dir().join(format!("bir_unencrypted_import_{unique}.db"))
+    }
+    #[cfg(not(feature = "sqlcipher"))]
+    {
+        let name = out_db_path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "bir_data.db".to_string());
+        out_db_path.with_file_name(format!("{name}.import-{unique}.tmp"))
+    }
+}
+
+/// Extract the database of the backup archive at `zip_path` and check it,
+/// without touching `out_db_path`. See [`StagedDatabase`].
+pub fn stage_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<StagedDatabase, DbError> {
     let file = fs::File::open(zip_path)?;
     let mut archive = ZipArchive::new(file).map_err(|e| DbError::Other(e.to_string()))?;
 
@@ -362,29 +440,100 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
         .by_name("bir_data.db")
         .map_err(|e| DbError::Other(e.to_string()))?;
 
-    // Extract to temp unencrypted db
-    let temp_dir = std::env::temp_dir();
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let temp_db_path = temp_dir.join(format!("bir_unencrypted_import_{}.db", timestamp));
-
-    let mut temp_file = fs::File::create(&temp_db_path)?;
+    // From here on every early return drops the guard, which removes the file.
+    let staged = StagedDatabase {
+        staged: staging_path(out_db_path),
+        target: out_db_path.to_path_buf(),
+    };
+    #[cfg(not(feature = "sqlcipher"))]
+    if let Some(folder) = staged.staged.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(folder)?;
+    }
+    let mut temp_file = fs::File::create(&staged.staged)?;
     std::io::copy(&mut db_file_in_zip, &mut temp_file)?;
+    // The bytes are on disk before anything depends on them.
+    temp_file.sync_all()?;
     drop(temp_file);
 
-    install_extracted_database(&temp_db_path, out_db_path)?;
-
-    // Clean up
-    let _ = fs::remove_file(&temp_db_path);
-
-    Ok(())
+    check_restorable_database(&staged.staged)?;
+    Ok(staged)
 }
 
-/// SQLCipher build: encrypt the extracted plain database into `out_db_path`.
+/// Restore the database of the backup archive at `zip_path` over
+/// `out_db_path`: stage and check it first, replace only then.
+pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
+    stage_database_zip(zip_path, out_db_path)?.install()
+}
+
+/// The tables every database this app has ever written has (its first schema
+/// creates them all). An archive without them is some other SQLite file.
+const CORE_TABLES: [&str; 4] = ["profiles", "submissions", "form_drafts", "settings"];
+
+/// What a plain SQLite file must be before it may replace the live database:
+/// the plain header, a clean `PRAGMA integrity_check`, the app's core tables,
+/// and a schema version this build can open (not newer than the one it
+/// migrates to). The file is only read (no create, no write).
+fn check_restorable_database(path: &Path) -> Result<(), DbError> {
+    fn refuse(why: impl std::fmt::Display) -> DbError {
+        DbError::Other(format!(
+            "The backup's database {why}, so it was not restored. The current database was left as it is."
+        ))
+    }
+    if crate::db::database_file_kind(path)? != crate::db::DatabaseFileKind::PlainSqlite {
+        return Err(refuse("is not a plain SQLite file"));
+    }
+    let verdict = (|| -> Result<(), DbError> {
+        let conn =
+            rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(|error| refuse(format!("cannot be opened ({error})")))?;
+        let integrity: String = conn
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .map_err(|error| refuse(format!("did not pass the integrity check ({error})")))?;
+        if integrity != "ok" {
+            return Err(refuse(format!(
+                "did not pass the integrity check ({integrity})"
+            )));
+        }
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(|error| refuse(format!("has no readable schema version ({error})")))?;
+        let supported = crate::db::current_schema_version()?;
+        if version > supported {
+            return Err(refuse(format!(
+                "was made by a newer version of the app (schema version {version}; this one opens up to {supported})"
+            )));
+        }
+        let mut statement = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .map_err(|error| refuse(format!("has no readable tables ({error})")))?;
+        let tables: BTreeSet<String> = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .and_then(|rows| rows.collect())
+            .map_err(|error| refuse(format!("has no readable tables ({error})")))?;
+        let missing: Vec<&str> = CORE_TABLES
+            .into_iter()
+            .filter(|table| !tables.contains(*table))
+            .collect();
+        if !missing.is_empty() {
+            return Err(refuse(format!(
+                "is not an eBIRForms database (no {} table)",
+                missing.join(", ")
+            )));
+        }
+        Ok(())
+    })();
+    // A read-only open of a database in WAL mode may have made these.
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let _ = fs::remove_file(with_suffix(path, suffix));
+    }
+    verdict
+}
+
+/// SQLCipher build: encrypt the staged plain database into `out_db_path`.
+/// The archive was checked when it was staged; the replaced database goes
+/// only now.
 #[cfg(feature = "sqlcipher")]
-fn install_extracted_database(temp_db_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
+fn install_staged_database(temp_db_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
     // Delete the current database so we can cleanly export into a new one
     if out_db_path.exists() {
         let _ = fs::remove_file(out_db_path);
@@ -421,44 +570,30 @@ fn install_extracted_database(temp_db_path: &Path, out_db_path: &Path) -> Result
     Ok(())
 }
 
-/// Plain build: there is no key and no `sqlcipher_export`; the extracted
-/// file already is the database. It is checked first (plain SQLite header and
-/// readable), and only then does it replace the current one, so a bad archive
-/// never costs the current database. An archive made by the SQLCipher build
-/// holds a plain database too (the export decrypts it), so it restores here.
+/// Plain build: there is no key and no `sqlcipher_export`; the staged file
+/// already is the database. It is renamed over the live one (atomic on the
+/// same folder), after the replaced database's sidecar files are gone, so a
+/// failure at any step leaves the current database as it was.
 #[cfg(not(feature = "sqlcipher"))]
-fn install_extracted_database(temp_db_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
-    let check = || -> Result<(), DbError> {
-        if crate::db::database_file_kind(temp_db_path)? != crate::db::DatabaseFileKind::PlainSqlite
+fn install_staged_database(staged: &Path, out_db_path: &Path) -> Result<(), DbError> {
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let sidecar = with_suffix(out_db_path, suffix);
+        match fs::remove_file(&sidecar) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(DbError::Io(error)),
+        }
+    }
+    fs::rename(staged, out_db_path)?;
+    // Make the rename itself durable (best effort; not every platform lets a folder be synced).
+    #[cfg(unix)]
+    {
+        if let Some(folder) = out_db_path.parent().filter(|p| !p.as_os_str().is_empty())
+            && let Ok(folder) = fs::File::open(folder)
         {
-            return Err(DbError::Other(
-                "The backup's database is not a plain SQLite file, so it was not restored. \
-                 The current database was left as it is."
-                    .into(),
-            ));
-        }
-        let conn = rusqlite::Connection::open_with_flags(
-            temp_db_path,
-            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-        )?;
-        let _: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0))?;
-        Ok(())
-    };
-    if let Err(error) = check() {
-        let _ = fs::remove_file(temp_db_path);
-        return Err(error);
-    }
-
-    // Replace the current database and its sidecar files.
-    for suffix in ["", "-wal", "-shm"] {
-        let mut sidecar = out_db_path.as_os_str().to_os_string();
-        sidecar.push(suffix);
-        let sidecar = std::path::PathBuf::from(sidecar);
-        if sidecar.exists() {
-            fs::remove_file(&sidecar)?;
+            let _ = folder.sync_all();
         }
     }
-    fs::copy(temp_db_path, out_db_path)?;
     Ok(())
 }
 
@@ -1458,6 +1593,233 @@ mod tests {
         assert_eq!(
             db.get_setting("round_trip").unwrap(),
             Some("plain".to_string())
+        );
+    }
+    // ---- restoring a database backup: validate, then replace ----
+
+    /// The files in `dir`, sorted.
+    fn names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// A backup archive whose `bir_data.db` is `bytes`.
+    fn write_database_archive(path: &Path, bytes: &[u8]) {
+        let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
+        zip.start_file("bir_data.db", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        std::io::Write::write_all(&mut zip, bytes).unwrap();
+        zip.finish().unwrap();
+    }
+
+    /// The (plain) bytes of a real, migrated database that holds the setting
+    /// `marker = value`: what a good backup carries. Built in a folder of its own.
+    fn good_database_bytes(value: &str) -> Vec<u8> {
+        let dir = tempdir().unwrap();
+        let source = Database::open(dir.path().join("source.db")).unwrap();
+        source.set_setting("marker", value).unwrap();
+        let archive = dir.path().join("good.zip");
+        crate::export::export_database_zip(&source, &archive).unwrap();
+        source.close().unwrap();
+        let mut zip = ZipArchive::new(fs::File::open(&archive).unwrap()).unwrap();
+        let mut bytes = Vec::new();
+        zip.by_name("bir_data.db")
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        bytes
+    }
+
+    /// The current database in a folder of its own: `kept = yes`, closed.
+    fn current_database(dir: &Path) -> PathBuf {
+        let current = dir.join("bir_data.db");
+        let db = Database::open(&current).unwrap();
+        db.set_setting("kept", "yes").unwrap();
+        db.close().unwrap();
+        current
+    }
+
+    fn assert_current_untouched(current: &Path, before: &[u8]) {
+        assert_eq!(fs::read(current).unwrap(), before, "current database bytes");
+        let db = Database::open(current).unwrap();
+        assert_eq!(db.get_setting("kept").unwrap(), Some("yes".to_string()));
+    }
+
+    /// Every way an archive's database can be unfit to replace the live one is
+    /// refused with the reason, before the live database is touched, and
+    /// leaves no temporary file next to it. (Before the check ran first, the
+    /// SQLCipher build deleted the live file and then failed to export; the
+    /// plain build only looked at the header and `count(*)` of `sqlite_master`.)
+    #[test]
+    fn a_database_backup_that_is_unfit_never_costs_the_current_database() {
+        let good = good_database_bytes("good");
+        let page = {
+            let size = u16::from_be_bytes([good[16], good[17]]);
+            if size == 1 { 65536 } else { usize::from(size) }
+        };
+        assert!(good.len() >= page * 6, "a real database has several pages");
+
+        let mut corrupt = good.clone();
+        corrupt[page..page * 4].fill(0xAB);
+
+        let scratch = tempdir().unwrap();
+        let foreign = scratch.path().join("foreign.db");
+        {
+            let conn = rusqlite::Connection::open(&foreign).unwrap();
+            conn.execute_batch("CREATE TABLE notes (body TEXT); INSERT INTO notes VALUES ('x');")
+                .unwrap();
+        }
+        let newer = scratch.path().join("newer.db");
+        fs::write(&newer, &good).unwrap();
+        {
+            let conn = rusqlite::Connection::open(&newer).unwrap();
+            conn.execute_batch("PRAGMA user_version = 9999;").unwrap();
+        }
+
+        let cases: [(&str, Vec<u8>, &str); 4] = [
+            (
+                "not sqlite at all",
+                "\u{1}\u{2}not-sqlite-".repeat(512).into_bytes(),
+                "not a plain SQLite",
+            ),
+            ("damaged pages", corrupt, "integrity check"),
+            (
+                "another program's database",
+                fs::read(&foreign).unwrap(),
+                "not an eBIRForms database",
+            ),
+            (
+                "a newer schema",
+                fs::read(&newer).unwrap(),
+                "newer version of the app",
+            ),
+        ];
+        for (name, bytes, reason) in cases {
+            let dir = tempdir().unwrap();
+            let current = current_database(dir.path());
+            let before = fs::read(&current).unwrap();
+            let listing = names(dir.path());
+            let archive = scratch.path().join("backup.zip");
+            write_database_archive(&archive, &bytes);
+
+            let error = extract_database_zip(&archive, &current)
+                .expect_err(&format!("{name}: must be refused"))
+                .to_string();
+            assert!(error.contains(reason), "{name}: {error}");
+            assert!(error.contains("left as it is"), "{name}: {error}");
+            assert_current_untouched(&current, &before);
+            assert_eq!(
+                names(dir.path()),
+                listing,
+                "{name}: nothing left beside the database"
+            );
+        }
+    }
+
+    /// A good backup replaces the current database, and what the replaced
+    /// one left behind (its write-ahead log and shared memory) goes too, or it
+    /// would be replayed into the new file.
+    #[test]
+    fn a_good_database_backup_replaces_the_current_one_and_leaves_nothing_behind() {
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        for suffix in ["-wal", "-shm"] {
+            fs::write(
+                with_suffix(&current, suffix),
+                b"stale bytes of the old file",
+            )
+            .unwrap();
+        }
+        let scratch = tempdir().unwrap();
+        let archive = scratch.path().join("backup.zip");
+        write_database_archive(&archive, &good_database_bytes("restored"));
+
+        extract_database_zip(&archive, &current).unwrap();
+
+        assert_eq!(
+            names(dir.path()),
+            ["bir_data.db"],
+            "no log, no temporary file"
+        );
+        let db = Database::open(&current).unwrap();
+        assert_eq!(
+            db.get_setting("marker").unwrap(),
+            Some("restored".to_string())
+        );
+        assert_eq!(
+            db.get_setting("kept").unwrap(),
+            None,
+            "the old data is gone"
+        );
+    }
+
+    /// Staging checks the archive and writes beside the target; it replaces
+    /// nothing until `install`, and dropping a staged database removes it.
+    #[test]
+    fn a_staged_database_replaces_nothing_until_it_is_installed() {
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        let before = fs::read(&current).unwrap();
+        let scratch = tempdir().unwrap();
+        let archive = scratch.path().join("backup.zip");
+        write_database_archive(&archive, &good_database_bytes("staged"));
+
+        let staged = stage_database_zip(&archive, &current).unwrap();
+        let temporary = staged.path().to_path_buf();
+        assert!(temporary.is_file());
+        #[cfg(not(feature = "sqlcipher"))]
+        assert_eq!(
+            temporary.parent(),
+            current.parent(),
+            "staged beside the file it will replace, so the rename stays on one file system"
+        );
+        assert_current_untouched(&current, &before);
+        drop(staged);
+        assert!(!temporary.exists(), "dropping a staged database cleans up");
+        assert_current_untouched(&current, &before);
+
+        stage_database_zip(&archive, &current)
+            .unwrap()
+            .install()
+            .unwrap();
+        let db = Database::open(&current).unwrap();
+        assert_eq!(
+            db.get_setting("marker").unwrap(),
+            Some("staged".to_string())
+        );
+    }
+
+    /// Plain build: when the replace itself fails, here because the old
+    /// file's write-ahead log is something that cannot be removed, the
+    /// current database is still there, byte for byte, and the temporary file
+    /// is gone. (Before, the live file was deleted first and the failure came
+    /// after.)
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn a_replace_that_fails_midway_keeps_the_current_database() {
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        let before = fs::read(&current).unwrap();
+        fs::create_dir(with_suffix(&current, "-wal")).unwrap();
+        let scratch = tempdir().unwrap();
+        let archive = scratch.path().join("backup.zip");
+        write_database_archive(&archive, &good_database_bytes("never"));
+
+        extract_database_zip(&archive, &current).expect_err("the log cannot be removed");
+
+        assert_eq!(
+            fs::read(&current).unwrap(),
+            before,
+            "current database bytes"
+        );
+        assert_eq!(
+            names(dir.path()),
+            ["bir_data.db", "bir_data.db-wal"],
+            "no temporary file"
         );
     }
 }

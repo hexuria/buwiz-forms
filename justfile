@@ -141,6 +141,17 @@ shell-check: shell-ui-test
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --test headless_detach
 
+# bir-core and bir-app-api tests in the plain-SQLite build the NSH app ships (no sqlcipher), with the four safety variables:
+# nothing reaches the keychain, a real database or the BIR.
+[unix]
+core-plain-test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1
+    unset BIR_SFTP_LIVE BIR_DATABASE_PATH
+    cargo test -p bir-core --no-default-features
+    cargo test -p bir-app-api --no-default-features
+
 # Run code formatting, linting, and type checking
 [unix]
 check:
@@ -954,21 +965,77 @@ nsh-test *args="":
     exec nsh test {{args}}
 
 # Refuses a database path inside the owner's live data, the migrated copy or the migration folder (Hard rules 2 and 3).
+# The same checks as the door's guard (nsh/src/guards.rs, which a test compares with this script): the home folder
+# is the account's own from the password database, never $HOME; the path is resolved through symlinks and ".."; and
+# it is refused by name, by device+inode (macOS reaches one folder as /Users/u/x and as /System/Volumes/Data/Users/u/x,
+# and a volume may ignore case: an ancestor that IS a protected folder is refused), and as a hard link to a file
+# directly inside a protected folder.
 [private]
 [unix]
 _nsh-db-guard db:
     #!/usr/bin/env bash
     set -euo pipefail
-    db="{{db}}"
-    [ -n "$db" ] || exit 0
-    real() { python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
-    canon="$(real "$db")"
-    for guarded in "$HOME/Library/Group Containers/group.dev.goldcoders.bir" "$HOME/BuwizNsh/data" "$HOME/BuwizNsh/migration"; do
-        g="$(real "$guarded")"
-        case "$canon" in
-            "$g"|"$g"/*) echo "refusing $canon: that is the owner's data. cp a copy to ~/BuwizNsh/agents/<track>.db and use that"; exit 1 ;;
-        esac
-    done
+    [ -n {{quote(db)}} ] || exit 0
+    python3 -I - {{quote(db)}} <<'PY'
+    import os
+    import pwd
+    import sys
+
+    home = pwd.getpwuid(os.getuid()).pw_dir
+    protected = [
+        home + "/Library/Group Containers/group.dev.goldcoders.bir",
+        home + "/BuwizNsh/data",
+        home + "/BuwizNsh/migration",
+    ]
+    candidate = os.path.realpath(sys.argv[1])
+
+
+    def identity(path):
+        try:
+            info = os.stat(path)
+        except OSError:
+            return None
+        return (info.st_dev, info.st_ino)
+
+
+    def lower(path):
+        return path.lower() if sys.platform in ("darwin", "win32") else path
+
+
+    def refuse(why):
+        print("refusing %s: %s, the owner's data. cp a copy to ~/BuwizNsh/agents/<track>.db and use that" % (candidate, why), file=sys.stderr)
+        sys.exit(1)
+
+
+    folders = [os.path.realpath(path) for path in protected]
+    for folder in folders:
+        if lower(candidate) == lower(folder) or lower(candidate).startswith(lower(folder).rstrip(os.sep) + os.sep):
+            refuse("it is inside " + folder)
+
+    known = {}
+    for folder in folders:
+        found = identity(folder) if os.path.isdir(folder) else None
+        if found is not None:
+            known[found] = folder
+
+    path = candidate
+    while True:
+        found = identity(path)
+        if found is not None and found in known:
+            refuse("it is inside %s (the same folder by device and inode, under another name)" % known[found])
+        parent = os.path.dirname(path)
+        if parent == path:
+            break
+        path = parent
+
+    if os.path.isfile(candidate):
+        info = os.stat(candidate)
+        if info.st_nlink > 1:
+            for folder in known.values():
+                for name in os.listdir(folder):
+                    if identity(os.path.join(folder, name)) == (info.st_dev, info.st_ino):
+                        refuse("it is a hard link to a file in " + folder)
+    PY
 
 # The database comes from the caller: just nsh-run ~/BuwizNsh/agents/<track>.db, or BIR_DATABASE_PATH in the environment.
 # A path inside the owner's data, ~/BuwizNsh/data or ~/BuwizNsh/migration is refused.

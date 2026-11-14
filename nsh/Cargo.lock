@@ -2828,6 +2828,7 @@ dependencies = [
  "bir-app-api",
  "bir-core",
  "futures",
+ "libc",
  "nsh-core",
  "serde_json",
  "temp-env",

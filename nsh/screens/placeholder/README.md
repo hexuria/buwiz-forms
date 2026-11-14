@@ -1,0 +1,1 @@
+Placeholder pages for the views that are not built yet (wave 3: Home, Form library, Calendar, Filings, the taxpayer pages; wave 4: Settings). `shell/views.tsx` maps each view to one. A screen agent replaces that mapping with the real screen; `Placeholder.tsx` stays.

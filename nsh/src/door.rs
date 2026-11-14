@@ -9,11 +9,10 @@
 //!   before anything opens, and no database inside the owner's folders is ever opened.
 
 use std::cell::RefCell;
-use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, Once, OnceLock};
 
 use bir_app_api::host::{FunctionKind, HostArguments, HostModule};
 use nsh_core::JsonValue;
@@ -28,57 +27,85 @@ struct Process {
 
 static PROCESS: OnceLock<Process> = OnceLock::new();
 
-/// Install the hooks and run the send guard, once. Nothing else has happened yet: no database is open and
-/// no worker exists.
+/// Set up the process, once: the keychain switch, the hooks and the send guard.
+///
+/// **This is the only place the door changes the process environment** (`BUWIZ_NO_KEYCHAIN`,
+/// `BIR_SFTP_DRY_RUN`, `BIR_SFTP_LIVE`; the database a test run opens is named with
+/// `bir_core::db::set_database_path_override`, not the environment). It runs at the registration of the native
+/// module (`lib.rs`): both generated hosts (`nsh/.nsh/rust/macos-host/main.rs`, `.../test/main.rs`) build the
+/// registry as the first statement of `main`, before NSH starts any thread, and the database, the submission
+/// worker and every reader thread of ours come later still. So no thread of ours can be reading the
+/// environment while it changes (NSH's own startup follows the registry, and it reads nothing named `BIR_*`),
+/// and every later reader sees the finished values. Should the registry ever be built later (or never), the
+/// first host call runs this instead, before it opens anything.
 fn process() -> &'static Process {
     PROCESS.get_or_init(|| {
+        switch_off_keychain(cfg!(debug_assertions));
         let _ = bir_app_api::install_hooks(NshHooks);
-        if test_environment() {
-            // SAFETY: once, at boot, before the database and the worker exist.
-            unsafe { std::env::set_var("BUWIZ_NO_KEYCHAIN", "1") };
-        }
         Process {
             send: guards::send_guard(),
         }
     })
 }
 
-/// `EBIR_TEST_ENV` is on: a dev, test or agent run. The keychain stays shut, and a database nobody named
-/// is a scratch one.
+/// Set up the process now. The native module's registration calls it (see [`process`]).
+pub(crate) fn prepare_process() {
+    process();
+}
+
+/// Whether [`prepare_process`] has run in this process.
+#[cfg(test)]
+pub(crate) fn process_prepared() -> bool {
+    PROCESS.get().is_some()
+}
+
+/// Debug builds never reach the OS keychain, whatever the caller set: `BUWIZ_NO_KEYCHAIN=1` before anything
+/// in bir-core runs. A release build leaves the variable to the caller.
+fn switch_off_keychain(debug_build: bool) {
+    if debug_build {
+        // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
+        unsafe { std::env::set_var(bir_core::platform::NO_KEYCHAIN_ENV, "1") };
+    }
+}
+
+/// `EBIR_TEST_ENV` is on: a dev, test or agent run. A database nobody named is a scratch one. Read the way
+/// bir-core reads it (`bir_core::db::test_environment`), so the two never disagree.
 pub fn test_environment() -> bool {
-    std::env::var("EBIR_TEST_ENV").is_ok_and(|value| {
-        let value = value.trim().to_ascii_lowercase();
-        !value.is_empty() && !matches!(value.as_str(), "0" | "false" | "no" | "off")
-    })
+    bir_core::db::test_environment()
 }
 
 const DATABASE_PATH: &str = "BIR_DATABASE_PATH";
 
-/// The scratch database path this process last made, so a later thread can tell it from a path someone
-/// named.
-static SCRATCH: Mutex<Option<OsString>> = Mutex::new(None);
+/// The scratch folders of earlier runs are cleared out the first time this process names one.
+static SWEPT: Once = Once::new();
 static SCRATCH_SEQUENCE: AtomicU32 = AtomicU32::new(0);
-/// One boot at a time: the environment names the database, and a boot reads it right after.
+/// One boot at a time: a boot names the database right before this thread opens it.
 static BOOT: Mutex<()> = Mutex::new(());
 
-/// In a test environment with no `BIR_DATABASE_PATH` (or only the previous scratch one), name a fresh
-/// scratch database in the temp folder: a test never opens the NSH app's real data folder, and two engines
-/// of one test run never share a file (the owner lock would refuse the second).
+thread_local! {
+    /// The database this thread asked for with [`use_database`], until it boots.
+    static NAMED: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+/// Decide which database this thread opens, and name it for bir-core.
+///
+/// A caller who set `BIR_DATABASE_PATH` has named it; so has a test that called [`use_database`]. In a test
+/// environment with neither, a fresh scratch database in the temp folder: a test never opens the NSH app's
+/// real data folder, and two engines of one test run never share a file (the owner lock would refuse the
+/// second). Nothing is named outside a test environment.
 fn choose_database() -> Result<(), String> {
     if !test_environment() {
         return Ok(());
     }
-    let named = std::env::var_os(DATABASE_PATH).filter(|value| !value.is_empty());
-    let mut scratch = SCRATCH
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    if named.is_some() && named != *scratch {
+    if let Some(named) = NAMED.with(|slot| slot.borrow().clone()) {
+        bir_core::db::set_database_path_override(Some(named));
+        return Ok(());
+    }
+    if std::env::var_os(DATABASE_PATH).is_some_and(|value| !value.is_empty()) {
         return Ok(());
     }
     let root = std::env::temp_dir().join("ebirforms-door");
-    if scratch.is_none() {
-        forget_old_scratch(&root);
-    }
+    SWEPT.call_once(|| forget_old_scratch(&root, SCRATCH_LIFETIME));
     let folder = root.join(format!(
         "{}-{}",
         std::process::id(),
@@ -86,30 +113,56 @@ fn choose_database() -> Result<(), String> {
     ));
     std::fs::create_dir_all(&folder)
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
-    let path = folder.join("bir_data.db").into_os_string();
-    // SAFETY: serialized by BOOT, at boot, before this thread's database opens.
-    unsafe { std::env::set_var(DATABASE_PATH, &path) };
-    *scratch = Some(path);
+    bir_core::db::set_database_path_override(Some(folder.join("bir_data.db")));
     Ok(())
 }
 
-/// Scratch folders of earlier runs older than a day go; best effort, and only ever inside `root`.
-fn forget_old_scratch(root: &std::path::Path) {
+/// How long a scratch folder lives after its last change.
+const SCRATCH_LIFETIME: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Scratch folders of earlier runs that nobody changed for `lifetime` go; best effort, and only ever
+/// folders inside `root`.
+///
+/// A folder's own modified time does not move while a database inside it is written (only adding or
+/// removing a file does), so age is the newest change of anything inside, and a folder whose owner lock is
+/// held (a live run has its database open, however quiet) is never touched.
+fn forget_old_scratch(root: &Path, lifetime: std::time::Duration) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
-    let day = std::time::Duration::from_secs(24 * 60 * 60);
     for entry in entries.flatten() {
-        let old = entry
-            .metadata()
-            .and_then(|meta| meta.modified())
-            .ok()
-            .and_then(|modified| modified.elapsed().ok())
-            .is_some_and(|age| age > day);
-        if old {
-            let _ = std::fs::remove_dir_all(entry.path());
+        let folder = entry.path();
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let quiet = newest_change(&folder)
+            .and_then(|changed| changed.elapsed().ok())
+            .is_some_and(|age| age > lifetime);
+        if !quiet {
+            continue;
+        }
+        // Hold the owner lock while deleting: a run that starts now waits for it, and one that has the
+        // database open keeps it, so we skip. (The lock file is made if the folder has none.)
+        let Ok(lock) = bir_core::db::try_acquire_live_owner_lock(&folder.join("bir_data.db"))
+        else {
+            continue;
+        };
+        drop(lock);
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+}
+
+/// The most recent modified time of `path` and of everything inside it. `None` when something cannot be
+/// read, which is as good as "changed just now".
+fn newest_change(path: &Path) -> Option<std::time::SystemTime> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    let mut newest = meta.modified().ok()?;
+    if meta.is_dir() {
+        for entry in std::fs::read_dir(path).ok()? {
+            newest = newest.max(newest_change(&entry.ok()?.path())?);
         }
     }
+    Some(newest)
 }
 
 /// Name the database this thread opens (`EBIR_TEST_ENV` only, and before the first call). Returns the path.
@@ -136,8 +189,8 @@ pub fn use_database(path: &str) -> Result<String, String> {
             .map_err(|error| format!("Cannot make the database folder: {error}"))?;
     }
     let _serial = BOOT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    // SAFETY: serialized by BOOT; this thread has not opened its database yet.
-    unsafe { std::env::set_var(DATABASE_PATH, &path) };
+    NAMED.with(|slot| *slot.borrow_mut() = Some(path.clone()));
+    bir_core::db::set_database_path_override(Some(path.clone()));
     Ok(path.display().to_string())
 }
 
@@ -337,10 +390,19 @@ mod tests {
 
     use super::*;
 
-    /// The dev environment of the plan, a database nobody else opens, and a home folder of its own.
+    /// Forgets the database name a test gave bir-core in-process when the test ends, even by a panic.
+    struct ForgetDatabaseName;
+
+    impl Drop for ForgetDatabaseName {
+        fn drop(&mut self) {
+            bir_core::db::set_database_path_override(None);
+        }
+    }
+
+    /// The dev environment of the plan, a database nobody else opens, and a home folder of its own (the
+    /// protected folders hang off it for the guard, on this thread).
     fn dev_env<R>(database: Option<&Path>, home: Option<&Path>, body: impl FnOnce() -> R) -> R {
         let database = database.map(|path| path.display().to_string());
-        let home = home.map(|path| path.display().to_string());
         temp_env::with_vars(
             [
                 ("BUWIZ_NO_KEYCHAIN", Some("1")),
@@ -350,12 +412,15 @@ mod tests {
                 ("BIR_SFTP_LIVE", None),
                 ("BIR_SFTP_HOST", None),
                 ("BIR_DATABASE_PATH", database.as_deref()),
-                (
-                    "HOME",
-                    home.as_deref().or(std::env::var("HOME").ok().as_deref()),
-                ),
             ],
-            body,
+            || {
+                let _forget = ForgetDatabaseName;
+                bir_core::db::set_database_path_override(None);
+                match home {
+                    Some(home) => guards::with_home_for_test(home, body),
+                    None => body(),
+                }
+            },
         )
     }
 
@@ -491,6 +556,11 @@ mod tests {
             );
             assert!(path.exists());
             assert!(guards::database_refusal_here(&path).is_none());
+            assert_eq!(
+                std::env::var_os("BIR_DATABASE_PATH"),
+                None,
+                "the scratch database is named in-process, the environment is not changed"
+            );
         });
     }
 
@@ -506,6 +576,11 @@ mod tests {
             assert_eq!(
                 use_database(&database.display().to_string()).expect("named"),
                 database.display().to_string()
+            );
+            assert_eq!(
+                std::env::var_os("BIR_DATABASE_PATH"),
+                None,
+                "the named database is given to bir-core in-process, the environment is not changed"
             );
             let info = call("system_info", vec![]).expect("system_info");
             assert_eq!(info["database_path"], database.display().to_string());
@@ -548,5 +623,193 @@ mod tests {
             "{} is stale: run nsh/bir/regenerate.sh",
             path.display()
         );
+    }
+    /// `EBIR_TEST_ENV` reads the way bir-core reads it. (The door used to take any value but `0`, `false`,
+    /// `no` and `off`, so `enabled` or `2` made a test run that bir-core does not treat as one.)
+    #[test]
+    fn the_door_reads_test_environment_the_way_bir_core_does() {
+        for value in [
+            None,
+            Some(""),
+            Some("1"),
+            Some("true"),
+            Some(" YES "),
+            Some("on"),
+            Some("0"),
+            Some("false"),
+            Some("no"),
+            Some("off"),
+            Some("2"),
+            Some("enabled"),
+            Some("anything"),
+        ] {
+            temp_env::with_var("EBIR_TEST_ENV", value, || {
+                assert_eq!(
+                    test_environment(),
+                    bir_core::db::test_environment(),
+                    "{value:?}"
+                );
+            });
+        }
+        for refused in ["enabled", "2", "anything", ""] {
+            temp_env::with_var("EBIR_TEST_ENV", Some(refused), || {
+                assert!(!test_environment(), "{refused:?}");
+            });
+        }
+        for accepted in ["1", "true", "yes", "on"] {
+            temp_env::with_var("EBIR_TEST_ENV", Some(accepted), || {
+                assert!(test_environment(), "{accepted:?}");
+            });
+        }
+    }
+
+    /// A debug build switches the keychain off whatever the caller set and whether or not this is a test
+    /// run; a release build leaves the caller's variable alone.
+    #[test]
+    fn a_debug_build_always_switches_the_keychain_off_and_a_release_build_leaves_it() {
+        for caller in [None, Some(""), Some("0"), Some("false"), Some("1")] {
+            temp_env::with_vars(
+                [("BUWIZ_NO_KEYCHAIN", caller), ("EBIR_TEST_ENV", None)],
+                || {
+                    switch_off_keychain(true);
+                    assert_eq!(
+                        std::env::var("BUWIZ_NO_KEYCHAIN").as_deref(),
+                        Ok("1"),
+                        "debug, caller {caller:?}"
+                    );
+                    assert!(bir_core::platform::keychain_disabled());
+                },
+            );
+            temp_env::with_vars(
+                [("BUWIZ_NO_KEYCHAIN", caller), ("EBIR_TEST_ENV", None)],
+                || {
+                    switch_off_keychain(false);
+                    assert_eq!(
+                        std::env::var("BUWIZ_NO_KEYCHAIN").ok().as_deref(),
+                        caller,
+                        "release, caller {caller:?}"
+                    );
+                },
+            );
+        }
+    }
+
+    /// Registering the native module is what sets the process up, before anything is called and before any
+    /// other thread exists: it needs a process of its own, where nothing has run yet.
+    #[test]
+    fn registration_prepares_the_process_before_anything_is_called() {
+        const CHILD: &str = "NSH_DOOR_REGISTRATION_CHILD";
+        if std::env::var_os(CHILD).is_some() {
+            assert!(!process_prepared(), "nothing has run yet");
+            let _ = crate::registry();
+            assert!(process_prepared(), "the registration set the process up");
+            assert_eq!(std::env::var("BIR_SFTP_DRY_RUN").as_deref(), Ok("1"));
+            assert_eq!(std::env::var_os("BIR_SFTP_LIVE"), None);
+            assert!(bir_core::platform::keychain_disabled());
+            return;
+        }
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "door::tests::registration_prepares_the_process_before_anything_is_called",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .env_remove("BUWIZ_NO_KEYCHAIN")
+            .env_remove("BIR_SFTP_DRY_RUN")
+            .env_remove("BIR_SFTP_HOST")
+            .env_remove("EBIR_TEST_ENV")
+            .env("BIR_SFTP_LIVE", "1")
+            .status()
+            .unwrap();
+        assert!(status.success(), "the registration child failed");
+    }
+
+    /// Set the modified time of a file or folder to `by` ago.
+    fn grow_old(path: &Path, by: std::time::Duration) {
+        let when = std::time::SystemTime::now() - by;
+        if path.is_dir() {
+            std::fs::File::open(path)
+                .unwrap()
+                .set_modified(when)
+                .unwrap();
+        } else {
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(when)
+                .unwrap();
+        }
+    }
+
+    const LONG_AGO: std::time::Duration = std::time::Duration::from_secs(3 * 24 * 60 * 60);
+
+    /// A scratch folder with a database, its log and (after a lock) its lock file, all of them `by` old.
+    fn scratch_folder(root: &Path, name: &str, by: std::time::Duration) -> PathBuf {
+        let folder = root.join(name);
+        std::fs::create_dir_all(&folder).unwrap();
+        for file in ["bir_data.db", "bir_data.db-wal"] {
+            std::fs::write(folder.join(file), b"scratch").unwrap();
+        }
+        age_everything(&folder, by);
+        folder
+    }
+
+    fn age_everything(folder: &Path, by: std::time::Duration) {
+        for entry in std::fs::read_dir(folder).unwrap() {
+            grow_old(&entry.unwrap().path(), by);
+        }
+        grow_old(folder, by);
+    }
+
+    #[test]
+    fn an_old_quiet_scratch_folder_is_forgotten_and_a_recent_one_is_not() {
+        let root = tempfile::tempdir().expect("scratch root");
+        let old = scratch_folder(root.path(), "1-0", LONG_AGO);
+        let recent = scratch_folder(root.path(), "2-0", std::time::Duration::from_secs(60));
+        let stray = root.path().join("notes.txt");
+        std::fs::write(&stray, b"not a scratch folder").unwrap();
+        grow_old(&stray, LONG_AGO);
+
+        forget_old_scratch(root.path(), SCRATCH_LIFETIME);
+
+        assert!(!old.exists(), "a folder nobody changed for days");
+        assert!(recent.is_dir(), "a recent folder");
+        assert!(stray.is_file(), "only folders are ever deleted");
+    }
+
+    /// A folder's own modified time moves only when a file is added or removed in it, not while the database
+    /// inside is written: a live run's folder looks days old. It is the newest change inside that counts.
+    #[test]
+    fn a_scratch_folder_whose_database_was_written_lately_is_kept() {
+        let root = tempfile::tempdir().expect("scratch root");
+        let live = scratch_folder(root.path(), "3-0", LONG_AGO);
+        // The run writes its database: the file is new, the folder is as old as ever.
+        std::fs::write(live.join("bir_data.db"), b"a commit a minute ago").unwrap();
+        grow_old(&live, LONG_AGO);
+
+        forget_old_scratch(root.path(), SCRATCH_LIFETIME);
+
+        assert!(live.join("bir_data.db").is_file(), "a live run's database");
+    }
+
+    /// A run that has its database open holds the owner lock, however quiet it has been: its folder stays.
+    /// Once the lock is gone the folder goes.
+    #[test]
+    fn a_scratch_folder_whose_owner_lock_is_held_is_kept() {
+        let root = tempfile::tempdir().expect("scratch root");
+        let folder = scratch_folder(root.path(), "4-0", LONG_AGO);
+        let lock = bir_core::db::try_acquire_live_owner_lock(&folder.join("bir_data.db"))
+            .expect("a free lock");
+        // Taking the lock made its file; age everything again so only the lock is left to protect it.
+        age_everything(&folder, LONG_AGO);
+
+        forget_old_scratch(root.path(), SCRATCH_LIFETIME);
+        assert!(folder.join("bir_data.db").is_file(), "held by a live run");
+
+        drop(lock);
+        forget_old_scratch(root.path(), SCRATCH_LIFETIME);
+        assert!(!folder.exists(), "nobody holds it any more");
     }
 }

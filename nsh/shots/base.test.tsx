@@ -5,7 +5,7 @@ import { LOOKS, shoot } from "./shoot";
 
 for (const look of LOOKS) {
   test(`base screen, ${look.name}`, async () => {
-    const app = await open("../App.tsx", {
+    const app = await open("../BasePreview.tsx", {
       width: look.width,
       height: look.height,
       platform: look.platform,

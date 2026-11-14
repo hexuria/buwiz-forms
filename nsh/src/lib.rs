@@ -17,6 +17,9 @@ use nsh_core::prelude::*;
 /// The crate's UI set (`nsh.json` `"rust"`): everything TSX can import from `ebirforms/native`.
 #[native_module("ebirforms/native")]
 fn native(registry: &mut Registry) {
+    // The earliest single point: the generated hosts build the registry before NSH starts, so the door's
+    // one change to the process environment happens before any other thread exists (see `door::process`).
+    door::prepare_process();
     registry.module::<Bridge>().module::<Door>();
 }
 
@@ -124,10 +127,66 @@ impl Door {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
+
     use super::Bridge;
 
     #[test]
     fn ping_answers_pong() {
         assert_eq!(Bridge::ping(), "pong");
+    }
+
+    /// The NSH app is plain SQLite: no database key, no keychain, its own data folder. Nothing else pins
+    /// that: a `bir-core` dependency that gained the `sqlcipher` feature (here or through another crate of
+    /// the graph) would compile, run, and write encrypted files the app cannot read back. This fails then:
+    /// a new database starts with the plain SQLite header, and the data folder is the NSH app's own.
+    #[test]
+    fn bir_core_is_built_as_plain_sqlite_with_the_nsh_data_folder() {
+        let folder = tempfile::tempdir().expect("temp folder");
+        let path = folder.path().join("probe.db");
+        temp_env::with_vars(
+            [
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+            ],
+            || {
+                let db = bir_core::db::Database::open(&path).expect("a plain database opens");
+                db.set_setting("probe", "plain").expect("a write");
+                db.close().expect("closes");
+            },
+        );
+        let mut head = [0u8; 16];
+        std::fs::File::open(&path)
+            .expect("the database file")
+            .read_exact(&mut head)
+            .expect("its first bytes");
+        assert_eq!(
+            &head,
+            bir_core::db::SQLITE_PLAIN_HEADER,
+            "a new database is encrypted: bir-core was built with the sqlcipher feature"
+        );
+
+        let home = tempfile::tempdir().expect("temp home");
+        temp_env::with_vars(
+            [
+                ("HOME", Some(home.path().as_os_str())),
+                ("XDG_DATA_HOME", None),
+                ("BIR_DATABASE_PATH", None),
+            ],
+            || {
+                let data = bir_core::platform::data_dir();
+                assert!(
+                    data.ends_with("dev.goldcoders.bir.nsh"),
+                    "the data folder is the old app's group container: bir-core was built with sqlcipher ({})",
+                    data.display()
+                );
+                #[cfg(unix)]
+                assert!(
+                    data.starts_with(home.path()),
+                    "the data folder left the temp home ({})",
+                    data.display()
+                );
+            },
+        );
     }
 }

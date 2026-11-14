@@ -442,8 +442,57 @@ type ReaderKey = zeroize::Zeroizing<String>;
 #[cfg(not(feature = "sqlcipher"))]
 type ReaderKey = ();
 
+/// The schema version this build creates and can open: the `user_version` a
+/// new database reaches once every migration has run. A file whose version is
+/// higher was written by a newer app.
+pub(crate) fn current_schema_version() -> Result<i32, DbError> {
+    static CURRENT: std::sync::OnceLock<i32> = std::sync::OnceLock::new();
+    if let Some(version) = CURRENT.get() {
+        return Ok(*version);
+    }
+    let fresh = Database::open_ephemeral()?;
+    let version: i32 = fresh
+        .conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    Ok(*CURRENT.get_or_init(|| version))
+}
+
 pub fn default_database_path() -> std::path::PathBuf {
     crate::platform::data_dir().join("bir_data.db")
+}
+
+/// The database path a host named in-process, with [`set_database_path_override`].
+static DATABASE_PATH_OVERRIDE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+fn database_path_override() -> Option<PathBuf> {
+    DATABASE_PATH_OVERRIDE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+/// Name the live database file in-process: [`app_database_path`] answers it
+/// (before `BIR_DATABASE_PATH`) for every thread until it is set to `None`.
+/// For a host that picks a scratch database for a test run: the same effect
+/// as setting `BIR_DATABASE_PATH`, without changing the process environment
+/// while other threads may be reading it. The old shell never calls it.
+pub fn set_database_path_override(path: Option<PathBuf>) {
+    *DATABASE_PATH_OVERRIDE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
+}
+
+/// `EBIR_TEST_ENV` is on (`1`, `true`, `yes` or `on`, any case): a dev,
+/// test or agent run. This is how the transport reads the variable when it
+/// decides on a dry run (a test checks that the two agree), so a host that asks
+/// gets the answer bir-core acts on.
+pub fn test_environment() -> bool {
+    std::env::var("EBIR_TEST_ENV").is_ok_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    })
 }
 
 /// Live DB file painted `bir` and `bir-headless serve` open.
@@ -454,28 +503,41 @@ pub fn default_database_path() -> std::path::PathBuf {
 /// Debug builds: the Dev Mode "Use a separate dev database" switch picks
 /// `bir_data.dev.db` through this same function (env still wins).
 pub fn app_database_path() -> PathBuf {
+    if let Some(path) = database_path_override() {
+        return path;
+    }
     match std::env::var_os("BIR_DATABASE_PATH") {
         Some(path) if !path.is_empty() => PathBuf::from(path),
         _ => crate::dev_mode::dev_database_path().unwrap_or_else(default_database_path),
     }
 }
 
-/// Create the parent directory and copy a non-empty cwd `bir_data.db` when
-/// the target is missing (same bootstrap as painted `bir`).
+/// Create the parent directory and, in the SQLCipher build, copy a non-empty
+/// cwd `bir_data.db` when the target is missing (same bootstrap as painted
+/// `bir`). The plain (NSH) build never copies: a `bir_data.db` that happens
+/// to sit in the folder the app was started from is not its database.
 pub fn prepare_app_database_file(path: &Path) {
+    prepare_app_database_file_from(path, &std::env::current_dir().unwrap_or_default());
+}
+
+/// [`prepare_app_database_file`] with the folder the app was started from given.
+fn prepare_app_database_file_from(path: &Path, start_folder: &Path) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let legacy_db_path = std::env::current_dir()
-        .unwrap_or_default()
-        .join("bir_data.db");
-    if !path.exists()
-        && legacy_db_path.exists()
-        && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
-        && legacy_db_path != path
+    #[cfg(feature = "sqlcipher")]
     {
-        let _ = std::fs::copy(&legacy_db_path, path);
+        let legacy_db_path = start_folder.join("bir_data.db");
+        if !path.exists()
+            && legacy_db_path.exists()
+            && legacy_db_path.metadata().map(|m| m.len()).unwrap_or(0) > 0
+            && legacy_db_path != path
+        {
+            let _ = std::fs::copy(&legacy_db_path, path);
+        }
     }
+    #[cfg(not(feature = "sqlcipher"))]
+    let _ = start_folder;
 }
 
 /// Sidecar lock next to the SQLCipher file (`bir_data.db.owner.lock`).
@@ -1834,6 +1896,92 @@ mod tests {
             assert_eq!(app_database_path(), override_path);
             assert_ne!(app_database_path(), default_database_path());
         });
+    }
+
+    /// An in-process database path answers for every thread and wins over
+    /// `BIR_DATABASE_PATH`; clearing it gives the environment back.
+    #[test]
+    fn an_in_process_database_path_wins_over_the_environment() {
+        let named = tempfile::tempdir().expect("temporary directory");
+        let from_env = named.path().join("from-env.db");
+        let in_process = named.path().join("in-process.db");
+        temp_env::with_var("BIR_DATABASE_PATH", Some(&from_env), || {
+            assert_eq!(app_database_path(), from_env);
+            set_database_path_override(Some(in_process.clone()));
+            let seen_elsewhere = std::thread::spawn(app_database_path).join().unwrap();
+            let seen_here = app_database_path();
+            set_database_path_override(None);
+            assert_eq!(seen_here, in_process);
+            assert_eq!(seen_elsewhere, in_process, "not a per-thread setting");
+            assert_eq!(app_database_path(), from_env);
+        });
+    }
+
+    /// `test_environment` reads `EBIR_TEST_ENV` the way the transport does when
+    /// it decides on a dry run: with a live acknowledgement and nothing else
+    /// asking for a dry run, the transport is a dry run exactly when
+    /// `test_environment` is true.
+    #[test]
+    fn test_environment_agrees_with_the_transport() {
+        for (value, expected) in [
+            (None, false),
+            (Some(""), false),
+            (Some("1"), true),
+            (Some(" TRUE "), true),
+            (Some("yes"), true),
+            (Some("On"), true),
+            (Some("0"), false),
+            (Some("false"), false),
+            (Some("no"), false),
+            (Some("off"), false),
+            (Some("2"), false),
+            (Some("enabled"), false),
+        ] {
+            temp_env::with_vars(
+                [
+                    ("EBIR_TEST_ENV", value),
+                    ("BIR_SFTP_DRY_RUN", None),
+                    ("BIR_SFTP_LIVE", Some("1")),
+                    ("BIR_SFTP_HOST", None),
+                ],
+                || {
+                    assert_eq!(test_environment(), expected, "{value:?}");
+                    assert_eq!(
+                        crate::transport::is_sftp_dry_run(),
+                        expected,
+                        "the transport reads {value:?} differently"
+                    );
+                },
+            );
+        }
+    }
+
+    /// The folder the app started in holds a non-empty `bir_data.db` and the
+    /// target does not exist yet. The SQLCipher build adopts that file (old
+    /// bootstrap, unchanged); the plain build never copies it.
+    #[test]
+    fn a_database_in_the_start_folder_is_copied_only_by_the_sqlcipher_build() {
+        let start = tempfile::tempdir().expect("start folder");
+        std::fs::write(start.path().join("bir_data.db"), b"stray bytes").expect("stray file");
+        let target_folder = tempfile::tempdir().expect("target folder");
+        let target = target_folder.path().join("nested").join("bir_data.db");
+
+        prepare_app_database_file_from(&target, start.path());
+
+        assert!(
+            target.parent().unwrap().is_dir(),
+            "the parent folder is made"
+        );
+        if cfg!(feature = "sqlcipher") {
+            assert_eq!(std::fs::read(&target).expect("copied"), b"stray bytes");
+        } else {
+            assert!(!target.exists(), "the plain build copied a stray file");
+        }
+
+        // A target that exists is never overwritten, in either build.
+        std::fs::write(&target, b"mine").expect("target");
+        prepare_app_database_file_from(&target, start.path());
+        assert_eq!(std::fs::read(&target).unwrap(), b"mine");
     }
 
     #[test]

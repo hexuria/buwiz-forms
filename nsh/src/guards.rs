@@ -4,10 +4,15 @@
 //!   submission worker starts. It forces a dry run, drops the live acknowledgement, and decides whether the
 //!   worker may start at all. The one way out of a dry run is the mock BIR server on loopback.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
-//!   folders. It is checked before every host call, so a lazy open can never get around it.
+//!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
+//!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`.
 //!
-//! Both are plain functions over the environment and a home folder, so their tests use temp folders and
+//! Both are plain functions over the environment and a list of folders, so their tests use temp folders and
 //! never touch a real path. Contract: `docs/plans/nsh-tsx-migration.md`, "The door".
+//!
+//! **Environment.** The send guard is the only code here that changes the process environment (two
+//! variables). It runs once, from the door's process setup, which the native module's registration calls
+//! (see `door::process`); nothing else in this crate sets or removes a variable.
 
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::path::{Component, Path, PathBuf};
@@ -68,8 +73,9 @@ pub fn send_guard() -> SendMode {
 
 /// [`send_guard`] with the "is anything listening there" probe given, for tests.
 pub(crate) fn send_guard_with(listening: impl Fn(&str, u16) -> bool) -> SendMode {
-    // SAFETY: the guard runs once, at the boot of the door, before the database and the worker exist; the
-    // environment is only read by the transport afterwards.
+    // SAFETY: the guard runs once, from `door::process` (called when the native module registers, before any
+    // thread of ours or of NSH's app exists; see there), before the database and the worker exist; the
+    // environment is only read by the transport afterwards. A test calls it directly under `temp_env`.
     unsafe { std::env::remove_var("BIR_SFTP_LIVE") };
     let mock = mock_target(&listening);
     if mock.is_none() {
@@ -128,7 +134,7 @@ fn port_is_listening(host: &str, port: u16) -> bool {
 }
 
 /// The folders the door never opens a database in, under `home`.
-fn protected_folders(home: &Path) -> [PathBuf; 3] {
+pub fn protected_folders(home: &Path) -> [PathBuf; 3] {
     [
         home.join("Library/Group Containers/group.dev.goldcoders.bir"),
         home.join("BuwizNsh/data"),
@@ -136,35 +142,180 @@ fn protected_folders(home: &Path) -> [PathBuf; 3] {
     ]
 }
 
-/// Why the door must not open `path` as the database, or `None` when it may.
+/// The home folder of the user this process runs as, from the password database (the real uid), never
+/// from `$HOME`: a process started with `HOME=/tmp/x` still protects the owner's real folders. `None` when
+/// the account has no entry. On Windows, where there is no password database, the profile folder std knows.
+pub fn account_home() -> Option<PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::ffi::{CStr, OsStr};
+        use std::os::unix::ffi::OsStrExt;
+
+        // SAFETY: `getpwuid_r` fills `entry` and the strings it points to inside `buffer`, both of which
+        // outlive the reads below; the result is copied out before they go away.
+        unsafe {
+            let mut entry: libc::passwd = std::mem::zeroed();
+            let mut found: *mut libc::passwd = std::ptr::null_mut();
+            let mut buffer = vec![0u8; 16 * 1024];
+            let status = libc::getpwuid_r(
+                libc::getuid(),
+                &mut entry,
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+                &mut found,
+            );
+            if status != 0 || found.is_null() || entry.pw_dir.is_null() {
+                return None;
+            }
+            let dir = CStr::from_ptr(entry.pw_dir).to_bytes();
+            (!dir.is_empty()).then(|| PathBuf::from(OsStr::from_bytes(dir)))
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        std::env::home_dir()
+    }
+}
+
+/// The owner's protected folders, under the account's real home folder. `None` when that cannot be found.
+fn protected_folders_here() -> Option<Vec<PathBuf>> {
+    #[cfg(test)]
+    if let Some(folders) = TEST_PROTECTED.with(|slot| slot.borrow().clone()) {
+        return Some(folders);
+    }
+    account_home().map(|home| protected_folders(&home).to_vec())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test seam: the protected folders of this thread, in place of the real account's (a test never
+    /// reads the owner's real folders).
+    static TEST_PROTECTED: std::cell::RefCell<Option<Vec<PathBuf>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Run `body` with `home` standing in for the account's home folder, on this thread.
+#[cfg(test)]
+pub(crate) fn with_home_for_test<R>(home: &Path, body: impl FnOnce() -> R) -> R {
+    struct Restore(Option<Vec<PathBuf>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TEST_PROTECTED.with(|slot| *slot.borrow_mut() = self.0.take());
+        }
+    }
+    let before = TEST_PROTECTED.with(|slot| slot.replace(Some(protected_folders(home).to_vec())));
+    let _restore = Restore(before);
+    body()
+}
+
+/// Why the door must not open `path` as the database, or `None` when it may. `protected` are the folders
+/// that must stay untouched; they need not exist.
 ///
-/// `path` is made absolute and resolved through symlinks (as far as it exists, then the rest by name), so
-/// `..` and links cannot reach a protected folder. With no `home` the owner's folders cannot be named, and
-/// the answer is a refusal.
-pub fn database_refusal(path: &Path, home: Option<&Path>) -> Option<String> {
-    let Some(home) = home else {
-        return Some(
-            "Cannot tell where the owner's data folders are (no home folder), so no database is opened."
-                .into(),
-        );
-    };
+/// Two checks, either of which refuses:
+///
+/// * **By name.** `path` is made absolute and resolved through symlinks (as far as it exists, then the rest
+///   by name), so `..` and links cannot reach a protected folder; names compare case-insensitively where
+///   the file system usually is (macOS, Windows).
+/// * **By identity** (Unix). A protected folder that exists is known by its device and inode, which no
+///   spelling changes: macOS reaches the same folder as `/Users/u/x` and `/System/Volumes/Data/Users/u/x`
+///   (a firmlink, not a symlink), a case-insensitive volume answers to any case, a bind mount to its other
+///   path. So `path` is refused when any ancestor of it that exists IS a protected folder, and, when it is
+///   an existing file with more than one link, when it is the same file as one directly inside a protected
+///   folder (a hard link).
+pub fn database_refusal(path: &Path, protected: &[PathBuf]) -> Option<String> {
     let canonical = canonical_target(path);
-    for folder in protected_folders(home) {
-        let folder = canonical_target(&folder);
-        if inside(&canonical, &folder) {
-            return Some(format!(
-                "Refusing to open {}: it is inside {}, the owner's data. Copy a database to ~/BuwizNsh/agents/<track>.db and point BIR_DATABASE_PATH there.",
-                canonical.display(),
-                folder.display()
-            ));
+    let folders: Vec<PathBuf> = protected
+        .iter()
+        .map(|folder| canonical_target(folder))
+        .collect();
+    let refuse = |how: String| {
+        Some(format!(
+            "Refusing to open {}: it is {how}, the owner's data. Copy a database to ~/BuwizNsh/agents/<track>.db and point BIR_DATABASE_PATH there.",
+            canonical.display()
+        ))
+    };
+    for folder in &folders {
+        if inside(&canonical, folder) {
+            return refuse(format!("inside {}", folder.display()));
+        }
+    }
+    let identified: Vec<(Identity, &PathBuf)> = folders
+        .iter()
+        .filter(|folder| folder.is_dir())
+        .filter_map(|folder| identity(folder).map(|id| (id, folder)))
+        .collect();
+    if !identified.is_empty() {
+        for ancestor in canonical.ancestors() {
+            if let Some(id) = identity(ancestor)
+                && let Some((_, folder)) = identified.iter().find(|(known, _)| *known == id)
+            {
+                return refuse(format!(
+                    "inside {} (the same folder by device and inode, under another name)",
+                    folder.display()
+                ));
+            }
+        }
+        if let Some(file) = hard_linked_file_identity(&canonical) {
+            for (_, folder) in &identified {
+                let Ok(entries) = std::fs::read_dir(folder) else {
+                    continue;
+                };
+                if entries
+                    .flatten()
+                    .any(|entry| identity(&entry.path()) == Some(file))
+                {
+                    return refuse(format!("a hard link to a file in {}", folder.display()));
+                }
+            }
         }
     }
     None
 }
 
-/// [`database_refusal`] for the real home folder.
+/// [`database_refusal`] for the owner's real folders. With no home folder to name them, the answer is a
+/// refusal.
 pub fn database_refusal_here(path: &Path) -> Option<String> {
-    database_refusal(path, std::env::home_dir().as_deref())
+    refusal_with(path, protected_folders_here())
+}
+
+/// [`database_refusal`] over the folders found, or the refusal for there being none to find.
+fn refusal_with(path: &Path, protected: Option<Vec<PathBuf>>) -> Option<String> {
+    let Some(protected) = protected else {
+        return Some(
+            "Cannot tell where the owner's data folders are (no home folder), so no database is opened."
+                .into(),
+        );
+    };
+    database_refusal(path, &protected)
+}
+
+/// A file or folder as the file system knows it, whatever the path that reached it: (device, inode).
+type Identity = (u64, u64);
+
+#[cfg(unix)]
+fn identity(path: &Path) -> Option<Identity> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(path)
+        .ok()
+        .map(|meta| (meta.dev(), meta.ino()))
+}
+
+/// Windows has no device and inode in std; there the guard is by name only.
+#[cfg(not(unix))]
+fn identity(_path: &Path) -> Option<Identity> {
+    None
+}
+
+/// The identity of `path` when it is an existing regular file with more than one link.
+#[cfg(unix)]
+fn hard_linked_file_identity(path: &Path) -> Option<Identity> {
+    use std::os::unix::fs::MetadataExt;
+    let meta = std::fs::metadata(path).ok()?;
+    (meta.is_file() && meta.nlink() > 1).then(|| (meta.dev(), meta.ino()))
+}
+
+#[cfg(not(unix))]
+fn hard_linked_file_identity(_path: &Path) -> Option<Identity> {
+    None
 }
 
 fn inside(path: &Path, folder: &Path) -> bool {
@@ -431,7 +582,7 @@ mod tests {
         }
 
         fn refusal(&self, path: &Path) -> Option<String> {
-            database_refusal(path, Some(self.root.path()))
+            database_refusal(path, &protected_folders(self.root.path()))
         }
     }
 
@@ -574,7 +725,218 @@ mod tests {
 
     #[test]
     fn with_no_home_nothing_is_opened() {
-        let why = database_refusal(Path::new("/somewhere/else.db"), None).expect("refused");
+        let why = refusal_with(Path::new("/somewhere/else.db"), None).expect("refused");
         assert!(why.contains("no home folder"), "{why}");
+    }
+
+    /// A folder tree like the owner's, for the identity checks: the three protected folders exist, with a
+    /// database in each, plus a folder that is not protected.
+    struct Owner {
+        home: Home,
+    }
+
+    impl Owner {
+        fn new() -> Self {
+            let home = Home::new();
+            for folder in [
+                GROUP,
+                "BuwizNsh/data",
+                "BuwizNsh/migration",
+                "BuwizNsh/agents",
+            ] {
+                home.make(folder);
+            }
+            fs::write(home.path("BuwizNsh/data/bir_data.db"), b"owner data")
+                .expect("owner database");
+            Owner { home }
+        }
+
+        /// The temp home as the file system names it (macOS puts /var behind /private).
+        fn real(&self, relative: &str) -> PathBuf {
+            self.home
+                .root
+                .path()
+                .canonicalize()
+                .expect("canonical home")
+                .join(relative)
+        }
+    }
+
+    /// macOS reaches every folder of the data volume a second way, `/System/Volumes/Data/...`: a firmlink,
+    /// which is not a symlink, so resolving links does not see it. The same file by that name is the same
+    /// file. (Before the identity check, this spelling got through.)
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_firmlink_spelling_of_a_protected_folder_is_refused() {
+        let data_volume = Path::new("/System/Volumes/Data");
+        if !data_volume.is_dir() {
+            return; // macOS before 10.15 has no firmlinks
+        }
+        let owner = Owner::new();
+        let firm = |relative: &str| {
+            let real = owner.real(relative);
+            PathBuf::from(format!("{}{}", data_volume.display(), real.display()))
+        };
+        let spelled = firm("BuwizNsh/data/bir_data.db");
+        assert_eq!(
+            identity(&spelled),
+            identity(&owner.real("BuwizNsh/data/bir_data.db")),
+            "the firmlink reaches the same file (the premise of this test)"
+        );
+        for folder in [GROUP, "BuwizNsh/data", "BuwizNsh/migration"] {
+            for file in ["bir_data.db", "new/deeper.db"] {
+                let candidate = firm(&format!("{folder}/{file}"));
+                let why = owner
+                    .home
+                    .refusal(&candidate)
+                    .unwrap_or_else(|| panic!("{} got through", candidate.display()));
+                assert!(why.contains("Refusing to open"), "{why}");
+            }
+        }
+        // The folder itself, and a folder beside the protected ones, by the same spelling.
+        assert!(owner.home.refusal(&firm("BuwizNsh/data")).is_some());
+        assert_eq!(owner.home.refusal(&firm("BuwizNsh/agents/door.db")), None);
+    }
+
+    /// A hard link is another name for the same bytes: one made outside the protected folders is refused,
+    /// one to some other file is not.
+    #[cfg(unix)]
+    #[test]
+    fn a_hard_link_to_a_database_in_a_protected_folder_is_refused() {
+        let owner = Owner::new();
+        let agents = owner.real("BuwizNsh/agents");
+        let alias = agents.join("alias.db");
+        fs::hard_link(owner.real("BuwizNsh/data/bir_data.db"), &alias).expect("hard link");
+        let why = owner.home.refusal(&alias).expect("hard link refused");
+        assert!(why.contains("hard link"), "{why}");
+        // Through a symlink to the alias too.
+        std::os::unix::fs::symlink(&alias, agents.join("by-link.db")).expect("link");
+        assert!(owner.home.refusal(&agents.join("by-link.db")).is_some());
+        // Several names for a file that is not the owner's is fine.
+        let mine = agents.join("mine.db");
+        fs::write(&mine, b"mine").expect("write");
+        fs::hard_link(&mine, agents.join("mine-too.db")).expect("hard link");
+        assert_eq!(owner.home.refusal(&mine), None);
+        assert_eq!(owner.home.refusal(&agents.join("mine-too.db")), None);
+        // And a file with a single name, inside no protected folder, is fine.
+        assert_eq!(owner.home.refusal(&agents.join("fresh.db")), None);
+    }
+
+    /// The `_nsh-db-guard` recipe of the root justfile is this guard in Python (for `just nsh-run` and
+    /// `just nsh-shots`). Run its script, with the account's home swapped for a temp one, on the same
+    /// folders: it must say what the door's guard says, and what each should say is stated.
+    #[cfg(unix)]
+    #[test]
+    fn the_justfile_guard_says_what_the_door_guard_says() {
+        use std::os::unix::fs::symlink;
+        use std::process::Command;
+
+        let justfile =
+            fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../justfile"))
+                .expect("the root justfile");
+        let recipe = justfile
+            .split("_nsh-db-guard db:")
+            .nth(1)
+            .expect("the _nsh-db-guard recipe");
+        let script = recipe
+            .split("<<'PY'\n")
+            .nth(1)
+            .expect("the recipe's python script")
+            .lines()
+            .take_while(|line| line.trim() != "PY")
+            .map(|line| line.strip_prefix("    ").unwrap_or(line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        const HOME_LINE: &str = "home = pwd.getpwuid(os.getuid()).pw_dir";
+        assert!(
+            script.contains(HOME_LINE),
+            "the recipe takes the home folder from the password database"
+        );
+        let script = script.replace(HOME_LINE, "home = sys.argv[2]");
+
+        let owner = Owner::new();
+        let home = owner.home.root.path().to_path_buf();
+        let agents = owner.real("BuwizNsh/agents");
+        fs::hard_link(
+            owner.real("BuwizNsh/data/bir_data.db"),
+            agents.join("alias.db"),
+        )
+        .expect("hard link");
+        symlink(owner.real("BuwizNsh/data"), agents.join("to-data")).expect("link");
+        let mut cases: Vec<(PathBuf, bool)> = vec![
+            (owner.real("BuwizNsh/data/bir_data.db"), true),
+            (owner.real("BuwizNsh/data/new/deeper.db"), true),
+            (owner.real("BuwizNsh/migration"), true),
+            (owner.real(&format!("{GROUP}/x.db")), true),
+            (home.join("BuwizNsh/agents/../data/x.db"), true),
+            (agents.join("alias.db"), true),
+            (agents.join("to-data/x.db"), true),
+            (home.join("buwiznsh/DATA/x.db"), true),
+            (agents.join("door.db"), false),
+            (owner.real("BuwizNsh/data-copy/x.db"), false),
+            (owner.real("BuwizNsh/agents"), false),
+        ];
+        #[cfg(target_os = "macos")]
+        for (relative, refused) in [
+            ("BuwizNsh/data/x.db", true),
+            ("BuwizNsh/agents/x.db", false),
+        ] {
+            cases.push((
+                PathBuf::from(format!(
+                    "/System/Volumes/Data{}",
+                    owner.real(relative).display()
+                )),
+                refused,
+            ));
+        }
+        for (candidate, expected) in cases {
+            let ran = Command::new("python3")
+                .args(["-I", "-c", &script])
+                .arg(&candidate)
+                .arg(&home)
+                .output();
+            let output = match ran {
+                Ok(output) => output,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return, // no python3 here
+                Err(error) => panic!("python3: {error}"),
+            };
+            let recipe_refused = !output.status.success();
+            assert_eq!(
+                recipe_refused,
+                expected,
+                "the recipe on {}: {}",
+                candidate.display(),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(
+                owner.home.refusal(&candidate).is_some(),
+                expected,
+                "the door guard on {}",
+                candidate.display()
+            );
+        }
+    }
+
+    /// The protected folders hang off the account's home folder from the password database, not `$HOME`:
+    /// a process started with `HOME=/tmp/x` still protects the owner's real ones.
+    #[cfg(unix)]
+    #[test]
+    fn the_protected_folders_ignore_home() {
+        let elsewhere = tempfile::tempdir().expect("elsewhere");
+        let account = account_home().expect("the account has a home folder");
+        assert!(account.is_absolute(), "{}", account.display());
+        temp_env::with_var("HOME", Some(elsewhere.path()), || {
+            assert_eq!(account_home().as_deref(), Some(account.as_path()));
+            let folders = protected_folders_here().expect("folders");
+            assert_eq!(folders.len(), 3);
+            for folder in folders {
+                assert!(folder.starts_with(&account), "{}", folder.display());
+                assert!(
+                    !folder.starts_with(elsewhere.path()),
+                    "{}",
+                    folder.display()
+                );
+            }
+        });
     }
 }

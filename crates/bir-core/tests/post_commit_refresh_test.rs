@@ -1,6 +1,5 @@
 use bir_core::db::{Database, PostCommitRefreshStatus};
 use bir_core::profile::TaxpayerProfile;
-#[cfg(feature = "sqlcipher")]
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
 
@@ -27,11 +26,17 @@ fn test_profile() -> TaxpayerProfile {
     .expect("minimal taxpayer profile fixture should deserialize")
 }
 
+/// The key line of a second connection: the SQLCipher build keys it, the plain build has no key.
 #[cfg(feature = "sqlcipher")]
+const KEY_PRAGMA: &str =
+    "PRAGMA key = \"x'0000000000000000000000000000000000000000000000000000000000000000'\";";
+#[cfg(not(feature = "sqlcipher"))]
+const KEY_PRAGMA: &str = "";
+
 fn install_refresh_request_failure(path: &std::path::Path) {
     let conn = Connection::open(path).expect("test database should reopen");
-    conn.execute_batch(
-        "PRAGMA key = \"x'0000000000000000000000000000000000000000000000000000000000000000'\";
+    conn.execute_batch(&format!(
+        "{KEY_PRAGMA}
          DELETE FROM settings WHERE key = 'google_calendar_sync_requested';
          CREATE TRIGGER reject_calendar_refresh_insert
          BEFORE INSERT ON settings
@@ -44,8 +49,8 @@ fn install_refresh_request_failure(path: &std::path::Path) {
          WHEN NEW.key = 'google_calendar_sync_requested'
          BEGIN
            SELECT RAISE(ABORT, 'forced refresh request failure');
-         END;",
-    )
+         END;"
+    ))
     .expect("refresh failure trigger should install");
 }
 
@@ -73,7 +78,6 @@ fn profile_save_reports_recorded_post_commit_refresh_request() {
     });
 }
 
-#[cfg(feature = "sqlcipher")]
 #[test]
 fn profile_refresh_failure_warns_without_rolling_back_committed_profile() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {

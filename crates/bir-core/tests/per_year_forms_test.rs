@@ -297,7 +297,6 @@ fn confirmed_profile_change_leaves_every_stored_year_as_picked() {
 /// A reviewed confirmation save writes no Forms Set row at all: with every
 /// `per_year_forms` insert refused, it still commits and the user's list
 /// is untouched.
-#[cfg(feature = "sqlcipher")]
 #[test]
 fn a_reviewed_profile_save_writes_no_forms_set_row() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
@@ -353,12 +352,19 @@ fn a_reviewed_profile_save_writes_no_forms_set_row() {
         assert!(submitted.apply_profile_version_confirmation_plan(&plan));
         submitted.per_year_forms.clear();
 
-        let key = Database::get_or_create_master_key().expect("test database key");
+        // The SQLCipher build keys the second connection; the plain build has no key.
+        #[cfg(feature = "sqlcipher")]
+        let key_pragma = format!(
+            "PRAGMA key = \"x'{}'\";",
+            Database::get_or_create_master_key().expect("test database key")
+        );
+        #[cfg(not(feature = "sqlcipher"))]
+        let key_pragma = String::new();
         let trigger_connection =
             rusqlite::Connection::open(temp_file.path()).expect("trigger connection");
         trigger_connection
             .execute_batch(&format!(
-                "PRAGMA key = \"x'{key}'\";
+                "{key_pragma}
                  CREATE TRIGGER fail_any_forms_set_write
                  BEFORE INSERT ON per_year_forms
                  BEGIN

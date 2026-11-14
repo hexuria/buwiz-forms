@@ -1,0 +1,248 @@
+// The frame around every screen (old app/main.js paint): the app root. It boots the app state, owns the polls and the
+// key bindings (both end with it), draws the title bar, sidebar, main surface and right panel (wide), or the header, the
+// tab bar and the sheets (under 600 points), floats the sidebar and panel as overlays under 860, and mounts the dialogs
+// and the toaster once. Screens are drawn by views.tsx.
+import type { JSX } from "nsh";
+import { cleanup, effect, ErrorBoundary, keymap, platform, Scroll, untracked, View } from "nsh";
+import { Button } from "nsh/base";
+import { isAvailable as desktopAvailable, currentWindow } from "nsh/desktop";
+import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
+import { doorStatus } from "../bir";
+import { errorText } from "../lib/errors";
+import { BREAK, SIZE } from "../theme/tokens";
+import { AppButton, Text, Toaster } from "../ui";
+import { app, boot, startPolling } from "./app";
+import { DevDoor, DevPages } from "./DevPages";
+import { NarrowBar, PanelSheets, TabBar } from "./Narrow";
+import { NewReturn } from "./NewReturn";
+import { Palette } from "./Palette";
+import { RightPanel } from "./Panels";
+import { ROUTES, type Route } from "./routes";
+import { Sidebar } from "./Sidebar";
+import { store } from "./store";
+import { TitleBar } from "./TitleBar";
+import { UpdateSlot } from "./UpdateSlot";
+import { renderView } from "./views";
+
+/** Props of Shell. */
+export interface ShellProps {
+  /** The dev start route (BIR_SHELL_START): "tp=<root>;theme=dark;view=library;form=2551Q/2026/3". */
+  start?: string;
+  /** Run the polls (events 30 s, device filings 5 s, update status 1 s). Default true; test fixtures turn it off. */
+  polling?: boolean;
+}
+
+/** The chords the frame owns (Cmd on macOS, Ctrl elsewhere), and Esc. Each has one owner: this root. */
+function bindKeys(): void {
+  const settings = () => app.chromeVisible() && app.go("settings");
+  keymap.bind(
+    {
+      "mod+b": () => app.toggleSidebar(),
+      "mod+t": () => app.cycleTheme(),
+      "mod+shift+b": () => app.togglePanel("profile"),
+      "mod+shift+n": () => app.togglePanel("notifs"),
+      "mod+k": () => app.openPalette(),
+      "mod+n": () => app.startNewReturn(),
+      "mod+,": () => void settings(),
+      "mod+l": () => app.lockApp(),
+      "mod+[": () => void app.back(),
+      "mod+]": () => void app.forward(),
+    },
+    { when: "always" },
+  );
+  keymap.bind("escape", () => void app.dismiss(), { when: "always" });
+}
+
+/** A screen that threw: the frame stays, the page says so and offers Home. */
+function ViewError(props: { error: unknown; reset: () => void }) {
+  store.logScreen("error", `screen: ${errorText(props.error)}`);
+  return (
+    <View testID="view-error" class="items-start gap-3 p-8">
+      <Text variant="title">This page could not be shown</Text>
+      <Text tone="fg2">{errorText(props.error)}</Text>
+      <AppButton
+        testID="view-error-home"
+        label="Go to Home"
+        variant="primary"
+        onPress={() => {
+          props.reset();
+          app.go("home");
+        }}
+      />
+    </View>
+  );
+}
+
+function Guarded(props: { route: Route }): JSX.Element {
+  return (
+    <ErrorBoundary fallback={(error, reset) => <ViewError error={error} reset={reset} />}>
+      {renderView(props.route)}
+    </ErrorBoundary>
+  );
+}
+
+/** A view in the main surface, laid out as its route table entry says (page 880, wide 1120, full, or self: the screen sets its own width and scrolls). */
+function ViewFrame() {
+  const route = untracked(app.route);
+  const view = untracked(app.view);
+  const layout = ROUTES[view].layout;
+  if (layout === "self") {
+    return (
+      <View class="min-h-0 w-full flex-1">
+        <Guarded route={{ ...route, view }} />
+      </View>
+    );
+  }
+  const cap = layout === "page" ? SIZE.contentMax : layout === "wide" ? 1120 : undefined;
+  return (
+    <Scroll
+      testID="main-scroll"
+      class="min-h-0 flex-1"
+      contentClass={`items-center pb-14 ${app.layout.mainWidth() < BREAK.narrowContent ? "px-4 pt-5" : "px-8 pt-7"}`}
+    >
+      <View class="w-full min-w-0" style={{ maxWidth: cap }}>
+        <Guarded route={{ ...route, view }} />
+      </View>
+    </Scroll>
+  );
+}
+
+/** The surface the screens draw on: inset 8 with radius 12 and a hairline when wide, flush when narrow. */
+function MainSurface() {
+  return (
+    <View
+      testID="main-surface"
+      class={`min-h-0 min-w-0 flex-1 overflow-hidden border-border bg-card ${app.layout.narrow() ? "border-y" : "rounded-(--radius-card) border"}`}
+      style={{
+        marginBottom: app.layout.narrow() ? 0 : SIZE.mainInset,
+        marginLeft: app.layout.narrow() || app.layout.sidebarDocked() ? 0 : SIZE.mainInset,
+        marginRight: app.layout.narrow() || app.layout.panelDocked() ? 0 : SIZE.mainInset,
+      }}
+    >
+      <View class="min-h-0 flex-1">
+        {() => {
+          // The view is made again when the person moves (the route's seq) or the view that shows changes; a retarget keeps it.
+          void app.route().seq;
+          void app.view();
+          return untracked(() => <ViewFrame />);
+        }}
+      </View>
+      <If when={doorStatus().testEnvironment && app.isFresh() && app.view() === "home"}>
+        <DevDoor />
+      </If>
+    </View>
+  );
+}
+
+/** Under 860 points the sidebar and the panel float over the page, on a scrim that closes them. */
+function Floating() {
+  return (
+    <If when={app.layout.overlayMode() && !app.layout.narrow() && (app.sidebarOpen() || app.panel() !== null)}>
+      <Scrim />
+      <If when={app.sidebarOpen()}>
+        <View testID="sidebar-overlay" class="absolute bottom-0 left-0 bg-background shadow-xl" style={{ top: SIZE.titleBar }}>
+          <Sidebar />
+        </View>
+      </If>
+      <If when={app.panel() !== null}>
+        <View testID="panel-overlay" class="absolute right-0 bottom-0 bg-background shadow-xl" style={{ top: SIZE.titleBar }}>
+          <RightPanel />
+        </View>
+      </If>
+    </If>
+  );
+}
+
+/** A press on the scrim closes the sidebar and the panel; the layers above it never reach it. */
+function Scrim() {
+  return (
+    <Button
+      testID="overlay-scrim"
+      accessibilityLabel="Close"
+      class="absolute inset-x-0 bottom-0 bg-scrim"
+      style={{ top: SIZE.titleBar }}
+      onPress={app.closeFloating}
+    />
+  );
+}
+
+/** The signed-in frame. */
+function Frame() {
+  return (
+    <View testID="frame" class="min-h-0 flex-1">
+      <If when={app.layout.narrow()} else={<TitleBar />}>
+        <NarrowBar />
+      </If>
+      <View class="min-h-0 flex-1 flex-row">
+        <If when={app.layout.sidebarDocked() && !app.layout.narrow()}>
+          <Sidebar />
+        </If>
+        <MainSurface />
+        <If when={app.layout.panelDocked() && !app.layout.narrow()}>
+          <RightPanel />
+        </If>
+      </View>
+      <If when={app.layout.narrow()}>
+        <TabBar />
+        <PanelSheets />
+      </If>
+      <Floating />
+      <If when={app.overlay() === "palette"}>
+        <Palette />
+      </If>
+      <If when={app.overlay() === "new"}>
+        <NewReturn />
+      </If>
+      <UpdateSlot />
+    </View>
+  );
+}
+
+/** First launch, sign-in and the account gate take the whole window (wave 4 fills this): a drag strip and a note. */
+function LockedFrame() {
+  return (
+    <View testID="locked-frame" class="min-h-0 flex-1">
+      <View desktop={{ windowDrag: true }} style={{ height: SIZE.titleBar }} />
+      <View class="flex-1 items-center justify-center">
+        <Text tone="fg2">Locked</Text>
+      </View>
+    </View>
+  );
+}
+
+/** The dev pages (the theme page and the UI kit's gallery) take the whole window. */
+const isDevPage = () => app.view() === "kit" || app.view() === "theme";
+
+/** The app root. */
+export function Shell(props: ShellProps) {
+  void boot(props.start);
+  // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).
+  if (desktopAvailable && platform.desktop) currentWindow().set({ titleBar: { style: "hidden", height: SIZE.titleBar } });
+  bindKeys();
+  // Android's back button: the topmost layer closes first, then history goes back; else the app leaves.
+  if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
+  // The polls end with the root; headless fixtures leave them off unless a test asks.
+  if (props.polling !== false) cleanup(startPolling());
+  // Under 860 points the sidebar and the panel float and start closed; back above it the sidebar docks open again.
+  effect(() => {
+    const overlays = app.layout.overlayMode();
+    untracked(() => app.followWidth(overlays));
+  });
+  // The menu bar matches the window: the filing chrome shows only once nothing stands in front of it.
+  effect(() => app.syncShellChrome(app.chromeVisible()));
+  return (
+    <View testID="shell" class="flex-1 bg-background">
+      <If when={app.booted()}>
+        <If when={app.chromeVisible()} else={<LockedFrame />}>
+          <If when={isDevPage()} else={<Frame />}>
+            <DevPages />
+          </If>
+        </If>
+      </If>
+      {/* The kit's gallery brings a Toaster of its own: two would show every toast twice. */}
+      <If when={!isDevPage()}>
+        <Toaster bottom={(app.view() === "form" ? 96 : 20) + (app.layout.narrow() ? 56 : 0)} />
+      </If>
+    </View>
+  );
+}

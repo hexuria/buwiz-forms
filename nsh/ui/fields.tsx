@@ -1,6 +1,8 @@
 // Text entry: TextField (the one wrapper of nsh/base's Input), Field and FieldGrid, FormActions, PinCells (OtpInput),
 // and the masked fields on TextField: TinInput, MoneyInput, PercentInput, IntInput, DateField. The masks' rules are in
-// mask.ts (pure, tested); here they meet the input: the text is controlled, the caret is put back after a reformat.
+// mask.ts (pure, tested); here they meet the input: the text is controlled, the caret is put back after a reformat, and
+// the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
+// before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
 import type { InputRef, JSX } from "nsh";
 import { effect, signal, Text as NText, untracked, View } from "nsh";
 import { type CalendarEntry, DatePicker, Input, OtpInput } from "nsh/base";
@@ -8,8 +10,8 @@ import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
 import { cx, TOUCH } from "./look";
 import {
-  applyMask, DATE_ERROR, digitsOnly, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, type Mask,
-  moneyMask, moneyPlain, parseTypedDate, PERCENT_MASK, reconcile, TIN_LENGTH, TIN_MASK,
+  DATE_ERROR, digitsOnly, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, type Mask, moneyMask, moneyPlain,
+  parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type TextSelection,
 } from "./mask";
 import { Chip } from "./status";
 import { Icon, Text } from "./text";
@@ -62,6 +64,10 @@ export interface TextFieldProps {
   onFocus?: () => void;
   onBlur?: () => void;
   onSubmit?: () => void;
+  /** The caret or selection moved (UTF-16 units). */
+  onSelectionChange?: (e: { start: number; end: number }) => void;
+  /** Before the text changes: the typed text, "Backspace" or "Enter". */
+  onKeyPress?: (e: { key: string }) => void;
   /** The input's ref, to focus it or set its selection. */
   inputRef?: (ref: InputRef) => void;
   testID?: string;
@@ -112,6 +118,8 @@ export function TextField(props: TextFieldProps) {
           onFocus={() => props.onFocus?.()}
           onBlur={() => props.onBlur?.()}
           onSubmit={() => props.onSubmit?.()}
+          onSelectionChange={props.onSelectionChange}
+          onKeyPress={props.onKeyPress}
           class={cx(
             "h-full min-w-0 flex-1 bg-transparent text-body caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
             flat() ? "text-muted-foreground" : "text-foreground",
@@ -152,8 +160,10 @@ interface MaskedProps {
   shown: (value: string, focused: boolean) => string;
   /** The value of a shown text. */
   valueOf: (text: string) => string;
-  /** Two values mean the same (no reformat from outside). */
+  /** Two values mean the same (no reformat from outside, no report on leaving the box). */
   same?: (a: string, b: string) => boolean;
+  /** The text a box the filer edited settles on when left (the amount rounded to centavos); unset: the shown one. */
+  settle?: (text: string) => string;
   keyboardType: KeyboardType;
   /** Defaults where the caller sets none. */
   placeholder?: string;
@@ -162,23 +172,51 @@ interface MaskedProps {
   align?: "left" | "right";
 }
 
-/** A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. */
+/**
+ * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
+ * what was reported: an edit the mask refuses is taken back out of the native box, and leaving a box the filer edited
+ * reports the value it settled on (a typed 1.255 shown as 1.26 is 1.26 in the draft too) when that is not the one last
+ * reported. A box left unedited never reports: a stored value is shown, not changed.
+ */
 function MaskedField(props: MaskedProps) {
   let input: InputRef | undefined;
   const focused = signal(false);
   const text = signal(props.shown(props.value ?? "", false));
   const same = (a: string, b: string) => (props.same ? props.same(a, b) : a === b);
+  // The value last reported or last given: a report is made only when it changes. `edited`: the filer changed it since the
+  // box took the keys.
+  let last = props.value ?? "";
+  let edited = false;
+  // The selection the input last reported, and what the current edit started from (taken at its key press): that
+  // selection, and whether the key typed a character (a paste or any edit without a key is judged as a paste).
+  let selected: TextSelection | undefined;
+  let editFrom: TextSelection | undefined;
+  let editTyped = false;
   // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
   effect(() => {
     const value = props.value ?? "";
+    last = value;
     const now = untracked(text);
     if (!same(props.valueOf(now), value)) text.set(props.shown(value, untracked(focused)));
   });
   const change = (raw: string) => {
-    const next = reconcile(text(), raw, props.mask);
+    const prev = untracked(text);
+    const from = editFrom;
+    const typed = editTyped;
+    editFrom = undefined;
+    editTyped = false;
+    const next = reconcile(prev, raw, props.mask, undefined, from, typed);
+    // The native box holds `raw`. A signal that already holds the answer would send nothing: show `raw` first so the
+    // answer is a change the box must take.
+    if (next.text === prev && raw !== prev) text.set(raw);
     text.set(next.text);
-    if (next.text !== raw) input?.setSelection(next.caret);
-    props.onChange(props.valueOf(next.text));
+    if (next.text !== raw || next.rejected) input?.setSelection(next.caret);
+    if (next.rejected) return;
+    const value = props.valueOf(next.text);
+    if (value === last) return;
+    last = value;
+    edited = true;
+    props.onChange(value);
   };
   return (
     <TextField
@@ -205,14 +243,33 @@ function MaskedField(props: MaskedProps) {
       returnKeyType={props.field.returnKeyType}
       onSubmit={props.field.onSubmit}
       testID={props.field.testID}
+      onSelectionChange={(e) => {
+        selected = { start: e.start, end: e.end };
+        props.field.onSelectionChange?.(e);
+      }}
+      onKeyPress={(e) => {
+        editFrom = selected;
+        editTyped = [...e.key].length === 1;
+        props.field.onKeyPress?.(e);
+      }}
       onFocus={() => {
         focused.set(true);
+        edited = false;
         props.field.onFocus?.();
       }}
       onBlur={() => {
         focused.set(false);
-        const shown = props.shown(props.valueOf(text()), false);
+        editFrom = undefined;
+        editTyped = false;
+        const laidOut = props.shown(props.valueOf(text()), false);
+        const shown = edited && props.settle ? props.settle(laidOut) : laidOut;
+        edited = false;
         if (shown !== text()) text.set(shown);
+        const value = props.valueOf(shown);
+        if (!same(value, last)) {
+          last = value;
+          props.onChange(value);
+        }
         props.field.onBlur?.();
       }}
     />
@@ -235,7 +292,7 @@ export function TinInput(props: TinInputProps) {
       onChange={props.onChange}
       placeholder="000-000-000-00000"
       mask={TIN_MASK}
-      shown={(v) => formatTinDigits(v)}
+      shown={(v) => (/^[\d\s-]*$/.test(v) && digitsOnly(v).length <= TIN_LENGTH ? formatTinDigits(v) : v)}
       valueOf={(t) => digitsOnly(t).slice(0, TIN_LENGTH)}
       keyboardType="number-pad"
     />
@@ -244,24 +301,27 @@ export function TinInput(props: TinInputProps) {
 
 /** Props of MoneyInput. */
 export interface MoneyInputProps extends MaskedFieldProps {
-  /** The plain number as text: "1250000.50", "" for none. */
+  /** The plain number as text: "1250000.50", "-250", "" for none. A negative value is shown negative whatever `negative` says. */
   value: string;
-  /** The plain number as text after each edit (no separators). */
+  /**
+   * The plain number as text after each edit: digits, one "." and a leading "-", no separators or ₱ ("1250000.5", "-250",
+   * ".5" while typing, "" for none; whatever else arrives is shown as it is and reported unchanged). Leaving the box
+   * reports again only when its formatting changed the number (a typed 1.255 shown as 1.26 reports "1.26"; 1250000.5
+   * shown as 1,250,000.50 reports nothing).
+   */
   onChange: (plain: string) => void;
   /** Whole pesos: leaving the box shows "1,234" rather than "1,234.00". */
   whole?: boolean;
-  /** A leading minus is allowed. */
+  /** A minus may be typed or pasted; unset, a pasted negative is refused and a typed minus does nothing (a negative value that is there stays negative). */
   negative?: boolean;
 }
 
-const numeric = (s: string) => s.trim() !== "" && !Number.isNaN(Number(s));
-
 /**
  * An amount: digits and one decimal point, thousands separators while typing, right-aligned in tabular figures, a ₱
- * before it; leaving the box writes two decimals (formatMoney). The value out is the plain numeric string.
+ * before it; leaving the box writes two decimals (formatMoney, on the digits: decimal rounding half up, any length). The
+ * value out is the plain numeric string, and the box never shows a number other than the one reported.
  */
 export function MoneyInput(props: MoneyInputProps) {
-  const mask = () => moneyMask({ negative: props.negative });
   return (
     <MaskedField
       field={props}
@@ -269,10 +329,11 @@ export function MoneyInput(props: MoneyInputProps) {
       onChange={props.onChange}
       prefix="₱"
       align="right"
-      mask={mask()}
-      shown={(v, focused) => (focused ? applyMask(v, mask()) : formatMoney(applyMask(v, mask()), props.whole))}
+      mask={moneyMask({ negative: props.negative })}
+      shown={(v, focused) => shownMoney(v, focused, props.whole)}
+      settle={(t) => formatMoney(t, props.whole)}
       valueOf={(t) => moneyPlain(t)}
-      same={(a, b) => a === b || (numeric(a) && numeric(b) && Number(a) === Number(b))}
+      same={sameAmount}
       keyboardType="decimal-pad"
     />
   );
@@ -284,7 +345,7 @@ export interface NumberTextProps extends MaskedFieldProps {
   onChange: (value: string) => void;
 }
 
-/** A percent: digits and one decimal point, right-aligned in tabular figures, a % after it. */
+/** A percent: digits and one decimal point, right-aligned in tabular figures, a % after it. Reports the text as typed ("12.5"). */
 export function PercentInput(props: NumberTextProps) {
   return (
     <MaskedField
@@ -294,14 +355,14 @@ export function PercentInput(props: NumberTextProps) {
       suffix="%"
       align="right"
       mask={PERCENT_MASK}
-      shown={(v) => applyMask(v, PERCENT_MASK)}
+      shown={(v) => v}
       valueOf={(t) => t}
       keyboardType="decimal-pad"
     />
   );
 }
 
-/** A whole number or a code: digits only (leading zeros kept), at most `maxDigits`, tabular figures. */
+/** A whole number or a code: digits only (leading zeros kept), at most `maxDigits`, tabular figures. Reports the digits ("0123"). */
 export function IntInput(props: NumberTextProps & { maxDigits?: number }) {
   return (
     <MaskedField
@@ -309,7 +370,7 @@ export function IntInput(props: NumberTextProps & { maxDigits?: number }) {
       value={props.value}
       onChange={props.onChange}
       mask={intMask(props.maxDigits)}
-      shown={(v) => applyMask(v, intMask(props.maxDigits))}
+      shown={(v) => v}
       valueOf={(t) => t}
       keyboardType="number-pad"
     />

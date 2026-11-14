@@ -2231,31 +2231,11 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
         .any(|name| name.ends_with("profile.json"));
 
     if is_db {
-        // Painted flow (import_export.rs): safety-backup the live file, then
-        // extract the archive over it. Drop the cached connection first — it
-        // holds the owner lock and an open handle on the file being replaced.
-        let db_path = db::app_database_path();
-        let timestamp = std::time::SystemTime::now()
+        let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|elapsed| elapsed.as_secs())
             .unwrap_or(0);
-        if db_path.exists()
-            && let Some(parent) = db_path.parent()
-        {
-            // Flush the WAL first: a raw copy of bir_data.db alone can miss
-            // commits still living in -wal, and this copy is the restore
-            // point if the extract corrupts the database.
-            with_database(|db| db.checkpoint().map_err(db_error))?;
-            let _ = std::fs::copy(
-                &db_path,
-                parent.join(format!("bir_data.safety-{timestamp}.db")),
-            );
-        }
-        reset_database()?;
-        return match bir_core::import::extract_database_zip(path, &db_path) {
-            Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
-            Err(error) => Err(HostError::new(error.to_string())),
-        };
+        return restore_database_archive(path, stamp);
     }
 
     if is_profile {
@@ -2266,6 +2246,59 @@ fn import_archive_from(path: &std::path::Path) -> HostResult {
     }
 
     Ok(HostObject::new().field("kind", "invalid").into())
+}
+
+/// Replace the open database with the one in the database archive at `archive`.
+///
+/// Painted flow (import_export.rs), in an order where nothing live changes
+/// until the archive is known good and the restore point exists:
+///
+/// 1. extract the archive's database next to the live file and check it (the
+///    plain SQLite header, `PRAGMA integrity_check`, the app's core tables, a
+///    schema version this build opens); a bad archive stops here;
+/// 2. save a safety copy of the live file under `stamp`; if that fails the
+///    import stops here;
+/// 3. drop the cached connection (it holds the owner lock and an open handle
+///    on the file being replaced) and put the checked file in its place; if
+///    that fails, the connection is reopened on the file that is still there.
+fn restore_database_archive(archive: &std::path::Path, stamp: u64) -> HostResult {
+    let db_path = db::app_database_path();
+    let staged = bir_core::import::stage_database_zip(archive, &db_path)
+        .map_err(|error| HostError::new(error.to_string()))?;
+    restore_staged_database(staged, &db_path, stamp)
+}
+
+/// Steps 2 and 3 of [`restore_database_archive`] for a database already
+/// staged and checked. The staged file is removed on every path out.
+fn restore_staged_database(
+    staged: bir_core::import::StagedDatabase,
+    db_path: &std::path::Path,
+    stamp: u64,
+) -> HostResult {
+    if db_path.exists()
+        && let Some(parent) = db_path.parent()
+    {
+        // Flush the WAL first: a raw copy of bir_data.db alone can miss
+        // commits still living in -wal, and this copy is the restore
+        // point if the replace goes wrong.
+        with_database(|db| db.checkpoint().map_err(db_error))?;
+        let copy = parent.join(format!("bir_data.safety-{stamp}.db"));
+        if let Err(error) = std::fs::copy(db_path, &copy) {
+            let _ = std::fs::remove_file(&copy);
+            return Err(HostError::new(format!(
+                "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
+            )));
+        }
+    }
+    reset_database()?;
+    match staged.install() {
+        Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
+        Err(error) => {
+            // Back on the file that is still there, now rather than at the next call.
+            let _ = open_database_slot();
+            Err(HostError::new(error.to_string()))
+        }
+    }
 }
 
 /// The page's export: `tin`'s profile as a `.zip` archive under the host's
@@ -4364,6 +4397,203 @@ mod tests {
         .unwrap();
         assert_eq!(tins, [ARCHIVE_TIN], "the archive's database is open");
         std::fs::write(scratch.join("child-done"), "ok").unwrap();
+    }
+
+    /// Run the test `name` again in a child process whose database is
+    /// `<scratch>/data/bir_data.db` and whose `EBIR_TEST_ENV` keeps the key off
+    /// the keychain: a database import writes the app's database file, so it
+    /// never runs against this process's. The child writes `child-done`.
+    fn run_in_scratch_process(name: &str, scratch: &ScratchDir) {
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                &format!("bir_module::tests::{name}"),
+                "--nocapture",
+            ])
+            .current_dir(scratch.path())
+            .env(IMPORT_CHILD, scratch.path())
+            .env(
+                "BIR_DATABASE_PATH",
+                scratch.path().join("data").join("bir_data.db"),
+            )
+            .env("EBIR_TEST_ENV", "1")
+            .env("BIR_SFTP_DRY_RUN", "1")
+            .status()
+            .unwrap();
+        assert!(status.success(), "{name}: the child failed");
+        assert_eq!(
+            std::fs::read_to_string(scratch.path().join("child-done"))
+                .ok()
+                .as_deref(),
+            Some("ok"),
+            "{name}: the child ran to its end"
+        );
+    }
+
+    const IMPORT_CHILD: &str = "BIR_IMPORT_ARCHIVE_CHILD_SCRATCH";
+
+    /// The child's start: its scratch folder, after the checks that it runs
+    /// on a scratch database and never the live one.
+    fn import_child(scratch: &std::ffi::OsStr) -> std::path::PathBuf {
+        let scratch = std::path::PathBuf::from(scratch);
+        std::fs::create_dir_all(scratch.join("inputs")).unwrap();
+        assert_eq!(
+            db::app_database_path(),
+            scratch.join("data").join("bir_data.db"),
+            "the scratch database"
+        );
+        assert!(
+            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            "the key stays off the keychain"
+        );
+        with_database(|db| {
+            db.create_taxpayer(new_taxpayer("123456788", "Kept Trading Corp"))
+                .map_err(db_error)?;
+            Ok(())
+        })
+        .unwrap();
+        scratch
+    }
+
+    /// A database backup archive of a database holding "Restored Holdings Inc".
+    fn good_database_archive(scratch: &std::path::Path) -> std::path::PathBuf {
+        let source = Database::open(scratch.join("inputs").join("source.db")).unwrap();
+        source
+            .create_taxpayer(new_taxpayer("987654320", "Restored Holdings Inc"))
+            .unwrap();
+        source.checkpoint().unwrap();
+        let archive = scratch.join("inputs").join("good.zip");
+        bir_core::export::export_database_zip(&source, &archive).unwrap();
+        drop(source);
+        archive
+    }
+
+    /// The names of the profiles in the open database.
+    fn profile_names() -> Vec<String> {
+        with_database(|db| {
+            Ok(db
+                .list_profiles()
+                .map_err(db_error)?
+                .into_iter()
+                .map(|profile| profile.full_name.clone())
+                .collect())
+        })
+        .unwrap()
+    }
+
+    /// Files next to the database that an import must not leave behind or
+    /// make before it is sure: safety copies and staging files.
+    fn import_leftovers(scratch: &std::path::Path) -> Vec<String> {
+        std::fs::read_dir(scratch.join("data"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("bir_data.safety-") || name.contains(".import-"))
+            .collect()
+    }
+
+    /// An archive whose database cannot replace the live one is refused
+    /// before anything changes: the open database keeps its data and
+    /// connection, no safety copy is made, no staging file is left.
+    #[test]
+    fn a_database_archive_that_fails_its_checks_changes_nothing() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = scratch.join("inputs").join("bad.zip");
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(&archive).unwrap());
+            zip.start_file("bir_data.db", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            std::io::Write::write_all(&mut zip, &b"\x01\x02not-sqlite-".repeat(512)).unwrap();
+            zip.finish().unwrap();
+
+            match import_archive_from(&archive) {
+                Ok(_) => panic!("an archive that is not a database was imported"),
+                Err(error) => {
+                    assert!(
+                        error.message().contains("not a plain SQLite"),
+                        "{}",
+                        error.message()
+                    );
+                    assert!(error.message().contains("left as it is"));
+                }
+            }
+            assert_eq!(import_leftovers(&scratch), Vec::<String>::new());
+            assert!(!RELEASED.get(), "the live connection was never let go");
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "a_database_archive_that_fails_its_checks_changes_nothing",
+            &ScratchDir::new("unfit"),
+        );
+    }
+
+    /// No safety copy, no import: when the copy of the file about to be
+    /// replaced cannot be made, the import stops with that said, the live
+    /// database keeps its data, and nothing is left behind.
+    #[test]
+    fn a_failed_safety_copy_stops_the_database_import() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            // The copy's name is taken by a folder, so copying onto it fails.
+            std::fs::create_dir(scratch.join("data").join("bir_data.safety-7.db")).unwrap();
+
+            match restore_database_archive(&archive, 7) {
+                Ok(_) => panic!("the import went on without a safety copy"),
+                Err(error) => {
+                    assert!(
+                        error.message().contains("safety copy"),
+                        "{}",
+                        error.message()
+                    );
+                    assert!(error.message().contains("nothing was imported"));
+                }
+            }
+            assert_eq!(
+                import_leftovers(&scratch),
+                ["bir_data.safety-7.db"],
+                "only the folder that was in the way"
+            );
+            assert!(!RELEASED.get(), "the live connection was never let go");
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "a_failed_safety_copy_stops_the_database_import",
+            &ScratchDir::new("safety"),
+        );
+    }
+
+    /// Plain build: the replace fails after the connection was let go (the
+    /// checked file is gone, so the rename has nothing to move). The import
+    /// reports it and the connection is back on the file that is still
+    /// there, at once and not at the next call, with its data.
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn a_database_replace_that_fails_puts_the_connection_back() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            let db_path = db::app_database_path();
+            let staged = bir_core::import::stage_database_zip(&archive, &db_path).unwrap();
+            std::fs::remove_file(staged.path()).unwrap();
+
+            assert!(restore_staged_database(staged, &db_path, 9).is_err());
+            assert!(
+                !RELEASED.get(),
+                "the connection was reopened by the failure"
+            );
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            assert_eq!(import_leftovers(&scratch), ["bir_data.safety-9.db"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "a_database_replace_that_fails_puts_the_connection_back",
+            &ScratchDir::new("replace"),
+        );
     }
 
     // ---------- the submission worker ----------
