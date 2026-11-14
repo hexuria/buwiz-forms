@@ -506,6 +506,8 @@ impl Form1601CDraft {
             next_retry_at: None,
             profile_edits: Vec::new(),
             profile_baseline: std::collections::BTreeMap::new(),
+            kept: std::collections::BTreeMap::new(),
+            auto_stops: Vec::new(),
         };
         if !errors.is_empty() {
             return Err(errors);

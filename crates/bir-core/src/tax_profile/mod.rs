@@ -12,7 +12,6 @@
 //!   ZIP, phone and email from the head office (`00000`) unless the field is
 //!   overridden (D2). Inheritance resolves on read.
 
-pub mod field_kinds;
 pub mod tax_types;
 pub mod templates;
 pub mod year_facts;
@@ -25,14 +24,9 @@ use serde::{Deserialize, Serialize};
 use crate::db::DbError;
 use crate::profile::TaxpayerType;
 
-pub use field_kinds::{
-    AutoSource, FieldKind, FieldSpec, FormFieldKinds, IdentitySource, PeriodSource, ResolvedPeriod,
-    TemplatableKind, field_kinds_for,
-};
 pub use tax_types::{TaxTypeChip, facts_used_by, tax_type_of, tax_types_for_year};
 pub use templates::{
-    FormTemplate, GuidedStop, PrefillPlan, TemplateChoice, TemplateField, TemplateFieldError,
-    TemplateSource, snapshot_setup_answers, validate_template_fields,
+    FormTemplate, TemplateField, TemplateFieldError, TemplateSource, validate_template_fields,
 };
 pub use year_facts::{
     EffectiveYearFacts, Fact, FactOwner, ViewFacts, YearFacts, YearFactsPatch, YearFactsView,

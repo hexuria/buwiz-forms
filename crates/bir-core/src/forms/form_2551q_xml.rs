@@ -21,27 +21,29 @@ pub struct OfficialAtcOption {
     pub rate: String,
 }
 
+/// The official 2551Q `drpATC` options, in the dropdown's order.
+pub fn official_atc_options() -> &'static [OfficialAtcOption] {
+    static OPTIONS: OnceLock<Vec<OfficialAtcOption>> = OnceLock::new();
+    OPTIONS.get_or_init(|| {
+        serde_json::from_str::<OfficialAtcOptions>(include_str!(
+            "../../data/official-xml/2551q-v2018-atc-options.json"
+        ))
+        .expect("valid 2551Q ATC options")
+        .options
+    })
+}
+
 /// The official 2551Q ATC option for `code` at `rate` (a fraction, e.g.
 /// 0.03). PT010 has two options: 3% (value 1) and the 1% of July 2020 to
 /// June 2023 (value 23). `None` when the official dropdown has no such entry.
 pub fn official_atc_option(code: &str, rate: f64) -> Option<&'static OfficialAtcOption> {
-    static OPTIONS: OnceLock<Vec<OfficialAtcOption>> = OnceLock::new();
-    OPTIONS
-        .get_or_init(|| {
-            serde_json::from_str::<OfficialAtcOptions>(include_str!(
-                "../../data/official-xml/2551q-v2018-atc-options.json"
-            ))
-            .expect("valid 2551Q ATC options")
-            .options
-        })
-        .iter()
-        .find(|option| {
-            option.code == code
-                && option
-                    .rate
-                    .parse::<f64>()
-                    .is_ok_and(|percent| (percent / 100.0 - rate).abs() < 1e-9)
-        })
+    official_atc_options().iter().find(|option| {
+        option.code == code
+            && option
+                .rate
+                .parse::<f64>()
+                .is_ok_and(|percent| (percent / 100.0 - rate).abs() < 1e-9)
+    })
 }
 
 impl Form2551QDraft {

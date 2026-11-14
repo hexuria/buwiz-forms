@@ -42,6 +42,7 @@ use serde_json::{Map, Value, json};
 
 use crate::bir_module::{json, to_json, with_database};
 
+mod carry_forward;
 mod catalogs;
 mod combs;
 mod conditions;
@@ -135,6 +136,14 @@ export interface ScreenFormOpened {
     profile_differs?: string[];
     /** One-time notes this opening offers (`key`, `text`); show the ones `screen_form_notes_seen` records. */
     notes?: { key: string; text: string }[];
+    /** Boxes filled from the previous return (`last`) or from the template (`template`) when this return was created. Stored with the return. A radio item is named by its group box (the schema field's `grp`). */
+    kept: Record<string, "last" | "template">;
+    /** Automatic stops as box keys: boxes the user filled in the previous return that the carry rule does not copy (amounts and dates). Stored with the return when it is created. Empty for a first return. */
+    auto_stops: string[];
+    /** The user's own "Stop here" switches for this branch and form: true = always a stop, false = never. */
+    stop_edits: Record<string, boolean>;
+    /** Boxes that may carry a "Stop here" switch (user boxes: not computed, not locked, not profile), radio items by their group box. */
+    stoppable: string[];
     errors: ScreenFormError[];
 }
 export interface ScreenFormPeriodPart {
@@ -3123,7 +3132,7 @@ fn open_screen_form(
     // The draft to show; the one the profile alone makes for this period
     // (what decides whether the profile filled a box); and for a sample, one
     // for another year and period (what tells which boxes follow the period).
-    let (draft, from_profile, build, filed_original, followed, notes, checked, consumed) =
+    let (draft, from_profile, build, filed_original, (followed, carried), notes, checked, consumed) =
         with_database(|db| {
             let profile = db
                 .get_profile_for_year(&tin, year)
@@ -3176,6 +3185,12 @@ fn open_screen_form(
                         mark_trigger_date(kind, &mut draft, part_key);
                     }
                 }
+            }
+            // A brand-new return starts with the answers of the previous
+            // period's return, or the template's (owner's decision 9),
+            // before it follows the profile, so profile boxes still win.
+            if !sample && draft["id"].is_null() {
+                carry_forward::carry_into(db, kind, &tin, year, period, &mut draft);
             }
             // A stored Draft follows the tax profile in every box the filer did
             // not edit on it, saved quietly; the page says what changed.
@@ -3236,12 +3251,13 @@ fn open_screen_form(
             };
             // The 1604E rows the filer marked checked (D5).
             let checked = rows_1604::checked_rows(db, kind, &draft);
+            let carried = carry_forward::open_fields(db, kind, &tin, &draft);
             Ok((
                 draft,
                 from_profile,
                 build,
                 filed_original,
-                followed,
+                (followed, carried),
                 notes,
                 checked,
                 consumed,
@@ -3260,6 +3276,9 @@ fn open_screen_form(
         opened["filed_original"] = filed_original;
         opened["profile_updates"] = json!(followed);
         opened["notes"] = json!(notes);
+        for (field, value) in carried {
+            opened[field] = value;
+        }
         Ok(json(opened))
     })
 }
@@ -5808,7 +5827,7 @@ fn screen_form_amend(
         u16::try_from(arguments.integer(2)?).map_err(|_| host_error("year is out of range"))?;
     let period = page_period(code, arguments.integer(3)?).map_err(host_error)?;
     let exact = arguments.get(4).and_then(|key| to_json(key).as_i64());
-    let (amended, from_profile, status, updated_at) = with_database(|db| {
+    let (amended, from_profile, status, updated_at, carried) = with_database(|db| {
         let profile = db
             .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
@@ -5822,13 +5841,16 @@ fn screen_form_amend(
             .unwrap_or("")
             .to_string();
         let mut amended = agent::amended_copy(kind, &filed).map_err(host_error)?;
+        // An amendment corrects its filed return: it is no carry.
+        carry_forward::forget(&mut amended);
         // The amendment carries its filed return's typed parts, as opening
         // a stored return does, whether or not the filed return was opened
         // in this process.
         seed_amendment_parts(kind, &filed, &mut amended);
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
-        Ok((amended, from_profile, status, updated_at))
+        let carried = carry_forward::open_fields(db, kind, &tin, &amended);
+        Ok((amended, from_profile, status, updated_at, carried))
     })?;
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -5849,6 +5871,9 @@ fn screen_form_amend(
             Some(json!({ "status": status_name(&status), "updated_at": updated_at })),
         );
         opened["amends"] = json!(status_name(&status));
+        for (field, value) in carried {
+            opened[field] = value;
+        }
         Ok(json(opened))
     })
 }
@@ -6225,6 +6250,10 @@ mod tests {
     mod radio_untick_rule;
     // PR 15: the shared effective-lock table pinned core-side (P4-19).
     mod agent_locks;
+    // The carry rule's page-side inputs, pinned core-side.
+    mod agent_carry;
+    // A new return starts with the previous return's answers.
+    mod carry;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
