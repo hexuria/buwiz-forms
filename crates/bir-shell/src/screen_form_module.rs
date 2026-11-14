@@ -8125,7 +8125,10 @@ mod tests {
 
     /// The fixture's July 0619E is late, so Queue refuses it while the
     /// year's EOPT tier is not set (decision 3: the tier sets its penalty
-    /// rates); set it, and Queue goes on.
+    /// rates), and then while nobody has said whether the taxpayer is a
+    /// government withholding agent (the form's category box is required,
+    /// and its "Private" is only the page's guess). Answer both, and Queue
+    /// goes on.
     fn set_eopt_tier_for_a_late_queue(draft: &Value) {
         let refused = call(
             "screen_form_queue",
@@ -8143,6 +8146,31 @@ mod tests {
                 2026,
                 &bir_core::tax_profile::YearFactsPatch {
                     eopt_tier: Some(Some(bir_core::profile::EoptTier::Micro)),
+                    ..Default::default()
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| HostError::new(error.to_string()))
+        })
+        .unwrap();
+        let refused = call(
+            "screen_form_queue",
+            vec!["0619E".into(), json(draft.clone())],
+        )
+        .unwrap_err();
+        assert!(
+            refused
+                .message()
+                .contains("Government withholding agent is not set"),
+            "{}",
+            refused.message()
+        );
+        with_database(|db| {
+            db.set_year_facts(
+                TIN,
+                2026,
+                &bir_core::tax_profile::YearFactsPatch {
+                    is_government_withholding_entity: Some(Some(false)),
                     ..Default::default()
                 },
             )
