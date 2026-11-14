@@ -2653,12 +2653,14 @@ pub fn module() -> HostModule {
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
+    let module = crate::scroll_module::register(module);
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
+        crate::scroll_module::DECLARATIONS,
     ))
 }
 

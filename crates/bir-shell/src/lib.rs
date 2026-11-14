@@ -33,6 +33,7 @@ mod packaged;
 pub mod print_preview_window;
 pub mod print_sheet;
 mod screen_form_module;
+mod scroll_module;
 pub mod static_html;
 mod tax_profile_module;
 mod tray;
