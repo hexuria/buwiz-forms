@@ -1430,15 +1430,14 @@ pub(crate) fn send_draft(
     if identity.status != FilingStatus::Draft {
         return Err(format!("this return is {:?}, not a Draft", identity.status));
     }
-    if kind == AgentFormKind::Form2551Q {
-        if let Some(profile) = db
+    if kind == AgentFormKind::Form2551Q
+        && let Some(profile) = db
             .get_profile_for_year(&identity.tin, identity.taxable_year)
             .map_err(|error| error.to_string())?
-            && let Ok(mut typed) = serde_json::from_value::<Form2551QDraft>(draft.clone())
-        {
-            let _ = typed.reconcile_with_effective_profile(&profile);
-            *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
-        }
+        && let Ok(mut typed) = serde_json::from_value::<Form2551QDraft>(draft.clone())
+    {
+        let _ = typed.reconcile_with_effective_profile(&profile);
+        *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
     }
     let errors = agent::validate(kind, draft)?;
     if !errors.is_empty() {
