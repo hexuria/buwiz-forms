@@ -1032,16 +1032,32 @@ fn rollback_result_label<T>(result: &Result<T, anyhow::Error>) -> String {
     }
 }
 
+// `BUWIZ_NO_KEYCHAIN=1`: the three functions below never reach the OS
+// keychain. Nothing is stored (not connected), a save is refused, and there is
+// nothing to delete.
+
 fn save_credentials(credentials: &GoogleCalendarCredential) -> Result<(), anyhow::Error> {
+    if crate::platform::keychain_disabled() {
+        return Err(anyhow::anyhow!(
+            "Google Calendar credentials cannot be saved: the OS keychain is switched off ({}=1)",
+            crate::platform::NO_KEYCHAIN_ENV
+        ));
+    }
     let serialized = serde_json::to_string(credentials)?;
     keychain_set(&serialized)
 }
 
 fn load_credentials() -> Result<GoogleCalendarCredential, anyhow::Error> {
+    if crate::platform::keychain_disabled() {
+        return Err(anyhow::anyhow!("Google Calendar account is not connected"));
+    }
     Ok(serde_json::from_str(&keychain_get()?)?)
 }
 
 fn delete_credentials() -> Result<(), anyhow::Error> {
+    if crate::platform::keychain_disabled() {
+        return Ok(());
+    }
     keychain_delete()
 }
 
@@ -1463,5 +1479,26 @@ mod tests {
         let error = anyhow::Error::new(CalendarResourceNotFound);
 
         assert!(is_resource_not_found(&error));
+    }
+
+    #[test]
+    fn with_the_keychain_off_the_calendar_is_not_connected_and_nothing_is_stored() {
+        temp_env::with_var("BUWIZ_NO_KEYCHAIN", Some("1"), || {
+            let credentials = GoogleCalendarCredential {
+                email: "filer@example.test".into(),
+                access_token: "access".into(),
+                refresh_token: "refresh".into(),
+                expires_at_unix: 0,
+            };
+
+            let load = load_credentials().expect_err("nothing is stored");
+            assert!(load.to_string().contains("not connected"), "{load}");
+            assert!(google_calendar_configuration().connected_email.is_none());
+            let save = save_credentials(&credentials).expect_err("a save is refused");
+            assert!(save.to_string().contains("switched off"), "{save}");
+            delete_credentials().expect("nothing to delete is not an error");
+            // Still nothing after the refused save.
+            assert!(load_credentials().is_err());
+        });
     }
 }

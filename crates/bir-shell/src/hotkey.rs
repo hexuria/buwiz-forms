@@ -3,38 +3,8 @@
 //! A bare key (`"E"`) means the platform default modifiers: Control+Option on
 //! macOS, Super+Shift elsewhere. The setting is `global_hotkey_key`.
 
+use bir_app_api::hotkey_combo::split_combo;
 use global_hotkey::hotkey::{Code, HotKey, Modifiers};
-
-/// The modifiers a legacy bare-key binding uses on this platform.
-fn default_modifier_tokens() -> &'static [&'static str] {
-    if cfg!(target_os = "macos") {
-        &["control", "alt"]
-    } else {
-        &["platform", "shift"]
-    }
-}
-
-/// Split `"control+alt+F12"` into modifier tokens and the key.
-/// A bare key returns the platform default modifiers.
-fn split_combo(combo: &str) -> Option<(Vec<String>, String)> {
-    let parts: Vec<&str> = combo
-        .split('+')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect();
-    let (key, mods) = parts.split_last()?;
-    let key = key.to_uppercase();
-    if mods.is_empty() {
-        return Some((
-            default_modifier_tokens()
-                .iter()
-                .map(|token| (*token).to_string())
-                .collect(),
-            key,
-        ));
-    }
-    Some((mods.iter().map(|token| (*token).to_string()).collect(), key))
-}
 
 /// Build a `global_hotkey` chord from a stored combo. `None` when the key is
 /// not one this listener can register.
@@ -134,6 +104,21 @@ mod tests {
         } else {
             assert!(mods.contains(Modifiers::SUPER));
             assert!(mods.contains(Modifiers::SHIFT));
+        }
+    }
+
+    /// The host functions accept a combo by bir-app-api's key list; this
+    /// listener must register exactly those keys.
+    #[test]
+    fn the_app_api_key_list_is_the_listeners() {
+        for key in bir_app_api::hotkey_combo::KEYS {
+            assert!(key_char_to_code(key).is_some(), "{key}");
+        }
+        for key in ["F13", "SPACE", "TAB", "-", "NOTAKEY"] {
+            assert!(key_char_to_code(key).is_none(), "{key}");
+            assert!(!bir_app_api::hotkey_combo::is_registrable(&format!(
+                "control+{key}"
+            )));
         }
     }
 

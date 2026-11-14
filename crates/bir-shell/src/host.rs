@@ -96,6 +96,9 @@ fn capabilities() -> Capabilities {
 /// renders the shell's built-in failure surface instead of exiting.
 pub fn run(root: PathBuf) -> anyhow::Result<()> {
     let root = resolve_app_root(&root, "main.js").unwrap_or(root);
+    // Before anything signs in or out: the account gate's menu calls go
+    // through the hooks.
+    crate::bir_host::install_hooks();
 
     // Linux tray menus panic unless GTK is initialized before GPUI connects.
     crate::tray::init_gtk();
@@ -123,7 +126,7 @@ pub fn run(root: PathBuf) -> anyhow::Result<()> {
             tracing::warn!("storage unavailable: {error}");
         }
         set_capabilities(capabilities());
-        export_module(bir_module::module()).expect("bir module must export");
+        export_module(crate::bir_host::module()).expect("bir module must export");
         // Open the database only after the account gate says the session is
         // good. That start is also what runs the submission worker. A locked
         // launch waits until sign-in calls `cloud_account_session_opened`.

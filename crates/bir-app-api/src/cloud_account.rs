@@ -70,7 +70,7 @@ pub fn register(module: HostModule) -> HostModule {
 
 /// Pause filing, then open the UI only when a saved session still qualifies.
 /// Call this before the menu bar is built and before the database worker starts.
-pub(crate) fn prepare_launch() {
+pub fn prepare_launch() {
     bir_core::background_cron::set_submission_paused(true);
     forget_saved_server_url();
     if crate::account_gate::auth_bypass_enabled() {
@@ -226,14 +226,14 @@ fn sign_out(
 fn session_opened() -> HostResult {
     crate::account_gate::set_unlocked(true);
     crate::bir_module::open_database_at_launch();
-    crate::updater::start();
-    let _ = gpui_shell::with_current_app(crate::app_menu::refresh);
+    crate::hooks::hooks().start_updater();
+    crate::hooks::hooks().refresh_menu();
     Ok(HostValue::Null)
 }
 
 fn session_closed() -> HostResult {
     crate::account_gate::set_unlocked(false);
-    let _ = gpui_shell::with_current_app(crate::app_menu::refresh);
+    crate::hooks::hooks().refresh_menu();
     Ok(HostValue::Null)
 }
 

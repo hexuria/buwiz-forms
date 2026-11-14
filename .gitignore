@@ -159,3 +159,10 @@ node_modules/
 /forms-corrected.manifest.json
 .ci-html/
 /assets/form-renderer-build-identity.json
+
+# NSH app (nsh/): its own cargo workspace keeps its lockfile like crates/bir-shell does; generated files stay out.
+!/nsh/Cargo.lock
+/nsh/.nsh/
+/nsh/target/
+# Real-window screenshots go to ~/BuwizNsh/evidence/, never into the worktree (nsh test --target writes PNGs into the current directory).
+/nsh/*.png

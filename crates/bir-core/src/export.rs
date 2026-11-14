@@ -235,15 +235,8 @@ pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError
     let temp_db_path = temporary_plaintext_database_path("bir_unencrypted");
 
     let result = (|| {
-        // Export current encrypted DB to a temporary unencrypted DB
-        db.conn.execute(
-            "ATTACH DATABASE ?1 AS plaintext KEY '';",
-            rusqlite::params![path_as_utf8(&temp_db_path)?],
-        )?;
-        let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
-        let _ = stmt.query([])?.next()?;
-        drop(stmt);
-        db.conn.execute("DETACH DATABASE plaintext;", [])?;
+        // Copy the current DB to a temporary unencrypted DB
+        write_plaintext_copy(db, &temp_db_path)?;
 
         zip_plaintext_database(&temp_db_path, zip_path)
     })();
@@ -252,7 +245,33 @@ pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError
     result
 }
 
-/// Exports an existing SQLCipher database while the source is attached with `mode=ro`.
+/// SQLCipher build: export the encrypted DB into a new unencrypted file.
+#[cfg(feature = "sqlcipher")]
+fn write_plaintext_copy(db: &Database, temp_db_path: &Path) -> Result<(), DbError> {
+    db.conn.execute(
+        "ATTACH DATABASE ?1 AS plaintext KEY '';",
+        rusqlite::params![path_as_utf8(temp_db_path)?],
+    )?;
+    let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
+    let _ = stmt.query([])?.next()?;
+    drop(stmt);
+    db.conn.execute("DETACH DATABASE plaintext;", [])?;
+    Ok(())
+}
+
+/// Plain build: the DB is already plain SQLite, and there is no
+/// `sqlcipher_export`. `VACUUM INTO` writes a consistent, compact copy into a
+/// new file without touching the source.
+#[cfg(not(feature = "sqlcipher"))]
+fn write_plaintext_copy(db: &Database, temp_db_path: &Path) -> Result<(), DbError> {
+    db.conn.execute(
+        "VACUUM INTO ?1;",
+        rusqlite::params![path_as_utf8(temp_db_path)?],
+    )?;
+    Ok(())
+}
+
+/// Exports an existing database while the source is opened with `mode=ro`.
 ///
 /// Unlike [`export_database_zip`], this path does not open the source through the normal
 /// application lifecycle, so it cannot create, migrate, recover, or write the live database.
@@ -267,39 +286,71 @@ pub fn export_existing_database_zip(
         )));
     }
 
+    crate::db::ensure_openable_file(source_database)?;
+
     let temp_db_path = temporary_plaintext_database_path("bir_read_only_export");
     let result = (|| {
-        let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
-            | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
-            | rusqlite::OpenFlags::SQLITE_OPEN_URI;
-        let connection = rusqlite::Connection::open_with_flags(&temp_db_path, flags)?;
-        let key_hex = Database::get_existing_master_key()?;
-        let source_uri = sqlite_read_only_uri(source_database)?;
-
-        connection.execute(
-            &format!(
-                "ATTACH DATABASE ?1 AS encrypted_source KEY \"x'{}'\";",
-                key_hex
-            ),
-            rusqlite::params![source_uri],
-        )?;
-        let _: i64 = connection.query_row(
-            "SELECT count(*) FROM encrypted_source.sqlite_master",
-            [],
-            |row| row.get(0),
-        )?;
-        let mut statement =
-            connection.prepare("SELECT sqlcipher_export('main', 'encrypted_source');")?;
-        let _ = statement.query([])?.next()?;
-        drop(statement);
-        connection.execute("DETACH DATABASE encrypted_source;", [])?;
-        drop(connection);
+        write_plaintext_copy_of_existing(source_database, &temp_db_path)?;
 
         zip_plaintext_database(&temp_db_path, zip_path)
     })();
 
     let _ = fs::remove_file(&temp_db_path);
     result
+}
+
+/// SQLCipher build: attach the encrypted source read-only and export it into
+/// a new unencrypted file.
+#[cfg(feature = "sqlcipher")]
+fn write_plaintext_copy_of_existing(
+    source_database: &Path,
+    temp_db_path: &Path,
+) -> Result<(), DbError> {
+    let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+        | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
+        | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+    let connection = rusqlite::Connection::open_with_flags(temp_db_path, flags)?;
+    let key_hex = Database::get_existing_master_key()?;
+    let source_uri = sqlite_read_only_uri(source_database)?;
+
+    connection.execute(
+        &format!(
+            "ATTACH DATABASE ?1 AS encrypted_source KEY \"x'{}'\";",
+            key_hex
+        ),
+        rusqlite::params![source_uri],
+    )?;
+    let _: i64 = connection.query_row(
+        "SELECT count(*) FROM encrypted_source.sqlite_master",
+        [],
+        |row| row.get(0),
+    )?;
+    let mut statement =
+        connection.prepare("SELECT sqlcipher_export('main', 'encrypted_source');")?;
+    let _ = statement.query([])?.next()?;
+    drop(statement);
+    connection.execute("DETACH DATABASE encrypted_source;", [])?;
+    drop(connection);
+    Ok(())
+}
+
+/// Plain build: open the source read-only (`mode=ro`) and `VACUUM INTO` a new
+/// file. The source is never written.
+#[cfg(not(feature = "sqlcipher"))]
+fn write_plaintext_copy_of_existing(
+    source_database: &Path,
+    temp_db_path: &Path,
+) -> Result<(), DbError> {
+    let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+    let connection =
+        rusqlite::Connection::open_with_flags(sqlite_read_only_uri(source_database)?, flags)?;
+    let _: i64 =
+        connection.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0))?;
+    connection.execute(
+        "VACUUM INTO ?1;",
+        rusqlite::params![path_as_utf8(temp_db_path)?],
+    )?;
+    Ok(())
 }
 
 fn temporary_plaintext_database_path(prefix: &str) -> PathBuf {

@@ -10,6 +10,7 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 /// Returns the Windows application data directory.
 ///
 /// Uses `%LOCALAPPDATA%\Taxman\eBIRForms` following Windows conventions.
+#[cfg(feature = "sqlcipher")]
 pub fn data_dir() -> PathBuf {
     if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
         let dir = PathBuf::from(local_app_data)
@@ -22,6 +23,29 @@ pub fn data_dir() -> PathBuf {
     // Fallback
     if let Some(home) = std::env::var_os("USERPROFILE") {
         let dir = PathBuf::from(home).join(".taxman-ebir");
+        let _ = std::fs::create_dir_all(&dir);
+        return dir;
+    }
+
+    PathBuf::from(".taxman-ebir")
+}
+
+/// Returns the Windows application data directory of the plain-SQLite (NSH)
+/// build: `%LOCALAPPDATA%\dev.goldcoders.bir.nsh`.
+#[cfg(not(feature = "sqlcipher"))]
+pub fn data_dir() -> PathBuf {
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+        let dir = PathBuf::from(local_app_data).join(super::NSH_APP_ID);
+        let _ = std::fs::create_dir_all(&dir);
+        return dir;
+    }
+
+    // Fallback
+    if let Some(home) = std::env::var_os("USERPROFILE") {
+        let dir = PathBuf::from(home)
+            .join("AppData")
+            .join("Local")
+            .join(super::NSH_APP_ID);
         let _ = std::fs::create_dir_all(&dir);
         return dir;
     }

@@ -1,0 +1,13 @@
+[package]
+name = "nsh-app-ebirforms"
+version = "0.2.0"
+edition = "2024"
+publish = false
+
+# Its own workspace, like crates/bir-shell: the root workspace (and its Cargo.lock) never sees this crate.
+[workspace]
+
+# Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork, NSH 0.4.0).
+# Never mix sources: a version or source mismatch is a cargo error. See nsh/AGENTS.md.
+[dependencies]
+nsh-core = { path = "/Volumes/goldcoders/features/nsh-tsx/nsh/crates/nsh-core" }

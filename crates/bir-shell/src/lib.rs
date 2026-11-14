@@ -8,35 +8,35 @@
 //! See `docs/plans/gpui-shell-migration.md` (tracking issue #135) for the
 //! slice plan.
 
-mod account_gate;
 #[cfg(feature = "agent")]
 mod agent;
 
 #[cfg(feature = "agent")]
 pub fn run_headless() -> std::process::ExitCode {
+    bir_host::install_hooks();
     agent::headless::run()
 }
 mod app_menu;
-mod auth_limiter;
-mod bir_module;
+mod bir_host;
 mod blitz_render;
-mod cloud_account;
-mod dashboard_module;
 #[cfg(target_os = "linux")]
 mod desktop_entry;
 mod host;
+// The Mac App Store build has no global hotkey (see `tray`).
+#[cfg(any(test, not(feature = "mas_build")))]
 mod hotkey;
 #[cfg(any(test, target_os = "linux"))]
 mod linux_csd;
-mod logging;
-mod packaged;
 pub mod print_preview_window;
-pub mod print_sheet;
-mod screen_form_module;
 mod scroll_module;
-pub mod static_html;
-mod tax_profile_module;
 mod tray;
 mod updater;
+
+// The host functions moved to bir-app-api; these keep their `crate::` paths
+// for the gpui glue that still calls them.
+#[cfg(feature = "agent")]
+use bir_app_api::screen_form_module;
+use bir_app_api::{account_gate, bir_module, cloud_account, packaged};
+pub use bir_app_api::{print_sheet, static_html};
 
 pub use host::{app_root, run};

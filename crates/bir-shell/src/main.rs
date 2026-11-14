@@ -12,7 +12,12 @@ fn main() {
     let developer_mode = bir_core::logging::developer_mode_enabled();
     let _ = bir_core::logging::install(bir_core::logging::InstallOptions {
         developer_mode,
-        default_filter: bir_core::logging::shell_filter(developer_mode),
+        // The host functions now log from bir-app-api: give it bir_shell's level.
+        default_filter: if developer_mode {
+            concat_filter(bir_core::logging::shell_filter(true), ",bir_app_api=debug")
+        } else {
+            concat_filter(bir_core::logging::shell_filter(false), ",bir_app_api=info")
+        },
     });
 
     if let Err(error) = bir_shell::run(bir_shell::app_root()) {
@@ -20,4 +25,9 @@ fn main() {
         eprintln!("{error:#}");
         std::process::exit(1);
     }
+}
+
+/// One filter string for the process, built once at start-up.
+fn concat_filter(base: &str, extra: &str) -> &'static str {
+    Box::leak(format!("{base}{extra}").into_boxed_str())
 }

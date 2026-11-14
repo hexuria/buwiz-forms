@@ -86,7 +86,7 @@ fn drop_reader() {
 /// The shared handle behind [`with_database`]. Refuses while the Buwiz
 /// account gate is locked. The first unlocked open is what
 /// [`open_database_at_launch`] uses to start the submission worker.
-pub(crate) fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
+pub fn database_handle() -> Result<std::sync::Arc<std::sync::Mutex<Database>>, HostError> {
     crate::account_gate::ensure_unlocked()?;
     open_database_slot()
 }
@@ -134,7 +134,7 @@ fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
 /// An update install calls it before starting the new process, because the
 /// owner lock is a process-wide flock and the replacement cannot open the
 /// database until this process has dropped it.
-pub(crate) fn shutdown_for_quit() {
+pub fn shutdown_for_quit() {
     static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
         return;
@@ -192,7 +192,7 @@ fn release_database() {
 /// The stored global-show chord, if the database is already open and a key
 /// is saved. Does not open the database: a missing handle means "not set".
 #[cfg(not(feature = "mas_build"))]
-pub(crate) fn stored_global_hotkey() -> Option<String> {
+pub fn stored_global_hotkey() -> Option<String> {
     let handle = DATABASE.with(|slot| slot.borrow().clone())?;
     let db = bir_core::lock_timing::lock(&handle).ok()?;
     db.get_setting("global_hotkey_key")
@@ -204,7 +204,7 @@ pub(crate) fn stored_global_hotkey() -> Option<String> {
 /// Whether [`shutdown_for_quit`] dropped the owner lock. An update refuses to
 /// relaunch when this is still false: the new process would lose the race
 /// for the encrypted database.
-pub(crate) fn owner_lock_released() -> bool {
+pub fn owner_lock_released() -> bool {
     OWNER_LOCK_RELEASED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
@@ -213,7 +213,7 @@ pub(crate) fn owner_lock_released() -> bool {
 /// Also adopts the legacy log file and prunes to the user's retention, then
 /// (in the shipping binary) re-checks that every six hours. Tests do not
 /// start the sleeper thread: it would keep the test process alive.
-pub(crate) fn open_database_at_launch() {
+pub fn open_database_at_launch() {
     if !crate::account_gate::is_unlocked() {
         return;
     }
@@ -255,7 +255,7 @@ pub(crate) fn submission_worker_wakes() -> u32 {
 /// Tell the submission worker the queue changed, so a queued return goes out
 /// now rather than on the worker's next one-minute tick (the shell form screens
 /// and the agent host do the same after Queue and Cancel queue).
-pub(crate) fn wake_submission_worker() {
+pub fn wake_submission_worker() {
     #[cfg(test)]
     SUBMISSION_WORKER_WAKES.with(|wakes| wakes.set(wakes.get() + 1));
     bir_core::background_cron::wake();
@@ -333,7 +333,7 @@ pub(crate) fn use_ephemeral_database() {
 
 /// `serde_json::Value` → `HostValue`. bir-core serializes cleanly; the
 /// boundary keeps JSON's six shapes exactly.
-pub(crate) fn json(value: serde_json::Value) -> HostValue {
+pub fn json(value: serde_json::Value) -> HostValue {
     match value {
         serde_json::Value::Null => HostValue::Null,
         serde_json::Value::Bool(v) => HostValue::Bool(v),
@@ -356,7 +356,7 @@ pub(crate) fn serialize<T: serde::Serialize>(value: &T) -> Result<HostValue, Hos
 
 /// `HostValue` → `serde_json::Value`: the inverse of `json`, for functions
 /// that take structured arguments (a whole profile record, a draft).
-pub(crate) fn to_json(value: &HostValue) -> serde_json::Value {
+pub fn to_json(value: &HostValue) -> serde_json::Value {
     match value {
         HostValue::Null => serde_json::Value::Null,
         HostValue::Bool(v) => serde_json::Value::Bool(*v),
@@ -398,7 +398,7 @@ fn computer_snapshot() -> (Option<String>, u32) {
 }
 
 /// Chords the Settings picker offers. The same combo language as
-/// [`crate::hotkey::build_hotkey`]: explicit modifiers, not a bare key.
+/// [`crate::hotkey_combo::is_registrable`]: explicit modifiers, not a bare key.
 fn hotkey_presets() -> Vec<HostValue> {
     let (stored_prefix, label_prefix) = if cfg!(target_os = "macos") {
         ("control+alt", "Ctrl+Option")
@@ -454,7 +454,7 @@ fn system_info() -> HostResult {
 /// An unknown key is refused and the stored chord is left as it was.
 fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
     let combo = arguments.string(0)?.trim().to_string();
-    if !combo.is_empty() && crate::hotkey::build_hotkey(&combo).is_none() {
+    if !combo.is_empty() && !crate::hotkey_combo::is_registrable(&combo) {
         return Err(HostError::new(
             "That shortcut is not one this computer can register. Use a letter, digit, or F-key with modifiers, like super+shift+E.",
         ));
@@ -490,7 +490,7 @@ fn set_log_retention(arguments: &gpui_shell::HostArguments) -> HostResult {
 }
 
 fn update_status() -> HostResult {
-    let status = crate::updater::current_status();
+    let status = crate::hooks::hooks().update_status();
     let version = match status.version {
         Some(version) => HostValue::from(version),
         None => HostValue::Null,
@@ -509,17 +509,17 @@ fn update_status() -> HostResult {
 }
 
 fn install_update() -> HostResult {
-    crate::updater::install_ready_update();
+    crate::hooks::hooks().install_update();
     Ok(HostValue::Null)
 }
 
 fn dismiss_update() -> HostResult {
-    crate::updater::dismiss();
+    crate::hooks::hooks().dismiss_update();
     Ok(HostValue::Null)
 }
 
 fn check_for_updates() -> HostResult {
-    crate::updater::check_now();
+    crate::hooks::hooks().check_for_updates();
     Ok(HostValue::Null)
 }
 
@@ -527,11 +527,11 @@ fn set_auto_update_download(arguments: &gpui_shell::HostArguments) -> HostResult
     let enabled = arguments.boolean(0)?;
     with_database(|db| {
         db.set_setting(
-            crate::updater::AUTO_DOWNLOAD_SETTING,
+            crate::hooks::AUTO_DOWNLOAD_SETTING,
             if enabled { "1" } else { "0" },
         )
         .map_err(|error| HostError::new(error.to_string()))?;
-        crate::updater::set_auto_download(enabled);
+        crate::hooks::hooks().set_auto_update_download(enabled);
         Ok(HostValue::Null)
     })
 }
@@ -1305,28 +1305,8 @@ fn mac_login(
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn os_authenticate(reason: &str) -> bool {
-    use robius_authentication::{
-        AndroidText, BiometricStrength, Context, PolicyBuilder, Text, WindowsText,
-    };
-    let Some(policy) = PolicyBuilder::new()
-        .biometrics(Some(BiometricStrength::Strong))
-        .password(true)
-        .watch(true)
-        .build()
-    else {
-        tracing::warn!("OS sign-in policy unavailable");
-        return false;
-    };
-    let text = Text {
-        android: AndroidText {
-            title: "Admin sign-in",
-            subtitle: None,
-            description: None,
-        },
-        apple: reason,
-        windows: WindowsText::new_truncated("Admin sign-in", reason),
-    };
-    futures::executor::block_on(Context::new(()).authenticate(text, &policy)).is_ok()
+    // The prompt (robius-authentication) is the host's: see `Hooks`.
+    crate::hooks::hooks().os_authenticate(reason)
 }
 
 /// Refuse to archive or delete the solo owner (the admin) or the reserved
@@ -2114,7 +2094,7 @@ pub(crate) fn open_print_preview(
         Some(name) => format!("BIR Form {form_code} \u{2014} {name}"),
         None => format!("BIR Form {form_code}"),
     };
-    crate::print_preview_window::request_keyed(path.clone(), title, form_code.to_string());
+    crate::hooks::hooks().print_preview_request(path.clone(), title, form_code.to_string());
     Ok(HostObject::new()
         .field("path", path.display().to_string())
         .into())
@@ -2175,47 +2155,33 @@ fn reset_database() -> Result<(), HostError> {
     })
 }
 
-/// Open a native path panel through GPUI and run `work` on the main thread
-/// with the path the user picked.
+/// Ask the host to open a native path panel and run `work` with the path the
+/// user picked.
 ///
-/// A host call runs inside a GPUI `App` update, with the `AppCell` borrowed.
-/// A blocking panel (`rfd::FileDialog`) spins a nested modal run loop there;
-/// that loop resumes pending GPUI foreground tasks, the first one to borrow
-/// the `AppCell` panics, and the app aborts. GPUI's prompts open the panel
-/// from a foreground task after the current update and answer through a
-/// channel, so nothing nests. `work` runs in a foreground task too, outside
-/// any `App` borrow, on the thread that owns the database slot. The promise
-/// answers `{ kind: "cancelled" }` when the panel is dismissed.
-fn after_path_prompt<P, E, C, R>(
-    prompt: impl FnOnce(&mut gpui_kit::App) -> R,
-    work: impl FnOnce(P) -> HostResult + 'static,
-) -> Result<gpui_shell::host_modules::HostFuture, HostError>
-where
-    R: std::future::Future<Output = Result<Result<Option<P>, E>, C>> + 'static,
-    P: 'static,
-    E: std::fmt::Display + 'static,
-    C: 'static,
-{
+/// A host call runs inside a UI update. A blocking panel would spin a nested
+/// modal run loop there, so the host opens the panel after the current update
+/// and answers through [`crate::hooks::PathAnswer`], on the thread that owns
+/// the database slot, outside any UI borrow; `work` runs in that answer. The
+/// promise answers `{ kind: "cancelled" }` when the panel is dismissed.
+fn after_path_prompt(
+    prompt: impl FnOnce(crate::hooks::PathAnswer) -> bool,
+    work: impl FnOnce(std::path::PathBuf) -> HostResult + 'static,
+) -> Result<gpui_shell::host_modules::HostFuture, HostError> {
+    use crate::hooks::PathChoice;
     let (sender, receiver) = futures::channel::oneshot::channel::<HostResult>();
-    gpui_shell::with_current_app(move |cx| {
-        let answer = prompt(cx);
-        cx.foreground_executor()
-            .spawn(async move {
-                let result = match answer.await {
-                    Ok(Ok(Some(path))) => work(path),
-                    // Dismissed, or the panel went away without answering.
-                    Ok(Ok(None)) | Err(_) => {
-                        Ok(HostObject::new().field("kind", "cancelled").into())
-                    }
-                    Ok(Err(error)) => Err(HostError::new(format!(
-                        "The file dialog could not open: {error}"
-                    ))),
-                };
-                let _ = sender.send(result);
-            })
-            .detach();
-    })
-    .ok_or_else(|| HostError::new("no app is running to open the file dialog"))?;
+    let answer: crate::hooks::PathAnswer = Box::new(move |choice| {
+        let result = match choice {
+            PathChoice::Picked(path) => work(path),
+            PathChoice::Cancelled => Ok(HostObject::new().field("kind", "cancelled").into()),
+            PathChoice::Failed(error) => Err(HostError::new(format!(
+                "The file dialog could not open: {error}"
+            ))),
+        };
+        let _ = sender.send(result);
+    });
+    if !prompt(answer) {
+        return Err(HostError::new("no app is running to open the file dialog"));
+    }
     Ok(Box::pin(async move {
         receiver
             .await
@@ -2236,18 +2202,8 @@ fn import_archive(
         ));
     }
     after_path_prompt(
-        |cx| {
-            cx.prompt_for_paths(gpui_kit::PathPromptOptions {
-                files: true,
-                directories: false,
-                multiple: false,
-                prompt: Some("Import".into()),
-            })
-        },
-        |paths: Vec<std::path::PathBuf>| match paths.first() {
-            Some(path) => import_archive_from(path),
-            None => Ok(HostObject::new().field("kind", "cancelled").into()),
-        },
+        |answer| crate::hooks::hooks().prompt_for_open_path("Import", answer),
+        |path| import_archive_from(&path),
     )
 }
 
@@ -2373,7 +2329,7 @@ fn export_profile(
     let file_name = format!("BIR_Profile_{}_{}.zip", tin, timestamp);
     let directory = std::env::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
     after_path_prompt(
-        move |cx| cx.prompt_for_new_path(&directory, Some(file_name.as_str())),
+        move |answer| crate::hooks::hooks().prompt_for_save_path(&directory, &file_name, answer),
         move |path: std::path::PathBuf| export_profile_to(&tin, pin.as_deref(), &path),
     )
 }
@@ -2403,7 +2359,8 @@ fn list_deadlines() -> HostResult {
 
 /// Pick up route-3 filings the account server is holding for this computer.
 ///
-/// Each row is gated by the standing send OK and by [`crate::agent::send_draft`],
+/// Each row is gated by the standing send OK and by the host's agent send
+/// ([`crate::hooks::Hooks::agent_send_draft`]),
 /// which runs the page's Validate before queueing. The server never contacts BIR.
 #[cfg(not(feature = "agent"))]
 fn pull_device_filings() -> HostResult {
@@ -2561,15 +2518,15 @@ fn accept_device_filing(
             }));
         }
     }
-    crate::agent::send_draft(db, kind, &mut draft)
+    crate::hooks::hooks().agent_send_draft(db, kind, &mut draft)
 }
 
 /// The script is on the main window (`open`) or back on the gate, first
 /// launch, or the sign-in screen. Rebuilds the menu bar to match.
 fn shell_set_chrome(arguments: &gpui_shell::HostArguments) -> HostResult {
     let open = arguments.boolean(0)?;
-    crate::app_menu::set_shell_chrome_open(open);
-    let _ = gpui_shell::with_current_app(crate::app_menu::refresh);
+    crate::hooks::hooks().set_shell_chrome_open(open);
+    crate::hooks::hooks().refresh_menu();
     Ok(HostValue::Null)
 }
 
@@ -2580,10 +2537,7 @@ fn shell_set_chrome(arguments: &gpui_shell::HostArguments) -> HostResult {
 fn agent_take() -> HostResult {
     // Queued UI commands are tools. A locked gate must not apply them.
     crate::account_gate::ensure_unlocked()?;
-    #[cfg(feature = "agent")]
-    let command = crate::agent::pop_command();
-    #[cfg(not(feature = "agent"))]
-    let command: Option<serde_json::Value> = None;
+    let command = crate::hooks::hooks().agent_pop_command();
     match command {
         Some(value) => Ok(HostValue::Str(value.to_string())),
         None => Ok(HostValue::Null),
@@ -2655,14 +2609,13 @@ pub fn module() -> HostModule {
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
-    let module = crate::scroll_module::register(module);
+    // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
-        crate::scroll_module::DECLARATIONS,
     ))
 }
 

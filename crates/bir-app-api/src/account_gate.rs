@@ -51,7 +51,7 @@ pub fn set_unlocked(unlocked: bool) {
     UNLOCKED.store(unlocked, Ordering::SeqCst);
     // Signing out leaves the gate. Filing menus must not survive into it.
     if !unlocked {
-        crate::app_menu::set_shell_chrome_open(false);
+        crate::hooks::hooks().set_shell_chrome_open(false);
     }
     // The worker may already be running from an earlier sign-in in this
     // process. Pausing it stops the next filing tick without the one-way
@@ -70,8 +70,8 @@ pub fn ensure_unlocked() -> Result<(), HostError> {
 
 /// Refuse data verbs on this thread even when the process bypass is set.
 /// Other tests keep the bypass; cargo runs them in parallel.
-#[cfg(test)]
-pub(crate) fn force_locked<R>(body: impl FnOnce() -> R) -> R {
+#[cfg(any(test, feature = "test-support"))]
+pub fn force_locked<R>(body: impl FnOnce() -> R) -> R {
     struct Restore(bool);
     impl Drop for Restore {
         fn drop(&mut self) {

@@ -297,6 +297,7 @@ fn confirmed_profile_change_leaves_every_stored_year_as_picked() {
 /// A reviewed confirmation save writes no Forms Set row at all: with every
 /// `per_year_forms` insert refused, it still commits and the user's list
 /// is untouched.
+#[cfg(feature = "sqlcipher")]
 #[test]
 fn a_reviewed_profile_save_writes_no_forms_set_row() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {

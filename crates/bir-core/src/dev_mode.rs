@@ -591,6 +591,17 @@ pub fn set_test_server_password(password: &str) -> Result<(), String> {
     if !is_debug_build() {
         return Err("Dev Mode is unavailable in release builds".into());
     }
+    if crate::platform::keychain_disabled() {
+        // Nothing is stored while the keychain is off, so clearing is a no-op.
+        return if password.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Could not store password: the OS keychain is switched off ({}=1)",
+                crate::platform::NO_KEYCHAIN_ENV
+            ))
+        };
+    }
     let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
         .map_err(|error| format!("Could not open OS keychain: {error}"))?;
     if password.is_empty() {
@@ -612,6 +623,9 @@ pub fn has_test_server_password() -> bool {
 }
 
 fn keychain_password() -> Option<String> {
+    if crate::platform::keychain_disabled() {
+        return None;
+    }
     keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
         .ok()?
         .get_password()
@@ -910,5 +924,16 @@ mod tests {
         for mode in [SubmissionMode::DryRun, SubmissionMode::TestServer] {
             assert_eq!(SubmissionMode::from_setting(mode.as_setting()), Some(mode));
         }
+    }
+
+    #[test]
+    fn with_the_keychain_off_no_test_server_password_is_found_or_stored() {
+        temp_env::with_var("BUWIZ_NO_KEYCHAIN", Some("1"), || {
+            assert_eq!(keychain_password(), None);
+            assert!(!has_test_server_password());
+            let error = set_test_server_password("secret").expect_err("a store is refused");
+            assert!(error.contains("switched off"), "{error}");
+            set_test_server_password("").expect("clearing nothing is not an error");
+        });
     }
 }

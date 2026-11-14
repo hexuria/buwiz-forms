@@ -913,3 +913,94 @@ _package-linux: build-frozen-html-identity
         trap - EXIT
         echo "✅ Tarball: $TARBALL"
     fi
+
+# ---------------------------------------------------------------------------
+# NSH (TSX) app in nsh/. Read nsh/AGENTS.md first.
+# The CLI is ~/BuwizNsh/tools/bin/nsh (NSH 0.4.0 built from the checkout at
+# /Volumes/goldcoders/features/nsh-tsx/nsh); never the obsolete one in ~/.nsh.
+# Every recipe puts that CLI first on PATH and sets CARGO_TARGET_DIR. Extra
+# arguments pass through: `just nsh-test --filter ping`.
+# ---------------------------------------------------------------------------
+
+# NSH: cargo check of nsh/'s crate, then tsc over the TSX against the generated types.
+[unix]
+nsh-check *args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    cd nsh
+    exec nsh check {{args}}
+
+# NSH: bundle and compile the app; every warning it prints is a finding.
+[unix]
+nsh-build *args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    cd nsh
+    exec nsh build {{args}}
+
+# nsh-test also sets the dev environment, so a test that reaches the door can never read the keychain or send. It never sets BIR_DATABASE_PATH.
+
+# NSH: Rust tests, then every *.test.tsx and *.test.ts, headless (390x844 phone viewport unless a test opens another).
+[unix]
+nsh-test *args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
+    unset BIR_SFTP_LIVE BIR_DATABASE_PATH
+    cd nsh
+    exec nsh test {{args}}
+
+# Refuses a database path inside the owner's live data, the migrated copy or the migration folder (Hard rules 2 and 3).
+[private]
+[unix]
+_nsh-db-guard db:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    db="{{db}}"
+    [ -n "$db" ] || exit 0
+    real() { python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1"; }
+    canon="$(real "$db")"
+    for guarded in "$HOME/Library/Group Containers/group.dev.goldcoders.bir" "$HOME/BuwizNsh/data" "$HOME/BuwizNsh/migration"; do
+        g="$(real "$guarded")"
+        case "$canon" in
+            "$g"|"$g"/*) echo "refusing $canon: that is the owner's data. cp a copy to ~/BuwizNsh/agents/<track>.db and use that"; exit 1 ;;
+        esac
+    done
+
+# The database comes from the caller: just nsh-run ~/BuwizNsh/agents/<track>.db, or BIR_DATABASE_PATH in the environment.
+# A path inside the owner's data, ~/BuwizNsh/data or ~/BuwizNsh/migration is refused.
+
+# NSH: open the app in a macOS window (hot TSX edits) in dry-run dev mode: no keychain, no sign-in gate, nothing sent.
+[macos]
+nsh-run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard db)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
+    unset BIR_SFTP_LIVE
+    if [ -n "{{db}}" ]; then export BIR_DATABASE_PATH="{{db}}"; else unset BIR_DATABASE_PATH; fi
+    cd nsh
+    exec nsh run --target macos {{args}}
+
+# Opens real macOS windows for a minute or so. BIR_DATABASE_PATH, if set in the environment, is passed on (and guarded).
+
+# NSH: real-window screenshots from nsh/shots/<name>.test.tsx into ~/BuwizNsh/evidence/<name>/ (never the worktree).
+[macos]
+nsh-shots name="base" *args="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
+    unset BIR_SFTP_LIVE
+    {{just_executable()}} _nsh-db-guard "${BIR_DATABASE_PATH:-}"
+    test_file="$(pwd -P)/nsh/shots/{{name}}.test.tsx"
+    [ -f "$test_file" ] || { echo "no $test_file: shots tests live in nsh/shots/<name>.test.tsx"; exit 1; }
+    out="$HOME/BuwizNsh/evidence/{{name}}"
+    mkdir -p "$out"
+    # The PNGs are written relative to the current directory, so run from the evidence folder (never the worktree).
+    cd "$out"
+    nsh test "$test_file" --target macos {{args}}
+    echo "screenshots in $out"

@@ -798,7 +798,14 @@ fn keyring_entry() -> Result<keyring::Entry, keyring::Error> {
     keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
 }
 
+// `BUWIZ_NO_KEYCHAIN=1`: no call below reaches the OS keychain. A read finds
+// nothing (the private file, if any, still answers), a write reports failure
+// (the private file is still written), a delete has nothing to delete.
+
 fn keyring_load() -> Option<String> {
+    if crate::platform::keychain_disabled() {
+        return None;
+    }
     let entry = keyring_entry().ok()?;
     match entry.get_password() {
         Ok(value) if !value.trim().is_empty() => Some(value),
@@ -807,12 +814,18 @@ fn keyring_load() -> Option<String> {
 }
 
 fn keyring_save(raw: &str) -> bool {
+    if crate::platform::keychain_disabled() {
+        return false;
+    }
     keyring_entry()
         .and_then(|entry| entry.set_password(raw))
         .is_ok()
 }
 
 fn keyring_delete() {
+    if crate::platform::keychain_disabled() {
+        return;
+    }
     if let Ok(entry) = keyring_entry() {
         match entry.delete_credential() {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
@@ -1477,5 +1490,31 @@ mod tests {
         if let Some(raw) = previous {
             let _ = keyring_save(&raw);
         }
+    }
+
+    #[test]
+    fn with_the_keychain_off_the_account_is_signed_out_and_the_os_is_not_called() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(ACCOUNT_FILE_NAME);
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                (ENV_ACCOUNT_FILE, Some(path.to_str().unwrap())),
+            ],
+            || {
+                assert_eq!(keyring_load(), None);
+                assert!(!keyring_save("not stored"));
+                keyring_delete();
+                assert!(load_stored_account().unwrap().is_none(), "signed out");
+
+                // The private file is not the keychain: it still works.
+                let stored = StoredAccount::from_secrets(&secrets());
+                save_stored_account(&stored).unwrap();
+                let loaded = load_stored_account().unwrap().expect("file account");
+                assert_eq!(loaded.refresh_token, "refresh-secret");
+                clear_stored_account();
+                assert!(load_stored_account().unwrap().is_none());
+            },
+        );
     }
 }

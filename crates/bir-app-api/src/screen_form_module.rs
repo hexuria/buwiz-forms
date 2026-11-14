@@ -1678,7 +1678,7 @@ const NO_LONGER_STORED: &str =
 /// The draft each painted page opens for `(profile, year, period)`: the
 /// stored one, else a new one from the profile. `fresh` (a Form library
 /// sample) always builds the new one and reads no stored return.
-pub(crate) fn load_draft(
+pub fn load_draft(
     db: &Database,
     kind: AgentFormKind,
     profile: &TaxpayerProfile,
@@ -6256,7 +6256,7 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
     let started = std::time::Instant::now();
     let code = arguments.string(0)?.to_owned();
     let kind = kind_of(&code)?;
-    if !crate::print_preview_window::has_live(kind.form_code()) {
+    if !crate::hooks::hooks().print_preview_has_live(kind.form_code()) {
         return Ok(HostValue::Bool(false));
     }
     let (draft, sample) = draft_with_staged_edits(kind, arguments)?;
@@ -6275,7 +6275,7 @@ fn screen_form_preview_sync(arguments: &HostArguments) -> HostResult {
             .unwrap_or_default();
             crate::static_html::staticize(&crate::print_sheet::prepare_html_for(&slug, &html, true))
         });
-        crate::print_preview_window::live_update(kind.form_code(), produce, started);
+        crate::hooks::hooks().print_preview_live_update(kind.form_code(), produce, started);
         Ok(HostValue::Bool(true))
     })
 }

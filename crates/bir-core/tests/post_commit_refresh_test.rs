@@ -1,5 +1,6 @@
 use bir_core::db::{Database, PostCommitRefreshStatus};
 use bir_core::profile::TaxpayerProfile;
+#[cfg(feature = "sqlcipher")]
 use rusqlite::Connection;
 use tempfile::NamedTempFile;
 
@@ -26,6 +27,7 @@ fn test_profile() -> TaxpayerProfile {
     .expect("minimal taxpayer profile fixture should deserialize")
 }
 
+#[cfg(feature = "sqlcipher")]
 fn install_refresh_request_failure(path: &std::path::Path) {
     let conn = Connection::open(path).expect("test database should reopen");
     conn.execute_batch(
@@ -71,6 +73,7 @@ fn profile_save_reports_recorded_post_commit_refresh_request() {
     });
 }
 
+#[cfg(feature = "sqlcipher")]
 #[test]
 fn profile_refresh_failure_warns_without_rolling_back_committed_profile() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {

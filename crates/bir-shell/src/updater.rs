@@ -33,7 +33,7 @@ pub const DEFAULT_FEED_URL: &str =
 /// Database setting. Absent, or any value other than `0` / `false` / `off`,
 /// means a newer release is downloaded in the background. The page writes it
 /// through `set_auto_update_download`, not through `set_setting`.
-pub const AUTO_DOWNLOAD_SETTING: &str = "auto_update_download";
+pub const AUTO_DOWNLOAD_SETTING: &str = bir_app_api::hooks::AUTO_DOWNLOAD_SETTING;
 
 const DEFAULT_INTERVAL: u64 = 4 * 60 * 60;
 const DEFAULT_LAUNCH_DELAY: u64 = 2;

@@ -372,7 +372,19 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
 
     let mut temp_file = fs::File::create(&temp_db_path)?;
     std::io::copy(&mut db_file_in_zip, &mut temp_file)?;
+    drop(temp_file);
 
+    install_extracted_database(&temp_db_path, out_db_path)?;
+
+    // Clean up
+    let _ = fs::remove_file(&temp_db_path);
+
+    Ok(())
+}
+
+/// SQLCipher build: encrypt the extracted plain database into `out_db_path`.
+#[cfg(feature = "sqlcipher")]
+fn install_extracted_database(temp_db_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
     // Delete the current database so we can cleanly export into a new one
     if out_db_path.exists() {
         let _ = fs::remove_file(out_db_path);
@@ -387,7 +399,7 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
     }
 
     // Open the unencrypted db
-    let conn = rusqlite::Connection::open(&temp_db_path)?;
+    let conn = rusqlite::Connection::open(temp_db_path)?;
     let key_hex = Database::get_or_create_master_key()?;
 
     // Attach the target db (encrypted) and export to it
@@ -406,9 +418,47 @@ pub fn extract_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<(), D
     // Small delay to ensure file system operations complete
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    // Clean up
-    let _ = fs::remove_file(&temp_db_path);
+    Ok(())
+}
 
+/// Plain build: there is no key and no `sqlcipher_export`; the extracted
+/// file already is the database. It is checked first (plain SQLite header and
+/// readable), and only then does it replace the current one, so a bad archive
+/// never costs the current database. An archive made by the SQLCipher build
+/// holds a plain database too (the export decrypts it), so it restores here.
+#[cfg(not(feature = "sqlcipher"))]
+fn install_extracted_database(temp_db_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
+    let check = || -> Result<(), DbError> {
+        if crate::db::database_file_kind(temp_db_path)? != crate::db::DatabaseFileKind::PlainSqlite
+        {
+            return Err(DbError::Other(
+                "The backup's database is not a plain SQLite file, so it was not restored. \
+                 The current database was left as it is."
+                    .into(),
+            ));
+        }
+        let conn = rusqlite::Connection::open_with_flags(
+            temp_db_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        let _: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |row| row.get(0))?;
+        Ok(())
+    };
+    if let Err(error) = check() {
+        let _ = fs::remove_file(temp_db_path);
+        return Err(error);
+    }
+
+    // Replace the current database and its sidecar files.
+    for suffix in ["", "-wal", "-shm"] {
+        let mut sidecar = out_db_path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        let sidecar = std::path::PathBuf::from(sidecar);
+        if sidecar.exists() {
+            fs::remove_file(&sidecar)?;
+        }
+    }
+    fs::copy(temp_db_path, out_db_path)?;
     Ok(())
 }
 
@@ -1347,6 +1397,67 @@ mod tests {
         assert!(
             db.list_profiles().unwrap().is_empty(),
             "the first profile survived a rolled-back import"
+        );
+    }
+
+    /// Plain build: a backup whose database is not plain SQLite (what an
+    /// encrypted file looks like) is refused, and the current database, its
+    /// bytes and its name, is not touched.
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn a_backup_that_is_not_plain_sqlite_is_refused_and_the_current_database_stays() {
+        let dir = tempdir().unwrap();
+        let current = dir.path().join("bir_data.db");
+        {
+            let db = Database::open(&current).unwrap();
+            db.set_setting("kept", "yes").unwrap();
+            db.close().unwrap();
+        }
+        let before = fs::read(&current).unwrap();
+        let archive = dir.path().join("backup.zip");
+        write_archive(
+            &archive,
+            &[("bir_data.db", "\u{1}\u{2}not-sqlite-".repeat(512))],
+        );
+
+        let error = extract_database_zip(&archive, &current).expect_err("must refuse");
+        assert!(error.to_string().contains("not a plain SQLite"), "{error}");
+        assert_eq!(
+            fs::read(&current).unwrap(),
+            before,
+            "current database untouched"
+        );
+        let db = Database::open(&current).unwrap();
+        assert_eq!(db.get_setting("kept").unwrap(), Some("yes".to_string()));
+    }
+
+    /// Plain build: a whole-database backup round-trips with no key and no
+    /// `sqlcipher_export`, and the restored file is plain SQLite.
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn a_whole_database_backup_round_trips_as_plain_sqlite() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("source.db");
+        let restored = dir.path().join("restored.db");
+        let archive = dir.path().join("backup.zip");
+        {
+            let db = Database::open(&source).unwrap();
+            db.set_setting("round_trip", "plain").unwrap();
+            crate::export::export_database_zip(&db, &archive).unwrap();
+            db.close().unwrap();
+        }
+        // An older copy is replaced.
+        fs::write(&restored, b"old").unwrap();
+        extract_database_zip(&archive, &restored).unwrap();
+
+        assert_eq!(
+            crate::db::database_file_kind(&restored).unwrap(),
+            crate::db::DatabaseFileKind::PlainSqlite
+        );
+        let db = Database::open(&restored).unwrap();
+        assert_eq!(
+            db.get_setting("round_trip").unwrap(),
+            Some("plain".to_string())
         );
     }
 }

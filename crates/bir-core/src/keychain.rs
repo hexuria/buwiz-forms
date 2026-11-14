@@ -27,6 +27,15 @@ const ERR_SEC_DUPLICATE_ITEM: i32 = -25299;
 /// answer a keychain access prompt.
 const NATIVE_CALL_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Why a store refuses to work while `BUWIZ_NO_KEYCHAIN=1` is set.
+const KEYCHAIN_OFF: &str = "the OS keychain is switched off (BUWIZ_NO_KEYCHAIN=1)";
+
+/// `BUWIZ_NO_KEYCHAIN=1`: the two real stores answer without calling the OS.
+/// Reads find nothing, writes fail, deletes find nothing to delete.
+fn keychain_off() -> bool {
+    crate::platform::keychain_disabled()
+}
+
 /// Result of reading one generic password.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Lookup {
@@ -261,6 +270,9 @@ impl KeychainStore for NativeKeychain {
     }
 
     fn read(&self, service: &str, account: &str) -> Lookup {
+        if keychain_off() {
+            return Lookup::Missing;
+        }
         let (service, account) = (service.to_owned(), account.to_owned());
         bounded(move || {
             use security_framework::os::macos::passwords::find_generic_password;
@@ -277,6 +289,9 @@ impl KeychainStore for NativeKeychain {
     }
 
     fn add_new(&self, service: &str, account: &str, value: &str) -> AddOutcome {
+        if keychain_off() {
+            return AddOutcome::Failed(KEYCHAIN_OFF.to_string());
+        }
         let (service, account, value) = (service.to_owned(), account.to_owned(), value.to_owned());
         bounded(move || {
             use security_framework::os::macos::keychain::SecKeychain;
@@ -295,6 +310,9 @@ impl KeychainStore for NativeKeychain {
     }
 
     fn upsert(&self, service: &str, account: &str, value: &str) -> Result<(), String> {
+        if keychain_off() {
+            return Err(KEYCHAIN_OFF.to_string());
+        }
         let (service, account, value) = (service.to_owned(), account.to_owned(), value.to_owned());
         bounded(move || {
             use security_framework::os::macos::keychain::SecKeychain;
@@ -308,6 +326,9 @@ impl KeychainStore for NativeKeychain {
     }
 
     fn delete(&self, service: &str, account: &str) -> DeleteOutcome {
+        if keychain_off() {
+            return DeleteOutcome::Missing;
+        }
         let (service, account) = (service.to_owned(), account.to_owned());
         bounded(move || {
             match security_framework::passwords::delete_generic_password(&service, &account) {
@@ -345,6 +366,9 @@ impl KeychainStore for SecurityCli {
     }
 
     fn read(&self, service: &str, account: &str) -> Lookup {
+        if keychain_off() {
+            return Lookup::Missing;
+        }
         let output = match Self::run(&["find-generic-password", "-s", service, "-a", account, "-w"])
         {
             Ok(output) => output,
@@ -366,6 +390,9 @@ impl KeychainStore for SecurityCli {
     }
 
     fn add_new(&self, service: &str, account: &str, value: &str) -> AddOutcome {
+        if keychain_off() {
+            return AddOutcome::Failed(KEYCHAIN_OFF.to_string());
+        }
         // Deliberately NOT -U ("update if exists"): without it the add fails
         // rather than overwrites.
         match Self::run(&[
@@ -395,6 +422,9 @@ impl KeychainStore for SecurityCli {
     }
 
     fn upsert(&self, service: &str, account: &str, value: &str) -> Result<(), String> {
+        if keychain_off() {
+            return Err(KEYCHAIN_OFF.to_string());
+        }
         let output = Self::run(&[
             "add-generic-password",
             "-s",
@@ -414,6 +444,9 @@ impl KeychainStore for SecurityCli {
     }
 
     fn delete(&self, service: &str, account: &str) -> DeleteOutcome {
+        if keychain_off() {
+            return DeleteOutcome::Missing;
+        }
         match Self::run(&["delete-generic-password", "-s", service, "-a", account]) {
             Ok(output) if output.status.success() => DeleteOutcome::Deleted,
             Ok(output)
@@ -732,5 +765,43 @@ mod tests {
         let mut legacy = Fake::new("cli", Lookup::Missing);
         legacy.delete = DeleteOutcome::Failed("denied".into());
         assert!(delete_with_fallback(&native, &legacy, SERVICE, ACCOUNT).is_err());
+    }
+
+    /// `BUWIZ_NO_KEYCHAIN=1`: the two real stores answer without calling the
+    /// OS. A name nobody uses, so even a broken switch would only ask for an
+    /// item that does not exist.
+    #[test]
+    fn with_the_keychain_off_the_real_stores_find_nothing_and_store_nothing() {
+        temp_env::with_var("BUWIZ_NO_KEYCHAIN", Some("1"), || {
+            let (service, account) = ("dev.goldcoders.bir.test-keychain-off", "never-stored");
+            let stores: [&dyn KeychainStore; 2] = [&NativeKeychain, &SecurityCli];
+            for store in stores {
+                let name = store.name();
+                assert_eq!(store.read(service, account), Lookup::Missing, "{name} read");
+                assert!(
+                    matches!(store.add_new(service, account, "x"), AddOutcome::Failed(_)),
+                    "{name} add_new"
+                );
+                assert!(
+                    store.upsert(service, account, "x").is_err(),
+                    "{name} upsert"
+                );
+                assert_eq!(
+                    store.delete(service, account),
+                    DeleteOutcome::Missing,
+                    "{name} delete"
+                );
+            }
+            // A master key is never created through them either.
+            let result = resolve_master_key(
+                &NativeKeychain,
+                &SecurityCli,
+                service,
+                account,
+                KeyMode::CreateIfMissing,
+                || VALID.to_string(),
+            );
+            assert!(result.is_err(), "no key is generated: {result:?}");
+        });
     }
 }

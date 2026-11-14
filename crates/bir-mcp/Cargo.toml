@@ -13,6 +13,10 @@ doctest = false
 name = "bir-mcp"
 path = "src/main.rs"
 
+[features]
+default = ["sqlcipher"]
+sqlcipher = ["bir-core/sqlcipher"]
+
 [dependencies]
 serde_json = { workspace = true }
 # Workspace pin shared with bir-shell's `agent` feature.
@@ -22,7 +26,7 @@ reqwest = { workspace = true }
 # `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
 tiny_http = { version = "0.12", default-features = false }
 # Desktop device flow and the account store shared with the Buwiz app.
-bir-core = { path = "../bir-core" }
+bir-core = { path = "../bir-core", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,8 +1,13 @@
-//! Encrypted SQLite database for taxpayer data.
+//! SQLite database for taxpayer data.
 //!
 //! Stores profiles, form data, submission history.
-//! Data is transparently AES-256 encrypted using SQLCipher.
-//! Master key stored in OS keychain.
+//!
+//! With the cargo feature `sqlcipher` (default) the data is transparently
+//! AES-256 encrypted using SQLCipher, and the master key is stored in the OS
+//! keychain. With the feature off (the NSH app) it is plain SQLite: no key, no
+//! keychain, and a file that is not plain SQLite is an error that is never
+//! renamed. Either way a file of the other kind is refused and left in place
+//! (see [`database_file_kind`]).
 //!
 //! This module is split into domain-specific sub-modules:
 //! - `profiles` — Taxpayer profile CRUD
@@ -53,8 +58,11 @@ pub use taxpayers::{BulkCopyReport, MissingFormPolicy, TemplateConflictPolicy};
 
 use rusqlite::{Connection, ErrorCode, OpenFlags, params};
 use std::fs::{File, OpenOptions};
+use std::io::Read;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "sqlcipher")]
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(feature = "sqlcipher")]
 use tracing::info;
 
 use serde::{Deserialize, Serialize};
@@ -243,10 +251,102 @@ const SECURITY_ERR_ITEM_NOT_FOUND: i32 = 44;
 
 /// Keychain service and account of the SQLCipher master key. Unchanged since
 /// the first release: existing installs find their key under these names.
-#[cfg(all(target_os = "macos", not(test)))]
+#[cfg(all(feature = "sqlcipher", target_os = "macos", not(test)))]
 const MASTER_KEY_SERVICE: &str = "com.ebir.rust";
-#[cfg(all(target_os = "macos", not(test)))]
+#[cfg(all(feature = "sqlcipher", target_os = "macos", not(test)))]
 const MASTER_KEY_ACCOUNT: &str = "sqlcipher_master_key";
+
+/// The database key of unit tests and of `EBIR_TEST_ENV` runs. Not a secret.
+#[cfg(feature = "sqlcipher")]
+const TEST_MASTER_KEY_HEX: &str =
+    "0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Where the master key comes from, decided by the environment alone.
+#[cfg(feature = "sqlcipher")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MasterKeyPlan {
+    /// `EBIR_TEST_ENV`: the fixed test key, no OS call.
+    TestKey,
+    /// `BUWIZ_NO_KEYCHAIN=1` and no test env: an error, no OS call, no key.
+    KeychainOff,
+    /// Ask the OS credential store.
+    OsStore,
+}
+
+#[cfg(feature = "sqlcipher")]
+fn master_key_plan(test_env: bool, keychain_off: bool) -> MasterKeyPlan {
+    if test_env {
+        MasterKeyPlan::TestKey
+    } else if keychain_off {
+        MasterKeyPlan::KeychainOff
+    } else {
+        MasterKeyPlan::OsStore
+    }
+}
+
+/// The first 16 bytes of every plain (unencrypted) SQLite file.
+pub const SQLITE_PLAIN_HEADER: &[u8; 16] = b"SQLite format 3\0";
+
+/// What the first bytes of a database file say it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatabaseFileKind {
+    /// No file, or an empty one: SQLite starts a new database in it.
+    Absent,
+    /// Starts with [`SQLITE_PLAIN_HEADER`]: a plain SQLite database.
+    PlainSqlite,
+    /// Anything else: an encrypted database, or not a database at all.
+    Other,
+}
+
+/// Classify the file at `path` by its header. Reads at most 16 bytes; never
+/// writes, renames or opens it as a database.
+pub fn database_file_kind(path: &Path) -> Result<DatabaseFileKind, DbError> {
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(DatabaseFileKind::Absent);
+        }
+        Err(error) => return Err(DbError::Io(error)),
+    };
+    let mut head = [0u8; 16];
+    let mut filled = 0;
+    while filled < head.len() {
+        let read = file.read(&mut head[filled..])?;
+        if read == 0 {
+            break;
+        }
+        filled += read;
+    }
+    Ok(match filled {
+        0 => DatabaseFileKind::Absent,
+        16 if &head == SQLITE_PLAIN_HEADER => DatabaseFileKind::PlainSqlite,
+        _ => DatabaseFileKind::Other,
+    })
+}
+
+/// Refuse, before anything is keyed, renamed or created, a file this build
+/// cannot open: not plain SQLite in the plain build, plain SQLite in the
+/// SQLCipher build. The file is left exactly where and as it is.
+pub(crate) fn ensure_openable_file(path: &Path) -> Result<(), DbError> {
+    match database_file_kind(path)? {
+        DatabaseFileKind::Other if !cfg!(feature = "sqlcipher") => {
+            Err(DbError::NotPlainSqlite(path.to_path_buf()))
+        }
+        DatabaseFileKind::PlainSqlite if cfg!(feature = "sqlcipher") => {
+            Err(DbError::NotEncrypted(path.to_path_buf()))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// The error for a file SQLite reports as "not a database" once opened.
+pub(crate) fn wrong_format_error(path: &Path) -> DbError {
+    if cfg!(feature = "sqlcipher") {
+        DbError::Encryption
+    } else {
+        DbError::NotPlainSqlite(path.to_path_buf())
+    }
+}
 
 /// Whether a failed keychain read means the master key is genuinely absent.
 ///
@@ -279,6 +379,22 @@ pub enum DbError {
     Serialization(#[from] serde_json::Error),
     #[error("Encryption key invalid or database corrupted")]
     Encryption,
+    /// Plain-SQLite build: the file's header is not "SQLite format 3". It may
+    /// be an encrypted database of the old app. It is never renamed.
+    #[error(
+        "The database file {} is not a plain SQLite database (it may be encrypted or damaged). \
+         It was left in place under its own name.",
+        .0.display()
+    )]
+    NotPlainSqlite(PathBuf),
+    /// SQLCipher build: the file has the plain SQLite header, so it is not
+    /// encrypted. It is never renamed.
+    #[error(
+        "The database file {} is not encrypted: it is a plain SQLite database. \
+         It was left in place under its own name.",
+        .0.display()
+    )]
+    NotEncrypted(PathBuf),
     #[error("Keychain CLI error: {0}")]
     KeychainCli(String),
     #[error("Zip error: {0}")]
@@ -316,9 +432,15 @@ pub struct Database {
     /// The key [`Database::open`] read, kept so [`Database::open_reader`]
     /// can key a second connection without reading the keychain again.
     /// That call drops it; zeroed on drop. Never logged: `Database` has no
-    /// `Debug`.
-    reader_key: Option<zeroize::Zeroizing<String>>,
+    /// `Debug`. In the plain build there is no key: the token only keeps the
+    /// same one-reader-per-open rule.
+    reader_key: Option<ReaderKey>,
 }
+
+#[cfg(feature = "sqlcipher")]
+type ReaderKey = zeroize::Zeroizing<String>;
+#[cfg(not(feature = "sqlcipher"))]
+type ReaderKey = ();
 
 pub fn default_database_path() -> std::path::PathBuf {
     crate::platform::data_dir().join("bir_data.db")
@@ -510,6 +632,10 @@ impl Database {
 
     /// Opens the database, quarantining an unreadable existing file and
     /// recreating it when the on-disk contents are not a usable SQLCipher DB.
+    ///
+    /// A file with the plain SQLite header is never quarantined: it is not
+    /// encrypted, so it is not unreadable, and the error says so.
+    #[cfg(feature = "sqlcipher")]
     pub fn open_or_recreate<P: AsRef<Path>>(path: P) -> Result<(Self, Option<PathBuf>), DbError> {
         let path = path.as_ref();
 
@@ -525,17 +651,27 @@ impl Database {
         }
     }
 
-    /// Opens the database and initializes SQLCipher using the OS keychain.
+    /// Opens the database. Plain-SQLite build: there is nothing to recreate
+    /// from, so a file that is not plain SQLite is an error and is never
+    /// renamed or quarantined. The second tuple field is always `None`.
+    #[cfg(not(feature = "sqlcipher"))]
+    pub fn open_or_recreate<P: AsRef<Path>>(path: P) -> Result<(Self, Option<PathBuf>), DbError> {
+        Self::open(path).map(|db| (db, None))
+    }
+
+    /// Opens the database. With SQLCipher it is keyed from the OS keychain;
+    /// plain SQLite has no key. A file of the wrong kind is refused and left
+    /// in place (see [`ensure_openable_file`]).
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, DbError> {
+        let path = path.as_ref();
+        ensure_openable_file(path)?;
+        // The key first: with no key (keychain switched off, store refused)
+        // nothing is created at `path`.
+        let key_hex = Self::read_key()?;
         let conn = Connection::open(path)?;
 
-        let key_hex = zeroize::Zeroizing::new(Self::get_or_create_master_key()?);
-
-        // Initialize SQLCipher transparent encryption
-        conn.execute_batch(&zeroize::Zeroizing::new(format!(
-            "PRAGMA key = \"x'{}'\";",
-            key_hex.as_str()
-        )))?;
+        // Initialize SQLCipher transparent encryption (no-op without it)
+        Self::apply_key(&conn, &key_hex)?;
 
         // Improve concurrency and wait for locks instead of failing immediately (fixes UI freezes)
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
@@ -551,7 +687,7 @@ impl Database {
                 if let rusqlite::Error::SqliteFailure(err, _) = &e {
                     // Only treat it as an encryption error if it's explicitly NotADatabase
                     if err.code == ErrorCode::NotADatabase {
-                        return DbError::Encryption;
+                        return wrong_format_error(path);
                     }
                 }
                 DbError::Sqlite(e)
@@ -584,7 +720,7 @@ impl Database {
         })
     }
 
-    /// Opens an existing SQLCipher database without creating, migrating, or recovering it.
+    /// Opens an existing database without creating, migrating, or recovering it.
     ///
     /// This is intentionally narrower than [`Self::open`]. It exists for read-only diagnostics
     /// and backup export, where a failed audit must never mutate or replace the source database.
@@ -599,9 +735,9 @@ impl Database {
             )));
         }
 
+        ensure_openable_file(path)?;
         let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-        let key_hex = Self::get_existing_master_key()?;
-        conn.execute_batch(&format!("PRAGMA key = \"x'{}'\";", key_hex))?;
+        Self::unlock_existing(&conn)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
 
         let mut check_stmt = conn.prepare("SELECT count(*) FROM sqlite_master")?;
@@ -610,7 +746,7 @@ impl Database {
             .map_err(|error| {
                 if let rusqlite::Error::SqliteFailure(sqlite_error, _) = &error {
                     if sqlite_error.code == ErrorCode::NotADatabase {
-                        return DbError::Encryption;
+                        return wrong_format_error(path);
                     }
                 }
                 DbError::Sqlite(error)
@@ -624,6 +760,7 @@ impl Database {
         })
     }
 
+    #[cfg(feature = "sqlcipher")]
     fn should_recreate_after_open_error(err: &DbError) -> bool {
         match err {
             DbError::Encryption => true,
@@ -634,16 +771,78 @@ impl Database {
         }
     }
 
+    /// The key [`Database::open`] keys with, kept afterwards so a reader can
+    /// be keyed with it later. Plain SQLite has no key.
+    #[cfg(feature = "sqlcipher")]
+    fn read_key() -> Result<ReaderKey, DbError> {
+        Ok(zeroize::Zeroizing::new(Self::get_or_create_master_key()?))
+    }
+
+    #[cfg(not(feature = "sqlcipher"))]
+    fn read_key() -> Result<ReaderKey, DbError> {
+        Ok(())
+    }
+
+    #[cfg(feature = "sqlcipher")]
+    fn apply_key(conn: &Connection, key_hex: &ReaderKey) -> Result<(), DbError> {
+        conn.execute_batch(&zeroize::Zeroizing::new(format!(
+            "PRAGMA key = \"x'{}'\";",
+            key_hex.as_str()
+        )))?;
+        Ok(())
+    }
+
+    #[cfg(not(feature = "sqlcipher"))]
+    fn apply_key(_conn: &Connection, _key: &ReaderKey) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    /// Like [`Self::unlock`] for an existing database: the key must already
+    /// exist, and none is ever created.
+    #[cfg(feature = "sqlcipher")]
+    fn unlock_existing(conn: &Connection) -> Result<(), DbError> {
+        let key_hex = zeroize::Zeroizing::new(Self::get_existing_master_key()?);
+        conn.execute_batch(&zeroize::Zeroizing::new(format!(
+            "PRAGMA key = \"x'{}'\";",
+            key_hex.as_str()
+        )))?;
+        Ok(())
+    }
+
+    #[cfg(not(feature = "sqlcipher"))]
+    fn unlock_existing(_conn: &Connection) -> Result<(), DbError> {
+        Ok(())
+    }
+
+    /// The key the environment dictates without touching the OS: the fixed
+    /// test key under `EBIR_TEST_ENV`, an error when the keychain is switched
+    /// off (`BUWIZ_NO_KEYCHAIN=1`; a key is never generated), `None` when the
+    /// OS store decides.
+    #[cfg(all(feature = "sqlcipher", not(test)))]
+    fn master_key_from_environment() -> Result<Option<String>, DbError> {
+        match master_key_plan(
+            std::env::var("EBIR_TEST_ENV").is_ok(),
+            crate::platform::keychain_disabled(),
+        ) {
+            MasterKeyPlan::TestKey => Ok(Some(TEST_MASTER_KEY_HEX.to_string())),
+            MasterKeyPlan::KeychainOff => Err(DbError::KeychainCli(format!(
+                "The OS keychain is switched off ({}=1), so there is no database key. \
+                 Not looking one up and not generating one.",
+                crate::platform::NO_KEYCHAIN_ENV
+            ))),
+            MasterKeyPlan::OsStore => Ok(None),
+        }
+    }
+
+    #[cfg(feature = "sqlcipher")]
     pub fn get_or_create_master_key() -> Result<String, DbError> {
         #[cfg(test)]
-        return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        return Ok(TEST_MASTER_KEY_HEX.to_string());
 
         #[cfg(not(test))]
         {
-            if std::env::var("EBIR_TEST_ENV").is_ok() {
-                return Ok(
-                    "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-                );
+            if let Some(key) = Self::master_key_from_environment()? {
+                return Ok(key);
             }
 
             // Platform dispatch: macOS uses Security.framework (off the main
@@ -657,16 +856,15 @@ impl Database {
         }
     }
 
+    #[cfg(feature = "sqlcipher")]
     pub(crate) fn get_existing_master_key() -> Result<String, DbError> {
         #[cfg(test)]
-        return Ok("0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        return Ok(TEST_MASTER_KEY_HEX.to_string());
 
         #[cfg(not(test))]
         {
-            if std::env::var("EBIR_TEST_ENV").is_ok() {
-                return Ok(
-                    "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-                );
+            if let Some(key) = Self::master_key_from_environment()? {
+                return Ok(key);
             }
 
             #[cfg(target_os = "macos")]
@@ -677,7 +875,7 @@ impl Database {
         }
     }
 
-    #[cfg(all(target_os = "macos", not(test)))]
+    #[cfg(all(feature = "sqlcipher", target_os = "macos", not(test)))]
     fn get_existing_master_key_macos() -> Result<String, DbError> {
         crate::keychain::resolve_master_key(
             &crate::keychain::NativeKeychain,
@@ -690,7 +888,7 @@ impl Database {
         .map_err(DbError::KeychainCli)
     }
 
-    #[cfg(all(not(target_os = "macos"), not(test)))]
+    #[cfg(all(feature = "sqlcipher", not(target_os = "macos"), not(test)))]
     fn get_existing_master_key_keyring() -> Result<String, DbError> {
         let keyring_error = match keyring::Entry::new("com.ebir.rust", "sqlcipher_master_key") {
             Ok(entry) => match entry.get_password() {
@@ -727,7 +925,7 @@ impl Database {
     /// Native calls run on a helper thread with a timeout: earlier releases
     /// observed `SecKeychainFindGenericPassword` deadlocking GPUI's main run
     /// loop when called on it directly.
-    #[cfg(all(target_os = "macos", not(test)))]
+    #[cfg(all(feature = "sqlcipher", target_os = "macos", not(test)))]
     fn get_or_create_master_key_macos() -> Result<String, DbError> {
         let hex_key = crate::keychain::resolve_master_key(
             &crate::keychain::NativeKeychain,
@@ -752,7 +950,7 @@ impl Database {
     /// database was encrypted with. On a headless Linux box with no Secret
     /// Service on D-Bus, `get_password` fails with `PlatformFailure`, which
     /// routes to the file fallback instead of refusing to start.
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
     fn get_or_create_master_key_keyring() -> Result<String, DbError> {
         use keyring::Entry;
         use tracing::info;
@@ -809,7 +1007,7 @@ impl Database {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
     fn read_fallback_key_file() -> Option<String> {
         let key_path = crate::platform::data_dir().join("bir_key.txt");
         match std::fs::read_to_string(key_path) {
@@ -818,7 +1016,7 @@ impl Database {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
     fn get_or_create_master_key_file_fallback() -> Result<String, DbError> {
         use tracing::info;
         let key_path = crate::platform::data_dir().join("bir_key.txt");
@@ -853,7 +1051,14 @@ impl Database {
         Ok(hex_key)
     }
 
+    /// Move an unreadable encrypted file aside. Refuses a file that has the
+    /// plain SQLite header: that one is not unreadable, it is not encrypted,
+    /// and it is never renamed.
+    #[cfg(feature = "sqlcipher")]
     fn quarantine_database_file(path: &Path) -> Result<PathBuf, DbError> {
+        if database_file_kind(path)? == DatabaseFileKind::PlainSqlite {
+            return Err(DbError::NotEncrypted(path.to_path_buf()));
+        }
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -889,6 +1094,7 @@ impl Database {
     }
 
     /// Remove old `.corrupt-*.bak` files, keeping only the most recent `keep`.
+    #[cfg(feature = "sqlcipher")]
     fn cleanup_old_backups(db_path: &Path, keep: usize) {
         let Some(dir) = db_path.parent() else {
             return;
@@ -1393,7 +1599,7 @@ mod keychain_miss_tests {
 }
 
 /// Outcome of reading the SQLCipher master key from the OS credential store.
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
 #[derive(Debug, PartialEq, Eq)]
 enum KeyringRead {
     Found(String),
@@ -1402,7 +1608,7 @@ enum KeyringRead {
     Refuse(String),
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
 fn classify_keyring_read(result: Result<String, keyring::Error>) -> KeyringRead {
     match result {
         Ok(hex_key) => KeyringRead::Found(hex_key),
@@ -1426,7 +1632,7 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
     #[test]
     fn keyring_read_falls_back_only_when_store_is_unreachable() {
         use super::{KeyringRead, classify_keyring_read};
@@ -1457,6 +1663,7 @@ mod tests {
     use super::*;
     use crate::naming::Tin;
     use crate::profile::TaxpayerProfile;
+    #[cfg(feature = "sqlcipher")]
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -1545,6 +1752,7 @@ mod tests {
         assert_eq!(list_after.len(), 0);
     }
 
+    #[cfg(feature = "sqlcipher")]
     #[test]
     fn test_open_or_recreate_quarantines_unreadable_db() {
         let mut db_file = NamedTempFile::new().unwrap();
@@ -2170,5 +2378,208 @@ mod tests {
                 .any(|entry| entry.file_name().to_string_lossy().contains("corrupt"));
             assert!(!corrupt);
         });
+    }
+
+    // ---------- file kind: the guard both builds share ----------
+
+    /// A plain SQLite file, made without a key, in either build.
+    fn write_plain_sqlite_file(path: &Path) {
+        let conn = Connection::open(path).expect("create plain file");
+        conn.execute_batch("CREATE TABLE probe (x INTEGER); INSERT INTO probe VALUES (7);")
+            .expect("write plain file");
+    }
+
+    /// Every entry of `directory`, by name.
+    fn entry_names(directory: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(directory)
+            .expect("read directory")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn a_database_file_is_classified_by_its_header() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let missing = directory.path().join("missing.db");
+        let empty = directory.path().join("empty.db");
+        let plain = directory.path().join("plain.db");
+        let garbage = directory.path().join("garbage.db");
+        let short = directory.path().join("short.db");
+        std::fs::write(&empty, b"").unwrap();
+        write_plain_sqlite_file(&plain);
+        std::fs::write(&garbage, vec![0xA7u8; 4096]).unwrap();
+        std::fs::write(&short, b"SQLite").unwrap();
+
+        assert_eq!(
+            database_file_kind(&missing).unwrap(),
+            DatabaseFileKind::Absent
+        );
+        assert_eq!(
+            database_file_kind(&empty).unwrap(),
+            DatabaseFileKind::Absent
+        );
+        assert_eq!(
+            database_file_kind(&plain).unwrap(),
+            DatabaseFileKind::PlainSqlite
+        );
+        assert_eq!(
+            database_file_kind(&garbage).unwrap(),
+            DatabaseFileKind::Other
+        );
+        assert_eq!(database_file_kind(&short).unwrap(), DatabaseFileKind::Other);
+        assert!(!missing.exists(), "classifying never creates a file");
+    }
+
+    // ---------- SQLCipher build: the mirror guard ----------
+
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn the_master_key_plan_never_asks_the_os_while_the_keychain_is_off() {
+        assert_eq!(master_key_plan(true, true), MasterKeyPlan::TestKey);
+        assert_eq!(master_key_plan(true, false), MasterKeyPlan::TestKey);
+        assert_eq!(master_key_plan(false, true), MasterKeyPlan::KeychainOff);
+        assert_eq!(master_key_plan(false, false), MasterKeyPlan::OsStore);
+    }
+
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn a_plain_sqlite_file_is_refused_as_not_encrypted_and_never_quarantined() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("bir_data.db");
+        write_plain_sqlite_file(&path);
+        let before = std::fs::read(&path).unwrap();
+
+        let open = Database::open(&path);
+        assert!(matches!(open, Err(DbError::NotEncrypted(_))), "open");
+        let recreate = Database::open_or_recreate(&path);
+        assert!(
+            matches!(recreate, Err(DbError::NotEncrypted(_))),
+            "open_or_recreate"
+        );
+        let read_only = Database::open_existing_read_only(&path);
+        assert!(
+            matches!(read_only, Err(DbError::NotEncrypted(_))),
+            "open_existing_read_only"
+        );
+        let message = DbError::NotEncrypted(path.clone()).to_string();
+        assert!(message.contains("not encrypted"), "{message}");
+
+        assert_eq!(std::fs::read(&path).unwrap(), before, "bytes untouched");
+        assert_eq!(entry_names(directory.path()), ["bir_data.db"]);
+    }
+
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn quarantine_itself_refuses_a_plain_sqlite_file() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("bir_data.db");
+        write_plain_sqlite_file(&path);
+
+        let error = Database::quarantine_database_file(&path).expect_err("must refuse");
+        assert!(matches!(error, DbError::NotEncrypted(_)), "{error}");
+        assert_eq!(entry_names(directory.path()), ["bir_data.db"]);
+    }
+
+    // ---------- plain build: no key, no rename ----------
+
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn the_plain_build_opens_a_plain_file_without_a_key() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("bir_data.db");
+        {
+            let db = Database::open(&path).expect("create a plain database");
+            db.set_setting("probe", "plain").expect("write");
+            db.close().expect("close");
+        }
+        assert_eq!(
+            database_file_kind(&path).unwrap(),
+            DatabaseFileKind::PlainSqlite
+        );
+        // Any SQLite client reads it: there is no key.
+        let raw = Connection::open(&path).expect("open without a key");
+        let value: String = raw
+            .query_row("SELECT value FROM settings WHERE key = 'probe'", [], |r| {
+                r.get(0)
+            })
+            .expect("read without a key");
+        assert_eq!(value, "plain");
+        drop(raw);
+
+        let (db, recovered) = Database::open_or_recreate(&path).expect("reopen");
+        assert!(recovered.is_none());
+        assert_eq!(db.get_setting("probe").unwrap(), Some("plain".to_string()));
+    }
+
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn the_plain_build_starts_a_new_database_in_an_empty_file() {
+        let file = NamedTempFile::new().expect("empty temporary file");
+        let db = Database::open(file.path()).expect("empty file is a new database");
+        db.set_setting("probe", "new").expect("write");
+    }
+
+    #[cfg(not(feature = "sqlcipher"))]
+    #[test]
+    fn the_plain_build_refuses_a_file_that_is_not_plain_sqlite_and_leaves_it_alone() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("bir_data.db");
+        // What an encrypted database looks like: no header, high-entropy pages.
+        let encrypted_looking: Vec<u8> = (0..8192u32)
+            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+            .collect();
+        std::fs::write(&path, &encrypted_looking).unwrap();
+
+        let open = Database::open(&path);
+        assert!(matches!(open, Err(DbError::NotPlainSqlite(_))), "open");
+        let recreate = Database::open_or_recreate(&path);
+        assert!(
+            matches!(recreate, Err(DbError::NotPlainSqlite(_))),
+            "open_or_recreate"
+        );
+        let read_only = Database::open_existing_read_only(&path);
+        assert!(
+            matches!(read_only, Err(DbError::NotPlainSqlite(_))),
+            "open_existing_read_only"
+        );
+        let message = DbError::NotPlainSqlite(path.clone()).to_string();
+        assert!(message.contains("not a plain SQLite"), "{message}");
+
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            encrypted_looking,
+            "bytes untouched"
+        );
+        assert_eq!(
+            entry_names(directory.path()),
+            ["bir_data.db"],
+            "no .corrupt-*.bak, no new file: it was not renamed"
+        );
+    }
+
+    #[cfg(all(unix, not(feature = "sqlcipher")))]
+    #[test]
+    fn the_plain_build_keeps_its_database_in_the_nsh_data_folder() {
+        let home = tempfile::tempdir().expect("temporary home");
+        temp_env::with_vars(
+            [
+                ("HOME", Some(home.path().as_os_str())),
+                ("XDG_DATA_HOME", None),
+                ("BIR_DATABASE_PATH", None),
+            ],
+            || {
+                let path = default_database_path();
+                assert!(path.starts_with(home.path()), "{}", path.display());
+                assert!(
+                    path.ends_with("dev.goldcoders.bir.nsh/bir_data.db"),
+                    "{}",
+                    path.display()
+                );
+                assert!(!path.to_string_lossy().contains("group.dev.goldcoders.bir"));
+            },
+        );
     }
 }

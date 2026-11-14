@@ -16,6 +16,11 @@ await_holding_lock = "deny"
 await_holding_invalid_type = "deny"
 
 [features]
+# SQLCipher encryption of the local database (default on). Off = plain SQLite:
+# no PRAGMA key, no master-key lookup, and a file that is not plain SQLite is an
+# error that is never renamed. The old shell keeps it on; the NSH app turns it off.
+default = ["sqlcipher"]
+sqlcipher = ["rusqlite/bundled-sqlcipher"]
 # Mac App Store build, enabled by `bir-shell/mas_build`. Compiles out the
 # `sh -c` runner for user cron jobs (arbitrary code execution is rejected by
 # App Review 2.5.2 and cannot run under the App Sandbox); such jobs are marked
@@ -56,7 +61,7 @@ russh-sftp = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
 rss = { workspace = true }
-rusqlite = { workspace = true }
+rusqlite = { workspace = true, features = ["bundled"] }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 openssl = { version = "0.10", features = ["vendored"] }

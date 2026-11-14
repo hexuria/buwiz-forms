@@ -26,13 +26,13 @@ fn is_application_dir(dir: &Path) -> bool {
 }
 
 /// The `app/` directory's own test; public so the host can name it.
-pub(crate) fn application_present(dir: &Path) -> bool {
+pub fn application_present(dir: &Path) -> bool {
     is_application_dir(dir)
 }
 
 /// Whether a directory exists. The predicate for plain resource directories
 /// such as `print-overrides/`.
-pub(crate) fn directory_present(dir: &Path) -> bool {
+pub fn directory_present(dir: &Path) -> bool {
     dir.is_dir()
 }
 
@@ -58,7 +58,7 @@ fn candidates(executable_dir: &Path, name: &str) -> Vec<PathBuf> {
 /// The first packaged location for `name` that `present` accepts, relative to
 /// `executable` (the binary itself, whose parent directory is searched).
 /// `None` when there is no executable path or no candidate qualifies.
-pub(crate) fn dir(
+pub fn dir(
     name: &str,
     executable: Option<&Path>,
     present: impl Fn(&Path) -> bool,

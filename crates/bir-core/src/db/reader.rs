@@ -10,9 +10,10 @@
 use std::path::PathBuf;
 
 use rusqlite::{Connection, OpenFlags};
+#[cfg(feature = "sqlcipher")]
 use zeroize::Zeroizing;
 
-use super::{Database, DbError};
+use super::{Database, DbError, wrong_format_error};
 
 /// A reader rarely sees `SQLITE_BUSY` in WAL mode (recovery after a crash, a
 /// truncating checkpoint). It errors after this rather than stalling the UI
@@ -23,7 +24,8 @@ impl Database {
     /// Open a read-only connection to this database's file, keyed with the
     /// key [`Database::open`] already read: no second keychain read, no
     /// prompt. `Ok(None)` for an in-memory database, which has no file a
-    /// second connection could open.
+    /// second connection could open. Plain SQLite has no key to apply, but
+    /// keeps the same once-per-open rule.
     ///
     /// The connection is opened read-only and `PRAGMA query_only = ON`, so a
     /// write sent to it fails with an error rather than writing. It runs no
@@ -52,10 +54,13 @@ impl Database {
                 | OpenFlags::SQLITE_OPEN_NO_MUTEX
                 | OpenFlags::SQLITE_OPEN_URI,
         )?;
+        #[cfg(feature = "sqlcipher")]
         conn.execute_batch(&Zeroizing::new(format!(
             "PRAGMA key = \"x'{}'\";",
             key.as_str()
         )))?;
+        #[cfg(not(feature = "sqlcipher"))]
+        let _ = key;
         conn.busy_timeout(READER_BUSY_TIMEOUT)?;
         conn.execute_batch("PRAGMA query_only = ON;")?;
         let _: i64 = conn
@@ -64,7 +69,7 @@ impl Database {
                 rusqlite::Error::SqliteFailure(failure, _)
                     if failure.code == rusqlite::ErrorCode::NotADatabase =>
                 {
-                    DbError::Encryption
+                    wrong_format_error(&path)
                 }
                 _ => DbError::Sqlite(error),
             })?;

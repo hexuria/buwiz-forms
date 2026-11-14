@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/bir-app-api",
     "crates/bir-core",
+    "crates/bir-host-shim",
     "crates/bir-mcp",
     "crates/bir-print",
     "crates/bir-rules",
@@ -44,7 +46,9 @@ russh = { version = "0.63", default-features = false, features = ["flate2", "rin
 russh-sftp = "3.0"
 
 # Database
-rusqlite = { version = "0.32", features = ["bundled-sqlcipher"] }
+# No default features/bundling here: bir-core picks plain SQLite ("bundled") and
+# its `sqlcipher` feature switches to "bundled-sqlcipher".
+rusqlite = { version = "0.32" }
 
 
 

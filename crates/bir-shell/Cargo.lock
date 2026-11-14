@@ -886,6 +886,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "bir-app-api"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "bir-core",
+ "bir-host-shim",
+ "bir-print",
+ "chrono",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zip",
+]
+
+[[package]]
 name = "bir-core"
 version = "0.2.0"
 dependencies = [
@@ -943,6 +961,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bir-host-shim"
+version = "0.2.0"
+
+[[package]]
 name = "bir-print"
 version = "0.2.0"
 dependencies = [
@@ -975,6 +997,7 @@ dependencies = [
  "anyrender",
  "anyrender_vello_cpu",
  "base64 0.22.1",
+ "bir-app-api",
  "bir-core",
  "bir-print",
  "blitz-dom",
