@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::db::DbError;
 
-const CURRENT_MIGRATION_VERSION: i32 = 22;
+const CURRENT_MIGRATION_VERSION: i32 = 23;
 
 const NO_CONFIRMED_PROFILE_EVIDENCE_REASON: &str =
     "No confirmed effective profile evidence for this taxable year; review required";
@@ -358,6 +358,9 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
         // `taxpayers` row instead of on each branch profile, and the app's
         // access mode (solo / helpdesk) inferred for existing installs.
         "SELECT 1; -- v22 marker: taxpayer credentials and access mode (Rust-side)",
+        // v23: The tax facts of each branch per tax year, in their own table
+        // (`year_facts`), filled once from the profiles (Rust-side).
+        "SELECT 1; -- v23 marker: year facts (Rust-side)",
     ];
 
     while version < CURRENT_MIGRATION_VERSION {
@@ -428,6 +431,10 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
                 migrate_v22_taxpayer_credentials(conn)?;
                 infer_v22_access_mode(conn)?;
             }
+
+            if version == 23 {
+                migrate_v23_year_facts(conn)?;
+            }
         } else {
             break;
         }
@@ -472,6 +479,48 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     // import) onto its taxpayer. A taxpayer's own credential always wins.
     migrate_v22_taxpayer_credentials(conn)?;
 
+    // Heal a database whose v23 table is missing. Only the table: the
+    // backfill runs once, at v23, so a record removed since is not refilled.
+    ensure_year_facts_table(conn)?;
+
+    Ok(())
+}
+
+fn ensure_year_facts_table(conn: &Connection) -> Result<(), DbError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS year_facts (
+            tin TEXT NOT NULL,
+            taxable_year INTEGER NOT NULL,
+            facts_json TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (tin, taxable_year)
+        );",
+    )?;
+    Ok(())
+}
+
+/// v23: the tax facts of each branch per tax year (owner decisions 4-6).
+///
+/// For every branch and every year it has (`branch_json.tax_years` and the
+/// years of its `per_year_forms`), one record filled from the confirmed
+/// profile version that covers the year when exactly one does, else from
+/// the flat profile fields ([`crate::tax_profile::YearFacts::backfill`]).
+/// The head office owns the income type, the 8% or graduated choice and the
+/// EOPT tier for every branch, so its records cover every year any branch
+/// of the taxpayer has, and its election is the flat `tax_elections` entry
+/// of the year: its own, else another branch's. A branch's own record
+/// holds only the facts it owns. `profiles.data_json` is not touched: the
+/// flat fields and `profile_versions` stay as stored. Existing records are
+/// kept (idempotent).
+fn migrate_v23_year_facts(conn: &Connection) -> Result<(), DbError> {
+    ensure_year_facts_table(conn)?;
+    if !table_exists(conn, "profiles")? {
+        return Ok(());
+    }
+    let written = super::taxpayers::backfill_year_facts(conn)?;
+    if written > 0 {
+        info!("v23 migration: wrote {} year facts records", written);
+    }
     Ok(())
 }
 
@@ -3913,5 +3962,180 @@ mod tests {
             rows,
             vec![vec![Some("555555555".into()), Some("Late Arrival".into())]]
         );
+    }
+
+    /// v23 on a v22 database: every branch's years get a record, from the
+    /// one confirmed version covering the year, else from the flat fields;
+    /// the head office's records cover every year of the taxpayer and take
+    /// the year's flat election (its own, else a branch's); a branch's own
+    /// record holds only the facts it owns; profile JSON is untouched.
+    #[test]
+    fn test_v23_backfills_year_facts_on_a_v22_database() {
+        use crate::profile::{
+            EoptTier, IncomeTaxElection, TaxClassification, TaxProfileVersion,
+            TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
+        };
+        use crate::tax_profile::YearFacts;
+
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        conn.execute_batch("DROP TABLE year_facts; PRAGMA user_version = 22;")
+            .unwrap();
+
+        let profile_json = |tin: &str, extra: serde_json::Value| {
+            let mut value = serde_json::json!({
+                "id": null,
+                "full_name": "Juana Santos",
+                "tin": {"segment1": &tin[0..3], "segment2": &tin[3..6], "segment3": &tin[6..9], "branch": &tin[9..]},
+                "rdo_code": "039",
+                "line_of_business": "Flat line",
+                "registered_address": "Quezon City",
+                "zip_code": "1100",
+                "phone": "",
+                "email": "",
+                "default_form_type": "",
+                "taxpayer_type": "Individual",
+                "tax_classification": "SelfEmployed",
+                "eopt_tier": "Small",
+                "business_start_date": "2018-01-01",
+                "atc_codes": ["PT010"]
+            });
+            for (key, item) in extra.as_object().unwrap() {
+                value[key] = item.clone();
+            }
+            let mut profile: TaxpayerProfile = serde_json::from_value(value).unwrap();
+            if tin.ends_with("00000") {
+                let mut version = TaxProfileVersion::from_profile_backfill(&profile);
+                version.id = "cor-2024".into();
+                version.source = TaxProfileVersionSource::ManualCor;
+                version.status = TaxProfileVersionStatus::Confirmed;
+                version.effective_from = chrono::NaiveDate::from_ymd_opt(2024, 1, 1);
+                version.effective_until = chrono::NaiveDate::from_ymd_opt(2024, 12, 31);
+                version.needs_effective_date_review = false;
+                version.tax_classification = Some(TaxClassification::MixedIncome);
+                version.eopt_tier = Some(EoptTier::Medium);
+                version.cor.registration_date = version.effective_from;
+                version.cor.line_of_business_description = "COR line".into();
+                profile.profile_versions = vec![version];
+            }
+            serde_json::to_string(&profile).unwrap()
+        };
+        let head = "22233344400000";
+        let branch = "22233344400001";
+        let head_json = profile_json(head, serde_json::json!({}));
+        let branch_json = profile_json(
+            branch,
+            serde_json::json!({
+                "line_of_business": "Branch line",
+                "tax_elections": [{
+                    "taxable_year": 2025, "election": "EightPercent",
+                    "elected_at": "2025-03-01T00:00:00", "source_form": "2551Qv2018"
+                }]
+            }),
+        );
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json, branch_json) VALUES (?1, ?2, ?3)",
+            rusqlite::params![head, head_json, r#"{"tax_years":[2023,2024]}"#],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json, branch_json) VALUES (?1, ?2, ?3)",
+            rusqlite::params![branch, branch_json, r#"{"tax_years":[2026]}"#],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO per_year_forms (tin, taxable_year, form_code, frequency, active, source, custom)
+             VALUES (?1, 2025, '2551Q', 'quarterly', 1, 'manual', 0)",
+            [head],
+        )
+        .unwrap();
+
+        migrate_database(&conn).unwrap();
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, 23);
+
+        let record = |tin: &str, year: i64| -> Option<YearFacts> {
+            conn.query_row(
+                "SELECT facts_json FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+                rusqlite::params![tin, year],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .unwrap()
+            .map(|json| serde_json::from_str(&json).unwrap())
+        };
+        let years = |tin: &str| -> Vec<i64> {
+            let mut stmt = conn
+                .prepare("SELECT taxable_year FROM year_facts WHERE tin = ?1 ORDER BY taxable_year")
+                .unwrap();
+            stmt.query_map([tin], |row| row.get(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .collect()
+        };
+        // The head office: its own years, its forms-list year, and the
+        // branch's years.
+        assert_eq!(years(head), vec![2023, 2024, 2025, 2026]);
+        let flat_year = record(head, 2023).unwrap();
+        assert_eq!(
+            flat_year.tax_classification,
+            Some(TaxClassification::SelfEmployed)
+        );
+        assert_eq!(flat_year.eopt_tier, Some(EoptTier::Small));
+        assert_eq!(flat_year.line_of_business.as_deref(), Some("Flat line"));
+        assert_eq!(
+            flat_year.business_start_date,
+            chrono::NaiveDate::from_ymd_opt(2018, 1, 1)
+        );
+        assert_eq!(flat_year.atc_codes, vec!["PT010".to_string()]);
+        assert_eq!(flat_year.income_tax_election, None);
+        // The one confirmed version covering 2024 fills that year.
+        let cor_year = record(head, 2024).unwrap();
+        assert_eq!(
+            cor_year.tax_classification,
+            Some(TaxClassification::MixedIncome)
+        );
+        assert_eq!(cor_year.eopt_tier, Some(EoptTier::Medium));
+        assert_eq!(cor_year.line_of_business.as_deref(), Some("COR line"));
+        assert_eq!(
+            cor_year.business_start_date,
+            chrono::NaiveDate::from_ymd_opt(2024, 1, 1)
+        );
+        // Only the branch had a 2025 election: it is the head office's.
+        let election_year = record(head, 2025).unwrap();
+        assert_eq!(
+            election_year.income_tax_election,
+            Some(IncomeTaxElection::EightPercent)
+        );
+        assert_eq!(election_year.election_source.as_deref(), Some("2551Q"));
+        // The branch: its own years, its own facts only.
+        assert_eq!(years(branch), vec![2026]);
+        let branch_year = record(branch, 2026).unwrap();
+        assert_eq!(branch_year.line_of_business.as_deref(), Some("Branch line"));
+        assert_eq!(branch_year.tax_classification, None);
+        assert_eq!(branch_year.eopt_tier, None);
+        assert_eq!(branch_year.income_tax_election, None);
+        // The stored profiles are byte for byte what they were.
+        let stored = |tin: &str| -> String {
+            conn.query_row(
+                "SELECT data_json FROM profiles WHERE tin = ?1",
+                [tin],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(stored(head), head_json);
+        assert_eq!(stored(branch), branch_json);
+
+        // Startup again: nothing is refilled or changed.
+        conn.execute(
+            "DELETE FROM year_facts WHERE tin = ?1 AND taxable_year = 2023",
+            [head],
+        )
+        .unwrap();
+        migrate_database(&conn).unwrap();
+        assert_eq!(years(head), vec![2024, 2025, 2026]);
     }
 }

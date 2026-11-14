@@ -2394,8 +2394,11 @@ fn reapply_penalty_context(
     let Some(tin) = draft["tin"].as_str().map(str::to_string) else {
         return Ok(());
     };
+    let Ok(year) = agent::identity(kind, draft).map(|identity| identity.taxable_year) else {
+        return Ok(());
+    };
     let Some(profile) = db
-        .get_profile_by_tin(&tin)
+        .get_profile_for_year(&tin, year)
         .map_err(|error| error.to_string())?
     else {
         return Ok(());
@@ -3123,7 +3126,7 @@ fn open_screen_form(
     let (draft, from_profile, build, filed_original, followed, notes, checked, consumed) =
         with_database(|db| {
             let profile = db
-                .get_profile_by_tin(&tin)
+                .get_profile_for_year(&tin, year)
                 .map_err(|error| host_error(error.to_string()))?
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
@@ -3609,7 +3612,7 @@ fn screen_form_sample_period(
         None => Answer::Incomplete,
         Some((year, period)) => with_database(|db| {
             let profile = db
-                .get_profile_by_tin(&tin)
+                .get_profile_for_year(&tin, year)
                 .map_err(|error| host_error(error.to_string()))?
                 .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
             let mut draft =
@@ -4386,7 +4389,7 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
     let tin = agent::identity(kind, &draft).map_err(host_error)?.tin;
     let (profile, from_profile) = with_database(|db| {
         let profile = db
-            .get_profile_by_tin(&tin)
+            .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
         let from_profile =
@@ -5807,7 +5810,7 @@ fn screen_form_amend(
     let exact = arguments.get(4).and_then(|key| to_json(key).as_i64());
     let (amended, from_profile, status, updated_at) = with_database(|db| {
         let profile = db
-            .get_profile_by_tin(&tin)
+            .get_profile_for_year(&tin, year)
             .map_err(|error| host_error(error.to_string()))?
             .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
         let filed =

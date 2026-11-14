@@ -97,9 +97,9 @@ pub fn process_sync(
         return Err(SyncError::PayloadInvalid(payload_errors));
     }
 
-    // ── Step 2: Look up profile by TIN ───────────────────────────────
+    // ── Step 2: Look up the profile of the payload's tax year ─────────
     let profile = db
-        .get_profile(&payload.tin)
+        .get_profile_for_year(&payload.tin, payload.period_start.year() as u16)
         .map_err(|e| SyncError::DatabaseError(e.to_string()))?
         .ok_or_else(|| SyncError::ProfileNotFound(payload.tin.clone()))?;
 
@@ -289,6 +289,9 @@ mod tests {
         };
 
         db.save_profile(profile).unwrap();
+        // The forms list holds only what the user picks: the 2551Q is on it.
+        db.set_yearly_forms("010558054000", 2026, &["2551Q"])
+            .unwrap();
         Some(db)
     }
 

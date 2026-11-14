@@ -1569,7 +1569,7 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
         match form_code.as_str() {
             "2551Q" => {
                 let profile = db
-                    .get_profile(&tin)
+                    .get_profile_for_year(&tin, year)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new(format!("no profile for TIN {tin}")))?;
                 let q = quarter.ok_or_else(|| {
@@ -1583,7 +1583,7 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
             }
             "1601C" => {
                 let profile = db
-                    .get_profile(&tin)
+                    .get_profile_for_year(&tin, year)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new(format!("no profile for TIN {tin}")))?;
                 let month = quarter.ok_or_else(|| {
@@ -1649,18 +1649,16 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
-                db.confirm_initial_profile_year(&tin, i32::from(year))
-                    .map_err(|error| HostError::new(error.to_string()))?;
                 let mut draft = db
                     .get_2551q_draft(&tin, year, q)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
                 if let Some(profile) = db
-                    .get_profile_by_tin(&tin)
+                    .get_profile_for_year(&tin, year)
                     .map_err(|error| HostError::new(error.to_string()))?
                 {
-                    // A stored resolution error clears once a confirmed version
-                    // covers the quarter. The transition still runs the page's
+                    // The year's profile of the branch (its year facts over
+                    // the flat fields). The transition still runs the page's
                     // Validate (`filing_errors`).
                     let _ = draft.reconcile_with_effective_profile(&profile);
                 }
@@ -2535,7 +2533,7 @@ fn accept_device_filing(
         }));
     }
     let profile = db
-        .get_profile_by_tin(&tin)
+        .get_profile_for_year(&tin, year)
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("no taxpayer profile for {tin}"))?;
     let mut draft =

@@ -19,7 +19,7 @@ use crate::forms::agent::AgentFormKind;
 use crate::forms::agent::template_stops::{self, TemplateStops};
 use crate::forms::forms_set::{FormSetEntry, FormSetSource, PerYearFormsSet};
 use crate::forms::registry::canonical_form_code;
-use crate::profile::{TaxpayerProfile, TaxpayerType};
+use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile, TaxpayerType};
 use crate::tax_profile::templates::{form_order_key, value_at_path};
 use crate::tax_profile::{AddedTaxYear, check_tax_year, format_tin_root, snapshot_setup_answers};
 use crate::tax_profile::{
@@ -31,7 +31,10 @@ use crate::tax_profile::{
     is_head_office_code, normalize_branch_code, parse_tin_root, resolve_facts,
     validate_template_fields,
 };
-use crate::tax_profile::{TaxpayerCredentials, reject_reserved_tin_root};
+use crate::tax_profile::{
+    EffectiveYearFacts, FactOwner, TaxTypeChip, TaxpayerCredentials, YearFacts, YearFactsPatch,
+    YearFactsView, reject_reserved_tin_root,
+};
 
 type Result<T> = std::result::Result<T, TaxProfileError>;
 
@@ -644,7 +647,7 @@ fn record_tax_year(conn: &Connection, tin: &str, year: u16) -> Result<()> {
 
 /// A branch's tax years: the ones added explicitly plus every year that has
 /// a stored Forms Set (legacy and COR-era years included).
-fn query_tax_years(conn: &Connection, tin: &str) -> Result<BTreeSet<u16>> {
+pub(crate) fn query_tax_years(conn: &Connection, tin: &str) -> Result<BTreeSet<u16>> {
     let mut years = load_branch_settings(conn, tin)?.tax_years;
     let mut stmt =
         conn.prepare("SELECT DISTINCT taxable_year FROM per_year_forms WHERE tin = ?1")?;
@@ -662,9 +665,10 @@ fn active_codes(conn: &Connection, tin: &str, year: u16) -> Result<Vec<String>> 
 
 /// Every table keyed by a full TIN (`column` holds root + branch code).
 /// `profiles` and `taxpayers` are handled separately by the TIN move.
-const TIN_KEYED_TABLES: [(&str, &str); 12] = [
+const TIN_KEYED_TABLES: [(&str, &str); 13] = [
     ("form_drafts", "tin"),
     ("per_year_forms", "tin"),
+    ("year_facts", "tin"),
     ("form_templates", "tin"),
     ("submissions", "tin"),
     ("submission_receipts", "tin"),
@@ -918,6 +922,465 @@ fn load_return(conn: &Connection, draft_id: i64) -> Result<ReturnRow> {
     )
     .optional()?
     .ok_or_else(|| TaxProfileError::NotFound(format!("No return with id {draft_id}")))
+}
+
+// =========================================================================
+// Year facts (owner decisions 4-7) — `year_facts`
+// =========================================================================
+
+/// What a refused election change says.
+fn election_locked_message(year: u16) -> String {
+    format!(
+        "The 8% or graduated choice for {year} cannot change: a return that carries it was already filed."
+    )
+}
+
+fn read_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<Option<YearFacts>, DbError> {
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT facts_json FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(json.as_deref().map(serde_json::from_str).transpose()?)
+}
+
+pub(crate) fn write_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+) -> std::result::Result<(), DbError> {
+    conn.execute(
+        "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
+         VALUES (?1, ?2, ?3, datetime('now'))
+         ON CONFLICT(tin, taxable_year)
+         DO UPDATE SET facts_json = excluded.facts_json, updated_at = datetime('now')",
+        params![tin, i64::from(year), serde_json::to_string(facts)?],
+    )?;
+    Ok(())
+}
+
+/// An imported archive's forms list for `year`: `codes` become the year's
+/// hand-picked forms and `year` one of the branch's tax years, inside the
+/// caller's transaction.
+pub(crate) fn restore_yearly_forms(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    codes: &[String],
+) -> Result<()> {
+    let codes = canonical_codes(codes)?;
+    if !codes.is_empty() || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty() {
+        replace_yearly_forms(conn, tin, year, &codes)?;
+    }
+    record_tax_year(conn, tin, year)
+}
+
+/// Every stored record of `tin`, by year.
+pub(crate) fn list_year_facts(
+    conn: &Connection,
+    tin: &str,
+) -> std::result::Result<BTreeMap<u16, YearFacts>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT taxable_year, facts_json FROM year_facts WHERE tin = ?1 ORDER BY taxable_year",
+    )?;
+    let rows = stmt.query_map([tin], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    let mut records = BTreeMap::new();
+    for row in rows {
+        let (year, json) = row?;
+        if let Ok(year) = u16::try_from(year) {
+            records.insert(year, serde_json::from_str(&json)?);
+        }
+    }
+    Ok(records)
+}
+
+/// The flat profile stored for `tin`, or `None` when there is none or this
+/// build cannot read it.
+fn flat_profile(
+    conn: &Connection,
+    tin: &str,
+) -> std::result::Result<Option<TaxpayerProfile>, DbError> {
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT data_json FROM profiles WHERE tin = ?1",
+            [tin],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(json.and_then(|json| serde_json::from_str(&json).ok()))
+}
+
+/// The row that holds `tin`'s head-office facts: the taxpayer's head office
+/// (its lowest-id zero branch), or `tin` itself when there is none.
+fn head_office_tin_of(conn: &Connection, tin: &str) -> std::result::Result<String, DbError> {
+    let Some(root) = tin.get(..9) else {
+        return Ok(tin.to_string());
+    };
+    let head: Option<String> = conn
+        .query_row(
+            "SELECT tin FROM profiles
+             WHERE length(tin) > 9 AND substr(tin, 1, 9) = ?1
+               AND substr(tin, 10) NOT GLOB '*[^0]*'
+             ORDER BY id LIMIT 1",
+            [root],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(head.unwrap_or_else(|| tin.to_string()))
+}
+
+/// The `form_drafts.tin` keys under `tin`'s root.
+fn branch_tins_of(conn: &Connection, tin: &str) -> std::result::Result<Vec<String>, DbError> {
+    let Some(root) = tin.get(..9) else {
+        return Ok(vec![tin.to_string()]);
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT tin FROM profiles WHERE {} ORDER BY id",
+        root_matches("tin")
+    ))?;
+    let tins = stmt
+        .query_map([root], |row| row.get(0))?
+        .collect::<std::result::Result<Vec<String>, _>>()?;
+    Ok(tins)
+}
+
+/// "2551Qv2018" -> "2551Q"; the profile manager's own entries -> "Tax profile".
+fn election_source_label(source_form: &str) -> String {
+    let code = source_form.trim();
+    for form in ["2551Q", "1701Q", "1701"] {
+        if code.starts_with(form) {
+            return form.to_string();
+        }
+    }
+    match code {
+        "" | "profile_manager" => "Tax profile".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// The flat `tax_elections` entries of `year` that speak for the head
+/// office `head_tin`: its own, else `prefer_tin`'s, else the first branch's
+/// under the root that has some.
+fn flat_year_elections(
+    conn: &Connection,
+    head_tin: &str,
+    prefer_tin: &str,
+    year: u16,
+) -> std::result::Result<Vec<TaxElectionHistory>, DbError> {
+    let mut order = vec![head_tin.to_string(), prefer_tin.to_string()];
+    order.extend(branch_tins_of(conn, head_tin)?);
+    for tin in order {
+        if let Some(profile) = flat_profile(conn, &tin)? {
+            let entries: Vec<TaxElectionHistory> = profile
+                .tax_elections
+                .iter()
+                .filter(|entry| entry.taxable_year == year)
+                .cloned()
+                .collect();
+            if !entries.is_empty() {
+                return Ok(entries);
+            }
+        }
+    }
+    Ok(Vec::new())
+}
+
+/// The one election `entries` record, with where it was made.
+fn election_of_entries(
+    entries: &[TaxElectionHistory],
+    year: u16,
+) -> (Option<IncomeTaxElection>, Option<String>) {
+    let election = crate::tax_profile::year_facts::election_of_ledger(entries, year);
+    let source = election.as_ref().and_then(|election| {
+        entries
+            .iter()
+            .find(|entry| &entry.election == election)
+            .map(|entry| election_source_label(&entry.source_form))
+    });
+    (election, source)
+}
+
+/// The record a year without one reads as: the branch's nearest earlier
+/// record (every fact but the election), else its flat profile fields;
+/// with `as_head`, the year's flat election too.
+fn seed_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    as_head: bool,
+) -> std::result::Result<YearFacts, DbError> {
+    let earlier = list_year_facts(conn, tin)?
+        .range(..year)
+        .next_back()
+        .map(|(_, facts)| facts.carried_to_next_year());
+    let mut facts = match earlier {
+        Some(facts) => facts,
+        None => flat_profile(conn, tin)?
+            .map(|profile| YearFacts::from_flat_profile(&profile))
+            .unwrap_or_default(),
+    };
+    facts.income_tax_election = None;
+    facts.election_source = None;
+    if !as_head {
+        // A branch's own record holds only the facts it owns.
+        facts.tax_classification = None;
+        facts.eopt_tier = None;
+    }
+    if as_head {
+        let entries = flat_year_elections(conn, tin, tin, year)?;
+        (facts.income_tax_election, facts.election_source) = election_of_entries(&entries, year);
+    }
+    Ok(facts)
+}
+
+/// `tin`'s stored record for `year`, written from its seed first when the
+/// year has none.
+fn ensure_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<YearFacts, DbError> {
+    if let Some(facts) = read_year_facts(conn, tin, year)? {
+        return Ok(facts);
+    }
+    let as_head = head_office_tin_of(conn, tin)? == tin;
+    let facts = seed_year_facts(conn, tin, year, as_head)?;
+    write_year_facts(conn, tin, year, &facts)?;
+    Ok(facts)
+}
+
+/// `tin`'s effective facts for `year`: the head office's record for the
+/// facts it owns, the branch's own for the rest (each the stored record,
+/// else its seed).
+pub(crate) fn effective_year_facts_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<EffectiveYearFacts, DbError> {
+    let head_tin = head_office_tin_of(conn, tin)?;
+    let own = match read_year_facts(conn, tin, year)? {
+        Some(facts) => facts,
+        None => seed_year_facts(conn, tin, year, head_tin == tin)?,
+    };
+    let stored_head = read_year_facts(conn, &head_tin, year)?;
+    let election_recorded = stored_head.is_some();
+    let head = match stored_head {
+        Some(facts) => facts,
+        None if head_tin == tin => own.clone(),
+        None => seed_year_facts(conn, &head_tin, year, true)?,
+    };
+    let fallback_elections = if election_recorded {
+        Vec::new()
+    } else {
+        flat_year_elections(conn, &head_tin, tin, year)?
+    };
+    Ok(EffectiveYearFacts {
+        tin: tin.to_string(),
+        year,
+        facts: YearFacts {
+            tax_classification: head.tax_classification,
+            income_tax_election: head.income_tax_election,
+            election_source: head.election_source,
+            eopt_tier: head.eopt_tier,
+            ..own
+        },
+        head_office_tin: head_tin,
+        election_recorded,
+        fallback_elections,
+    })
+}
+
+/// `profile` with its year's effective facts laid over the flat fields.
+pub(crate) fn overlay_profile_for_year(
+    conn: &Connection,
+    profile: &mut TaxpayerProfile,
+    year: u16,
+) -> std::result::Result<(), DbError> {
+    let effective = effective_year_facts_on(conn, &profile.tin.full(), year)?;
+    crate::tax_profile::overlay_year_facts(profile, &effective);
+    Ok(())
+}
+
+/// Decision 7: the year's election is locked once a 2551Q, 1701Q or 1701
+/// of any branch of the taxpayer is past Queued for the year.
+pub(crate) fn election_locked_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<bool, DbError> {
+    let Some(root) = tin.get(..9) else {
+        return Ok(false);
+    };
+    let filed: i64 = conn.query_row(
+        &format!(
+            "SELECT count(*) FROM form_drafts
+             WHERE {} AND taxable_year = ?2
+               AND form_code IN ('2551Q', '1701Q', '1701')
+               AND status IN ('Submitted', 'Filed', 'Confirmed', 'Paid')",
+            root_matches("tin")
+        ),
+        params![root, i64::from(year)],
+        |row| row.get(0),
+    )?;
+    Ok(filed > 0)
+}
+
+/// Whether two elections are the same 8% or graduated choice.
+fn same_choice(left: Option<&IncomeTaxElection>, right: Option<&IncomeTaxElection>) -> bool {
+    let eight = |election: &IncomeTaxElection| *election == IncomeTaxElection::EightPercent;
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => eight(left) == eight(right),
+        _ => false,
+    }
+}
+
+/// Write `election` as the year's choice on the head office's record of
+/// `tin`'s taxpayer, made on `source`. A graduated answer over a recorded
+/// graduated one keeps the recorded deduction method. Refused, unwritten,
+/// when the choice changes and the year is locked.
+pub(crate) fn record_year_election_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    election: IncomeTaxElection,
+    source: &str,
+) -> std::result::Result<(), DbError> {
+    let head_tin = head_office_tin_of(conn, tin)?;
+    let current = effective_year_facts_on(conn, tin, year)?;
+    let recorded = current.facts.income_tax_election.as_ref();
+    if same_choice(recorded, Some(&election)) && current.election_recorded {
+        return Ok(());
+    }
+    if !same_choice(recorded, Some(&election)) && election_locked_on(conn, tin, year)? {
+        return Err(DbError::Other(election_locked_message(year)));
+    }
+    let mut facts = ensure_year_facts(conn, &head_tin, year)?;
+    if !same_choice(facts.income_tax_election.as_ref(), Some(&election)) {
+        facts.income_tax_election = Some(election);
+        facts.election_source = Some(source.to_string());
+    }
+    write_year_facts(conn, &head_tin, year, &facts)
+}
+
+/// v23's one-time fill (see `migrations::migrate_v23_year_facts`). Returns
+/// the number of records written.
+pub(crate) fn backfill_year_facts(conn: &Connection) -> std::result::Result<usize, DbError> {
+    struct Branch {
+        tin: String,
+        profile: TaxpayerProfile,
+        years: BTreeSet<u16>,
+    }
+    let rows: Vec<(String, String, Option<String>)> = {
+        let mut stmt = conn.prepare(
+            "SELECT tin, data_json, branch_json FROM profiles
+             WHERE length(tin) >= 9 ORDER BY id",
+        )?;
+        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<_, _>>()?
+    };
+    let mut by_root: BTreeMap<String, Vec<Branch>> = BTreeMap::new();
+    for (tin, data_json, branch_json) in rows {
+        let Ok(mut profile) = serde_json::from_str::<TaxpayerProfile>(&data_json) else {
+            tracing::warn!(tin = %tin, "v23: skipping a profile this build cannot read");
+            continue;
+        };
+        profile.normalize_profile_version_review_statuses();
+        let mut years: BTreeSet<u16> = branch_json
+            .as_deref()
+            .and_then(|json| serde_json::from_str::<BranchSettings>(json).ok())
+            .map(|settings| settings.tax_years)
+            .unwrap_or_default();
+        let mut stmt =
+            conn.prepare("SELECT DISTINCT taxable_year FROM per_year_forms WHERE tin = ?1")?;
+        for year in stmt.query_map([&tin], |row| row.get::<_, i64>(0))? {
+            if let Ok(year) = u16::try_from(year?) {
+                years.insert(year);
+            }
+        }
+        by_root
+            .entry(tin[..9].to_string())
+            .or_default()
+            .push(Branch {
+                tin,
+                profile,
+                years,
+            });
+    }
+
+    let mut written = 0;
+    let mut insert =
+        |tin: &str, year: u16, facts: &YearFacts| -> std::result::Result<(), DbError> {
+            written += conn.execute(
+            "INSERT OR IGNORE INTO year_facts (tin, taxable_year, facts_json) VALUES (?1, ?2, ?3)",
+            params![tin, i64::from(year), serde_json::to_string(facts)?],
+        )?;
+            Ok(())
+        };
+    for branches in by_root.values() {
+        let head = branches
+            .iter()
+            .position(|branch| is_head_office_code(&branch.tin[9..]));
+        let election_years = |branch: &Branch| -> BTreeSet<u16> {
+            branch
+                .profile
+                .tax_elections
+                .iter()
+                .map(|entry| entry.taxable_year)
+                .collect()
+        };
+        for (index, branch) in branches.iter().enumerate() {
+            let is_head = head.is_none_or(|head| head == index);
+            let mut years = branch.years.clone();
+            if is_head {
+                years.extend(election_years(branch));
+                if head.is_some() {
+                    for other in branches {
+                        years.extend(other.years.iter().copied());
+                        years.extend(election_years(other));
+                    }
+                }
+            }
+            for year in years {
+                let mut facts = YearFacts::backfill(&branch.profile, year);
+                if is_head {
+                    let speakers = std::iter::once(branch).chain(
+                        branches
+                            .iter()
+                            .filter(|other| head.is_some() && other.tin != branch.tin),
+                    );
+                    for speaker in speakers {
+                        let entries: Vec<TaxElectionHistory> = speaker
+                            .profile
+                            .tax_elections
+                            .iter()
+                            .filter(|entry| entry.taxable_year == year)
+                            .cloned()
+                            .collect();
+                        if !entries.is_empty() {
+                            (facts.income_tax_election, facts.election_source) =
+                                election_of_entries(&entries, year);
+                            break;
+                        }
+                    }
+                } else {
+                    facts.tax_classification = None;
+                    facts.eopt_tier = None;
+                }
+                insert(&branch.tin, year, &facts)?;
+            }
+        }
+    }
+    Ok(written)
 }
 
 impl Database {
@@ -1416,6 +1879,17 @@ impl Database {
             replace_yearly_forms(&tx, tin, year, &codes)?;
         }
         record_tax_year(&tx, tin, year)?;
+        // Decision 5: a new year starts from the latest year's facts (its
+        // forms only when asked). The election is chosen each year.
+        if read_year_facts(&tx, tin, year)?.is_none()
+            && let Some(facts) = years
+                .last()
+                .map(|latest| read_year_facts(&tx, tin, *latest))
+                .transpose()?
+                .flatten()
+        {
+            write_year_facts(&tx, tin, year, &facts.carried_to_next_year())?;
+        }
         let forms = active_codes(&tx, tin, year)?;
         tx.commit()?;
         if !forms.is_empty() {
@@ -1426,6 +1900,92 @@ impl Database {
             copied_from,
             forms,
         })
+    }
+
+    // =====================================================================
+    // Year facts (decisions 4-7)
+    // =====================================================================
+
+    /// The branch's stored facts record for `year`, if it has one.
+    pub fn year_facts(&self, tin: &str, year: u16) -> Result<Option<YearFacts>> {
+        branch_exists(&self.conn, tin)?;
+        Ok(read_year_facts(&self.conn, tin, year)?)
+    }
+
+    /// The branch's effective facts for `year`: the head office's income
+    /// type, election and EOPT tier, the branch's own other facts.
+    pub fn effective_year_facts(&self, tin: &str, year: u16) -> Result<EffectiveYearFacts> {
+        branch_exists(&self.conn, tin)?;
+        Ok(effective_year_facts_on(&self.conn, tin, year)?)
+    }
+
+    /// The Tax profile page's view of the branch's year: the effective
+    /// facts, who holds each, which of the year's forms read it, what is
+    /// not set, and the election lock.
+    pub fn year_facts_view(&self, tin: &str, year: u16) -> Result<YearFactsView> {
+        branch_exists(&self.conn, tin)?;
+        let effective = effective_year_facts_on(&self.conn, tin, year)?;
+        let forms: Vec<String> = canonical_codes(active_codes(&self.conn, tin, year)?)?
+            .into_iter()
+            .collect();
+        let birth_date = load_taxpayer(&self.conn, &root_of(tin)?)?.and_then(|t| t.birth_date);
+        let locked = election_locked_on(&self.conn, tin, year)?;
+        Ok(YearFactsView::new(&effective, &forms, birth_date, locked))
+    }
+
+    /// The tax types the branch's forms list for `year` gives (decision 2).
+    pub fn tax_types_for_year(&self, tin: &str, year: u16) -> Result<Vec<TaxTypeChip>> {
+        branch_exists(&self.conn, tin)?;
+        Ok(crate::tax_profile::tax_types_for_year(active_codes(
+            &self.conn, tin, year,
+        )?))
+    }
+
+    /// Whether the year's 8% or graduated choice can no longer change
+    /// (decision 7).
+    pub fn income_tax_election_locked(&self, tin: &str, year: u16) -> Result<bool> {
+        Ok(election_locked_on(&self.conn, tin, year)?)
+    }
+
+    /// Set the facts `patch` names for `year`. Head-office facts go to the
+    /// head office's record whichever branch `tin` names; the others to
+    /// `tin`'s own. A year without a record starts from its seed (the
+    /// latest earlier record, else the flat profile). Refuses, unwritten, a
+    /// change to a locked election. Does not save the profile.
+    pub fn set_year_facts(
+        &self,
+        tin: &str,
+        year: u16,
+        patch: &YearFactsPatch,
+    ) -> Result<EffectiveYearFacts> {
+        check_tax_year(year)?;
+        branch_exists(&self.conn, tin)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let current = effective_year_facts_on(&tx, tin, year)?;
+        if let Some(election) = &patch.income_tax_election
+            && !same_choice(
+                current.facts.income_tax_election.as_ref(),
+                election.as_ref(),
+            )
+            && election_locked_on(&tx, tin, year)?
+        {
+            return Err(TaxProfileError::Conflict(election_locked_message(year)));
+        }
+        let head_tin = current.head_office_tin.clone();
+        for (owner, row) in [
+            (FactOwner::HeadOffice, &head_tin),
+            (FactOwner::Branch, &tin.to_string()),
+        ] {
+            if !patch.touches(owner) {
+                continue;
+            }
+            let mut facts = ensure_year_facts(&tx, row, year)?;
+            facts.apply(patch, owner);
+            write_year_facts(&tx, row, year, &facts)?;
+        }
+        let effective = effective_year_facts_on(&tx, tin, year)?;
+        tx.commit()?;
+        Ok(effective)
     }
 
     // =====================================================================

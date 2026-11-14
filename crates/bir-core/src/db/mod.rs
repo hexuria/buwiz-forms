@@ -39,7 +39,9 @@ mod receipts;
 pub use queueable::{AmendmentBase, ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
 mod submissions;
-mod taxpayers;
+pub(crate) mod taxpayers;
+#[cfg(test)]
+mod year_facts_tests;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
 pub use legacy_filed_returns::LegacyFiledReturn;
 pub use submissions::SubmissionSummary;
