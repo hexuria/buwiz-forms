@@ -238,6 +238,55 @@ fn an_earlier_year_added_later_never_takes_a_later_years_facts() {
 }
 
 #[test]
+fn an_income_type_that_chooses_no_rate_takes_the_choice_with_it_or_is_refused() {
+    let db = db();
+    db.set_year_facts(
+        HEAD,
+        2025,
+        &patch(
+            json!({"tax_classification": "SelfEmployed", "income_tax_election": "EightPercent"}),
+        ),
+    )
+    .unwrap();
+    // Nothing carries the choice yet: it goes with the income type.
+    let now = db
+        .set_year_facts(
+            HEAD,
+            2025,
+            &patch(json!({"tax_classification": "PurelyCompensation"})),
+        )
+        .unwrap();
+    assert_eq!(now.facts.income_tax_election, None);
+    // Chosen again and filed: the income type cannot drop it any more.
+    db.set_year_facts(
+        HEAD,
+        2025,
+        &patch(json!({"tax_classification": "MixedIncome", "income_tax_election": "EightPercent"})),
+    )
+    .unwrap();
+    insert_return(&db, BRANCH, "1701Q", 2025, "Submitted");
+    for change in [
+        json!({"tax_classification": "PurelyCompensation"}),
+        json!({"tax_classification": null}),
+    ] {
+        let error = db.set_year_facts(HEAD, 2025, &patch(change)).unwrap_err();
+        assert!(error.to_string().contains("chooses no rate"), "{error}");
+    }
+    // One business income type to the other keeps the choice and is allowed.
+    let kept = db
+        .set_year_facts(
+            HEAD,
+            2025,
+            &patch(json!({"tax_classification": "SelfEmployed"})),
+        )
+        .unwrap();
+    assert_eq!(
+        kept.facts.income_tax_election,
+        Some(IncomeTaxElection::EightPercent)
+    );
+}
+
+#[test]
 fn a_filed_return_locks_nothing_while_no_choice_is_recorded() {
     let db = db();
     db.set_year_facts(
@@ -279,9 +328,30 @@ fn the_election_locks_once_a_return_carrying_it_is_filed() {
     );
     assert_eq!(head.election_source.as_deref(), Some("Tax profile"));
 
-    // A queued return does not lock the choice.
+    // A return waiting to send does not lock the choice for good, but the
+    // choice cannot change under it: it would go out carrying the old one.
     insert_return(&db, BRANCH, "1701Q", 2025, "Queued");
     assert!(!db.income_tax_election_locked(HEAD, 2025).unwrap());
+    let waiting = db
+        .record_income_tax_election(HEAD, 2025, IncomeTaxElection::GraduatedUnspecified)
+        .unwrap_err()
+        .to_string();
+    assert!(waiting.contains("waiting to send"), "{waiting}");
+    let error = db
+        .set_year_facts(
+            BRANCH,
+            2025,
+            &patch(json!({"income_tax_election": "GraduatedOsd"})),
+        )
+        .unwrap_err();
+    assert!(matches!(error, TaxProfileError::Conflict(_)), "{error}");
+    // Saying the same choice again is no change.
+    db.record_income_tax_election(HEAD, 2025, IncomeTaxElection::EightPercent)
+        .unwrap();
+    // Its queue cancelled, the choice may change again.
+    db.conn
+        .execute("UPDATE form_drafts SET status = 'Draft'", [])
+        .unwrap();
     db.record_income_tax_election(HEAD, 2025, IncomeTaxElection::GraduatedUnspecified)
         .unwrap();
 
@@ -705,6 +775,14 @@ fn the_profile_archive_carries_the_years_forms_and_facts() {
             &patch(json!({"line_of_business": "Stall", "atc_codes": ["PT010"]})),
         )
         .unwrap();
+    // Held by the head office for every branch.
+    source
+        .set_year_facts(
+            HEAD,
+            2025,
+            &patch(json!({"tax_classification": "SelfEmployed", "eopt_tier": "Small"})),
+        )
+        .unwrap();
     let dir = tempfile::tempdir().unwrap();
     let archive = dir.path().join("branch.zip");
     crate::export::export_profile_data(&source, BRANCH, &archive, None).unwrap();
@@ -725,6 +803,23 @@ fn the_profile_archive_carries_the_years_forms_and_facts() {
     let facts = target.year_facts(BRANCH, 2025).unwrap().unwrap();
     assert_eq!(facts.line_of_business.as_deref(), Some("Stall"));
     assert_eq!(facts.atc_codes, vec!["PT010".to_string()]);
+    // The head office's facts travelled with the branch: exported alone, it
+    // still knows the income type and the EOPT tier for the year.
+    let effective = target.effective_year_facts(BRANCH, 2025).unwrap().facts;
+    assert_eq!(
+        effective.tax_classification,
+        Some(TaxClassification::SelfEmployed)
+    );
+    assert_eq!(effective.eopt_tier, Some(EoptTier::Small));
+
+    // Imported where the head office already holds something, its facts stay.
+    let held = db();
+    held.set_year_facts(HEAD, 2025, &patch(json!({"eopt_tier": "Large"})))
+        .unwrap();
+    crate::import::import_profile_data(&held, &archive).unwrap();
+    let after = held.effective_year_facts(BRANCH, 2025).unwrap().facts;
+    assert_eq!(after.eopt_tier, Some(EoptTier::Large), "never overwritten");
+    assert_eq!(after.line_of_business.as_deref(), Some("Stall"));
 
     // An archive written before year facts (profile.json only) still imports.
     let old = dir.path().join("old.zip");

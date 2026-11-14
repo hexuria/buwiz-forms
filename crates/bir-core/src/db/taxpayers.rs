@@ -945,6 +945,50 @@ fn load_return(conn: &Connection, draft_id: i64) -> Result<ReturnRow> {
 // =========================================================================
 
 /// What a refused election change says.
+/// Why the year's recorded 8% or graduated choice cannot change right now,
+/// or `None` when it can: a return that carries it was filed (decision 7,
+/// for good), or one is waiting to send (until its queue is cancelled: a
+/// queued return must not go out carrying a choice the year no longer has).
+pub(crate) fn election_change_refusal_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<Option<String>, DbError> {
+    if election_locked_on(conn, tin, year)? {
+        return Ok(Some(election_locked_message(year)));
+    }
+    let Some(root) = tin.get(..9) else {
+        return Ok(None);
+    };
+    let queued: i64 = conn.query_row(
+        &format!(
+            "SELECT count(*) FROM form_drafts
+             WHERE {} AND taxable_year = ?2
+               AND form_code IN ('2551Q', '1701Q', '1701')
+               AND status = 'Queued'",
+            root_matches("tin")
+        ),
+        params![root, i64::from(year)],
+        |row| row.get(0),
+    )?;
+    Ok((queued > 0).then(|| {
+        format!(
+            "The 8% or graduated choice for {year} cannot change while a return that carries it is waiting to send. Cancel that return's queue first."
+        )
+    }))
+}
+
+/// An income type that chooses between 8% and graduated rates.
+fn chooses_a_rate(classification: Option<&crate::profile::TaxClassification>) -> bool {
+    matches!(
+        classification,
+        Some(
+            crate::profile::TaxClassification::SelfEmployed
+                | crate::profile::TaxClassification::MixedIncome
+        )
+    )
+}
+
 fn election_locked_message(year: u16) -> String {
     format!(
         "The 8% or graduated choice for {year} cannot change: a return that carries it was already filed."
@@ -999,6 +1043,60 @@ pub(crate) fn restore_yearly_forms(
 }
 
 /// Every stored record of `tin`, by year.
+/// The facts a branch's archive carries for each year it has a record or a
+/// tax year: its EFFECTIVE facts, so the income type, the 8% or graduated
+/// choice and the EOPT tier the head office holds for it travel with a
+/// branch that is exported on its own.
+pub(crate) fn year_facts_for_export(
+    conn: &Connection,
+    tin: &str,
+) -> std::result::Result<BTreeMap<u16, YearFacts>, DbError> {
+    let mut years: BTreeSet<u16> = list_year_facts(conn, tin)?.into_keys().collect();
+    years.extend(query_tax_years(conn, tin).map_err(|error| DbError::Other(error.to_string()))?);
+    let mut records = BTreeMap::new();
+    for year in years {
+        records.insert(year, effective_year_facts_on(conn, tin, year)?.facts);
+    }
+    Ok(records)
+}
+
+/// Put an archive's facts for `year` back. The branch's own facts go to its
+/// record. The head-office facts go to the head office's record, and only
+/// where it has none: an import never overwrites what the head office
+/// already holds for every branch. A branch whose taxpayer has no head
+/// office here holds them itself.
+pub(crate) fn restore_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+) -> std::result::Result<(), DbError> {
+    let head_tin = head_office_tin_of(conn, tin)?;
+    if head_tin == tin {
+        return write_year_facts(conn, tin, year, facts);
+    }
+    let own = YearFacts {
+        tax_classification: None,
+        income_tax_election: None,
+        election_source: None,
+        eopt_tier: None,
+        ..facts.clone()
+    };
+    write_year_facts(conn, tin, year, &own)?;
+    let mut head = ensure_year_facts(conn, &head_tin, year)?;
+    if head.tax_classification.is_none() {
+        head.tax_classification = facts.tax_classification.clone();
+    }
+    if head.income_tax_election.is_none() {
+        head.income_tax_election = facts.income_tax_election.clone();
+        head.election_source = facts.election_source.clone();
+    }
+    if head.eopt_tier.is_none() {
+        head.eopt_tier = facts.eopt_tier.clone();
+    }
+    write_year_facts(conn, &head_tin, year, &head)
+}
+
 pub(crate) fn list_year_facts(
     conn: &Connection,
     tin: &str,
@@ -1288,8 +1386,11 @@ pub(crate) fn record_year_election_on(
     if same_choice(recorded, Some(&election)) && current.election_recorded {
         return Ok(());
     }
-    if !same_choice(recorded, Some(&election)) && election_locked_on(conn, tin, year)? {
-        return Err(DbError::Other(election_locked_message(year)));
+    if recorded.is_some()
+        && !same_choice(recorded, Some(&election))
+        && let Some(refusal) = election_change_refusal_on(conn, tin, year)?
+    {
+        return Err(DbError::Other(refusal));
     }
     let mut facts = ensure_year_facts(conn, &head_tin, year)?;
     if !same_choice(facts.income_tax_election.as_ref(), Some(&election)) {
@@ -1997,14 +2098,28 @@ impl Database {
         branch_exists(&self.conn, tin)?;
         let tx = self.conn.unchecked_transaction()?;
         let current = effective_year_facts_on(&tx, tin, year)?;
+        let recorded = current.facts.income_tax_election.as_ref();
         if let Some(election) = &patch.income_tax_election
-            && !same_choice(
-                current.facts.income_tax_election.as_ref(),
-                election.as_ref(),
-            )
-            && election_locked_on(&tx, tin, year)?
+            && recorded.is_some()
+            && !same_choice(recorded, election.as_ref())
+            && let Some(refusal) = election_change_refusal_on(&tx, tin, year)?
         {
-            return Err(TaxProfileError::Conflict(election_locked_message(year)));
+            return Err(TaxProfileError::Conflict(refusal));
+        }
+        // An income type that chooses no rate cannot stand beside a recorded
+        // 8% or graduated choice. While the choice may still change it goes
+        // with the income type; once a return carries it, the income type
+        // cannot move to one that has no such choice.
+        let drops_choice = matches!(
+            &patch.tax_classification,
+            Some(new) if recorded.is_some()
+                && patch.income_tax_election.is_none()
+                && !chooses_a_rate(new.as_ref())
+        );
+        if drops_choice && let Some(refusal) = election_change_refusal_on(&tx, tin, year)? {
+            return Err(TaxProfileError::Conflict(format!(
+                "The income type for {year} cannot change to one that chooses no rate. {refusal}"
+            )));
         }
         let head_tin = current.head_office_tin.clone();
         for (owner, row) in [
@@ -2016,6 +2131,10 @@ impl Database {
             }
             let mut facts = ensure_year_facts(&tx, row, year)?;
             facts.apply(patch, owner);
+            if drops_choice && owner == FactOwner::HeadOffice {
+                facts.income_tax_election = None;
+                facts.election_source = None;
+            }
             write_year_facts(&tx, row, year, &facts)?;
         }
         let effective = effective_year_facts_on(&tx, tin, year)?;

@@ -221,7 +221,7 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
     zip.start_file(format!("{}yearly_forms.json", base_dir), options)?;
     zip.write_all(serde_json::to_string_pretty(&yearly_forms)?.as_bytes())?;
     let year_facts: std::collections::BTreeMap<String, crate::tax_profile::YearFacts> =
-        crate::db::taxpayers::list_year_facts(&db.conn, tin)?
+        crate::db::taxpayers::year_facts_for_export(&db.conn, tin)?
             .into_iter()
             .map(|(year, facts)| (year.to_string(), facts))
             .collect();

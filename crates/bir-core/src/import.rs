@@ -297,7 +297,7 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                     let Ok(year) = year.parse::<u16>() else {
                         continue;
                     };
-                    crate::db::taxpayers::write_year_facts(&db.conn, &tin, year, &facts)?;
+                    crate::db::taxpayers::restore_year_facts(&db.conn, &tin, year, &facts)?;
                 }
             }
 
