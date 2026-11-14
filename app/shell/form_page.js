@@ -246,6 +246,9 @@ export function profileDiffersNote(differs) {
   return `Differs from your profile: ${differs.join("; ")}`;
 }
 
+/** A filed return whose tax profile changed after it (decision 5). */
+export const PROFILE_CHANGED_NOTE = "The tax profile changed after this return was filed. This return keeps what was filed.";
+
 /** How faded a box another answer turns off is (rule 6). */
 const OFF_OPACITY = 0.45;
 
@@ -297,6 +300,7 @@ export class FormPageActions {
     for (const input of state?.inputs?.values() || []) input.release();
     for (const handle of state?.editFocus?.values() || []) handle.release();
     for (const handle of state?.focusAnchors?.values() || []) handle.release();
+    for (const input of state?.askInputs?.values() || []) input.release();
     state?.checkButton?.entity.release();
     state?.pill?.entity.release();
   }
@@ -395,6 +399,24 @@ export class FormPageActions {
       electionAt: null,
       electionPick: null,
       electionSavedAt: null,
+      // The tax facts the return reads that are not set (decision 3): the
+      // cards (`asks`) by the row they sit on, a choice card's pick, a date
+      // or text card's box, and the row that says an answer was saved; the
+      // host's blocking messages beside the form's own.
+      asks: [],
+      askAt: new Map(),
+      askPick: {},
+      askInputs: new Map(),
+      askSavedAt: new Map(),
+      factErrors: [],
+      // "Save to profile too" (decision 8): the profile boxes that can be
+      // written back (the host's `profile_save`), the ones changed with Edit
+      // on this visit, and the ones switched on.
+      profileSave: {},
+      profileEdited: new Set(),
+      toProfile: new Set(),
+      // A filed return: what the tax profile changed after it (decision 5).
+      profileChanged: [],
     };
     if (!schema) return;
     this.state.checkButton = {
@@ -509,7 +531,38 @@ export class FormPageActions {
     s.stopEdits = r.stop_edits && typeof r.stop_edits === "object" ? r.stop_edits : {};
     s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
     s.stoppable = new Set(Array.isArray(r.stoppable) ? r.stoppable : []);
+    s.profileSave = r.profile_save && typeof r.profile_save === "object" ? r.profile_save : {};
+    s.profileChanged = Array.isArray(r.profile_changed) ? r.profile_changed : [];
+    this.takeAsks(r.asks);
+    s.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
     this.setErrors(r.errors);
+  }
+
+  /**
+   * The cards the host asks (decision 3), each on the row of its box, or
+   * on the first row when the host could not place it. A sample and a
+   * return that is not a Draft ask nothing. A date or text card keeps its
+   * box across a refresh of the list.
+   */
+  takeAsks(asks) {
+    const s = this.state;
+    s.asks = !s.sample && s.editable && Array.isArray(asks) ? asks : [];
+    s.askAt = new Map();
+    const first = s.schema.parts[0]?.items.length ? "0:0" : null;
+    for (const ask of s.asks) {
+      const id = (ask.key && this.itemIdForKey(ask.key)) || first;
+      if (!id) continue;
+      if (!s.askAt.has(id)) s.askAt.set(id, []);
+      s.askAt.get(id).push(ask);
+      if ((ask.control === "date" || ask.control === "text") && !s.askInputs.has(ask.fact)) {
+        s.askInputs.set(ask.fact, InputState.new({ value: "" }));
+      }
+    }
+    for (const [fact, input] of s.askInputs) {
+      if (s.asks.some((a) => a.fact === fact)) continue;
+      input.release();
+      s.askInputs.delete(fact);
+    }
   }
 
   /** The filer edited a quiet date, or asked for every message: it speaks. */
@@ -704,6 +757,12 @@ export class FormPageActions {
       s.electionAt === id || s.electionSavedAt === id
         ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || "", s.electionAt === id ? [this.electionReadiness(), s.draft?.taxpayer_type ?? null, Boolean(s.profileRefreshed)] : null]
         : null,
+      // The fact cards on the row, a choice card's pick and the saved line.
+      s.askAt.has(id) || s.askSavedAt.has(id)
+        ? [(s.askAt.get(id) || []).map((a) => [a.fact, a.note, s.askPick[a.fact] ?? null]), s.askSavedAt.get(id) || null]
+        : null,
+      // "Save to profile too": changed with Edit, and switched on.
+      keys.some((k) => s.profileSave[k]) ? keys.map((k) => [s.profileEdited.has(k), s.toProfile.has(k)]) : null,
       // The row a step went to, its "Stop here" switch and the copied-answer marks.
       s.stepAt === id,
       this.rowStoppable(it) ? this.rowIsStop(it) : null,
@@ -1064,6 +1123,8 @@ export class FormPageActions {
     // it), so focusing or reformatting a box never sends it.
     s.pending[k] = value;
     s.dirty = true;
+    // A profile box changed with Edit: its row offers "Save to profile too".
+    if (s.opened.has(k) && s.profileSave[k]) s.profileEdited.add(k);
     this.unquiet([k]);
     // An edited box is the user's own now: its "same as last time" mark goes (on the row's next refresh).
     delete s.kept[k];
@@ -2049,6 +2110,7 @@ export class FormPageActions {
         this.state.off = r.off || {};
         if (Array.isArray(r.penalties)) this.state.penalties = r.penalties;
         if (r.pools) this.state.poolTexts = r.pools;
+        this.state.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -2082,7 +2144,9 @@ export class FormPageActions {
     const s = this.state;
     // The host holds back what a sample's blank period cannot judge, and
     // the page a quiet date's message until it speaks.
-    s.errors = (errors || []).filter((e) => !(s.quiet && e.field === s.quiet.field));
+    // A tax fact not set that changes what this return files (the host's
+    // `fact_errors`) is a message like the form's own, on its card's row.
+    s.errors = [...(errors || []), ...(s.factErrors || [])].filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
     s.checkable = {};
     s.electionAt = null;
@@ -2156,15 +2220,119 @@ export class FormPageActions {
     return this.app.store.electionReadiness?.(s.tin, this.taxYear()) ?? null;
   }
 
+  /** The card the host asks for `fact`, if any. */
+  askFor(fact) {
+    return this.state?.asks?.find((a) => a.fact === fact) || null;
+  }
+
+  /** A choice card's answer picked (only its row redraws). */
+  pickAsk(fact, value) {
+    this.state.askPick[fact] = value;
+    this.refreshRows();
+  }
+
   /**
-   * Item 13's card when the profile cannot take the election: open the
-   * taxpayer's Registration section for the return's year. Coming back to
-   * the form (`main.js` `enterView`) re-asks, and the card follows.
+   * A fact card's Save (decision 3): the answer goes to the tax profile
+   * (`update_taxpayer` for the birth date, else `set_year_facts` for the
+   * return's taxable year), the open draft takes it the way "Update from
+   * tax profile" does (`screen_form_use_profile`, naming the fact so the
+   * boxes it fills take it), and the return is saved and checked again.
+   * The card goes and its row says the answer was saved; only that row
+   * redraws.
    */
-  confirmRegistration(cx) {
+  saveAsk(fact, cx) {
     const s = this.state;
-    if (!s?.tin) return;
-    this.app.taxpayerUi?.startRegistration?.({ tin: s.tin, year: this.taxYear(), fromForm: true }, cx);
+    const ask = this.askFor(fact);
+    if (!s?.draft || !s.editable || s.sample || !ask) return;
+    let value;
+    if (ask.control === "choice") {
+      if (!(fact in s.askPick)) return;
+      value = s.askPick[fact];
+    } else {
+      const raw = (s.askInputs.get(fact)?.value() ?? "").trim();
+      if (ask.control === "date") {
+        const date = parseTypedDate(raw);
+        if (!date) return this.app.toast(DATE_ERROR, cx, "triangle-alert");
+        value = `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+      } else {
+        if (!raw) return this.app.toast(`Type the ${ask.label.toLowerCase()} first.`, cx, "triangle-alert");
+        value = raw;
+      }
+    }
+    const year = this.taxYear();
+    const at = [...s.askAt].find(([, asks]) => asks.includes(ask))?.[0] ?? null;
+    if (Object.keys(s.pending).length) this.flush(cx);
+    try {
+      if (fact === "birth_date") this.app.store.write("update_taxpayer", String(s.tin).slice(0, 9), { birth_date: value });
+      else this.app.store.write("set_year_facts", s.tin, year, { [fact]: value });
+    } catch (e) {
+      return this.app.toast(plainRefusal(message(e)), cx, "triangle-alert");
+    }
+    const before = s.values;
+    try {
+      const r = this.app.store.call("screen_form_use_profile", s.code, s.year, s.period, s.draft, [fact]);
+      s.draft = r.draft;
+      s.values = this.shown(r.values);
+      s.options = r.options || s.options;
+      if (r.pools) s.poolTexts = r.pools;
+      if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+      this.takeAsks(Array.isArray(r.asks) ? r.asks : s.asks.filter((a) => a !== ask));
+    } catch (e) {
+      this.takeAsks(s.asks.filter((a) => a !== ask));
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+    delete s.askPick[fact];
+    // The fact's own message goes with its card; the next check says the rest.
+    s.factErrors = (s.factErrors || []).filter((e) => e.field !== `tax_profile.${fact}`);
+    this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
+    if (at) s.askSavedAt.set(at, `${ask.label} saved to the tax profile. Later returns use it.`);
+    s.dirty = true;
+    this.syncComputed();
+    this.syncChanged(before, {});
+    if (s.amends && !s.saved) this.flush(cx);
+    else this.save(cx);
+    this.refreshRows();
+    this.app.toast(`Saved to ${this.taxpayerName()}'s tax profile.`, cx, "circle-check");
+  }
+
+  /** "Save to profile too" on a profile item: on, its boxes go to the profile on the next save. */
+  setToProfile(keys, on) {
+    const s = this.state;
+    for (const k of keys) {
+      if (on) s.toProfile.add(k);
+      else s.toProfile.delete(k);
+    }
+    // The next save writes them, Queue's too.
+    if (on) s.dirty = true;
+    this.refreshRows();
+  }
+
+  /**
+   * After a save: the profile boxes switched on go to the tax profile
+   * (`screen_form_save_to_profile`, which writes each through its own
+   * function and saves the return with those boxes equal to the profile).
+   * What it says, or null when nothing was switched on or it failed (its
+   * toast says why and the switches stay on).
+   */
+  saveToProfile(cx) {
+    const s = this.state;
+    const keys = [...s.toProfile].filter((k) => s.profileEdited.has(k));
+    if (!keys.length) return null;
+    let r;
+    try {
+      r = this.app.store.write("screen_form_save_to_profile", s.code, s.year, s.period, s.draft, keys);
+    } catch (e) {
+      this.app.toast(plainRefusal(message(e)), cx, "triangle-alert");
+      return null;
+    }
+    s.draft = r.draft;
+    s.values = this.shown({ ...s.values, ...(r.values || {}) });
+    if (r.pools) s.poolTexts = r.pools;
+    for (const k of keys) {
+      s.toProfile.delete(k);
+      s.profileEdited.delete(k);
+    }
+    return [`Saved to the tax profile too: ${(r.saved || []).join(", ")}.`, ...(r.notes || [])].join(" ");
   }
 
   /**
@@ -2338,7 +2506,10 @@ export class FormPageActions {
       s.saved = true;
       // A changed and saved return goes to the top of Recent; opening one never moves it.
       if (changed) this.app.bumpRecent({ tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.returnKey != null ? { returnKey: s.returnKey } : {}) });
-      this.app.toast("Draft saved.", cx, "save");
+      // "Save to profile too": the boxes switched on go to the profile now.
+      const profiled = s.toProfile.size ? this.saveToProfile(cx) : null;
+      if (profiled) this.refreshRows();
+      this.app.toast(profiled ? `Draft saved. ${profiled}` : "Draft saved.", cx, "save");
       this.validate(cx);
     } catch (e) {
       // Edits the draft never took stay staged for the next try.
@@ -2528,11 +2699,57 @@ export class FormPageActions {
     this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, sample: s.sample }, cx);
   }
 
+  /**
+   * Queue (decision 3): saved first, then the host says what the tax facts
+   * not set do (`screen_form_queue_check`). One that changes what is filed
+   * stops Queue: its message goes on its card's row, like any validation
+   * message (the pill's to-do list steps to it). The others are said once
+   * in a confirmation; Continue queues.
+   */
   queue(cx) {
     const s = this.state;
     // A sample is saved first (as Save does), then its return is queued.
     if (s.sample) return this.saveSample(cx, (acx) => this.queue(acx));
     if (!this.ensureSaved(cx)) return;
+    let check = null;
+    try {
+      check = this.app.store.call("screen_form_queue_check", s.code, s.draft);
+    } catch (_) {
+      // An older host: Queue's own checks still refuse what must not go.
+    }
+    if (check?.blocks?.length) {
+      s.factErrors = check.blocks;
+      this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
+      this.notify(cx);
+      return this.app.toast(check.blocks[0].message, cx, "triangle-alert");
+    }
+    if (check?.warns?.length) {
+      s.queueWarn = { warns: check.warns };
+      this.app.overlay = "queue-confirm";
+      return cx.notify();
+    }
+    this.queueNow(cx);
+  }
+
+  /** The Queue confirmation's Continue: queue it as it is. */
+  confirmQueue(cx) {
+    const s = this.state;
+    if (!s?.queueWarn) return;
+    s.queueWarn = null;
+    this.app.overlay = null;
+    this.queueNow(cx);
+    cx.notify();
+  }
+
+  /** The Queue confirmation's Cancel (or Esc): nothing is queued. */
+  cancelQueueConfirm(cx) {
+    if (this.state) this.state.queueWarn = null;
+    this.app.overlay = null;
+    cx.notify();
+  }
+
+  queueNow(cx) {
+    const s = this.state;
     try {
       if (this.usesPeriodPath()) this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
       else this.app.store.write("screen_form_queue", s.code, s.draft);
@@ -3164,6 +3381,100 @@ function datePicker(cx, ui, id, date, row = id) {
 }
 
 /**
+ * A tax fact the tax profile has not set, asked where the form uses it
+ * (decision 3): one sentence (what is asked, and that the answer goes to
+ * the tax profile for every later return), the control (choices, a date
+ * box or a text box) and Save. Picking redraws only this row.
+ */
+function factCard(cx, ui, ask) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const fact = ask.fact;
+  const control = div().flex().flex_row().flex_wrap().gap(SPACE[2]).mt(SPACE[3]);
+  let ready = true;
+  if (ask.control === "choice") {
+    ready = fact in s.askPick;
+    (ask.choices || []).forEach((choice, n) => {
+      const on = ready && JSON.stringify(s.askPick[fact]) === JSON.stringify(choice.value);
+      control.child(
+        div()
+          .id(`fp-ask-${fact}-${n}`)
+          .flex()
+          .flex_col()
+          .min_w(140)
+          .py(SPACE[2])
+          .px(10)
+          .rounded(RADIUS.ctl)
+          .border(1)
+          .border_color(on ? t.accent : t.borderStrong)
+          .bg(on ? t.accentSoft : t.surface)
+          .cursor_pointer()
+          .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
+          .accessibility_label(on ? `${choice.label}, chosen` : choice.label)
+          .on_click((_e, cx) => ui.pickAsk(fact, choice.value, cx))
+          .child(Text(cx, "control", choice.label).whitespace_normal()),
+      );
+    });
+  } else {
+    const input = s.askInputs.get(fact);
+    if (input) {
+      const width = ask.control === "date" ? controlWidth({ t: "date" }, 320) : 320;
+      control.child(TextField(cx, input, { id: `fp-ask-${fact}-input`, label: ask.label, width, error: false }));
+    }
+  }
+  return div()
+    .id(`fp-ask-${fact}`)
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .py(10)
+    .px(SPACE[3])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.surface)
+    .shadow_xs()
+    .child(Text(cx, "control", ask.label).font_weight(600).whitespace_normal())
+    .child(Text(cx, "meta", ask.note, "fg2").mt(2).whitespace_normal())
+    .child(control)
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .justify_end()
+        .mt(SPACE[3])
+        .child(AppButton(cx, `fp-ask-${fact}-save`, "Save", { variant: "primary", size: "sm", disabled: !ready, onClick: (_e, cx) => ui.saveAsk(fact, cx) })),
+    );
+}
+
+/**
+ * A profile item changed with Edit (decision 8): "Save to profile too",
+ * off by default. Off, the change stays on this return; on, the next save
+ * writes it to the tax profile too (the host's note says where).
+ */
+function profileSwitch(cx, ui, id, keys) {
+  const s = ui.state;
+  const on = keys.some((k) => s.toProfile.has(k));
+  const entry = s.profileSave[keys[0]] || {};
+  const note = on ? `Your next save writes it to the tax profile too. ${entry.note || ""}`.trim() : "Off: the change stays on this return.";
+  return div()
+    .id(`fp-to-profile-${id}`)
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(6)
+        .child(Switch(cx, `fp-to-profile-switch-${id}`, on, (v, cx) => ui.setToProfile(keys, v, cx), "Save to profile too"))
+        .child(Text(cx, "meta", "Save to profile too", "fg2")),
+    )
+    .child(Text(cx, "meta", note, "fg3").mt(2).whitespace_normal());
+}
+
+/**
  * Item 13's question (pick 1 B): a later-quarter 2551Q needs the taxpayer's
  * income-tax election for its taxable year, which the tax profile holds;
  * answered here once, it is saved there and every later return reuses it.
@@ -3236,18 +3547,18 @@ function plainRefusal(text) {
 
 /**
  * Item 13's card when the tax profile cannot take the year's election
- * (`income_tax_election_readiness`): what is missing and for which year, and
- * the way to supply it (the taxpayer's Registration section). It offers no
- * rate and no Save, since the profile would refuse them.
+ * (`income_tax_election_readiness`): what stands in the way, and the way
+ * out. With no income type on the profile, the income-type card (a fact
+ * card, `asks`) asks it on this row instead, and this card says nothing.
+ * It offers no rate and no Save, since the profile would refuse them.
  */
 function electionBlockedCard(cx, ui, ready) {
   const t = tokens(cx);
   const name = ui.taxpayerName();
   const year = ui.taxYear();
-  const cor = "as on the Certificate of Registration (BIR Form 2303)";
   let title;
   let body;
-  let action = { id: "fp-election-register", label: "Confirm registration", run: (cx) => ui.confirmRegistration(cx) };
+  let action = null;
   if (!ready) {
     title = `Buwiz could not read ${name}'s tax profile for ${year}.`;
     body = "Try again in a moment. The rate can be chosen once the profile is read.";
@@ -3259,18 +3570,15 @@ function electionBlockedCard(cx, ui, ready) {
         ui.refreshRows();
       },
     };
-  } else if (ready.gap === "no_confirmed_registration") {
-    title = `${name}'s tax profile has no confirmed registration for ${year}.`;
-    body = `Choosing an income-tax rate needs one. Confirm whether ${name} is self-employed or has mixed income in ${year}, ${cor}; then come back here to choose the rate.`;
+  } else if (ready.gap === "not_business_income" && !ready.classification && ui.askFor("tax_classification")) {
+    // The income-type card on this row asks it; the rate follows.
+    return null;
   } else if (ready.gap === "not_business_income") {
     title =
       ready.classification === "PurelyCompensation"
-        ? `${name}'s tax profile has ${name} registered for compensation income only in ${year}.`
+        ? `${name}'s tax profile has ${name} earning compensation income only in ${year}.`
         : `${name}'s tax profile does not say whether ${name} is self-employed or has mixed income in ${year}.`;
-    body = `The income-tax rate is chosen by self-employed and mixed-income earners. Confirm ${name}'s registration for ${year}, ${cor}; then come back here to choose the rate.`;
-  } else if (ready.gap === "timeline_needs_review") {
-    title = `${name}'s tax profile has registration dates for ${year} that need review.`;
-    body = `${(ready.issues || [])[0] || "Two confirmed registrations overlap or one has no start date"}. A new registration ${cor} replaces them from its date.`;
+    body = "The income-tax rate is chosen by self-employed and mixed-income earners. If that is wrong, change the income type on the tax profile; then come back here to choose the rate.";
   } else if (ui.state.draft?.taxpayer_type === "Individual" && !ui.state.profileRefreshed) {
     // The return was built while the profile said individual; a Draft keeps
     // that snapshot until it is brought up to date (bir-core marks only a
@@ -3285,11 +3593,9 @@ function electionBlockedCard(cx, ui, ready) {
     // registration: the dates on the profile disagree with the year's latest.
     title = `This quarter of ${name}'s tax profile is still an individual's registration, while ${year}'s latest is a ${ready.taxpayer_type ? ready.taxpayer_type.toLowerCase() : "non-individual"}'s.`;
     body = "Check the registration dates on the tax profile. Until they agree, this return asks for the income-tax rate and the profile cannot record one.";
-    action = null;
   } else {
     title = `${name}'s tax profile is registered as ${ready.taxpayer_type ? `a ${ready.taxpayer_type}` : "a non-individual"} in ${year}.`;
     body = "Only individuals choose this income-tax rate. If that registration is wrong, correct it on the tax profile.";
-    action = null;
   }
   return div()
     .id("fp-election")
@@ -3937,6 +4243,13 @@ function itemRow(cx, ui, it, pi, ii, width) {
   }
 
   const msg = s.dateErrors?.[id] || s.messages[id] || "";
+  // "Save to profile too" (decision 8): on a profile item changed with Edit
+  // whose boxes have a safe write path; off by default.
+  const saveable = s.editable && !s.sample ? editKeys.filter((k) => s.profileSave[k]) : [];
+  const toProfile = saveable.length && (editingHere || saveable.some((k) => s.profileEdited.has(k))) ? profileSwitch(cx, ui, id, saveable) : null;
+  // The tax facts not set that this item shows (decision 3), and Item 13's rate question.
+  const cards = s.editable && !s.sample ? (s.askAt.get(id) || []).map((a) => factCard(cx, ui, a)) : [];
+  const election = s.editable && s.electionAt === id ? electionCard(cx, ui) : null;
   // Where a step scrolls to: a mark at the row's top (the host scroll module).
   const Mark = ui.app.store.component?.("ScrollMark");
   return div()
@@ -3992,6 +4305,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .child(label)
         .children(needs)
         .child(controls)
+        .when(Boolean(toProfile), (el) => el.child(toProfile))
         // What another item holds, offered for this one (`from`).
         .children(fromHint(cx, ui, it, id))
         // A shut box that shows blank says why, in the filer's words.
@@ -3999,8 +4313,23 @@ function itemRow(cx, ui, it, pi, ii, width) {
         // Reserved 18 px validation line, present with or without a message;
         // a long message wraps onto more lines rather than being cut.
         .child(div().min_h(SIZE.validationLine).mt(SPACE[1]).child(Text(cx, "meta", msg, "danger").whitespace_normal()))
+        // A tax fact the profile has not set, asked where the form uses it.
+        .children(cards)
+        .when(s.askSavedAt.has(id), (el) =>
+          el.child(
+            div()
+              .id(`fp-ask-saved-${id}`)
+              .flex()
+              .flex_row()
+              .items_center()
+              .gap(6)
+              .mt(SPACE[1])
+              .child(Icon(cx, "circle-check", { size: 14, color: "success" }))
+              .child(Text(cx, "meta", s.askSavedAt.get(id), "success").whitespace_normal()),
+          ),
+        )
         // 2551Q Item 13: the year's income-tax election, asked where the message is.
-        .when(s.editable && s.electionAt === id, (el) => el.child(electionCard(cx, ui)))
+        .when(Boolean(election), (el) => el.child(election))
         .when(s.electionSavedAt === id && s.electionAt !== id, (el) =>
           el.child(
             div()
@@ -4248,6 +4577,29 @@ export function renderRemovalConfirm(cx, app) {
   return Overlay(cx, "removal-confirm", card, (cx) => ui.cancelRemoval(cx), { width: 420 });
 }
 
+/**
+ * Queue's confirmation when tax facts the return reads are not set but do
+ * not change what it files (decision 3): each said once, then Continue
+ * queues it as it is, or Cancel.
+ */
+export function renderQueueConfirm(cx, app) {
+  const ui = app.formUi;
+  const held = ui.state?.queueWarn;
+  if (!held) return div();
+  const card = div()
+    .flex()
+    .flex_col()
+    .items_stretch()
+    .w_full()
+    .gap(SPACE[3])
+    .p(SPACE[5])
+    .child(Text(cx, "title", "Queue this return?").whitespace_normal())
+    .children(held.warns.map((warn, n) => div().id(`queue-warn-${n}`).child(Text(cx, "control", warn).whitespace_normal())))
+    .child(AppButton(cx, "queue-continue", "Continue", { variant: "primary", block: true, onClick: (_e, cx) => ui.confirmQueue(cx) }))
+    .child(AppButton(cx, "queue-cancel", "Cancel", { variant: "secondary", block: true, onClick: (_e, cx) => ui.cancelQueueConfirm(cx) }));
+  return Overlay(cx, "queue-confirm", card, (cx) => ui.cancelQueueConfirm(cx), { width: 420 });
+}
+
 // ---------------------------------------------------------------- page
 
 /**
@@ -4351,6 +4703,18 @@ function formContent(cx, app, width) {
   // from its history, says what it is.
   if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());
   if (s.filedOriginalView) page.child(Text(cx, "meta", filedOriginalStrip(s.filedOriginalView), "fg2").mb(SPACE[4]).whitespace_normal());
+  // A filed return whose tax profile moved on says so, quietly (decision 5).
+  if (!s.editable && s.profileChanged?.length) {
+    page.child(
+      div()
+        .id("fp-profile-changed")
+        .flex()
+        .flex_col()
+        .mb(SPACE[4])
+        .child(Text(cx, "meta", PROFILE_CHANGED_NOTE, "fg2").whitespace_normal())
+        .children(s.profileChanged.map((change, n) => div().id(`fp-profile-changed-${n}`).child(Text(cx, "meta", `· ${change}`, "fg3").whitespace_normal()))),
+    );
+  }
   // A return that left the app is read-only, and says when it went.
   if (!s.editable && !s.filedOriginalView && (s.submittedAt || s.confirmedAt)) {
     const parts = [];

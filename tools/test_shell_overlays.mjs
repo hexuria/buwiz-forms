@@ -121,6 +121,7 @@ const linked = {
     formScrollArea: (_app, id, plain) => plain(stub().id(id)).overflow_y_scroll().overflow_x_hidden(),
     renderExistingOffer: stub,
     renderRemovalConfirm: stub,
+    renderQueueConfirm: stub,
     renderSamplePeriod: stub,
     FormPageActions: stubClass,
   }),
