@@ -1506,6 +1506,54 @@ mod tests {
         .unwrap()
     }
 
+    /// The assistant's 2551Q send (`send_draft`) for a year whose facts
+    /// were just set and a profile with no confirmed version: it queues,
+    /// and Item 13 becomes the year's election on the head office.
+    #[test]
+    fn the_2551q_send_needs_no_confirmed_profile_version() {
+        let db = Database::open_ephemeral().expect("ephemeral database");
+        db.create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+            tin_root: "000123453".into(),
+            name: "Juana Santos".into(),
+            taxpayer_type: bir_core::profile::TaxpayerType::Individual,
+            birth_date: None,
+            head_office: bir_core::tax_profile::BranchFacts {
+                rdo_code: "039".into(),
+                registered_address: "Quezon City".into(),
+                zip_code: "1100".into(),
+                phone: "09170000000".into(),
+                email: "juana@example.com".into(),
+            },
+        })
+        .unwrap();
+        let head = "00012345300000";
+        db.set_year_facts(
+            head,
+            2024,
+            &bir_core::tax_profile::YearFactsPatch {
+                tax_classification: Some(Some(bir_core::profile::TaxClassification::SelfEmployed)),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.grant_send(head, "2551Q").unwrap();
+        let profile = db.get_profile_for_year(head, 2024).unwrap().unwrap();
+        assert!(profile.profile_versions.is_empty());
+        let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
+        draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
+        let mut value = serde_json::to_value(&draft).unwrap();
+
+        let sent = send_draft(&db, AgentFormKind::Form2551Q, &mut value).unwrap();
+
+        assert_eq!(sent["queued"], true, "{sent}");
+        let facts = db.year_facts(head, 2024).unwrap().unwrap();
+        assert_eq!(
+            facts.income_tax_election,
+            Some(bir_core::profile::IncomeTaxElection::GraduatedUnspecified)
+        );
+        assert_eq!(facts.election_source.as_deref(), Some("2551Q Q1"));
+    }
+
     #[test]
     fn hello_names_bir_shell_and_screenshot_stays_unavailable() {
         let mut session = Session::new(UiQueue::new());

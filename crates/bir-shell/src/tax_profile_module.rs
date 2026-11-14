@@ -2610,49 +2610,6 @@ mod tests {
         }
     }
 
-    /// The assistant's 2551Q send (`agent::session::send_draft`) for a year
-    /// with a fresh record and no confirmed profile version.
-    #[cfg(feature = "agent")]
-    #[test]
-    fn the_assistants_2551q_send_needs_no_confirmed_profile_version() {
-        setup_individual();
-        with_database(|db| {
-            db.set_year_facts(
-                JUANA_HEAD,
-                2024,
-                &bir_core::tax_profile::YearFactsPatch {
-                    tax_classification: Some(Some(
-                        bir_core::profile::TaxClassification::SelfEmployed,
-                    )),
-                    ..Default::default()
-                },
-            )
-            .map_err(host_error)?;
-            db.grant_send(JUANA_HEAD, "2551Q")
-                .map_err(|error| HostError::new(error.to_string()))?;
-            let draft = {
-                let profile = db.get_profile_for_year(JUANA_HEAD, 2024).unwrap().unwrap();
-                let mut draft =
-                    bir_core::forms::Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
-                draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
-                draft
-            };
-            let mut value = serde_json::to_value(&draft).unwrap();
-            let sent = crate::agent::session::send_draft(
-                db,
-                bir_core::forms::agent::AgentFormKind::Form2551Q,
-                &mut value,
-            )
-            .map_err(HostError::new)?;
-            assert_eq!(sent["queued"], true, "{sent}");
-            Ok(())
-        })
-        .unwrap();
-        let view = ok(year_facts, vec![json!(JUANA_HEAD), json!(2024)]);
-        assert_eq!(view["facts"]["income_tax_election"], "GraduatedUnspecified");
-        assert_eq!(view["election_source"], "2551Q Q1");
-    }
-
     fn block_on_open(tin: &str, year: u16, quarter: u8) -> Value {
         let future = crate::bir_module::module()
             .begin(
