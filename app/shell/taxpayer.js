@@ -742,11 +742,9 @@ export class TaxpayerActions {
       app.toast(`${code} template saved from the newest return.`, cx, "layout-template");
     } catch (e) {
       const text = message(e);
-      const shown = /no field classification/i.test(text)
-        ? `Templates for ${code} are not available yet. So far only 1601C and 2551Q returns can keep their setup answers.`
-        : /no return|not ?found|no .*draft/i.test(text)
-          ? `Open and save a ${code} return first. The template keeps its setup answers.`
-          : text;
+      const shown = /no return|not ?found|no .*draft|first/i.test(text)
+        ? `Open and save a ${code} return first. The template starts from its answers.`
+        : text;
       app.toast(shown, cx, "triangle-alert");
     }
   }
@@ -1690,6 +1688,15 @@ function formsTab(cx, app, width) {
 
 // ---------------------------------------------------------------- templates tab
 
+/** "3 answers · 2 stops": what a template fixes and how many "Stop here" switches are on. */
+function templateCounts(tpl) {
+  const answers = tpl.answers_kept ?? 0;
+  const stops = tpl.marked ?? 0;
+  const a = answers === 1 ? "1 answer" : `${answers} answers`;
+  const st = stops === 1 ? "1 stop" : `${stops} stops`;
+  return `${a} · ${st}`;
+}
+
 function templatesTab(cx, app, width) {
   const ui = app.taxpayerUi;
   const b = app.branch();
@@ -1722,7 +1729,7 @@ function templatesTab(cx, app, width) {
       Text(
         cx,
         "body",
-        `One template per form for ${b.name}, kept across tax years. These are the forms it files in ${year}. A template keeps setup answers and never keeps amounts.`,
+        `A new return starts with the answers of your last one. A template fixes the answers to start from instead. ${b.name} can have one per form, kept across tax years. These are the forms it files in ${year}. A template never holds amounts or dates.`,
         "fg2",
       )
         .mb(SPACE[4])
@@ -1741,7 +1748,7 @@ function templatesTab(cx, app, width) {
     const row = ListRow(cx, `tp-template-${f.c}`)
       .child(Code(cx, f.c, tpl ? "fg" : "fg3").w(68).flex_none())
       .child(NameCell(cx, f.t, tpl ? `Updated ${shortDate(tpl.updated_at)}` : "No template yet", { dim: !tpl }));
-    if (!compact) row.child(Text(cx, "meta", tpl ? `${tpl.answers_kept} answers kept` : "", "fg2").w(128).flex_none());
+    if (!compact) row.child(Text(cx, "meta", tpl ? templateCounts(tpl) : "", "fg2").w(176).flex_none());
     const actions = div().flex().flex_row().justify_end().gap(SPACE[1]).flex_none();
     if (tpl) {
       actions
