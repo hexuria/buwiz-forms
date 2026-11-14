@@ -522,7 +522,7 @@ impl Session {
             ));
         }
         let db = self.lock_db()?;
-        let profile = load_profile(&db, &tin)?;
+        let profile = load_profile(&db, &tin, year)?;
         let mut draft =
             crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
         if agent::identity(kind, &draft)?.status == FilingStatus::Draft {
@@ -601,7 +601,7 @@ impl Session {
         let fields = collect_fill_fields(args)?;
         let source = fill_source(args, &fields, kind, &draft)?;
         let db = self.lock_db()?;
-        let profile = load_profile(&db, &tin)?;
+        let profile = load_profile(&db, &tin, year)?;
         let from_profile = profile_context(&db, kind, &profile, year, period)?;
         let def = kind.definition();
         let (mut filled, mut kept) = (Vec::new(), Vec::new());
@@ -743,7 +743,7 @@ impl Session {
         let year = open.year;
         let period = open.period;
         let db = self.lock_db()?;
-        let profile = load_profile(&db, &tin)?;
+        let profile = load_profile(&db, &tin, year)?;
         let bounds = filing_bounds(kind, &open.draft);
         let overlaps = |version: &bir_core::profile::TaxProfileVersion| match bounds {
             None => true,
@@ -1055,8 +1055,10 @@ enum TinQuery {
     },
 }
 
-fn load_profile(db: &Database, tin: &str) -> Result<TaxpayerProfile, String> {
-    db.get_profile_by_tin(tin)
+/// The branch's profile for tax year `year` (its year facts over the flat
+/// fields), as every return of that year reads it.
+fn load_profile(db: &Database, tin: &str, year: u16) -> Result<TaxpayerProfile, String> {
+    db.get_profile_for_year(tin, year)
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("no taxpayer profile for {tin}"))
 }
@@ -1428,17 +1430,14 @@ pub(crate) fn send_draft(
     if identity.status != FilingStatus::Draft {
         return Err(format!("this return is {:?}, not a Draft", identity.status));
     }
-    if kind == AgentFormKind::Form2551Q {
-        db.confirm_initial_profile_year(&identity.tin, i32::from(identity.taxable_year))
-            .map_err(|error| error.to_string())?;
-        if let Some(profile) = db
-            .get_profile_by_tin(&identity.tin)
+    if kind == AgentFormKind::Form2551Q
+        && let Some(profile) = db
+            .get_profile_for_year(&identity.tin, identity.taxable_year)
             .map_err(|error| error.to_string())?
-            && let Ok(mut typed) = serde_json::from_value::<Form2551QDraft>(draft.clone())
-        {
-            let _ = typed.reconcile_with_effective_profile(&profile);
-            *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
-        }
+        && let Ok(mut typed) = serde_json::from_value::<Form2551QDraft>(draft.clone())
+    {
+        let _ = typed.reconcile_with_effective_profile(&profile);
+        *draft = serde_json::to_value(&typed).map_err(|error| error.to_string())?;
     }
     let errors = agent::validate(kind, draft)?;
     if !errors.is_empty() {
@@ -1504,6 +1503,54 @@ mod tests {
             json!({"tin": TIN, "name": "TEST", "rdo_code": "040"}),
         )
         .unwrap()
+    }
+
+    /// The assistant's 2551Q send (`send_draft`) for a year whose facts
+    /// were just set and a profile with no confirmed version: it queues,
+    /// and Item 13 becomes the year's election on the head office.
+    #[test]
+    fn the_2551q_send_needs_no_confirmed_profile_version() {
+        let db = Database::open_ephemeral().expect("ephemeral database");
+        db.create_taxpayer(bir_core::tax_profile::NewTaxpayer {
+            tin_root: "000123453".into(),
+            name: "Juana Santos".into(),
+            taxpayer_type: bir_core::profile::TaxpayerType::Individual,
+            birth_date: None,
+            head_office: bir_core::tax_profile::BranchFacts {
+                rdo_code: "039".into(),
+                registered_address: "Quezon City".into(),
+                zip_code: "1100".into(),
+                phone: "09170000000".into(),
+                email: "juana@example.com".into(),
+            },
+        })
+        .unwrap();
+        let head = "00012345300000";
+        db.set_year_facts(
+            head,
+            2024,
+            &bir_core::tax_profile::YearFactsPatch {
+                tax_classification: Some(Some(bir_core::profile::TaxClassification::SelfEmployed)),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        db.grant_send(head, "2551Q").unwrap();
+        let profile = db.get_profile_for_year(head, 2024).unwrap().unwrap();
+        assert!(profile.profile_versions.is_empty());
+        let mut draft = Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
+        draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
+        let mut value = serde_json::to_value(&draft).unwrap();
+
+        let sent = send_draft(&db, AgentFormKind::Form2551Q, &mut value).unwrap();
+
+        assert_eq!(sent["queued"], true, "{sent}");
+        let facts = db.year_facts(head, 2024).unwrap().unwrap();
+        assert_eq!(
+            facts.income_tax_election,
+            Some(bir_core::profile::IncomeTaxElection::GraduatedUnspecified)
+        );
+        assert_eq!(facts.election_source.as_deref(), Some("2551Q Q1"));
     }
 
     #[test]

@@ -210,6 +210,24 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
         zip.write_all(providers_json.as_bytes())?;
     }
 
+    // 6. The branch's tax years: each year's forms list (the active codes,
+    // an empty list for a year with none) and its stored facts record.
+    let years = crate::db::taxpayers::query_tax_years(&db.conn, tin)
+        .map_err(|error| DbError::Other(error.to_string()))?;
+    let mut yearly_forms = std::collections::BTreeMap::new();
+    for year in years {
+        yearly_forms.insert(year.to_string(), db.active_form_codes_for_year(tin, year)?);
+    }
+    zip.start_file(format!("{}yearly_forms.json", base_dir), options)?;
+    zip.write_all(serde_json::to_string_pretty(&yearly_forms)?.as_bytes())?;
+    let year_facts: std::collections::BTreeMap<String, crate::tax_profile::YearFacts> =
+        crate::db::taxpayers::year_facts_for_export(&db.conn, tin)?
+            .into_iter()
+            .map(|(year, facts)| (year.to_string(), facts))
+            .collect();
+    zip.start_file(format!("{}year_facts.json", base_dir), options)?;
+    zip.write_all(serde_json::to_string_pretty(&year_facts)?.as_bytes())?;
+
     Ok(())
 }
 

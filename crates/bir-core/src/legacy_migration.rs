@@ -1245,6 +1245,8 @@ mod tests {
         let scan = scan_legacy_folder(&fixture_root()).unwrap();
         let db = Database::open_ephemeral().unwrap();
         let mut profile = db.save_profile(test_profile("00000")).unwrap();
+        // A save writes no version ledger any more: seed the one record.
+        profile.ensure_profile_version_ledger();
         profile.profile_versions[0].status = TaxProfileVersionStatus::Confirmed;
         profile.profile_versions[0].effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
         profile.profile_versions[0].needs_effective_date_review = false;

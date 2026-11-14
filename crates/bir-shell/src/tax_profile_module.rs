@@ -1,20 +1,21 @@
 //! Tax-profile host functions: taxpayers, branches, tax years, yearly forms,
 //! starter packs and form templates. Every rule (TIN shape, tax-year bound,
-//! one template per form, D8 setup-only snapshots, the one-transaction TIN
+//! one template per form, the carry rule a snapshot pins by, the one-transaction TIN
 //! move) lives in bir-core; this file only converts JSON in and out.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use bir_core::db::Database;
-use bir_core::forms::agent::template_stops::TemplateStops;
+use bir_core::forms::agent::AgentFormKind;
+use bir_core::forms::agent::carry;
 use bir_core::forms::registry::canonical_form_code;
 use bir_core::profile::{
     EmailAuthMethod, IncomeTaxElection, TaxClassification, TaxpayerProfile, TaxpayerType,
 };
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
-    ResolvedBranch, StarterPack, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
-    TemplateField, format_tin_root, tax_year_bounds,
+    ResolvedBranch, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches, format_tin_root,
+    tax_year_bounds,
 };
 use chrono::Datelike as _;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
@@ -63,6 +64,8 @@ export interface NewTaxpayerInput {
 export interface TaxpayerUpdateInput {
     name?: string;
     taxpayer_type?: Taxpayer["taxpayer_type"];
+    /** "YYYY-MM-DD", or null to clear. Omitted: unchanged. */
+    birth_date?: string | null;
 }
 export interface NewBranchInput {
     branch_code: string;
@@ -76,11 +79,47 @@ export interface BranchUpdateInput {
 export interface TaxYearBounds { min: number; max: number; }
 export interface AddedTaxYear { year: number; copied_from: number | null; forms: string[]; }
 export interface YearlyFormsChange { added: string[]; removed: string[]; forms: string[]; }
-export interface StarterPackInfo { id: string; label: string; forms: string[]; }
+/** A setup (decision 14): the forms of a year and the facts they read. Never a date, a line of business or anything personal. */
+export interface Setup {
+    /** A built-in id such as "non_vat_professional", or "user-<n>" for one the user saved. */
+    id: string;
+    name: string;
+    taxpayer_types: Taxpayer["taxpayer_type"][];
+    forms: string[];
+    facts: {
+        tax_classification: YearFactsView["facts"]["tax_classification"];
+        income_tax_election: YearFactsView["facts"]["income_tax_election"];
+        eopt_tier: YearFactsView["facts"]["eopt_tier"];
+        business_start_date: null;
+        line_of_business: null;
+        is_government_withholding_entity: boolean | null;
+        atc_codes: string[];
+    };
+    built_in: boolean;
+    /** The forms are added to the year's list instead of replacing it (Employer). */
+    adds_forms: boolean;
+}
+export interface SetupApplied {
+    /** The year's forms list afterwards. */
+    forms: string[];
+    /** Facts written. */
+    set: Fact[];
+    /** Facts already set to something else and left as they are (without `replace`, or a locked 8% or graduated choice). */
+    kept: Fact[];
+    election_locked: boolean;
+    /** Templates copied (copy_setup_from only). */
+    templates_copied: string[];
+    /** Templates the target already had and kept (copy_setup_from only). */
+    templates_kept: string[];
+    /** Forms that were on the list, are not in the setup, and stay on it: without `replace` a setup only adds forms. Empty after a replace. */
+    forms_kept: string[];
+}
 export interface FormTemplateSummary {
     form_code: string;
     updated_at: string;
+    /** How many answers the template fixes (box keys it pins). */
     answers_kept: number;
+    /** How many "Stop here" switches are on. */
     marked: number;
     source: string;
 }
@@ -100,20 +139,29 @@ export function list_tax_years(tin: string): number[];
 export function add_tax_year(tin: string, year: number, copy_forms: boolean): AddedTaxYear;
 export function yearly_forms(tin: string, year: number): string[];
 export function set_yearly_forms(tin: string, year: number, form_codes: string[]): YearlyFormsChange;
-export function starter_packs(tin: string): StarterPackInfo[];
+/** The setups for a taxpayer type: the built-in ones, then the user's. */
+export function list_setups(taxpayer_type: Taxpayer["taxpayer_type"]): Setup[];
+/** Set the year's forms (replaced, or added to for an `adds_forms` setup) and the setup's facts. A fact already set to something else is kept unless `replace`; a locked 8% or graduated choice always is. Never touches name, TIN, address or contact. */
+export function apply_setup(tin: string, year: number, setup_id: string, replace?: boolean): SetupApplied;
+/** Save the branch's year as a setup: its forms and facts, no dates, no line of business, nothing personal. */
+export function save_setup(tin: string, year: number, name: string): Setup;
+/** Delete one of the user's setups; a built-in one is refused. */
+export function delete_setup(id: string): boolean;
+/** Start `to_tin`'s year from `from_tin`'s: templates of its forms, its forms list and the facts a setup would hold. What the target already has is kept unless `replace`. */
+export function copy_setup_from(from_tin: string, to_tin: string, year: number, replace?: boolean): SetupApplied;
 export function list_form_templates(tin: string): FormTemplateSummary[];
 export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
 export function create_template_from_return(draft_id: number): FormTemplateSummary;
 export function delete_form_template(tin: string, form_code: string): boolean;
-/** The form page's template stops, as page keys: `stops` write a field the template marks, `markable` may be marked ("Stop here"). */
+/** Older form page only (`screen_form_open` now carries `stop_edits` and `stoppable`): `stops` are the boxes switched on as a stop, `markable` the boxes that may be one, radios by each radio's key. */
 export interface TemplateStops { stops: string[]; markable: string[]; }
 /** null when the branch has no template for the form. */
 export function template_stops(tin: string, form_code: string): TemplateStops | null;
-/** Mark (`on`) or unmark the template field the page box `key` writes. */
-export function set_template_stop(tin: string, form_code: string, key: string, on: boolean): TemplateStops;
-/** The annual income-tax election for one taxable year, on the tax profile; refused for a year with no self-employed or mixed-income registration. */
+/** "Stop here": on true = always a stop, false = never a stop, null = back to automatic. Creates the template row when the branch has none for the form. Works for every form; a radio is switched as its item's group box. Returns the new switches, a radio item's for each of its radios (and, for the older page, `stops` and `markable`). */
+export function set_template_stop(tin: string, form_code: string, box_key: string, on: boolean | null): { stop_edits: Record<string, boolean> } & TemplateStops;
+/** The annual income-tax election for one taxable year, on the head office's year facts; refused for a year whose income type is not self-employed or mixed income, and for a change once a return carrying it was filed. */
 export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
-export type IncomeTaxElectionGap = "ready" | "no_confirmed_registration" | "timeline_needs_review" | "not_individual" | "not_business_income";
+export type IncomeTaxElectionGap = "ready" | "not_individual" | "not_business_income";
 export type IndividualIncomeType = "PurelyCompensation" | "SelfEmployed" | "MixedIncome";
 /** Whether record_income_tax_election would accept the year, and if not what the tax profile lacks. A read. */
 export interface IncomeTaxElectionReadiness {
@@ -121,15 +169,50 @@ export interface IncomeTaxElectionReadiness {
     gap: IncomeTaxElectionGap;
     taxpayer_type: Taxpayer["taxpayer_type"] | null;
     classification: string | null;
-    /** YYYY-MM-DD: when that registration took effect. */
+    /** Always null: the year facts hold no start date for the income type. */
     since: string | null;
-    /** YYYY-MM-DD: a new confirmed registration must start after this. */
+    /** Always null: any date may be confirmed. */
     new_registration_after: string | null;
+    /** Always empty. */
     issues: string[];
 }
 export function income_tax_election_readiness(tin: string, year: number): IncomeTaxElectionReadiness;
-/** An individual's income type from `effective_from` (YYYY-MM-DD), as a new confirmed profile version (reviewed plan). */
+/** An individual's income type from `effective_from` (YYYY-MM-DD): the year facts' income type of that date's year, and of every later year that has a record without one. */
 export function confirm_income_registration(tin: string, income_type: IndividualIncomeType, effective_from: string): boolean;
+export type Fact = "birth_date" | "tax_classification" | "income_tax_election" | "eopt_tier"
+    | "business_start_date" | "line_of_business" | "is_government_withholding_entity" | "atc_codes";
+export interface YearFactsView {
+    tin: string;
+    year: number;
+    facts: {
+        tax_classification: "PurelyCompensation" | "SelfEmployed" | "MixedIncome" | "Corporation" | "CooperativeExempt" | "CooperativeTaxable" | "CooperativeMixed" | "EstateOrTrust" | null;
+        income_tax_election: "EightPercent" | "GraduatedUnspecified" | "GraduatedOsd" | "GraduatedItemized" | null;
+        eopt_tier: "Micro" | "Small" | "Medium" | "Large" | null;
+        /** YYYY-MM-DD */
+        business_start_date: string | null;
+        line_of_business: string | null;
+        is_government_withholding_entity: boolean | null;
+        atc_codes: string[];
+    };
+    /** Which row holds each fact: the head office or this branch. */
+    owner: Record<Exclude<Fact, "birth_date">, "head_office" | "branch">;
+    /** Form codes on this branch's list for the year that read each fact. Empty list: not in use. */
+    used_by: Record<Fact, string[]>;
+    /** Facts in use that are not set. */
+    not_set: Fact[];
+    /** The 8% or graduated choice cannot change: a return carrying it was filed. */
+    election_locked: boolean;
+    /** Where the year's election was made, e.g. "2551Q Q1" or "Tax profile"; null when none is set. */
+    election_source: string | null;
+}
+export function year_facts(tin: string, year: number): YearFactsView;
+/** Sets only the keys present in `patch` (null clears). Head-office facts are written to the head office's record whichever branch `tin` names. Refuses a change to a locked election. */
+export function set_year_facts(tin: string, year: number, patch: Partial<YearFactsView["facts"]>): YearFactsView;
+export interface TaxTypeChip { type: string; label: string; forms: string[]; }
+/** The chips: the tax types the year's forms list gives. */
+export function tax_types_for_year(tin: string, year: number): TaxTypeChip[];
+/** Groups of two or more annual income tax returns among `codes` that stand for one another (1700, 1701, 1701A, 1701MS; 1702, 1702RT, 1702EX, 1702MX): a taxpayer files one of a group for a year. The forms list keeps whatever the user picks; the page only warns. */
+export function annual_return_conflicts(codes: string[]): string[][];
 export interface RdoOption { code: string; description: string; }
 export function list_rdos(): RdoOption[];
 export function list_zip_codes(): string[];
@@ -207,7 +290,11 @@ pub fn register(module: HostModule) -> HostModule {
         .function("add_tax_year", add_tax_year)
         .function("yearly_forms", yearly_forms)
         .function("set_yearly_forms", set_yearly_forms)
-        .function("starter_packs", starter_packs)
+        .function("list_setups", list_setups)
+        .function("apply_setup", apply_setup)
+        .function("save_setup", save_setup)
+        .function("delete_setup", delete_setup)
+        .function("copy_setup_from", copy_setup_from)
         .function("list_form_templates", list_form_templates)
         .function("create_template_from_latest", create_template_from_latest)
         .function("create_template_from_return", create_template_from_return)
@@ -220,6 +307,10 @@ pub fn register(module: HostModule) -> HostModule {
             income_tax_election_readiness,
         )
         .function("confirm_income_registration", confirm_income_registration)
+        .function("year_facts", year_facts)
+        .function("set_year_facts", set_year_facts)
+        .function("tax_types_for_year", tax_types_for_year)
+        .function("annual_return_conflicts", annual_return_conflicts)
         .function("list_rdos", |_| list_rdos())
         .function("list_zip_codes", |_| list_zip_codes())
         .function("inbox_state", inbox_state)
@@ -404,18 +495,14 @@ fn field_string(value: Option<Value>) -> String {
     }
 }
 
+/// One template on the Templates tab: how many answers it pins
+/// (`answers_kept`) and how many "Stop here" switches are on (`marked`).
 fn template_record(template: &FormTemplate) -> HostValue {
-    let kept = template
-        .fields
-        .values()
-        .filter(|field| matches!(field, TemplateField::Kept { .. }))
-        .count();
-    let marked = template.fields.len() - kept;
     HostObject::new()
         .field("form_code", template.form_code.as_str())
         .field("updated_at", template.updated_at.as_str())
-        .field("answers_kept", kept as f64)
-        .field("marked", marked as f64)
+        .field("answers_kept", template.pinned().len() as f64)
+        .field("marked", template.stops_on() as f64)
         .field("source", template.source.to_db())
         .into()
 }
@@ -532,10 +619,21 @@ fn create_taxpayer(arguments: &HostArguments) -> HostResult {
 fn update_taxpayer(arguments: &HostArguments) -> HostResult {
     let tin_root = arguments.string(0)?;
     let input = object_argument(arguments, 1)?;
+    let birth_date = match input.get("birth_date") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(Value::String(raw)) if raw.trim().is_empty() => Some(None),
+        Some(Value::String(raw)) => {
+            Some(Some(raw.trim().parse().map_err(|_| {
+                HostError::new(format!("`{raw}` is not a date (YYYY-MM-DD)"))
+            })?))
+        }
+        Some(_) => return Err(HostError::new("`birth_date` must be a string or null")),
+    };
     let update = TaxpayerUpdate {
         name: optional_string(&input, "name")?,
         taxpayer_type: taxpayer_type(&input, "taxpayer_type")?,
-        birth_date: None,
+        birth_date,
     };
     with_database(|db| {
         let updated = db.update_taxpayer(tin_root, update).map_err(host_error)?;
@@ -693,33 +791,61 @@ fn set_yearly_forms(arguments: &HostArguments) -> HostResult {
     })
 }
 
-fn starter_packs(arguments: &HostArguments) -> HostResult {
+// ---------- setups ----------
+
+fn optional_flag(arguments: &HostArguments, index: usize) -> bool {
+    arguments
+        .get(index)
+        .and_then(HostValue::as_bool)
+        .unwrap_or(false)
+}
+
+fn list_setups(arguments: &HostArguments) -> HostResult {
+    let raw = arguments.string(0)?;
+    let taxpayer_type: TaxpayerType = serde_json::from_value(Value::String(raw.to_string()))
+        .map_err(|_| HostError::new(format!("`{raw}` is not a taxpayer type")))?;
+    with_reader(|db| {
+        let setups = db.list_setups(&taxpayer_type).map_err(host_error)?;
+        crate::bir_module::serialize(&setups)
+    })
+}
+
+fn apply_setup(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let id = arguments.string(2)?;
+    let replace = optional_flag(arguments, 3);
     with_database(|db| {
-        let branch = db
-            .get_branch(tin)
-            .map_err(host_error)?
-            .ok_or_else(|| HostError::new(format!("No branch with TIN {tin}")))?;
-        let taxpayer = load_taxpayer(db, &branch.tin_root)?.taxpayer;
-        Ok(HostValue::Array(
-            StarterPack::ALL
-                .into_iter()
-                .map(|pack| {
-                    HostObject::new()
-                        .field("id", field_string(serde_json::to_value(pack).ok()))
-                        .field("label", pack.label())
-                        .field(
-                            "forms",
-                            strings(
-                                pack.form_codes(&taxpayer.taxpayer_type)
-                                    .iter()
-                                    .map(|code| code.to_string()),
-                            ),
-                        )
-                        .into()
-                })
-                .collect(),
-        ))
+        let applied = db.apply_setup(tin, year, id, replace).map_err(host_error)?;
+        crate::bir_module::serialize(&applied)
+    })
+}
+
+fn save_setup(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let name = arguments.string(2)?;
+    with_database(|db| {
+        let setup = db.save_setup(tin, year, name).map_err(host_error)?;
+        crate::bir_module::serialize(&setup)
+    })
+}
+
+fn delete_setup(arguments: &HostArguments) -> HostResult {
+    let id = arguments.string(0)?;
+    with_database(|db| db.delete_setup(id).map(HostValue::Bool).map_err(host_error))
+}
+
+fn copy_setup_from(arguments: &HostArguments) -> HostResult {
+    let from_tin = arguments.string(0)?;
+    let to_tin = arguments.string(1)?;
+    let year = year_argument(arguments, 2)?;
+    let replace = optional_flag(arguments, 3);
+    with_database(|db| {
+        let applied = db
+            .copy_setup_from(from_tin, to_tin, year, replace)
+            .map_err(host_error)?;
+        crate::bir_module::serialize(&applied)
     })
 }
 
@@ -766,19 +892,45 @@ fn delete_form_template(arguments: &HostArguments) -> HostResult {
     })
 }
 
-fn stops_record(stops: &TemplateStops) -> HostValue {
+/// A box key and, for a radio item's group box, each of its radios: the
+/// older page draws a radio by its own key.
+fn with_radios(kind: AgentFormKind, key: &str) -> Vec<String> {
+    let mut keys = vec![key.to_string()];
+    if let Some(entry) = kind.definition().box_def(key) {
+        keys.extend(entry.members.iter().cloned());
+    }
+    keys
+}
+
+/// The older page's stops record: the switches on, and the boxes that may
+/// be stops, radios by their own keys too.
+fn stops_record(kind: AgentFormKind, stop_edits: &BTreeMap<String, bool>) -> HostObject {
+    let stops = stop_edits
+        .iter()
+        .filter(|(_, on)| **on)
+        .flat_map(|(key, _)| with_radios(kind, key));
+    let markable = carry::stoppable(kind)
+        .into_iter()
+        .flat_map(|key| with_radios(kind, key));
     HostObject::new()
-        .field("stops", strings(stops.stops.iter().cloned()))
-        .field("markable", strings(stops.markable.iter().cloned()))
-        .into()
+        .field("stops", strings(stops))
+        .field("markable", strings(markable))
+}
+
+fn page_kind(form_code: &str) -> Result<AgentFormKind, HostError> {
+    AgentFormKind::from_code(&canonical_form_code(form_code))
+        .ok_or_else(|| HostError::new(format!("No on-screen form {form_code}")))
 }
 
 fn template_stops(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
     let form_code = arguments.string(1)?;
+    let kind = page_kind(form_code)?;
     with_reader(|db| {
-        let stops = db.template_stops(tin, form_code).map_err(host_error)?;
-        Ok(stops.as_ref().map_or(HostValue::Null, stops_record))
+        let template = db.get_form_template(tin, form_code).map_err(host_error)?;
+        Ok(template.map_or(HostValue::Null, |template| {
+            stops_record(kind, &template.stop_edits()).into()
+        }))
     })
 }
 
@@ -786,12 +938,34 @@ fn set_template_stop(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
     let form_code = arguments.string(1)?;
     let key = arguments.string(2)?;
-    let on = arguments.boolean(3)?;
+    let on = match arguments.get(3).map(to_json) {
+        None | Some(Value::Null) => None,
+        Some(Value::Bool(on)) => Some(on),
+        Some(other) => {
+            return Err(HostError::new(format!(
+                "`on` must be true, false or null, not {other}"
+            )));
+        }
+    };
+    let kind = page_kind(form_code)?;
     with_database(|db| {
-        let stops = db
+        let stop_edits = db
             .set_template_stop(tin, form_code, key, on)
             .map_err(host_error)?;
-        Ok(stops_record(&stops))
+        // By the keys the page draws: a radio item's switch for each radio.
+        let edits = stop_edits
+            .iter()
+            .flat_map(|(key, on)| {
+                carry::page_keys(kind, key)
+                    .into_iter()
+                    .map(move |page_key| (page_key, *on))
+            })
+            .fold(HostObject::new(), |object, (key, on)| {
+                object.field(key.as_str(), on)
+            });
+        Ok(stops_record(kind, &stop_edits)
+            .field("stop_edits", HostValue::from(edits))
+            .into())
     })
 }
 
@@ -866,6 +1040,59 @@ fn confirm_income_registration(arguments: &HostArguments) -> HostResult {
             .map_err(plain_db_error)?;
         Ok(HostValue::Bool(true))
     })
+}
+
+// ---------- year facts ----------
+
+fn year_facts(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    with_reader(|db| {
+        let view = db.year_facts_view(tin, year).map_err(host_error)?;
+        crate::bir_module::serialize(&view)
+    })
+}
+
+/// Writes the year facts directly: never through the profile save.
+fn set_year_facts(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let patch = bir_core::tax_profile::YearFactsPatch::from_json(&object_argument(arguments, 2)?)
+        .map_err(host_error)?;
+    with_database(|db| {
+        db.set_year_facts(tin, year, &patch).map_err(host_error)?;
+        let view = db.year_facts_view(tin, year).map_err(host_error)?;
+        crate::bir_module::serialize(&view)
+    })
+}
+
+fn tax_types_for_year(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    with_reader(|db| {
+        let chips = db.tax_types_for_year(tin, year).map_err(host_error)?;
+        crate::bir_module::serialize(&chips)
+    })
+}
+
+/// The annual income tax returns among the given codes that stand for one
+/// another. Nothing is removed from a forms list (decision 1): the Forms
+/// tab shows a warning and the user decides.
+fn annual_return_conflicts(arguments: &HostArguments) -> HostResult {
+    let codes = arguments
+        .value(0)?
+        .as_array()
+        .ok_or_else(|| HostError::new("argument 1 must be a list of form codes"))?
+        .iter()
+        .map(|code| {
+            code.as_str()
+                .map(canonical_form_code)
+                .ok_or_else(|| HostError::new("every form code must be a string"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::bir_module::serialize(
+        &bir_core::integration::validation::conflicting_annual_itr_code_groups(&codes),
+    )
 }
 
 // ---------- confirmation inbox ----------
@@ -1678,14 +1905,93 @@ mod tests {
     }
 
     #[test]
-    fn starter_packs_follow_the_taxpayer_type() {
+    fn setups_follow_the_taxpayer_type_and_round_trip_through_the_host() {
         setup();
-        let packs = ok(starter_packs, vec![json!(HEAD)]);
-        let packs = packs.as_array().unwrap();
-        assert_eq!(packs.len(), 4);
-        assert_eq!(packs[1]["id"], "VatBusiness");
-        assert_eq!(packs[1]["label"], "VAT business");
-        assert_eq!(packs[1]["forms"], json!(["2550Q", "1702Q", "1702RT"]));
+        let listed = ok(list_setups, vec![json!("Corporation")]);
+        let ids: Vec<&str> = listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|setup| setup["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "vat_business_corporation",
+                "corporation_non_vat",
+                "employer"
+            ]
+        );
+        assert_eq!(listed[0]["name"], "VAT business");
+        assert_eq!(listed[0]["forms"], json!(["2550Q", "1702Q", "1702RT"]));
+        assert_eq!(listed[0]["built_in"], true);
+        assert_eq!(listed[2]["adds_forms"], true);
+        assert!(
+            call(list_setups, vec![json!("Robot")])
+                .unwrap_err()
+                .contains("not a taxpayer type")
+        );
+
+        let applied = ok(
+            apply_setup,
+            vec![json!(HEAD), json!(2026), json!("corporation_non_vat")],
+        );
+        assert_eq!(applied["forms"], json!(["1702Q", "1702RT", "2551Q"]));
+        assert_eq!(applied["set"], json!(["tax_classification"]));
+        assert_eq!(applied["kept"], json!([]));
+        let added = ok(
+            apply_setup,
+            vec![json!(HEAD), json!(2026), json!("employer"), json!(false)],
+        );
+        assert_eq!(
+            added["forms"],
+            json!(["1601C", "1604C", "1702Q", "1702RT", "2551Q"])
+        );
+
+        ok(
+            set_year_facts,
+            vec![json!(HEAD), json!(2026), json!({"eopt_tier": "Medium"})],
+        );
+        let saved = ok(
+            save_setup,
+            vec![json!(HEAD), json!(2026), json!("Our shop")],
+        );
+        assert_eq!(saved["name"], "Our shop");
+        assert_eq!(saved["built_in"], false);
+        assert_eq!(saved["facts"]["eopt_tier"], "Medium");
+        assert_eq!(saved["facts"]["business_start_date"], Value::Null);
+        let id = saved["id"].as_str().unwrap().to_string();
+        assert!(id.starts_with("user-"));
+
+        ok(
+            set_year_facts,
+            vec![json!(HEAD), json!(2026), json!({"eopt_tier": "Large"})],
+        );
+        let kept = ok(apply_setup, vec![json!(HEAD), json!(2026), json!(&id)]);
+        assert_eq!(kept["kept"], json!(["eopt_tier"]), "asks before replacing");
+        let replaced = ok(
+            apply_setup,
+            vec![json!(HEAD), json!(2026), json!(&id), json!(true)],
+        );
+        assert_eq!(replaced["set"], json!(["eopt_tier"]));
+
+        add_branch("00001");
+        let copied = ok(
+            copy_setup_from,
+            vec![json!(HEAD), json!("12345678800001"), json!(2026)],
+        );
+        assert_eq!(
+            copied["forms"],
+            json!(["1601C", "1604C", "1702Q", "1702RT", "2551Q"])
+        );
+        assert_eq!(copied["templates_copied"], json!([]));
+
+        assert_eq!(ok(delete_setup, vec![json!(&id)]), json!(true));
+        assert!(
+            call(delete_setup, vec![json!("employer")])
+                .unwrap_err()
+                .contains("built-in")
+        );
     }
 
     #[test]
@@ -1712,7 +2018,7 @@ mod tests {
                 vec![json!(HEAD), json!("2551Q")]
             )
             .unwrap_err(),
-            "Open and save a 2551Q return first. The template keeps its setup answers."
+            "Open and save a 2551Q return first. The template starts from its answers."
         );
         let id = save_return(1);
         let template = ok(
@@ -1747,6 +2053,53 @@ mod tests {
                 .unwrap_err()
                 .contains("No return with id 999999")
         );
+    }
+
+    #[test]
+    fn set_template_stop_takes_true_false_and_null_on_any_form() {
+        setup();
+        let stop = |key: &str, on: Value| {
+            ok(
+                set_template_stop,
+                vec![json!(HEAD), json!("0619E"), json!(key), on],
+            )
+        };
+        assert_eq!(
+            ok(template_stops, vec![json!(HEAD), json!("0619E")]),
+            Value::Null
+        );
+        let on = stop("frm0619E:txtTax14", json!(true));
+        assert_eq!(on["stop_edits"], json!({"frm0619E:txtTax14": true}));
+        assert_eq!(on["stops"], json!(["frm0619E:txtTax14"]));
+        assert!(
+            on["markable"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("frm0619E:txtTax14"))
+        );
+        let off = stop("frm0619E:txtTax14", json!(false));
+        assert_eq!(off["stop_edits"], json!({"frm0619E:txtTax14": false}));
+        assert_eq!(off["stops"], json!([]));
+        let auto = stop("frm0619E:txtTax14", Value::Null);
+        assert_eq!(auto["stop_edits"], json!({}));
+        // The older page's reader still answers for the template made.
+        let stops = ok(template_stops, vec![json!(HEAD), json!("0619E")]);
+        assert_eq!(stops["stops"], json!([]));
+        assert!(
+            call(
+                set_template_stop,
+                vec![
+                    json!(HEAD),
+                    json!("0619E"),
+                    json!("frm0619E:txtTax14"),
+                    json!("yes")
+                ]
+            )
+            .is_err()
+        );
+        let listed = ok(list_form_templates, vec![json!(HEAD)]);
+        assert_eq!(listed[0]["form_code"], "0619E");
+        assert_eq!(listed[0]["marked"], 0);
     }
 
     #[test]
@@ -2210,5 +2563,355 @@ mod tests {
         let state = to_json(&connect_inbox_oauth_run(HEAD, &db).unwrap());
         assert_eq!(state["oauth_connected"], true);
         assert_eq!(state["oauth_inbox_email"], "receipts@example.com");
+    }
+
+    // ---------- year facts (interface I-1) ----------
+
+    const JUANA_ROOT: &str = "000123453";
+    const JUANA_HEAD: &str = "00012345300000";
+
+    /// Fresh database with the demo individual and her head office.
+    fn setup_individual() {
+        use_ephemeral_database();
+        ok(
+            create_taxpayer,
+            vec![json!({
+                "tin_root": "000-123-453",
+                "name": "Juana Santos",
+                "taxpayer_type": "Individual",
+                "head_office": {
+                    "rdo_code": "039",
+                    "registered_address": "Quezon City",
+                    "zip_code": "1100",
+                    "phone": "09170000000",
+                    "email": "juana@example.com"
+                }
+            })],
+        );
+    }
+
+    fn bir_call(name: &str, values: Vec<Value>) -> Result<Value, String> {
+        crate::bir_module::module()
+            .call(name, &args(values))
+            .map(|value| to_json(&value))
+            .map_err(|error| error.message().to_string())
+    }
+
+    /// A saved Draft 2551Q for Q1 of `year`, built from the year's profile,
+    /// with Item 13 answered.
+    fn save_year_return(
+        tin: &str,
+        year: u16,
+        eight_percent: bool,
+    ) -> bir_core::forms::Form2551QDraft {
+        use bir_core::forms::form_2551q::Item13Election;
+        with_database(|db| {
+            let profile = db.get_profile_for_year(tin, year).unwrap().unwrap();
+            let mut draft =
+                bir_core::forms::Form2551QDraft::new_from_effective_profile(&profile, year, 1);
+            draft.item_13_election = if eight_percent {
+                Item13Election::EightPercent
+            } else {
+                Item13Election::Graduated
+            };
+            db.save_2551q_draft(&draft).unwrap();
+            Ok(draft)
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn year_facts_round_trip_through_the_host() {
+        setup_individual();
+        ok(
+            create_branch,
+            vec![
+                json!(JUANA_ROOT),
+                json!({"branch_code": "00001", "name": "Stall"}),
+            ],
+        );
+        let branch = "00012345300001";
+        ok(
+            set_yearly_forms,
+            vec![json!(branch), json!(2025), json!(["2551Q", "1701"])],
+        );
+        let view = ok(
+            set_year_facts,
+            vec![
+                json!(branch),
+                json!(2025),
+                json!({"tax_classification": "SelfEmployed", "line_of_business": "Stall"}),
+            ],
+        );
+        assert_eq!(view["tin"], branch);
+        assert_eq!(view["year"], 2025);
+        assert_eq!(view["facts"]["tax_classification"], "SelfEmployed");
+        assert_eq!(view["facts"]["line_of_business"], "Stall");
+        assert_eq!(view["facts"]["income_tax_election"], Value::Null);
+        assert_eq!(view["facts"]["atc_codes"], json!([]));
+        assert_eq!(view["owner"]["tax_classification"], "head_office");
+        assert_eq!(view["owner"]["line_of_business"], "branch");
+        assert_eq!(view["used_by"]["birth_date"], json!(["1701"]));
+        assert_eq!(
+            view["used_by"]["income_tax_election"],
+            json!(["1701", "2551Q"])
+        );
+        assert!(
+            view["not_set"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("birth_date"))
+        );
+        assert_eq!(view["election_locked"], false);
+        assert_eq!(view["election_source"], Value::Null);
+        // The head office holds the income type, not the line of business.
+        let head = ok(year_facts, vec![json!(JUANA_HEAD), json!(2025)]);
+        assert_eq!(head["facts"]["tax_classification"], "SelfEmployed");
+        assert_eq!(head["facts"]["line_of_business"], Value::Null);
+        assert_eq!(head["used_by"]["tax_classification"], json!([]));
+        // Null clears; an unknown key or value is refused.
+        let cleared = ok(
+            set_year_facts,
+            vec![
+                json!(branch),
+                json!(2025),
+                json!({"line_of_business": null}),
+            ],
+        );
+        assert_eq!(cleared["facts"]["line_of_business"], Value::Null);
+        assert!(
+            call(
+                set_year_facts,
+                vec![
+                    json!(branch),
+                    json!(2025),
+                    json!({"is_vat_registered": true})
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            call(
+                set_year_facts,
+                vec![json!(branch), json!(2025), json!({"eopt_tier": "Huge"})]
+            )
+            .is_err()
+        );
+
+        let chips = ok(tax_types_for_year, vec![json!(branch), json!(2025)]);
+        assert_eq!(
+            chips,
+            json!([
+                {"type": "percentage_tax", "label": "Percentage tax", "forms": ["2551Q"]},
+                {"type": "income_tax", "label": "Income tax", "forms": ["1701"]},
+            ])
+        );
+        assert_eq!(
+            ok(tax_types_for_year, vec![json!(branch), json!(2024)]),
+            json!([])
+        );
+
+        // Two annual income tax returns of one kind are named, for a warning.
+        assert_eq!(
+            ok(
+                annual_return_conflicts,
+                vec![json!(["1701", "1701A", "2551Q", "1702RT"])]
+            ),
+            json!([["1701", "1701A"]])
+        );
+        assert_eq!(
+            ok(annual_return_conflicts, vec![json!(["1701", "1701Q"])]),
+            json!([])
+        );
+    }
+
+    #[test]
+    fn update_taxpayer_accepts_a_birth_date() {
+        setup_individual();
+        let set = ok(
+            update_taxpayer,
+            vec![json!(JUANA_ROOT), json!({"birth_date": "1990-01-02"})],
+        );
+        assert_eq!(set["birth_date"], "1990-01-02");
+        let kept = ok(
+            update_taxpayer,
+            vec![json!(JUANA_ROOT), json!({"name": "Juana D. Santos"})],
+        );
+        assert_eq!(kept["birth_date"], "1990-01-02", "omitted: unchanged");
+        let cleared = ok(
+            update_taxpayer,
+            vec![json!(JUANA_ROOT), json!({"birth_date": null})],
+        );
+        assert_eq!(cleared["birth_date"], Value::Null);
+        assert!(
+            call(
+                update_taxpayer,
+                vec![json!(JUANA_ROOT), json!({"birth_date": "Jan 2"})]
+            )
+            .is_err()
+        );
+    }
+
+    /// The current screens' calls keep working on year facts: readiness,
+    /// the registration control and the 2551Q Item 13 question.
+    #[test]
+    fn the_election_host_functions_map_onto_year_facts() {
+        setup_individual();
+        let ready = ok(
+            income_tax_election_readiness,
+            vec![json!(JUANA_HEAD), json!(2025)],
+        );
+        assert_eq!(ready["gap"], "not_business_income");
+        assert_eq!(ready["new_registration_after"], Value::Null);
+        assert_eq!(ready["issues"], json!([]));
+        assert!(
+            call(
+                record_income_tax_election,
+                vec![json!(JUANA_HEAD), json!(2025), json!("eight_percent")]
+            )
+            .is_err()
+        );
+        assert_eq!(
+            ok(
+                confirm_income_registration,
+                vec![
+                    json!(JUANA_HEAD),
+                    json!("SelfEmployed"),
+                    json!("2025-01-01")
+                ]
+            ),
+            json!(true)
+        );
+        let ready = ok(
+            income_tax_election_readiness,
+            vec![json!(JUANA_HEAD), json!(2025)],
+        );
+        assert_eq!(ready["gap"], "ready");
+        assert_eq!(ready["classification"], "SelfEmployed");
+        assert_eq!(
+            ok(
+                record_income_tax_election,
+                vec![json!(JUANA_HEAD), json!(2025), json!("eight_percent")]
+            ),
+            json!(true)
+        );
+        let view = ok(year_facts, vec![json!(JUANA_HEAD), json!(2025)]);
+        assert_eq!(view["facts"]["income_tax_election"], "EightPercent");
+        assert_eq!(view["election_source"], "Tax profile");
+        // No confirmed profile version was written for any of it.
+        with_database(|db| {
+            assert!(
+                db.get_profile(JUANA_HEAD)
+                    .unwrap()
+                    .unwrap()
+                    .profile_versions
+                    .is_empty()
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// The 2551Q call sites in the host — the queue (`queue_form_draft`),
+    /// the page's "Use profile values" (`screen_form_use_profile`) and its
+    /// open (`screen_form_open`) — for a profile with no confirmed version
+    /// and for one whose versions are only drafts and reviews.
+    #[test]
+    fn the_2551q_host_paths_need_no_confirmed_profile_version() {
+        use bir_core::profile::{TaxProfileVersion, TaxProfileVersionStatus};
+        for messy in [false, true] {
+            setup_individual();
+            ok(
+                set_year_facts,
+                vec![
+                    json!(JUANA_HEAD),
+                    json!(2025),
+                    json!({"tax_classification": "SelfEmployed"}),
+                ],
+            );
+            if messy {
+                with_database(|db| {
+                    let mut profile = db.get_profile(JUANA_HEAD).unwrap().unwrap();
+                    let mut draft = TaxProfileVersion::from_profile_backfill(&profile);
+                    draft.id = "draft".into();
+                    draft.status = TaxProfileVersionStatus::Draft;
+                    draft.cor.registered_name = "Someone Else".into();
+                    let mut review = draft.clone();
+                    review.id = "review".into();
+                    review.status = TaxProfileVersionStatus::NeedsReview;
+                    review.effective_from = None;
+                    profile.profile_versions = vec![draft, review];
+                    db.save_profile(profile).unwrap();
+                    Ok(())
+                })
+                .unwrap();
+            }
+
+            // The page opens a 2551Q of the year from the year's facts.
+            let opened = block_on_open(JUANA_HEAD, 2025, 2);
+            assert_eq!(
+                opened["draft"]["taxpayer_name"], "Juana Santos",
+                "messy={messy}"
+            );
+            assert!(
+                opened["draft"]["profile_resolution_error"].is_null(),
+                "messy={messy}"
+            );
+
+            // "Use profile values" on a Q2 draft takes the recorded election.
+            let draft = save_year_return(JUANA_HEAD, 2025, true);
+            with_database(|db| {
+                db.record_income_tax_election(
+                    JUANA_HEAD,
+                    2025,
+                    bir_core::profile::IncomeTaxElection::EightPercent,
+                )
+                .map_err(|error| HostError::new(error.to_string()))?;
+                Ok(())
+            })
+            .unwrap();
+            let mut q2 = serde_json::to_value(&draft).unwrap();
+            q2["quarter"] = json!(2);
+            q2["id"] = Value::Null;
+            q2["annual_income_tax_election"] = json!("unrecorded");
+            let used = bir_call(
+                "screen_form_use_profile",
+                vec![json!("2551Q"), json!(2025), json!(2), q2],
+            )
+            .unwrap_or_else(|error| panic!("messy={messy}: {error}"));
+            assert_eq!(used["draft"]["annual_income_tax_election"], "eight_percent");
+            assert!(used["draft"]["profile_resolution_error"].is_null());
+
+            // The queue.
+            let id = bir_call(
+                "queue_form_draft",
+                vec![json!(JUANA_HEAD), json!("2551Q"), json!(2025), json!(1)],
+            )
+            .unwrap_or_else(|error| panic!("messy={messy}: {error}"));
+            assert!(id.as_f64().unwrap() > 0.0);
+            let view = ok(year_facts, vec![json!(JUANA_HEAD), json!(2025)]);
+            assert_eq!(view["facts"]["income_tax_election"], "EightPercent");
+        }
+    }
+
+    fn block_on_open(tin: &str, year: u16, quarter: u8) -> Value {
+        let future = crate::bir_module::module()
+            .begin(
+                "screen_form_open",
+                &args(vec![
+                    json!(tin),
+                    json!("2551Q"),
+                    json!(year),
+                    json!(quarter),
+                ]),
+            )
+            .unwrap();
+        let mut future = std::pin::pin!(future);
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        loop {
+            if let std::task::Poll::Ready(output) = future.as_mut().poll(&mut context) {
+                return to_json(&output.unwrap());
+            }
+        }
     }
 }

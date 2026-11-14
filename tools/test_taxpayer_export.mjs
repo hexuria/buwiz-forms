@@ -42,11 +42,13 @@ const kidsOf = (e, kids) => {
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24, 28, 32], RADIUS: { lg: 8, md: 6, sm: 4 } };
 uiExports.Text = (_cx, _v, text) => el({ text: String(text) });
 uiExports.Code = (_cx, code) => el({ code });
+uiExports.Line = (_cx, _v, text) => el({ text: String(text) });
 uiExports.Icon = () => el();
+uiExports.IconButton = (_cx, id, _icon, opts = {}) => el({ button: id, onClick: opts.onClick });
 uiExports.AppButton = (_cx, id, label, opts = {}) => el({ button: id, label, disabled: Boolean(opts.disabled), onClick: opts.onClick });
 uiExports.Avatar = () => el();
 uiExports.Chip = (_cx, chip) => el({ chip });
-uiExports.Segmented = (_cx, id) => el({ segmented: id });
+uiExports.Segmented = (_cx, id, options, selected, onChange) => el({ segmented: id, options, selected, onChange });
 uiExports.Switch = (_cx, id) => el({ switch: id });
 uiExports.CheckboxLabel = () => el({ checkboxLabel: true });
 uiExports.Checkbox = (_cx, id) => el({ checkbox: id });
@@ -56,7 +58,7 @@ uiExports.Field = (_cx, label, opts = {}) => kidsOf(el({ field: label }), [opts.
 uiExports.FieldGrid = (_cx, _w, cells) => kidsOf(el({ fieldGrid: true }), cells.map((c) => c && c.el));
 uiExports.Disclosure = (_cx, id, opts = {}) => kidsOf(el({ disclosure: id, title: opts.title }), [opts.body]);
 uiExports.DisclosureGroup = (_cx, id, sections) => kidsOf(el({ group: id }), sections);
-uiExports.FormActions = (_cx, id) => el({ formActions: id });
+uiExports.FormActions = (_cx, id, onCancel, onSave) => el({ formActions: id, onCancel, onSave });
 uiExports.ListGroup = (_cx, id, rows) => kidsOf(el({ listGroup: id }), rows);
 uiExports.ListRow = (_cx, id) => el({ row: id });
 uiExports.NameCell = (_cx, title, sub) => el({ title, sub });
@@ -139,11 +141,12 @@ const mock = (name, exports) =>
 const source = (path) => new vm.SourceTextModule(fs.readFileSync(new URL(path, root), "utf8"), { context: contextVM, identifier: path });
 const taxpayerMod = source("app/shell/taxpayer.js");
 const linked = {
-  "gpui-kit": mock("gpui-kit", { div: () => el() }),
+  "gpui-kit": mock("gpui-kit", { div: () => el(), View: class View {} }),
   "gpui-base": mock("gpui-base", { InputState, OtpState }),
   "./ui.js": mock("./ui.js", uiExports),
   "./store.js": mock("./store.js", storeExports),
   "./library.js": mock("./library.js", libraryExports),
+  "./facts.js": source("app/shell/facts.js"),
 };
 await taxpayerMod.link((s) => linked[s]);
 await taxpayerMod.evaluate();
@@ -186,11 +189,16 @@ function makeApp({ hasPin, exportResult, exportError, exportPending }) {
     yearForms: () => [],
     templates: () => [],
     go: () => {},
+    years: () => [],
     startNewReturn: () => {},
     store: {
       inboxState: () => ({ auth_method: "GoogleOAuth", oauth_connected: false, tracking_enabled: false, last_check_at: null }),
       sendGrants: () => [],
       yearlyForms: () => [],
+      yearFacts: () => null,
+      taxTypes: () => [],
+      annualConflicts: () => [],
+      screenIndex: () => [],
       writeAsync: async (name, ...args) => {
         calls.push([name, ...args]);
         if (exportPending) return exportPending;
@@ -296,21 +304,35 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   assert.equal(exportBtn(exportTree(app)).info.disabled, false, "Export enabled after the panel answers");
 }
 
-// ---- Registration: where the 2551Q card sends a filer whose profile has no
-// self-employed or mixed-income registration for the return's year. Only an
-// individual has it; nothing is filled in for the filer; the save goes
-// through bir-core's reviewed confirmation and then back to the return.
+// ---- The income type: where the 2551Q card sends a filer whose year has no
+// self-employed or mixed-income type. The old Registration section is gone;
+// the Facts section's income-type row opens in place, nothing is chosen for
+// the filer, the save goes through set_year_facts for the return's year and
+// then back to the return.
 {
   const { app, toasts } = makeApp({ hasPin: false });
   const disclosures = (tree) => find(tree, (i) => i.disclosure).map((m) => m.info.disclosure);
-  assert.ok(!disclosures(renderTaxpayerPage(cx, app, "profile", 900)).includes("tp-sec-registration"), "a corporation has no income type to confirm");
+  assert.ok(!disclosures(renderTaxpayerPage(cx, app, "profile", 900)).includes("tp-sec-registration"), "no Registration section");
 
   app.taxpayer().taxpayer_type = "Individual";
   const writes = [];
   const went = [];
-  const readiness = { taxable_year: 2026, gap: "not_business_income", taxpayer_type: "Individual", classification: null, since: "2020-01-01", new_registration_after: "2020-01-01", issues: [] };
   let refuse = null;
-  app.store.electionReadiness = () => readiness;
+  const view = {
+    tin: TIN,
+    year: 2026,
+    facts: { tax_classification: null, income_tax_election: null, eopt_tier: null, business_start_date: null, line_of_business: null, is_government_withholding_entity: false, atc_codes: [] },
+    owner: {},
+    used_by: { tax_classification: ["2551Q"], income_tax_election: ["2551Q"], eopt_tier: ["2551Q"], is_government_withholding_entity: [], atc_codes: [], birth_date: [], business_start_date: ["2551Q"], line_of_business: [] },
+    not_set: ["tax_classification", "eopt_tier"],
+    election_locked: false,
+    election_source: null,
+  };
+  app.years = () => [2026];
+  app.store.yearFacts = () => view;
+  app.store.taxTypes = () => [];
+  app.store.screenIndex = () => [];
+  app.store.electionReadiness = () => ({ gap: "not_business_income" });
   app.store.write = (name, ...args) => {
     writes.push([name, ...args]);
     if (refuse) throw new Error(refuse);
@@ -318,41 +340,31 @@ const exportTree = (app) => profileExportCard(cx, app, app.taxpayer());
   };
   app.branchFor = () => app.branch();
   app.history = ["home", "form"];
-  app.go = (view) => went.push(["go", view]);
+  app.go = (v) => went.push(["go", v]);
   app.goBack = () => went.push(["back"]);
-  let page = renderTaxpayerPage(cx, app, "profile", 900);
-  assert.ok(disclosures(page).includes("tp-sec-registration"), "an individual has the Registration section");
-  assert.ok(find(page, (i) => i.field === "Income type in 2026").length === 1, "it shows the year's income type");
+  app.selectYear = () => {};
 
   const ui = app.taxpayerUi;
   ui.startRegistration({ tin: TIN, year: 2026, fromForm: true }, cx);
   assert.deepEqual(went, [["go", "profile"]], "the card opens the Profile tab");
-  assert.equal(ui.reg.type, null, "no income type is chosen for the filer");
-  assert.equal(ui.reg.from.value(), "", "and no date is filled in");
-  page = renderTaxpayerPage(cx, app, "profile", 900);
-  assert.equal(find(page, (i) => i.segmented === "tp-reg-type").length, 1, "the income-type choice");
-  assert.equal(find(page, (i) => i.field === "tp-reg-from").length, 1, "the date it took effect");
-  assert.equal(find(page, (i) => i.formActions === "tp-reg").length, 1, "Cancel and Confirm registration");
-
-  const tryDate = (date) => {
-    ui.reg.from.set_value(date);
-    ui.saveRegistration(cx);
-    return ui.reg?.error;
-  };
-  assert.match(tryDate("2026-01-01"), /Choose how Example Trading Corp is registered/);
-  ui.pickIncomeType("SelfEmployed", cx);
-  assert.match(tryDate("2026-02-30"), /YYYY-MM-DD/);
-  assert.match(tryDate("2027-01-01"), /by December 31, 2026/);
-  assert.match(tryDate("2020-01-01"), /after 2020-01-01/);
-  assert.equal(writes.length, 0, "nothing bir-core would refuse is sent");
-
-  refuse = "Other error: The tax profile already has a confirmed registration from January 1, 2026; a new one must start after that date";
-  assert.equal(tryDate("2026-01-01"), "The tax profile already has a confirmed registration from January 1, 2026; a new one must start after that date", "a refusal in plain words");
+  assert.equal(ui.factEdit.fact, "tax_classification", "with the income type open");
+  assert.equal(ui.factEdit.value, null, "and nothing chosen for the filer");
+  const page = renderTaxpayerPage(cx, app, "profile", 900);
+  const choice = find(page, (i) => i.segmented === "tp-fact-tax_classification-choice")[0];
+  assert.deepEqual(Array.from(choice.info.options, (o) => o.value), ["SelfEmployed", "MixedIncome", "PurelyCompensation"], "an individual's income types");
+  ui.saveFactEdit(cx);
+  assert.equal(writes.length, 0, "nothing is sent before a choice");
+  assert.equal(ui.factEdit.error, "Choose one first.");
+  ui.pickFact("SelfEmployed", cx);
+  refuse = "Other error: The tax profile cannot take it.";
+  ui.saveFactEdit(cx);
+  assert.equal(ui.factEdit.error, "The tax profile cannot take it.", "a refusal in plain words");
   refuse = null;
-  tryDate("2026-03-01");
-  assert.deepEqual(writes.at(-1), ["confirm_income_registration", TIN, "SelfEmployed", "2026-03-01"]);
-  assert.equal(ui.reg, null, "the edit closes");
-  assert.equal(toasts.at(-1).msg, "Registration confirmed from 2026-03-01.");
+  ui.saveFactEdit(cx);
+  assert.equal(JSON.stringify(writes.at(-1)), JSON.stringify(["set_year_facts", TIN, 2026, { tax_classification: "SelfEmployed" }]));
+  assert.ok(!writes.some((w) => w[0] === "confirm_income_registration"), "the old confirmation is not used");
+  assert.equal(ui.factEdit, null, "the edit closes");
+  assert.equal(toasts.at(-1).msg, "Income type saved for 2026.");
   assert.deepEqual(went.at(-1), ["back"], "back to the return, whose card asks again");
 }
 

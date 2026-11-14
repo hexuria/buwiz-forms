@@ -137,6 +137,7 @@ const linked = {
   "gpui-base": mock("gpui-base", { Input: { new: stub }, InputState, CalendarState: {}, Popup: { new: stub }, OtpInput: { new: stub }, OtpState: InputState }),
   "gpui-component": mock("gpui-component", { Spinner: { new: stub } }),
   "./ui.js": ui,
+  "./todo.js": source("app/shell/todo.js"),
   "./store.js": mock("./store.js", { formatTin: (root9, code) => `${root9}-${code}`, errorText: (e) => String(e && e.message ? e.message : e) }),
 };
 await ui.link((s) => linked[s]);
@@ -172,6 +173,8 @@ const bumped = [];
 // bir-core income_tax_election_readiness: the profile can take 2026's election.
 const READY = { taxable_year: 2026, gap: "ready", taxpayer_type: "Individual", classification: "SelfEmployed", since: "2026-01-01", new_registration_after: "2026-01-01", issues: [] };
 let readiness = READY;
+// The cards the host asks (decision 3): none while the profile has the income type.
+let asksNow = [];
 const readinessAsked = [];
 const store = {
   templates: () => [],
@@ -182,12 +185,12 @@ const store = {
   call(name, ...args) {
     calls.push([name, ...args]);
     if (name === "screen_form_schema") return schema;
-    if (name === "screen_form_open") return Promise.resolve({ draft, status: "Draft", editable: true, values: { ...values }, locks: {}, errors: errors() });
+    if (name === "screen_form_open") return Promise.resolve({ draft, status: "Draft", editable: true, values: { ...values }, locks: {}, errors: errors(), asks: asksNow });
     if (name === "screen_form_use_profile") {
       // sync_with_profile: the profile's election; Item 13 stays for the filer.
       const individual = profileType === "Individual";
       draft = { ...args[3], taxpayer_type: profileType, annual_income_tax_election: individual ? profileElection : "unrecorded", item_13_election: individual || !syncAnswers ? "unanswered" : "not_applicable" };
-      return { draft, values: { ...values }, options: {}, rejected: {} };
+      return { draft, values: { ...values }, options: {}, rejected: {}, asks: asksNow };
     }
     if (name === "screen_form_fill") {
       values = { ...values, ...args[2] };
@@ -205,6 +208,12 @@ const store = {
       return true;
     }
     if (name === "screen_form_save") return { draft: args[1], status: "Draft" };
+    // The income-type card's Save: the head office's year facts take it.
+    if (name === "set_year_facts") {
+      asksNow = asksNow.filter((a) => !(a.fact in args[2]));
+      readiness = { ...READY, classification: args[2].tax_classification };
+      return { tin: args[0], year: args[1] };
+    }
     throw Error(`unexpected host write ${name}`);
   },
 };
@@ -234,7 +243,7 @@ function frame() {
 
 app.formUi.open({ code: "2551Q", tin: TIN, year: 2026, period: 3 }, cx);
 await settle();
-const s = app.formUi.state;
+let s = app.formUi.state;
 app.formUi.jumpTo(Number(ITEM13.split(":")[0]), cx);
 frame();
 
@@ -293,59 +302,77 @@ draw(pill);
 assert.equal(byId(pill.tree, "fp-pill-count").length, 0, "no section needs attention");
 console.log(JSON.stringify({ item13: ITEM13, item16: ITEM16, rowBuildsOnSave: traces.length, hostCalls: names }));
 
-// ---- a profile that cannot take the election (a taxpayer added in the app:
-// no income type confirmed for 2026). The card knows before any press: no
-// rate, no Save, what is missing and for which year, and the way to supply it.
-draft = { ...draft, annual_income_tax_election: "unrecorded" };
-readiness = { ...READY, gap: "not_business_income", classification: null, since: "2020-01-01", new_registration_after: "2020-01-01" };
-const writesBefore = calls.filter((c) => c[0] === "record_income_tax_election").length;
-app.formUi.validate(cx);
+// ---- a profile with no income type for 2026 (decision 3): the rate cannot
+// be recorded, so Item 13 asks the income type with a fact card from the
+// host's `asks`, never "Confirm registration". Saving it writes the year's
+// facts, the return follows the profile, and the rate question comes back.
+const INCOME_ASK = {
+  fact: "tax_classification",
+  key: R1,
+  label: "Income type",
+  control: "choice",
+  choices: [
+    { value: "SelfEmployed", label: "Self-employed or professional" },
+    { value: "MixedIncome", label: "Mixed income (compensation and business)" },
+    { value: "PurelyCompensation", label: "Compensation only" },
+  ],
+  note: "Juana Santos's income type for 2026 is not in the tax profile; what you save here goes there for every later return.",
+};
+asksNow = [INCOME_ASK];
+profileElection = "unrecorded";
+draft = { ...draft, annual_income_tax_election: "unrecorded", item_13_election: "unanswered" };
+values = { ...values, [R1]: "false", [R2]: "false" };
+readiness = { ...READY, gap: "not_business_income", classification: null };
+app.formUi.open({ code: "2551Q", tin: TIN, year: 2026, period: 3 }, cx);
+await settle();
+s = app.formUi.state;
+app.formUi.jumpTo(Number(ITEM13.split(":")[0]), cx);
+frame();
+assert.equal(byId(row13(), "fp-ask-tax_classification").length, 1, "Item 13 asks the income type");
+assert.equal(byId(frame(), "fp-ask-tax_classification").length, 1, "only there");
+assert.equal(byId(frame(), "fp-election").length, 0, "the rate card waits for the income type");
+assert.equal(byId(frame(), "fp-election-register").length, 0, "no Confirm registration");
+const asked = texts(one(frame(), "fp-ask-tax_classification")).join(" ");
+assert.ok(asked.includes(INCOME_ASK.note), asked);
+assert.ok(!/registration|not confirmed|Certificate/i.test(asked), `no Registration wording: ${asked}`);
+assert.ok(has(one(frame(), "fp-ask-tax_classification-save"), "disabled", true), "Save waits for an answer");
+traces.length = 0;
+click(frame(), "fp-ask-tax_classification-0");
+frame();
+assert.deepEqual([...new Set(traces)], [`fp-item-${ITEM13}`], "picking rebuilds only Item 13");
+assert.ok(!has(one(frame(), "fp-ask-tax_classification-save"), "disabled", true));
+traces.length = 0;
+calls.length = 0;
+click(frame(), "fp-ask-tax_classification-save");
 await settle();
 frame();
-assert.equal(byId(frame(), "fp-election").length, 1, "Item 13 still has its card");
-assert.deepEqual(readinessAsked.at(-1), [TIN, 2026], "readiness is asked for the return's own TIN and year");
-assert.equal(byId(frame(), "fp-election-save").length, 0, "no Save the profile would refuse");
-assert.equal(byId(frame(), "fp-election-graduated").length + byId(frame(), "fp-election-eight_percent").length, 0, "no rate to pick");
-const blocked = texts(one(frame(), "fp-election")).join(" ");
-assert.ok(blocked.includes("Juana Santos's tax profile does not say whether Juana Santos is self-employed or has mixed income in 2026."), blocked);
-assert.ok(blocked.includes("Certificate of Registration"), "it says where the fact comes from");
-assert.ok(!/Other error/.test(blocked), "no raw host text");
-// recordElection itself refuses to send it, even if called.
-s.electionPick = "graduated";
-app.formUi.recordElection(cx);
-assert.equal(calls.filter((c) => c[0] === "record_income_tax_election").length, writesBefore, "nothing is sent while the profile cannot take it");
-s.electionPick = null;
-// No confirmed registration at all, and a compensation-only one, say so too.
-for (const [gap, classification, words] of [
-  ["no_confirmed_registration", null, "has no confirmed registration for 2026"],
-  ["not_business_income", "PurelyCompensation", "registered for compensation income only in 2026"],
-]) {
-  readiness = { ...readiness, gap, classification };
-  app.formUi.refreshRows();
-  assert.ok(texts(one(frame(), "fp-election")).join(" ").includes(words), `${gap}: ${words}`);
-}
-// "Confirm registration" opens the taxpayer's Registration section for 2026.
-const opened = [];
-app.taxpayerUi = { startRegistration: (opts) => opened.push(opts) };
-click(frame(), "fp-election-register");
-assert.equal(JSON.stringify(opened), JSON.stringify([{ tin: TIN, year: 2026, fromForm: true }]), "the Registration section, for the return's branch and year");
-// The filer confirms it there and comes back: the card asks again, and only Item 13 rebuilds.
-readiness = READY;
-traces.length = 0;
-app.formUi.reenter();
-frame();
-assert.deepEqual([...new Set(traces)], [`fp-item-${ITEM13}`], "coming back rebuilds only Item 13");
-assert.equal(byId(frame(), "fp-election-register").length, 0);
-assert.equal(byId(frame(), "fp-election-graduated").length, 1, "the rates are offered now");
-assert.ok(texts(one(frame(), "fp-election")).includes("Which income-tax rate did Juana Santos choose for 2026?"));
+const savedCalls = calls.map((c) => c[0]);
+assert.deepEqual(savedCalls.slice(0, 2), ["set_year_facts", "screen_form_use_profile"], `host calls: ${savedCalls}`);
+assert.equal(JSON.stringify(calls[0]), JSON.stringify(["set_year_facts", TIN, 2026, { tax_classification: "SelfEmployed" }]), "the year's facts, for the return's own year");
+assert.equal(JSON.stringify(calls[1][5]), JSON.stringify(["tax_classification"]), "the return takes the answered fact");
+assert.ok(savedCalls.includes("screen_form_save") && savedCalls.includes("screen_form_validate"), "then saved and checked");
+assert.ok(!savedCalls.includes("confirm_income_registration"), "never the registration call");
+assert.equal(byId(frame(), "fp-ask-tax_classification").length, 0, "the card is gone");
+assert.ok(texts(one(frame(), `fp-ask-saved-${ITEM13}`)).join(" ").includes("Income type saved to the tax profile."));
+assert.ok(texts(one(frame(), "fp-election")).includes("Which income-tax rate did Juana Santos choose for 2026?"), "the rate is asked now");
+assert.deepEqual([...new Set(traces)], [`fp-item-${ITEM13}`], "the save rebuilds only Item 13");
+
+// Compensation only: the rate is not for this taxpayer; no Save, no registration.
+readiness = { ...READY, gap: "not_business_income", classification: "PurelyCompensation" };
+app.formUi.refreshRows();
+const compensation = texts(one(frame(), "fp-election")).join(" ");
+assert.ok(compensation.includes("earning compensation income only in 2026"), compensation);
+assert.ok(compensation.includes("change the income type on the tax profile"), compensation);
+assert.equal(byId(frame(), "fp-election-save").length + byId(frame(), "fp-election-register").length, 0);
 
 // A refusal that still comes (the profile changed in between): plain words,
 // and the card falls back to what the profile lacks.
-refuseElection = "Other error: The tax profile has no confirmed self-employed or mixed-income registration for 2026";
+refuseElection = "Other error: The tax profile does not record self-employed or mixed income for 2026, so it cannot record an income-tax election for that year";
 readiness = { ...READY };
+app.formUi.refreshRows();
 const realElectionWrite = store.write;
 store.write = (name, ...args) => {
-  if (name === "record_income_tax_election") readiness = { ...READY, gap: "no_confirmed_registration", classification: null };
+  if (name === "record_income_tax_election") readiness = { ...READY, gap: "not_business_income", classification: "PurelyCompensation" };
   return realElectionWrite.call(store, name, ...args);
 };
 click(frame(), "fp-election-graduated");
@@ -353,10 +380,9 @@ frame();
 click(frame(), "fp-election-save");
 await settle();
 frame();
-assert.ok(toasts.at(-1).startsWith("The tax profile has no confirmed self-employed"), `the refusal is shown, plainly: ${toasts.at(-1)}`);
+assert.ok(toasts.at(-1).startsWith("The tax profile does not record self-employed"), `the refusal is shown, plainly: ${toasts.at(-1)}`);
 assert.equal(byId(frame(), "fp-election").length, 1, "the card stays");
 assert.equal(byId(frame(), "fp-election-save").length, 0, "and stops offering the Save");
-assert.equal(byId(frame(), "fp-election-register").length, 1, "it offers the registration instead");
 store.write = realElectionWrite;
 refuseElection = null;
 

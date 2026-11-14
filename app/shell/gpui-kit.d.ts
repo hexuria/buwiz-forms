@@ -27917,6 +27917,10 @@ declare module "bir" {
   export function record_screen_log(level: string, message: string): null;
   /** Next UI command from the gpui-agent host, or null when none is waiting. */
   export function agent_take(): string | null;
+  /** Pick up filings an assistant queued on the account server. Null when there is nothing to say. */
+  export function pull_device_filings(): { message: string; icon: string } | null;
+  /** True once the main window is up. False through the gate, first launch, and sign-in. */
+  export function shell_set_chrome(open: boolean): null;
 
   export interface CloudAccountStatus {
       server_url: string;
@@ -28110,6 +28114,11 @@ declare module "bir" {
   export function test_inbox_connection(tin: string): Promise<InboxVerifyResult>;
   /** Runs the cron-side fetch→confirm poll for this inbox once, updating its job row. */
   export function check_inbox_now(tin: string): Promise<InboxCheckResult>;
+  /** Standing OK for an assistant to file one form for this branch. The Queue button does not use it. */
+  export interface SendGrant { tin: string; form: string; granted_at: string; }
+  export function list_send_grants(tin: string): SendGrant[];
+  export function grant_send(tin: string, form: string): SendGrant;
+  export function revoke_send(tin: string, form: string): void;
 
   export interface ScreenFormIndexEntry {
       c: string;
@@ -28368,6 +28377,29 @@ declare module "bir" {
       return_key: number | null;
   }
   export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
+
+  /**
+   * A vertical scroll area whose position `scroll_reveal` can move. It fills
+   * its parent (`flex_1`, `h_full`, `min_w(0)`, `min_h(0)`) and hides sideways
+   * overflow. `props.name` names it for `scroll_reveal` and `scroll_offset`
+   * (default: the id).
+   */
+  export const ScrollArea: { new(id: string, props: { name?: string }): NativeElement };
+  /**
+   * A zero-size marker for the top of a row inside the area `props.area`. Place
+   * it as an absolute child at the row's top (the row `relative()`).
+   */
+  export const ScrollMark: { new(id: string, props: { name: string; area: string }): NativeElement };
+  /**
+   * Move area `area` so mark `mark` sits `margin` px below its top (clamped).
+   * False when either has not been painted yet (nothing moves). Call
+   * `window.refresh()` afterwards so the new position is drawn.
+   */
+  export function scroll_reveal(area: string, mark: string, margin: number): boolean;
+  /** How far area `area` is scrolled down (px), or null when it is not painted yet. */
+  export function scroll_offset(area: string): number | null;
+  /** Forget mark `mark` until it is painted again (before a step changes the layout). */
+  export function scroll_forget(mark: string): null;
 }
 
 /**

@@ -1569,7 +1569,7 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
         match form_code.as_str() {
             "2551Q" => {
                 let profile = db
-                    .get_profile(&tin)
+                    .get_profile_for_year(&tin, year)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new(format!("no profile for TIN {tin}")))?;
                 let q = quarter.ok_or_else(|| {
@@ -1583,7 +1583,7 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
             }
             "1601C" => {
                 let profile = db
-                    .get_profile(&tin)
+                    .get_profile_for_year(&tin, year)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new(format!("no profile for TIN {tin}")))?;
                 let month = quarter.ok_or_else(|| {
@@ -1649,21 +1649,21 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                 let q = quarter.ok_or_else(|| {
                     HostError::new("2551Q drafts are quarterly: pass quarter 1-4")
                 })?;
-                db.confirm_initial_profile_year(&tin, i32::from(year))
-                    .map_err(|error| HostError::new(error.to_string()))?;
                 let mut draft = db
                     .get_2551q_draft(&tin, year, q)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new("No saved 2551Q draft for that period"))?;
                 if let Some(profile) = db
-                    .get_profile_by_tin(&tin)
+                    .get_profile_for_year(&tin, year)
                     .map_err(|error| HostError::new(error.to_string()))?
                 {
-                    // A stored resolution error clears once a confirmed version
-                    // covers the quarter. The transition still runs the page's
+                    // The year's profile of the branch (its year facts over
+                    // the flat fields). The transition still runs the page's
                     // Validate (`filing_errors`).
                     let _ = draft.reconcile_with_effective_profile(&profile);
                 }
+                // A tax fact not set that changes what it files (decision 3).
+                crate::screen_form_module::refuse_unset_facts_of(db, "2551Q", &draft)?;
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
                         errors
@@ -1683,6 +1683,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                     .get_1601c_draft(&tin, year, month)
                     .map_err(|error| HostError::new(error.to_string()))?
                     .ok_or_else(|| HostError::new("No saved 1601C draft for that period"))?;
+                crate::screen_form_module::refuse_unset_facts_of(db, "1601C", &draft)?;
                 draft.transition_to_queued().map_err(|errors| {
                     HostError::new(
                         errors
@@ -1706,6 +1707,7 @@ fn queue_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
                         .ok_or_else(|| {
                             HostError::new(format!("No saved {form_code} draft for that period"))
                         })?;
+                    crate::screen_form_module::refuse_unset_facts_of(db, &form_code, &draft)?;
                     draft
                         .queue(bir_core::filing_queue::QueueAuthSource::Gui)
                         .map_err(|errors| {
@@ -2535,7 +2537,7 @@ fn accept_device_filing(
         }));
     }
     let profile = db
-        .get_profile_by_tin(&tin)
+        .get_profile_for_year(&tin, year)
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("no taxpayer profile for {tin}"))?;
     let mut draft =
@@ -2653,12 +2655,14 @@ pub fn module() -> HostModule {
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
+    let module = crate::scroll_module::register(module);
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
+        crate::scroll_module::DECLARATIONS,
     ))
 }
 

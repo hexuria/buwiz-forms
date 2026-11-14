@@ -31,15 +31,21 @@ mod legacy_amendment;
 mod legacy_filed_returns;
 mod migrations;
 mod notices;
+mod previous_return;
+pub use previous_return::PreviousReturn;
 mod profiles;
 mod providers;
 mod queueable;
 mod reader;
 mod receipts;
+mod setups;
 pub use queueable::{AmendmentBase, ClaimQueueableResult, RevertedForAmendment};
 pub use receipts::ReceiptConfirmationOutcome;
+pub use setups::SetupApplied;
 mod submissions;
-mod taxpayers;
+pub(crate) mod taxpayers;
+#[cfg(test)]
+mod year_facts_tests;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
 pub use legacy_filed_returns::LegacyFiledReturn;
 pub use submissions::SubmissionSummary;
@@ -312,12 +318,6 @@ pub struct Database {
     /// That call drops it; zeroed on drop. Never logged: `Database` has no
     /// `Debug`.
     reader_key: Option<zeroize::Zeroizing<String>>,
-}
-
-/// The filing period a Tax Form Library selection (`FileForm { form_code,
-/// year, quarter }`) names, with the same slot semantics the draft store uses.
-pub(crate) fn period_from_library_slot(form_code: &str, slot: u8) -> crate::forms::FilingPeriod {
-    drafts::period_from_legacy_slot(form_code, Some(slot), 1)
 }
 
 pub fn default_database_path() -> std::path::PathBuf {

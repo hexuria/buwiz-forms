@@ -1304,7 +1304,9 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
                         Ok(g) => g,
                         Err(_) => return,
                     };
-                    let current_profile = match db_guard.get_profile(&profile_clone.tin.full()) {
+                    let current_profile = match db_guard
+                        .get_profile_for_year(&profile_clone.tin.full(), summary.taxable_year)
+                    {
                         Ok(Some(profile)) => profile,
                         _ => return,
                     };
@@ -2637,27 +2639,35 @@ mod tests {
         }
     }
 
+    /// The cron's 2551Q submission boundary (`prepare_queued_2551q`) for a
+    /// year profile with no confirmed version, and for one whose versions
+    /// overlap and lack dates: the return is ready, nothing asks for a
+    /// version.
     #[test]
-    fn submission_preparation_rejects_an_unresolved_effective_profile() {
+    fn submission_preparation_needs_no_confirmed_profile_version() {
         let reviewed_profile = reviewed_profile();
         let draft = queued_draft(&reviewed_profile);
-        let mut current_profile = reviewed_profile;
-        current_profile.profile_versions.clear();
+        let mut without = reviewed_profile.clone();
+        without.profile_versions.clear();
+        let mut messy = reviewed_profile;
+        let mut overlapping = messy.profile_versions[0].clone();
+        overlapping.id = "overlapping".into();
+        overlapping.cor.registered_name = "Someone Else".into();
+        let mut undated = overlapping.clone();
+        undated.id = "undated".into();
+        undated.effective_from = None;
+        messy.profile_versions.push(overlapping);
+        messy.profile_versions.push(undated);
 
-        match prepare_queued_2551q(draft, &current_profile, None) {
-            Queued2551QPreparation::Rejected { draft, errors, .. } => {
-                assert_eq!(draft.status, FilingStatus::Draft);
-                assert!(
-                    draft
-                        .last_error
-                        .as_deref()
-                        .is_some_and(|message| message.contains("effective taxpayer profile"))
-                );
-                assert!(errors.iter().any(|(field, message)| {
-                    field == "profile_resolution" && message.contains("No confirmed")
-                }));
+        for current_profile in [without, messy] {
+            match prepare_queued_2551q(draft.clone(), &current_profile, None) {
+                Queued2551QPreparation::Ready { draft, .. } => {
+                    assert_eq!(draft.status, FilingStatus::Queued);
+                    assert!(draft.profile_resolution_error.is_none());
+                    assert!(!draft.profile_snapshot_stale);
+                }
+                _ => panic!("the queued return needs no profile version"),
             }
-            _ => panic!("an unresolved effective profile must reject the queued return"),
         }
     }
 

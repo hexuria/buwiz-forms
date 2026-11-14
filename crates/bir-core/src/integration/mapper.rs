@@ -458,22 +458,19 @@ mod tests {
         }
     }
 
+    /// A profile with no confirmed version maps like any other: the
+    /// return takes the profile it is given (the year's profile).
     #[test]
-    fn test_mapper_2551q_keeps_unresolved_profile_import_fail_closed() {
+    fn test_mapper_2551q_without_a_profile_version_uses_the_profile() {
         let mapper = Mapper2551Q;
         let mut profile = test_profile();
         profile.profile_versions.clear();
 
         let FormDraftOutput::Form2551Q(draft) = mapper.map(&test_payload(), &profile).unwrap();
 
-        assert!(
-            draft
-                .profile_resolution_error
-                .as_deref()
-                .is_some_and(|message| message.contains("No confirmed"))
-        );
-        assert!(draft.taxpayer_name.is_empty());
-        assert!(draft.rdo_code.is_empty());
+        assert!(draft.profile_resolution_error.is_none());
+        assert_eq!(draft.taxpayer_name, profile.full_name);
+        assert_eq!(draft.rdo_code, profile.rdo_code);
     }
 
     #[test]

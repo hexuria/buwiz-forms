@@ -98,6 +98,7 @@ const real = {
   "./shell/theme.js": source("app/shell/theme.js"),
   "./shell/ui.js": source("app/shell/ui.js"),
   "./shell/chrome.js": source("app/shell/chrome.js"),
+  "./shell/facts.js": source("app/shell/facts.js"),
   "./shell/chrome_gate.js": source("app/shell/chrome_gate.js"),
   "./shell/recent.js": source("app/shell/recent.js"),
 };
@@ -117,8 +118,10 @@ const linked = {
     renderFormPage: stub,
     renderFormSplit: () => null,
     formColumnBox: () => null,
+    formScrollArea: (_app, id, plain) => plain(stub().id(id)).overflow_y_scroll().overflow_x_hidden(),
     renderExistingOffer: stub,
     renderRemovalConfirm: stub,
+    renderQueueConfirm: stub,
     renderSamplePeriod: stub,
     FormPageActions: stubClass,
   }),
@@ -136,6 +139,7 @@ for (const [k, v] of Object.entries(real)) {
   linked[k.replace("./shell/", "./")] = v;
 }
 linked["./periods.js"] = periods;
+linked["./todo.js"] = source("app/shell/todo.js");
 const main = source("app/main.js");
 await main.link((s) => {
   if (!linked[s]) throw new Error(`unlinked import ${s}`);
@@ -170,6 +174,10 @@ const store = {
   taxYears: () => [2026],
   yearlyForms: () => ["1601C"],
   templates: () => [],
+  taxTypes: () => [],
+  annualConflicts: () => [],
+  yearFacts: () => null,
+  electionReadiness: () => null,
   screenIndex: () => [{ c: "1601C", freq: "Monthly" }],
   logScreen() {},
   call() {},

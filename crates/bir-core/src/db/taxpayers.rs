@@ -15,23 +15,25 @@ use serde_json::Value;
 
 use super::{Database, DbError};
 use crate::forms::FilingStatus;
-use crate::forms::agent::AgentFormKind;
-use crate::forms::agent::template_stops::{self, TemplateStops};
+use crate::forms::agent::carry;
 use crate::forms::forms_set::{FormSetEntry, FormSetSource, PerYearFormsSet};
 use crate::forms::registry::canonical_form_code;
-use crate::profile::{TaxpayerProfile, TaxpayerType};
-use crate::tax_profile::templates::{form_order_key, value_at_path};
-use crate::tax_profile::{AddedTaxYear, check_tax_year, format_tin_root, snapshot_setup_answers};
+use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile, TaxpayerType};
+use crate::tax_profile::templates::{
+    migrate_fields, snapshot_answers, template_form, updated_fields,
+};
+use crate::tax_profile::{AddedTaxYear, check_tax_year, format_tin_root};
 use crate::tax_profile::{
-    AutoSource, BranchFacts, BranchField, BranchName, BranchSettings, BranchUpdate, FieldKind,
-    FieldSetting, FormTemplate, GroupingReview, IdentitySource, NewBranch, NewTaxpayer,
-    PrefillPlan, ResolvedBranch, ResolvedPeriod, StarterPack, TaxProfileError, Taxpayer,
-    TaxpayerData, TaxpayerUpdate, TaxpayerWithBranches, TemplatableKind, TemplateChoice,
-    TemplateField, TemplateFieldError, TemplateSource, default_branch_name, field_kinds_for,
-    is_head_office_code, normalize_branch_code, parse_tin_root, resolve_facts,
+    BranchFacts, BranchField, BranchName, BranchSettings, BranchUpdate, FieldSetting, FormTemplate,
+    GroupingReview, NewBranch, NewTaxpayer, ResolvedBranch, TaxProfileError, Taxpayer,
+    TaxpayerData, TaxpayerUpdate, TaxpayerWithBranches, TemplateField, TemplateSource,
+    default_branch_name, is_head_office_code, normalize_branch_code, parse_tin_root, resolve_facts,
     validate_template_fields,
 };
-use crate::tax_profile::{TaxpayerCredentials, reject_reserved_tin_root};
+use crate::tax_profile::{
+    EffectiveYearFacts, FactOwner, TaxTypeChip, TaxpayerCredentials, YearFacts, YearFactsPatch,
+    YearFactsView, reject_reserved_tin_root,
+};
 
 type Result<T> = std::result::Result<T, TaxProfileError>;
 
@@ -491,26 +493,17 @@ struct TemplateRow {
 
 impl TemplateRow {
     fn into_template(self) -> Result<FormTemplate> {
+        let fields = migrate_fields(&self.form_code, serde_json::from_str(&self.fields_json)?);
         Ok(FormTemplate {
             id: self.id,
             tin: self.tin,
             form_code: self.form_code,
-            fields: serde_json::from_str(&self.fields_json)?,
+            fields,
             source: TemplateSource::from_db(&self.source)?,
             created_at: self.created_at,
             updated_at: self.updated_at,
         })
     }
-}
-
-/// The on-screen form a template's stops are drawn on, and its canonical code.
-fn page_form(form_code: &str) -> Result<(AgentFormKind, String)> {
-    let form_code = canonical_form_code(form_code);
-    let kind = AgentFormKind::from_code(&form_code)
-        .ok_or_else(|| TaxProfileError::NotFound(format!("No on-screen form {form_code}")))?;
-    field_kinds_for(&form_code)
-        .ok_or_else(|| TemplateFieldError::FormNotClassified(form_code.clone()))?;
-    Ok((kind, form_code))
 }
 
 fn query_template(conn: &Connection, tin: &str, form_code: &str) -> Result<Option<FormTemplate>> {
@@ -558,6 +551,32 @@ fn insert_template(
             "Branch {tin} already has a {form_code} template; a branch has one template per form"
         )));
     }
+    Ok(())
+}
+
+/// Store `fields` as the branch's template for `form_code`: over the one it
+/// has (`exists`, keeping its id and creation time), else a new row.
+fn write_template(
+    conn: &Connection,
+    tin: &str,
+    form_code: &str,
+    fields: &BTreeMap<String, TemplateField>,
+    source: &TemplateSource,
+    exists: bool,
+) -> Result<()> {
+    if !exists {
+        return insert_template(conn, tin, form_code, fields, source);
+    }
+    conn.execute(
+        "UPDATE form_templates SET fields_json = ?3, source = ?4, updated_at = datetime('now')
+         WHERE tin = ?1 AND form_code = ?2",
+        params![
+            tin,
+            form_code,
+            serde_json::to_string(fields)?,
+            source.to_db()
+        ],
+    )?;
     Ok(())
 }
 
@@ -644,7 +663,7 @@ fn record_tax_year(conn: &Connection, tin: &str, year: u16) -> Result<()> {
 
 /// A branch's tax years: the ones added explicitly plus every year that has
 /// a stored Forms Set (legacy and COR-era years included).
-fn query_tax_years(conn: &Connection, tin: &str) -> Result<BTreeSet<u16>> {
+pub(crate) fn query_tax_years(conn: &Connection, tin: &str) -> Result<BTreeSet<u16>> {
     let mut years = load_branch_settings(conn, tin)?.tax_years;
     let mut stmt =
         conn.prepare("SELECT DISTINCT taxable_year FROM per_year_forms WHERE tin = ?1")?;
@@ -662,9 +681,10 @@ fn active_codes(conn: &Connection, tin: &str, year: u16) -> Result<Vec<String>> 
 
 /// Every table keyed by a full TIN (`column` holds root + branch code).
 /// `profiles` and `taxpayers` are handled separately by the TIN move.
-const TIN_KEYED_TABLES: [(&str, &str); 12] = [
+const TIN_KEYED_TABLES: [(&str, &str); 13] = [
     ("form_drafts", "tin"),
     ("per_year_forms", "tin"),
+    ("year_facts", "tin"),
     ("form_templates", "tin"),
     ("submissions", "tin"),
     ("submission_receipts", "tin"),
@@ -918,6 +938,577 @@ fn load_return(conn: &Connection, draft_id: i64) -> Result<ReturnRow> {
     )
     .optional()?
     .ok_or_else(|| TaxProfileError::NotFound(format!("No return with id {draft_id}")))
+}
+
+// =========================================================================
+// Year facts (owner decisions 4-7) — `year_facts`
+// =========================================================================
+
+/// What a refused election change says.
+/// Why the year's recorded 8% or graduated choice cannot change right now,
+/// or `None` when it can: a return that carries it was filed (decision 7,
+/// for good), or one is waiting to send (until its queue is cancelled: a
+/// queued return must not go out carrying a choice the year no longer has).
+pub(crate) fn election_change_refusal_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<Option<String>, DbError> {
+    if election_locked_on(conn, tin, year)? {
+        return Ok(Some(election_locked_message(year)));
+    }
+    let Some(root) = tin.get(..9) else {
+        return Ok(None);
+    };
+    let queued: i64 = conn.query_row(
+        &format!(
+            "SELECT count(*) FROM form_drafts
+             WHERE {} AND taxable_year = ?2
+               AND form_code IN ('2551Q', '1701Q', '1701')
+               AND status = 'Queued'",
+            root_matches("tin")
+        ),
+        params![root, i64::from(year)],
+        |row| row.get(0),
+    )?;
+    Ok((queued > 0).then(|| {
+        format!(
+            "The 8% or graduated choice for {year} cannot change while a return that carries it is waiting to send. Cancel that return's queue first."
+        )
+    }))
+}
+
+/// An income type that chooses between 8% and graduated rates.
+fn chooses_a_rate(classification: Option<&crate::profile::TaxClassification>) -> bool {
+    matches!(
+        classification,
+        Some(
+            crate::profile::TaxClassification::SelfEmployed
+                | crate::profile::TaxClassification::MixedIncome
+        )
+    )
+}
+
+fn election_locked_message(year: u16) -> String {
+    format!(
+        "The 8% or graduated choice for {year} cannot change: a return that carries it was already filed."
+    )
+}
+
+fn read_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<Option<YearFacts>, DbError> {
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT facts_json FROM year_facts WHERE tin = ?1 AND taxable_year = ?2",
+            params![tin, i64::from(year)],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(json.as_deref().map(serde_json::from_str).transpose()?)
+}
+
+pub(crate) fn write_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+) -> std::result::Result<(), DbError> {
+    conn.execute(
+        "INSERT INTO year_facts (tin, taxable_year, facts_json, updated_at)
+         VALUES (?1, ?2, ?3, datetime('now'))
+         ON CONFLICT(tin, taxable_year)
+         DO UPDATE SET facts_json = excluded.facts_json, updated_at = datetime('now')",
+        params![tin, i64::from(year), serde_json::to_string(facts)?],
+    )?;
+    Ok(())
+}
+
+/// An imported archive's forms list for `year`: `codes` become the year's
+/// hand-picked forms and `year` one of the branch's tax years, inside the
+/// caller's transaction.
+pub(crate) fn restore_yearly_forms(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    codes: &[String],
+) -> Result<()> {
+    let codes = canonical_codes(codes)?;
+    if !codes.is_empty() || !super::forms_set::query_per_year_forms(conn, tin, year)?.is_empty() {
+        replace_yearly_forms(conn, tin, year, &codes)?;
+    }
+    record_tax_year(conn, tin, year)
+}
+
+/// Every stored record of `tin`, by year.
+/// The facts a branch's archive carries for each year it has a record or a
+/// tax year: its EFFECTIVE facts, so the income type, the 8% or graduated
+/// choice and the EOPT tier the head office holds for it travel with a
+/// branch that is exported on its own.
+pub(crate) fn year_facts_for_export(
+    conn: &Connection,
+    tin: &str,
+) -> std::result::Result<BTreeMap<u16, YearFacts>, DbError> {
+    let mut years: BTreeSet<u16> = list_year_facts(conn, tin)?.into_keys().collect();
+    years.extend(query_tax_years(conn, tin).map_err(|error| DbError::Other(error.to_string()))?);
+    let mut records = BTreeMap::new();
+    for year in years {
+        records.insert(year, effective_year_facts_on(conn, tin, year)?.facts);
+    }
+    Ok(records)
+}
+
+/// Put an archive's facts for `year` back. The branch's own facts go to its
+/// record. The head-office facts go to the head office's record, and only
+/// where it has none: an import never overwrites what the head office
+/// already holds for every branch. A branch whose taxpayer has no head
+/// office here holds them itself.
+pub(crate) fn restore_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    facts: &YearFacts,
+) -> std::result::Result<(), DbError> {
+    let head_tin = head_office_tin_of(conn, tin)?;
+    if head_tin == tin {
+        return write_year_facts(conn, tin, year, facts);
+    }
+    let own = YearFacts {
+        tax_classification: None,
+        income_tax_election: None,
+        election_source: None,
+        eopt_tier: None,
+        ..facts.clone()
+    };
+    write_year_facts(conn, tin, year, &own)?;
+    let mut head = ensure_year_facts(conn, &head_tin, year)?;
+    if head.tax_classification.is_none() {
+        head.tax_classification = facts.tax_classification.clone();
+    }
+    if head.income_tax_election.is_none() {
+        head.income_tax_election = facts.income_tax_election.clone();
+        head.election_source = facts.election_source.clone();
+    }
+    if head.eopt_tier.is_none() {
+        head.eopt_tier = facts.eopt_tier.clone();
+    }
+    write_year_facts(conn, &head_tin, year, &head)
+}
+
+pub(crate) fn list_year_facts(
+    conn: &Connection,
+    tin: &str,
+) -> std::result::Result<BTreeMap<u16, YearFacts>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT taxable_year, facts_json FROM year_facts WHERE tin = ?1 ORDER BY taxable_year",
+    )?;
+    let rows = stmt.query_map([tin], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+    let mut records = BTreeMap::new();
+    for row in rows {
+        let (year, json) = row?;
+        if let Ok(year) = u16::try_from(year) {
+            records.insert(year, serde_json::from_str(&json)?);
+        }
+    }
+    Ok(records)
+}
+
+/// The flat profile stored for `tin`, or `None` when there is none or this
+/// build cannot read it.
+fn flat_profile(
+    conn: &Connection,
+    tin: &str,
+) -> std::result::Result<Option<TaxpayerProfile>, DbError> {
+    let json: Option<String> = conn
+        .query_row(
+            "SELECT data_json FROM profiles WHERE tin = ?1",
+            [tin],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(json.and_then(|json| serde_json::from_str(&json).ok()))
+}
+
+/// The row that holds `tin`'s head-office facts: the taxpayer's head office
+/// (its lowest-id zero branch), or `tin` itself when there is none.
+fn head_office_tin_of(conn: &Connection, tin: &str) -> std::result::Result<String, DbError> {
+    let Some(root) = tin.get(..9) else {
+        return Ok(tin.to_string());
+    };
+    let head: Option<String> = conn
+        .query_row(
+            "SELECT tin FROM profiles
+             WHERE length(tin) > 9 AND substr(tin, 1, 9) = ?1
+               AND substr(tin, 10) NOT GLOB '*[^0]*'
+             ORDER BY id LIMIT 1",
+            [root],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(head.unwrap_or_else(|| tin.to_string()))
+}
+
+/// The `form_drafts.tin` keys under `tin`'s root.
+fn branch_tins_of(conn: &Connection, tin: &str) -> std::result::Result<Vec<String>, DbError> {
+    let Some(root) = tin.get(..9) else {
+        return Ok(vec![tin.to_string()]);
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT tin FROM profiles WHERE {} ORDER BY id",
+        root_matches("tin")
+    ))?;
+    let tins = stmt
+        .query_map([root], |row| row.get(0))?
+        .collect::<std::result::Result<Vec<String>, _>>()?;
+    Ok(tins)
+}
+
+/// "2551Qv2018" -> "2551Q"; the profile manager's own entries -> "Tax profile".
+fn election_source_label(source_form: &str) -> String {
+    let code = source_form.trim();
+    for form in ["2551Q", "1701Q", "1701"] {
+        if code.starts_with(form) {
+            return form.to_string();
+        }
+    }
+    match code {
+        "" | "profile_manager" => "Tax profile".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// The flat `tax_elections` entries of `year` that speak for the head
+/// office `head_tin`: its own, else `prefer_tin`'s, else the first branch's
+/// under the root that has some.
+fn flat_year_elections(
+    conn: &Connection,
+    head_tin: &str,
+    prefer_tin: &str,
+    year: u16,
+) -> std::result::Result<Vec<TaxElectionHistory>, DbError> {
+    let mut order = vec![head_tin.to_string(), prefer_tin.to_string()];
+    order.extend(branch_tins_of(conn, head_tin)?);
+    for tin in order {
+        if let Some(profile) = flat_profile(conn, &tin)? {
+            let entries: Vec<TaxElectionHistory> = profile
+                .tax_elections
+                .iter()
+                .filter(|entry| entry.taxable_year == year)
+                .cloned()
+                .collect();
+            if !entries.is_empty() {
+                return Ok(entries);
+            }
+        }
+    }
+    Ok(Vec::new())
+}
+
+/// The one election `entries` record, with where it was made.
+fn election_of_entries(
+    entries: &[TaxElectionHistory],
+    year: u16,
+) -> (Option<IncomeTaxElection>, Option<String>) {
+    let election = crate::tax_profile::year_facts::election_of_ledger(entries, year);
+    let source = election.as_ref().and_then(|election| {
+        entries
+            .iter()
+            .find(|entry| &entry.election == election)
+            .map(|entry| election_source_label(&entry.source_form))
+    });
+    (election, source)
+}
+
+/// The record a year without one reads as: the branch's nearest earlier
+/// record (every fact but the election), else its flat profile fields;
+/// with `as_head`, the year's flat election too.
+fn seed_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    as_head: bool,
+) -> std::result::Result<YearFacts, DbError> {
+    let earlier = list_year_facts(conn, tin)?
+        .range(..year)
+        .next_back()
+        .map(|(_, facts)| facts.carried_to_next_year());
+    let mut facts = match earlier {
+        Some(facts) => facts,
+        None => flat_profile(conn, tin)?
+            .map(|profile| YearFacts::from_flat_profile(&profile))
+            .unwrap_or_default(),
+    };
+    facts.income_tax_election = None;
+    facts.election_source = None;
+    if !as_head {
+        // A branch's own record holds only the facts it owns.
+        facts.tax_classification = None;
+        facts.eopt_tier = None;
+    }
+    if as_head {
+        let entries = flat_year_elections(conn, tin, tin, year)?;
+        (facts.income_tax_election, facts.election_source) = election_of_entries(&entries, year);
+    }
+    Ok(facts)
+}
+
+/// `tin`'s stored record for `year`, written from its seed first when the
+/// year has none.
+fn ensure_year_facts(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<YearFacts, DbError> {
+    if let Some(facts) = read_year_facts(conn, tin, year)? {
+        return Ok(facts);
+    }
+    let as_head = head_office_tin_of(conn, tin)? == tin;
+    let facts = seed_year_facts(conn, tin, year, as_head)?;
+    write_year_facts(conn, tin, year, &facts)?;
+    Ok(facts)
+}
+
+/// `tin`'s effective facts for `year`: the head office's record for the
+/// facts it owns, the branch's own for the rest (each the stored record,
+/// else its seed).
+pub(crate) fn effective_year_facts_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<EffectiveYearFacts, DbError> {
+    let head_tin = head_office_tin_of(conn, tin)?;
+    let own = match read_year_facts(conn, tin, year)? {
+        Some(facts) => facts,
+        None => seed_year_facts(conn, tin, year, head_tin == tin)?,
+    };
+    let stored_head = read_year_facts(conn, &head_tin, year)?;
+    let election_recorded = stored_head.is_some();
+    let head = match stored_head {
+        Some(facts) => facts,
+        None if head_tin == tin => own.clone(),
+        None => seed_year_facts(conn, &head_tin, year, true)?,
+    };
+    let fallback_elections = if election_recorded {
+        Vec::new()
+    } else {
+        flat_year_elections(conn, &head_tin, tin, year)?
+    };
+    Ok(EffectiveYearFacts {
+        tin: tin.to_string(),
+        year,
+        facts: YearFacts {
+            tax_classification: head.tax_classification,
+            income_tax_election: head.income_tax_election,
+            election_source: head.election_source,
+            eopt_tier: head.eopt_tier,
+            ..own
+        },
+        head_office_tin: head_tin,
+        election_recorded,
+        fallback_elections,
+    })
+}
+
+/// `profile` with its year's effective facts laid over the flat fields.
+pub(crate) fn overlay_profile_for_year(
+    conn: &Connection,
+    profile: &mut TaxpayerProfile,
+    year: u16,
+) -> std::result::Result<(), DbError> {
+    let effective = effective_year_facts_on(conn, &profile.tin.full(), year)?;
+    crate::tax_profile::overlay_year_facts(profile, &effective);
+    Ok(())
+}
+
+/// Decision 7: the year's election is locked once a 2551Q, 1701Q or 1701
+/// of any branch of the taxpayer is past Queued for the year.
+pub(crate) fn election_locked_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+) -> std::result::Result<bool, DbError> {
+    let Some(root) = tin.get(..9) else {
+        return Ok(false);
+    };
+    let filed: i64 = conn.query_row(
+        &format!(
+            "SELECT count(*) FROM form_drafts
+             WHERE {} AND taxable_year = ?2
+               AND form_code IN ('2551Q', '1701Q', '1701')
+               AND status IN ('Submitted', 'Filed', 'Confirmed', 'Paid')",
+            root_matches("tin")
+        ),
+        params![root, i64::from(year)],
+        |row| row.get(0),
+    )?;
+    if filed == 0 {
+        return Ok(false);
+    }
+    // A year with no choice recorded has nothing a filed return could carry
+    // (a return filed before the choice was kept, or one whose Item 13 did
+    // not apply): the first answer is still allowed, and locks from then on.
+    // Without this the row read "Not chosen" and could never be answered.
+    let recorded = effective_year_facts_on(conn, tin, year)?
+        .facts
+        .income_tax_election
+        .is_some();
+    Ok(recorded)
+}
+
+/// Whether two elections are the same 8% or graduated choice.
+fn same_choice(left: Option<&IncomeTaxElection>, right: Option<&IncomeTaxElection>) -> bool {
+    let eight = |election: &IncomeTaxElection| *election == IncomeTaxElection::EightPercent;
+    match (left, right) {
+        (None, None) => true,
+        (Some(left), Some(right)) => eight(left) == eight(right),
+        _ => false,
+    }
+}
+
+/// Write `election` as the year's choice on the head office's record of
+/// `tin`'s taxpayer, made on `source`. A graduated answer over a recorded
+/// graduated one keeps the recorded deduction method. Refused, unwritten,
+/// when the choice changes and the year is locked.
+pub(crate) fn record_year_election_on(
+    conn: &Connection,
+    tin: &str,
+    year: u16,
+    election: IncomeTaxElection,
+    source: &str,
+) -> std::result::Result<(), DbError> {
+    let head_tin = head_office_tin_of(conn, tin)?;
+    let current = effective_year_facts_on(conn, tin, year)?;
+    let recorded = current.facts.income_tax_election.as_ref();
+    if same_choice(recorded, Some(&election)) && current.election_recorded {
+        return Ok(());
+    }
+    if recorded.is_some()
+        && !same_choice(recorded, Some(&election))
+        && let Some(refusal) = election_change_refusal_on(conn, tin, year)?
+    {
+        return Err(DbError::Other(refusal));
+    }
+    let mut facts = ensure_year_facts(conn, &head_tin, year)?;
+    if !same_choice(facts.income_tax_election.as_ref(), Some(&election)) {
+        facts.income_tax_election = Some(election);
+        facts.election_source = Some(source.to_string());
+    }
+    write_year_facts(conn, &head_tin, year, &facts)
+}
+
+/// v23's one-time fill (see `migrations::migrate_v23_year_facts`). Returns
+/// the number of records written.
+pub(crate) fn backfill_year_facts(conn: &Connection) -> std::result::Result<usize, DbError> {
+    struct Branch {
+        tin: String,
+        profile: TaxpayerProfile,
+        years: BTreeSet<u16>,
+    }
+    let rows: Vec<(String, String, Option<String>)> = {
+        let mut stmt = conn.prepare(
+            "SELECT tin, data_json, branch_json FROM profiles
+             WHERE length(tin) >= 9 ORDER BY id",
+        )?;
+        stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<_, _>>()?
+    };
+    let mut by_root: BTreeMap<String, Vec<Branch>> = BTreeMap::new();
+    for (tin, data_json, branch_json) in rows {
+        let Ok(mut profile) = serde_json::from_str::<TaxpayerProfile>(&data_json) else {
+            tracing::warn!(tin = %tin, "v23: skipping a profile this build cannot read");
+            continue;
+        };
+        profile.normalize_profile_version_review_statuses();
+        let mut years: BTreeSet<u16> = branch_json
+            .as_deref()
+            .and_then(|json| serde_json::from_str::<BranchSettings>(json).ok())
+            .map(|settings| settings.tax_years)
+            .unwrap_or_default();
+        let mut stmt =
+            conn.prepare("SELECT DISTINCT taxable_year FROM per_year_forms WHERE tin = ?1")?;
+        for year in stmt.query_map([&tin], |row| row.get::<_, i64>(0))? {
+            if let Ok(year) = u16::try_from(year?) {
+                years.insert(year);
+            }
+        }
+        by_root
+            .entry(tin[..9].to_string())
+            .or_default()
+            .push(Branch {
+                tin,
+                profile,
+                years,
+            });
+    }
+
+    let mut written = 0;
+    let mut insert =
+        |tin: &str, year: u16, facts: &YearFacts| -> std::result::Result<(), DbError> {
+            written += conn.execute(
+            "INSERT OR IGNORE INTO year_facts (tin, taxable_year, facts_json) VALUES (?1, ?2, ?3)",
+            params![tin, i64::from(year), serde_json::to_string(facts)?],
+        )?;
+            Ok(())
+        };
+    for branches in by_root.values() {
+        let head = branches
+            .iter()
+            .position(|branch| is_head_office_code(&branch.tin[9..]));
+        let election_years = |branch: &Branch| -> BTreeSet<u16> {
+            branch
+                .profile
+                .tax_elections
+                .iter()
+                .map(|entry| entry.taxable_year)
+                .collect()
+        };
+        for (index, branch) in branches.iter().enumerate() {
+            let is_head = head.is_none_or(|head| head == index);
+            let mut years = branch.years.clone();
+            if is_head {
+                years.extend(election_years(branch));
+                if head.is_some() {
+                    for other in branches {
+                        years.extend(other.years.iter().copied());
+                        years.extend(election_years(other));
+                    }
+                }
+            }
+            for year in years {
+                let mut facts = YearFacts::backfill(&branch.profile, year);
+                if is_head {
+                    let speakers = std::iter::once(branch).chain(
+                        branches
+                            .iter()
+                            .filter(|other| head.is_some() && other.tin != branch.tin),
+                    );
+                    for speaker in speakers {
+                        let entries: Vec<TaxElectionHistory> = speaker
+                            .profile
+                            .tax_elections
+                            .iter()
+                            .filter(|entry| entry.taxable_year == year)
+                            .cloned()
+                            .collect();
+                        if !entries.is_empty() {
+                            (facts.income_tax_election, facts.election_source) =
+                                election_of_entries(&entries, year);
+                            break;
+                        }
+                    }
+                } else {
+                    facts.tax_classification = None;
+                    facts.eopt_tier = None;
+                }
+                insert(&branch.tin, year, &facts)?;
+            }
+        }
+    }
+    Ok(written)
 }
 
 impl Database {
@@ -1346,26 +1937,6 @@ impl Database {
         self.set_yearly_forms::<&str>(tin, year, &[])
     }
 
-    /// Add a starter pack's forms (for the taxpayer's type) to the list.
-    pub fn apply_starter_pack(
-        &self,
-        tin: &str,
-        year: u16,
-        pack: StarterPack,
-    ) -> Result<PerYearFormsSet> {
-        check_tax_year(year)?;
-        let root = root_of(tin)?;
-        let taxpayer = load_taxpayer(&self.conn, &root)?
-            .ok_or_else(|| TaxProfileError::NotFound(format!("No taxpayer {root}")))?;
-        let mut codes = self.active_form_codes_for_year(tin, year)?;
-        codes.extend(
-            pack.form_codes(&taxpayer.taxpayer_type)
-                .iter()
-                .map(|code| code.to_string()),
-        );
-        self.set_yearly_forms(tin, year, &codes)
-    }
-
     /// D9 "Copy 2026 forms to 2027?": add `from_year`'s forms to `to_year`.
     pub fn copy_yearly_forms(
         &self,
@@ -1416,6 +1987,22 @@ impl Database {
             replace_yearly_forms(&tx, tin, year, &codes)?;
         }
         record_tax_year(&tx, tin, year)?;
+        // Decision 5: a new year starts from the facts of the year before
+        // it (its forms only when asked): the nearest EARLIER year the
+        // branch has, never a later one, so adding 2024 to a branch that has
+        // 2026 does not give 2024 the facts of 2026. The election is chosen
+        // each year.
+        if read_year_facts(&tx, tin, year)?.is_none()
+            && let Some(facts) = years
+                .iter()
+                .rev()
+                .find(|have| **have < year)
+                .map(|earlier| read_year_facts(&tx, tin, *earlier))
+                .transpose()?
+                .flatten()
+        {
+            write_year_facts(&tx, tin, year, &facts.carried_to_next_year())?;
+        }
         let forms = active_codes(&tx, tin, year)?;
         tx.commit()?;
         if !forms.is_empty() {
@@ -1426,6 +2013,133 @@ impl Database {
             copied_from,
             forms,
         })
+    }
+
+    // =====================================================================
+    // Year facts (decisions 4-7)
+    // =====================================================================
+
+    /// The branch's stored facts record for `year`, if it has one.
+    pub fn year_facts(&self, tin: &str, year: u16) -> Result<Option<YearFacts>> {
+        branch_exists(&self.conn, tin)?;
+        Ok(read_year_facts(&self.conn, tin, year)?)
+    }
+
+    /// The branch's effective facts for `year`: the head office's income
+    /// type, election and EOPT tier, the branch's own other facts.
+    pub fn effective_year_facts(&self, tin: &str, year: u16) -> Result<EffectiveYearFacts> {
+        branch_exists(&self.conn, tin)?;
+        Ok(effective_year_facts_on(&self.conn, tin, year)?)
+    }
+
+    /// The Tax profile page's view of the branch's year: the effective
+    /// facts, who holds each, which of the year's forms read it, what is
+    /// not set, and the election lock.
+    pub fn year_facts_view(&self, tin: &str, year: u16) -> Result<YearFactsView> {
+        branch_exists(&self.conn, tin)?;
+        let effective = effective_year_facts_on(&self.conn, tin, year)?;
+        let forms: Vec<String> = canonical_codes(active_codes(&self.conn, tin, year)?)?
+            .into_iter()
+            .collect();
+        let taxpayer = load_taxpayer(&self.conn, &root_of(tin)?)?;
+        let birth_date = taxpayer.as_ref().and_then(|t| t.birth_date);
+        let individual = taxpayer
+            .as_ref()
+            .is_some_and(|t| t.taxpayer_type == TaxpayerType::Individual);
+        let locked = election_locked_on(&self.conn, tin, year)?;
+        let mut view = YearFactsView::new(&effective, &forms, birth_date, locked);
+        // A fact nobody can answer for this taxpayer is not "not set": a
+        // birth date and an income type are an individual's, and only a
+        // self-employed or mixed-income individual chooses 8% or graduated.
+        let chooses_a_rate = individual
+            && matches!(
+                view.facts.tax_classification,
+                Some(
+                    crate::profile::TaxClassification::SelfEmployed
+                        | crate::profile::TaxClassification::MixedIncome
+                )
+            );
+        view.not_set.retain(|fact| match fact {
+            crate::tax_profile::Fact::BirthDate | crate::tax_profile::Fact::TaxClassification => {
+                individual
+            }
+            crate::tax_profile::Fact::IncomeTaxElection => chooses_a_rate,
+            _ => true,
+        });
+        Ok(view)
+    }
+
+    /// The tax types the branch's forms list for `year` gives (decision 2).
+    pub fn tax_types_for_year(&self, tin: &str, year: u16) -> Result<Vec<TaxTypeChip>> {
+        branch_exists(&self.conn, tin)?;
+        Ok(crate::tax_profile::tax_types_for_year(active_codes(
+            &self.conn, tin, year,
+        )?))
+    }
+
+    /// Whether the year's 8% or graduated choice can no longer change
+    /// (decision 7).
+    pub fn income_tax_election_locked(&self, tin: &str, year: u16) -> Result<bool> {
+        Ok(election_locked_on(&self.conn, tin, year)?)
+    }
+
+    /// Set the facts `patch` names for `year`. Head-office facts go to the
+    /// head office's record whichever branch `tin` names; the others to
+    /// `tin`'s own. A year without a record starts from its seed (the
+    /// latest earlier record, else the flat profile). Refuses, unwritten, a
+    /// change to a locked election. Does not save the profile.
+    pub fn set_year_facts(
+        &self,
+        tin: &str,
+        year: u16,
+        patch: &YearFactsPatch,
+    ) -> Result<EffectiveYearFacts> {
+        check_tax_year(year)?;
+        branch_exists(&self.conn, tin)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let current = effective_year_facts_on(&tx, tin, year)?;
+        let recorded = current.facts.income_tax_election.as_ref();
+        if let Some(election) = &patch.income_tax_election
+            && recorded.is_some()
+            && !same_choice(recorded, election.as_ref())
+            && let Some(refusal) = election_change_refusal_on(&tx, tin, year)?
+        {
+            return Err(TaxProfileError::Conflict(refusal));
+        }
+        // An income type that chooses no rate cannot stand beside a recorded
+        // 8% or graduated choice. While the choice may still change it goes
+        // with the income type; once a return carries it, the income type
+        // cannot move to one that has no such choice.
+        let drops_choice = matches!(
+            &patch.tax_classification,
+            Some(new) if recorded.is_some()
+                && patch.income_tax_election.is_none()
+                && !chooses_a_rate(new.as_ref())
+        );
+        if drops_choice && let Some(refusal) = election_change_refusal_on(&tx, tin, year)? {
+            return Err(TaxProfileError::Conflict(format!(
+                "The income type for {year} cannot change to one that chooses no rate. {refusal}"
+            )));
+        }
+        let head_tin = current.head_office_tin.clone();
+        for (owner, row) in [
+            (FactOwner::HeadOffice, &head_tin),
+            (FactOwner::Branch, &tin.to_string()),
+        ] {
+            if !patch.touches(owner) {
+                continue;
+            }
+            let mut facts = ensure_year_facts(&tx, row, year)?;
+            facts.apply(patch, owner);
+            if drops_choice && owner == FactOwner::HeadOffice {
+                facts.income_tax_election = None;
+                facts.election_source = None;
+            }
+            write_year_facts(&tx, row, year, &facts)?;
+        }
+        let effective = effective_year_facts_on(&tx, tin, year)?;
+        tx.commit()?;
+        Ok(effective)
     }
 
     // =====================================================================
@@ -1583,7 +2297,7 @@ impl Database {
     }
 
     // =====================================================================
-    // Templates (D6, D7, D8, D15, D16, D17)
+    // Templates (D6, D7; owner's decisions 9 to 11)
     // =====================================================================
 
     pub fn get_form_template(&self, tin: &str, form_code: &str) -> Result<Option<FormTemplate>> {
@@ -1609,76 +2323,9 @@ impl Database {
         rows.map(|row| row?.into_template()).collect()
     }
 
-    /// Path 2: a blank form in template mode; fields can only be marked.
-    pub fn create_blank_form_template(
-        &self,
-        tin: &str,
-        form_code: &str,
-        marked_fields: &[String],
-    ) -> Result<FormTemplate> {
-        let form_code = canonical_form_code(form_code);
-        branch_exists(&self.conn, tin)?;
-        let fields = marked_fields
-            .iter()
-            .map(|field| (field.clone(), TemplateField::Marked))
-            .collect();
-        validate_template_fields(&form_code, &fields, &TemplateSource::Blank)?;
-        insert_template(&self.conn, tin, &form_code, &fields, &TemplateSource::Blank)?;
-        self.get_form_template(tin, &form_code)?
-            .ok_or_else(|| TaxProfileError::NotFound(form_code))
-    }
-
-    /// Path 1 / D17: "Use as template" on a filed return. Kept values are read
-    /// from the filed return itself; the caller only chooses keep or mark.
-    pub fn create_form_template_from_filed_draft(
-        &self,
-        draft_id: i64,
-        choices: &BTreeMap<String, TemplateChoice>,
-    ) -> Result<FormTemplate> {
-        let (tin, form_code, status, data_json): (String, String, String, String) = self
-            .conn
-            .query_row(
-                "SELECT tin, form_code, status, data_json FROM form_drafts WHERE id = ?1",
-                [draft_id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-            )
-            .optional()?
-            .ok_or_else(|| TaxProfileError::NotFound(format!("No return with id {draft_id}")))?;
-        if !matches!(
-            super::drafts::filing_status_from_db(&status),
-            FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid
-        ) {
-            return Err(TaxProfileError::Invalid(format!(
-                "Return {draft_id} has not been filed ({status}); only a filed return can become a template"
-            )));
-        }
-        branch_exists(&self.conn, &tin)?;
-        let form_code = canonical_form_code(&form_code);
-        let draft: Value = serde_json::from_str(&data_json)?;
-        let mut fields = BTreeMap::new();
-        for (field, choice) in choices {
-            let value = match choice {
-                TemplateChoice::Mark => TemplateField::Marked,
-                TemplateChoice::Keep => TemplateField::Kept {
-                    value: value_at_path(&draft, field).cloned().ok_or_else(|| {
-                        TaxProfileError::Invalid(format!(
-                            "Return {draft_id} has no value for `{field}`"
-                        ))
-                    })?,
-                },
-            };
-            fields.insert(field.clone(), value);
-        }
-        let source = TemplateSource::Filed { draft_id };
-        validate_template_fields(&form_code, &fields, &source)?;
-        insert_template(&self.conn, &tin, &form_code, &fields, &source)?;
-        self.get_form_template(&tin, &form_code)?
-            .ok_or_else(|| TaxProfileError::NotFound(form_code))
-    }
-
-    /// Create / Update (D8): snapshot the newest return of `form_code` for
-    /// this branch (any year, any status; newest = most recently saved),
-    /// keeping only setup answers. Replaces an existing template.
+    /// Create / Update (the Templates tab): snapshot this branch's latest
+    /// return of `form_code` (the latest period of any year; of one period a
+    /// filed return over a draft), see [`Self::snapshot_template_from_return`].
     pub fn snapshot_template_from_latest_return(
         &self,
         tin: &str,
@@ -1686,125 +2333,104 @@ impl Database {
     ) -> Result<FormTemplate> {
         let form_code = canonical_form_code(form_code);
         branch_exists(&self.conn, tin)?;
-        let latest = {
-            let mut stmt = self.conn.prepare(
-                "SELECT id, form_code FROM form_drafts WHERE tin = ?1
-                 ORDER BY updated_at DESC, id DESC",
-            )?;
-            let rows = stmt.query_map([tin], |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-            })?;
-            let mut found = None;
-            for row in rows {
-                let (id, code) = row?;
-                if canonical_form_code(&code) == form_code {
-                    found = Some(id);
-                    break;
-                }
-            }
-            found
-        };
-        let draft_id = latest.ok_or_else(|| {
+        template_form(&form_code)?;
+        let latest = self.previous_return(tin, &form_code, u16::MAX, u32::MAX)?;
+        let draft_id = latest.map(|found| found.id).ok_or_else(|| {
             TaxProfileError::NotFound(format!(
-                "Open and save a {form_code} return first. The template keeps its setup answers."
+                "Open and save a {form_code} return first. The template starts from its answers."
             ))
         })?;
         self.snapshot_template_from_return(draft_id)
     }
 
-    /// D17 "Use as template": snapshot one return (any status) of its branch,
-    /// keeping only setup answers. Replaces the branch's template for the form.
+    /// "Use as template" on one return (any status), and the tab's Update:
+    /// the branch's template for the form pins the answers of that return
+    /// that carry ([`crate::forms::agent::carry`]) and keeps every "Stop
+    /// here" switch it held. Works for every form.
     pub fn snapshot_template_from_return(&self, draft_id: i64) -> Result<FormTemplate> {
         let row = load_return(&self.conn, draft_id)?;
         branch_exists(&self.conn, &row.tin)?;
         let form_code = canonical_form_code(&row.form_code);
-        let kinds = field_kinds_for(&form_code)
-            .ok_or_else(|| TemplateFieldError::FormNotClassified(form_code.clone()))?;
+        let kind = template_form(&form_code)?;
         let draft: Value = serde_json::from_str(&row.data_json)?;
-        let fields = snapshot_setup_answers(kinds, &draft);
+        let answers = snapshot_answers(kind, &draft);
         let source = match super::drafts::filing_status_from_db(&row.status) {
             FilingStatus::Submitted | FilingStatus::Confirmed | FilingStatus::Paid => {
                 TemplateSource::Filed { draft_id }
             }
             FilingStatus::Draft | FilingStatus::Queued => TemplateSource::Return { draft_id },
         };
-        validate_template_fields(&form_code, &fields, &source)?;
         let tx = self.conn.unchecked_transaction()?;
-        tx.execute(
-            "DELETE FROM form_templates WHERE tin = ?1 AND form_code = ?2",
-            params![row.tin, form_code],
+        let existing = query_template(&tx, &row.tin, &form_code)?;
+        let fields = updated_fields(
+            &existing
+                .as_ref()
+                .map(|template| template.fields.clone())
+                .unwrap_or_default(),
+            &answers,
+        );
+        validate_template_fields(&form_code, &fields, &source)?;
+        write_template(
+            &tx,
+            &row.tin,
+            &form_code,
+            &fields,
+            &source,
+            existing.is_some(),
         )?;
-        insert_template(&tx, &row.tin, &form_code, &fields, &source)?;
         tx.commit()?;
         self.get_form_template(&row.tin, &form_code)?
             .ok_or_else(|| TaxProfileError::NotFound(form_code))
     }
 
-    /// Replace an existing template's fields (template-mode edits, D10 "Update
-    /// template?"). The source is unchanged.
-    pub fn update_form_template_fields(
-        &self,
-        tin: &str,
-        form_code: &str,
-        fields: BTreeMap<String, TemplateField>,
-    ) -> Result<FormTemplate> {
-        let form_code = canonical_form_code(form_code);
-        let existing = query_template(&self.conn, tin, &form_code)?.ok_or_else(|| {
-            TaxProfileError::NotFound(format!("Branch {tin} has no {form_code} template"))
-        })?;
-        validate_template_fields(&form_code, &fields, &existing.source)?;
-        self.conn.execute(
-            "UPDATE form_templates SET fields_json = ?3, updated_at = datetime('now')
-             WHERE tin = ?1 AND form_code = ?2",
-            params![tin, form_code, serde_json::to_string(&fields)?],
-        )?;
-        self.get_form_template(tin, &form_code)?
-            .ok_or_else(|| TaxProfileError::NotFound(form_code))
-    }
-
-    /// The form page's template stops for this branch's template of
-    /// `form_code` (the section pill's ‹ and ›), as page keys; `None` when
-    /// the branch has no template for the form.
-    pub fn template_stops(&self, tin: &str, form_code: &str) -> Result<Option<TemplateStops>> {
-        let (kind, form_code) = page_form(form_code)?;
-        Ok(query_template(&self.conn, tin, &form_code)?
-            .map(|template| template_stops::page_stops(kind, &template)))
-    }
-
-    /// "Stop here" on the form page: mark (`on`) or unmark the field the box
-    /// `key` writes in this branch's template of `form_code`. A field the
-    /// template keeps a value for is not turned into a stop.
+    /// "Stop here" on the form page (interface I-2): `on` true makes box
+    /// `key` always a stop, false never a stop, `None` back to automatic.
+    /// Creates the branch's template for the form when it has none; works
+    /// for every form; a pinned box can be a stop too. A radio is switched
+    /// as its item. Returns the template's switches.
     pub fn set_template_stop(
         &self,
         tin: &str,
         form_code: &str,
         key: &str,
-        on: bool,
-    ) -> Result<TemplateStops> {
-        let (kind, form_code) = page_form(form_code)?;
-        let field = template_stops::field_of_key(kind, key).ok_or_else(|| {
-            TaxProfileError::Invalid(format!("`{key}` cannot be a template stop on {form_code}"))
-        })?;
-        let template = query_template(&self.conn, tin, &form_code)?.ok_or_else(|| {
-            TaxProfileError::NotFound(format!("Branch {tin} has no {form_code} template"))
-        })?;
-        let mut fields = template.fields;
-        let marked = match fields.get(&field) {
-            Some(TemplateField::Kept { .. }) => {
-                return Err(TaxProfileError::Invalid(format!(
-                    "The {form_code} template keeps an answer for `{field}`; it is filled in, not a stop"
-                )));
-            }
-            Some(TemplateField::Marked) => true,
-            None => false,
-        };
-        if on && !marked {
-            fields.insert(field, TemplateField::Marked);
-        } else if !on && marked {
-            fields.remove(&field);
+        on: Option<bool>,
+    ) -> Result<BTreeMap<String, bool>> {
+        let form_code = canonical_form_code(form_code);
+        let kind = template_form(&form_code)?;
+        let key = carry::answer_key(kind, key);
+        if !carry::is_stoppable(kind, &key) {
+            return Err(TaxProfileError::Invalid(format!(
+                "`{key}` cannot be a stop on {form_code}: it is computed or filled from the profile"
+            )));
         }
-        let template = self.update_form_template_fields(tin, &form_code, fields)?;
-        Ok(template_stops::page_stops(kind, &template))
+        branch_exists(&self.conn, tin)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let existing = query_template(&tx, tin, &form_code)?;
+        if existing.is_none() && on.is_none() {
+            return Ok(BTreeMap::new());
+        }
+        let mut fields = existing
+            .as_ref()
+            .map(|template| template.fields.clone())
+            .unwrap_or_default();
+        let pinned = match fields.get(&key) {
+            Some(TemplateField::Kept { value, .. }) => Some(value.clone()),
+            _ => None,
+        };
+        match TemplateField::from_parts(pinned, on) {
+            Some(field) => fields.insert(key, field),
+            None => fields.remove(&key),
+        };
+        let source = existing
+            .as_ref()
+            .map_or(TemplateSource::Blank, |template| template.source.clone());
+        validate_template_fields(&form_code, &fields, &source)?;
+        write_template(&tx, tin, &form_code, &fields, &source, existing.is_some())?;
+        tx.commit()?;
+        Ok(self
+            .get_form_template(tin, &form_code)?
+            .map(|template| template.stop_edits())
+            .unwrap_or_default())
     }
 
     /// Returns whether a template was deleted.
@@ -1900,97 +2526,6 @@ impl Database {
             let _ = self.request_google_calendar_sync();
         }
         Ok(report)
-    }
-
-    // =====================================================================
-    // Prefill
-    // =====================================================================
-
-    /// What opening `form_code` from the Tax Form Library applies for this
-    /// branch: Auto values (period and identity), then kept template values,
-    /// then the guided-mode stop list (D13, D14, D18).
-    ///
-    /// `year` and `slot` are exactly the library's `FileForm { year, quarter }`.
-    pub fn resolve_prefill(
-        &self,
-        tin: &str,
-        form_code: &str,
-        year: u16,
-        slot: u8,
-    ) -> Result<PrefillPlan> {
-        let form_code = canonical_form_code(form_code);
-        let kinds = field_kinds_for(&form_code)
-            .ok_or_else(|| TemplateFieldError::FormNotClassified(form_code.clone()))?;
-        let period = ResolvedPeriod::from_library_selection(&form_code, year, slot)?;
-        let branch = self
-            .get_branch(tin)?
-            .ok_or_else(|| TaxProfileError::NotFound(format!("No branch with TIN {tin}")))?;
-        let taxpayer = load_taxpayer(&self.conn, &branch.tin_root)?
-            .ok_or_else(|| TaxProfileError::NotFound(format!("No taxpayer {}", branch.tin_root)))?;
-
-        let mut auto_values = BTreeMap::new();
-        let mut locked_fields = Vec::new();
-        for (field, source) in kinds.auto_fields() {
-            locked_fields.push(field.to_string());
-            let value = match source {
-                AutoSource::Period(source) => period.value_of(source),
-                AutoSource::Identity(source) => Some(match source {
-                    IdentitySource::Tin => Value::from(branch.tin.clone()),
-                    IdentitySource::TaxpayerName => Value::from(taxpayer.name.clone()),
-                    IdentitySource::TaxpayerType => serde_json::to_value(&taxpayer.taxpayer_type)?,
-                    IdentitySource::RdoCode => Value::from(branch.value(BranchField::RdoCode)),
-                    IdentitySource::RegisteredAddress => {
-                        Value::from(branch.value(BranchField::RegisteredAddress))
-                    }
-                    IdentitySource::ZipCode => Value::from(branch.value(BranchField::ZipCode)),
-                    IdentitySource::Phone => Value::from(branch.value(BranchField::Phone)),
-                    IdentitySource::Email => Value::from(branch.value(BranchField::Email)),
-                }),
-                AutoSource::Computed(_) => None,
-            };
-            if let Some(value) = value {
-                auto_values.insert(field.to_string(), value);
-            }
-        }
-
-        let mut kept_values = BTreeMap::new();
-        let mut marked_fields = Vec::new();
-        if let Some(template) = query_template(&self.conn, tin, &form_code)? {
-            for (field, value) in template.fields {
-                // Re-check against the current registry: a field reclassified
-                // since the template was saved must never override an Auto
-                // value or prefill an amount.
-                match (kinds.kind_of(&field), value) {
-                    (
-                        Some(FieldKind::Templatable(TemplatableKind::Setup)),
-                        TemplateField::Kept { value },
-                    ) => {
-                        kept_values.insert(field, value);
-                    }
-                    (Some(FieldKind::Templatable(_)), TemplateField::Marked) => {
-                        marked_fields.push(field);
-                    }
-                    (kind, _) => tracing::warn!(
-                        tin,
-                        form_code,
-                        field,
-                        ?kind,
-                        "Ignoring a template field that is no longer templatable"
-                    ),
-                }
-            }
-        }
-        marked_fields.sort_by_key(|field| form_order_key(kinds, field));
-
-        Ok(PrefillPlan {
-            tin: branch.tin,
-            period,
-            auto_values,
-            locked_fields,
-            kept_values,
-            guided_default_on: !marked_fields.is_empty(),
-            marked_fields,
-        })
     }
 }
 
@@ -2345,17 +2880,35 @@ mod tests {
     }
 
     #[test]
-    fn starter_packs_and_year_copy_add_to_the_list() {
+    fn setups_and_year_copy_add_to_the_list() {
         let db = db_with_taxpayer(TaxpayerType::Corporation);
         db.set_yearly_forms(HEAD, 2026, &["0605"]).unwrap();
-        db.apply_starter_pack(HEAD, 2026, StarterPack::VatBusiness)
+        db.apply_setup(HEAD, 2026, "vat_business_corporation", false)
             .unwrap();
-        let mut expected = vec!["0605", "1702Q", "1702RT", "2550Q"];
-        assert_eq!(db.active_form_codes_for_year(HEAD, 2026).unwrap(), expected);
+        assert_eq!(
+            db.active_form_codes_for_year(HEAD, 2026).unwrap(),
+            ["0605", "1702Q", "1702RT", "2550Q"],
+            "without the user's yes a setup only adds to the list"
+        );
+        db.apply_setup(HEAD, 2026, "vat_business_corporation", true)
+            .unwrap();
+        assert_eq!(
+            db.active_form_codes_for_year(HEAD, 2026).unwrap(),
+            ["1702Q", "1702RT", "2550Q"],
+            "with it, a setup that does not add replaces the list"
+        );
+        db.set_yearly_forms(HEAD, 2026, &["0605"]).unwrap();
+        db.apply_setup(HEAD, 2026, "employer", false).unwrap();
+        let mut expected = vec!["0605", "1601C", "1604C"];
+        assert_eq!(
+            db.active_form_codes_for_year(HEAD, 2026).unwrap(),
+            expected,
+            "Employer adds to the list"
+        );
 
-        db.set_yearly_forms(HEAD, 2027, &["1601C"]).unwrap();
+        db.set_yearly_forms(HEAD, 2027, &["2550Q"]).unwrap();
         db.copy_yearly_forms(HEAD, 2026, 2027).unwrap();
-        expected.insert(1, "1601C");
+        expected.push("2550Q");
         assert_eq!(db.active_form_codes_for_year(HEAD, 2027).unwrap(), expected);
         assert!(matches!(
             db.copy_yearly_forms(HEAD, 2023, 2024),
@@ -2379,93 +2932,122 @@ mod tests {
         db.conn.last_insert_rowid()
     }
 
-    fn choices(entries: &[(&str, TemplateChoice)]) -> BTreeMap<String, TemplateChoice> {
-        entries
+    /// A template with only stops switched on (`stops`, box keys), stored
+    /// the way a "Stop here" switch leaves it.
+    fn blank_template(db: &Database, tin: &str, form_code: &str, stops: &[&str]) {
+        let fields = stops
             .iter()
-            .map(|(field, choice)| (field.to_string(), *choice))
-            .collect()
+            .map(|key| (key.to_string(), TemplateField::Marked { stop: None }))
+            .collect();
+        insert_template(&db.conn, tin, form_code, &fields, &TemplateSource::Blank).unwrap();
     }
 
     #[test]
-    fn template_from_filed_return_keeps_filed_setup_values_only() {
+    fn template_from_a_return_pins_the_answers_that_carry() {
         let db = db_with_taxpayer(TaxpayerType::Individual);
         let filed = insert_return(&db, HEAD, "Confirmed");
-        let template = db
-            .create_form_template_from_filed_draft(
-                filed,
-                &choices(&[
-                    ("item_13_election", TemplateChoice::Keep),
-                    ("schedule_1[0].atc", TemplateChoice::Keep),
-                    ("schedule_1[0].taxable_amount", TemplateChoice::Mark),
-                ]),
-            )
-            .unwrap();
+        let template = db.snapshot_template_from_return(filed).unwrap();
         assert_eq!(template.tin, HEAD);
         assert_eq!(template.source, TemplateSource::Filed { draft_id: filed });
-        assert_eq!(
-            template.fields["item_13_election"],
-            TemplateField::Kept {
-                value: json!("graduated")
-            }
-        );
-        assert_eq!(
-            template.fields["schedule_1[0].atc"],
-            TemplateField::Kept {
-                value: json!("PT010")
-            }
-        );
+        // PT010 at 3%: the select's official option 1.
+        assert_eq!(template.fields["drpATC1"], TemplateField::pinned("1"));
+        // Never an amount, the 8% choice, a profile box or the period.
+        for key in template.fields.keys() {
+            assert!(
+                crate::forms::agent::carry::carries(
+                    crate::forms::agent::AgentFormKind::Form2551Q,
+                    key
+                ),
+                "{key}"
+            );
+        }
+        assert!(!template.fields.contains_key("txtATCAmt1"));
+        assert!(!template.fields.contains_key("frm2551Qv2018:taxRate"));
 
-        // D7: one template per form per branch.
-        let duplicate = db.create_blank_form_template(HEAD, "2551Q", &[]);
-        assert!(matches!(duplicate, Err(TaxProfileError::Conflict(_))));
-
-        // D8: an amount can be marked, never kept - not even from a filed return.
-        db.delete_form_template(HEAD, "2551Q").unwrap();
-        let amount = db.create_form_template_from_filed_draft(
-            filed,
-            &choices(&[("schedule_1[0].taxable_amount", TemplateChoice::Keep)]),
+        // D7: one template per form per branch; a snapshot replaces it.
+        let draft = insert_return_at(
+            &db,
+            HEAD,
+            "Draft",
+            2,
+            crate::forms::form_2551q::Item13Election::Graduated,
         );
-        assert!(matches!(
-            amount,
-            Err(TaxProfileError::Template(TemplateFieldError::AmountKept(_)))
-        ));
-        let auto = db.update_form_template_fields(HEAD, "2551Q", BTreeMap::new());
-        assert!(matches!(auto, Err(TaxProfileError::NotFound(_))));
-
-        let draft = insert_return(&db, &add_branch(&db, "00001", &[]), "Draft");
-        let unfiled = db.create_form_template_from_filed_draft(
-            draft,
-            &choices(&[("item_13_election", TemplateChoice::Keep)]),
-        );
-        assert!(matches!(unfiled, Err(TaxProfileError::Invalid(_))));
+        let replaced = db.snapshot_template_from_return(draft).unwrap();
+        assert_eq!(replaced.source, TemplateSource::Return { draft_id: draft });
+        assert_eq!(replaced.id, template.id);
+        assert_eq!(db.list_form_templates(HEAD).unwrap().len(), 1);
     }
 
     #[test]
-    fn stop_here_marks_and_unmarks_the_field_a_page_box_writes() {
+    fn update_keeps_the_stop_switches() {
         let db = db_with_taxpayer(TaxpayerType::Individual);
-        assert_eq!(db.template_stops(HEAD, "2551Q").unwrap(), None);
-        db.create_blank_form_template(HEAD, "2551Q", &[]).unwrap();
-        let none = db.template_stops(HEAD, "2551Q").unwrap().unwrap();
-        assert!(none.stops.is_empty());
-        let item_13 = "frm2551Qv2018:taxRate2";
-        assert!(none.markable.iter().any(|key| key == item_13));
-
-        let marked = db.set_template_stop(HEAD, "2551Q", item_13, true).unwrap();
-        assert!(marked.stops.iter().any(|key| key == item_13));
+        let filed = insert_return(&db, HEAD, "Confirmed");
+        db.snapshot_template_from_return(filed).unwrap();
+        db.set_template_stop(HEAD, "2551Q", "drpATC1", Some(true))
+            .unwrap();
+        db.set_template_stop(HEAD, "2551Q", "txtATCAmt1", Some(true))
+            .unwrap();
+        db.set_template_stop(HEAD, "2551Q", "frm2551Qv2018:txt15", Some(false))
+            .unwrap();
+        let switches = db
+            .get_form_template(HEAD, "2551Q")
+            .unwrap()
+            .unwrap()
+            .stop_edits();
+        // The tab's Update takes the newest return again.
+        let updated = db
+            .snapshot_template_from_latest_return(HEAD, "2551Q")
+            .unwrap();
+        assert_eq!(updated.stop_edits(), switches);
         assert_eq!(
-            db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields["item_13_election"],
-            TemplateField::Marked
+            updated.fields["drpATC1"],
+            TemplateField::Kept {
+                value: json!("1"),
+                stop: Some(true)
+            }
         );
-        // The other Item 13 radio writes the same field: one stop, both keys.
-        assert!(
-            marked
-                .stops
-                .iter()
-                .any(|key| key == "frm2551Qv2018:taxRate1")
+        assert_eq!(
+            updated.stop_edits(),
+            BTreeMap::from([
+                ("drpATC1".to_string(), true),
+                ("frm2551Qv2018:txt15".to_string(), false),
+                ("txtATCAmt1".to_string(), true),
+            ])
         );
+    }
 
-        let unmarked = db.set_template_stop(HEAD, "2551Q", item_13, false).unwrap();
-        assert!(unmarked.stops.is_empty());
+    #[test]
+    fn a_stop_switch_has_three_states_on_every_form() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        // Off with no template: nothing to store, no template made.
+        assert!(
+            db.set_template_stop(HEAD, "2551Q", "txtATCAmt1", None)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(db.get_form_template(HEAD, "2551Q").unwrap().is_none());
+        // On: the template row is created.
+        let on = db
+            .set_template_stop(HEAD, "2551Q", "txtATCAmt1", Some(true))
+            .unwrap();
+        assert_eq!(on, BTreeMap::from([("txtATCAmt1".to_string(), true)]));
+        let template = db.get_form_template(HEAD, "2551Q").unwrap().unwrap();
+        assert_eq!(template.source, TemplateSource::Blank);
+        assert_eq!(
+            template.fields["txtATCAmt1"],
+            TemplateField::Marked { stop: None }
+        );
+        // Never: an automatic stop switched off.
+        let never = db
+            .set_template_stop(HEAD, "2551Q", "txtATCAmt1", Some(false))
+            .unwrap();
+        assert_eq!(never, BTreeMap::from([("txtATCAmt1".to_string(), false)]));
+        // Back to automatic.
+        assert!(
+            db.set_template_stop(HEAD, "2551Q", "txtATCAmt1", None)
+                .unwrap()
+                .is_empty()
+        );
         assert!(
             db.get_form_template(HEAD, "2551Q")
                 .unwrap()
@@ -2473,41 +3055,119 @@ mod tests {
                 .fields
                 .is_empty()
         );
-        // An Auto box (the profile's RDO) is never a stop.
-        assert!(matches!(
-            db.set_template_stop(HEAD, "2551Q", "frm2551Qv2018:txtRDOCode", true),
-            Err(TaxProfileError::Invalid(_))
-        ));
+        // A radio is switched as its item.
+        let item = db
+            .set_template_stop(HEAD, "2551Q", "frm2551Qv2018:taxTreaty_2", Some(true))
+            .unwrap();
+        assert_eq!(
+            item,
+            BTreeMap::from([("frm2551Qv2018:taxTreaty".to_string(), true)])
+        );
+        // A profile box and a computed box are never stops.
+        for key in ["frm2551Qv2018:txtRDOCode", "frm2551Qv2018:txt14"] {
+            assert!(matches!(
+                db.set_template_stop(HEAD, "2551Q", key, Some(true)),
+                Err(TaxProfileError::Invalid(_))
+            ));
+        }
+        // Any form: 1701Q, which the old registry never classified.
+        let kind = crate::forms::agent::AgentFormKind::from_code("1701Q").unwrap();
+        let first = crate::forms::agent::carry::stoppable(kind)[0];
+        let other = db
+            .set_template_stop(HEAD, "1701Q", first, Some(true))
+            .unwrap();
+        assert_eq!(other, BTreeMap::from([(first.to_string(), true)]));
+        assert!(db.delete_form_template(HEAD, "2551Q").unwrap());
+        assert!(db.get_form_template(HEAD, "2551Q").unwrap().is_none());
     }
 
     #[test]
-    fn template_writes_reject_auto_fields_and_blank_kept_values() {
+    fn a_pinned_answer_can_be_a_stop_too() {
         let db = db_with_taxpayer(TaxpayerType::Individual);
-        let auto = db.create_blank_form_template(HEAD, "2551Q", &["rdo_code".to_string()]);
-        assert!(matches!(
-            auto,
-            Err(TaxProfileError::Template(TemplateFieldError::AutoField(_)))
-        ));
-        db.create_blank_form_template(HEAD, "2551Q", &["item_13_election".to_string()])
+        let filed = insert_return(&db, HEAD, "Confirmed");
+        db.snapshot_template_from_return(filed).unwrap();
+        db.set_template_stop(HEAD, "2551Q", "drpATC1", Some(true))
             .unwrap();
-        let kept_on_blank = db.update_form_template_fields(
-            HEAD,
-            "2551Q",
-            BTreeMap::from([(
-                "item_13_election".to_string(),
-                TemplateField::Kept {
-                    value: json!("graduated"),
-                },
-            )]),
+        let fields = db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields;
+        assert_eq!(
+            fields["drpATC1"],
+            TemplateField::Kept {
+                value: json!("1"),
+                stop: Some(true)
+            }
         );
-        assert!(matches!(
-            kept_on_blank,
-            Err(TaxProfileError::Template(
-                TemplateFieldError::KeptOnBlankTemplate(_)
-            ))
-        ));
-        assert!(db.delete_form_template(HEAD, "2551Q").unwrap());
-        assert!(db.get_form_template(HEAD, "2551Q").unwrap().is_none());
+        db.set_template_stop(HEAD, "2551Q", "drpATC1", None)
+            .unwrap();
+        let fields = db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields;
+        assert_eq!(fields["drpATC1"], TemplateField::pinned("1"));
+    }
+
+    #[test]
+    fn stored_templates_with_the_old_field_ids_load_as_box_keys() {
+        let db = db_with_taxpayer(TaxpayerType::Individual);
+        for (code, fields) in [
+            (
+                "2551Q",
+                json!({
+                    "schedule_1[0].atc": {"kind": "kept", "value": "PT010"},
+                    "schedule_1[0].taxable_amount": {"kind": "marked"},
+                    "item_13_election": {"kind": "kept", "value": "graduated"},
+                }),
+            ),
+            (
+                "1601C",
+                json!({
+                    "atc": {"kind": "kept", "value": "WW010"},
+                    "category_of_agent": {"kind": "marked"},
+                }),
+            ),
+        ] {
+            db.conn
+                .execute(
+                    "INSERT INTO form_templates (tin, form_code, fields_json, source)
+                     VALUES (?1, ?2, ?3, 'filed:1')",
+                    params![HEAD, code, fields.to_string()],
+                )
+                .unwrap();
+        }
+        let q = db.get_form_template(HEAD, "2551Q").unwrap().unwrap();
+        assert_eq!(
+            q.fields,
+            BTreeMap::from([
+                ("drpATC1".to_string(), TemplateField::pinned("1")),
+                (
+                    "txtATCAmt1".to_string(),
+                    TemplateField::Marked { stop: None }
+                ),
+            ])
+        );
+        let c = db.get_form_template(HEAD, "1601C").unwrap().unwrap();
+        assert_eq!(
+            c.fields,
+            BTreeMap::from([
+                (
+                    "frm1601c:CatAgent".to_string(),
+                    TemplateField::Marked { stop: None }
+                ),
+                (
+                    "frm1601c:txtATC".to_string(),
+                    TemplateField::pinned("WW010")
+                ),
+            ])
+        );
+        // A switch written over an old template stores box keys only.
+        db.set_template_stop(HEAD, "1601C", "frm1601c:txtTax14", Some(true))
+            .unwrap();
+        let stored: String = db
+            .conn
+            .query_row(
+                "SELECT fields_json FROM form_templates WHERE tin = ?1 AND form_code = '1601C'",
+                [HEAD],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(!stored.contains("category_of_agent"), "{stored}");
+        assert!(stored.contains("frm1601c:CatAgent"), "{stored}");
     }
 
     #[test]
@@ -2515,16 +3175,10 @@ mod tests {
         let db = db_with_taxpayer(TaxpayerType::Individual);
         let target = add_branch(&db, "00001", &[]);
         let filed = insert_return(&db, HEAD, "Submitted");
-        db.create_form_template_from_filed_draft(
-            filed,
-            &choices(&[("item_13_election", TemplateChoice::Keep)]),
-        )
-        .unwrap();
-        db.create_blank_form_template(HEAD, "1601C", &["category_of_agent".to_string()])
-            .unwrap();
+        db.snapshot_template_from_return(filed).unwrap();
+        blank_template(&db, HEAD, "1601C", &["frm1601c:CatAgent"]);
         db.set_yearly_forms(&target, 2026, &["2551Q"]).unwrap();
-        db.create_blank_form_template(&target, "2551Q", &["tax_relief".to_string()])
-            .unwrap();
+        blank_template(&db, &target, "2551Q", &["frm2551Qv2018:taxTreaty"]);
         let both = ["2551Q", "1601C"];
 
         let skipped = db
@@ -2578,16 +3232,18 @@ mod tests {
             }
         );
 
+        assert_eq!(
+            copy.fields,
+            db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields
+        );
+
         // D6: an independent copy.
-        db.update_form_template_fields(&target, "2551Q", BTreeMap::new())
+        let head_fields = db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields;
+        db.set_template_stop(&target, "2551Q", "txtATCAmt1", Some(true))
             .unwrap();
         assert_eq!(
-            db.get_form_template(HEAD, "2551Q")
-                .unwrap()
-                .unwrap()
-                .fields
-                .len(),
-            1
+            db.get_form_template(HEAD, "2551Q").unwrap().unwrap().fields,
+            head_fields
         );
 
         // A missing source template fails the whole copy.
@@ -2603,101 +3259,9 @@ mod tests {
     }
 
     #[test]
-    fn prefill_applies_auto_then_kept_values_then_marked_stops() {
-        let db = db_with_taxpayer(TaxpayerType::Individual);
-        let branch = add_branch(
-            &db,
-            "00002",
-            &[(
-                BranchField::RegisteredAddress,
-                FieldSetting::Override("Cebu City".into()),
-            )],
-        );
-        let fields = BTreeMap::from([
-            (
-                "item_13_election".to_string(),
-                TemplateField::Kept {
-                    value: json!("eight_percent"),
-                },
-            ),
-            (
-                "schedule_1[1].taxable_amount".to_string(),
-                TemplateField::Marked,
-            ),
-            (
-                "schedule_1[0].taxable_amount".to_string(),
-                TemplateField::Marked,
-            ),
-            ("tax_relief".to_string(), TemplateField::Marked),
-        ]);
-        db.conn
-            .execute(
-                "INSERT INTO form_templates (tin, form_code, fields_json, source)
-                 VALUES (?1, '2551Q', ?2, 'filed:1')",
-                params![branch, serde_json::to_string(&fields).unwrap()],
-            )
-            .unwrap();
-        // A field stored by a build that classified it differently must not
-        // override the Auto value.
-        db.conn
-            .execute(
-                "UPDATE form_templates SET fields_json = json_set(fields_json,
-                    '$.rdo_code', json('{\"kind\":\"kept\",\"value\":\"999\"}'))",
-                [],
-            )
-            .unwrap();
-
-        let plan = db.resolve_prefill(&branch, "2551Q", 2026, 2).unwrap();
-        assert_eq!(
-            plan.auto_values,
-            BTreeMap::from([
-                ("tin".to_string(), json!("12345678900002")),
-                ("taxable_year".to_string(), json!(2026)),
-                ("quarter".to_string(), json!(2)),
-                ("rdo_code".to_string(), json!("039")),
-                ("taxpayer_name".to_string(), json!("Juan Dela Cruz")),
-                ("registered_address".to_string(), json!("Cebu City")),
-                ("zip_code".to_string(), json!("1100")),
-                ("contact_number".to_string(), json!("09170000000")),
-                ("email".to_string(), json!("head@example.com")),
-                ("taxpayer_type".to_string(), json!("Individual")),
-            ])
-        );
-        assert!(plan.locked_fields.contains(&"total_tax_due".to_string()));
-        assert_eq!(
-            plan.kept_values,
-            BTreeMap::from([("item_13_election".to_string(), json!("eight_percent"))])
-        );
-        assert_eq!(
-            plan.marked_fields,
-            vec![
-                "tax_relief",
-                "schedule_1[0].taxable_amount",
-                "schedule_1[1].taxable_amount"
-            ]
-        );
-        assert!(plan.guided_default_on);
-
-        let monthly = db.resolve_prefill(HEAD, "1601C", 2026, 2).unwrap();
-        assert_eq!(monthly.auto_values["month"], json!(2));
-        assert_eq!(
-            monthly.auto_values["email_address"],
-            json!("head@example.com")
-        );
-        assert!(monthly.kept_values.is_empty() && !monthly.guided_default_on);
-
-        assert!(matches!(
-            db.resolve_prefill(HEAD, "1701", 2025, 0),
-            Err(TaxProfileError::Template(
-                TemplateFieldError::FormNotClassified(_)
-            ))
-        ));
-    }
-
-    #[test]
     fn deleting_a_profile_removes_its_templates_and_empty_taxpayer() {
         let db = db_with_taxpayer(TaxpayerType::Individual);
-        db.create_blank_form_template(HEAD, "2551Q", &[]).unwrap();
+        blank_template(&db, HEAD, "2551Q", &[]);
         db.delete_profile(HEAD).unwrap();
         assert!(db.get_form_template(HEAD, "2551Q").unwrap().is_none());
         assert!(db.get_taxpayer(ROOT).unwrap().is_none());
@@ -2752,7 +3316,7 @@ mod tests {
             );
             assert_eq!(year_error(db.clear_yearly_forms(HEAD, year)), expected);
             assert_eq!(
-                year_error(db.apply_starter_pack(HEAD, year, StarterPack::Employer)),
+                year_error(db.apply_setup(HEAD, year, "employer", false)),
                 expected
             );
             assert_eq!(year_error(db.copy_yearly_forms(HEAD, max, year)), expected);
@@ -2765,7 +3329,7 @@ mod tests {
     fn tax_years_belong_to_a_branch_persist_empty_and_copy_the_latest_year() {
         let db = db_with_taxpayer(TaxpayerType::Corporation);
         let branch = add_branch(&db, "00001", &[]);
-        db.create_blank_form_template(HEAD, "2551Q", &[]).unwrap();
+        blank_template(&db, HEAD, "2551Q", &[]);
 
         let first = db.add_tax_year(HEAD, 2024, true).unwrap();
         assert_eq!(
@@ -2843,8 +3407,7 @@ mod tests {
         db.set_yearly_forms(HEAD, 2026, &["2551Q", "1601C"])
             .unwrap();
         db.add_tax_year(&branch, 2025, false).unwrap();
-        db.create_blank_form_template(&branch, "2551Q", &["tax_relief".to_string()])
-            .unwrap();
+        blank_template(&db, &branch, "2551Q", &["frm2551Qv2018:taxTreaty"]);
         db.copy_form_templates(
             &branch,
             &["2551Q"],
@@ -3056,60 +3619,49 @@ mod tests {
     }
 
     #[test]
-    fn template_snapshots_the_newest_return_of_any_status_keeping_setup_answers() {
+    fn template_snapshots_the_latest_return_of_any_status() {
         use crate::forms::form_2551q::Item13Election;
         let db = db_with_taxpayer(TaxpayerType::Individual);
         match db.snapshot_template_from_latest_return(HEAD, "2551Q") {
             Err(TaxProfileError::NotFound(message)) => assert_eq!(
                 message,
-                "Open and save a 2551Q return first. The template keeps its setup answers."
+                "Open and save a 2551Q return first. The template starts from its answers."
             ),
             other => panic!("expected NotFound, got {other:?}"),
         }
         let filed = insert_return_at(&db, HEAD, "Confirmed", 1, Item13Election::Graduated);
-        let newest = insert_return_at(&db, HEAD, "Draft", 2, Item13Election::EightPercent);
+        let latest = insert_return_at(&db, HEAD, "Draft", 2, Item13Election::EightPercent);
+        // The first quarter saved last is still not the latest return.
+        db.conn
+            .execute(
+                "UPDATE form_drafts SET updated_at = datetime('now', '+1 day') WHERE id = ?1",
+                [filed],
+            )
+            .unwrap();
 
         let template = db
             .snapshot_template_from_latest_return(HEAD, "2551q")
             .unwrap();
-        assert_eq!(template.source, TemplateSource::Return { draft_id: newest });
-        assert_eq!(
-            template.fields["item_13_election"],
-            TemplateField::Kept {
-                value: json!("eight_percent")
-            }
-        );
-        assert_eq!(
-            template.fields["schedule_1[0].atc"],
-            TemplateField::Kept {
-                value: json!("PT010")
-            }
-        );
-        // D8: amounts, Auto and computed fields are dropped.
-        let kinds = field_kinds_for("2551Q").unwrap();
-        for field in template.fields.keys() {
-            assert_eq!(
-                kinds.kind_of(field),
-                Some(FieldKind::Templatable(TemplatableKind::Setup)),
-                "{field}"
+        assert_eq!(template.source, TemplateSource::Return { draft_id: latest });
+        // PT010 at 3%: the select's official option 1.
+        assert_eq!(template.fields["drpATC1"], TemplateField::pinned("1"));
+        // Amounts, the 8% choice, profile and period boxes are never pinned.
+        for key in template.fields.keys() {
+            assert!(
+                crate::forms::agent::carry::carries(
+                    crate::forms::agent::AgentFormKind::Form2551Q,
+                    key
+                ),
+                "{key}"
             );
         }
-        assert!(!template.fields.contains_key("schedule_1[0].taxable_amount"));
-        assert!(!template.fields.contains_key("tin"));
+        assert!(!template.fields.contains_key("frm2551Qv2018:taxRate"));
+        assert!(!template.fields.contains_key("txtATCAmt1"));
 
         // "Use as template" on a chosen return replaces the one template.
         let replaced = db.snapshot_template_from_return(filed).unwrap();
         assert_eq!(replaced.source, TemplateSource::Filed { draft_id: filed });
-        assert_eq!(
-            replaced.fields["item_13_election"],
-            TemplateField::Kept {
-                value: json!("graduated")
-            }
-        );
         assert_eq!(db.list_form_templates(HEAD).unwrap().len(), 1);
-        // Prefill uses the snapshot.
-        let plan = db.resolve_prefill(HEAD, "2551Q", 2026, 3).unwrap();
-        assert_eq!(plan.kept_values["item_13_election"], json!("graduated"));
 
         assert!(matches!(
             db.snapshot_template_from_return(9_999),

@@ -84,6 +84,12 @@ export class Store {
     return fn(...args);
   }
 
+  /** A host component of the `bir` module (`ScrollArea`, `ScrollMark`), or null on a host without it. */
+  component(name) {
+    const c = bir[name];
+    return c && typeof c.new === "function" ? c : null;
+  }
+
   /**
    * Memoised read: `fallback` when the call throws; the error is kept, and
    * the call is tried again on the first read after FAILED_READ_RETRY_MS.
@@ -197,8 +203,22 @@ export class Store {
   templates(tin) {
     return tin ? this.read(`templates:${tin}`, "list_form_templates", [tin], []) : [];
   }
-  starterPacks(tin) {
-    return tin ? this.read(`packs:${tin}`, "starter_packs", [tin], []) : [];
+  /** The setups offered to a taxpayer type: built-in first, then the user's (`list_setups`). */
+  setups(taxpayerType) {
+    return taxpayerType ? this.read(`setups:${taxpayerType}`, "list_setups", [taxpayerType], []) : [];
+  }
+  /** One branch's facts for a tax year, who holds each and which forms read them (`year_facts`); null when the read failed. */
+  yearFacts(tin, year) {
+    return tin && year ? this.read(`year_facts:${tin}:${year}`, "year_facts", [tin, year], null) : null;
+  }
+  /** Annual income tax returns among `codes` that stand for one another, as groups (`annual_return_conflicts`). */
+  annualConflicts(codes) {
+    const list = [...codes].sort();
+    return list.length > 1 ? this.read(`annual_conflicts:${list.join(",")}`, "annual_return_conflicts", [list], []) : [];
+  }
+  /** The tax types the year's forms list gives, as chips (`tax_types_for_year`). */
+  taxTypes(tin, year) {
+    return tin && year ? this.read(`tax_types:${tin}:${year}`, "tax_types_for_year", [tin, year], []) : [];
   }
   /** Standing send OKs for one branch: `{ tin, form, granted_at }`. */
   sendGrants(tin) {

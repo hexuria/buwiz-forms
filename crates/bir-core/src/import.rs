@@ -276,6 +276,31 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
                 }
             }
 
+            // 6. The branch's tax years (added with the year facts): each
+            // year's forms list, hand-picked (source Manual), and its facts
+            // record. An archive without them imports as before, and the
+            // forms list is never generated from the profile.
+            if let Ok(yearly_json) = read_from_zip("yearly_forms.json") {
+                let yearly: BTreeMap<String, Vec<String>> = serde_json::from_str(&yearly_json)?;
+                for (year, codes) in yearly {
+                    let Ok(year) = year.parse::<u16>() else {
+                        continue;
+                    };
+                    crate::db::taxpayers::restore_yearly_forms(&db.conn, &tin, year, &codes)
+                        .map_err(|error| DbError::Other(error.to_string()))?;
+                }
+            }
+            if let Ok(facts_json) = read_from_zip("year_facts.json") {
+                let records: BTreeMap<String, crate::tax_profile::YearFacts> =
+                    serde_json::from_str(&facts_json)?;
+                for (year, facts) in records {
+                    let Ok(year) = year.parse::<u16>() else {
+                        continue;
+                    };
+                    crate::db::taxpayers::restore_year_facts(&db.conn, &tin, year, &facts)?;
+                }
+            }
+
             // 5. Read data_providers.json (added in export v1): a provider's
             // provider_id and name only, never its credentials or row id. One is
             // created, with no credentials, only when this TIN has no provider

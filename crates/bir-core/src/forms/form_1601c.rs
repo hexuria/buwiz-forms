@@ -301,6 +301,16 @@ pub struct Form1601CDraft {
     /// holds this value. Never filed or printed.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub profile_baseline: std::collections::BTreeMap<String, serde_json::Value>,
+    /// The boxes the carry filled when this return was created (box key ->
+    /// `last`, from the previous period's return, or `template`), owner's
+    /// decision 9. Never filed or printed.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub kept: std::collections::BTreeMap<String, String>,
+    /// The automatic stops recorded when this return was created: boxes the
+    /// filer filled in the previous return that the carry rule does not copy
+    /// (amounts and dates). Never filed or printed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_stops: Vec<String>,
 }
 
 impl Form1601CDraft {
@@ -455,6 +465,8 @@ impl Form1601CDraft {
             next_retry_at: None,
             profile_edits: Vec::new(),
             profile_baseline: std::collections::BTreeMap::new(),
+            kept: std::collections::BTreeMap::new(),
+            auto_stops: Vec::new(),
         }
     }
 

@@ -97,6 +97,7 @@ function mount(e) { if (e?.view && e.dirty && !e.released) { e.dirty = false; co
 const InputState = { new({ value = "" } = {}) { let text = value; const on = {}; return { value: () => text, set_value: (v) => { text = v; }, on(ev, fn) { on[ev] = fn; }, release() { return true; } }; } };
 const CalendarState = { new() { return { set_value() {}, value: () => null, year: () => 2026, month: () => 10, today: () => "2026-10-17", month_days: () => [[]], on() {}, release() { return true; } }; } };
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, Math, Number, String, Object, Array, window: { viewport_size: () => ({ width: 1400, height: 900 }) } });
+const todoModule = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/todo.js", root), "utf8"), { context: contextVM, identifier: "todo.js" });
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
 const kit = mock("gpui-kit", { div: element, svg: element, View });
 const base = mock("gpui-base", { InputState, CalendarState, Popup: { new: element } });
@@ -117,7 +118,7 @@ uiExports.Line = uiExports.Text;
 const store = mock("./store.js", { formatTin: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) });
 const periods = mock("./periods.js", { periodLabel: () => "Q3 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
-await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
+await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods, "./todo.js": todoModule })[s]);
 await mod.evaluate();
 const { FormPageActions, renderFormPage, renderRemovalConfirm } = mod.namespace;
 const part0Index = (label) => schema.parts[0].items.findIndex((it) => it.l === label);

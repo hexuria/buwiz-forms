@@ -145,12 +145,20 @@ export const SHORTCUTS = {
   theme: { chord: "t", action: "toggle-theme" },
   profile: { chord: "shift-b", action: "toggle-profile" },
   notifs: { chord: "shift-n", action: "toggle-notifications" },
+  // The form pill's › and ‹: bound by the script (`script`, main.js
+  // bindShortcuts) as `secondary-` (⌘ on macOS, Ctrl elsewhere), not by the menu.
+  nextTodo: { chord: "right", action: "next-to-do", script: true },
+  prevTodo: { chord: "left", action: "previous-to-do", script: true },
 };
+
+/** Arrow keys as the keyboard prints them. */
+const KEY_GLYPHS = { right: "→", left: "←", up: "↑", down: "↓" };
 
 /** A shortcut as the keyboard shows it: "⌘⇧B" on macOS, "Ctrl Shift B" elsewhere. */
 export function shortcutLabel(id, mac) {
   const parts = SHORTCUTS[id].chord.split("-");
-  const key = parts.pop().toUpperCase();
+  const last = parts.pop();
+  const key = KEY_GLYPHS[last] || last.toUpperCase();
   const shift = parts.includes("shift");
   return mac ? `⌘${shift ? "⇧" : ""}${key}` : `Ctrl ${shift ? "Shift " : ""}${key}`;
 }

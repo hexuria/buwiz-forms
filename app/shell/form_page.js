@@ -37,6 +37,7 @@ import {
   takesPointer,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
+import { effectiveStops, stopCall, todoRows, nextRow } from "./todo.js";
 
 const VALIDATE_DELAY = 300;
 /** A sample's period is asked about this long after its last change. */
@@ -45,6 +46,12 @@ const PERIOD_ASK_DELAY = 300;
 const LIVE_PREVIEW_DELAY = 120;
 /** How many times, 100 ms apart, a one-time note waits for its page to be drawn before it is left unrecorded (`recordNotesWhenShown`). */
 export const NOTE_CHECKS = 50;
+/** A step reveals its row this long after it opened the section (ms), so the row has been drawn and measured. */
+const REVEAL_DELAY = 50;
+/** How many times a step looks for its row's mark before it gives up (the row stays tinted). */
+const REVEAL_TRIES = 10;
+/** A revealed row sits this far below the top of the scroll area (px). */
+const REVEAL_MARGIN = 24;
 
 /**
  * A listed dropdown option as `{ value, label }`. The schema writes many
@@ -239,6 +246,9 @@ export function profileDiffersNote(differs) {
   return `Differs from your profile: ${differs.join("; ")}`;
 }
 
+/** A filed return whose tax profile changed after it (decision 5). */
+export const PROFILE_CHANGED_NOTE = "The tax profile changed after this return was filed. This return keeps what was filed.";
+
 /** How faded a box another answer turns off is (rule 6). */
 const OFF_OPACITY = 0.45;
 
@@ -289,6 +299,8 @@ export class FormPageActions {
     for (const row of state?.rowViews?.values() || []) row.entity.release();
     for (const input of state?.inputs?.values() || []) input.release();
     for (const handle of state?.editFocus?.values() || []) handle.release();
+    for (const handle of state?.focusAnchors?.values() || []) handle.release();
+    for (const input of state?.askInputs?.values() || []) input.release();
     state?.checkButton?.entity.release();
     state?.pill?.entity.release();
   }
@@ -366,17 +378,45 @@ export class FormPageActions {
       saved: false,
       openSelect: null,
       moreOpen: new Set(),
-      // Template mode: ‹ and › stop on the boxes the branch's template marks
-      // (`stops`, from `loadStops`), and each box it may mark has "Stop here".
-      guided: false,
-      stops: null,
-      // The row a template step marked (a step opens its section; it cannot scroll to it).
-      stopAt: null,
+      // The pill's to-do stepping (decision 12; `todo`): the boxes copied
+      // from the last return or the template (`kept`, marked until edited),
+      // the automatic stops and the user's own switches (I-2), the boxes
+      // that may carry "Stop here", the row the last step went to, the stops
+      // stepped past on this visit, and, after Check, a fresh start at the top.
+      kept: {},
+      autoStops: [],
+      stopEdits: {},
+      stopKeys: new Set(),
+      stoppable: new Set(),
+      stepAt: null,
+      passed: new Set(),
+      stepFromTop: false,
+      // Each box's focus anchor (`focusRow`): a text box's sits just before
+      // it, a choice's is the choice itself.
+      focusAnchors: new Map(),
       // 2551Q Item 13's question (`electionCard`): the row it is on, the
       // answer picked, and the row that says it was saved.
       electionAt: null,
       electionPick: null,
       electionSavedAt: null,
+      // The tax facts the return reads that are not set (decision 3): the
+      // cards (`asks`) by the row they sit on, a choice card's pick, a date
+      // or text card's box, and the row that says an answer was saved; the
+      // host's blocking messages beside the form's own.
+      asks: [],
+      askAt: new Map(),
+      askPick: {},
+      askInputs: new Map(),
+      askSavedAt: new Map(),
+      factErrors: [],
+      // "Save to profile too" (decision 8): the profile boxes that can be
+      // written back (the host's `profile_save`), the ones changed with Edit
+      // on this visit, and the ones switched on.
+      profileSave: {},
+      profileEdited: new Set(),
+      toProfile: new Set(),
+      // A filed return: what the tax profile changed after it (decision 5).
+      profileChanged: [],
     };
     if (!schema) return;
     this.state.checkButton = {
@@ -400,7 +440,6 @@ export class FormPageActions {
         const s = this.state;
         s.loading = false;
         this.takeOpened(r);
-        this.loadStops();
         // Every part already open (one picked while the return was still
         // opening, too) gets its inputs now that the draft is here.
         for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
@@ -484,7 +523,46 @@ export class FormPageActions {
     // 1801's item 1 on a new return) says nothing until the filer edits it
     // or presses Check or Save.
     s.quiet = r.quiet || null;
+    // What a new return copied, its automatic stops, the user's switches and
+    // the boxes "Stop here" may go on (I-2). An older host sends none of
+    // them: all empty, so the pill steps by messages and required boxes.
+    s.kept = r.kept && typeof r.kept === "object" ? { ...r.kept } : {};
+    s.autoStops = Array.isArray(r.auto_stops) ? r.auto_stops : [];
+    s.stopEdits = r.stop_edits && typeof r.stop_edits === "object" ? r.stop_edits : {};
+    s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
+    s.stoppable = new Set(Array.isArray(r.stoppable) ? r.stoppable : []);
+    s.profileSave = r.profile_save && typeof r.profile_save === "object" ? r.profile_save : {};
+    s.profileChanged = Array.isArray(r.profile_changed) ? r.profile_changed : [];
+    this.takeAsks(r.asks);
+    s.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
     this.setErrors(r.errors);
+  }
+
+  /**
+   * The cards the host asks (decision 3), each on the row of its box, or
+   * on the first row when the host could not place it. A sample and a
+   * return that is not a Draft ask nothing. A date or text card keeps its
+   * box across a refresh of the list.
+   */
+  takeAsks(asks) {
+    const s = this.state;
+    s.asks = !s.sample && s.editable && Array.isArray(asks) ? asks : [];
+    s.askAt = new Map();
+    const first = s.schema.parts[0]?.items.length ? "0:0" : null;
+    for (const ask of s.asks) {
+      const id = (ask.key && this.itemIdForKey(ask.key)) || first;
+      if (!id) continue;
+      if (!s.askAt.has(id)) s.askAt.set(id, []);
+      s.askAt.get(id).push(ask);
+      if ((ask.control === "date" || ask.control === "text") && !s.askInputs.has(ask.fact)) {
+        s.askInputs.set(ask.fact, InputState.new({ value: "" }));
+      }
+    }
+    for (const [fact, input] of s.askInputs) {
+      if (s.asks.some((a) => a.fact === fact)) continue;
+      input.release();
+      s.askInputs.delete(fact);
+    }
   }
 
   /** The filer edited a quiet date, or asked for every message: it speaks. */
@@ -600,6 +678,15 @@ export class FormPageActions {
         if (cx.focus_handle && !s.editFocus.has(id) && (it.f || []).some((f) => s.profileEdit.has(f.k))) {
           s.editFocus.set(id, cx.focus_handle());
         }
+        // A step puts the keyboard in a box through its anchor (`focusRow`).
+        if (cx.focus_handle && !it.rows) {
+          const want = (key) => {
+            if (!s.focusAnchors.has(key)) s.focusAnchors.set(key, cx.focus_handle());
+          };
+          const date = oneDate(it);
+          if (date) want(date.oneKey);
+          else for (const f of it.f || []) if (!f.c) want(f.t === "radio" ? `radio:${id}` : f.k);
+        }
         if (!s.rowViews.has(id)) {
           const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
           s.rowViews.set(id, {
@@ -666,12 +753,20 @@ export class FormPageActions {
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
       it.from ? s.values[it.from.k] ?? "" : null,
-      // Item 13's question and its answer, the "Stop here" switch and a template step's mark.
+      // Item 13's question and its answer.
       s.electionAt === id || s.electionSavedAt === id
         ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || "", s.electionAt === id ? [this.electionReadiness(), s.draft?.taxpayer_type ?? null, Boolean(s.profileRefreshed)] : null]
         : null,
-      s.stops ? [s.guided && s.stops.markable.has(id), s.stops.marked.has(id)] : null,
-      s.stopAt === id,
+      // The fact cards on the row, a choice card's pick and the saved line.
+      s.askAt.has(id) || s.askSavedAt.has(id)
+        ? [(s.askAt.get(id) || []).map((a) => [a.fact, a.note, s.askPick[a.fact] ?? null]), s.askSavedAt.get(id) || null]
+        : null,
+      // "Save to profile too": changed with Edit, and switched on.
+      keys.some((k) => s.profileSave[k]) ? keys.map((k) => [s.profileEdited.has(k), s.toProfile.has(k)]) : null,
+      // The row a step went to, its "Stop here" switch and the copied-answer marks.
+      s.stepAt === id,
+      this.rowStoppable(it) ? this.rowIsStop(it) : null,
+      keys.map((k) => s.kept[k] || ""),
       keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
     ]);
   }
@@ -715,8 +810,9 @@ export class FormPageActions {
 
   /**
    * The section pill redraws (its own view, rule 2) only when what it shows
-   * changes: the open section, each section's messages, the template stops
-   * and the window's side of the side-list width.
+   * changes: the open section, each section's messages, the to-do rows,
+   * the row the last step went to and the window's side of the side-list
+   * width.
    */
   refreshPill() {
     const s = this.state;
@@ -726,7 +822,7 @@ export class FormPageActions {
     const snapshot = JSON.stringify([
       L.column >= BREAK.formNav, L.vp?.height ?? 0, L.mainWidth ?? 0, L.padX ?? 0,
       s.current, [...s.openParts], s.schema.parts.map((_p, i) => this.partErrors(i)),
-      s.guided, s.stops ? [...s.stops.marked.keys()] : null, s.stopAt, s.loading, s.error,
+      this.todo().map((r) => `${r.id}:${r.reason}`), s.stepAt, s.stepFromTop, s.loading, s.error,
     ]);
     if (snapshot === pill.snapshot) return;
     pill.snapshot = snapshot;
@@ -751,112 +847,193 @@ export class FormPageActions {
   }
 
   /**
-   * The branch's template for this form (Tax profile > Templates): the
-   * fields it marks are the pill's stops, and every box it may mark gets
-   * "Stop here". Template mode starts on when it marks any (D13). Only
-   * forms with a field registry (2551Q, 1601C) can have one.
+   * The rows that still need the user, in form order, each once with its
+   * strongest reason (`todo.js`): a validation message, an empty required
+   * box, or a stop not yet filled or stepped past. A read-only return has
+   * only its messages.
    */
-  loadStops() {
+  todo() {
     const s = this.state;
-    s.stops = null;
-    const template = this.app.store.templates(s.tin).find((x) => x.form_code === s.code);
-    if (!template) return;
-    let r = null;
-    try {
-      r = this.app.store.call("template_stops", s.tin, s.code);
-    } catch (_e) {
-      return;
-    }
-    if (!r) return;
-    this.takeStops(r);
-    s.guided = s.stops.order.length > 0;
-  }
-
-  /** The host's stop keys as page rows (`pi:ii`), each with the key that stands for it. */
-  takeStops(r) {
-    const s = this.state;
-    const rows = (keys) => {
-      const out = new Map();
-      for (const k of keys || []) {
-        const id = this.itemIdForKey(k);
-        if (id && !out.has(id)) out.set(id, k);
-      }
-      return out;
-    };
-    const marked = rows(r.stops);
-    const order = [...marked.keys()].sort((a, b) => {
-      const [ap, ai] = a.split(":").map(Number);
-      const [bp, bi] = b.split(":").map(Number);
-      return ap - bp || ai - bi;
+    if (!s?.schema || !s.draft) return [];
+    return todoRows({
+      parts: s.schema.parts,
+      messages: s.messages,
+      values: s.values,
+      stops: s.editable ? s.stopKeys : new Set(),
+      passed: s.passed,
+      blocked: (k) => !s.editable || this.isLocked(k),
     });
-    s.stops = { marked, markable: rows(r.markable), order };
-    if (s.stopAt && !marked.has(s.stopAt)) s.stopAt = null;
   }
 
-  /** The rows ‹ and › stop on: the template's stops in template mode, else none (they step by section). */
-  stopIds() {
+  /** How many rows of part `pi` still need the user. */
+  partTodo(pi) {
+    return this.todo().filter((r) => r.id.startsWith(`${pi}:`)).length;
+  }
+
+  /** The boxes of item `it` that may carry "Stop here" (I-2 `stoppable`). */
+  stopBoxes(it) {
     const s = this.state;
-    return s.guided && s.stops ? s.stops.order : [];
+    if (!s.stoppable?.size) return [];
+    return itemKeys(it).filter((k) => s.stoppable.has(k));
   }
 
-  /** Template mode on or off (the pill's list). */
-  setGuided(on, cx) {
+  /** Whether item `it` gets "Stop here": an editable return and a box that may carry it. */
+  rowStoppable(it) {
+    return Boolean(this.state.editable) && this.stopBoxes(it).length > 0;
+  }
+
+  /** Whether one of the item's boxes is a stop now (automatic or switched on). */
+  rowIsStop(it) {
     const s = this.state;
-    s.guided = on;
-    if (!on) s.stopAt = null;
-    this.refreshRows();
-    cx.notify();
+    return this.stopBoxes(it).some((k) => s.stopKeys.has(k));
   }
 
-  /** "Stop here": mark or unmark the field row `id` writes in the template. */
+  /**
+   * "Stop here" on row `id`: each of its boxes that may carry it goes on or
+   * off. An automatic stop switched off sends `false`, a box the app would
+   * not stop on switched on sends `true`, and going back to what the app
+   * would do sends `null` (`stopCall`). The host returns the switches; the
+   * list follows them.
+   */
   setStop(id, on, cx) {
     const s = this.state;
-    const key = on ? s.stops?.markable.get(id) : s.stops?.marked.get(id);
-    if (!key) return;
-    let r;
-    try {
-      r = this.app.store.write("set_template_stop", s.tin, s.code, key, on);
-    } catch (e) {
-      return this.app.toast(message(e), cx, "triangle-alert");
+    const [pi, ii] = id.split(":").map(Number);
+    const it = s.schema.parts[pi]?.items[ii];
+    if (!it || !s.editable) return;
+    for (const k of this.stopBoxes(it)) {
+      const call = stopCall(k, on, s.autoStops);
+      if ((s.stopEdits[k] ?? null) === call) continue;
+      let r;
+      try {
+        r = this.app.store.write("set_template_stop", s.tin, s.code, k, call);
+      } catch (e) {
+        return this.app.toast(message(e), cx, "triangle-alert");
+      }
+      s.stopEdits = r?.stop_edits && typeof r.stop_edits === "object" ? r.stop_edits : s.stopEdits;
     }
-    this.takeStops(r);
+    s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
+    // Switched on again on purpose: the stop counts again even if passed.
+    if (on) s.passed.delete(id);
     this.refreshRows();
   }
 
   /**
-   * Where ‹ (`dir` -1) or › (1) goes: the previous or next section, or in
-   * template mode the previous or next stop (from the open section when no
-   * stop is marked yet). Null at either end.
+   * Where ‹ (`dir` -1) or › (1) goes. With rows to do: the previous or next
+   * of them from the row the last step went to (from the open section when
+   * none, from the top after Check); past the last, › is Check
+   * (`{ check: true }`). With none: the previous or next section. Null at
+   * either end.
    */
   stepTarget(dir) {
     const s = this.state;
     if (!s?.schema) return null;
-    const stops = this.stopIds();
-    if (stops.length) {
-      const partOf = (id) => Number(id.split(":")[0]);
-      const at = s.stopAt ? stops.indexOf(s.stopAt) : -1;
-      const next = at >= 0
-        ? stops[at + dir]
-        : dir > 0
-          ? stops.find((id) => partOf(id) >= s.current)
-          : [...stops].reverse().find((id) => partOf(id) < s.current);
-      return next ? { part: partOf(next), stop: next } : null;
+    const ids = this.todo().map((r) => r.id);
+    if (ids.length) {
+      const row = nextRow(ids, dir, s.stepAt, s.current, s.stepFromTop);
+      if (row) return { part: Number(row.split(":")[0]), row };
+      return dir > 0 ? { check: true } : null;
     }
     const part = s.current + dir;
-    return part >= 0 && part < s.schema.parts.length ? { part, stop: null } : null;
+    return part >= 0 && part < s.schema.parts.length ? { part, row: null } : null;
   }
 
   /**
-   * ‹ and ›. A template stop opens its section and marks its row: the
-   * toolkit gives scripts no scroll offset to set on a plain scroll area and
-   * no way to focus a text input, so the filer scrolls to the marked row and
-   * clicks into it.
+   * ‹ and › (and their keys). A row step opens its section, then, once the
+   * row has been drawn, scrolls it into view and puts the keyboard in its
+   * box (`revealRow`). A stop stepped past forward leaves the list. Past
+   * the last row › runs Check; the next › starts again from the top, on
+   * whatever Check found.
    */
   step(dir, cx) {
+    const s = this.state;
     const target = this.stepTarget(dir);
     if (!target) return;
-    this.jumpTo(target.part, cx, target.stop);
+    if (target.check) {
+      if (s.stepAt) s.passed.add(s.stepAt);
+      s.stepAt = null;
+      s.stepFromTop = true;
+      this.refreshRows();
+      this.check(cx);
+      return;
+    }
+    if (s.stepAt && dir > 0) s.passed.add(s.stepAt);
+    s.stepFromTop = false;
+    this.jumpTo(target.part, cx, target.row);
     this.redrawPage(cx);
+    if (target.row) this.revealRow(target.row, cx);
+  }
+
+  /** The scroll area the form is in: the wide layout's own, else the page's. */
+  scrollAreaName() {
+    return this.app.layout().column >= BREAK.formNav ? "fp-scroll" : "main-scroll";
+  }
+
+  /**
+   * After a step: once the row has been drawn in its opened section, move
+   * the form so the row sits near the top (`scroll_reveal`, the host scroll
+   * module), then put the keyboard in its box. A host without the module
+   * leaves the row tinted where it is. Gives up after REVEAL_TRIES; a later
+   * step or the user leaving the row stops it.
+   */
+  revealRow(row, cx) {
+    const store = this.app.store;
+    if (!store.component?.("ScrollMark")) return;
+    const mark = `fp-row-${row}`;
+    try {
+      // The mark painted before the section opened is at the wrong place.
+      store.call("scroll_forget", mark);
+    } catch (_e) {
+      return;
+    }
+    const token = this.token;
+    let tries = 0;
+    const attempt = (tcx) => {
+      const s = this.state;
+      if (token !== this.token || s.stepAt !== row) return;
+      let found = false;
+      try {
+        found = store.call("scroll_reveal", this.scrollAreaName(), mark, REVEAL_MARGIN);
+      } catch (_e) {
+        return;
+      }
+      if (!found) {
+        tries += 1;
+        if (tries < REVEAL_TRIES) tcx.timer.after(REVEAL_DELAY, attempt);
+        return;
+      }
+      globalThis.window?.refresh?.();
+      this.focusRow(row);
+    };
+    cx.timer.after(REVEAL_DELAY, attempt);
+  }
+
+  /**
+   * The keyboard into row `row`'s box: its first stop box that takes typing,
+   * else its first empty required box, else its first box that takes
+   * typing. A text box: its anchor (just before it, not a Tab stop) takes
+   * focus and Tab order moves on into the box (`window.focus_next`). A
+   * tick box, tick group or list: its own focus handle. Never called while
+   * drawing.
+   */
+  focusRow(row) {
+    const s = this.state;
+    const [pi, ii] = row.split(":").map(Number);
+    const it = s.schema.parts[pi]?.items[ii];
+    if (!it || it.rows || !s.editable) return false;
+    const open = (f) => !f.c && !this.isLocked(f.k);
+    const fs = (it.f || []).filter(open);
+    const entry = this.todo().find((r) => r.id === row);
+    const empty = (f) => (f.t === "radio" || f.t === "chk" ? s.values[f.k] !== "true" : !String(s.values[f.k] ?? "").trim());
+    const pick = fs.find((f) => entry?.stops.includes(f.k)) || fs.find((f) => f.r && empty(f)) || fs[0];
+    if (!pick) return false;
+    const date = oneDate(it);
+    const key = date ? date.oneKey : pick.t === "radio" ? `radio:${row}` : pick.k;
+    const anchor = s.focusAnchors.get(key);
+    if (!anchor) return false;
+    anchor.focus();
+    const typed = date || s.inputs.has(pick.k);
+    if (typed) globalThis.window?.focus_next?.();
+    return true;
   }
 
   refreshLayout() {
@@ -922,15 +1099,15 @@ export class FormPageActions {
 
   /**
    * Navigator and pill: open the chosen part and fold the others, so it
-   * sits near the top (a new open does not scroll the page: scripts get no
-   * scroll offset). `stop`: the row a template step marks.
+   * sits near the top. `row`: the row a step goes to (tinted; `step`
+   * scrolls it into view).
    */
-  jumpTo(i, cx, stop = null) {
+  jumpTo(i, cx, row = null) {
     const s = this.state;
     this.ensureInputs(i, cx);
     s.openParts = new Set([i]);
     s.current = i;
-    s.stopAt = stop;
+    s.stepAt = row;
     this.refreshRows();
     cx.notify();
   }
@@ -946,7 +1123,11 @@ export class FormPageActions {
     // it), so focusing or reformatting a box never sends it.
     s.pending[k] = value;
     s.dirty = true;
+    // A profile box changed with Edit: its row offers "Save to profile too".
+    if (s.opened.has(k) && s.profileSave[k]) s.profileEdited.add(k);
     this.unquiet([k]);
+    // An edited box is the user's own now: its "same as last time" mark goes (on the row's next refresh).
+    delete s.kept[k];
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
     const seq = s.editSeq;
@@ -1044,6 +1225,7 @@ export class FormPageActions {
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
+    for (const k of Object.keys(edits)) delete s.kept[k];
     // What the boxes showed, for an answer the filer then cancels.
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k]]));
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
@@ -1928,6 +2110,7 @@ export class FormPageActions {
         this.state.off = r.off || {};
         if (Array.isArray(r.penalties)) this.state.penalties = r.penalties;
         if (r.pools) this.state.poolTexts = r.pools;
+        this.state.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
         this.syncComputed();
         this.setErrors(r.errors);
       } catch (e) {
@@ -1961,7 +2144,9 @@ export class FormPageActions {
     const s = this.state;
     // The host holds back what a sample's blank period cannot judge, and
     // the page a quiet date's message until it speaks.
-    s.errors = (errors || []).filter((e) => !(s.quiet && e.field === s.quiet.field));
+    // A tax fact not set that changes what this return files (the host's
+    // `fact_errors`) is a message like the form's own, on its card's row.
+    s.errors = [...(errors || []), ...(s.factErrors || [])].filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
     s.checkable = {};
     s.electionAt = null;
@@ -2035,15 +2220,119 @@ export class FormPageActions {
     return this.app.store.electionReadiness?.(s.tin, this.taxYear()) ?? null;
   }
 
+  /** The card the host asks for `fact`, if any. */
+  askFor(fact) {
+    return this.state?.asks?.find((a) => a.fact === fact) || null;
+  }
+
+  /** A choice card's answer picked (only its row redraws). */
+  pickAsk(fact, value) {
+    this.state.askPick[fact] = value;
+    this.refreshRows();
+  }
+
   /**
-   * Item 13's card when the profile cannot take the election: open the
-   * taxpayer's Registration section for the return's year. Coming back to
-   * the form (`main.js` `enterView`) re-asks, and the card follows.
+   * A fact card's Save (decision 3): the answer goes to the tax profile
+   * (`update_taxpayer` for the birth date, else `set_year_facts` for the
+   * return's taxable year), the open draft takes it the way "Update from
+   * tax profile" does (`screen_form_use_profile`, naming the fact so the
+   * boxes it fills take it), and the return is saved and checked again.
+   * The card goes and its row says the answer was saved; only that row
+   * redraws.
    */
-  confirmRegistration(cx) {
+  saveAsk(fact, cx) {
     const s = this.state;
-    if (!s?.tin) return;
-    this.app.taxpayerUi?.startRegistration?.({ tin: s.tin, year: this.taxYear(), fromForm: true }, cx);
+    const ask = this.askFor(fact);
+    if (!s?.draft || !s.editable || s.sample || !ask) return;
+    let value;
+    if (ask.control === "choice") {
+      if (!(fact in s.askPick)) return;
+      value = s.askPick[fact];
+    } else {
+      const raw = (s.askInputs.get(fact)?.value() ?? "").trim();
+      if (ask.control === "date") {
+        const date = parseTypedDate(raw);
+        if (!date) return this.app.toast(DATE_ERROR, cx, "triangle-alert");
+        value = `${date.y}-${String(date.m).padStart(2, "0")}-${String(date.d).padStart(2, "0")}`;
+      } else {
+        if (!raw) return this.app.toast(`Type the ${ask.label.toLowerCase()} first.`, cx, "triangle-alert");
+        value = raw;
+      }
+    }
+    const year = this.taxYear();
+    const at = [...s.askAt].find(([, asks]) => asks.includes(ask))?.[0] ?? null;
+    if (Object.keys(s.pending).length) this.flush(cx);
+    try {
+      if (fact === "birth_date") this.app.store.write("update_taxpayer", String(s.tin).slice(0, 9), { birth_date: value });
+      else this.app.store.write("set_year_facts", s.tin, year, { [fact]: value });
+    } catch (e) {
+      return this.app.toast(plainRefusal(message(e)), cx, "triangle-alert");
+    }
+    const before = s.values;
+    try {
+      const r = this.app.store.call("screen_form_use_profile", s.code, s.year, s.period, s.draft, [fact]);
+      s.draft = r.draft;
+      s.values = this.shown(r.values);
+      s.options = r.options || s.options;
+      if (r.pools) s.poolTexts = r.pools;
+      if (Array.isArray(r.penalties)) s.penalties = r.penalties;
+      this.takeAsks(Array.isArray(r.asks) ? r.asks : s.asks.filter((a) => a !== ask));
+    } catch (e) {
+      this.takeAsks(s.asks.filter((a) => a !== ask));
+      this.app.toast(message(e), cx, "triangle-alert");
+    }
+    delete s.askPick[fact];
+    // The fact's own message goes with its card; the next check says the rest.
+    s.factErrors = (s.factErrors || []).filter((e) => e.field !== `tax_profile.${fact}`);
+    this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
+    if (at) s.askSavedAt.set(at, `${ask.label} saved to the tax profile. Later returns use it.`);
+    s.dirty = true;
+    this.syncComputed();
+    this.syncChanged(before, {});
+    if (s.amends && !s.saved) this.flush(cx);
+    else this.save(cx);
+    this.refreshRows();
+    this.app.toast(`Saved to ${this.taxpayerName()}'s tax profile.`, cx, "circle-check");
+  }
+
+  /** "Save to profile too" on a profile item: on, its boxes go to the profile on the next save. */
+  setToProfile(keys, on) {
+    const s = this.state;
+    for (const k of keys) {
+      if (on) s.toProfile.add(k);
+      else s.toProfile.delete(k);
+    }
+    // The next save writes them, Queue's too.
+    if (on) s.dirty = true;
+    this.refreshRows();
+  }
+
+  /**
+   * After a save: the profile boxes switched on go to the tax profile
+   * (`screen_form_save_to_profile`, which writes each through its own
+   * function and saves the return with those boxes equal to the profile).
+   * What it says, or null when nothing was switched on or it failed (its
+   * toast says why and the switches stay on).
+   */
+  saveToProfile(cx) {
+    const s = this.state;
+    const keys = [...s.toProfile].filter((k) => s.profileEdited.has(k));
+    if (!keys.length) return null;
+    let r;
+    try {
+      r = this.app.store.write("screen_form_save_to_profile", s.code, s.year, s.period, s.draft, keys);
+    } catch (e) {
+      this.app.toast(plainRefusal(message(e)), cx, "triangle-alert");
+      return null;
+    }
+    s.draft = r.draft;
+    s.values = this.shown({ ...s.values, ...(r.values || {}) });
+    if (r.pools) s.poolTexts = r.pools;
+    for (const k of keys) {
+      s.toProfile.delete(k);
+      s.profileEdited.delete(k);
+    }
+    return [`Saved to the tax profile too: ${(r.saved || []).join(", ")}.`, ...(r.notes || [])].join(" ");
   }
 
   /**
@@ -2217,7 +2506,10 @@ export class FormPageActions {
       s.saved = true;
       // A changed and saved return goes to the top of Recent; opening one never moves it.
       if (changed) this.app.bumpRecent({ tin: s.tin, code: s.code, year: s.year, period: s.period, ...(s.returnKey != null ? { returnKey: s.returnKey } : {}) });
-      this.app.toast("Draft saved.", cx, "save");
+      // "Save to profile too": the boxes switched on go to the profile now.
+      const profiled = s.toProfile.size ? this.saveToProfile(cx) : null;
+      if (profiled) this.refreshRows();
+      this.app.toast(profiled ? `Draft saved. ${profiled}` : "Draft saved.", cx, "save");
       this.validate(cx);
     } catch (e) {
       // Edits the draft never took stay staged for the next try.
@@ -2407,11 +2699,57 @@ export class FormPageActions {
     this.open({ tin: s.tin, code: s.code, year: s.year, period: s.period, sample: s.sample }, cx);
   }
 
+  /**
+   * Queue (decision 3): saved first, then the host says what the tax facts
+   * not set do (`screen_form_queue_check`). One that changes what is filed
+   * stops Queue: its message goes on its card's row, like any validation
+   * message (the pill's to-do list steps to it). The others are said once
+   * in a confirmation; Continue queues.
+   */
   queue(cx) {
     const s = this.state;
     // A sample is saved first (as Save does), then its return is queued.
     if (s.sample) return this.saveSample(cx, (acx) => this.queue(acx));
     if (!this.ensureSaved(cx)) return;
+    let check = null;
+    try {
+      check = this.app.store.call("screen_form_queue_check", s.code, s.draft);
+    } catch (_) {
+      // An older host: Queue's own checks still refuse what must not go.
+    }
+    if (check?.blocks?.length) {
+      s.factErrors = check.blocks;
+      this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
+      this.notify(cx);
+      return this.app.toast(check.blocks[0].message, cx, "triangle-alert");
+    }
+    if (check?.warns?.length) {
+      s.queueWarn = { warns: check.warns };
+      this.app.overlay = "queue-confirm";
+      return cx.notify();
+    }
+    this.queueNow(cx);
+  }
+
+  /** The Queue confirmation's Continue: queue it as it is. */
+  confirmQueue(cx) {
+    const s = this.state;
+    if (!s?.queueWarn) return;
+    s.queueWarn = null;
+    this.app.overlay = null;
+    this.queueNow(cx);
+    cx.notify();
+  }
+
+  /** The Queue confirmation's Cancel (or Esc): nothing is queued. */
+  cancelQueueConfirm(cx) {
+    if (this.state) this.state.queueWarn = null;
+    this.app.overlay = null;
+    cx.notify();
+  }
+
+  queueNow(cx) {
+    const s = this.state;
     try {
       if (this.usesPeriodPath()) this.app.store.write("queue_form_draft", s.tin, s.code, s.year, s.period || null);
       else this.app.store.write("screen_form_queue", s.code, s.draft);
@@ -2498,6 +2836,36 @@ function lockedBox(cx, value, width, opts = {}) {
     .child(Line(cx, "body", value || "", opts.hint ? "fg3" : "fg2"));
 }
 
+/**
+ * A text box's focus anchor: nothing to see and not a Tab stop, painted just
+ * before the box, so focusing it and moving to the next Tab stop puts the
+ * keyboard in the box (`focusRow`). Null without a handle.
+ */
+function focusAnchor(ui, key) {
+  const handle = ui.state.focusAnchors?.get(key);
+  return handle ? div().absolute().size(0).track_focus(handle).tab_index(0).tab_stop(false) : null;
+}
+
+/**
+ * A choice (tick box, tick group, list) a step can put the keyboard on: its
+ * own focus handle (not a Tab stop), a tint while it has the keyboard, and
+ * Space or Enter acting on it (`act`, when given).
+ */
+function focusable(cx, ui, el, key, act = null) {
+  const handle = ui.state.focusAnchors?.get(key);
+  if (!handle) return el;
+  const t = tokens(cx);
+  const wrap = div().id(`fp-focus-${key}`).rounded(RADIUS.row).focus((st) => st.bg(t.hover)).track_focus(handle).child(el);
+  if (act) {
+    wrap.on_key_down((e, cx) => {
+      if (e.key !== "enter" && e.key !== "space") return;
+      act(cx);
+      cx.stop_propagation();
+    });
+  }
+  return wrap;
+}
+
 function control(cx, ui, f, itemLabel, multi, available) {
   const s = ui.state;
   const t = tokens(cx);
@@ -2508,10 +2876,17 @@ function control(cx, ui, f, itemLabel, multi, available) {
   let el;
   if (f.t === "sel") {
     el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
+    if (!locked) {
+      el = focusable(cx, ui, el, f.k, (cx) => {
+        s.openSelect = s.openSelect === f.k ? null : f.k;
+        ui.refreshRows();
+        cx.notify();
+      });
+    }
   } else if (f.t === "chk") {
     const on = value === "true" || value === "1" || value === "Y";
     const hint = locked && !on ? ui.reasonFor(f.k) : "";
-    return div()
+    const row = div()
       .id(`fp-${f.k}-row`)
       .flex()
       .flex_row()
@@ -2521,6 +2896,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
+    return locked ? row : focusable(cx, ui, row, f.k, (cx) => ui.choose({ [f.k]: on ? "false" : "true" }, cx));
   } else if (locked) {
     // A computed amount (a penalty too, until Edit penalties) shows 0.00 for
     // zero, never an empty box.
@@ -2559,6 +2935,11 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0).when(Boolean(ui.isOff(f.k)), (el) => el.opacity(OFF_OPACITY));
   if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
   void t;
+  // A text box gets its anchor just before it (`focusRow`).
+  if (!locked && f.t !== "sel" && s.inputs.has(f.k)) {
+    const anchor = focusAnchor(ui, f.k);
+    if (anchor) wrap.child(anchor);
+  }
   wrap.child(el);
   return wrap;
 }
@@ -2690,8 +3071,10 @@ function radioGroup(cx, ui, it, radios) {
     row.child(item);
   }
   if (hint) row.child(Text(cx, "meta", hint, "fg3"));
-  void it;
-  return row;
+  if (radios.every((f) => !s.editable || f.c || ui.isLocked(f.k))) return row;
+  // A step puts the keyboard on the group (the item's one anchor).
+  const id = ui.itemIdForKey(radios[0].k);
+  return focusable(cx, ui, row, `radio:${id}`);
 }
 
 function tinBoxes(cx, ui, it) {
@@ -2704,7 +3087,11 @@ function tinBoxes(cx, ui, it) {
     const locked = !s.editable || f.c || ui.isLocked(f.k);
     const input = s.inputs.get(f.k);
     if (locked || !input) row.child(lockedBox(cx, s.values[f.k] ?? "", width, { center: true }));
-    else row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
+    else {
+      const anchor = focusAnchor(ui, f.k);
+      if (anchor) row.child(anchor);
+      row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
+    }
   });
   return row;
 }
@@ -2994,6 +3381,100 @@ function datePicker(cx, ui, id, date, row = id) {
 }
 
 /**
+ * A tax fact the tax profile has not set, asked where the form uses it
+ * (decision 3): one sentence (what is asked, and that the answer goes to
+ * the tax profile for every later return), the control (choices, a date
+ * box or a text box) and Save. Picking redraws only this row.
+ */
+function factCard(cx, ui, ask) {
+  const s = ui.state;
+  const t = tokens(cx);
+  const fact = ask.fact;
+  const control = div().flex().flex_row().flex_wrap().gap(SPACE[2]).mt(SPACE[3]);
+  let ready = true;
+  if (ask.control === "choice") {
+    ready = fact in s.askPick;
+    (ask.choices || []).forEach((choice, n) => {
+      const on = ready && JSON.stringify(s.askPick[fact]) === JSON.stringify(choice.value);
+      control.child(
+        div()
+          .id(`fp-ask-${fact}-${n}`)
+          .flex()
+          .flex_col()
+          .min_w(140)
+          .py(SPACE[2])
+          .px(10)
+          .rounded(RADIUS.ctl)
+          .border(1)
+          .border_color(on ? t.accent : t.borderStrong)
+          .bg(on ? t.accentSoft : t.surface)
+          .cursor_pointer()
+          .when(!on, (el) => el.hover((st) => st.bg(t.hover)))
+          .accessibility_label(on ? `${choice.label}, chosen` : choice.label)
+          .on_click((_e, cx) => ui.pickAsk(fact, choice.value, cx))
+          .child(Text(cx, "control", choice.label).whitespace_normal()),
+      );
+    });
+  } else {
+    const input = s.askInputs.get(fact);
+    if (input) {
+      const width = ask.control === "date" ? controlWidth({ t: "date" }, 320) : 320;
+      control.child(TextField(cx, input, { id: `fp-ask-${fact}-input`, label: ask.label, width, error: false }));
+    }
+  }
+  return div()
+    .id(`fp-ask-${fact}`)
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .py(10)
+    .px(SPACE[3])
+    .rounded(RADIUS.row)
+    .border(1)
+    .border_color(t.borderStrong)
+    .bg(t.surface)
+    .shadow_xs()
+    .child(Text(cx, "control", ask.label).font_weight(600).whitespace_normal())
+    .child(Text(cx, "meta", ask.note, "fg2").mt(2).whitespace_normal())
+    .child(control)
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .justify_end()
+        .mt(SPACE[3])
+        .child(AppButton(cx, `fp-ask-${fact}-save`, "Save", { variant: "primary", size: "sm", disabled: !ready, onClick: (_e, cx) => ui.saveAsk(fact, cx) })),
+    );
+}
+
+/**
+ * A profile item changed with Edit (decision 8): "Save to profile too",
+ * off by default. Off, the change stays on this return; on, the next save
+ * writes it to the tax profile too (the host's note says where).
+ */
+function profileSwitch(cx, ui, id, keys) {
+  const s = ui.state;
+  const on = keys.some((k) => s.toProfile.has(k));
+  const entry = s.profileSave[keys[0]] || {};
+  const note = on ? `Your next save writes it to the tax profile too. ${entry.note || ""}`.trim() : "Off: the change stays on this return.";
+  return div()
+    .id(`fp-to-profile-${id}`)
+    .flex()
+    .flex_col()
+    .mt(SPACE[2])
+    .child(
+      div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(6)
+        .child(Switch(cx, `fp-to-profile-switch-${id}`, on, (v, cx) => ui.setToProfile(keys, v, cx), "Save to profile too"))
+        .child(Text(cx, "meta", "Save to profile too", "fg2")),
+    )
+    .child(Text(cx, "meta", note, "fg3").mt(2).whitespace_normal());
+}
+
+/**
  * Item 13's question (pick 1 B): a later-quarter 2551Q needs the taxpayer's
  * income-tax election for its taxable year, which the tax profile holds;
  * answered here once, it is saved there and every later return reuses it.
@@ -3066,18 +3547,18 @@ function plainRefusal(text) {
 
 /**
  * Item 13's card when the tax profile cannot take the year's election
- * (`income_tax_election_readiness`): what is missing and for which year, and
- * the way to supply it (the taxpayer's Registration section). It offers no
- * rate and no Save, since the profile would refuse them.
+ * (`income_tax_election_readiness`): what stands in the way, and the way
+ * out. With no income type on the profile, the income-type card (a fact
+ * card, `asks`) asks it on this row instead, and this card says nothing.
+ * It offers no rate and no Save, since the profile would refuse them.
  */
 function electionBlockedCard(cx, ui, ready) {
   const t = tokens(cx);
   const name = ui.taxpayerName();
   const year = ui.taxYear();
-  const cor = "as on the Certificate of Registration (BIR Form 2303)";
   let title;
   let body;
-  let action = { id: "fp-election-register", label: "Confirm registration", run: (cx) => ui.confirmRegistration(cx) };
+  let action = null;
   if (!ready) {
     title = `Buwiz could not read ${name}'s tax profile for ${year}.`;
     body = "Try again in a moment. The rate can be chosen once the profile is read.";
@@ -3089,18 +3570,15 @@ function electionBlockedCard(cx, ui, ready) {
         ui.refreshRows();
       },
     };
-  } else if (ready.gap === "no_confirmed_registration") {
-    title = `${name}'s tax profile has no confirmed registration for ${year}.`;
-    body = `Choosing an income-tax rate needs one. Confirm whether ${name} is self-employed or has mixed income in ${year}, ${cor}; then come back here to choose the rate.`;
+  } else if (ready.gap === "not_business_income" && !ready.classification && ui.askFor("tax_classification")) {
+    // The income-type card on this row asks it; the rate follows.
+    return null;
   } else if (ready.gap === "not_business_income") {
     title =
       ready.classification === "PurelyCompensation"
-        ? `${name}'s tax profile has ${name} registered for compensation income only in ${year}.`
+        ? `${name}'s tax profile has ${name} earning compensation income only in ${year}.`
         : `${name}'s tax profile does not say whether ${name} is self-employed or has mixed income in ${year}.`;
-    body = `The income-tax rate is chosen by self-employed and mixed-income earners. Confirm ${name}'s registration for ${year}, ${cor}; then come back here to choose the rate.`;
-  } else if (ready.gap === "timeline_needs_review") {
-    title = `${name}'s tax profile has registration dates for ${year} that need review.`;
-    body = `${(ready.issues || [])[0] || "Two confirmed registrations overlap or one has no start date"}. A new registration ${cor} replaces them from its date.`;
+    body = "The income-tax rate is chosen by self-employed and mixed-income earners. If that is wrong, change the income type on the tax profile; then come back here to choose the rate.";
   } else if (ui.state.draft?.taxpayer_type === "Individual" && !ui.state.profileRefreshed) {
     // The return was built while the profile said individual; a Draft keeps
     // that snapshot until it is brought up to date (bir-core marks only a
@@ -3115,11 +3593,9 @@ function electionBlockedCard(cx, ui, ready) {
     // registration: the dates on the profile disagree with the year's latest.
     title = `This quarter of ${name}'s tax profile is still an individual's registration, while ${year}'s latest is a ${ready.taxpayer_type ? ready.taxpayer_type.toLowerCase() : "non-individual"}'s.`;
     body = "Check the registration dates on the tax profile. Until they agree, this return asks for the income-tax rate and the profile cannot record one.";
-    action = null;
   } else {
     title = `${name}'s tax profile is registered as ${ready.taxpayer_type ? `a ${ready.taxpayer_type}` : "a non-individual"} in ${year}.`;
     body = "Only individuals choose this income-tax rate. If that registration is wrong, correct it on the tax profile.";
-    action = null;
   }
   return div()
     .id("fp-election")
@@ -3238,10 +3714,9 @@ class FormPill extends View {
 
 /** The pill at most (px); its popover is as wide, so their edges line up. */
 const PILL_W = 488;
-/** The pill's popover at most (px), and what its list leaves for the header and template rows. */
+/** The pill's popover at most (px), and what its list leaves for the header. */
 const PILL_POPOVER_MAX = 440;
 const PILL_LIST_HEAD = 64;
-const PILL_LIST_STOPS = 72;
 const PILL_SHEET_HANDLE = 24;
 /** The list shows at least about three rows, however short the window. */
 const PILL_LIST_MIN = 150;
@@ -3255,7 +3730,10 @@ function drawPill(cx, ui, view) {
   const cur = Math.min(Math.max(s.current, 0), parts.length - 1);
   const here = sectionNames(parts[cur], cur);
   const needing = parts.map((_p, i) => i).filter((i) => ui.partErrors(i) > 0);
-  const stops = ui.stopIds();
+  // The rows still to do (decision 12), and how many hold a message.
+  const todo = ui.todo();
+  const ids = todo.map((r) => r.id);
+  const flagged = todo.filter((r) => r.reason === "message").length;
   const toggle = (cx) => {
     view.listOpen = !view.listOpen;
     cx.notify();
@@ -3268,7 +3746,7 @@ function drawPill(cx, ui, view) {
 
   const step = (dir) => {
     const target = ui.stepTarget(dir);
-    const label = stops.length ? (dir < 0 ? "Previous template stop" : "Next template stop") : dir < 0 ? "Previous section" : "Next section";
+    const label = target?.check ? "Check" : todo.length ? (dir < 0 ? "Previous to do" : "Next to do") : dir < 0 ? "Previous section" : "Next section";
     const btn = div()
       .id(dir < 0 ? "fp-pill-prev" : "fp-pill-next")
       .flex()
@@ -3281,7 +3759,7 @@ function drawPill(cx, ui, view) {
       .bg(t.hover)
       .tooltip(label)
       .accessibility_label(label)
-      .child(Icon(cx, dir < 0 ? "chevron-left" : "chevron-right", { size: 18, color: target ? "fg2" : "fg3" }));
+      .child(Icon(cx, target?.check ? "circle-check" : dir < 0 ? "chevron-left" : "chevron-right", { size: 18, color: target ? "fg2" : "fg3" }));
     if (!target) return btn.opacity(0.35).disabled(true);
     return btn
       .cursor_pointer()
@@ -3292,21 +3770,25 @@ function drawPill(cx, ui, view) {
       });
   };
 
-  // What the pill says: the open section, or in template mode the stop it is on.
+  // What the pill says: the open section, or with rows to do how many and
+  // the row the last step went to.
   let small = `${here.tag} · ${cur + 1} of ${parts.length}`;
   let big = here.short;
-  if (stops.length) {
-    const at = s.stopAt ? stops.indexOf(s.stopAt) : -1;
+  if (ids.length) {
+    const at = s.stepAt ? ids.indexOf(s.stepAt) : -1;
     if (at >= 0) {
-      const [pi, ii] = s.stopAt.split(":").map(Number);
+      const [pi, ii] = s.stepAt.split(":").map(Number);
       const it = parts[pi].items[ii];
-      small = `Stop ${at + 1} of ${stops.length} · ${sectionNames(parts[pi], pi).tag}`;
+      small = `${at + 1} of ${ids.length} to do · ${sectionNames(parts[pi], pi).tag}`;
       big = it.no ? `Item ${it.no} · ${it.l}` : it.l;
     } else {
-      small = `${stops.length} template stop${stops.length > 1 ? "s" : ""} · ${here.tag}`;
+      small = `${ids.length} to do · ${here.tag}`;
     }
   }
-  const count = needing.length
+  // Red: the rows with a message (with nothing to do, the sections that have one).
+  const red = ids.length ? flagged : needing.length;
+  const redLabel = ids.length ? `${red} item${red > 1 ? "s" : ""} need${red > 1 ? "" : "s"} attention` : `${red} section${red > 1 ? "s" : ""} need${red > 1 ? "" : "s"} attention`;
+  const count = red
     ? div()
         .id("fp-pill-count")
         .flex()
@@ -3318,8 +3800,8 @@ function drawPill(cx, ui, view) {
         .px(6)
         .rounded(RADIUS.full)
         .bg(t.danger)
-        .accessibility_label(`${needing.length} section${needing.length > 1 ? "s" : ""} need${needing.length > 1 ? "" : "s"} attention`)
-        .child(Text(cx, "num", String(needing.length), "primaryFg").text_color(t.surface))
+        .accessibility_label(redLabel)
+        .child(Text(cx, "num", String(red), "primaryFg").text_color(t.surface))
     : null;
   const listLabel = `All sections${view.listOpen ? ", shown" : ""}`;
   // The pill, its popover and its sheet float over the form: a press on
@@ -3387,10 +3869,11 @@ function drawPill(cx, ui, view) {
   // from the toolkit and draws no row (the first build's empty popover).
   const list = (room) => {
     const bad = needing.length;
-    const listMax = Math.max(PILL_LIST_MIN, room - PILL_LIST_HEAD - (s.stops ? PILL_LIST_STOPS : 0));
+    const listMax = Math.max(PILL_LIST_MIN, room - PILL_LIST_HEAD);
     const rows = parts.map((p, i) => {
       const names = sectionNames(p, i);
       const errors = ui.partErrors(i);
+      const left = todo.filter((r) => r.id.startsWith(`${i}:`)).length;
       const on = i === cur && s.openParts.has(i);
       return div()
         .id(`fp-section-${i}`)
@@ -3428,7 +3911,9 @@ function drawPill(cx, ui, view) {
         .child(
           errors > 0
             ? Text(cx, "metaStrong", `Fix · ${errors}`, "danger").flex_none()
-            : Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg2").flex_none(),
+            : left > 0
+              ? Text(cx, "metaStrong", `${left} to do`, "fg2").flex_none()
+              : Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg2").flex_none(),
         );
     });
     const body = div()
@@ -3462,35 +3947,6 @@ function drawPill(cx, ui, view) {
           ),
       )
       .child(div().id("fp-sections-list").flex().flex_col().flex_none().max_h(listMax).px(SPACE[2]).overflow_y_scroll().children(rows));
-    // The branch's template for the form: ‹ and › stop on what it marks.
-    if (s.stops) {
-      body.child(
-        div()
-          .flex()
-          .flex_row()
-          .items_center()
-          .gap(SPACE[3])
-          .mx(SPACE[2])
-          .mt(SPACE[2])
-          .pt(SPACE[3])
-          .px(SPACE[3])
-          .border_t(1)
-          .border_color(t.border)
-          .child(Icon(cx, "layout-template", { color: "fg2" }))
-          .child(
-            div()
-              .flex()
-              .flex_col()
-              .flex_1()
-              .min_w(0)
-              .child(Text(cx, "control", "Template stops"))
-              .child(
-                Text(cx, "meta", s.stops.order.length ? `‹ and › stop on the ${s.stops.order.length} item${s.stops.order.length > 1 ? "s" : ""} the template marks` : "Turn on, then mark items with Stop here", "fg2").whitespace_normal(),
-              ),
-          )
-          .child(Switch(cx, "fp-guided", s.guided, (v, cx) => ui.setGuided(v, cx), "Template stops")),
-      );
-    }
     return body;
   };
 
@@ -3615,11 +4071,18 @@ function itemRow(cx, ui, it, pi, ii, width) {
     markers.push(["user", tip]);
   }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
+  // A box this new return copied, until it is edited: from the last return or the template.
+  const kept = itemKeys(it).map((k) => s.kept[k]).filter(Boolean);
+  if (kept.includes("template")) markers.push(["layout-template", "From your template"]);
+  else if (kept.includes("last")) markers.push(["history", "Same as last time"]);
   // Rule 8: the penalties show what is computed; one Edit opens all three.
   const penalty = s.editable ? fs.map((f) => ui.penaltyGroupOf(f.k)).find((g) => g && g.applies) : null;
   const penaltyOpen = Boolean(penalty) && (penalty.edited || penalty.keys.some((k) => s.penaltyOpen.has(k)));
-  // Template mode: a box the template may mark has "Stop here" (‹ and › stop on it).
-  const stoppable = Boolean(s.guided && s.stops?.markable.has(id));
+  // "Stop here" (‹ and › stop on the row) on a box that may carry it: shown
+  // on the row a step went to, under the pointer, or with its "more" open,
+  // never on every row at once. Its room is kept, so nothing moves.
+  const stoppable = ui.rowStoppable(it);
+  const stopShown = stoppable && (s.stepAt === id || s.hoverItem === id || s.moreOpen.has(id));
   const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0) + (penalty ? (penaltyOpen ? 210 : 130) : 0) + (stoppable ? 100 : 0);
   const label = div()
     .flex()
@@ -3684,7 +4147,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
     }
     label.child(edit);
   }
-  if (stoppable) {
+  if (stopShown) {
     label.child(
       div()
         .flex()
@@ -3693,8 +4156,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .items_center()
         .gap(6)
         .h(22)
+        .tooltip("‹ and › stop here on every return of this form")
         .child(Text(cx, "meta", "Stop here", "fg2"))
-        .child(Switch(cx, `fp-stop-${id}`, s.stops.marked.has(id), (v, cx) => ui.setStop(id, v, cx), "Stop here")),
+        .child(Switch(cx, `fp-stop-${id}`, ui.rowIsStop(it), (v, cx) => ui.setStop(id, v, cx), "Stop here")),
     );
   }
 
@@ -3748,7 +4212,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
       locked || !input
         ? lockedBox(cx, shown || hint, controlWidth({ t: "date" }, inner), { hint: Boolean(hint) })
         : TextField(cx, input, { id: `fp-${date.oneKey}`, label: it.l, width: controlWidth({ t: "date" }, inner), error: false });
-    controls = div().flex().flex_row().items_end().gap(SPACE[1]).child(box);
+    controls = div().flex().flex_row().items_end().gap(SPACE[1]);
+    const anchor = !locked && input ? focusAnchor(ui, date.oneKey) : null;
+    if (anchor) controls.child(anchor);
+    controls.child(box);
     if (!locked) controls.child(datePicker(cx, ui, id, date));
   } else if (tin) {
     controls = tinBoxes(cx, ui, it);
@@ -3776,8 +4243,18 @@ function itemRow(cx, ui, it, pi, ii, width) {
   }
 
   const msg = s.dateErrors?.[id] || s.messages[id] || "";
+  // "Save to profile too" (decision 8): on a profile item changed with Edit
+  // whose boxes have a safe write path; off by default.
+  const saveable = s.editable && !s.sample ? editKeys.filter((k) => s.profileSave[k]) : [];
+  const toProfile = saveable.length && (editingHere || saveable.some((k) => s.profileEdited.has(k))) ? profileSwitch(cx, ui, id, saveable) : null;
+  // The tax facts not set that this item shows (decision 3), and Item 13's rate question.
+  const cards = s.editable && !s.sample ? (s.askAt.get(id) || []).map((a) => factCard(cx, ui, a)) : [];
+  const election = s.editable && s.electionAt === id ? electionCard(cx, ui) : null;
+  // Where a step scrolls to: a mark at the row's top (the host scroll module).
+  const Mark = ui.app.store.component?.("ScrollMark");
   return div()
     .id(`fp-item-${id}`)
+    .relative()
     .flex()
     .flex_row()
     .gap(SPACE[3])
@@ -3786,11 +4263,12 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .pb(SPACE[2])
     .pl(SPACE[3])
     .when(allCalc, (el) => el.bg(t.bg))
-    // The row a template step went to: its section opened, but the page
-    // cannot scroll to it, so it is marked.
-    .when(s.stopAt === id, (el) => el.bg(t.accentSoft))
-    // The pointer over a profile item turns its mark into Edit.
-    .when(hasEdit, (el) =>
+    // The row a step went to is tinted.
+    .when(s.stepAt === id, (el) => el.bg(t.accentSoft))
+    .when(Boolean(Mark), (el) => el.child(Mark.new(`fp-row-mark-${id}`, { name: `fp-row-${id}`, area: ui.scrollAreaName() })))
+    // The pointer over a profile item turns its mark into Edit, and over a
+    // box that may carry it shows "Stop here".
+    .when(hasEdit || stoppable, (el) =>
       el.on_hover((hovered, cx) => {
         const next = hovered ? id : s.hoverItem === id ? null : s.hoverItem;
         if (next === s.hoverItem) return;
@@ -3827,6 +4305,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .child(label)
         .children(needs)
         .child(controls)
+        .when(Boolean(toProfile), (el) => el.child(toProfile))
         // What another item holds, offered for this one (`from`).
         .children(fromHint(cx, ui, it, id))
         // A shut box that shows blank says why, in the filer's words.
@@ -3834,8 +4313,23 @@ function itemRow(cx, ui, it, pi, ii, width) {
         // Reserved 18 px validation line, present with or without a message;
         // a long message wraps onto more lines rather than being cut.
         .child(div().min_h(SIZE.validationLine).mt(SPACE[1]).child(Text(cx, "meta", msg, "danger").whitespace_normal()))
+        // A tax fact the profile has not set, asked where the form uses it.
+        .children(cards)
+        .when(s.askSavedAt.has(id), (el) =>
+          el.child(
+            div()
+              .id(`fp-ask-saved-${id}`)
+              .flex()
+              .flex_row()
+              .items_center()
+              .gap(6)
+              .mt(SPACE[1])
+              .child(Icon(cx, "circle-check", { size: 14, color: "success" }))
+              .child(Text(cx, "meta", s.askSavedAt.get(id), "success").whitespace_normal()),
+          ),
+        )
         // 2551Q Item 13: the year's income-tax election, asked where the message is.
-        .when(s.editable && s.electionAt === id, (el) => el.child(electionCard(cx, ui)))
+        .when(Boolean(election), (el) => el.child(election))
         .when(s.electionSavedAt === id && s.electionAt !== id, (el) =>
           el.child(
             div()
@@ -4083,6 +4577,29 @@ export function renderRemovalConfirm(cx, app) {
   return Overlay(cx, "removal-confirm", card, (cx) => ui.cancelRemoval(cx), { width: 420 });
 }
 
+/**
+ * Queue's confirmation when tax facts the return reads are not set but do
+ * not change what it files (decision 3): each said once, then Continue
+ * queues it as it is, or Cancel.
+ */
+export function renderQueueConfirm(cx, app) {
+  const ui = app.formUi;
+  const held = ui.state?.queueWarn;
+  if (!held) return div();
+  const card = div()
+    .flex()
+    .flex_col()
+    .items_stretch()
+    .w_full()
+    .gap(SPACE[3])
+    .p(SPACE[5])
+    .child(Text(cx, "title", "Queue this return?").whitespace_normal())
+    .children(held.warns.map((warn, n) => div().id(`queue-warn-${n}`).child(Text(cx, "control", warn).whitespace_normal())))
+    .child(AppButton(cx, "queue-continue", "Continue", { variant: "primary", block: true, onClick: (_e, cx) => ui.confirmQueue(cx) }))
+    .child(AppButton(cx, "queue-cancel", "Cancel", { variant: "secondary", block: true, onClick: (_e, cx) => ui.cancelQueueConfirm(cx) }));
+  return Overlay(cx, "queue-confirm", card, (cx) => ui.cancelQueueConfirm(cx), { width: 420 });
+}
+
 // ---------------------------------------------------------------- page
 
 /**
@@ -4186,6 +4703,18 @@ function formContent(cx, app, width) {
   // from its history, says what it is.
   if (s.amends || s.filedOriginal) page.child(Text(cx, "meta", `This return amends a filed one. ${FILED_KEPT}`, "fg2").mb(SPACE[4]).whitespace_normal());
   if (s.filedOriginalView) page.child(Text(cx, "meta", filedOriginalStrip(s.filedOriginalView), "fg2").mb(SPACE[4]).whitespace_normal());
+  // A filed return whose tax profile moved on says so, quietly (decision 5).
+  if (!s.editable && s.profileChanged?.length) {
+    page.child(
+      div()
+        .id("fp-profile-changed")
+        .flex()
+        .flex_col()
+        .mb(SPACE[4])
+        .child(Text(cx, "meta", PROFILE_CHANGED_NOTE, "fg2").whitespace_normal())
+        .children(s.profileChanged.map((change, n) => div().id(`fp-profile-changed-${n}`).child(Text(cx, "meta", `· ${change}`, "fg3").whitespace_normal()))),
+    );
+  }
   // A return that left the app is read-only, and says when it went.
   if (!s.editable && !s.filedOriginalView && (s.submittedAt || s.confirmedAt)) {
     const parts = [];
@@ -4387,6 +4916,18 @@ export function renderFormSplit(cx, app, L) {
   return split;
 }
 
+/**
+ * The form's scroll area, `#fp-scroll` (wide) or `#main-scroll` (narrow):
+ * the host's `ScrollArea`, whose position a step can move (`revealRow`), on
+ * a host that has it; else a plain up-and-down scroll area styled by
+ * `plain`. Both fill their parent and hide sideways overflow.
+ */
+export function formScrollArea(app, id, plain) {
+  const Area = app.store.component?.("ScrollArea");
+  if (Area) return Area.new(id, { name: id });
+  return plain(div().id(id)).overflow_y_scroll().overflow_x_hidden();
+}
+
 function drawFormSplit(cx, app, L) {
   if (L.column < BREAK.formNav) return null;
   const c = formContent(cx, app, L.column);
@@ -4414,7 +4955,7 @@ function drawFormSplit(cx, app, L) {
     .min_h(0)
     .w_full()
     .child(navCol)
-    .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
+    .child(formScrollArea(app, "fp-scroll", (el) => el.flex_1().min_w(0).h_full()).child(body));
   // A wide window keeps the side list and has the pill too (the owner's
   // note on pick 8): it floats over fp-scroll.
   const pill = c.parts ? app.formUi.pillView() : null;
