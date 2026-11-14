@@ -522,7 +522,7 @@ impl Session {
             ));
         }
         let db = self.lock_db()?;
-        let profile = load_profile(&db, &tin)?;
+        let profile = load_profile(&db, &tin, year)?;
         let mut draft =
             crate::screen_form_module::load_draft(&db, kind, &profile, year, period, false, None)?;
         if agent::identity(kind, &draft)?.status == FilingStatus::Draft {
@@ -601,7 +601,7 @@ impl Session {
         let fields = collect_fill_fields(args)?;
         let source = fill_source(args, &fields, kind, &draft)?;
         let db = self.lock_db()?;
-        let profile = load_profile(&db, &tin)?;
+        let profile = load_profile(&db, &tin, year)?;
         let from_profile = profile_context(&db, kind, &profile, year, period)?;
         let def = kind.definition();
         let (mut filled, mut kept) = (Vec::new(), Vec::new());
@@ -743,7 +743,7 @@ impl Session {
         let year = open.year;
         let period = open.period;
         let db = self.lock_db()?;
-        let profile = load_profile(&db, &tin)?;
+        let profile = load_profile(&db, &tin, year)?;
         let bounds = filing_bounds(kind, &open.draft);
         let overlaps = |version: &bir_core::profile::TaxProfileVersion| match bounds {
             None => true,
@@ -1055,8 +1055,10 @@ enum TinQuery {
     },
 }
 
-fn load_profile(db: &Database, tin: &str) -> Result<TaxpayerProfile, String> {
-    db.get_profile_by_tin(tin)
+/// The branch's profile for tax year `year` (its year facts over the flat
+/// fields), as every return of that year reads it.
+fn load_profile(db: &Database, tin: &str, year: u16) -> Result<TaxpayerProfile, String> {
+    db.get_profile_for_year(tin, year)
         .map_err(|error| error.to_string())?
         .ok_or_else(|| format!("no taxpayer profile for {tin}"))
 }
@@ -1429,10 +1431,8 @@ pub(crate) fn send_draft(
         return Err(format!("this return is {:?}, not a Draft", identity.status));
     }
     if kind == AgentFormKind::Form2551Q {
-        db.confirm_initial_profile_year(&identity.tin, i32::from(identity.taxable_year))
-            .map_err(|error| error.to_string())?;
         if let Some(profile) = db
-            .get_profile_by_tin(&identity.tin)
+            .get_profile_for_year(&identity.tin, identity.taxable_year)
             .map_err(|error| error.to_string())?
             && let Ok(mut typed) = serde_json::from_value::<Form2551QDraft>(draft.clone())
         {

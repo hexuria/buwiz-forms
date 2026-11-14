@@ -716,7 +716,7 @@ impl Database {
             ));
         }
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Immediate)?;
-        use crate::profile::{IncomeTaxElection, TaxElectionHistory, TaxpayerProfile};
+        use crate::profile::{IncomeTaxElection, TaxpayerProfile};
 
         let existing = tx
             .query_row(
@@ -756,10 +756,10 @@ impl Database {
             }
         }
 
-        // Every queued return is bound to the authoritative profile, even if
-        // Item 13 does not create an 8% ledger entry. Read it inside this
-        // transaction so profile synchronization, election persistence, and
-        // the draft UPSERT either all commit or all roll back.
+        // Every queued return is bound to the year's profile of its branch
+        // (the year facts over the flat fields), even if Item 13 records no
+        // election. Read it inside this transaction so the election write
+        // and the draft UPSERT either both commit or both roll back.
         let profile_json = tx
             .query_row(
                 "SELECT data_json FROM profiles WHERE tin = ?1",
@@ -774,6 +774,7 @@ impl Database {
                 ))
             })?;
         let mut profile: TaxpayerProfile = serde_json::from_str(&profile_json)?;
+        super::taxpayers::overlay_profile_for_year(&tx, &mut profile, draft.taxable_year)?;
         let current_annual_election = annual_income_tax_election(&profile, draft.taxable_year);
         if current_annual_election == AnnualIncomeTaxElection::Conflicting {
             return Err(DbError::Other(format!(
@@ -782,49 +783,30 @@ impl Database {
             )));
         }
 
-        let requests_eight_percent = draft.item_13_election == Item13Election::EightPercent;
-        let requests_graduated = draft.item_13_election == Item13Election::Graduated;
-        if requests_eight_percent && current_annual_election == AnnualIncomeTaxElection::Graduated {
-            return Err(DbError::Other(format!(
-                "Taxpayer profile already records a conflicting income-tax election for {}",
-                draft.taxable_year
-            )));
-        }
-        if requests_graduated && current_annual_election == AnnualIncomeTaxElection::EightPercent {
-            return Err(DbError::Other(format!(
-                "Taxpayer profile already records a conflicting income-tax election for {}",
-                draft.taxable_year
-            )));
-        }
-
-        let mut profile_changed = false;
-        if (requests_eight_percent || requests_graduated)
-            && current_annual_election == AnnualIncomeTaxElection::Unrecorded
-        {
-            // Keep the new election in this transaction's in-memory profile
-            // until the fully synchronized queued draft validates. An invalid
-            // or stale draft therefore cannot leave a partial ledger write.
-            profile.tax_elections.push(TaxElectionHistory {
-                taxable_year: draft.taxable_year,
-                election: if requests_eight_percent {
-                    IncomeTaxElection::EightPercent
-                } else {
-                    IncomeTaxElection::GraduatedUnspecified
-                },
-                elected_at: chrono::Utc::now().naive_utc(),
-                source_form: "2551Qv2018".to_string(),
-            });
-            profile_changed = true;
+        // Item 13 answered on this return is the year's 8% or graduated
+        // choice. It may change until a return carrying it is filed
+        // (decision 7); `record_year_election_on` refuses a locked change.
+        let requested = match draft.item_13_election {
+            Item13Election::EightPercent => Some(IncomeTaxElection::EightPercent),
+            Item13Election::Graduated => Some(IncomeTaxElection::GraduatedUnspecified),
+            Item13Election::Unanswered | Item13Election::NotApplicable => None,
+        };
+        if let Some(election) = requested {
+            super::taxpayers::record_year_election_on(
+                &tx,
+                &draft.tin,
+                draft.taxable_year,
+                election,
+                &format!("2551Q Q{}", draft.quarter),
+            )?;
+            profile = serde_json::from_str(&profile_json)?;
+            super::taxpayers::overlay_profile_for_year(&tx, &mut profile, draft.taxable_year)?;
         }
 
         let mut verified = draft.clone();
         verified
             .reconcile_with_effective_profile(&profile)
-            .map_err(|error| {
-                DbError::Other(format!(
-                    "Cannot queue 2551Q until its exact filing period resolves to one confirmed taxpayer-profile version: {error}"
-                ))
-            })?;
+            .map_err(|error| DbError::Other(format!("Cannot queue 2551Q: {error}")))?;
         if let Err(validation_errors) = verified.revalidate_queued_before_submission() {
             let summary = validation_errors
                 .iter()
@@ -834,65 +816,6 @@ impl Database {
             return Err(DbError::Other(format!(
                 "Queued 2551Q draft failed current-profile and queue-fingerprint validation: {summary}"
             )));
-        }
-
-        if profile_changed {
-            let resolved = profile.resolve_tax_profile_for_year(draft.taxable_year);
-            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
-                let details = resolved
-                    .issues
-                    .iter()
-                    .map(|issue| issue.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                return Err(DbError::Other(format!(
-                    "Cannot reconcile the {} Forms Set after recording Item 13 because the confirmed profile timeline is unresolved{}",
-                    draft.taxable_year,
-                    if details.is_empty() {
-                        String::new()
-                    } else {
-                        format!(": {details}")
-                    }
-                )));
-            }
-
-            let stored_set =
-                super::forms_set::query_per_year_forms(&tx, &draft.tin, draft.taxable_year)?;
-            let existing_set = (!stored_set.is_empty()).then_some(&stored_set);
-            let suggestions = crate::integration::validation::form_suggestions_for_profile_year(
-                &profile,
-                draft.taxable_year,
-            );
-            let reconciled = crate::forms::reconcile_forms_set_for_year(
-                draft.taxable_year,
-                existing_set,
-                &suggestions,
-            );
-            if !reconciled.conflicts.is_empty() {
-                tracing::warn!(
-                    tin = %draft.tin,
-                    taxable_year = draft.taxable_year,
-                    conflicts = reconciled.conflicts.len(),
-                    "Item 13 election reconciled a Forms Set that needs review"
-                );
-            }
-            super::forms_set::execute_replace_per_year_forms(
-                &tx,
-                &draft.tin,
-                draft.taxable_year,
-                &reconciled.forms_set,
-            )?;
-            let updated_profile_json = serde_json::to_string(&profile)?;
-            let updated = tx.execute(
-                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
-                params![updated_profile_json, &draft.tin],
-            )?;
-            if updated != 1 {
-                return Err(DbError::Other(format!(
-                    "Expected one taxpayer profile for TIN {}, updated {updated}",
-                    draft.tin
-                )));
-            }
         }
 
         let json = serde_json::to_string(&verified)?;
@@ -1276,7 +1199,8 @@ impl Database {
                     "Cannot claim 2551Q submission because taxpayer profile {tin} does not exist"
                 ))
             })?;
-        let profile: crate::profile::TaxpayerProfile = serde_json::from_str(&profile_json)?;
+        let mut profile: crate::profile::TaxpayerProfile = serde_json::from_str(&profile_json)?;
+        super::taxpayers::overlay_profile_for_year(&tx, &mut profile, taxable_year)?;
         let rejection_errors = match draft.reconcile_with_effective_profile(&profile) {
             Ok(()) => draft.revalidate_queued_before_submission().err(),
             Err(error) => {
@@ -3524,6 +3448,19 @@ mod tests {
         insert_raw_test_profile(db, &persisted);
     }
 
+    /// The year's election entries as the year's profile reads them (the
+    /// head office's year facts).
+    fn year_elections(db: &Database, tin: &str, year: u16) -> Vec<TaxElectionHistory> {
+        db.get_profile_for_year(tin, year)
+            .unwrap()
+            .unwrap()
+            .tax_elections
+            .iter()
+            .filter(|entry| entry.taxable_year == year)
+            .cloned()
+            .collect()
+    }
+
     fn insert_raw_test_profile(db: &Database, profile: &TaxpayerProfile) {
         db.conn
             .execute(
@@ -4514,24 +4451,20 @@ mod tests {
             "an existing Queued snapshot must not be replaced by a stale requeue"
         );
 
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        let elections = saved_profile
-            .tax_elections
-            .iter()
-            .filter(|entry| entry.taxable_year == 2026)
-            .collect::<Vec<_>>();
+        let elections = year_elections(&db, &draft.tin, 2026);
         let saved_draft = db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().unwrap();
 
         assert!(first_id > 0);
         assert_eq!(elections.len(), 1);
         assert_eq!(elections[0].election, IncomeTaxElection::EightPercent);
-        assert_eq!(elections[0].source_form, "2551Qv2018");
+        assert_eq!(elections[0].source_form, "2551Q Q1");
         assert_eq!(saved_draft.status, FilingStatus::Queued);
-        let saved_set = db.get_per_year_forms(&draft.tin, 2026).unwrap();
-        assert!(saved_set.contains_active("1701Q"));
-        assert!(saved_set.contains_active("1701"));
-        assert!(!saved_set.contains_active("2551Q"));
-        assert_eq!(saved_profile.per_year_forms.get(&2026), Some(&saved_set));
+        // The election is the year's fact, not the flat ledger, and the
+        // forms list gains nothing (decision 1).
+        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
+        assert!(saved_profile.tax_elections.is_empty());
+        assert!(db.get_per_year_forms(&draft.tin, 2026).unwrap().is_empty());
+        assert!(saved_profile.per_year_forms.is_empty());
     }
 
     #[test]
@@ -4587,10 +4520,11 @@ mod tests {
                 if warning.contains("committed")
                     && warning.contains("forced refresh request failure")
         ));
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        assert!(saved_profile.tax_elections.iter().any(|entry| {
-            entry.taxable_year == 2026 && entry.election == IncomeTaxElection::EightPercent
-        }));
+        assert!(
+            year_elections(&db, &draft.tin, 2026)
+                .iter()
+                .any(|entry| entry.election == IncomeTaxElection::EightPercent)
+        );
         assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_some());
     }
 
@@ -4631,8 +4565,10 @@ mod tests {
         assert_eq!(excluded.source, crate::forms::FormSetSource::Manual);
     }
 
+    /// The queue writes no Forms Set; a failure writing the year's election
+    /// rolls the whole queue back.
     #[test]
-    fn forms_set_write_failure_rolls_back_queued_election_and_draft() {
+    fn year_facts_write_failure_rolls_back_queued_election_and_draft() {
         let db = test_db();
         let profile = test_profile();
         insert_test_profile(&db, &profile);
@@ -4642,6 +4578,11 @@ mod tests {
                  BEFORE INSERT ON per_year_forms
                  BEGIN
                    SELECT RAISE(ABORT, 'forced Forms Set failure');
+                 END;
+                 CREATE TRIGGER reject_item13_year_facts
+                 BEFORE INSERT ON year_facts
+                 BEGIN
+                   SELECT RAISE(ABORT, 'forced year facts failure');
                  END;",
             )
             .unwrap();
@@ -4649,16 +4590,10 @@ mod tests {
 
         let error = db
             .save_queued_2551q_draft_and_election(&draft)
-            .expect_err("a Forms Set write failure must abort the transaction");
+            .expect_err("a year facts write failure must abort the transaction");
 
-        assert!(error.to_string().contains("forced Forms Set failure"));
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        assert!(
-            saved_profile
-                .tax_elections
-                .iter()
-                .all(|entry| entry.taxable_year != 2026)
-        );
+        assert!(error.to_string().contains("forced year facts failure"));
+        assert!(year_elections(&db, &draft.tin, 2026).is_empty());
         assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
         assert!(db.get_per_year_forms(&draft.tin, 2026).unwrap().is_empty());
     }
@@ -4681,10 +4616,11 @@ mod tests {
         db.save_queued_2551q_draft_and_election(&draft)
             .expect("the draft and annual election should commit atomically");
 
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        assert!(saved_profile.tax_elections.iter().any(|entry| {
-            entry.taxable_year == 2026 && entry.election == IncomeTaxElection::EightPercent
-        }));
+        assert!(
+            year_elections(&db, &draft.tin, 2026)
+                .iter()
+                .any(|entry| entry.election == IncomeTaxElection::EightPercent)
+        );
         assert_eq!(
             db.get_2551q_draft(&draft.tin, 2026, 3)
                 .unwrap()
@@ -4704,18 +4640,13 @@ mod tests {
         db.save_queued_2551q_draft_and_election(&draft)
             .expect("an unchanged current profile should accept the queued draft");
 
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        let elections = saved_profile
-            .tax_elections
-            .iter()
-            .filter(|entry| entry.taxable_year == 2026)
-            .collect::<Vec<_>>();
+        let elections = year_elections(&db, &draft.tin, 2026);
         assert_eq!(elections.len(), 1);
         assert_eq!(
             elections[0].election,
             IncomeTaxElection::GraduatedUnspecified
         );
-        assert_eq!(elections[0].source_form, "2551Qv2018");
+        assert_eq!(elections[0].source_form, "2551Q Q1");
         assert_eq!(
             db.get_2551q_draft(&draft.tin, 2026, 1)
                 .unwrap()
@@ -4739,8 +4670,11 @@ mod tests {
         }
     }
 
+    /// The queue reads the year's facts, not the dated versions: a missing,
+    /// overlapping, undated or out-of-period ledger queues the same return
+    /// and records its Item 13.
     #[test]
-    fn unresolved_effective_profile_ledgers_reject_queue_without_partial_writes() {
+    fn missing_or_messy_version_ledgers_do_not_block_the_queue() {
         let reviewed_profile = test_profile();
         let cases = [
             {
@@ -4755,14 +4689,14 @@ mod tests {
                 overlapping.id = "overlapping-confirmed-version".to_string();
                 overlapping.label = "Overlapping confirmed version".to_string();
                 overlapping.effective_from = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
+                overlapping.cor.registered_name = "Someone Else".to_string();
                 profile.profile_versions.push(overlapping);
                 ("overlapping ledger", profile)
             },
             {
                 let mut profile = reviewed_profile.clone();
-                profile.business_start_date = None;
-                profile.profile_versions.clear();
                 profile.ensure_profile_version_ledger();
+                profile.profile_versions[0].effective_from = None;
                 ("undated ledger", profile)
             },
             {
@@ -4779,22 +4713,17 @@ mod tests {
             insert_raw_test_profile(&db, &current_profile);
             let draft = queued_eight_percent_draft(&reviewed_profile);
 
-            let error = db
-                .save_queued_2551q_draft_and_election(&draft)
-                .expect_err(case);
+            db.save_queued_2551q_draft_and_election(&draft)
+                .unwrap_or_else(|error| panic!("{case}: {error}"));
 
-            assert!(
-                error.to_string().contains("exact filing period"),
-                "{case} returned an unexpected error: {error}"
-            );
-            assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
-            assert!(
-                db.get_profile(&draft.tin)
-                    .unwrap()
-                    .unwrap()
-                    .tax_elections
-                    .is_empty(),
-                "{case} must not persist the draft's requested election"
+            let stored = db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().unwrap();
+            assert_eq!(stored.status, FilingStatus::Queued, "{case}");
+            assert_eq!(stored.taxpayer_name, "Test Taxpayer", "{case}");
+            assert!(stored.profile_resolution_error.is_none(), "{case}");
+            assert_eq!(
+                year_elections(&db, &draft.tin, 2026)[0].election,
+                IncomeTaxElection::EightPercent,
+                "{case}"
             );
         }
     }
@@ -6163,14 +6092,16 @@ mod tests {
             Claim2551QSubmissionResult::Superseded
         ));
 
-        profile.eopt_tier = Some(crate::profile::EoptTier::Micro);
-        profile.profile_versions[0].eopt_tier = Some(crate::profile::EoptTier::Micro);
-        db.conn
-            .execute(
-                "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
-                params![serde_json::to_string(&profile).unwrap(), &queued.tin],
-            )
-            .unwrap();
+        // The year's EOPT tier changes after the return was queued.
+        db.set_year_facts(
+            &queued.tin,
+            queued.taxable_year,
+            &crate::tax_profile::YearFactsPatch {
+                eopt_tier: Some(Some(crate::profile::EoptTier::Micro)),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         match db
             .claim_queued_2551q_submission(
                 &queued.tin,
@@ -6197,8 +6128,10 @@ mod tests {
         assert!(stored.submission_claim_token.is_none());
     }
 
+    /// The claim reads the year's profile: clearing every dated version
+    /// changes nothing and the return is claimed.
     #[test]
-    fn network_claim_rejects_when_the_effective_profile_becomes_unresolved() {
+    fn network_claim_needs_no_confirmed_profile_version() {
         let db = test_db();
         let profile = test_profile();
         insert_test_profile(&db, &profile);
@@ -6206,13 +6139,13 @@ mod tests {
         db.save_queued_2551q_draft_and_election(&queued)
             .expect("queued draft should persist before claiming");
 
-        let mut unresolved_profile = db.get_profile(&queued.tin).unwrap().unwrap();
-        unresolved_profile.profile_versions.clear();
+        let mut without_versions = db.get_profile(&queued.tin).unwrap().unwrap();
+        without_versions.profile_versions.clear();
         db.conn
             .execute(
                 "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
                 params![
-                    serde_json::to_string(&unresolved_profile).unwrap(),
+                    serde_json::to_string(&without_versions).unwrap(),
                     &queued.tin
                 ],
             )
@@ -6229,63 +6162,63 @@ mod tests {
             )
             .unwrap()
         {
-            Claim2551QSubmissionResult::Rejected { draft, errors } => {
-                assert_eq!(draft.status, FilingStatus::Draft);
-                assert!(
-                    draft
-                        .last_error
-                        .as_deref()
-                        .is_some_and(|message| message.contains("effective taxpayer profile"))
-                );
-                assert!(errors.iter().any(|(field, message)| {
-                    field == "profile_resolution" && message.contains("No confirmed")
-                }));
+            Claim2551QSubmissionResult::Claimed { draft, .. } => {
+                assert!(draft.profile_resolution_error.is_none());
+                assert!(!draft.profile_snapshot_stale);
             }
-            _ => panic!("an unresolved profile must reject a network claim"),
+            Claim2551QSubmissionResult::Rejected { errors, .. } => {
+                panic!("no version is needed to claim: {errors:?}")
+            }
+            Claim2551QSubmissionResult::Superseded => panic!("superseded"),
         }
-
-        let stored = db
-            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
-            .unwrap()
-            .unwrap();
-        assert_eq!(stored.status, FilingStatus::Draft);
-        assert!(stored.queued_submission_fingerprint.is_none());
-        assert!(stored.submission_claim_token.is_none());
-        assert!(
-            stored
-                .last_error
-                .as_deref()
-                .is_some_and(|message| message.contains("effective taxpayer profile"))
-        );
     }
 
+    /// Decision 7: an earlier graduated choice gives way to the queued Q1's
+    /// 8% while nothing carrying it is filed; once a 1701Q of the year is
+    /// filed, the change is refused and nothing is written.
     #[test]
-    fn conflicting_annual_election_rejects_queued_draft_without_changes() {
-        let db = test_db();
-        let mut profile = test_profile();
-        profile.tax_elections.push(TaxElectionHistory {
-            taxable_year: 2026,
-            election: IncomeTaxElection::GraduatedOsd,
-            elected_at: chrono::Utc::now().naive_utc(),
-            source_form: "1701Q".to_string(),
-        });
-        insert_test_profile(&db, &profile);
-        let draft = queued_eight_percent_draft(&test_profile());
+    fn a_queued_item_13_changes_the_years_choice_until_it_is_locked() {
+        for locked in [false, true] {
+            let db = test_db();
+            let mut profile = test_profile();
+            profile.tax_elections.push(TaxElectionHistory {
+                taxable_year: 2026,
+                election: IncomeTaxElection::GraduatedOsd,
+                elected_at: chrono::Utc::now().naive_utc(),
+                source_form: "1701Q".to_string(),
+            });
+            insert_test_profile(&db, &profile);
+            if locked {
+                db.conn
+                    .execute(
+                        "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, period_key, status, data_json)
+                         VALUES (?1, '1701Q', 2026, 1, 'Q1', 'Submitted', '{}')",
+                        [profile.tin.full()],
+                    )
+                    .unwrap();
+            }
+            let draft = queued_eight_percent_draft(&test_profile());
 
-        let error = db.save_queued_2551q_draft_and_election(&draft).unwrap_err();
+            let result = db.save_queued_2551q_draft_and_election(&draft);
 
-        assert!(
-            error
-                .to_string()
-                .contains("conflicting income-tax election")
-        );
-        assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        assert_eq!(saved_profile.tax_elections.len(), 1);
-        assert_eq!(
-            saved_profile.tax_elections[0].election,
-            IncomeTaxElection::GraduatedOsd
-        );
+            let elections = year_elections(&db, &draft.tin, 2026);
+            assert_eq!(elections.len(), 1);
+            if locked {
+                assert!(result.unwrap_err().to_string().contains("cannot change"));
+                assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
+                assert_eq!(elections[0].election, IncomeTaxElection::GraduatedOsd);
+            } else {
+                result.unwrap();
+                assert_eq!(elections[0].election, IncomeTaxElection::EightPercent);
+            }
+            // The flat ledger is never rewritten.
+            let flat = db.get_profile(&draft.tin).unwrap().unwrap();
+            assert_eq!(flat.tax_elections.len(), 1);
+            assert_eq!(
+                flat.tax_elections[0].election,
+                IncomeTaxElection::GraduatedOsd
+            );
+        }
     }
 
     #[test]
@@ -6307,8 +6240,7 @@ mod tests {
 
         assert!(db.save_queued_2551q_draft_and_election(&draft).is_err());
         assert!(db.get_2551q_draft(&draft.tin, 2026, 1).unwrap().is_none());
-        let saved_profile = db.get_profile(&draft.tin).unwrap().unwrap();
-        assert!(saved_profile.tax_elections.is_empty());
+        assert!(year_elections(&db, &draft.tin, 2026).is_empty());
     }
 
     #[test]

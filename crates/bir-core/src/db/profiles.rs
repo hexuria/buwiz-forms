@@ -7,56 +7,7 @@ use crate::profile::{
     IncomeTaxElection, TaxProfileVersion, TaxProfileVersionConfirmationPlan,
     TaxProfileVersionSource, TaxProfileVersionStatus, TaxpayerProfile,
 };
-
-/// See [`Database::confirm_initial_profile_year`]. `conn` may be an open
-/// transaction on the profiles connection.
-pub(super) fn confirm_initial_profile_year_on(
-    conn: &Connection,
-    tin: &str,
-    year: i32,
-) -> Result<bool, DbError> {
-    let json: Option<String> = conn
-        .query_row(
-            "SELECT data_json FROM profiles WHERE tin = ?1",
-            params![tin],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let Some(json) = json else {
-        return Ok(false);
-    };
-    let mut profile: TaxpayerProfile = serde_json::from_str(&json)?;
-    profile.normalize_profile_version_review_statuses();
-    if !profile.confirmed_profile_versions().is_empty() {
-        return Ok(false);
-    }
-    let healable = profile.profile_versions.is_empty()
-        || (profile.profile_versions.len() == 1
-            && profile.profile_versions[0].source == TaxProfileVersionSource::MigrationBackfill
-            && profile.profile_versions[0].status != TaxProfileVersionStatus::Confirmed);
-    if !healable {
-        return Ok(false);
-    }
-    if profile.business_start_date.is_none() {
-        let start = chrono::NaiveDate::from_ymd_opt(year, 1, 1)
-            .ok_or_else(|| DbError::Other(format!("{year} is not a calendar year")))?;
-        profile.business_start_date = Some(start);
-    }
-    profile.profile_versions.clear();
-    profile.ensure_profile_version_ledger();
-    let stored = serde_json::to_string(&profile)?;
-    conn.execute(
-        "UPDATE profiles SET data_json = ?1 WHERE tin = ?2",
-        params![stored, tin],
-    )?;
-    Ok(true)
-}
-
-fn reconciliation_calendar_year(local_date: chrono::NaiveDate) -> u16 {
-    use chrono::Datelike as _;
-
-    local_date.year() as u16
-}
+use crate::tax_profile::year_facts::YearFactsPatch;
 
 fn same_persisted_version_except_label(
     stored: &TaxProfileVersion,
@@ -357,6 +308,7 @@ pub(super) fn delete_profile_rows(tx: &rusqlite::Connection, tin: &str) -> Resul
         ("submission_receipts", "tin"),
         ("data_providers", "profile_tin"),
         ("per_year_forms", "tin"),
+        ("year_facts", "tin"),
         ("profile_calendar_events", "profile_tin"),
         ("form_templates", "tin"),
     ] {
@@ -408,6 +360,7 @@ impl Database {
             ("submission_receipts", "tin"),
             ("data_providers", "profile_tin"),
             ("per_year_forms", "tin"),
+            ("year_facts", "tin"),
             ("profile_calendar_events", "profile_tin"),
             ("profile_calendar_links", "profile_tin"),
             ("form_templates", "tin"),
@@ -468,7 +421,6 @@ impl Database {
         mut profile: TaxpayerProfile,
         reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
     ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
-        profile.ensure_profile_version_ledger();
         let tin = profile.tin.full();
         let previous_tin = profile
             .id
@@ -496,9 +448,6 @@ impl Database {
         }
 
         validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, reviewed_plan)?;
-        profile
-            .validate_confirmed_profile_timeline()
-            .map_err(DbError::Other)?;
 
         // A caller may already hold a transaction — the profile import
         // writes the whole archive atomically. Then this save rides that
@@ -549,47 +498,9 @@ impl Database {
             super::forms_set::execute_replace_per_year_forms(conn, &tin, *year, set)?;
         }
 
-        // Refresh the current year and every already stored year in the same
-        // transaction as the profile update. Ambiguous or undated timelines
-        // preserve existing Forms Sets instead of guessing.
-        let mut years_to_update = std::collections::BTreeSet::new();
-        // Filing obligations follow the desktop user's local calendar year.
-        // Using UTC here can reconcile the previous year during the first
-        // local hours of January 1 in time zones east of UTC, while the UI and
-        // emitted compliance event already identify the new local year.
-        let current_year = reconciliation_calendar_year(chrono::Local::now().date_naive());
-        years_to_update.insert(current_year);
-        years_to_update.extend(profile.per_year_forms.keys().copied());
-        if let Some(stored) = &existing_profile {
-            years_to_update.extend(stored.per_year_forms.keys().copied());
-        }
-
-        for year in years_to_update {
-            let resolved = profile.resolve_tax_profile_for_year(year);
-            if resolved.has_blocking_issues() || resolved.effective_segments.is_empty() {
-                continue;
-            }
-
-            let suggestions =
-                crate::integration::validation::form_suggestions_for_profile_year(&profile, year);
-            let existing_set = profile.per_year_forms.get(&year).or_else(|| {
-                existing_profile
-                    .as_ref()
-                    .and_then(|stored| stored.per_year_forms.get(&year))
-            });
-            let result =
-                crate::forms::reconcile_forms_set_for_year(year, existing_set, &suggestions);
-            if !result.conflicts.is_empty() {
-                tracing::warn!(
-                    tin = %tin,
-                    taxable_year = year,
-                    conflicts = result.conflicts.len(),
-                    "Forms Set reconciliation requires review"
-                );
-            }
-            super::forms_set::execute_replace_per_year_forms(conn, &tin, year, &result.forms_set)?;
-            profile.per_year_forms.insert(year, result.forms_set);
-        }
+        // The forms list holds only what the user picks (decision 1): a
+        // save writes the sets the profile carries and adds or removes
+        // nothing.
 
         // Group a newly created (or re-keyed) profile under its taxpayer.
         super::taxpayers::sync_taxpayer_rows(conn)?;
@@ -690,82 +601,120 @@ impl Database {
         Ok(profiles)
     }
 
-    /// Give a profile its first confirmed year when nothing is confirmed yet.
-    ///
-    /// A taxpayer created in the app stores no profile version and no business
-    /// start, so Queue cannot resolve a period ("no confirmed taxpayer-profile
-    /// version covers …"). This writes the one-time migration backfill
-    /// directly into `profiles.data_json`: January 1 of `year` when the
-    /// business start is unset, then one Confirmed version from that date.
-    /// An existing business start is kept. A ledger that already has a
-    /// confirmed version, or anything other than empty / one unconfirmed
-    /// migration backfill, is left alone. Returns whether a version was written.
-    pub fn confirm_initial_profile_year(&self, tin: &str, year: i32) -> Result<bool, DbError> {
-        confirm_initial_profile_year_on(&self.conn, tin, year)
-    }
-
     /// Get a single profile by its TIN.
     pub fn get_profile_by_tin(&self, tin: &str) -> Result<Option<TaxpayerProfile>, DbError> {
         self.get_profile(tin)
     }
 
+    /// The profile of `tin` as the forms of tax year `year` read it: the
+    /// year's effective facts (head-office ownership included) laid over
+    /// the flat fields ([`crate::tax_profile::overlay_year_facts`]). Every
+    /// production path that builds, syncs, validates, queues, claims or
+    /// sends a return for a known year loads its profile here.
+    pub fn get_profile_for_year(
+        &self,
+        tin: &str,
+        year: u16,
+    ) -> Result<Option<TaxpayerProfile>, DbError> {
+        let Some(mut profile) = self.get_profile(tin)? else {
+            return Ok(None);
+        };
+        super::taxpayers::overlay_profile_for_year(&self.conn, &mut profile, year)?;
+        Ok(Some(profile))
+    }
+
     /// The filer's answer to the annual income-tax election for taxable year
-    /// `year` (the 2551Q page asks it at Item 13 of a later quarter): written
-    /// to the profile's election ledger for that year only
-    /// ([`TaxpayerProfile::set_income_tax_election`]). Refused for a year the
-    /// confirmed profile has no Self-Employed or Mixed Income segment in.
+    /// `year` (the 2551Q page asks it at Item 13 of a later quarter): the
+    /// year's facts of the head office, for that year only. Refused for a
+    /// year whose income type is not self-employed or mixed income, and for
+    /// a change to a locked year (decision 7). Returns the year's profile.
     pub fn record_income_tax_election(
         &self,
         tin: &str,
         year: u16,
         election: IncomeTaxElection,
     ) -> Result<TaxpayerProfile, DbError> {
-        let mut profile = self
-            .get_profile(tin)?
+        let profile = self
+            .get_profile_for_year(tin, year)?
             .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))?;
         if !profile.eligible_for_income_tax_election_in_year(year) {
             return Err(DbError::Other(format!(
-                "The tax profile has no confirmed self-employed or mixed-income registration for {year}, so it cannot record an income-tax election for that year"
+                "The tax profile does not record self-employed or mixed income for {year}, so it cannot record an income-tax election for that year"
             )));
         }
-        profile.set_income_tax_election(year, election);
-        self.save_profile(profile)
+        let tx = self.conn.unchecked_transaction()?;
+        super::taxpayers::record_year_election_on(&tx, tin, year, election, "Tax profile")?;
+        tx.commit()?;
+        self.get_profile_for_year(tin, year)?
+            .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))
     }
 
     /// Whether [`Self::record_income_tax_election`] would accept `year`, and
-    /// if not, what the profile lacks. Only reads.
+    /// if not, what the year's facts lack. Only reads.
     pub fn income_tax_election_readiness(
         &self,
         tin: &str,
         year: u16,
     ) -> Result<crate::profile::IncomeTaxElectionReadiness, DbError> {
         let profile = self
-            .get_profile(tin)?
+            .get_profile_for_year(tin, year)?
             .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))?;
         Ok(profile.income_tax_election_readiness(year))
     }
 
-    /// An individual's income type from `effective_from`, as a new confirmed
-    /// profile version ([`TaxpayerProfile::confirm_income_registration`]),
-    /// saved with its reviewed confirmation plan so the save checks the
-    /// timeline change again.
+    /// An individual's income type from `effective_from`: the year facts'
+    /// income type of the head office for the year of `effective_from`, and
+    /// of every following year that has a record and no income type yet.
+    /// Refused for a non-individual or a type that is not an individual's.
     pub fn confirm_income_registration(
         &self,
         tin: &str,
         classification: crate::profile::TaxClassification,
         effective_from: chrono::NaiveDate,
     ) -> Result<TaxpayerProfile, DbError> {
-        let mut profile = self
-            .get_profile(tin)?
+        use crate::profile::{TaxClassification, TaxpayerType};
+        use chrono::Datelike as _;
+        if !matches!(
+            classification,
+            TaxClassification::PurelyCompensation
+                | TaxClassification::SelfEmployed
+                | TaxClassification::MixedIncome
+        ) {
+            return Err(DbError::Other(format!(
+                "{classification:?} is not an individual's income type; choose compensation only, self-employed or mixed income"
+            )));
+        }
+        let year = u16::try_from(effective_from.year())
+            .map_err(|_| DbError::Other(format!("{effective_from} is not in a tax year")))?;
+        let profile = self
+            .get_profile_for_year(tin, year)?
             .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))?;
-        let plan = profile
-            .confirm_income_registration(
-                classification,
-                effective_from,
-                chrono::Local::now().date_naive(),
-            )
-            .map_err(DbError::Other)?;
-        self.save_profile_with_confirmation_plan(profile, &plan)
+        if profile.taxpayer_type != TaxpayerType::Individual {
+            return Err(DbError::Other(format!(
+                "Only an individual's tax profile records an income type; this one is registered as {:?}",
+                profile.taxpayer_type
+            )));
+        }
+        let patch = YearFactsPatch {
+            tax_classification: Some(Some(classification)),
+            ..YearFactsPatch::default()
+        };
+        self.set_year_facts(tin, year, &patch)
+            .map_err(|error| match error {
+                crate::tax_profile::TaxProfileError::Db(error) => error,
+                other => DbError::Other(other.to_string()),
+            })?;
+        let head_tin =
+            super::taxpayers::effective_year_facts_on(&self.conn, tin, year)?.head_office_tin;
+        for (later, mut facts) in super::taxpayers::list_year_facts(&self.conn, &head_tin)?
+            .into_iter()
+            .filter(|(later, facts)| *later > year && facts.tax_classification.is_none())
+        {
+            facts.tax_classification = patch.tax_classification.clone().flatten();
+            super::taxpayers::write_year_facts(&self.conn, &head_tin, later, &facts)?;
+        }
+        self.get_profile_for_year(tin, year)?
+            .ok_or_else(|| DbError::Other(format!("No taxpayer profile with TIN {tin}")))
     }
 
     /// Delete a profile by TIN.
@@ -788,14 +737,7 @@ impl Database {
         let years = self.list_forms_set_years(&tin)?;
         let mut per_year_forms = std::collections::BTreeMap::new();
         for y in years {
-            let mut set = self.get_per_year_forms(&tin, y)?;
-            // Enforce "one annual ITR per year" on already-stored data so a
-            // legacy conflicting Forms Set surfaces a single active ITR
-            // everywhere it is displayed; the healed set persists on the next
-            // save. Idempotent for already-clean sets.
-            let (keep_individual, keep_corporate) =
-                crate::integration::primary_annual_itrs_for_profile_year(profile, y);
-            set.deactivate_redundant_annual_itrs(keep_individual, keep_corporate);
+            let set = self.get_per_year_forms(&tin, y)?;
             per_year_forms.insert(y, set);
         }
         profile.per_year_forms = per_year_forms;
@@ -807,7 +749,6 @@ impl Database {
 mod tests {
     use super::*;
     use crate::db::ProfileCalendarLink;
-    use chrono::{FixedOffset, TimeZone, Utc};
     use tempfile::NamedTempFile;
 
     fn listing_test_profile(seg1: &str) -> TaxpayerProfile {
@@ -829,8 +770,9 @@ mod tests {
     }
 
     /// The 2551Q page's Item 13 question writes the election for the
-    /// return's own taxable year; a later-quarter return built from the
-    /// profile then passes the election check it failed before.
+    /// return's own taxable year (the head office's year facts); a
+    /// later-quarter return built from that year's profile then passes the
+    /// election check it failed before. No confirmed version is involved.
     #[test]
     fn a_recorded_election_is_read_back_for_its_year_and_clears_the_2551q_check() {
         use crate::forms::form_2551q::Form2551QDraft;
@@ -838,13 +780,15 @@ mod tests {
         let mut profile = listing_test_profile("111");
         profile.tax_classification = Some(crate::profile::TaxClassification::SelfEmployed);
         let tin = db.save_profile(profile).unwrap().tin.full();
+        let year_profile = |year| db.get_profile_for_year(&tin, year).unwrap().unwrap();
         let election_error = |profile: &TaxpayerProfile| {
             Form2551QDraft::new_from_profile(profile, 2026, 3)
                 .filing_errors()
                 .into_iter()
                 .any(|(field, _)| field == "annual_income_tax_election")
         };
-        let before = db.get_profile(&tin).unwrap().unwrap();
+        let before = year_profile(2026);
+        assert!(before.profile_versions.is_empty(), "precondition");
         assert!(
             before.eligible_for_income_tax_election_in_year(2026),
             "precondition"
@@ -858,46 +802,58 @@ mod tests {
             .unwrap();
         db.record_income_tax_election(&tin, 2025, IncomeTaxElection::GraduatedUnspecified)
             .unwrap();
-        let after = db.get_profile(&tin).unwrap().unwrap();
+        let after = year_profile(2026);
         assert_eq!(
             after.income_tax_election_for_year(2026),
             Some(IncomeTaxElection::EightPercent)
         );
         assert_eq!(
-            after.income_tax_election_for_year(2025),
+            year_profile(2025).income_tax_election_for_year(2025),
             Some(IncomeTaxElection::GraduatedUnspecified)
         );
-        assert_eq!(after.income_tax_election_for_year(2024), None);
+        assert_eq!(year_profile(2024).income_tax_election_for_year(2024), None);
         assert!(
             !election_error(&after),
             "the recorded 2026 election clears Q3"
+        );
+        assert!(
+            db.get_profile(&tin)
+                .unwrap()
+                .unwrap()
+                .tax_elections
+                .is_empty(),
+            "the flat ledger is not the store"
         );
 
         // Changing 2026's answer keeps 2025's.
         db.record_income_tax_election(&tin, 2026, IncomeTaxElection::GraduatedUnspecified)
             .unwrap();
-        let changed = db.get_profile(&tin).unwrap().unwrap();
         assert_eq!(
-            changed.income_tax_election_for_year(2026),
+            year_profile(2026).income_tax_election_for_year(2026),
             Some(IncomeTaxElection::GraduatedUnspecified)
         );
         assert_eq!(
-            changed.income_tax_election_for_year(2025),
+            year_profile(2025).income_tax_election_for_year(2025),
             Some(IncomeTaxElection::GraduatedUnspecified)
         );
 
-        // A year before any confirmed registration is refused, unwritten.
+        // A year whose income type is compensation only is refused, unwritten.
+        db.set_year_facts(
+            &tin,
+            2019,
+            &YearFactsPatch {
+                tax_classification: Some(Some(
+                    crate::profile::TaxClassification::PurelyCompensation,
+                )),
+                ..YearFactsPatch::default()
+            },
+        )
+        .unwrap();
         assert!(
             db.record_income_tax_election(&tin, 2019, IncomeTaxElection::EightPercent)
                 .is_err()
         );
-        assert_eq!(
-            db.get_profile(&tin)
-                .unwrap()
-                .unwrap()
-                .income_tax_election_for_year(2019),
-            None
-        );
+        assert_eq!(year_profile(2019).income_tax_election_for_year(2019), None);
         assert!(
             db.record_income_tax_election("999456789000", 2026, IncomeTaxElection::EightPercent)
                 .is_err()
@@ -906,10 +862,10 @@ mod tests {
 
     /// A taxpayer added in the app has no income type, so its 2026 election
     /// is refused: readiness says so before any write, and confirming the
-    /// registration (a reviewed version, through the checked save) is what
-    /// lets the unchanged election rule accept the year.
+    /// registration (the year facts' income type) is what lets the election
+    /// rule accept the year. No profile version is written.
     #[test]
-    fn confirming_the_registration_lets_the_unchanged_election_rule_accept_the_year() {
+    fn confirming_the_registration_lets_the_election_rule_accept_the_year() {
         use crate::profile::{IncomeTaxElectionGap, TaxClassification};
         let db = Database::open_in_memory_for_tests().expect("in-memory db");
         let profile = listing_test_profile("111");
@@ -927,9 +883,9 @@ mod tests {
         let date = |y, m, d| chrono::NaiveDate::from_ymd_opt(y, m, d).unwrap();
         db.confirm_income_registration(&tin, TaxClassification::SelfEmployed, date(2026, 1, 1))
             .unwrap();
-        let stored = db.get_profile(&tin).unwrap().unwrap();
-        assert!(stored.eligible_for_income_tax_election_in_year(2026));
-        assert!(!stored.eligible_for_income_tax_election_in_year(2025));
+        let year = |y| db.get_profile_for_year(&tin, y).unwrap().unwrap();
+        assert!(year(2026).eligible_for_income_tax_election_in_year(2026));
+        assert!(!year(2025).eligible_for_income_tax_election_in_year(2025));
         assert!(
             db.income_tax_election_readiness(&tin, 2026)
                 .unwrap()
@@ -937,27 +893,21 @@ mod tests {
         );
         db.record_income_tax_election(&tin, 2026, IncomeTaxElection::EightPercent)
             .unwrap();
+        assert!(year(2026).has_8_percent_election(2026));
+
+        // The same date again simply sets the year's income type again.
+        db.confirm_income_registration(&tin, TaxClassification::MixedIncome, date(2026, 1, 1))
+            .unwrap();
+        assert_eq!(
+            year(2026).tax_classification,
+            Some(TaxClassification::MixedIncome)
+        );
         assert!(
             db.get_profile(&tin)
                 .unwrap()
                 .unwrap()
-                .has_8_percent_election(2026)
-        );
-
-        // The same start again is refused by the timeline rule, unwritten.
-        let versions = stored.profile_versions.len();
-        let refused = db
-            .confirm_income_registration(&tin, TaxClassification::MixedIncome, date(2026, 1, 1))
-            .unwrap_err()
-            .to_string();
-        assert!(refused.contains("must start after"), "{refused}");
-        assert_eq!(
-            db.get_profile(&tin)
-                .unwrap()
-                .unwrap()
                 .profile_versions
-                .len(),
-            versions
+                .is_empty()
         );
         assert!(
             db.income_tax_election_readiness("999456789000", 2026)
@@ -1067,21 +1017,6 @@ mod tests {
         assert!(
             db.list_profiles().expect("still must not error").is_empty(),
             "unreadable rows are skipped, so the list is empty rather than failed"
-        );
-    }
-
-    #[test]
-    fn reconciliation_calendar_year_uses_local_date_at_utc_positive_year_boundary() {
-        let utc = Utc
-            .with_ymd_and_hms(2026, 12, 31, 10, 30, 0)
-            .single()
-            .expect("valid UTC instant");
-        let utc_plus_14 = FixedOffset::east_opt(14 * 60 * 60).expect("valid UTC+14 offset");
-        let local_date = utc.with_timezone(&utc_plus_14).date_naive();
-
-        assert_eq!(
-            (utc.date_naive(), reconciliation_calendar_year(local_date)),
-            (chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(), 2027)
         );
     }
 

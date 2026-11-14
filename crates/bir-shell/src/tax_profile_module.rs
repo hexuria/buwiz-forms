@@ -63,6 +63,8 @@ export interface NewTaxpayerInput {
 export interface TaxpayerUpdateInput {
     name?: string;
     taxpayer_type?: Taxpayer["taxpayer_type"];
+    /** "YYYY-MM-DD", or null to clear. Omitted: unchanged. */
+    birth_date?: string | null;
 }
 export interface NewBranchInput {
     branch_code: string;
@@ -111,9 +113,9 @@ export interface TemplateStops { stops: string[]; markable: string[]; }
 export function template_stops(tin: string, form_code: string): TemplateStops | null;
 /** Mark (`on`) or unmark the template field the page box `key` writes. */
 export function set_template_stop(tin: string, form_code: string, key: string, on: boolean): TemplateStops;
-/** The annual income-tax election for one taxable year, on the tax profile; refused for a year with no self-employed or mixed-income registration. */
+/** The annual income-tax election for one taxable year, on the head office's year facts; refused for a year whose income type is not self-employed or mixed income, and for a change once a return carrying it was filed. */
 export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
-export type IncomeTaxElectionGap = "ready" | "no_confirmed_registration" | "timeline_needs_review" | "not_individual" | "not_business_income";
+export type IncomeTaxElectionGap = "ready" | "not_individual" | "not_business_income";
 export type IndividualIncomeType = "PurelyCompensation" | "SelfEmployed" | "MixedIncome";
 /** Whether record_income_tax_election would accept the year, and if not what the tax profile lacks. A read. */
 export interface IncomeTaxElectionReadiness {
@@ -121,15 +123,48 @@ export interface IncomeTaxElectionReadiness {
     gap: IncomeTaxElectionGap;
     taxpayer_type: Taxpayer["taxpayer_type"] | null;
     classification: string | null;
-    /** YYYY-MM-DD: when that registration took effect. */
+    /** Always null: the year facts hold no start date for the income type. */
     since: string | null;
-    /** YYYY-MM-DD: a new confirmed registration must start after this. */
+    /** Always null: any date may be confirmed. */
     new_registration_after: string | null;
+    /** Always empty. */
     issues: string[];
 }
 export function income_tax_election_readiness(tin: string, year: number): IncomeTaxElectionReadiness;
-/** An individual's income type from `effective_from` (YYYY-MM-DD), as a new confirmed profile version (reviewed plan). */
+/** An individual's income type from `effective_from` (YYYY-MM-DD): the year facts' income type of that date's year, and of every later year that has a record without one. */
 export function confirm_income_registration(tin: string, income_type: IndividualIncomeType, effective_from: string): boolean;
+export type Fact = "birth_date" | "tax_classification" | "income_tax_election" | "eopt_tier"
+    | "business_start_date" | "line_of_business" | "is_government_withholding_entity" | "atc_codes";
+export interface YearFactsView {
+    tin: string;
+    year: number;
+    facts: {
+        tax_classification: "PurelyCompensation" | "SelfEmployed" | "MixedIncome" | "Corporation" | "CooperativeExempt" | "CooperativeTaxable" | "CooperativeMixed" | "EstateOrTrust" | null;
+        income_tax_election: "EightPercent" | "GraduatedUnspecified" | "GraduatedOsd" | "GraduatedItemized" | null;
+        eopt_tier: "Micro" | "Small" | "Medium" | "Large" | null;
+        /** YYYY-MM-DD */
+        business_start_date: string | null;
+        line_of_business: string | null;
+        is_government_withholding_entity: boolean | null;
+        atc_codes: string[];
+    };
+    /** Which row holds each fact: the head office or this branch. */
+    owner: Record<Exclude<Fact, "birth_date">, "head_office" | "branch">;
+    /** Form codes on this branch's list for the year that read each fact. Empty list: not in use. */
+    used_by: Record<Fact, string[]>;
+    /** Facts in use that are not set. */
+    not_set: Fact[];
+    /** The 8% or graduated choice cannot change: a return carrying it was filed. */
+    election_locked: boolean;
+    /** Where the year's election was made, e.g. "2551Q Q1" or "Tax profile"; null when none is set. */
+    election_source: string | null;
+}
+export function year_facts(tin: string, year: number): YearFactsView;
+/** Sets only the keys present in `patch` (null clears). Head-office facts are written to the head office's record whichever branch `tin` names. Refuses a change to a locked election. */
+export function set_year_facts(tin: string, year: number, patch: Partial<YearFactsView["facts"]>): YearFactsView;
+export interface TaxTypeChip { type: string; label: string; forms: string[]; }
+/** The chips: the tax types the year's forms list gives. */
+export function tax_types_for_year(tin: string, year: number): TaxTypeChip[];
 export interface RdoOption { code: string; description: string; }
 export function list_rdos(): RdoOption[];
 export function list_zip_codes(): string[];
@@ -220,6 +255,9 @@ pub fn register(module: HostModule) -> HostModule {
             income_tax_election_readiness,
         )
         .function("confirm_income_registration", confirm_income_registration)
+        .function("year_facts", year_facts)
+        .function("set_year_facts", set_year_facts)
+        .function("tax_types_for_year", tax_types_for_year)
         .function("list_rdos", |_| list_rdos())
         .function("list_zip_codes", |_| list_zip_codes())
         .function("inbox_state", inbox_state)
@@ -532,10 +570,21 @@ fn create_taxpayer(arguments: &HostArguments) -> HostResult {
 fn update_taxpayer(arguments: &HostArguments) -> HostResult {
     let tin_root = arguments.string(0)?;
     let input = object_argument(arguments, 1)?;
+    let birth_date = match input.get("birth_date") {
+        None => None,
+        Some(Value::Null) => Some(None),
+        Some(Value::String(raw)) if raw.trim().is_empty() => Some(None),
+        Some(Value::String(raw)) => {
+            Some(Some(raw.trim().parse().map_err(|_| {
+                HostError::new(format!("`{raw}` is not a date (YYYY-MM-DD)"))
+            })?))
+        }
+        Some(_) => return Err(HostError::new("`birth_date` must be a string or null")),
+    };
     let update = TaxpayerUpdate {
         name: optional_string(&input, "name")?,
         taxpayer_type: taxpayer_type(&input, "taxpayer_type")?,
-        birth_date: None,
+        birth_date,
     };
     with_database(|db| {
         let updated = db.update_taxpayer(tin_root, update).map_err(host_error)?;
@@ -865,6 +914,39 @@ fn confirm_income_registration(arguments: &HostArguments) -> HostResult {
         db.confirm_income_registration(tin, classification, effective_from)
             .map_err(plain_db_error)?;
         Ok(HostValue::Bool(true))
+    })
+}
+
+// ---------- year facts ----------
+
+fn year_facts(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    with_reader(|db| {
+        let view = db.year_facts_view(tin, year).map_err(host_error)?;
+        crate::bir_module::serialize(&view)
+    })
+}
+
+/// Writes the year facts directly: never through the profile save.
+fn set_year_facts(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    let patch = bir_core::tax_profile::YearFactsPatch::from_json(&object_argument(arguments, 2)?)
+        .map_err(host_error)?;
+    with_database(|db| {
+        db.set_year_facts(tin, year, &patch).map_err(host_error)?;
+        let view = db.year_facts_view(tin, year).map_err(host_error)?;
+        crate::bir_module::serialize(&view)
+    })
+}
+
+fn tax_types_for_year(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?;
+    let year = year_argument(arguments, 1)?;
+    with_reader(|db| {
+        let chips = db.tax_types_for_year(tin, year).map_err(host_error)?;
+        crate::bir_module::serialize(&chips)
     })
 }
 
@@ -2210,5 +2292,385 @@ mod tests {
         let state = to_json(&connect_inbox_oauth_run(HEAD, &db).unwrap());
         assert_eq!(state["oauth_connected"], true);
         assert_eq!(state["oauth_inbox_email"], "receipts@example.com");
+    }
+
+    // ---------- year facts (interface I-1) ----------
+
+    const JUANA_ROOT: &str = "000123453";
+    const JUANA_HEAD: &str = "00012345300000";
+
+    /// Fresh database with the demo individual and her head office.
+    fn setup_individual() {
+        use_ephemeral_database();
+        ok(
+            create_taxpayer,
+            vec![json!({
+                "tin_root": "000-123-453",
+                "name": "Juana Santos",
+                "taxpayer_type": "Individual",
+                "head_office": {
+                    "rdo_code": "039",
+                    "registered_address": "Quezon City",
+                    "zip_code": "1100",
+                    "phone": "09170000000",
+                    "email": "juana@example.com"
+                }
+            })],
+        );
+    }
+
+    fn bir_call(name: &str, values: Vec<Value>) -> Result<Value, String> {
+        crate::bir_module::module()
+            .call(name, &args(values))
+            .map(|value| to_json(&value))
+            .map_err(|error| error.message().to_string())
+    }
+
+    /// A saved Draft 2551Q for Q1 of `year`, built from the year's profile,
+    /// with Item 13 answered.
+    fn save_year_return(
+        tin: &str,
+        year: u16,
+        eight_percent: bool,
+    ) -> bir_core::forms::Form2551QDraft {
+        use bir_core::forms::form_2551q::Item13Election;
+        with_database(|db| {
+            let profile = db.get_profile_for_year(tin, year).unwrap().unwrap();
+            let mut draft =
+                bir_core::forms::Form2551QDraft::new_from_effective_profile(&profile, year, 1);
+            draft.item_13_election = if eight_percent {
+                Item13Election::EightPercent
+            } else {
+                Item13Election::Graduated
+            };
+            db.save_2551q_draft(&draft).unwrap();
+            Ok(draft)
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn year_facts_round_trip_through_the_host() {
+        setup_individual();
+        ok(
+            create_branch,
+            vec![
+                json!(JUANA_ROOT),
+                json!({"branch_code": "00001", "name": "Stall"}),
+            ],
+        );
+        let branch = "00012345300001";
+        ok(
+            set_yearly_forms,
+            vec![json!(branch), json!(2025), json!(["2551Q", "1701"])],
+        );
+        let view = ok(
+            set_year_facts,
+            vec![
+                json!(branch),
+                json!(2025),
+                json!({"tax_classification": "SelfEmployed", "line_of_business": "Stall"}),
+            ],
+        );
+        assert_eq!(view["tin"], branch);
+        assert_eq!(view["year"], 2025);
+        assert_eq!(view["facts"]["tax_classification"], "SelfEmployed");
+        assert_eq!(view["facts"]["line_of_business"], "Stall");
+        assert_eq!(view["facts"]["income_tax_election"], Value::Null);
+        assert_eq!(view["facts"]["atc_codes"], json!([]));
+        assert_eq!(view["owner"]["tax_classification"], "head_office");
+        assert_eq!(view["owner"]["line_of_business"], "branch");
+        assert_eq!(view["used_by"]["birth_date"], json!(["1701"]));
+        assert_eq!(
+            view["used_by"]["income_tax_election"],
+            json!(["1701", "2551Q"])
+        );
+        assert!(
+            view["not_set"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("birth_date"))
+        );
+        assert_eq!(view["election_locked"], false);
+        assert_eq!(view["election_source"], Value::Null);
+        // The head office holds the income type, not the line of business.
+        let head = ok(year_facts, vec![json!(JUANA_HEAD), json!(2025)]);
+        assert_eq!(head["facts"]["tax_classification"], "SelfEmployed");
+        assert_eq!(head["facts"]["line_of_business"], Value::Null);
+        assert_eq!(head["used_by"]["tax_classification"], json!([]));
+        // Null clears; an unknown key or value is refused.
+        let cleared = ok(
+            set_year_facts,
+            vec![
+                json!(branch),
+                json!(2025),
+                json!({"line_of_business": null}),
+            ],
+        );
+        assert_eq!(cleared["facts"]["line_of_business"], Value::Null);
+        assert!(
+            call(
+                set_year_facts,
+                vec![
+                    json!(branch),
+                    json!(2025),
+                    json!({"is_vat_registered": true})
+                ]
+            )
+            .is_err()
+        );
+        assert!(
+            call(
+                set_year_facts,
+                vec![json!(branch), json!(2025), json!({"eopt_tier": "Huge"})]
+            )
+            .is_err()
+        );
+
+        let chips = ok(tax_types_for_year, vec![json!(branch), json!(2025)]);
+        assert_eq!(
+            chips,
+            json!([
+                {"type": "percentage_tax", "label": "Percentage tax", "forms": ["2551Q"]},
+                {"type": "income_tax", "label": "Income tax", "forms": ["1701"]},
+            ])
+        );
+        assert_eq!(
+            ok(tax_types_for_year, vec![json!(branch), json!(2024)]),
+            json!([])
+        );
+    }
+
+    #[test]
+    fn update_taxpayer_accepts_a_birth_date() {
+        setup_individual();
+        let set = ok(
+            update_taxpayer,
+            vec![json!(JUANA_ROOT), json!({"birth_date": "1990-01-02"})],
+        );
+        assert_eq!(set["birth_date"], "1990-01-02");
+        let kept = ok(
+            update_taxpayer,
+            vec![json!(JUANA_ROOT), json!({"name": "Juana D. Santos"})],
+        );
+        assert_eq!(kept["birth_date"], "1990-01-02", "omitted: unchanged");
+        let cleared = ok(
+            update_taxpayer,
+            vec![json!(JUANA_ROOT), json!({"birth_date": null})],
+        );
+        assert_eq!(cleared["birth_date"], Value::Null);
+        assert!(
+            call(
+                update_taxpayer,
+                vec![json!(JUANA_ROOT), json!({"birth_date": "Jan 2"})]
+            )
+            .is_err()
+        );
+    }
+
+    /// The current screens' calls keep working on year facts: readiness,
+    /// the registration control and the 2551Q Item 13 question.
+    #[test]
+    fn the_election_host_functions_map_onto_year_facts() {
+        setup_individual();
+        let ready = ok(
+            income_tax_election_readiness,
+            vec![json!(JUANA_HEAD), json!(2025)],
+        );
+        assert_eq!(ready["gap"], "not_business_income");
+        assert_eq!(ready["new_registration_after"], Value::Null);
+        assert_eq!(ready["issues"], json!([]));
+        assert!(
+            call(
+                record_income_tax_election,
+                vec![json!(JUANA_HEAD), json!(2025), json!("eight_percent")]
+            )
+            .is_err()
+        );
+        assert_eq!(
+            ok(
+                confirm_income_registration,
+                vec![
+                    json!(JUANA_HEAD),
+                    json!("SelfEmployed"),
+                    json!("2025-01-01")
+                ]
+            ),
+            json!(true)
+        );
+        let ready = ok(
+            income_tax_election_readiness,
+            vec![json!(JUANA_HEAD), json!(2025)],
+        );
+        assert_eq!(ready["gap"], "ready");
+        assert_eq!(ready["classification"], "SelfEmployed");
+        assert_eq!(
+            ok(
+                record_income_tax_election,
+                vec![json!(JUANA_HEAD), json!(2025), json!("eight_percent")]
+            ),
+            json!(true)
+        );
+        let view = ok(year_facts, vec![json!(JUANA_HEAD), json!(2025)]);
+        assert_eq!(view["facts"]["income_tax_election"], "EightPercent");
+        assert_eq!(view["election_source"], "Tax profile");
+        // No confirmed profile version was written for any of it.
+        with_database(|db| {
+            assert!(
+                db.get_profile(JUANA_HEAD)
+                    .unwrap()
+                    .unwrap()
+                    .profile_versions
+                    .is_empty()
+            );
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// The 2551Q call sites in the host — the queue (`queue_form_draft`),
+    /// the page's "Use profile values" (`screen_form_use_profile`) and its
+    /// open (`screen_form_open`) — for a profile with no confirmed version
+    /// and for one whose versions are only drafts and reviews.
+    #[test]
+    fn the_2551q_host_paths_need_no_confirmed_profile_version() {
+        use bir_core::profile::{TaxProfileVersion, TaxProfileVersionStatus};
+        for messy in [false, true] {
+            setup_individual();
+            ok(
+                set_year_facts,
+                vec![
+                    json!(JUANA_HEAD),
+                    json!(2025),
+                    json!({"tax_classification": "SelfEmployed"}),
+                ],
+            );
+            if messy {
+                with_database(|db| {
+                    let mut profile = db.get_profile(JUANA_HEAD).unwrap().unwrap();
+                    let mut draft = TaxProfileVersion::from_profile_backfill(&profile);
+                    draft.id = "draft".into();
+                    draft.status = TaxProfileVersionStatus::Draft;
+                    draft.cor.registered_name = "Someone Else".into();
+                    let mut review = draft.clone();
+                    review.id = "review".into();
+                    review.status = TaxProfileVersionStatus::NeedsReview;
+                    review.effective_from = None;
+                    profile.profile_versions = vec![draft, review];
+                    db.save_profile(profile).unwrap();
+                    Ok(())
+                })
+                .unwrap();
+            }
+
+            // The page opens a 2551Q of the year from the year's facts.
+            let opened = block_on_open(JUANA_HEAD, 2025, 2);
+            assert_eq!(
+                opened["draft"]["taxpayer_name"], "Juana Santos",
+                "messy={messy}"
+            );
+            assert!(
+                opened["draft"]["profile_resolution_error"].is_null(),
+                "messy={messy}"
+            );
+
+            // "Use profile values" on a Q2 draft takes the recorded election.
+            let draft = save_year_return(JUANA_HEAD, 2025, true);
+            with_database(|db| {
+                db.record_income_tax_election(
+                    JUANA_HEAD,
+                    2025,
+                    bir_core::profile::IncomeTaxElection::EightPercent,
+                )
+                .map_err(|error| HostError::new(error.to_string()))?;
+                Ok(())
+            })
+            .unwrap();
+            let mut q2 = serde_json::to_value(&draft).unwrap();
+            q2["quarter"] = json!(2);
+            q2["id"] = Value::Null;
+            q2["annual_income_tax_election"] = json!("unrecorded");
+            let used = bir_call(
+                "screen_form_use_profile",
+                vec![json!("2551Q"), json!(2025), json!(2), q2],
+            )
+            .unwrap_or_else(|error| panic!("messy={messy}: {error}"));
+            assert_eq!(used["draft"]["annual_income_tax_election"], "eight_percent");
+            assert!(used["draft"]["profile_resolution_error"].is_null());
+
+            // The queue.
+            let id = bir_call(
+                "queue_form_draft",
+                vec![json!(JUANA_HEAD), json!("2551Q"), json!(2025), json!(1)],
+            )
+            .unwrap_or_else(|error| panic!("messy={messy}: {error}"));
+            assert!(id.as_f64().unwrap() > 0.0);
+            let view = ok(year_facts, vec![json!(JUANA_HEAD), json!(2025)]);
+            assert_eq!(view["facts"]["income_tax_election"], "EightPercent");
+        }
+    }
+
+    /// The assistant's 2551Q send (`agent::session::send_draft`) for a year
+    /// with a fresh record and no confirmed profile version.
+    #[cfg(feature = "agent")]
+    #[test]
+    fn the_assistants_2551q_send_needs_no_confirmed_profile_version() {
+        setup_individual();
+        with_database(|db| {
+            db.set_year_facts(
+                JUANA_HEAD,
+                2024,
+                &bir_core::tax_profile::YearFactsPatch {
+                    tax_classification: Some(Some(
+                        bir_core::profile::TaxClassification::SelfEmployed,
+                    )),
+                    ..Default::default()
+                },
+            )
+            .map_err(host_error)?;
+            db.grant_send(JUANA_HEAD, "2551Q")
+                .map_err(|error| HostError::new(error.to_string()))?;
+            let draft = {
+                let profile = db.get_profile_for_year(JUANA_HEAD, 2024).unwrap().unwrap();
+                let mut draft =
+                    bir_core::forms::Form2551QDraft::new_from_effective_profile(&profile, 2024, 1);
+                draft.item_13_election = bir_core::forms::form_2551q::Item13Election::Graduated;
+                draft
+            };
+            let mut value = serde_json::to_value(&draft).unwrap();
+            let sent = crate::agent::session::send_draft(
+                db,
+                bir_core::forms::agent::AgentFormKind::Form2551Q,
+                &mut value,
+            )
+            .map_err(HostError::new)?;
+            assert_eq!(sent["queued"], true, "{sent}");
+            Ok(())
+        })
+        .unwrap();
+        let view = ok(year_facts, vec![json!(JUANA_HEAD), json!(2024)]);
+        assert_eq!(view["facts"]["income_tax_election"], "GraduatedUnspecified");
+        assert_eq!(view["election_source"], "2551Q Q1");
+    }
+
+    fn block_on_open(tin: &str, year: u16, quarter: u8) -> Value {
+        let future = crate::bir_module::module()
+            .begin(
+                "screen_form_open",
+                &args(vec![
+                    json!(tin),
+                    json!("2551Q"),
+                    json!(year),
+                    json!(quarter),
+                ]),
+            )
+            .unwrap();
+        let mut future = std::pin::pin!(future);
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        loop {
+            if let std::task::Poll::Ready(output) = future.as_mut().poll(&mut context) {
+                return to_json(&output.unwrap());
+            }
+        }
     }
 }

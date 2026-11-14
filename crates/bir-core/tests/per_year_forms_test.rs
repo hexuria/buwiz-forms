@@ -85,6 +85,15 @@ fn persisted_forms_sets(db: &Database, tin: &str) -> Vec<(u16, PerYearFormsSet)>
         .collect()
 }
 
+/// The suggestion engine's Forms Set for `year`, in memory only (the engine
+/// still serves the v14 migration; no save uses it).
+fn with_suggested_forms(mut profile: TaxpayerProfile, year: u16) -> TaxpayerProfile {
+    let suggestions = bir_core::integration::form_suggestions_for_profile_year(&profile, year);
+    let reconciled = bir_core::forms::reconcile_forms_set_for_year(year, None, &suggestions);
+    profile.per_year_forms.insert(year, reconciled.forms_set);
+    profile
+}
+
 fn current_local_reconciliation_year() -> u16 {
     chrono::Local::now().year() as u16
 }
@@ -139,8 +148,11 @@ fn profile_save_preserves_existing_atc_codes_when_editor_omits_them() {
     });
 }
 
+/// Decision 1: the forms list holds only what the user picks. Neither the
+/// first save nor confirming a VAT replacement version adds, removes or
+/// re-sources a form.
 #[test]
-fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
+fn profile_saves_never_add_or_remove_a_form() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -153,16 +165,14 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
         ];
         let saved = save_initial_confirmed_profile(&db, profile);
         let year = current_local_reconciliation_year();
+        assert!(
+            saved.per_year_forms.is_empty(),
+            "the first save generates no Forms Set"
+        );
+        assert!(persisted_forms_sets(&db, &saved.tin.full()).is_empty());
 
-        let mut set = saved
-            .per_year_forms
-            .get(&year)
-            .cloned()
-            .expect("generated current-year Forms Set");
-        set.entries.push(FormSetEntry::from_code(
-            "CUSTOM_FORM",
-            FormSetSource::Manual,
-        ));
+        let set =
+            PerYearFormsSet::from_codes(year, ["2551Q", "CUSTOM_FORM"], FormSetSource::Manual);
         db.save_per_year_forms(&saved.tin.full(), year, &set)
             .expect("manual forms save");
 
@@ -193,20 +203,19 @@ fn profile_save_reconciles_generated_forms_and_preserves_manual_entry() {
         let changed = db
             .save_profile_with_confirmation_plan(changed, &plan)
             .expect("reviewed VAT profile save");
-        let reconciled = changed
-            .per_year_forms
-            .get(&year)
-            .expect("reconciled Forms Set");
 
-        assert!(reconciled.contains_active("CUSTOM_FORM"));
-        assert!(reconciled.contains_active("2550Q"));
-        assert!(!reconciled.contains_active("2551Q"));
-        assert!(reconciled.entry("2551Q").is_some());
+        assert_eq!(changed.per_year_forms.get(&year), Some(&set));
+        assert_eq!(
+            persisted_forms_sets(&db, &saved.tin.full()),
+            vec![(year, set)]
+        );
     });
 }
 
+/// Every stored year stays exactly as the user picked it when a confirmed
+/// version changes, and no year is generated.
 #[test]
-fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
+fn confirmed_profile_change_leaves_every_stored_year_as_picked() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -233,31 +242,20 @@ fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
             ["CUSTOM_HISTORICAL", "2551Q"],
             FormSetSource::Manual,
         );
-        let suppressed_historical_percentage_tax = historical_manual
+        let suppressed = historical_manual
             .entries
             .iter_mut()
             .find(|entry| entry.form_code == "2551Q")
             .expect("historical manual 2551Q entry");
-        suppressed_historical_percentage_tax.active = false;
-        suppressed_historical_percentage_tax.reason =
-            Some("Historical suppression by the taxpayer".into());
+        suppressed.active = false;
+        suppressed.reason = Some("Historical suppression by the taxpayer".into());
         db.save_per_year_forms(&tin, historical_year, &historical_manual)
             .expect("historical Forms Set save");
-
         let mid_year_manual =
             PerYearFormsSet::from_codes(mid_year, ["CUSTOM_MID_YEAR"], FormSetSource::Manual);
         db.save_per_year_forms(&tin, mid_year, &mid_year_manual)
             .expect("mid-year Forms Set save");
-
-        let mut current_set = db
-            .get_per_year_forms(&tin, current_year)
-            .expect("generated current-year Forms Set");
-        current_set.entries.push(FormSetEntry::from_code(
-            "CUSTOM_CURRENT",
-            FormSetSource::Manual,
-        ));
-        db.save_per_year_forms(&tin, current_year, &current_set)
-            .expect("current-year Forms Set save");
+        let before = persisted_forms_sets(&db, &tin);
 
         let mut changed = db
             .get_profile(&tin)
@@ -286,54 +284,21 @@ fn confirmed_profile_change_reconciles_current_and_stored_intersecting_years() {
         db.save_profile_with_confirmation_plan(changed, &plan)
             .expect("reviewed VAT profile save");
 
-        let historical = db
-            .get_per_year_forms(&tin, historical_year)
-            .expect("reconciled historical Forms Set");
-        let mid_year_set = db
-            .get_per_year_forms(&tin, mid_year)
-            .expect("reconciled mid-year Forms Set");
-        let current = db
-            .get_per_year_forms(&tin, current_year)
-            .expect("reconciled current-year Forms Set");
-        let entry_state = |set: &PerYearFormsSet, code: &str| {
-            set.entry(code).map(|entry| (entry.active, entry.source))
-        };
-        let actual = (
+        assert_eq!(persisted_forms_sets(&db, &tin), before);
+        assert_eq!(
             db.list_forms_set_years(&tin)
                 .expect("stored Forms Set years"),
-            entry_state(&historical, "CUSTOM_HISTORICAL"),
-            entry_state(&historical, "2551Q"),
-            entry_state(&historical, "2550Q"),
-            historical
-                .entry("2551Q")
-                .and_then(|entry| entry.reason.clone()),
-            entry_state(&mid_year_set, "CUSTOM_MID_YEAR"),
-            entry_state(&mid_year_set, "2551Q"),
-            entry_state(&mid_year_set, "2550Q"),
-            entry_state(&current, "CUSTOM_CURRENT"),
-            entry_state(&current, "2551Q"),
-            entry_state(&current, "2550Q"),
+            vec![mid_year, historical_year],
+            "the current year is not generated"
         );
-        let expected = (
-            vec![current_year, mid_year, historical_year],
-            Some((true, FormSetSource::Manual)),
-            Some((false, FormSetSource::Manual)),
-            Some((true, FormSetSource::InferredTaxType)),
-            Some("Historical suppression by the taxpayer".into()),
-            Some((true, FormSetSource::Manual)),
-            Some((false, FormSetSource::InferredTaxType)),
-            Some((true, FormSetSource::InferredTaxType)),
-            Some((true, FormSetSource::Manual)),
-            Some((false, FormSetSource::InferredTaxType)),
-            Some((true, FormSetSource::InferredTaxType)),
-        );
-
-        assert_eq!(actual, expected);
     });
 }
 
+/// A reviewed confirmation save writes no Forms Set row at all: with every
+/// `per_year_forms` insert refused, it still commits and the user's list
+/// is untouched.
 #[test]
-fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
+fn a_reviewed_profile_save_writes_no_forms_set_row() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -350,14 +315,11 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
         ];
         let saved = save_initial_confirmed_profile(&db, profile);
         let tin = saved.tin.full();
-
-        let mut current_set = db
-            .get_per_year_forms(&tin, current_year)
-            .expect("generated current-year Forms Set");
-        current_set.entries.push(FormSetEntry::from_code(
-            "CUSTOM_KEEP",
+        let current_set = PerYearFormsSet::from_codes(
+            current_year,
+            ["2551Q", "CUSTOM_KEEP"],
             FormSetSource::Manual,
-        ));
+        );
         db.save_per_year_forms(&tin, current_year, &current_set)
             .expect("manual Forms Set save");
 
@@ -381,8 +343,6 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
             .save_profile(changed)
             .expect("VAT replacement draft save");
         let before_forms_sets = persisted_forms_sets(&db, &tin);
-        let before_profile_json =
-            serde_json::to_value(&before_profile).expect("profile snapshot serialization");
 
         let effective_from = NaiveDate::from_ymd_opt(i32::from(current_year), 1, 1).unwrap();
         let plan = before_profile
@@ -390,6 +350,7 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
             .expect("VAT replacement confirmation plan");
         let mut submitted = before_profile;
         assert!(submitted.apply_profile_version_confirmation_plan(&plan));
+        submitted.per_year_forms.clear();
 
         let key = Database::get_or_create_master_key().expect("test database key");
         let trigger_connection =
@@ -397,37 +358,17 @@ fn forms_set_reconcile_failure_rolls_back_profile_timeline_and_forms_sets() {
         trigger_connection
             .execute_batch(&format!(
                 "PRAGMA key = \"x'{key}'\";
-                 CREATE TRIGGER fail_new_vat_form_write
+                 CREATE TRIGGER fail_any_forms_set_write
                  BEFORE INSERT ON per_year_forms
-                 WHEN NEW.form_code = '2550Q'
                  BEGIN
-                     SELECT RAISE(ABORT, 'forced Forms Set reconciliation failure');
+                     SELECT RAISE(ABORT, 'forced Forms Set write');
                  END;"
             ))
-            .expect("install deterministic Forms Set failure trigger");
+            .expect("install Forms Set write trigger");
 
-        let error = db
-            .save_profile_with_confirmation_plan(submitted, &plan)
-            .expect_err("the forced Forms Set write must fail the profile save");
-        assert!(
-            error
-                .to_string()
-                .contains("forced Forms Set reconciliation failure"),
-            "unexpected save error: {error}"
-        );
-
-        let after_profile = db
-            .get_profile(&tin)
-            .expect("profile lookup after rollback")
-            .expect("stored profile after rollback");
-        let after_profile_json =
-            serde_json::to_value(after_profile).expect("profile snapshot serialization");
-        let after_forms_sets = persisted_forms_sets(&db, &tin);
-
-        assert_eq!(
-            (after_profile_json, after_forms_sets),
-            (before_profile_json, before_forms_sets)
-        );
+        db.save_profile_with_confirmation_plan(submitted, &plan)
+            .expect("the save writes no Forms Set row");
+        assert_eq!(persisted_forms_sets(&db, &tin), before_forms_sets);
     });
 }
 
@@ -463,8 +404,11 @@ fn undated_migration_backfill_preserves_existing_forms_set() {
     });
 }
 
+/// The dated versions are an archive the save no longer checks: an
+/// overlapping confirmation saves (the reviewed-plan guard still applies)
+/// and the forms list is untouched.
 #[test]
-fn profile_save_rejects_overlapping_confirmed_versions() {
+fn profile_save_no_longer_checks_the_version_timeline() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -489,14 +433,12 @@ fn profile_save_rejects_overlapping_confirmed_versions() {
             .expect("confirmation plan should be available");
         assert!(changed.apply_profile_version_confirmation_plan(&plan));
 
-        let error = db
+        let stored = db
             .save_profile_with_confirmation_plan(changed, &plan)
-            .expect_err("overlap must be rejected");
+            .expect("the timeline is not the source any more");
 
-        assert!(
-            error.to_string().contains("overlap"),
-            "unexpected rejection: {error}"
-        );
+        assert_eq!(stored.confirmed_profile_versions().len(), 2);
+        assert!(persisted_forms_sets(&db, &stored.tin.full()).is_empty());
     });
 }
 
@@ -609,7 +551,7 @@ fn test_custom_form_added_and_removed() {
 }
 
 #[test]
-fn test_cor_confirmation_flow_populates_forms_set() {
+fn test_cor_confirmation_flow_adds_no_forms_set() {
     temp_env::with_var("EBIR_TEST_ENV", Some("1"), || {
         let temp_file = NamedTempFile::new().unwrap();
         let db = Database::open(temp_file.path()).expect("Failed to open DB");
@@ -685,18 +627,9 @@ fn test_cor_confirmation_flow_populates_forms_set() {
             .save_profile_with_confirmation_plan(saved_profile, &plan)
             .expect("Failed to save confirmed profile");
 
-        // Verify that a forms set has been automatically created and populated in per_year_forms table for 2026!
-        assert!(db.has_per_year_forms(&tin_str, 2026).unwrap());
-        let generated_set = db.get_per_year_forms(&tin_str, 2026).unwrap();
-        assert!(
-            !generated_set.entries.is_empty(),
-            "Generated forms set should not be empty"
-        );
-
-        // The explicit sourced include is authoritative over OCR/tax-type inference.
-        let entry = generated_set.entry("1701").unwrap();
-        assert!(entry.active);
-        assert_eq!(entry.source, FormSetSource::Manual);
+        // Decision 1: confirming a COR version, its include included,
+        // creates no forms list; the user picks it.
+        assert!(!db.has_per_year_forms(&tin_str, 2026).unwrap());
     });
 }
 
@@ -1249,7 +1182,14 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
         };
 
         let saved_indiv = save_initial_confirmed_profile(&db, individual);
-        let resolved_indiv = resolve_profile_obligations_for_year(&saved_indiv, 2026);
+        assert!(
+            resolve_profile_obligations_for_year(&saved_indiv, 2026)
+                .form_codes
+                .is_empty(),
+            "a save generates no forms list"
+        );
+        let resolved_indiv =
+            resolve_profile_obligations_for_year(&with_suggested_forms(saved_indiv, 2026), 2026);
 
         // Individual should have 1701/1701Q but NOT 1702/1702Q
         assert!(resolved_indiv.form_codes.contains(&"1701".to_string()));
@@ -1299,7 +1239,8 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
         };
 
         let saved_corp = save_initial_confirmed_profile(&db, corporate);
-        let resolved_corp = resolve_profile_obligations_for_year(&saved_corp, 2026);
+        let resolved_corp =
+            resolve_profile_obligations_for_year(&with_suggested_forms(saved_corp, 2026), 2026);
 
         // Corp should have 1702RT/1702Q but NOT 1701/1701Q
         assert!(!resolved_corp.form_codes.contains(&"1701".to_string()));
@@ -1353,7 +1294,8 @@ fn test_obligation_filtering_individual_vs_corporate_and_vat() {
         };
 
         let saved_vat_corp = save_initial_confirmed_profile(&db, vat_corp);
-        let resolved_vat_corp = resolve_profile_obligations_for_year(&saved_vat_corp, 2026);
+        let resolved_vat_corp =
+            resolve_profile_obligations_for_year(&with_suggested_forms(saved_vat_corp, 2026), 2026);
 
         // VAT Corp should have quarterly VAT but not percentage tax.
         assert!(resolved_vat_corp.form_codes.contains(&"2550Q".to_string()));

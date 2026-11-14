@@ -13,7 +13,9 @@
 //!   overridden (D2). Inheritance resolves on read.
 
 pub mod field_kinds;
+pub mod tax_types;
 pub mod templates;
+pub mod year_facts;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,9 +29,14 @@ pub use field_kinds::{
     AutoSource, FieldKind, FieldSpec, FormFieldKinds, IdentitySource, PeriodSource, ResolvedPeriod,
     TemplatableKind, field_kinds_for,
 };
+pub use tax_types::{TaxTypeChip, facts_used_by, tax_type_of, tax_types_for_year};
 pub use templates::{
     FormTemplate, GuidedStop, PrefillPlan, TemplateChoice, TemplateField, TemplateFieldError,
     TemplateSource, snapshot_setup_answers, validate_template_fields,
+};
+pub use year_facts::{
+    EffectiveYearFacts, Fact, FactOwner, ViewFacts, YearFacts, YearFactsPatch, YearFactsView,
+    overlay_year_facts,
 };
 
 /// Default name of the `00000` branch.

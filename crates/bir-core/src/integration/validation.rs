@@ -1442,39 +1442,6 @@ fn primary_annual_itr(
     )
 }
 
-/// The individual and corporate ITRs that should stay active for a profile in
-/// a taxable year, used to heal already-stored Forms Sets. Prefers the
-/// confirmed segment effective for the year, falling back to the flat
-/// profile's current classification.
-pub fn primary_annual_itrs_for_profile_year(
-    profile: &TaxpayerProfile,
-    year: u16,
-) -> (Option<&'static str>, Option<&'static str>) {
-    let election = profile.income_tax_election_for_year(year);
-    let resolved = profile.resolve_tax_profile_for_year(year);
-    let primary = match resolved.effective_segments.first() {
-        Some(version) => primary_annual_itr_for(
-            &version.taxpayer_type,
-            version.tax_classification.as_ref(),
-            election.as_ref(),
-            version.eopt_tier.as_ref(),
-            year,
-        ),
-        None => primary_annual_itr_for(
-            &profile.taxpayer_type,
-            profile.effective_classification().as_ref(),
-            election.as_ref(),
-            profile.eopt_tier.as_ref(),
-            year,
-        ),
-    };
-    match primary {
-        Some(code) if INDIVIDUAL_ANNUAL_ITR_GROUP.contains(&code) => (Some(code), None),
-        Some(code) if CORPORATE_ANNUAL_ITR_GROUP.contains(&code) => (None, Some(code)),
-        _ => (None, None),
-    }
-}
-
 /// The mutually exclusive annual-ITR group a form code belongs to, if any.
 /// A taxpayer files exactly one annual income tax return per year.
 pub fn annual_itr_group(form_code: &str) -> Option<&'static [&'static str]> {
