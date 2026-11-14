@@ -1924,9 +1924,32 @@ impl Database {
         let forms: Vec<String> = canonical_codes(active_codes(&self.conn, tin, year)?)?
             .into_iter()
             .collect();
-        let birth_date = load_taxpayer(&self.conn, &root_of(tin)?)?.and_then(|t| t.birth_date);
+        let taxpayer = load_taxpayer(&self.conn, &root_of(tin)?)?;
+        let birth_date = taxpayer.as_ref().and_then(|t| t.birth_date);
+        let individual = taxpayer
+            .as_ref()
+            .is_some_and(|t| t.taxpayer_type == TaxpayerType::Individual);
         let locked = election_locked_on(&self.conn, tin, year)?;
-        Ok(YearFactsView::new(&effective, &forms, birth_date, locked))
+        let mut view = YearFactsView::new(&effective, &forms, birth_date, locked);
+        // A fact nobody can answer for this taxpayer is not "not set": a
+        // birth date and an income type are an individual's, and only a
+        // self-employed or mixed-income individual chooses 8% or graduated.
+        let chooses_a_rate = individual
+            && matches!(
+                view.facts.tax_classification,
+                Some(
+                    crate::profile::TaxClassification::SelfEmployed
+                        | crate::profile::TaxClassification::MixedIncome
+                )
+            );
+        view.not_set.retain(|fact| match fact {
+            crate::tax_profile::Fact::BirthDate | crate::tax_profile::Fact::TaxClassification => {
+                individual
+            }
+            crate::tax_profile::Fact::IncomeTaxElection => chooses_a_rate,
+            _ => true,
+        });
+        Ok(view)
     }
 
     /// The tax types the branch's forms list for `year` gives (decision 2).

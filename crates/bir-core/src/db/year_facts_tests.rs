@@ -589,6 +589,47 @@ fn the_view_says_which_forms_read_each_fact_and_what_is_not_set() {
     assert!(!view.not_set.contains(&Fact::IncomeTaxElection));
     assert_eq!(view.election_source.as_deref(), Some("Tax profile"));
 
+    // A fact this taxpayer cannot answer is never "not set": a
+    // compensation-only individual chooses no rate, and a corporation has
+    // no birth date, income type or rate.
+    db.set_yearly_forms(BRANCH, 2026, &["2551Q", "1701"])
+        .unwrap();
+    db.set_year_facts(
+        HEAD,
+        2026,
+        &patch(json!({"tax_classification": "PurelyCompensation", "income_tax_election": null})),
+    )
+    .unwrap();
+    let view = db.year_facts_view(BRANCH, 2026).unwrap();
+    assert!(
+        !view.not_set.contains(&Fact::IncomeTaxElection),
+        "{:?}",
+        view.not_set
+    );
+    db.update_taxpayer(
+        ROOT,
+        TaxpayerUpdate {
+            taxpayer_type: Some(crate::profile::TaxpayerType::Corporation),
+            ..TaxpayerUpdate::default()
+        },
+    )
+    .unwrap();
+    db.set_year_facts(HEAD, 2026, &patch(json!({"tax_classification": null})))
+        .unwrap();
+    let view = db.year_facts_view(BRANCH, 2026).unwrap();
+    for fact in [
+        Fact::BirthDate,
+        Fact::TaxClassification,
+        Fact::IncomeTaxElection,
+    ] {
+        assert!(
+            !view.not_set.contains(&fact),
+            "{fact:?} in {:?}",
+            view.not_set
+        );
+    }
+    assert!(view.not_set.contains(&Fact::EoptTier));
+
     let chips = db.tax_types_for_year(BRANCH, 2025).unwrap();
     let types: Vec<&str> = chips.iter().map(|chip| chip.tax_type).collect();
     assert_eq!(
