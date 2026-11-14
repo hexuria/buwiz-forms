@@ -1,12 +1,13 @@
 //! Tax-profile host functions: taxpayers, branches, tax years, yearly forms,
 //! starter packs and form templates. Every rule (TIN shape, tax-year bound,
-//! one template per form, D8 setup-only snapshots, the one-transaction TIN
+//! one template per form, the carry rule a snapshot pins by, the one-transaction TIN
 //! move) lives in bir-core; this file only converts JSON in and out.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use bir_core::db::Database;
-use bir_core::forms::agent::template_stops::TemplateStops;
+use bir_core::forms::agent::AgentFormKind;
+use bir_core::forms::agent::carry;
 use bir_core::forms::registry::canonical_form_code;
 use bir_core::profile::{
     EmailAuthMethod, IncomeTaxElection, TaxClassification, TaxpayerProfile, TaxpayerType,
@@ -14,7 +15,7 @@ use bir_core::profile::{
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
     ResolvedBranch, StarterPack, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
-    TemplateField, format_tin_root, tax_year_bounds,
+    format_tin_root, tax_year_bounds,
 };
 use chrono::Datelike as _;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
@@ -80,7 +81,9 @@ export interface StarterPackInfo { id: string; label: string; forms: string[]; }
 export interface FormTemplateSummary {
     form_code: string;
     updated_at: string;
+    /** How many answers the template fixes (box keys it pins). */
     answers_kept: number;
+    /** How many "Stop here" switches are on. */
     marked: number;
     source: string;
 }
@@ -105,12 +108,12 @@ export function list_form_templates(tin: string): FormTemplateSummary[];
 export function create_template_from_latest(tin: string, form_code: string): FormTemplateSummary;
 export function create_template_from_return(draft_id: number): FormTemplateSummary;
 export function delete_form_template(tin: string, form_code: string): boolean;
-/** The form page's template stops, as page keys: `stops` write a field the template marks, `markable` may be marked ("Stop here"). */
+/** Older form page only (`screen_form_open` now carries `stop_edits` and `stoppable`): `stops` are the boxes switched on as a stop, `markable` the boxes that may be one, radios by each radio's key. */
 export interface TemplateStops { stops: string[]; markable: string[]; }
 /** null when the branch has no template for the form. */
 export function template_stops(tin: string, form_code: string): TemplateStops | null;
-/** Mark (`on`) or unmark the template field the page box `key` writes. */
-export function set_template_stop(tin: string, form_code: string, key: string, on: boolean): TemplateStops;
+/** "Stop here": on true = always a stop, false = never a stop, null = back to automatic. Creates the template row when the branch has none for the form. Works for every form; a radio is switched as its item's group box. Returns the new switches (and, for the older page, `stops` and `markable`). */
+export function set_template_stop(tin: string, form_code: string, box_key: string, on: boolean | null): { stop_edits: Record<string, boolean> } & TemplateStops;
 /** The annual income-tax election for one taxable year, on the tax profile; refused for a year with no self-employed or mixed-income registration. */
 export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
 export type IncomeTaxElectionGap = "ready" | "no_confirmed_registration" | "timeline_needs_review" | "not_individual" | "not_business_income";
@@ -404,18 +407,14 @@ fn field_string(value: Option<Value>) -> String {
     }
 }
 
+/// One template on the Templates tab: how many answers it pins
+/// (`answers_kept`) and how many "Stop here" switches are on (`marked`).
 fn template_record(template: &FormTemplate) -> HostValue {
-    let kept = template
-        .fields
-        .values()
-        .filter(|field| matches!(field, TemplateField::Kept { .. }))
-        .count();
-    let marked = template.fields.len() - kept;
     HostObject::new()
         .field("form_code", template.form_code.as_str())
         .field("updated_at", template.updated_at.as_str())
-        .field("answers_kept", kept as f64)
-        .field("marked", marked as f64)
+        .field("answers_kept", template.pinned().len() as f64)
+        .field("marked", template.stops_on() as f64)
         .field("source", template.source.to_db())
         .into()
 }
@@ -766,19 +765,45 @@ fn delete_form_template(arguments: &HostArguments) -> HostResult {
     })
 }
 
-fn stops_record(stops: &TemplateStops) -> HostValue {
+/// A box key and, for a radio item's group box, each of its radios: the
+/// older page draws a radio by its own key.
+fn with_radios(kind: AgentFormKind, key: &str) -> Vec<String> {
+    let mut keys = vec![key.to_string()];
+    if let Some(entry) = kind.definition().box_def(key) {
+        keys.extend(entry.members.iter().cloned());
+    }
+    keys
+}
+
+/// The older page's stops record: the switches on, and the boxes that may
+/// be stops, radios by their own keys too.
+fn stops_record(kind: AgentFormKind, stop_edits: &BTreeMap<String, bool>) -> HostObject {
+    let stops = stop_edits
+        .iter()
+        .filter(|(_, on)| **on)
+        .flat_map(|(key, _)| with_radios(kind, key));
+    let markable = carry::stoppable(kind)
+        .into_iter()
+        .flat_map(|key| with_radios(kind, key));
     HostObject::new()
-        .field("stops", strings(stops.stops.iter().cloned()))
-        .field("markable", strings(stops.markable.iter().cloned()))
-        .into()
+        .field("stops", strings(stops))
+        .field("markable", strings(markable))
+}
+
+fn page_kind(form_code: &str) -> Result<AgentFormKind, HostError> {
+    AgentFormKind::from_code(&canonical_form_code(form_code))
+        .ok_or_else(|| HostError::new(format!("No on-screen form {form_code}")))
 }
 
 fn template_stops(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
     let form_code = arguments.string(1)?;
+    let kind = page_kind(form_code)?;
     with_reader(|db| {
-        let stops = db.template_stops(tin, form_code).map_err(host_error)?;
-        Ok(stops.as_ref().map_or(HostValue::Null, stops_record))
+        let template = db.get_form_template(tin, form_code).map_err(host_error)?;
+        Ok(template.map_or(HostValue::Null, |template| {
+            stops_record(kind, &template.stop_edits()).into()
+        }))
     })
 }
 
@@ -786,12 +811,28 @@ fn set_template_stop(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?;
     let form_code = arguments.string(1)?;
     let key = arguments.string(2)?;
-    let on = arguments.boolean(3)?;
+    let on = match arguments.get(3).map(to_json) {
+        None | Some(Value::Null) => None,
+        Some(Value::Bool(on)) => Some(on),
+        Some(other) => {
+            return Err(HostError::new(format!(
+                "`on` must be true, false or null, not {other}"
+            )));
+        }
+    };
+    let kind = page_kind(form_code)?;
     with_database(|db| {
-        let stops = db
+        let stop_edits = db
             .set_template_stop(tin, form_code, key, on)
             .map_err(host_error)?;
-        Ok(stops_record(&stops))
+        let edits = stop_edits
+            .iter()
+            .fold(HostObject::new(), |object, (key, on)| {
+                object.field(key.as_str(), *on)
+            });
+        Ok(stops_record(kind, &stop_edits)
+            .field("stop_edits", HostValue::from(edits))
+            .into())
     })
 }
 
@@ -1712,7 +1753,7 @@ mod tests {
                 vec![json!(HEAD), json!("2551Q")]
             )
             .unwrap_err(),
-            "Open and save a 2551Q return first. The template keeps its setup answers."
+            "Open and save a 2551Q return first. The template starts from its answers."
         );
         let id = save_return(1);
         let template = ok(
@@ -1747,6 +1788,53 @@ mod tests {
                 .unwrap_err()
                 .contains("No return with id 999999")
         );
+    }
+
+    #[test]
+    fn set_template_stop_takes_true_false_and_null_on_any_form() {
+        setup();
+        let stop = |key: &str, on: Value| {
+            ok(
+                set_template_stop,
+                vec![json!(HEAD), json!("0619E"), json!(key), on],
+            )
+        };
+        assert_eq!(
+            ok(template_stops, vec![json!(HEAD), json!("0619E")]),
+            Value::Null
+        );
+        let on = stop("frm0619E:txtTax14", json!(true));
+        assert_eq!(on["stop_edits"], json!({"frm0619E:txtTax14": true}));
+        assert_eq!(on["stops"], json!(["frm0619E:txtTax14"]));
+        assert!(
+            on["markable"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("frm0619E:txtTax14"))
+        );
+        let off = stop("frm0619E:txtTax14", json!(false));
+        assert_eq!(off["stop_edits"], json!({"frm0619E:txtTax14": false}));
+        assert_eq!(off["stops"], json!([]));
+        let auto = stop("frm0619E:txtTax14", Value::Null);
+        assert_eq!(auto["stop_edits"], json!({}));
+        // The older page's reader still answers for the template made.
+        let stops = ok(template_stops, vec![json!(HEAD), json!("0619E")]);
+        assert_eq!(stops["stops"], json!([]));
+        assert!(
+            call(
+                set_template_stop,
+                vec![
+                    json!(HEAD),
+                    json!("0619E"),
+                    json!("frm0619E:txtTax14"),
+                    json!("yes")
+                ]
+            )
+            .is_err()
+        );
+        let listed = ok(list_form_templates, vec![json!(HEAD)]);
+        assert_eq!(listed[0]["form_code"], "0619E");
+        assert_eq!(listed[0]["marked"], 0);
     }
 
     #[test]
