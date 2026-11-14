@@ -1247,7 +1247,18 @@ pub(crate) fn election_locked_on(
         params![root, i64::from(year)],
         |row| row.get(0),
     )?;
-    Ok(filed > 0)
+    if filed == 0 {
+        return Ok(false);
+    }
+    // A year with no choice recorded has nothing a filed return could carry
+    // (a return filed before the choice was kept, or one whose Item 13 did
+    // not apply): the first answer is still allowed, and locks from then on.
+    // Without this the row read "Not chosen" and could never be answered.
+    let recorded = effective_year_facts_on(conn, tin, year)?
+        .facts
+        .income_tax_election
+        .is_some();
+    Ok(recorded)
 }
 
 /// Whether two elections are the same 8% or graduated choice.

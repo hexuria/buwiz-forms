@@ -212,6 +212,30 @@ fn a_year_without_a_record_reads_the_last_one_and_a_new_year_copies_it() {
 }
 
 #[test]
+fn a_filed_return_locks_nothing_while_no_choice_is_recorded() {
+    let db = db();
+    db.set_year_facts(
+        HEAD,
+        2025,
+        &patch(json!({"tax_classification": "SelfEmployed"})),
+    )
+    .unwrap();
+    // A 2551Q filed before the year's choice was kept anywhere.
+    insert_return(&db, BRANCH, "2551Q", 2025, "Submitted");
+    assert!(!db.income_tax_election_locked(HEAD, 2025).unwrap());
+    assert!(!db.year_facts_view(BRANCH, 2025).unwrap().election_locked);
+    // The first answer is taken, and from then on it is locked.
+    db.record_income_tax_election(BRANCH, 2025, IncomeTaxElection::EightPercent)
+        .unwrap();
+    assert!(db.income_tax_election_locked(HEAD, 2025).unwrap());
+    let refused = db
+        .record_income_tax_election(HEAD, 2025, IncomeTaxElection::GraduatedUnspecified)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("cannot change"), "{refused}");
+}
+
+#[test]
 fn the_election_locks_once_a_return_carrying_it_is_filed() {
     let db = db();
     db.set_year_facts(
