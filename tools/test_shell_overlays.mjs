@@ -116,12 +116,12 @@ const linked = {
   "./shell/form_page.js": mock("form_page", {
     renderFormPage: stub,
     renderFormSplit: () => null,
+    formColumnBox: () => null,
     renderExistingOffer: stub,
     renderRemovalConfirm: stub,
     renderSamplePeriod: stub,
     FormPageActions: stubClass,
   }),
-  "./shell/gallery.js": mock("gallery", { renderGallery: stub }),
   "./shell/auth.js": mock("auth", { renderSignIn: stub, renderSetup: stub }),
   "./shell/gate.js": mock("gate", { renderAccountGate: stub }),
   "./shell/update.js": mock("update", { installReadyUpdate() {}, pollUpdateStatus: () => false, renderUpdatePrompt: (_cx, _app, page) => page, setAutoUpdateDownload() {} }),

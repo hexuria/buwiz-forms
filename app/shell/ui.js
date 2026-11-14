@@ -1632,12 +1632,15 @@ export function SidePanel(cx, id, opts) {
  * A toast. `opts.action` ({label, onClick}) adds a button (Undo), and
  * `opts.progress` (1 to 0) a bar counting down the time left to use it.
  * `opts.bottom` lifts it off the window edge (20 px by default), above
- * something that floats there (the form page's section pill).
+ * something that floats there (the form page's section pill). `opts.over`
+ * ({left, width}, window px) centres it on that span instead of the window
+ * (the form's own column, which is not the window's middle).
  */
 export function Toast(cx, message, icon = "circle-check", opts = {}) {
   const t = tokens(cx);
   const width = 440;
   const bottom = opts.bottom ?? 20;
+  const span = (el) => (opts.over ? el.left(opts.over.left).w(opts.over.width) : el.left(0).right(0));
   const body = div()
     .flex()
     .flex_row()
@@ -1663,12 +1666,7 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
   }
   if (opts.action) {
     const bar = Math.max(0, Math.min(1, opts.progress ?? 1));
-    return div()
-      .id("toast")
-      .absolute()
-      .bottom(bottom)
-      .left(0)
-      .right(0)
+    return span(div().id("toast").absolute().bottom(bottom))
       .flex()
       .flex_row()
       .justify_center()
@@ -1685,12 +1683,7 @@ export function Toast(cx, message, icon = "circle-check", opts = {}) {
           .child(div().h(3).w(Math.round(width * bar)).bg(t.primaryFg).opacity(0.6)),
       );
   }
-  return div()
-    .id("toast")
-    .absolute()
-    .bottom(bottom)
-    .left(0)
-    .right(0)
+  return span(div().id("toast").absolute().bottom(bottom))
     .flex()
     .flex_row()
     .justify_center()

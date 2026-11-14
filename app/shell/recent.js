@@ -31,12 +31,33 @@ export function recentKey(r) {
 }
 
 /**
+ * Two entries for one return: the same taxpayer, form and period, and exact
+ * keys that do not disagree. An entry without an exact key opens what is
+ * stored for its period, which is the return an exact key names: listing
+ * both showed one return twice (opened once from the form list, once from
+ * a Filings card). Two different exact keys are two returns.
+ */
+export function sameReturn(a, b) {
+  if (a.tin !== b.tin || a.code !== b.code || a.year !== b.year || a.period !== b.period) return false;
+  return a.returnKey == null || b.returnKey == null || a.returnKey === b.returnKey;
+}
+
+/**
  * Recent as stored. An entry an earlier build wrote without a text id (a
- * number, or none) is rebuilt; anything that is not a list is no list.
+ * number, or none) is rebuilt; a return an earlier build listed twice keeps
+ * its first place (and its exact key); anything that is not a list is no list.
  */
 export function loadRecent(stored) {
   if (!Array.isArray(stored)) return [];
-  return stored.filter((r) => r && typeof r === "object").map((r) => (typeof r.key === "string" ? r : recentEntry(r)));
+  const out = [];
+  for (const raw of stored) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = typeof raw.key === "string" ? raw : recentEntry(raw);
+    const at = out.findIndex((x) => sameReturn(x, r));
+    if (at < 0) out.push(r);
+    else if (out[at].returnKey == null && r.returnKey != null) out[at] = r;
+  }
+  return out;
 }
 
 /**
@@ -45,13 +66,19 @@ export function loadRecent(stored) {
  */
 export function addRecent(list, opts) {
   const entry = recentEntry(opts);
-  if (list.some((r) => r.key === entry.key)) return list;
-  return [entry, ...list].slice(0, RECENT_MAX);
+  const at = list.findIndex((r) => sameReturn(r, entry));
+  if (at < 0) return [entry, ...list].slice(0, RECENT_MAX);
+  // Listed without its exact key, opened now with it: the entry takes the
+  // key where it is.
+  if (list[at].returnKey == null && entry.returnKey != null) return list.map((r, i) => (i === at ? entry : r));
+  return list;
 }
 
 /** A return was changed and saved: it moves to the top (or joins there). */
 export function bumpRecent(list, opts) {
-  const key = recentKey(opts);
-  const entry = list.find((r) => r.key === key) || recentEntry(opts);
-  return [entry, ...list.filter((r) => r.key !== key)].slice(0, RECENT_MAX);
+  const saved = recentEntry(opts);
+  const listed = list.find((r) => sameReturn(r, saved));
+  // The more exact of the two stays.
+  const entry = listed && (listed.returnKey != null || saved.returnKey == null) ? listed : saved;
+  return [entry, ...list.filter((r) => r !== listed && r.key !== entry.key)].slice(0, RECENT_MAX);
 }

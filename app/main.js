@@ -37,8 +37,7 @@ import { renderCalendar, CalendarFilters } from "./shell/calendar_page.js";
 import { renderFilings, FilingsFilters } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, renderFormSplit, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
-import { renderGallery } from "./shell/gallery.js";
+import { renderFormPage, renderFormSplit, formColumnBox, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { renderAccountGate } from "./shell/gate.js";
 import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
@@ -1193,7 +1192,6 @@ class BirApp extends View {
       });
     }
     items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: shortcutLabel("theme", this.isMac), run: (cx) => this.cycleTheme(cx) });
-    items.push({ group: "Actions", label: "Components", icon: "layout-template", run: (cx) => this.go("gallery", cx) });
     if (!q) return items;
     return items.filter((x) => x.match || `${x.label} ${x.hint || ""}`.toLowerCase().includes(q));
   }
@@ -1772,8 +1770,6 @@ class BirApp extends View {
         return renderNewTaxpayer(cx, this, width);
       case "form":
         return renderFormPage(cx, this, width);
-      case "gallery":
-        return renderGallery(cx, this, width);
       case "cron_tasks":
         return renderCronTasksPage(cx, this, width);
       default:
@@ -1795,8 +1791,11 @@ class BirApp extends View {
     const mainWidth = Math.max(240, vp.width - left - right - 2);
     const wide = this.view === "form" || this.view === "library";
     const padX = mainWidth < BREAK.narrowContent ? 16 : 32;
-    const column = Math.min(wide ? 1120 : SIZE.contentMax, mainWidth) - padX * 2;
-    return { vp, narrow, fullOverlay, sidebarDocked, panelDocked, mainWidth, padX, column: Math.max(200, column) };
+    // The Filings board has four columns of cards: it takes the whole pane.
+    const cap = this.view === "filings" ? mainWidth : wide ? 1120 : SIZE.contentMax;
+    const column = Math.min(cap, mainWidth) - padX * 2;
+    // `mainLeft`: the main surface's left edge in the window (its border included).
+    return { vp, narrow, fullOverlay, sidebarDocked, panelDocked, mainLeft: left, mainWidth, padX, column: Math.max(200, column) };
   }
 
   render(cx) {
@@ -1975,8 +1974,12 @@ class BirApp extends View {
       // the main surface's margin, and 12 px of air).
       const overPill = !settingsOpen && this.view === "form" && !this.isFresh() && Boolean(this.formUi.pillView?.());
       const bottom = overPill ? TOAST_OVER_PILL : undefined;
+      // And over the same span as the pill: the form's own column, or the
+      // whole main surface where the form is its centred column.
+      const box = overPill ? formColumnBox(L) : null;
+      const over = overPill ? { left: L.mainLeft + 1 + (box ? box.left : 0), width: box ? box.width : L.mainWidth } : undefined;
       root.child(
-        Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress, bottom } : { bottom }),
+        Toast(cx, st.message, st.icon, st.action ? { action: { label: st.action.label, onClick: (_e, cx) => this.undoLast(cx) }, progress: st.progress, bottom, over } : { bottom, over }),
       );
     }
     return renderUpdatePrompt(cx, this, root);

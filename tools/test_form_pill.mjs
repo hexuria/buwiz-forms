@@ -167,7 +167,6 @@ const linked = {
   "./shell/filings.js": mock("filings", { renderFilings: stub, FilingsFilters }),
   "./shell/settings.js": mock("settings", { renderSettings: stub }),
   "./shell/taxpayer.js": mock("taxpayer", { renderTaxpayerPage: stub, renderNewTaxpayer: stub, TaxpayerActions: stubClass }),
-  "./shell/gallery.js": mock("gallery", { renderGallery: stub }),
   "./shell/auth.js": mock("auth", { renderSignIn: stub, renderSetup: stub }),
   "./shell/gate.js": mock("gate", { renderAccountGate: stub }),
   "./shell/update.js": mock("update", { installReadyUpdate() {}, pollUpdateStatus: () => false, renderUpdatePrompt: (_cx, _app, page) => page, setAutoUpdateDownload() {} }),
@@ -343,6 +342,11 @@ function assertToastClearsPill(app) {
   const pill = one(t, "fp-pill");
   const height = pill.calls.find((c) => c[0] === "h")[1];
   assert.ok(bottom >= 8 + inset + height + 8, `the toast (bottom ${bottom}) sits above the pill (top ${8 + inset + height})`);
+  // And centred on what the pill is centred on: the layer's span, in window px.
+  const L = app.layout();
+  const left = layer.calls.find((c) => c[0] === "left")[1];
+  const span = layer.calls.find((c) => c[0] === "w")?.[1] ?? L.mainWidth;
+  assert.ok(has(toast, "left", L.mainLeft + 1 + left) && has(toast, "w", span) && !has(toast, "right", 0), "the toast is centred over the pill's span, not the window");
   app.toastState = null;
 }
 /**
@@ -485,16 +489,48 @@ for (const width of [1200, 1240]) {
   const layer = one(t, "fp-pill-layer");
   assert.ok(has(layer, "absolute") && has(layer, "bottom", 16), "at the bottom of the form");
   assert.ok(layer.calls.some((c) => c[0] === "left" && c[1] > 208), "beside the side list");
+  // Centred on the form's own column, not on the pane: it starts past the
+  // side list and the body's 22 px and is as wide as the parts.
+  const L = app.layout();
+  const edge = Math.max(L.padX, Math.floor((L.mainWidth - L.column) / 2));
+  assert.ok(has(layer, "left", edge + 208 + 6 + 22) && has(layer, "w", L.column - 208 - 28) && !has(layer, "right", 0), `${width}: the pill's layer is the form's column`);
   assertToastClearsPill(app);
   t = frame(app);
   click(t, "fp-pill-main");
   t = frame(app);
   assert.equal(byId(t, "fp-sections-scrim").length, 0, "wide: a popover, no scrim");
   assert.equal(byId(one(t, "fp-pill-layer"), "fp-sections").length, 1, "above the pill");
+  const pillMax = one(t, "fp-pill").calls.find((c) => c[0] === "max_w")[1];
+  assert.ok(has(one(t, "fp-sections"), "w_full") && has(one(t, "fp-sections"), "max_w", pillMax), "the popover is as wide as the pill: their edges line up");
   assertListLaysOut(app, 440);
   fire(one(t, "fp-pill-layer").out);
   t = frame(app);
   assert.equal(byId(t, "fp-sections").length, 0, "a click outside closes it");
+
+  // Expand all / Collapse all, beside "On this form" and in the pill's list.
+  const s = app.formUi.state;
+  const every = s.schema.parts.map((_p, i) => i);
+  const current = s.current;
+  assert.ok(has(one(t, "fp-parts-toggle"), "tooltip", "Expand all parts"), "one part open: the toggle expands");
+  click(t, "fp-parts-toggle");
+  rootDirty = true;
+  t = frame(app);
+  assert.deepEqual([...s.openParts].sort(), every, "every part opens");
+  assert.equal(s.current, current, "the pill keeps its section");
+  assert.ok(has(one(t, "fp-parts-toggle"), "tooltip", "Collapse all parts"), "all open: the toggle collapses");
+  click(t, "fp-parts-toggle");
+  rootDirty = true;
+  t = frame(app);
+  assert.deepEqual([...s.openParts], [], "every part folds");
+  click(t, "fp-pill-main");
+  t = frame(app);
+  click(t, "fp-sections-toggle");
+  rootDirty = true;
+  t = frame(app);
+  assert.deepEqual([...s.openParts].sort(), every, "the list's toggle opens every part");
+  assert.equal(byId(t, "fp-sections").length, 1, "and the list stays open");
+  assert.ok(has(one(t, "fp-sections-toggle"), "tooltip", "Collapse all parts"));
+  fire(one(t, "fp-pill-layer").out);
 }
 
 // ---- a template: ‹ and › stop on what it marks; "Stop here" marks a box
@@ -577,6 +613,14 @@ for (const width of [1200, 1240]) {
   const t = frame(app);
   assert.equal(byId(t, "fp-pill").length, 0);
   assert.ok(has(one(t, "toast"), "bottom", 20), "no pill: 20 px");
+  assert.ok(has(one(t, "toast"), "left", 0) && has(one(t, "toast"), "right", 0), "and the window's middle");
+  // The Filings board takes the whole pane; other pages keep the reading column.
+  const home = app.layout();
+  app.view = "filings";
+  const filings = app.layout();
+  assert.equal(filings.column, filings.mainWidth - 2 * filings.padX, "Filings: the pane less its padding");
+  assert.ok(home.column < filings.column && home.column <= 880, "Home keeps the 880 px column");
+  app.view = "home";
 }
 
 // ---- a press on the pill does not reach a section header painted beneath it
