@@ -211,6 +211,7 @@ const linked = {
     renderFormPage: stub,
     renderFormSplit: () => null,
     formColumnBox: () => null,
+    formScrollArea: (_app, id, plain) => plain(stub().id(id)).overflow_y_scroll().overflow_x_hidden(),
     renderExistingOffer: stub,
     renderRemovalConfirm: stub,
     renderSamplePeriod: stub,
@@ -229,6 +230,7 @@ for (const [k, v] of Object.entries(real)) {
   linked[k.replace("./shell/", "./")] = v;
 }
 linked["./periods.js"] = source("app/shell/periods.js");
+linked["./todo.js"] = source("app/shell/todo.js");
 const main = source("app/main.js");
 await main.link((s) => {
   if (!linked[s]) throw new Error(`unlinked import ${s}`);

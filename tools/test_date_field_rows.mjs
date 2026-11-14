@@ -44,6 +44,7 @@ const inputs=[];
 const InputState={new({value=""}={}){let text=value;const h={};const i={value:()=>text,set_value:v=>{text=v;},on(n,f){h[n]=f;},fire(n,c){h[n]?.({},c);},type(v,c){text=v;h.change?.({},c);},release(){return true;}};inputs.push(i);return i;}};
 const CalendarState={new(){let v=null;return {set_value(x){v=x;},value:()=>v,on(){},month:()=>12,year:()=>2020,today:()=>"2026-10-17",month_days:()=>[[]],prev_month(){},next_month(){}};}};
 const contextVM=vm.createContext({console,Map,Set,JSON,window:{viewport_size:()=>({width:1400,height:900})}});
+const todoModule = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/todo.js", root), "utf8"), { context: contextVM, identifier: "todo.js" });
 function mock(name,exports){const m=new vm.SyntheticModule(Object.keys(exports),function(){for(const [k,v]of Object.entries(exports))this.setExport(k,v);},{context:contextVM,identifier:name});return m;}
 const kit=mock("gpui-kit",{div:element,svg:element,View});
 const base=mock("gpui-base",{InputState,CalendarState,Popup:{new:element}});
@@ -62,7 +63,7 @@ const uiModule=mock("./ui.js",uiExports);
 const store=mock("./store.js",{formatTin:x=>x,errorText:e=>String(e&&e.message?e.message:e)});
 const periods=mock("./periods.js",{periodLabel:()=>"March 2026"});
 const mod=new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js",root),"utf8"),{context:contextVM});
-await mod.link(s=>({"gpui-kit":kit,"gpui-base":base,"gpui-component":components,"./ui.js":uiModule,"./store.js":store,"./periods.js":periods}[s]));
+await mod.link(s=>({"gpui-kit":kit,"gpui-base":base,"gpui-component":components,"./ui.js":uiModule,"./store.js":store,"./periods.js":periods, "./todo.js": todoModule}[s]));
 await mod.evaluate();
 let values={[dateKey]:""};
 const app={prefs:{},branchFor:()=>null,taxpayers:()=>[],layout:()=>({column}),invalidate:()=>{rootDirty=true;},toast(){rootDirty=true;},store:{templates:()=>[],call(name,...args){

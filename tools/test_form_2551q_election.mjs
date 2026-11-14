@@ -137,6 +137,7 @@ const linked = {
   "gpui-base": mock("gpui-base", { Input: { new: stub }, InputState, CalendarState: {}, Popup: { new: stub }, OtpInput: { new: stub }, OtpState: InputState }),
   "gpui-component": mock("gpui-component", { Spinner: { new: stub } }),
   "./ui.js": ui,
+  "./todo.js": source("app/shell/todo.js"),
   "./store.js": mock("./store.js", { formatTin: (root9, code) => `${root9}-${code}`, errorText: (e) => String(e && e.message ? e.message : e) }),
 };
 await ui.link((s) => linked[s]);
