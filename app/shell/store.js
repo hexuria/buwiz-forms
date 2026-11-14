@@ -84,6 +84,12 @@ export class Store {
     return fn(...args);
   }
 
+  /** A host component of the `bir` module (`ScrollArea`, `ScrollMark`), or null on a host without it. */
+  component(name) {
+    const c = bir[name];
+    return c && typeof c.new === "function" ? c : null;
+  }
+
   /**
    * Memoised read: `fallback` when the call throws; the error is kept, and
    * the call is tried again on the first read after FAILED_READ_RETRY_MS.

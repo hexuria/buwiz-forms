@@ -37,6 +37,7 @@ import {
   takesPointer,
 } from "./ui.js";
 import { errorText as message, formatTin } from "./store.js";
+import { effectiveStops, stopCall, todoRows, nextRow } from "./todo.js";
 
 const VALIDATE_DELAY = 300;
 /** A sample's period is asked about this long after its last change. */
@@ -45,6 +46,12 @@ const PERIOD_ASK_DELAY = 300;
 const LIVE_PREVIEW_DELAY = 120;
 /** How many times, 100 ms apart, a one-time note waits for its page to be drawn before it is left unrecorded (`recordNotesWhenShown`). */
 export const NOTE_CHECKS = 50;
+/** A step reveals its row this long after it opened the section (ms), so the row has been drawn and measured. */
+const REVEAL_DELAY = 50;
+/** How many times a step looks for its row's mark before it gives up (the row stays tinted). */
+const REVEAL_TRIES = 10;
+/** A revealed row sits this far below the top of the scroll area (px). */
+const REVEAL_MARGIN = 24;
 
 /**
  * A listed dropdown option as `{ value, label }`. The schema writes many
@@ -289,6 +296,7 @@ export class FormPageActions {
     for (const row of state?.rowViews?.values() || []) row.entity.release();
     for (const input of state?.inputs?.values() || []) input.release();
     for (const handle of state?.editFocus?.values() || []) handle.release();
+    for (const handle of state?.focusAnchors?.values() || []) handle.release();
     state?.checkButton?.entity.release();
     state?.pill?.entity.release();
   }
@@ -366,12 +374,22 @@ export class FormPageActions {
       saved: false,
       openSelect: null,
       moreOpen: new Set(),
-      // Template mode: ‹ and › stop on the boxes the branch's template marks
-      // (`stops`, from `loadStops`), and each box it may mark has "Stop here".
-      guided: false,
-      stops: null,
-      // The row a template step marked (a step opens its section; it cannot scroll to it).
-      stopAt: null,
+      // The pill's to-do stepping (decision 12; `todo`): the boxes copied
+      // from the last return or the template (`kept`, marked until edited),
+      // the automatic stops and the user's own switches (I-2), the boxes
+      // that may carry "Stop here", the row the last step went to, the stops
+      // stepped past on this visit, and, after Check, a fresh start at the top.
+      kept: {},
+      autoStops: [],
+      stopEdits: {},
+      stopKeys: new Set(),
+      stoppable: new Set(),
+      stepAt: null,
+      passed: new Set(),
+      stepFromTop: false,
+      // Each box's focus anchor (`focusRow`): a text box's sits just before
+      // it, a choice's is the choice itself.
+      focusAnchors: new Map(),
       // 2551Q Item 13's question (`electionCard`): the row it is on, the
       // answer picked, and the row that says it was saved.
       electionAt: null,
@@ -400,7 +418,6 @@ export class FormPageActions {
         const s = this.state;
         s.loading = false;
         this.takeOpened(r);
-        this.loadStops();
         // Every part already open (one picked while the return was still
         // opening, too) gets its inputs now that the draft is here.
         for (const i of new Set([0, ...s.openParts])) this.ensureInputs(i, acx);
@@ -484,6 +501,14 @@ export class FormPageActions {
     // 1801's item 1 on a new return) says nothing until the filer edits it
     // or presses Check or Save.
     s.quiet = r.quiet || null;
+    // What a new return copied, its automatic stops, the user's switches and
+    // the boxes "Stop here" may go on (I-2). An older host sends none of
+    // them: all empty, so the pill steps by messages and required boxes.
+    s.kept = r.kept && typeof r.kept === "object" ? { ...r.kept } : {};
+    s.autoStops = Array.isArray(r.auto_stops) ? r.auto_stops : [];
+    s.stopEdits = r.stop_edits && typeof r.stop_edits === "object" ? r.stop_edits : {};
+    s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
+    s.stoppable = new Set(Array.isArray(r.stoppable) ? r.stoppable : []);
     this.setErrors(r.errors);
   }
 
@@ -600,6 +625,15 @@ export class FormPageActions {
         if (cx.focus_handle && !s.editFocus.has(id) && (it.f || []).some((f) => s.profileEdit.has(f.k))) {
           s.editFocus.set(id, cx.focus_handle());
         }
+        // A step puts the keyboard in a box through its anchor (`focusRow`).
+        if (cx.focus_handle && !it.rows) {
+          const want = (key) => {
+            if (!s.focusAnchors.has(key)) s.focusAnchors.set(key, cx.focus_handle());
+          };
+          const date = oneDate(it);
+          if (date) want(date.oneKey);
+          else for (const f of it.f || []) if (!f.c) want(f.t === "radio" ? `radio:${id}` : f.k);
+        }
         if (!s.rowViews.has(id)) {
           const props = { ui: this, state: s, it, pi: partIndex, ii, width: this.rowWidth() };
           s.rowViews.set(id, {
@@ -666,12 +700,14 @@ export class FormPageActions {
       picker ? [picker.year(), picker.month(), picker.value(), s.picker.select || null] : null,
       s.hoverItem === id,
       it.from ? s.values[it.from.k] ?? "" : null,
-      // Item 13's question and its answer, the "Stop here" switch and a template step's mark.
+      // Item 13's question and its answer.
       s.electionAt === id || s.electionSavedAt === id
         ? [s.electionAt === id, s.electionSavedAt === id, s.electionPick || "", s.electionAt === id ? [this.electionReadiness(), s.draft?.taxpayer_type ?? null, Boolean(s.profileRefreshed)] : null]
         : null,
-      s.stops ? [s.guided && s.stops.markable.has(id), s.stops.marked.has(id)] : null,
-      s.stopAt === id,
+      // The row a step went to, its "Stop here" switch and the copied-answer marks.
+      s.stepAt === id,
+      this.rowStoppable(it) ? this.rowIsStop(it) : null,
+      keys.map((k) => s.kept[k] || ""),
       keys.map(k => [s.values[k] ?? "", s.poolTexts?.[k] ?? "", s.locks[k], s.off?.[k] || "", this.penaltySignature(k), s.profile.has(k), s.editing.has(k), s.profileEdit.has(k), this.optionsSignature(k), Boolean(s.notesAlways?.has(k))]),
     ]);
   }
@@ -715,8 +751,9 @@ export class FormPageActions {
 
   /**
    * The section pill redraws (its own view, rule 2) only when what it shows
-   * changes: the open section, each section's messages, the template stops
-   * and the window's side of the side-list width.
+   * changes: the open section, each section's messages, the to-do rows,
+   * the row the last step went to and the window's side of the side-list
+   * width.
    */
   refreshPill() {
     const s = this.state;
@@ -726,7 +763,7 @@ export class FormPageActions {
     const snapshot = JSON.stringify([
       L.column >= BREAK.formNav, L.vp?.height ?? 0, L.mainWidth ?? 0, L.padX ?? 0,
       s.current, [...s.openParts], s.schema.parts.map((_p, i) => this.partErrors(i)),
-      s.guided, s.stops ? [...s.stops.marked.keys()] : null, s.stopAt, s.loading, s.error,
+      this.todo().map((r) => `${r.id}:${r.reason}`), s.stepAt, s.stepFromTop, s.loading, s.error,
     ]);
     if (snapshot === pill.snapshot) return;
     pill.snapshot = snapshot;
@@ -751,112 +788,193 @@ export class FormPageActions {
   }
 
   /**
-   * The branch's template for this form (Tax profile > Templates): the
-   * fields it marks are the pill's stops, and every box it may mark gets
-   * "Stop here". Template mode starts on when it marks any (D13). Only
-   * forms with a field registry (2551Q, 1601C) can have one.
+   * The rows that still need the user, in form order, each once with its
+   * strongest reason (`todo.js`): a validation message, an empty required
+   * box, or a stop not yet filled or stepped past. A read-only return has
+   * only its messages.
    */
-  loadStops() {
+  todo() {
     const s = this.state;
-    s.stops = null;
-    const template = this.app.store.templates(s.tin).find((x) => x.form_code === s.code);
-    if (!template) return;
-    let r = null;
-    try {
-      r = this.app.store.call("template_stops", s.tin, s.code);
-    } catch (_e) {
-      return;
-    }
-    if (!r) return;
-    this.takeStops(r);
-    s.guided = s.stops.order.length > 0;
-  }
-
-  /** The host's stop keys as page rows (`pi:ii`), each with the key that stands for it. */
-  takeStops(r) {
-    const s = this.state;
-    const rows = (keys) => {
-      const out = new Map();
-      for (const k of keys || []) {
-        const id = this.itemIdForKey(k);
-        if (id && !out.has(id)) out.set(id, k);
-      }
-      return out;
-    };
-    const marked = rows(r.stops);
-    const order = [...marked.keys()].sort((a, b) => {
-      const [ap, ai] = a.split(":").map(Number);
-      const [bp, bi] = b.split(":").map(Number);
-      return ap - bp || ai - bi;
+    if (!s?.schema || !s.draft) return [];
+    return todoRows({
+      parts: s.schema.parts,
+      messages: s.messages,
+      values: s.values,
+      stops: s.editable ? s.stopKeys : new Set(),
+      passed: s.passed,
+      blocked: (k) => !s.editable || this.isLocked(k),
     });
-    s.stops = { marked, markable: rows(r.markable), order };
-    if (s.stopAt && !marked.has(s.stopAt)) s.stopAt = null;
   }
 
-  /** The rows ‹ and › stop on: the template's stops in template mode, else none (they step by section). */
-  stopIds() {
+  /** How many rows of part `pi` still need the user. */
+  partTodo(pi) {
+    return this.todo().filter((r) => r.id.startsWith(`${pi}:`)).length;
+  }
+
+  /** The boxes of item `it` that may carry "Stop here" (I-2 `stoppable`). */
+  stopBoxes(it) {
     const s = this.state;
-    return s.guided && s.stops ? s.stops.order : [];
+    if (!s.stoppable?.size) return [];
+    return itemKeys(it).filter((k) => s.stoppable.has(k));
   }
 
-  /** Template mode on or off (the pill's list). */
-  setGuided(on, cx) {
+  /** Whether item `it` gets "Stop here": an editable return and a box that may carry it. */
+  rowStoppable(it) {
+    return Boolean(this.state.editable) && this.stopBoxes(it).length > 0;
+  }
+
+  /** Whether one of the item's boxes is a stop now (automatic or switched on). */
+  rowIsStop(it) {
     const s = this.state;
-    s.guided = on;
-    if (!on) s.stopAt = null;
-    this.refreshRows();
-    cx.notify();
+    return this.stopBoxes(it).some((k) => s.stopKeys.has(k));
   }
 
-  /** "Stop here": mark or unmark the field row `id` writes in the template. */
+  /**
+   * "Stop here" on row `id`: each of its boxes that may carry it goes on or
+   * off. An automatic stop switched off sends `false`, a box the app would
+   * not stop on switched on sends `true`, and going back to what the app
+   * would do sends `null` (`stopCall`). The host returns the switches; the
+   * list follows them.
+   */
   setStop(id, on, cx) {
     const s = this.state;
-    const key = on ? s.stops?.markable.get(id) : s.stops?.marked.get(id);
-    if (!key) return;
-    let r;
-    try {
-      r = this.app.store.write("set_template_stop", s.tin, s.code, key, on);
-    } catch (e) {
-      return this.app.toast(message(e), cx, "triangle-alert");
+    const [pi, ii] = id.split(":").map(Number);
+    const it = s.schema.parts[pi]?.items[ii];
+    if (!it || !s.editable) return;
+    for (const k of this.stopBoxes(it)) {
+      const call = stopCall(k, on, s.autoStops);
+      if ((s.stopEdits[k] ?? null) === call) continue;
+      let r;
+      try {
+        r = this.app.store.write("set_template_stop", s.tin, s.code, k, call);
+      } catch (e) {
+        return this.app.toast(message(e), cx, "triangle-alert");
+      }
+      s.stopEdits = r?.stop_edits && typeof r.stop_edits === "object" ? r.stop_edits : s.stopEdits;
     }
-    this.takeStops(r);
+    s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
+    // Switched on again on purpose: the stop counts again even if passed.
+    if (on) s.passed.delete(id);
     this.refreshRows();
   }
 
   /**
-   * Where ‹ (`dir` -1) or › (1) goes: the previous or next section, or in
-   * template mode the previous or next stop (from the open section when no
-   * stop is marked yet). Null at either end.
+   * Where ‹ (`dir` -1) or › (1) goes. With rows to do: the previous or next
+   * of them from the row the last step went to (from the open section when
+   * none, from the top after Check); past the last, › is Check
+   * (`{ check: true }`). With none: the previous or next section. Null at
+   * either end.
    */
   stepTarget(dir) {
     const s = this.state;
     if (!s?.schema) return null;
-    const stops = this.stopIds();
-    if (stops.length) {
-      const partOf = (id) => Number(id.split(":")[0]);
-      const at = s.stopAt ? stops.indexOf(s.stopAt) : -1;
-      const next = at >= 0
-        ? stops[at + dir]
-        : dir > 0
-          ? stops.find((id) => partOf(id) >= s.current)
-          : [...stops].reverse().find((id) => partOf(id) < s.current);
-      return next ? { part: partOf(next), stop: next } : null;
+    const ids = this.todo().map((r) => r.id);
+    if (ids.length) {
+      const row = nextRow(ids, dir, s.stepAt, s.current, s.stepFromTop);
+      if (row) return { part: Number(row.split(":")[0]), row };
+      return dir > 0 ? { check: true } : null;
     }
     const part = s.current + dir;
-    return part >= 0 && part < s.schema.parts.length ? { part, stop: null } : null;
+    return part >= 0 && part < s.schema.parts.length ? { part, row: null } : null;
   }
 
   /**
-   * ‹ and ›. A template stop opens its section and marks its row: the
-   * toolkit gives scripts no scroll offset to set on a plain scroll area and
-   * no way to focus a text input, so the filer scrolls to the marked row and
-   * clicks into it.
+   * ‹ and › (and their keys). A row step opens its section, then, once the
+   * row has been drawn, scrolls it into view and puts the keyboard in its
+   * box (`revealRow`). A stop stepped past forward leaves the list. Past
+   * the last row › runs Check; the next › starts again from the top, on
+   * whatever Check found.
    */
   step(dir, cx) {
+    const s = this.state;
     const target = this.stepTarget(dir);
     if (!target) return;
-    this.jumpTo(target.part, cx, target.stop);
+    if (target.check) {
+      if (s.stepAt) s.passed.add(s.stepAt);
+      s.stepAt = null;
+      s.stepFromTop = true;
+      this.refreshRows();
+      this.check(cx);
+      return;
+    }
+    if (s.stepAt && dir > 0) s.passed.add(s.stepAt);
+    s.stepFromTop = false;
+    this.jumpTo(target.part, cx, target.row);
     this.redrawPage(cx);
+    if (target.row) this.revealRow(target.row, cx);
+  }
+
+  /** The scroll area the form is in: the wide layout's own, else the page's. */
+  scrollAreaName() {
+    return this.app.layout().column >= BREAK.formNav ? "fp-scroll" : "main-scroll";
+  }
+
+  /**
+   * After a step: once the row has been drawn in its opened section, move
+   * the form so the row sits near the top (`scroll_reveal`, the host scroll
+   * module), then put the keyboard in its box. A host without the module
+   * leaves the row tinted where it is. Gives up after REVEAL_TRIES; a later
+   * step or the user leaving the row stops it.
+   */
+  revealRow(row, cx) {
+    const store = this.app.store;
+    if (!store.component?.("ScrollMark")) return;
+    const mark = `fp-row-${row}`;
+    try {
+      // The mark painted before the section opened is at the wrong place.
+      store.call("scroll_forget", mark);
+    } catch (_e) {
+      return;
+    }
+    const token = this.token;
+    let tries = 0;
+    const attempt = (tcx) => {
+      const s = this.state;
+      if (token !== this.token || s.stepAt !== row) return;
+      let found = false;
+      try {
+        found = store.call("scroll_reveal", this.scrollAreaName(), mark, REVEAL_MARGIN);
+      } catch (_e) {
+        return;
+      }
+      if (!found) {
+        tries += 1;
+        if (tries < REVEAL_TRIES) tcx.timer.after(REVEAL_DELAY, attempt);
+        return;
+      }
+      globalThis.window?.refresh?.();
+      this.focusRow(row);
+    };
+    cx.timer.after(REVEAL_DELAY, attempt);
+  }
+
+  /**
+   * The keyboard into row `row`'s box: its first stop box that takes typing,
+   * else its first empty required box, else its first box that takes
+   * typing. A text box: its anchor (just before it, not a Tab stop) takes
+   * focus and Tab order moves on into the box (`window.focus_next`). A
+   * tick box, tick group or list: its own focus handle. Never called while
+   * drawing.
+   */
+  focusRow(row) {
+    const s = this.state;
+    const [pi, ii] = row.split(":").map(Number);
+    const it = s.schema.parts[pi]?.items[ii];
+    if (!it || it.rows || !s.editable) return false;
+    const open = (f) => !f.c && !this.isLocked(f.k);
+    const fs = (it.f || []).filter(open);
+    const entry = this.todo().find((r) => r.id === row);
+    const empty = (f) => (f.t === "radio" || f.t === "chk" ? s.values[f.k] !== "true" : !String(s.values[f.k] ?? "").trim());
+    const pick = fs.find((f) => entry?.stops.includes(f.k)) || fs.find((f) => f.r && empty(f)) || fs[0];
+    if (!pick) return false;
+    const date = oneDate(it);
+    const key = date ? date.oneKey : pick.t === "radio" ? `radio:${row}` : pick.k;
+    const anchor = s.focusAnchors.get(key);
+    if (!anchor) return false;
+    anchor.focus();
+    const typed = date || s.inputs.has(pick.k);
+    if (typed) globalThis.window?.focus_next?.();
+    return true;
   }
 
   refreshLayout() {
@@ -922,15 +1040,15 @@ export class FormPageActions {
 
   /**
    * Navigator and pill: open the chosen part and fold the others, so it
-   * sits near the top (a new open does not scroll the page: scripts get no
-   * scroll offset). `stop`: the row a template step marks.
+   * sits near the top. `row`: the row a step goes to (tinted; `step`
+   * scrolls it into view).
    */
-  jumpTo(i, cx, stop = null) {
+  jumpTo(i, cx, row = null) {
     const s = this.state;
     this.ensureInputs(i, cx);
     s.openParts = new Set([i]);
     s.current = i;
-    s.stopAt = stop;
+    s.stepAt = row;
     this.refreshRows();
     cx.notify();
   }
@@ -947,6 +1065,8 @@ export class FormPageActions {
     s.pending[k] = value;
     s.dirty = true;
     this.unquiet([k]);
+    // An edited box is the user's own now: its "same as last time" mark goes (on the row's next refresh).
+    delete s.kept[k];
     const token = this.token;
     s.editSeq = (s.editSeq || 0) + 1;
     const seq = s.editSeq;
@@ -1044,6 +1164,7 @@ export class FormPageActions {
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
+    for (const k of Object.keys(edits)) delete s.kept[k];
     // What the boxes showed, for an answer the filer then cancels.
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k]]));
     for (const [k, v] of Object.entries(edits)) s.values[k] = String(v);
@@ -2498,6 +2619,36 @@ function lockedBox(cx, value, width, opts = {}) {
     .child(Line(cx, "body", value || "", opts.hint ? "fg3" : "fg2"));
 }
 
+/**
+ * A text box's focus anchor: nothing to see and not a Tab stop, painted just
+ * before the box, so focusing it and moving to the next Tab stop puts the
+ * keyboard in the box (`focusRow`). Null without a handle.
+ */
+function focusAnchor(ui, key) {
+  const handle = ui.state.focusAnchors?.get(key);
+  return handle ? div().absolute().size(0).track_focus(handle).tab_index(0).tab_stop(false) : null;
+}
+
+/**
+ * A choice (tick box, tick group, list) a step can put the keyboard on: its
+ * own focus handle (not a Tab stop), a tint while it has the keyboard, and
+ * Space or Enter acting on it (`act`, when given).
+ */
+function focusable(cx, ui, el, key, act = null) {
+  const handle = ui.state.focusAnchors?.get(key);
+  if (!handle) return el;
+  const t = tokens(cx);
+  const wrap = div().id(`fp-focus-${key}`).rounded(RADIUS.row).focus((st) => st.bg(t.hover)).track_focus(handle).child(el);
+  if (act) {
+    wrap.on_key_down((e, cx) => {
+      if (e.key !== "enter" && e.key !== "space") return;
+      act(cx);
+      cx.stop_propagation();
+    });
+  }
+  return wrap;
+}
+
 function control(cx, ui, f, itemLabel, multi, available) {
   const s = ui.state;
   const t = tokens(cx);
@@ -2508,10 +2659,17 @@ function control(cx, ui, f, itemLabel, multi, available) {
   let el;
   if (f.t === "sel") {
     el = selectBox(cx, ui, f.k, f.l, f.o, value, locked, width);
+    if (!locked) {
+      el = focusable(cx, ui, el, f.k, (cx) => {
+        s.openSelect = s.openSelect === f.k ? null : f.k;
+        ui.refreshRows();
+        cx.notify();
+      });
+    }
   } else if (f.t === "chk") {
     const on = value === "true" || value === "1" || value === "Y";
     const hint = locked && !on ? ui.reasonFor(f.k) : "";
-    return div()
+    const row = div()
       .id(`fp-${f.k}-row`)
       .flex()
       .flex_row()
@@ -2521,6 +2679,7 @@ function control(cx, ui, f, itemLabel, multi, available) {
       .child(Checkbox(cx, `fp-${f.k}`, on, (v, cx) => (locked ? null : ui.choose({ [f.k]: v ? "true" : "false" }, cx)), f.l || itemLabel))
       .child(Text(cx, "body", f.l || itemLabel, locked ? "fg2" : "fg").whitespace_normal())
       .when(Boolean(hint), (el) => el.child(Text(cx, "meta", hint, "fg3")));
+    return locked ? row : focusable(cx, ui, row, f.k, (cx) => ui.choose({ [f.k]: on ? "false" : "true" }, cx));
   } else if (locked) {
     // A computed amount (a penalty too, until Edit penalties) shows 0.00 for
     // zero, never an empty box.
@@ -2559,6 +2718,11 @@ function control(cx, ui, f, itemLabel, multi, available) {
   const wrap = div().flex().flex_col().gap(SPACE[1]).min_w(0).when(Boolean(ui.isOff(f.k)), (el) => el.opacity(OFF_OPACITY));
   if (showSub) wrap.child(Text(cx, "meta", f.l, "fg2").max_w(width).whitespace_normal());
   void t;
+  // A text box gets its anchor just before it (`focusRow`).
+  if (!locked && f.t !== "sel" && s.inputs.has(f.k)) {
+    const anchor = focusAnchor(ui, f.k);
+    if (anchor) wrap.child(anchor);
+  }
   wrap.child(el);
   return wrap;
 }
@@ -2690,8 +2854,10 @@ function radioGroup(cx, ui, it, radios) {
     row.child(item);
   }
   if (hint) row.child(Text(cx, "meta", hint, "fg3"));
-  void it;
-  return row;
+  if (radios.every((f) => !s.editable || f.c || ui.isLocked(f.k))) return row;
+  // A step puts the keyboard on the group (the item's one anchor).
+  const id = ui.itemIdForKey(radios[0].k);
+  return focusable(cx, ui, row, `radio:${id}`);
 }
 
 function tinBoxes(cx, ui, it) {
@@ -2704,7 +2870,11 @@ function tinBoxes(cx, ui, it) {
     const locked = !s.editable || f.c || ui.isLocked(f.k);
     const input = s.inputs.get(f.k);
     if (locked || !input) row.child(lockedBox(cx, s.values[f.k] ?? "", width, { center: true }));
-    else row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
+    else {
+      const anchor = focusAnchor(ui, f.k);
+      if (anchor) row.child(anchor);
+      row.child(TextField(cx, input, { id: `fp-${f.k}`, label: f.l, width, error: false }));
+    }
   });
   return row;
 }
@@ -3238,10 +3408,9 @@ class FormPill extends View {
 
 /** The pill at most (px); its popover is as wide, so their edges line up. */
 const PILL_W = 488;
-/** The pill's popover at most (px), and what its list leaves for the header and template rows. */
+/** The pill's popover at most (px), and what its list leaves for the header. */
 const PILL_POPOVER_MAX = 440;
 const PILL_LIST_HEAD = 64;
-const PILL_LIST_STOPS = 72;
 const PILL_SHEET_HANDLE = 24;
 /** The list shows at least about three rows, however short the window. */
 const PILL_LIST_MIN = 150;
@@ -3255,7 +3424,10 @@ function drawPill(cx, ui, view) {
   const cur = Math.min(Math.max(s.current, 0), parts.length - 1);
   const here = sectionNames(parts[cur], cur);
   const needing = parts.map((_p, i) => i).filter((i) => ui.partErrors(i) > 0);
-  const stops = ui.stopIds();
+  // The rows still to do (decision 12), and how many hold a message.
+  const todo = ui.todo();
+  const ids = todo.map((r) => r.id);
+  const flagged = todo.filter((r) => r.reason === "message").length;
   const toggle = (cx) => {
     view.listOpen = !view.listOpen;
     cx.notify();
@@ -3268,7 +3440,7 @@ function drawPill(cx, ui, view) {
 
   const step = (dir) => {
     const target = ui.stepTarget(dir);
-    const label = stops.length ? (dir < 0 ? "Previous template stop" : "Next template stop") : dir < 0 ? "Previous section" : "Next section";
+    const label = target?.check ? "Check" : todo.length ? (dir < 0 ? "Previous to do" : "Next to do") : dir < 0 ? "Previous section" : "Next section";
     const btn = div()
       .id(dir < 0 ? "fp-pill-prev" : "fp-pill-next")
       .flex()
@@ -3281,7 +3453,7 @@ function drawPill(cx, ui, view) {
       .bg(t.hover)
       .tooltip(label)
       .accessibility_label(label)
-      .child(Icon(cx, dir < 0 ? "chevron-left" : "chevron-right", { size: 18, color: target ? "fg2" : "fg3" }));
+      .child(Icon(cx, target?.check ? "circle-check" : dir < 0 ? "chevron-left" : "chevron-right", { size: 18, color: target ? "fg2" : "fg3" }));
     if (!target) return btn.opacity(0.35).disabled(true);
     return btn
       .cursor_pointer()
@@ -3292,21 +3464,25 @@ function drawPill(cx, ui, view) {
       });
   };
 
-  // What the pill says: the open section, or in template mode the stop it is on.
+  // What the pill says: the open section, or with rows to do how many and
+  // the row the last step went to.
   let small = `${here.tag} · ${cur + 1} of ${parts.length}`;
   let big = here.short;
-  if (stops.length) {
-    const at = s.stopAt ? stops.indexOf(s.stopAt) : -1;
+  if (ids.length) {
+    const at = s.stepAt ? ids.indexOf(s.stepAt) : -1;
     if (at >= 0) {
-      const [pi, ii] = s.stopAt.split(":").map(Number);
+      const [pi, ii] = s.stepAt.split(":").map(Number);
       const it = parts[pi].items[ii];
-      small = `Stop ${at + 1} of ${stops.length} · ${sectionNames(parts[pi], pi).tag}`;
+      small = `${at + 1} of ${ids.length} to do · ${sectionNames(parts[pi], pi).tag}`;
       big = it.no ? `Item ${it.no} · ${it.l}` : it.l;
     } else {
-      small = `${stops.length} template stop${stops.length > 1 ? "s" : ""} · ${here.tag}`;
+      small = `${ids.length} to do · ${here.tag}`;
     }
   }
-  const count = needing.length
+  // Red: the rows with a message (with nothing to do, the sections that have one).
+  const red = ids.length ? flagged : needing.length;
+  const redLabel = ids.length ? `${red} item${red > 1 ? "s" : ""} need${red > 1 ? "" : "s"} attention` : `${red} section${red > 1 ? "s" : ""} need${red > 1 ? "" : "s"} attention`;
+  const count = red
     ? div()
         .id("fp-pill-count")
         .flex()
@@ -3318,8 +3494,8 @@ function drawPill(cx, ui, view) {
         .px(6)
         .rounded(RADIUS.full)
         .bg(t.danger)
-        .accessibility_label(`${needing.length} section${needing.length > 1 ? "s" : ""} need${needing.length > 1 ? "" : "s"} attention`)
-        .child(Text(cx, "num", String(needing.length), "primaryFg").text_color(t.surface))
+        .accessibility_label(redLabel)
+        .child(Text(cx, "num", String(red), "primaryFg").text_color(t.surface))
     : null;
   const listLabel = `All sections${view.listOpen ? ", shown" : ""}`;
   // The pill, its popover and its sheet float over the form: a press on
@@ -3387,10 +3563,11 @@ function drawPill(cx, ui, view) {
   // from the toolkit and draws no row (the first build's empty popover).
   const list = (room) => {
     const bad = needing.length;
-    const listMax = Math.max(PILL_LIST_MIN, room - PILL_LIST_HEAD - (s.stops ? PILL_LIST_STOPS : 0));
+    const listMax = Math.max(PILL_LIST_MIN, room - PILL_LIST_HEAD);
     const rows = parts.map((p, i) => {
       const names = sectionNames(p, i);
       const errors = ui.partErrors(i);
+      const left = todo.filter((r) => r.id.startsWith(`${i}:`)).length;
       const on = i === cur && s.openParts.has(i);
       return div()
         .id(`fp-section-${i}`)
@@ -3428,7 +3605,9 @@ function drawPill(cx, ui, view) {
         .child(
           errors > 0
             ? Text(cx, "metaStrong", `Fix · ${errors}`, "danger").flex_none()
-            : Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg2").flex_none(),
+            : left > 0
+              ? Text(cx, "metaStrong", `${left} to do`, "fg2").flex_none()
+              : Text(cx, "meta", `${p.items.length} item${p.items.length > 1 ? "s" : ""}`, "fg2").flex_none(),
         );
     });
     const body = div()
@@ -3462,35 +3641,6 @@ function drawPill(cx, ui, view) {
           ),
       )
       .child(div().id("fp-sections-list").flex().flex_col().flex_none().max_h(listMax).px(SPACE[2]).overflow_y_scroll().children(rows));
-    // The branch's template for the form: ‹ and › stop on what it marks.
-    if (s.stops) {
-      body.child(
-        div()
-          .flex()
-          .flex_row()
-          .items_center()
-          .gap(SPACE[3])
-          .mx(SPACE[2])
-          .mt(SPACE[2])
-          .pt(SPACE[3])
-          .px(SPACE[3])
-          .border_t(1)
-          .border_color(t.border)
-          .child(Icon(cx, "layout-template", { color: "fg2" }))
-          .child(
-            div()
-              .flex()
-              .flex_col()
-              .flex_1()
-              .min_w(0)
-              .child(Text(cx, "control", "Template stops"))
-              .child(
-                Text(cx, "meta", s.stops.order.length ? `‹ and › stop on the ${s.stops.order.length} item${s.stops.order.length > 1 ? "s" : ""} the template marks` : "Turn on, then mark items with Stop here", "fg2").whitespace_normal(),
-              ),
-          )
-          .child(Switch(cx, "fp-guided", s.guided, (v, cx) => ui.setGuided(v, cx), "Template stops")),
-      );
-    }
     return body;
   };
 
@@ -3615,11 +3765,18 @@ function itemRow(cx, ui, it, pi, ii, width) {
     markers.push(["user", tip]);
   }
   if (allCalc) markers.push(["lock", "Computed from other items"]);
+  // A box this new return copied, until it is edited: from the last return or the template.
+  const kept = itemKeys(it).map((k) => s.kept[k]).filter(Boolean);
+  if (kept.includes("template")) markers.push(["layout-template", "From your template"]);
+  else if (kept.includes("last")) markers.push(["history", "Same as last time"]);
   // Rule 8: the penalties show what is computed; one Edit opens all three.
   const penalty = s.editable ? fs.map((f) => ui.penaltyGroupOf(f.k)).find((g) => g && g.applies) : null;
   const penaltyOpen = Boolean(penalty) && (penalty.edited || penalty.keys.some((k) => s.penaltyOpen.has(k)));
-  // Template mode: a box the template may mark has "Stop here" (‹ and › stop on it).
-  const stoppable = Boolean(s.guided && s.stops?.markable.has(id));
+  // "Stop here" (‹ and › stop on the row) on a box that may carry it: shown
+  // on the row a step went to, under the pointer, or with its "more" open,
+  // never on every row at once. Its room is kept, so nothing moves.
+  const stoppable = ui.rowStoppable(it);
+  const stopShown = stoppable && (s.stepAt === id || s.hoverItem === id || s.moreOpen.has(id));
   const markerW = markers.length * 20 + (it.rows ? 64 : 0) + (hasEdit ? 56 : 0) + (penalty ? (penaltyOpen ? 210 : 130) : 0) + (stoppable ? 100 : 0);
   const label = div()
     .flex()
@@ -3684,7 +3841,7 @@ function itemRow(cx, ui, it, pi, ii, width) {
     }
     label.child(edit);
   }
-  if (stoppable) {
+  if (stopShown) {
     label.child(
       div()
         .flex()
@@ -3693,8 +3850,9 @@ function itemRow(cx, ui, it, pi, ii, width) {
         .items_center()
         .gap(6)
         .h(22)
+        .tooltip("‹ and › stop here on every return of this form")
         .child(Text(cx, "meta", "Stop here", "fg2"))
-        .child(Switch(cx, `fp-stop-${id}`, s.stops.marked.has(id), (v, cx) => ui.setStop(id, v, cx), "Stop here")),
+        .child(Switch(cx, `fp-stop-${id}`, ui.rowIsStop(it), (v, cx) => ui.setStop(id, v, cx), "Stop here")),
     );
   }
 
@@ -3748,7 +3906,10 @@ function itemRow(cx, ui, it, pi, ii, width) {
       locked || !input
         ? lockedBox(cx, shown || hint, controlWidth({ t: "date" }, inner), { hint: Boolean(hint) })
         : TextField(cx, input, { id: `fp-${date.oneKey}`, label: it.l, width: controlWidth({ t: "date" }, inner), error: false });
-    controls = div().flex().flex_row().items_end().gap(SPACE[1]).child(box);
+    controls = div().flex().flex_row().items_end().gap(SPACE[1]);
+    const anchor = !locked && input ? focusAnchor(ui, date.oneKey) : null;
+    if (anchor) controls.child(anchor);
+    controls.child(box);
     if (!locked) controls.child(datePicker(cx, ui, id, date));
   } else if (tin) {
     controls = tinBoxes(cx, ui, it);
@@ -3776,8 +3937,11 @@ function itemRow(cx, ui, it, pi, ii, width) {
   }
 
   const msg = s.dateErrors?.[id] || s.messages[id] || "";
+  // Where a step scrolls to: a mark at the row's top (the host scroll module).
+  const Mark = ui.app.store.component?.("ScrollMark");
   return div()
     .id(`fp-item-${id}`)
+    .relative()
     .flex()
     .flex_row()
     .gap(SPACE[3])
@@ -3786,11 +3950,12 @@ function itemRow(cx, ui, it, pi, ii, width) {
     .pb(SPACE[2])
     .pl(SPACE[3])
     .when(allCalc, (el) => el.bg(t.bg))
-    // The row a template step went to: its section opened, but the page
-    // cannot scroll to it, so it is marked.
-    .when(s.stopAt === id, (el) => el.bg(t.accentSoft))
-    // The pointer over a profile item turns its mark into Edit.
-    .when(hasEdit, (el) =>
+    // The row a step went to is tinted.
+    .when(s.stepAt === id, (el) => el.bg(t.accentSoft))
+    .when(Boolean(Mark), (el) => el.child(Mark.new(`fp-row-mark-${id}`, { name: `fp-row-${id}`, area: ui.scrollAreaName() })))
+    // The pointer over a profile item turns its mark into Edit, and over a
+    // box that may carry it shows "Stop here".
+    .when(hasEdit || stoppable, (el) =>
       el.on_hover((hovered, cx) => {
         const next = hovered ? id : s.hoverItem === id ? null : s.hoverItem;
         if (next === s.hoverItem) return;
@@ -4387,6 +4552,18 @@ export function renderFormSplit(cx, app, L) {
   return split;
 }
 
+/**
+ * The form's scroll area, `#fp-scroll` (wide) or `#main-scroll` (narrow):
+ * the host's `ScrollArea`, whose position a step can move (`revealRow`), on
+ * a host that has it; else a plain up-and-down scroll area styled by
+ * `plain`. Both fill their parent and hide sideways overflow.
+ */
+export function formScrollArea(app, id, plain) {
+  const Area = app.store.component?.("ScrollArea");
+  if (Area) return Area.new(id, { name: id });
+  return plain(div().id(id)).overflow_y_scroll().overflow_x_hidden();
+}
+
 function drawFormSplit(cx, app, L) {
   if (L.column < BREAK.formNav) return null;
   const c = formContent(cx, app, L.column);
@@ -4414,7 +4591,7 @@ function drawFormSplit(cx, app, L) {
     .min_h(0)
     .w_full()
     .child(navCol)
-    .child(div().id("fp-scroll").flex_1().min_w(0).h_full().overflow_y_scroll().overflow_x_hidden().child(body));
+    .child(formScrollArea(app, "fp-scroll", (el) => el.flex_1().min_w(0).h_full()).child(body));
   // A wide window keeps the side list and has the pill too (the owner's
   // note on pick 8): it floats over fp-scroll.
   const pill = c.parts ? app.formUi.pillView() : null;

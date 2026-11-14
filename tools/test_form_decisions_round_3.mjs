@@ -119,6 +119,7 @@ const CalendarState = { new() {
   return cal;
 } };
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, Math, Number, String, Object, Array, window: { viewport_size: () => ({ width: 1400, height: 900 }) } });
+const todoModule = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/todo.js", root), "utf8"), { context: contextVM, identifier: "todo.js" });
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
 const kit = mock("gpui-kit", { div: element, svg: element, View });
 const base = mock("gpui-base", { InputState, CalendarState, Popup: { new: element } });
@@ -136,7 +137,7 @@ uiExports.Line = uiExports.Text;
 const store = mock("./store.js", { formatTin: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) });
 const periods = mock("./periods.js", { periodLabel: () => "October 2026" });
 const mod = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/form_page.js", root), "utf8"), { context: contextVM });
-await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods })[s]);
+await mod.link((s) => ({ "gpui-kit": kit, "gpui-base": base, "gpui-component": components, "./ui.js": mock("./ui.js", uiExports), "./store.js": store, "./periods.js": periods, "./todo.js": todoModule })[s]);
 await mod.evaluate();
 const { FormPageActions, renderFormPage } = mod.namespace;
 

@@ -65,8 +65,28 @@ for (const os of ["macos", "windows", "linux"]) {
 }
 
 // The table the screen shows is the keymap the menu binds.
-const { SHORTCUTS, shortcutLabel } = ui;
+const { SHORTCUTS: ALL_SHORTCUTS, shortcutLabel } = ui;
+// The menu's chords; the script's own (the pill's ⌘→ / ⌘←) are checked below.
+const SHORTCUTS = Object.fromEntries(Object.entries(ALL_SHORTCUTS).filter(([, s]) => !s.script));
 assert.deepEqual(Object.keys(SHORTCUTS), ["sidebar", "theme", "profile", "notifs"]);
+assert.deepEqual(Object.keys(ALL_SHORTCUTS).filter((id) => ALL_SHORTCUTS[id].script), ["nextTodo", "prevTodo"]);
+// The pill's keys: the script binds `secondary-` (⌘ on macOS, Ctrl elsewhere)
+// once, with no context, so they also answer inside a text box; the menu binds none.
+for (const [id, keystroke, action, mac, other] of [
+  ["nextTodo", "secondary-right", "next-to-do", "⌘→", "Ctrl →"],
+  ["prevTodo", "secondary-left", "previous-to-do", "⌘←", "Ctrl ←"],
+]) {
+  for (const os of ["macos", "windows", "linux"]) {
+    const found = owners(os, keystroke, true);
+    assert.equal(found.length, 1, `${os}: ${keystroke} is bound once`);
+    assert.equal(found[0].owner, "script");
+    assert.equal(found[0].id, action);
+    assert.equal(found[0].context, undefined, `${keystroke} has no context`);
+  }
+  assert.equal(ALL_SHORTCUTS[id].action, action);
+  assert.deepEqual([shortcutLabel(id, true), shortcutLabel(id, false)], [mac, other]);
+  assert.ok(!native.some((b) => /right|left/.test(b.keystroke)), "the menu binds no arrow chord");
+}
 for (const [id, s] of Object.entries(SHORTCUTS)) {
   for (const mod of ["cmd", "ctrl"]) {
     const found = owners("macos", `${mod}-${s.chord}`, false);
@@ -218,6 +238,35 @@ for (const [os, keys] of [
   run("Show notifications");
   assert.equal(app.panel, "notifs");
   assert.equal(String(app.paletteItems().find((x) => x.hint === shortcutLabel("notifs", app.isMac)).label), "Hide notifications");
+}
+
+// ⌘→ / ⌘← off the form page: the handler passes the chord on (a text box's
+// line end or word jump), and moves nothing.
+for (const view of ["home", "calendar", "settings"]) {
+  const app = makeApp({ os: "macos", view });
+  for (const id of ["next-to-do", "previous-to-do"]) {
+    let propagated = 0;
+    assert.ok(dispatch(app.paint(cx), id, { ...cx, propagate() { propagated += 1; } }), `the app root handles ${id}`);
+    assert.equal(propagated, 1, `${view}: ${id} goes on to what has the keyboard`);
+  }
+}
+{
+  // On a form page they step (the form's own tests drive the steps).
+  const app = makeApp({ os: "macos", view: "form" });
+  const steps = [];
+  app.formUi = { pillView: () => ({}), step: (dir) => steps.push(dir) };
+  app.isFresh = () => false;
+  let propagated = 0;
+  const pcx = { ...cx, propagate() { propagated += 1; } };
+  app.stepTodo(1, pcx);
+  app.stepTodo(-1, pcx);
+  assert.deepEqual(steps, [1, -1], "› then ‹");
+  assert.equal(propagated, 0, "the chord stops on the form page");
+  // An overlay (the ⌘K list) keeps the chord for its text box.
+  app.overlay = "palette";
+  app.stepTodo(1, pcx);
+  assert.equal(propagated, 1);
+  assert.deepEqual(steps, [1, -1]);
 }
 
 console.log("test_shell_keys: ok");

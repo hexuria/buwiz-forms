@@ -37,7 +37,7 @@ import { renderCalendar, CalendarFilters } from "./shell/calendar_page.js";
 import { renderFilings, FilingsFilters } from "./shell/filings.js";
 import { renderSettings } from "./shell/settings.js";
 import { renderTaxpayerPage, renderNewTaxpayer, TaxpayerActions } from "./shell/taxpayer.js";
-import { renderFormPage, renderFormSplit, formColumnBox, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
+import { renderFormPage, renderFormSplit, formColumnBox, formScrollArea, renderExistingOffer, renderRemovalConfirm, renderSamplePeriod, FormPageActions } from "./shell/form_page.js";
 import { renderSignIn, renderSetup } from "./shell/auth.js";
 import { renderAccountGate } from "./shell/gate.js";
 import { installReadyUpdate, pollUpdateStatus, renderUpdatePrompt, setAutoUpdateDownload } from "./shell/update.js";
@@ -322,7 +322,24 @@ class BirApp extends View {
       // never while a text box has the keyboard (its own undo wins there).
       { keystroke: this.isMac ? "cmd-z" : "ctrl-z", action: "undo-last", context: "!Input" },
       { keystroke: "escape", action: "dismiss" },
+      // The form pill's ‹ and › (decision 12): ⌘→ / ⌘← on macOS, Ctrl+→ /
+      // Ctrl+← elsewhere. No context, so they beat a text box's own meaning
+      // of the chord; off the form page the handler passes it on (stepTodo).
+      { keystroke: `secondary-${SHORTCUTS.nextTodo.chord}`, action: SHORTCUTS.nextTodo.action },
+      { keystroke: `secondary-${SHORTCUTS.prevTodo.chord}`, action: SHORTCUTS.prevTodo.action },
     ]);
+  }
+
+  /**
+   * ⌘→ / ⌘← (Ctrl elsewhere): on the form page, the pill's › and ‹; anywhere
+   * else the chord goes on to what has the keyboard (a text box's line end
+   * or word jump).
+   */
+  stepTodo(dir, cx) {
+    const ui = this.formUi;
+    const onForm = this.view === "form" && !this.isFresh() && !this.overlay && Boolean(ui?.pillView?.());
+    if (!onForm) return cx.propagate();
+    ui.step(dir, cx);
   }
 
   /** Device approval finished. Open the database UI, once. */
@@ -1192,6 +1209,11 @@ class BirApp extends View {
       });
     }
     items.push({ group: "Actions", label: "Change theme", icon: "moon", hint: shortcutLabel("theme", this.isMac), run: (cx) => this.cycleTheme(cx) });
+    // On a return: the pill's › and ‹ (what still needs you, in form order).
+    if (this.view === "form" && !this.isFresh() && this.formUi?.pillView?.()) {
+      items.push({ group: "Actions", label: "Next to do", icon: "chevron-right", hint: shortcutLabel("nextTodo", this.isMac), run: (cx) => this.formUi.step(1, cx) });
+      items.push({ group: "Actions", label: "Previous to do", icon: "chevron-left", hint: shortcutLabel("prevTodo", this.isMac), run: (cx) => this.formUi.step(-1, cx) });
+    }
     if (!q) return items;
     return items.filter((x) => x.match || `${x.label} ${x.hint || ""}`.toLowerCase().includes(q));
   }
@@ -1847,12 +1869,9 @@ class BirApp extends View {
           .overflow_hidden()
           .when(Boolean(formSplit), (el) => el.child(formSplit))
           .when(!formSplit, (el) => el.child(
-            div()
-              .id("main-scroll")
-              .flex_1()
-              .min_h(0)
-              .overflow_y_scroll()
-              .overflow_x_hidden()
+            // On the form page the host's scroll area, so a pill step can
+            // bring a row into view (formScrollArea); elsewhere a plain one.
+            (this.view === "form" ? formScrollArea(this, "main-scroll", (el) => el.flex_1().min_h(0)) : div().id("main-scroll").flex_1().min_h(0).overflow_y_scroll().overflow_x_hidden())
               .child(
                 div()
                   .flex()
@@ -1902,6 +1921,8 @@ class BirApp extends View {
       })
       .on_action("go-back", (_e, cx) => this.goBack(cx))
       .on_action("go-forward", (_e, cx) => this.goForward(cx))
+      .on_action(SHORTCUTS.nextTodo.action, (_e, cx) => this.stepTodo(1, cx))
+      .on_action(SHORTCUTS.prevTodo.action, (_e, cx) => this.stepTodo(-1, cx))
       .on_action("dismiss", (_e, cx) => this.dismiss(cx))
       .on_action("undo-last", (_e, cx) => this.undoLast(cx))
       .on_key_down((e, cx) => this.paletteKey(e, cx))

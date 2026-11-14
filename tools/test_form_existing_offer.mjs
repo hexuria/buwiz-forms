@@ -51,6 +51,7 @@ function element() {
 function mount(e) { if (e?.view && e.dirty && !e.released) { e.dirty = false; const old = owner; owner = e; e.view.render(context(e)); owner = old; } }
 const InputState = { new({ value = "" } = {}) { let text = value; return { value: () => text, set_value: (v) => { text = v; }, on() {}, release() { return true; } }; } };
 const contextVM = vm.createContext({ console, Map, Set, JSON, Date, window: { viewport_size: () => ({ width: 1400, height: 900 }) } });
+const todoModule = new vm.SourceTextModule(fs.readFileSync(new URL("app/shell/todo.js", root), "utf8"), { context: contextVM, identifier: "todo.js" });
 function mock(name, exports) { return new vm.SyntheticModule(Object.keys(exports), function () { for (const [k, v] of Object.entries(exports)) this.setExport(k, v); }, { context: contextVM, identifier: name }); }
 const uiExports = { tokens: () => new Proxy({}, { get: () => "#000" }), SPACE: [0, 4, 8, 12, 16, 20, 24], RADIUS: {}, SIZE: { validationLine: 18 }, BREAK: { formNav: 760 } };
 for (const n of ["Text", "Line", "Code", "Icon", "AppButton", "IconButton", "Avatar", "Chip", "Switch", "Checkbox", "TextField", "Dropdown", "PageHeader", "MetaLine", "Overlay", "CheckboxLabel", "NavRow", "GroupLabel", "Kbd", "StepCircle", "ContextPill", "SidePanel", "DigitCells"]) uiExports[n] = element;
@@ -78,6 +79,7 @@ const linked = {
   "./theme.js": mock("./theme.js", { themeIcon: () => "sun" }),
   "./recent.js": recentMod,
   "./store.js": mock("./store.js", { formatTin: (x) => x, shortDate: (x) => x, errorText: (e) => String(e && e.message ? e.message : e) }),
+  "./todo.js": todoModule,
   "./periods.js": mock("./periods.js", { periodLabel: () => "Q1 2024", periodOptions: () => [], frequencyOf: () => "quarterly" }),
 };
 await recentMod.link(() => null);
