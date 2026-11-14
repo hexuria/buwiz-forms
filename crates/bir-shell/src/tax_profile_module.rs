@@ -14,8 +14,8 @@ use bir_core::profile::{
 };
 use bir_core::tax_profile::{
     BranchFacts, BranchField, BranchUpdate, FieldSetting, FormTemplate, NewBranch, NewTaxpayer,
-    ResolvedBranch, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches,
-    format_tin_root, tax_year_bounds,
+    ResolvedBranch, TaxProfileError, TaxpayerUpdate, TaxpayerWithBranches, format_tin_root,
+    tax_year_bounds,
 };
 use chrono::Datelike as _;
 use gpui_shell::{HostArguments, HostError, HostModule, HostObject, HostResult, HostValue};
