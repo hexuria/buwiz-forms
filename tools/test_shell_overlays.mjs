@@ -98,6 +98,7 @@ const real = {
   "./shell/theme.js": source("app/shell/theme.js"),
   "./shell/ui.js": source("app/shell/ui.js"),
   "./shell/chrome.js": source("app/shell/chrome.js"),
+  "./shell/facts.js": source("app/shell/facts.js"),
   "./shell/chrome_gate.js": source("app/shell/chrome_gate.js"),
   "./shell/recent.js": source("app/shell/recent.js"),
 };
@@ -172,6 +173,9 @@ const store = {
   taxYears: () => [2026],
   yearlyForms: () => ["1601C"],
   templates: () => [],
+  taxTypes: () => [],
+  yearFacts: () => null,
+  electionReadiness: () => null,
   screenIndex: () => [{ c: "1601C", freq: "Monthly" }],
   logScreen() {},
   call() {},

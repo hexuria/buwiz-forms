@@ -203,8 +203,17 @@ export class Store {
   templates(tin) {
     return tin ? this.read(`templates:${tin}`, "list_form_templates", [tin], []) : [];
   }
-  starterPacks(tin) {
-    return tin ? this.read(`packs:${tin}`, "starter_packs", [tin], []) : [];
+  /** The setups offered to a taxpayer type: built-in first, then the user's (`list_setups`). */
+  setups(taxpayerType) {
+    return taxpayerType ? this.read(`setups:${taxpayerType}`, "list_setups", [taxpayerType], []) : [];
+  }
+  /** One branch's facts for a tax year, who holds each and which forms read them (`year_facts`); null when the read failed. */
+  yearFacts(tin, year) {
+    return tin && year ? this.read(`year_facts:${tin}:${year}`, "year_facts", [tin, year], null) : null;
+  }
+  /** The tax types the year's forms list gives, as chips (`tax_types_for_year`). */
+  taxTypes(tin, year) {
+    return tin && year ? this.read(`tax_types:${tin}:${year}`, "tax_types_for_year", [tin, year], []) : [];
   }
   /** Standing send OKs for one branch: `{ tin, form, granted_at }`. */
   sendGrants(tin) {

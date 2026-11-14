@@ -191,6 +191,7 @@ const real = {
   "./shell/theme.js": source("app/shell/theme.js"),
   "./shell/ui.js": source("app/shell/ui.js"),
   "./shell/chrome.js": source("app/shell/chrome.js"),
+  "./shell/facts.js": source("app/shell/facts.js"),
   "./shell/chrome_gate.js": source("app/shell/chrome_gate.js"),
   "./shell/recent.js": source("app/shell/recent.js"),
   "./shell/home.js": source("app/shell/home.js"),
