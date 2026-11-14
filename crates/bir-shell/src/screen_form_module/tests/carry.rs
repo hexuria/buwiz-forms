@@ -105,6 +105,9 @@ fn a_second_month_starts_with_the_first_months_answers() {
     let stoppable = keys(&first["stoppable"]);
     assert!(stoppable.contains("frm1601c:txtTax14"), "{stoppable:?}");
     assert!(!stoppable.contains("frm1601c:txtRDOCode"), "a profile box");
+    // A radio item may be a stop under each radio the page draws, not under its group box.
+    assert!(stoppable.contains("frm1601c:AmendedRtn_1"), "{stoppable:?}");
+    assert!(!stoppable.contains("frm1601c:AmendedRtn"), "the page draws no group box");
     first_month();
     // The profile changes before the next month: the profile box follows it.
     set_rdo("040");
@@ -127,7 +130,9 @@ fn a_second_month_starts_with_the_first_months_answers() {
     assert_eq!(
         second["kept"],
         json!({
-            "frm1601c:SpecialTax": "last",
+            // A radio item, by each radio the page draws.
+            "frm1601c:SpecialTax_1": "last",
+            "frm1601c:SpecialTax_2": "last",
             "frm1601c:selTreaty": "last",
             "frm1601c:txt20Other": "last",
             "frm1601c:txtATC": "last",

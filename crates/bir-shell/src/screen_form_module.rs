@@ -136,13 +136,13 @@ export interface ScreenFormOpened {
     profile_differs?: string[];
     /** One-time notes this opening offers (`key`, `text`); show the ones `screen_form_notes_seen` records. */
     notes?: { key: string; text: string }[];
-    /** Boxes filled from the previous return (`last`) or from the template (`template`) when this return was created. Stored with the return. A radio item is named by its group box (the schema field's `grp`). */
+    /** Boxes filled from the previous return (`last`) or from the template (`template`) when this return was created. Stored with the return. A radio item is named by each of its radios, the keys the page draws. */
     kept: Record<string, "last" | "template">;
     /** Automatic stops as box keys: boxes the user filled in the previous return that the carry rule does not copy (amounts and dates). Stored with the return when it is created. Empty for a first return. */
     auto_stops: string[];
     /** The user's own "Stop here" switches for this branch and form: true = always a stop, false = never. */
     stop_edits: Record<string, boolean>;
-    /** Boxes that may carry a "Stop here" switch (user boxes: not computed, not locked, not profile), radio items by their group box. */
+    /** Boxes that may carry a "Stop here" switch (user boxes: not computed, not locked, not profile), a radio item by each of its radios. */
     stoppable: string[];
     errors: ScreenFormError[];
 }

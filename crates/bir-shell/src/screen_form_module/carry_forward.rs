@@ -243,9 +243,35 @@ pub(super) fn forget(draft: &mut Value) {
     }
 }
 
+/// A map keyed by answers, re-keyed by the boxes the page draws for each
+/// (`carry::page_keys`): a radio item's entry is repeated for every radio.
+pub(crate) fn by_page_key(kind: AgentFormKind, map: &Value) -> Value {
+    let mut out = Map::new();
+    for (key, value) in map.as_object().into_iter().flatten() {
+        for page_key in carry::page_keys(kind, key) {
+            out.insert(page_key, value.clone());
+        }
+    }
+    Value::Object(out)
+}
+
+/// A list of answers as the boxes the page draws for them, in order, once each.
+fn page_key_list<'a>(kind: AgentFormKind, keys: impl IntoIterator<Item = &'a str>) -> Value {
+    let mut out: Vec<String> = Vec::new();
+    for key in keys {
+        for page_key in carry::page_keys(kind, key) {
+            if !out.contains(&page_key) {
+                out.push(page_key);
+            }
+        }
+    }
+    json!(out)
+}
+
 /// Interface I-2's fields of `screen_form_open`: `kept` and `auto_stops`
 /// from the draft, the branch's `stop_edits` for the form and the boxes
-/// that may be stops.
+/// that may be stops. The draft and the template name a radio item by its
+/// group box; the page is told by each radio's own key, the key it draws.
 pub(super) fn open_fields(
     db: &Database,
     kind: AgentFormKind,
@@ -262,10 +288,21 @@ pub(super) fn open_fields(
         .flatten()
         .map(|template| template.stop_edits())
         .unwrap_or_default();
+    let stoppable = carry::stoppable(kind);
     [
-        ("kept", kept),
-        ("auto_stops", auto_stops),
-        ("stop_edits", json!(stop_edits)),
-        ("stoppable", json!(carry::stoppable(kind))),
+        ("kept", by_page_key(kind, &kept)),
+        (
+            "auto_stops",
+            page_key_list(
+                kind,
+                auto_stops
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_str),
+            ),
+        ),
+        ("stop_edits", by_page_key(kind, &json!(stop_edits))),
+        ("stoppable", page_key_list(kind, stoppable.iter().copied())),
     ]
 }

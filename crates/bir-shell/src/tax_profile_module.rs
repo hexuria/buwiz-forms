@@ -114,7 +114,7 @@ export function delete_form_template(tin: string, form_code: string): boolean;
 export interface TemplateStops { stops: string[]; markable: string[]; }
 /** null when the branch has no template for the form. */
 export function template_stops(tin: string, form_code: string): TemplateStops | null;
-/** "Stop here": on true = always a stop, false = never a stop, null = back to automatic. Creates the template row when the branch has none for the form. Works for every form; a radio is switched as its item's group box. Returns the new switches (and, for the older page, `stops` and `markable`). */
+/** "Stop here": on true = always a stop, false = never a stop, null = back to automatic. Creates the template row when the branch has none for the form. Works for every form; a radio is switched as its item's group box. Returns the new switches, a radio item's for each of its radios (and, for the older page, `stops` and `markable`). */
 export function set_template_stop(tin: string, form_code: string, box_key: string, on: boolean | null): { stop_edits: Record<string, boolean> } & TemplateStops;
 /** The annual income-tax election for one taxable year, on the head office's year facts; refused for a year whose income type is not self-employed or mixed income, and for a change once a return carrying it was filed. */
 export function record_income_tax_election(tin: string, year: number, election: "graduated" | "eight_percent"): boolean;
@@ -874,10 +874,16 @@ fn set_template_stop(arguments: &HostArguments) -> HostResult {
         let stop_edits = db
             .set_template_stop(tin, form_code, key, on)
             .map_err(host_error)?;
+        // By the keys the page draws: a radio item's switch for each radio.
         let edits = stop_edits
             .iter()
+            .flat_map(|(key, on)| {
+                carry::page_keys(kind, key)
+                    .into_iter()
+                    .map(move |page_key| (page_key, *on))
+            })
             .fold(HostObject::new(), |object, (key, on)| {
-                object.field(key.as_str(), *on)
+                object.field(key.as_str(), on)
             });
         Ok(stops_record(kind, &stop_edits)
             .field("stop_edits", HostValue::from(edits))

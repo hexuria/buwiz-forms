@@ -379,6 +379,17 @@ pub fn answer_key(kind: AgentFormKind, key: &str) -> String {
     kind.definition().question_of(key)
 }
 
+/// The boxes the form page draws for the answer `key`: a radio item's group
+/// box is drawn as its radios, each under its own key; any other box is
+/// itself. The page looks boxes up by the keys it draws, so what it is told
+/// about an answer (copied, a stop, switchable) is told for each of these.
+pub fn page_keys(kind: AgentFormKind, key: &str) -> Vec<String> {
+    match kind.definition().box_def(key) {
+        Some(entry) if entry.radio_group && !entry.members.is_empty() => entry.members.clone(),
+        _ => vec![key.to_string()],
+    }
+}
+
 /// A value that counts as not filled: no text, `false`, or zero.
 pub fn is_blank_value(value: &str) -> bool {
     let value = value.trim();
