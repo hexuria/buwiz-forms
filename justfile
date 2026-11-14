@@ -115,6 +115,7 @@ shell-ui-test:
     node --experimental-vm-modules tools/test_form_decisions_round_3.mjs
     node --experimental-vm-modules tools/test_calendar_filings_filters.mjs
     node --experimental-vm-modules tools/test_form_2551q_election.mjs
+    node --experimental-vm-modules tools/test_form_fact_cards.mjs
     node --experimental-vm-modules tools/test_form_pill.mjs
     node tools/test_form_todo.mjs
     node --experimental-vm-modules tools/test_home_calendar_as_needed.mjs

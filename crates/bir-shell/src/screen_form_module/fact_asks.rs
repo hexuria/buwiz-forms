@@ -207,6 +207,8 @@ pub(super) fn place(kind: AgentFormKind, fact: Fact) -> Option<Placed> {
             .as_array()
             .into_iter()
             .flatten()
+            // The page draws no hidden box.
+            .filter(|field| field["t"] != "hidden")
             .filter_map(|field| field["k"].as_str().map(str::to_string))
             .collect()
     };
