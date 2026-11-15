@@ -1561,7 +1561,8 @@ mod tests {
             let paper: NSSize = msg_send![&info, paperSize];
             let (top, left): (f64, f64) = (msg_send![&info, topMargin], msg_send![&info, leftMargin]);
             let panel: Bool = msg_send![&operation, showsPrintPanel];
-            assert!((paper.width - 595.28).abs() < 0.01 && (paper.height - 841.89).abs() < 0.01, "paper {paper:?}");
+            // A4 to the point: a machine with no printer (a CI runner) reports the sheet in whole points, 595 x 842.
+            assert!((paper.width - 595.28).abs() < 1.0 && (paper.height - 841.89).abs() < 1.0, "paper {paper:?}");
             assert_eq!((top, left), (0.0, 0.0));
             assert!(panel.as_bool());
         }

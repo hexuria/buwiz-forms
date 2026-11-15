@@ -809,6 +809,8 @@ mod tests {
     fn the_host_functions_reach_the_mailbox_through_the_door() {
         use serde_json::json;
 
+        // Desktop.poll() takes the "come forward" flag, which the single-copy tests wait for: one at a time.
+        let _turn = serial();
         let (folder, database) = scratch();
         let named = database.display().to_string();
         temp_env::with_vars(
