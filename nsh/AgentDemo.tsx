@@ -2,6 +2,7 @@
 // shell/agent/bridge.test.tsx. Commands arrive the way the host hands them over (JSON text through `take`), one for each press of
 // "Next command", so a test sees the frame after each. What a test asks for goes in `open(entry, { host: { params } })`:
 //   commands  the JSON texts the agent host would queue, in order
+//   pin       true: the owner (Juana Santos, "Just me") has the admin PIN 1234, so the sign-in screen (TIN 000123453) comes first
 //   fresh     true: an empty database in front of the first-run question (firstRun), and the first "Next command" also writes the demo
 //             taxpayer first, as the host's `profile.save` does behind the window's back
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
@@ -16,6 +17,7 @@ import { AppButton } from "./ui";
 interface Params {
   commands?: string[];
   fresh?: boolean;
+  pin?: boolean;
 }
 
 function Demo() {
@@ -31,6 +33,10 @@ function Demo() {
     }
   };
   if (p.fresh !== true) seed();
+  if (p.pin === true && !bir.auth_state().mode) {
+    bir.setup_solo("000123453");
+    bir.set_admin_pin("1234");
+  }
   let seeded = false;
   const later = [...(p.commands ?? [])];
   const queue: string[] = [];

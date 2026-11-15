@@ -31,6 +31,8 @@ function recorder(overrides: Partial<FrameDeps> = {}) {
 }
 
 const ACTIVE: AgentStatus = { built: true, active: true, address: "127.0.0.1:1", note: null };
+/** There is no frame here: it stands as signed in and unlocked (F8-3: the bridge drops commands while the real frame is locked; lock.test.ts). */
+const OPEN = () => true;
 
 test("a command is read from the JSON text the host hands over, as the old app read it", () => {
   expect(parseCommand('{"op":"refresh","tin_root":"000123453"}')).toEqual({ op: "refresh", tinRoot: "000123453" });
@@ -133,7 +135,7 @@ test("a listening agent is drained on the host's thread as well as polled", asyn
 test("a listening agent is polled and its commands are applied one at a time, in order", async () => {
   const { deps, said } = recorder();
   const queue = ['{"op":"go","view":"filings"}', "garbage", '{"op":"open","tin":"00012345300000","code":"2551Q","year":2025,"period":1}', '{"op":"choose","edits":{"k":"v"}}'];
-  const stop = startAgentBridge({ start: () => ACTIVE, drain: () => false, take: () => queue.shift() ?? null, deps, every: 5 });
+  const stop = startAgentBridge({ start: () => ACTIVE, drain: () => false, take: () => queue.shift() ?? null, deps, every: 5, open: OPEN });
   try {
     await sleep(250);
   } finally {
@@ -157,7 +159,7 @@ test("a command that throws is reported and the poll goes on", async () => {
   });
   const queue = ['{"op":"go","view":"boom"}', '{"op":"go","view":"home"}'];
   const errors: string[] = [];
-  const stop = startAgentBridge({ start: () => ACTIVE, drain: () => false, take: () => queue.shift() ?? null, deps, every: 5, onError: (e) => void errors.push(String((e as Error).message)) });
+  const stop = startAgentBridge({ start: () => ACTIVE, drain: () => false, take: () => queue.shift() ?? null, deps, every: 5, open: OPEN, onError: (e) => void errors.push(String((e as Error).message)) });
   try {
     await sleep(150);
   } finally {

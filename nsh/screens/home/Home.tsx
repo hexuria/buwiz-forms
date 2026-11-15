@@ -6,7 +6,7 @@ import { computed, signal, View, windowSize } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow } from "../../bir";
 import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec } from "../../lib/dashboard";
 import { MONTHS_LONG } from "../../lib/dates";
-import { app, go, store } from "../../shell";
+import { app, go, store, today } from "../../shell";
 import { SAVED_RETURNS_KEY } from "../../shell/store";
 import { BREAK, SIZE } from "../../theme/tokens";
 import { AppButton, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text } from "../../ui";
@@ -104,25 +104,24 @@ function pressTile(spec: TileSpec, today: string): void {
 }
 
 function Dashboard(props: { width: () => number }) {
-  const now = new Date();
   // Rows under 560 points drop their when column and code; the filed row's actions need 640 and the taxpayer row's bar 720.
   const compact = () => props.width() < 560;
   const filedCompact = () => props.width() < 640;
   const taxpayerCompact = () => props.width() < 720;
-  const data = computed(() => loadDashboard(store));
+  const data = computed(() => loadDashboard(store, today()));
   const view = (): HomeView => ({ homePick: homePick.pick(), homeDay: homePick.day() });
   const picked = computed(() => pickedDeadlines(view(), data()));
   const rows = () => picked().rows as DeadlineRow[];
   const specs = computed(() => tileSpecs(data()));
   const filed = computed<ReturnRow[]>(() => store.returns("filed").slice(0, 3));
-  const asNeeded = computed(() => asNeededEntries(store.asNeeded(new Date().getFullYear())));
+  const asNeeded = computed(() => asNeededEntries(store.asNeeded(today().getFullYear())));
   const tileWidth = () => {
     const cols = tileColumns(props.width());
     return Math.floor((props.width() - TILE_GAP * (cols - 1)) / cols);
   };
   return (
     <View testID="home-dashboard" class="w-full">
-      <PageHeader title={greeting(now)} lede={`${longToday(now)}.`} />
+      <PageHeader title={greeting(today())} lede={`${longToday(today())}.`} />
       <View testID="home-tiles" class="mt-6 w-full flex-row flex-wrap" style={{ gap: TILE_GAP }}>
         <Each of={specs()} key={(s) => s.key}>
           {(s) => (

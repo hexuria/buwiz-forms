@@ -23,6 +23,8 @@ export interface SectionEdit {
   tinError: string | null;
   /** The registered activity has the year's line of business and start date (a year exists). */
   yearFields: boolean;
+  /** The tax year those fields were read from (null without them): the edit belongs to it, and a save under another year is refused. */
+  year: number | null;
 }
 
 /** The fact row being edited. */
@@ -83,6 +85,7 @@ export function createPageState() {
     const values: Record<string, string> = {};
     const inherit: SectionEdit["inherit"] = {};
     let yearFields = false;
+    let year: number | null = null;
     if (sec === "taxpayer") {
       values.name = t.name;
       values.tin = t.tin_root;
@@ -95,6 +98,7 @@ export function createPageState() {
       const view = yearFacts();
       if (view) {
         yearFields = true;
+        year = view.year;
         values.line_of_business = view.facts.line_of_business || "";
         values.business_start_date = view.facts.business_start_date || "";
       }
@@ -106,7 +110,7 @@ export function createPageState() {
     }
     batch(() => {
       setSectionOpen(sec, true);
-      edit.set({ sec, values, type: t.taxpayer_type, inherit, touched: [], submitted: false, tinError: null, yearFields });
+      edit.set({ sec, values, type: t.taxpayer_type, inherit, touched: [], submitted: false, tinError: null, yearFields, year });
     });
   }
 
@@ -177,6 +181,12 @@ export function createPageState() {
     const t = app.taxpayer();
     const b = app.branch();
     if (!e0 || !t || !b) return;
+    // An edit that holds a year's facts is that year's: if the year changed under it, nothing of it is written into the new one.
+    if (e0.yearFields && e0.year !== (yearFacts()?.year ?? null)) {
+      edit.set(null);
+      toast("The tax year changed while this was open, so nothing was saved. Open the edit again for this year.", "triangle-alert");
+      return;
+    }
     const e = { ...e0, submitted: true };
     edit.set(e);
     if (Object.keys(problems(e)).length) return;
@@ -417,9 +427,11 @@ export function createPageState() {
     });
   }
 
-  /** The year switched: the year's edits go (the fact row, Save as a setup, staged forms, the band). */
+  /** The year switched: the year's edits go (the fact row, Save as a setup, staged forms, the band, a section edit that holds the year's facts). */
   function leaveYear(): void {
     batch(() => {
+      // The old page kept the section open and its Save wrote the old year's typing into the new year: it is closed instead.
+      if (edit()?.yearFields) edit.set(null);
       factEdit.set(null);
       saveSetup.set(null);
       forms.set(null);

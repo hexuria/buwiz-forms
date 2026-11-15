@@ -1,11 +1,10 @@
 // What the menu, the tray, the window's close button and the hotkey DO (the menu's data is menu_model.ts). Every action goes
 // through the frame's own API (shell/app.ts): navigation, the layers, the theme; none reaches into a screen.
 import { openUrl, signal } from "nsh";
-import { Application, Window } from "nsh/desktop";
-import { bir, shutdown } from "../../bir";
+import { Window } from "nsh/desktop";
+import { bir } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app } from "../app";
-import { store } from "../store";
 import { CLOSE_POLICY, SUPPORT_URL, WEBSITE_URL, type MenuAction, type Os } from "./menu_model";
 import { updates } from "./updates";
 
@@ -41,21 +40,11 @@ export function toggleMain(): void {
 
 // ---------------------------------------------------------------- quitting
 
-/** What ends the run once every screen has finished its work: the door's quit path (the worker stops, the database is checkpointed), then the app. */
-function endRun(): void {
-  try {
-    shutdown();
-  } catch (error) {
-    store.logScreen("warn", "quit: " + errorText(error));
-  }
-  Application.quit();
-}
-
 /**
- * Quits for real: the frame's quit path runs every screen's beforeLeave hook (an open form flushes its unsaved edits), then
- * the door shuts down, then the app ends. Resolves once the hooks are done; "exit" is for a test.
+ * Quits for real: the frame's quit path (app.quit) runs every screen's beforeLeave hook (an open form flushes its unsaved edits),
+ * then the door shuts down, then the app ends. Resolves once the hooks are done; "exit" is for a test.
  */
-export function quitApp(exit: () => void = endRun): Promise<void> {
+export function quitApp(exit?: () => void): Promise<void> {
   return app.quit(exit);
 }
 
@@ -82,12 +71,8 @@ async function signOutOfTheAccount(): Promise<void> {
     app.toast(errorText(error));
     return;
   }
-  try {
-    bir.cloud_account_session_closed();
-  } catch {
-    /* the host already locked the process */
-  }
-  app.setCloudLocked(true);
+  // The frame's own way: the host's session closes, the gate comes back, and every screen's state is put back for the next session.
+  app.lockCloud();
 }
 
 // ---------------------------------------------------------------- the menu's actions

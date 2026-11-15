@@ -88,7 +88,9 @@ fn an_agent_queued_return_goes_out_as_a_dry_run_the_door_forces_never_as_a_live_
             );
             assert_eq!(std::env::var("BIR_SFTP_DRY_RUN").as_deref(), Ok("1"));
 
-            // The sign-in opens the database and starts the submission worker, which the guard allowed.
+            // The frame is up (the agent is refused while the app is locked), and the sign-in opens the database and
+            // starts the submission worker, which the guard allowed.
+            agent::Agent::set_access(false, false);
             bir_app_api::account_gate::set_unlocked(true);
             bir_app_api::bir_module::open_database_at_launch();
 

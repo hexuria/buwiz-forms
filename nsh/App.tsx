@@ -1,5 +1,6 @@
 // The entry. NSH mounts the root once; the root is the frame (shell/Shell.tsx), which draws every screen.
-// BIR_SHELL_START opens a screen at launch for screenshots: "tp=<tin root>;theme=dark;view=library;form=2551Q/2026/3".
+// BIR_SHELL_START opens a screen at launch for screenshots: "tp=<tin root>;theme=dark;view=library;form=2551Q/2026/3". It is read only in a
+// test environment (the frame's boot refuses it elsewhere: the route can carry PINs).
 // The polls (events, device filings, update status) run in the shipped app and in a mock run (EBIR_TEST_ENV unset); in the
 // dev environment (nsh run, every test and shots recipe) they wait for BIR_SHELL_POLL=1.
 import { mount, View } from "nsh";

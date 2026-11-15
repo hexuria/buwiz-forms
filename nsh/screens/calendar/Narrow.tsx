@@ -4,7 +4,7 @@
 import { computed, signal, View } from "nsh";
 import type { DeadlineRow } from "../../bir";
 import { MONTHS_LONG } from "../../lib/dates";
-import { app, store } from "../../shell";
+import { app, store, today } from "../../shell";
 import {
   AppButton, Chip, CheckboxLabel, EmptyRow, IconButton, Line, ListGroup, PressCell, Segmented, Sheet, Text, TextField,
 } from "../../ui";
@@ -115,7 +115,7 @@ function FilterSheet(props: { open: boolean; onOpenChange: (open: boolean) => vo
 /** One day: its number (a ring on today) and a dot when something is due (danger when something is late). */
 function NarrowCell(props: { c: () => Cell }) {
   const c = props.c;
-  const tone = () => dayTone(c().items);
+  const tone = () => dayTone(c().items, today());
   return (
     <PressCell
       testID={`calendar-day-${c().iso}`}
@@ -153,11 +153,12 @@ export function NarrowCalendar() {
     const [from, to] = gridRange(y(), m());
     return byWhoAndHowOften(who(), store.deadlines(from, to));
   });
-  const cells = computed(() => gridCells(y(), m(), rows()));
+  const cells = computed(() => gridCells(y(), m(), rows(), today()));
   // What is still to do: late first, then what falls due in the next 60 days.
   const coming = computed(() => {
-    const [from, to] = upcomingRange();
-    return upcomingRows(byWhoAndHowOften(who(), store.deadlines(from, to)));
+    const now = today();
+    const [from, to] = upcomingRange(now);
+    return upcomingRows(byWhoAndHowOften(who(), store.deadlines(from, to)), now);
   });
   const listed = (): DeadlineRow[] => {
     const day = calendarState.picked();

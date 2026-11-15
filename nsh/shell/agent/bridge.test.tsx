@@ -73,3 +73,18 @@ test("desktop: a taxpayer the host wrote behind the window's back, then a refres
   await next(app); // go filings
   await app.waitFor("id:nav-filings", { timeout: 20_000 });
 });
+
+test("F8-3 desktop: commands that arrive while the sign-in screen is up are dropped, and the frame takes them again once signed in", async () => {
+  const commands = [JSON.stringify({ op: "go", view: "filings" }), JSON.stringify({ op: "go", view: "library" })];
+  const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", host: { params: { commands, pin: true } } });
+  await app.waitFor("id:auth-card");
+  await next(app); // go filings, while locked
+  await app.wait(300);
+  await app.type("id:auth-tin", "000123453");
+  await app.type("id:auth-tp-pin", "1234");
+  await app.waitFor("id:frame");
+  await app.wait(300);
+  expect(app.shows("id:filings-search")).toBe(false);
+  await next(app); // go library, signed in
+  await app.waitFor("text:Form library");
+});

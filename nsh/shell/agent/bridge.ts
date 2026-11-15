@@ -16,6 +16,16 @@ export const AGENT_POLL_MS = 50;
 /** Milliseconds between two drains of the agent's requests, on the database's thread: the old app's GPUI timer (32 ms). */
 export const AGENT_DRAIN_MS = 32;
 
+/**
+ * Whether the frame takes the agent's screen commands: the app is not locked (the sign-in lock or the Buwiz gate in front of it) and
+ * no taxpayer is signed in. The host refuses the agent's requests in both cases (src/agent.rs); this is the second lock for what was
+ * queued before the frame closed: a command that came from the last person's agent never moves, selects or saves anything for the
+ * next one. (First-run setup is not a lock: the agent's profile.save may create the first taxpayer there.)
+ */
+export function frameOpen(): boolean {
+  return !app.agentLocked() && app.session().kind !== "taxpayer";
+}
+
 /** The frame's side of the commands: its navigation, its store, the open form page. */
 export function frameDeps(): FrameDeps {
   return {
@@ -34,6 +44,7 @@ export function frameDeps(): FrameDeps {
     review: (message) => formUi.review(message),
     whenReady: (ref) => formUi.whenReady(ref),
     choose: (edits) => formUi.choose(edits),
+    // The door's quit path included: app.quit() hooks, then shutdown, then the run ends.
     quit: () => app.quit(),
   };
 }
@@ -50,6 +61,8 @@ export interface BridgeOptions {
   every?: number;
   /** Milliseconds between two drains (default AGENT_DRAIN_MS). */
   drainEvery?: number;
+  /** Whether the frame takes screen commands now (default `frameOpen`). */
+  open?: () => boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -81,7 +94,10 @@ export function startAgentBridge(options: BridgeOptions = {}): () => void {
         every: options.every ?? AGENT_POLL_MS,
         run: async () => {
           const cmd = parseCommand(take());
-          if (cmd) await applyCommand(cmd, deps, state);
+          if (!cmd) return;
+          // Locked, or a taxpayer signed in: the command is dropped, not held for whoever signs in next. A quit still ends the run.
+          if (cmd.op !== "quit" && !(options.open ?? frameOpen)()) return;
+          await applyCommand(cmd, deps, state);
         },
       },
     ],

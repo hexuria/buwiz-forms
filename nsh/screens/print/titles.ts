@@ -2,9 +2,15 @@
 // belongs to, and the script the toolbar runs in the sheet's page (the desk color and the zoom).
 import type { FormTarget } from "../form/FormPage";
 
-/** The window id of the preview of a form code: one window per code. */
-export function windowId(key: string): string {
-  return `print:${key}`;
+/** What a device with no second window says (a phone). */
+export const UNAVAILABLE = "Print preview is not available on this device.";
+
+/**
+ * The window id of a preview: the form code and the return it was asked on (`formIdentity`: form, TIN, year, period). Another return of
+ * the same form is another window, so it never lands in one that is closing for the last. A preview asked off a form page has the code only.
+ */
+export function windowId(key: string, identity?: string | null): string {
+  return identity ? `print:${key}:${identity.replace(/[^A-Za-z0-9]+/g, "-")}` : `print:${key}`;
 }
 
 /**

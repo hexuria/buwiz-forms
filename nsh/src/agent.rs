@@ -17,6 +17,13 @@
 //! * **UI commands.** What the session wants shown (`go`, `open`, `refresh`, `choose`, `review`, `quit`) is queued
 //!   and read by TSX through the host function `agent_take` ([`pop_command`], the hook of the same name); `nsh/shell/agent`
 //!   applies them to the frame. Polled only while [`AgentStatus::active`].
+//! * **The app's own locks.** The drain refuses every request, with a sentence, while the app is locked (the Buwiz account gate or
+//!   the PIN sign-in screen is in front, or the frame has not booted) and while a taxpayer is signed in. The frame says which it is
+//!   through `Agent.setAccess` (an effect of the root, on every change). The default is locked: nothing is answered until the frame
+//!   says it is open. First-run setup is not a lock (there is nothing to protect yet, and the agent's `profile.save` may create the
+//!   first taxpayer there). The agent's tools read and write the whole database; the UI limits a taxpayer's session to that
+//!   taxpayer and this layer cannot limit a request to one, so a taxpayer session refuses data requests entirely. The old shell has
+//!   neither state and does not use the gate.
 //! * **Send safety.** An agent's queue request goes through [`send_draft`], the hook `agent_send_draft` the host
 //!   functions use too: the same validate, standing OK and Queue as the UI. The door's send guard has forced a dry
 //!   run before the worker started, so a queued return is never a live send (`tests/agent_send.rs`).
@@ -25,6 +32,8 @@
 //!   type, screenshot) is NSH's, a second listener: see `nsh/AGENTS.md`, "Agent remote control".
 //!
 //! Nothing here changes the process environment.
+
+use std::cell::Cell;
 
 use nsh_core::prelude::*;
 
@@ -69,6 +78,50 @@ impl Agent {
     pub fn status() -> AgentStatus {
         status()
     }
+
+    /// The frame says who may use the app now: `locked` while the Buwiz gate or the sign-in screen is in front of it (or it has
+    /// not booted), `taxpayer_session` while a taxpayer (not the owner or the help desk admin) is signed in. While either is
+    /// true the agent's requests are refused: its tools are not limited to one taxpayer's data. Call it on the engine thread,
+    /// on every change. Until it is called the app counts as locked.
+    pub fn set_access(locked: bool, taxpayer_session: bool) {
+        ACCESS.with(|access| access.set(Access { locked, taxpayer_session }));
+    }
+}
+
+/// Who may use the app, as the frame last said.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Access {
+    locked: bool,
+    taxpayer_session: bool,
+}
+
+thread_local! {
+    /// The engine thread's access state (`Agent.setAccess`): locked until the frame says otherwise.
+    static ACCESS: Cell<Access> = const { Cell::new(Access { locked: true, taxpayer_session: false }) };
+}
+
+/// The sentence of a request refused because the app is locked.
+pub const LOCKED: &str = "The app is locked. Sign in on the computer first, then ask again.";
+
+/// The sentence of a request refused because a taxpayer is signed in.
+pub const TAXPAYER_SESSION_REFUSED: &str = "A taxpayer is signed in on this computer. The assistant cannot work in a taxpayer's session: sign out, or sign in as the owner or the help desk admin, then ask again.";
+
+/// Why the agent's requests are refused now, or `Ok`: the app is locked, or a taxpayer is signed in. The lock is said first.
+pub fn admission(locked: bool, taxpayer_session: bool) -> Result<(), String> {
+    if locked {
+        Err(LOCKED.to_owned())
+    } else if taxpayer_session {
+        Err(TAXPAYER_SESSION_REFUSED.to_owned())
+    } else {
+        Ok(())
+    }
+}
+
+/// `admission` for what the engine thread knows now.
+#[cfg(feature = "agent")]
+fn admission_now() -> Result<(), String> {
+    let access = ACCESS.with(Cell::get);
+    admission(access.locked, access.taxpayer_session)
 }
 
 #[cfg(not(feature = "agent"))]
@@ -151,7 +204,7 @@ mod live {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use bir_app_api::agent::{
-        APP, Session, UiQueue, drain as drain_batch, resolve_addr, tree_from_debug, try_start_with,
+        APP, Session, UiQueue, drain_gated, resolve_addr, tree_from_debug, try_start_with,
     };
     use gpui_agent::discovery::{self, HostRecord, PublishedHost};
     use gpui_agent::mailbox::AgentMailbox;
@@ -187,7 +240,12 @@ mod live {
         /// which also queues the `quit` command for TSX. The semantic tree of this data plane is empty: the window's
         /// is NSH's own control plane.
         pub fn drain(&self) -> bool {
-            let quit = drain_batch(&self.mailbox, &self.session, || tree_from_debug(None));
+            let quit = drain_gated(
+                &self.mailbox,
+                &self.session,
+                || tree_from_debug(None),
+                super::admission_now,
+            );
             if quit {
                 self.commands.push(json!({"op": "quit"}));
                 self.shutdown.store(true, Ordering::SeqCst);
@@ -300,5 +358,30 @@ mod live {
 
     pub(super) fn drain() -> bool {
         RUNNING.with(|slot| slot.borrow().as_ref().is_some_and(Listener::drain))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_lock_refuses_first_then_a_taxpayer_session_and_an_open_frame_is_admitted() {
+        assert_eq!(admission(true, false), Err(LOCKED.to_owned()));
+        assert_eq!(admission(true, true), Err(LOCKED.to_owned()), "the lock is said first");
+        assert_eq!(admission(false, true), Err(TAXPAYER_SESSION_REFUSED.to_owned()));
+        assert_eq!(admission(false, false), Ok(()));
+    }
+
+    #[test]
+    fn the_app_counts_as_locked_until_the_frame_says_otherwise() {
+        let now = || ACCESS.with(Cell::get);
+        assert_eq!(now(), Access { locked: true, taxpayer_session: false }, "locked at the start");
+        Agent::set_access(false, true);
+        assert_eq!(now(), Access { locked: false, taxpayer_session: true });
+        Agent::set_access(false, false);
+        assert_eq!(now(), Access { locked: false, taxpayer_session: false });
+        Agent::set_access(true, false);
+        assert_eq!(now(), Access { locked: true, taxpayer_session: false });
     }
 }

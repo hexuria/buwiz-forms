@@ -10,8 +10,15 @@ describe("window title", () => {
     expect(previewTitle("BIR Form 2551Q — Juana Santos", null)).toBe("BIR Form 2551Q — Juana Santos");
     expect(previewTitle("BIR Form 2551Q — Juana Santos", "")).toBe("BIR Form 2551Q — Juana Santos");
   });
-  test("one window id per form code", () => {
+  test("one window id per form code off a form page, per return on one", () => {
     expect(windowId("2551Q")).toBe("print:2551Q");
+    expect(windowId("2551Q", null)).toBe("print:2551Q");
+    const a = windowId("2551Q", "2551Q|00012345300000|2026|3|return");
+    expect(a).toBe("print:2551Q:2551Q-00012345300000-2026-3-return");
+    // Another period, another TIN, another year, a sample: each is its own window, so none reuses one that is closing for another.
+    for (const other of ["2551Q|00012345300000|2026|2|return", "2551Q|00012345300001|2026|3|return", "2551Q|00012345300000|2025|3|return", "2551Q|00012345300000|2026|3|sample"]) {
+      expect(windowId("2551Q", other)).not.toBe(a);
+    }
   });
 });
 

@@ -3,7 +3,7 @@
 import { View } from "nsh";
 import type { DeadlineRow } from "../../bir";
 import { daysUntil, MONTHS } from "../../lib/dates";
-import { openReturn } from "../../shell";
+import { openReturn, today } from "../../shell";
 import { Code, ListRow, NameCell, StatusChip, Text } from "../../ui";
 import { isOpenStatus, kindOf, rowKey, whoLine } from "./rows";
 
@@ -19,7 +19,7 @@ function whenText(n: number): string {
 
 /** The chip a row ends in: overdue and due soon say how many days, the rest say where the return stands. */
 function RowChip(props: { d: DeadlineRow }) {
-  const n = () => daysUntil(props.d.due_date);
+  const n = () => daysUntil(props.d.due_date, today());
   const late = () => isOpenStatus(props.d) && n() < 0;
   const soon = () => isOpenStatus(props.d) && n() <= 14;
   return (
@@ -43,7 +43,7 @@ export interface DueRowProps {
  * how soon a return is (else where it stands); a saved draft says so after the taxpayer when the chip says the time.
  */
 export function DueRow(props: DueRowProps) {
-  const n = () => daysUntil(props.d.due_date);
+  const n = () => daysUntil(props.d.due_date, today());
   const month = () => MONTHS[Number(props.d.due_date.split("-")[1]) - 1].toUpperCase();
   const day = () => String(Number(props.d.due_date.split("-")[2]));
   const open = () => isOpenStatus(props.d);

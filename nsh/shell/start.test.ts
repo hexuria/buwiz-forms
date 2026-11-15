@@ -1,5 +1,5 @@
 import { expect, test } from "nsh/test";
-import { parseStart, parseStartForm } from "./start";
+import { allowedStart, parseStart, parseStartForm } from "./start";
 import { nextThemePreference, parseThemePreference, storedThemePreference, themeIcon, themePreferenceFromStart } from "./theme";
 
 test("a start route is read step by step", () => {
@@ -38,4 +38,13 @@ test("the theme preference: parse, cycle, stored spelling, icon, start route", (
   expect(themeIcon("system")).toBe("monitor");
   expect(themePreferenceFromStart("tp=1;theme=dark")).toBe("dark");
   expect(themePreferenceFromStart("tp=1")).toBeNull();
+});
+
+test("F8-12: a start route is honoured only in a test environment", () => {
+  const route = "signin=000123453:1234;theme=dark";
+  expect(allowedStart(route, true)).toBe(route);
+  expect(allowedStart(route, false)).toBeUndefined();
+  expect(allowedStart("", true)).toBeUndefined();
+  expect(allowedStart(undefined, true)).toBeUndefined();
+  expect(allowedStart(null, false)).toBeUndefined();
 });

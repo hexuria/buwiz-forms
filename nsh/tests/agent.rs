@@ -89,6 +89,12 @@ fn invoke(client: &mut AgentClient, name: &str, args: Value) -> Value {
         .unwrap_or(Value::Null)
 }
 
+/// The frame is up, nobody stands in front of it and no taxpayer is signed in: what the root tells the host (`Agent.setAccess`) once the
+/// app has booted and signed in. The agent is refused until it does. The state belongs to the engine thread, which is the test's own.
+fn open_app() {
+    Agent::set_access(false, false);
+}
+
 /// What the frame would read through `agent_take`, until the queue is empty: the hook the host function calls.
 fn queued_commands() -> Vec<Value> {
     let mut commands = Vec::new();
@@ -109,6 +115,7 @@ fn an_external_agent_creates_the_demo_taxpayer_opens_a_2551q_fills_a_box_and_rea
         let listener = agent::listen()
             .expect("not refused")
             .expect("GPUI_AGENT=1 starts it");
+        open_app();
         assert!(listener.address().ip().is_loopback());
         assert_ne!(
             listener.address().port(),
@@ -229,6 +236,7 @@ fn the_listener_refuses_a_client_without_the_token_and_a_wrong_one() {
     let runtime = tempfile::tempdir().expect("runtime folder");
     agent_env(&[], runtime.path(), || {
         let listener = agent::listen().expect("not refused").expect("started");
+        open_app();
         let (none, wrong, right) = with_client(&listener, |addr| {
             let short = Duration::from_secs(5);
             let none = AgentClient::connect(addr)
@@ -248,6 +256,53 @@ fn the_listener_refuses_a_client_without_the_token_and_a_wrong_one() {
             );
         }
         assert!(right.expect("the right token connects").ok);
+    });
+}
+
+#[test]
+fn the_listener_answers_nothing_while_the_app_is_locked_or_a_taxpayer_is_signed_in() {
+    let runtime = tempfile::tempdir().expect("runtime folder");
+    agent_env(&[], runtime.path(), || {
+        let listener = agent::listen().expect("not refused").expect("started");
+        let hello = |listener: &Listener| {
+            with_client(listener, |addr| {
+                let response = connect(addr).rpc(Op::Hello).expect("the listener answers");
+                (response.ok, response.error)
+            })
+        };
+        let refused = |answer: (bool, Option<String>), sentence: &str| {
+            assert!(!answer.0, "the request was let in: {answer:?}");
+            assert_eq!(answer.1.as_deref(), Some(sentence));
+        };
+        let data = |listener: &Listener| {
+            with_client(listener, |addr| {
+                let mut client = connect(addr);
+                client.invoke("profile.list", json!({})).map(|response| response.result)
+            })
+        };
+
+        // Before the frame has said anything the app counts as locked: nothing is answered.
+        refused(hello(&listener), agent::LOCKED);
+        assert!(data(&listener).is_err(), "no data while locked");
+        // The sign-in screen (or the Buwiz gate) is in front: still locked.
+        Agent::set_access(true, false);
+        refused(hello(&listener), agent::LOCKED);
+        // The person signs in: the frame is open.
+        open_app();
+        assert!(hello(&listener).0, "an open frame answers");
+        assert!(data(&listener).is_ok());
+        // A taxpayer signs in: the tools are not limited to one taxpayer's data, so none is answered.
+        Agent::set_access(false, true);
+        refused(hello(&listener), agent::TAXPAYER_SESSION_REFUSED);
+        assert!(data(&listener).is_err(), "no data in a taxpayer's session");
+        // They sign out and the owner signs in.
+        Agent::set_access(false, false);
+        assert!(hello(&listener).0);
+        // Locked again (Lock app, Log out).
+        Agent::set_access(true, false);
+        refused(hello(&listener), agent::LOCKED);
+        // Nothing the refused requests asked for was queued for the frame.
+        assert!(queued_commands().is_empty());
     });
 }
 

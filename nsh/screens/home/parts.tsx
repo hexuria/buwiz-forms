@@ -4,7 +4,7 @@ import { View } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow, Taxpayer } from "../../bir";
 import { nextText, progressText, type DashboardTaxpayerRow, type StripDay, type TileSpec } from "../../lib/dashboard";
 import { daysUntil, MONTHS, shortDate } from "../../lib/dates";
-import { store } from "../../shell";
+import { store, today } from "../../shell";
 import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, PressCard, PressCell, StatusChip, Text } from "../../ui";
 import { cancelQueued, openDeadline, openListed, openUndated, startAsNeeded, useAsTemplate } from "./actions";
 import { deadlineKey, statusKind, whoLine } from "./rows";
@@ -45,7 +45,7 @@ export function StatTile(props: { spec: TileSpec; width: number; picked: boolean
 
 /** The dot of one open deadline: accent for a draft, warning within a week, quiet after. */
 function Dot(props: { d: DeadlineRow }) {
-  const tone = () => (props.d.status === "Draft" ? "bg-accent-blue" : daysUntil(props.d.due_date) <= 7 ? "bg-warning" : "bg-subtle-foreground");
+  const tone = () => (props.d.status === "Draft" ? "bg-accent-blue" : daysUntil(props.d.due_date, today()) <= 7 ? "bg-warning" : "bg-subtle-foreground");
   return <View class={`size-2 shrink-0 rounded-full ${tone()}`} />;
 }
 
@@ -109,7 +109,7 @@ function CodeCell(props: { code: string }) {
 
 /** When a deadline falls: an overdue or due-soon chip for an open one, else "Today", "N days ago" or "In N days". */
 function DueWhen(props: { d: DeadlineRow }) {
-  const days = () => daysUntil(props.d.due_date);
+  const days = () => daysUntil(props.d.due_date, today());
   const open = () => props.d.status === "Not started" || props.d.status === "Draft";
   return (
     <If
@@ -221,7 +221,7 @@ export function FiledRow(props: { r: ReturnRow; compact: boolean }) {
 export function TaxpayerRow(props: { row: DashboardTaxpayerRow; compact: boolean }) {
   const tp = () => props.row.taxpayer as Taxpayer;
   const next = () => props.row.next as DeadlineRow | null;
-  const nextDays = () => (next() ? daysUntil(next()!.due_date) : 0);
+  const nextDays = () => (next() ? daysUntil(next()!.due_date, today()) : 0);
   const pct = () => (props.row.due ? props.row.done / props.row.due : 0);
   return (
     <ListRow testID={`home-tp-${tp().tin_root}`}>

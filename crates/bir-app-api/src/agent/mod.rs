@@ -172,6 +172,14 @@ pub fn resolve_addr(requested: std::net::SocketAddr) -> std::net::SocketAddr {
     std::net::SocketAddr::new(requested.ip(), 0)
 }
 
+/// Answer every request of `batch` with `message` as the error, and do no host work.
+fn refuse(batch: Vec<MailboxRequest>, message: &str) {
+    for posted in batch {
+        let id = posted.request.id.clone();
+        posted.reply(gpui_agent::Response::err(id, message.to_owned()));
+    }
+}
+
 /// Run one drain of `mailbox` on the host's thread; `true` when the session
 /// asked the host to quit. `tree` gives the semantic tree the host has now;
 /// it is only asked for when a batch is waiting.
@@ -179,6 +187,18 @@ pub fn drain(
     mailbox: &AgentMailbox,
     session: &std::cell::RefCell<Session>,
     tree: impl FnOnce() -> UiTree,
+) -> bool {
+    drain_gated(mailbox, session, tree, || Ok(()))
+}
+
+/// [`drain`] for a host that has a say of its own, after the account gate: `gate` is asked once per waiting batch and an
+/// `Err` answers every request of it with that sentence, doing no host work (the NSH app refuses while its sign-in lock is up
+/// or a taxpayer is signed in; the old shell has no such state and calls [`drain`]).
+pub fn drain_gated(
+    mailbox: &AgentMailbox,
+    session: &std::cell::RefCell<Session>,
+    tree: impl FnOnce() -> UiTree,
+    gate: impl FnOnce() -> Result<(), String>,
 ) -> bool {
     let batch = mailbox.take();
     if batch.is_empty() {
@@ -191,6 +211,10 @@ pub fn drain(
     let Some(batch) = admit(batch) else {
         return false;
     };
+    if let Err(message) = gate() {
+        refuse(batch, &message);
+        return false;
+    }
     if session.borrow().needs_db() {
         match crate::bir_module::database_handle() {
             Ok(handle) => session.borrow_mut().set_db(handle),
@@ -373,6 +397,46 @@ mod tests {
                 Some(crate::account_gate::LOCKED_MESSAGE)
             );
         }
+    }
+
+    #[test]
+    fn a_host_gate_refuses_every_posted_tool_and_does_no_host_work() {
+        use std::cell::RefCell;
+        use std::time::Duration;
+
+        use gpui_agent::protocol::{Op, Request};
+
+        crate::account_gate::set_unlocked(true);
+        let mailbox = AgentMailbox::new();
+        let hello = mailbox.push(Request::new("hello", Op::Hello));
+        let invoke = mailbox.push(Request::new(
+            "list",
+            Op::Invoke {
+                name: "profile.list".into(),
+                args: serde_json::json!({}),
+            },
+        ));
+        let session = RefCell::new(Session::new(session::UiQueue::new()));
+        let quit = drain_gated(
+            &mailbox,
+            &session,
+            || panic!("a refused batch is never given the tree"),
+            || Err("The app is locked.".to_owned()),
+        );
+        assert!(!quit);
+        for response in [hello, invoke] {
+            let response = response.recv_timeout(Duration::from_millis(200)).unwrap();
+            assert!(!response.ok);
+            assert_eq!(response.error.as_deref(), Some("The app is locked."));
+        }
+        assert!(session.borrow().needs_db(), "no database was opened for it");
+        // Nothing waiting: the gate is not even asked.
+        assert!(!drain_gated(
+            &mailbox,
+            &session,
+            || panic!("no tree"),
+            || panic!("the gate is asked only when a batch waits"),
+        ));
     }
 
     #[test]

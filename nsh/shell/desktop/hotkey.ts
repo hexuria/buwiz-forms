@@ -1,5 +1,10 @@
 // The global show/hide hotkey: registered from the stored setting, registered again when the setting changes, off when it is empty
 // (old tray.rs HotkeyWatch). Pure over its dependencies, so a plain test plays the OS refusing a chord.
+//
+// One call into the system at a time. A register can take a while (a desktop portal asks the person), and the setting can change
+// meanwhile (a lock and an unlock are two changes): a second register or an unregister started beside the pending one can cross it
+// and leave the chord held by the system but unknown to us. So there is one state wanted (the last combo given to sync) and one loop
+// that brings the system to it, a step at a time: give back the chord held if it is not the wanted one, then register the wanted one.
 
 /** Where the hotkey stands: off (none stored), pending (the system has not answered yet), registered (the system took it), refused (another app holds the chord), invalid (not a combo this computer can register). */
 export type HotkeyStatus = "off" | "pending" | "registered" | "refused" | "invalid";
@@ -22,7 +27,7 @@ export interface HotkeyDeps {
 
 /** What createHotkey gives its owner. */
 export interface Hotkey {
-  /** Follows the stored combo: "control+alt+E", or empty for none. A newer call replaces one the system has not answered yet. */
+  /** Follows the stored combo: "control+alt+E", or empty for none. The answer is the status once the system has settled on it; a call a newer one replaced answers the status then. */
   sync(combo: string | null | undefined): Promise<HotkeyStatus>;
   status(): HotkeyStatus;
   /** Gives the keystroke back (the app is closing). */
@@ -32,68 +37,103 @@ export interface Hotkey {
 /** The hotkey of one app. */
 export function createHotkey(deps: HotkeyDeps): Hotkey {
   const log = deps.log ?? (() => {});
+  /** The combo wanted now ("" for none); the last one sync was given. */
   let wanted = "";
-  let current: string | null = null;
+  /** The chord the system holds for us (registered and not given back), or null. */
+  let held: string | null = null;
   let status: HotkeyStatus = "off";
-  /** Each change of the combo is a generation: a register that answers after a newer one began is given back. */
-  let generation = 0;
-  let latest: string | null = null;
-  const change = (next: HotkeyStatus): HotkeyStatus => {
+  /** The loop that brings the system to `wanted`, while it runs (one register or unregister in flight at most, never two loops). */
+  let running: Promise<void> | null = null;
+  /** The sync calls waiting for an answer: each is told when the system is settled on what was wanted when it asked, or sooner when a newer combo replaced it. */
+  let waiting: { combo: string; done: (status: HotkeyStatus) => void }[] = [];
+  const change = (next: HotkeyStatus): void => {
     status = next;
     deps.onStatus?.(next);
-    return next;
+  };
+  /** Answers the calls that asked for a combo that is not the wanted one any more (their register is over, or it is not asked at all). */
+  const answerReplaced = (): void => {
+    const gone = waiting.filter((w) => w.combo !== wanted);
+    waiting = waiting.filter((w) => w.combo === wanted);
+    for (const w of gone) w.done(status);
+  };
+  const answerAll = (): void => {
+    const all = waiting;
+    waiting = [];
+    for (const w of all) w.done(status);
   };
 
-  async function apply(combo: string): Promise<HotkeyStatus> {
-    // The same combo again changes nothing (a refused or invalid one is not asked again until the setting changes).
-    if (combo === wanted) return status;
-    wanted = combo;
-    const mine = ++generation;
-    latest = null;
-    if (current !== null) {
-      deps.unregister(current);
-      current = null;
+  /** Brings the system to `wanted`, re-reading it after every step: a change during a step is picked up by the next turn of the loop. */
+  async function settle(): Promise<void> {
+    for (;;) {
+      const combo = wanted;
+      const shortcut = combo === "" ? null : deps.shortcutFor(combo);
+      // Give back a chord that is not the wanted one: it was registered for a combo the setting has left (or the app is off).
+      if (held !== null && held !== shortcut) {
+        deps.unregister(held);
+        held = null;
+      }
+      if (combo === "") return change("off");
+      if (shortcut === null) {
+        log("warn", "invalid global hotkey combo '" + combo + "'");
+        return change("invalid");
+      }
+      if (held === shortcut) return change("registered");
+      change("pending");
+      let took = false;
+      try {
+        took = await deps.register(shortcut, deps.onPress);
+      } catch (error) {
+        log("warn", "could not register global hotkey '" + combo + "': " + String(error));
+      }
+      // Whatever the system took is ours to give back, even when the setting moved on while it thought: track it before anything else.
+      if (took) held = shortcut;
+      if (combo !== wanted) {
+        answerReplaced();
+        continue;
+      }
+      if (!took) {
+        log("warn", "could not register global hotkey '" + combo + "'");
+        return change("refused");
+      }
+      log("info", "global show hotkey registered: " + combo);
+      return change("registered");
     }
-    if (combo === "") return change("off");
-    const shortcut = deps.shortcutFor(combo);
-    if (shortcut === null) {
-      log("warn", "invalid global hotkey combo '" + combo + "'");
-      return change("invalid");
-    }
-    let took = false;
-    latest = shortcut;
-    change("pending");
-    try {
-      took = await deps.register(shortcut, deps.onPress);
-    } catch (error) {
-      log("warn", "could not register global hotkey '" + combo + "': " + String(error));
-    }
-    if (mine !== generation) {
-      // The setting moved on while the system thought about it (it may take a while: a desktop portal asks the person). Give it back,
-      // unless the newer combo is the same chord, which this registration already is.
-      if (took && latest !== shortcut) deps.unregister(shortcut);
-      return status;
-    }
-    if (!took) {
-      log("warn", "could not register global hotkey '" + combo + "'");
-      return change("refused");
-    }
-    current = shortcut;
-    log("info", "global show hotkey registered: " + combo);
-    return change("registered");
+  }
+
+  function start(): void {
+    if (running) return;
+    running = settle()
+      .catch((error) => log("warn", "global hotkey: " + String(error)))
+      .then(() => {
+        running = null;
+        answerAll();
+      });
   }
 
   return {
     sync(combo) {
-      return apply((combo ?? "").trim());
+      const next = (combo ?? "").trim();
+      // The same combo again changes nothing (a refused or invalid one is not asked again until the setting changes).
+      if (next === wanted && !running) return Promise.resolve(status);
+      return new Promise<HotkeyStatus>((done) => {
+        wanted = next;
+        waiting.push({ combo: next, done });
+        // A register still in flight: the status says what is wanted now (off: the chord is given back when the answer comes,
+        // which a headless run never gives).
+        if (running) change(next === "" ? "off" : "pending");
+        start();
+      });
     },
     status: () => status,
     stop() {
-      if (current !== null) deps.unregister(current);
-      current = null;
       wanted = "";
-      generation++;
+      // The loop still in flight gives back what its register brings; nothing in flight: give back what is held now.
+      if (held !== null && !running) {
+        deps.unregister(held);
+        held = null;
+      }
       change("off");
+      if (running) answerReplaced();
     },
   };
 }

@@ -218,13 +218,15 @@ return \"body\";}})({body},{revision});"
     )
 }
 
-/// Whether a process with this id is running (always true where it cannot be asked).
+/// Whether a process with this id is running.
 #[cfg(unix)]
 fn process_alive(pid: u32) -> bool {
     // SAFETY: signal 0 only asks whether the process exists.
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
 }
 
+/// Where a process cannot be asked here (Windows: no OpenProcess binding in this crate) every one counts as running, so
+/// [`Print::listen`] does not sweep at all there: a stale folder stays until the system cleans its temp folder.
 #[cfg(not(unix))]
 fn process_alive(_pid: u32) -> bool {
     true
@@ -274,13 +276,60 @@ fn file_stem(title: &str) -> String {
     if stem.is_empty() { "Print preview".to_owned() } else { stem.to_owned() }
 }
 
-/// Writes `text` to `path` so that a reader sees the old file or the new one, never half of it.
+/// Makes `dir` (and any folder above it that is missing) readable by this user only (0700 where modes exist). A folder that
+/// is there already must be a real folder of this user (not a link someone left at the predictable name); it is made 0700 too.
+fn private_dir(dir: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        builder.mode(0o700);
+        builder.create(dir)?;
+        let meta = std::fs::symlink_metadata(dir)?;
+        // SAFETY: geteuid only reads the process's own id.
+        if !meta.file_type().is_dir() || meta.uid() != unsafe { libc::geteuid() } {
+            return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{} is not a folder of this user", dir.display())));
+        }
+        if meta.mode() & 0o777 != 0o700 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    builder.create(dir)
+}
+
+/// Writes `bytes` to a new file at `path` that only this user can read (0600 where modes exist), replacing one there.
+fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let _ = std::fs::remove_file(path);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)
+}
+
+/// Writes `text` to `path` so that a reader sees the old file or the new one, never half of it. The folder and the file are
+/// this user's only (a filled return is in them).
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
-    std::fs::create_dir_all(dir)?;
+    private_dir(dir)?;
     let temp = path.with_extension("tmp");
-    std::fs::write(&temp, text)?;
+    write_private(&temp, text.as_bytes())?;
     std::fs::rename(&temp, path)
+}
+
+/// Writes the PDF of a preview into its folder (`<title>.pdf`, this user's only) and answers its path.
+fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
+    private_dir(dir)?;
+    let path = dir.join(format!("{}.pdf", file_stem(title)));
+    write_private(&path, pdf)?;
+    Ok(path)
 }
 
 // ------------------------------------------------------------------------------------------------ the previews
@@ -336,6 +385,7 @@ impl State {
     /// A preview was asked for: the events the host hears. A key already open gets a newer document in place.
     fn request(&mut self, key: &str, title: String, html: String) -> Result<Vec<PrintEvent>, String> {
         let path = self.sheet_path(key);
+        private_dir(&self.root).map_err(|error| format!("Could not write the preview: {error}"))?;
         write_atomic(&path, &html).map_err(|error| format!("Could not write the preview: {error}"))?;
         let url = url_for(&path);
         let doc = parse_doc(&html);
@@ -410,6 +460,12 @@ impl State {
             let _ = std::fs::remove_dir(&self.root);
         }
     }
+
+    /// Every preview is over (the app quits): forget them all and delete the whole folder.
+    fn close_all(&mut self) {
+        self.previews.clear();
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
 }
 
 thread_local! {
@@ -459,8 +515,17 @@ fn uninstall(id: u64) {
 
 // What the hooks call. ---------------------------------------------------------------------------------------------
 
-/// `print_preview_request`: open the preview of the sheet at `path`, or refresh the one open for `key`.
+/// `print_preview_request`: open the preview of the sheet at `path`, or refresh the one open for `key`. The file at `path`
+/// (bir-app-api's `$TMP/bir-<form>-<year>-<ts>-preview.html`, a filled return) is this host's to dispose of: it is read once
+/// and deleted at once, whatever comes next (the old shell's own hook keeps its file; this one is only the NSH app's).
 pub(crate) fn request(path: PathBuf, title: String, key: String) {
+    let read = std::fs::read_to_string(&path);
+    match std::fs::remove_file(&path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            tracing::warn!(path = %path.display(), %error, "print preview: cannot delete the source sheet");
+        }
+        _ => {}
+    }
     let Some(backend) = backend() else {
         tracing::warn!(path = %path.display(), "the print preview has no window host (screens/print/host is not loaded)");
         return;
@@ -471,7 +536,7 @@ pub(crate) fn request(path: PathBuf, title: String, key: String) {
         backend.emit(said);
         return;
     }
-    let html = match std::fs::read_to_string(&path) {
+    let html = match read {
         Ok(html) => bir_app_api::static_html::staticize_if_needed(html),
         Err(error) => {
             tracing::warn!(path = %path.display(), %error, "print preview: cannot read the sheet");
@@ -930,6 +995,8 @@ impl Print {
     /// Hears every preview event until the returned function is called: a sheet to open (or to focus), a newer
     /// document for an open one, a device that has no window for it. One host listens at a time; the latest wins.
     pub fn listen(#[args(event)] listener: Callback<PrintEvent>) -> Stop {
+        // Where a process cannot be asked (not unix), nothing is swept: see process_alive.
+        #[cfg(unix)]
         sweep_stale(&std::env::temp_dir(), process_alive);
         let id = install(Rc::new(HostBackend { listener }));
         Stop::new(move || uninstall(id))
@@ -944,8 +1011,7 @@ impl Print {
     /// scaling) as a sheet of the front window. Resolves once the panel is up; rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
         let (pdf, title, dir) = pdf_of(&key).await?;
-        let path = dir.join(format!("{}.pdf", file_stem(&title)));
-        std::fs::write(&path, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
+        let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
         blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
     }
 
@@ -985,6 +1051,12 @@ impl Print {
 
 fn forget(key: &str) {
     STATE.with(|state| state.borrow_mut().close(key));
+}
+
+/// The app quits: every preview of this engine thread is forgotten and its folder (`ebirforms-print-<pid>`) deleted. The door's
+/// `shutdown` calls it; a quit that skips it leaves the folder to the next start's sweep.
+pub(crate) fn remove_all() {
+    let _ = STATE.try_with(|state| state.borrow_mut().close_all());
 }
 
 #[cfg(test)]
@@ -1124,6 +1196,77 @@ mod tests {
         assert!(running.exists() && mine.exists() && other.exists() && unrelated.exists());
         assert!(process_alive(std::process::id()));
         sweep_stale(Path::new("/no/such/folder"), |_| false);
+    }
+
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_folders_and_files_of_a_preview_are_this_users_only() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().join("ebirforms-print-1");
+        let mut state = State::new(root.clone());
+        state.request("2551Q", "BIR Form 2551Q — Juana".to_owned(), sheet_doc(&["Juana"])).unwrap();
+        assert_eq!(mode_of(&root), 0o700, "the folder of the run");
+        assert_eq!(mode_of(&root.join("2551Q")), 0o700, "the folder of the preview");
+        assert_eq!(mode_of(&root.join("2551Q").join(SHEET)), 0o600, "the sheet");
+        state.update("2551Q", sheet_doc(&["Santos"]));
+        assert_eq!(mode_of(&root.join("2551Q").join(SHEET)), 0o600, "the sheet rewritten by an edit");
+        let pdf = write_pdf(&root.join("2551Q"), "BIR Form 2551Q — Juana", b"%PDF-1.4").unwrap();
+        assert_eq!(pdf, root.join("2551Q").join("BIR Form 2551Q - Juana.pdf"));
+        assert_eq!(mode_of(&pdf), 0o600, "the PDF Print writes");
+        // A folder left at the predictable name by someone else's umask is made private; a link there is refused.
+        let open = folder.path().join("open");
+        std::fs::create_dir(&open).unwrap();
+        std::fs::set_permissions(&open, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        private_dir(&open).unwrap();
+        assert_eq!(mode_of(&open), 0o700);
+        let link = folder.path().join("link");
+        std::os::unix::fs::symlink(&open, &link).unwrap();
+        assert!(private_dir(&link).is_err(), "a link at the folder's name is not followed");
+        assert!(State::new(link.clone()).request("2551Q", "t".to_owned(), sheet_doc(&["a"])).is_err());
+    }
+
+    #[test]
+    fn quitting_deletes_every_preview_folder() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().join("root");
+        let mut state = State::new(root.clone());
+        state.request("2551Q", "t".to_owned(), sheet_doc(&["a"])).unwrap();
+        state.request("1601C", "t".to_owned(), sheet_doc(&["a"])).unwrap();
+        write_pdf(&root.join("1601C"), "t", b"%PDF").unwrap();
+        state.close_all();
+        assert!(!root.exists(), "the run's folder, every preview and PDF in it");
+        assert!(state.previews.is_empty());
+        // The hook's thread state too, through what the door's shutdown calls.
+        let _recorder = host(folder.path());
+        let key = key();
+        request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
+        assert!(folder.path().join(sanitize(&key)).exists());
+        remove_all();
+        assert!(!has_live(&key));
+        assert!(!folder.path().exists(), "the thread's folder is gone");
+    }
+
+    #[test]
+    fn the_hook_deletes_the_source_sheet_once_it_is_read() {
+        let folder = tempfile::tempdir().unwrap();
+        let recorder = host(&folder.path().join("previews"));
+        let key = key();
+        let source = sheet_file(folder.path(), &["Juana", ""]);
+        request(source.clone(), "BIR Form".to_owned(), key.clone());
+        assert!(!source.exists(), "the filled return is not left in the temp folder");
+        assert_eq!(kinds(&recorder), vec![PrintEventKind::Open]);
+        // With no host listening the file is not kept either.
+        STATE.with(|state| state.borrow_mut().backend = None);
+        let unread = sheet_file(folder.path(), &["b"]);
+        request(unread.clone(), "t".to_owned(), key.clone());
+        assert!(!unread.exists());
+        forget(&key);
     }
 
     #[test]

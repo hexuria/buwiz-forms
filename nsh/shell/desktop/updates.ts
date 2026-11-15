@@ -7,8 +7,8 @@ import { store } from "../store";
 import { autoDownload, publishUpdate } from "./native";
 import { createUpdater, NOT_CONFIGURED, type Updater, type UpdateCommand, type UpdaterApi } from "./updater";
 
-/** nsh/updater, as the driver uses it. */
-export function realApi(): UpdaterApi {
+/** nsh/updater, as the driver uses it. `restart` is a test's stand-in for the swap and the restart. */
+export function realApi(restart: () => Promise<void> = installAndRestart): UpdaterApi {
   return {
     configured: () => (shellInfo().version ?? null) !== null,
     async check() {
@@ -20,13 +20,12 @@ export function realApi(): UpdaterApi {
       return { version: found.version };
     },
     download: () => downloadUpdate(),
-    // The frame's quit path first (an open form flushes its unsaved edits), then the swap and the restart. It settles only on failure.
+    // The frame's quit path first (an open form flushes its unsaved edits), then the door's shutdown (the worker stops, the database
+    // is checkpointed), then the swap and the restart. It settles only on failure.
     install: () =>
       new Promise<void>((resolve, reject) => {
         app
-          .quit(() => {
-            installAndRestart().then(resolve, reject);
-          })
+          .quit(() => app.endRun(() => void restart().then(resolve, reject)))
           .catch(reject);
       }),
   };

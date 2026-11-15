@@ -241,6 +241,8 @@ export function Shell(props: ShellProps) {
   });
   // The menu bar matches the window: the filing chrome shows only once nothing stands in front of it.
   effect(() => app.syncShellChrome(app.chromeVisible()));
+  // The agent's host refuses while the app is locked or a taxpayer is signed in (src/agent.rs): it hears of every change.
+  effect(() => app.syncAgentAccess());
   return (
     <View testID="shell" class="flex-1 bg-background">
       <If when={app.booted()}>

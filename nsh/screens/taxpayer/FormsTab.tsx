@@ -5,7 +5,7 @@ import { View } from "nsh";
 import type { ScreenFormIndexEntry } from "../../bir";
 import { daysUntil, shortDate } from "../../lib/dates";
 import { errorText } from "../../lib/errors";
-import { app, store, toast } from "../../shell";
+import { app, store, toast, today } from "../../shell";
 import { AppButton, Banner, Checkbox, CheckboxLabel, Chip, Code, Dropdown, EmptyRow, IconButton, Line, ListGroup, ListRow, NameCell, Segmented, Text, TextField } from "../../ui";
 import { applySetup, deleteSetup } from "./actions";
 import { AnnualConflictBanner, ReplaceBanner } from "./Banners";
@@ -93,7 +93,8 @@ function FormRow(props: { s: PageState; f: ScreenFormIndexEntry }) {
     const b = app.branch();
     if (!on() || !b) return { next: null, due: "" };
     const y = year();
-    return schedule(store.formDeadlines(b.tin, f.c, y, `${y}-01-01`, `${y + 1}-12-31`), (iso) => daysUntil(iso), shortDate);
+    const now = today();
+    return schedule(store.formDeadlines(b.tin, f.c, y, `${y}-01-01`, `${y + 1}-12-31`), (iso) => daysUntil(iso, now), shortDate);
   };
   return (
     <ListRow testID={`tp-form-${f.c}`}>

@@ -101,7 +101,7 @@ export interface SessionHooks {
   dismissToast?(id: string): void;
   /** The session wrote through the door (name: the host function): the frame drops its cached reads. */
   afterWrite?(name: string): void;
-  /** A changed return was saved: the frame bumps it in Recent. */
+  /** A changed return was saved, or one was stored for the first time (an amendment saved with nothing typed): the frame bumps it in Recent and settles the history. */
   onSaved?(target: FormTarget): void;
   /** The session now shows another return (a sample became its return, an offer loaded one, Undo came back). */
   onRetarget?(target: FormTarget): void;
@@ -2081,7 +2081,8 @@ export class FormSession {
     this.unquiet();
     let edits = s.pending;
     s.pending = {};
-    const changed = s.dirty || Object.keys(edits).length > 0;
+    // A save of what was edited, or the first save of a return that was not stored yet (an amendment saved with nothing typed).
+    const changed = s.dirty || Object.keys(edits).length > 0 || !s.saved;
     try {
       if (Object.keys(edits).length) {
         this.retireRemovalUndo();

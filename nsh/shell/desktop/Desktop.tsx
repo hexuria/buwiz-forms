@@ -16,7 +16,8 @@ import { app } from "../app";
 import { errorText } from "../../lib/errors";
 import { startPolls } from "../../lib/poll";
 import { AppButton, Dialog, Text } from "../../ui";
-import { aboutOpen, closePressed, perform, showMain, toggleMain } from "./actions";
+import { signOut as signOutOfTheAccount } from "../../screens/settings/cloud";
+import { aboutOpen, closePressed, perform, setSignOutHandler, showMain, toggleMain } from "./actions";
 import { createHotkey, type HotkeyStatus } from "./hotkey";
 import { buildMenu, buildTrayMenu, COPYRIGHT, type MenuState, type Os } from "./menu_model";
 import * as native from "./native";
@@ -105,6 +106,10 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
     });
   });
   cleanup(() => Menu.setApplicationMenu(null));
+
+  // The menu's Sign Out is Settings › Account's: the host's session closes, the gate comes back, every screen's state is reset.
+  setSignOutHandler(signOutOfTheAccount);
+  cleanup(() => setSignOutHandler(null));
 
   // The tray: a click brings the window back, a secondary click opens the menu.
   const trayMenu = buildTrayMenu((action) => perform(action, os));

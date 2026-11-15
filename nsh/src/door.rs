@@ -392,6 +392,8 @@ pub fn database_path() -> PathBuf {
 /// Stop the submission worker and close the database (the old host's quit path). A second call does nothing.
 pub fn shutdown() {
     bir_app_api::bir_module::shutdown_for_quit();
+    // The print previews' files (a filled return each) go with the run.
+    crate::print::remove_all();
 }
 
 #[cfg(test)]

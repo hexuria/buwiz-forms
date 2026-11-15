@@ -3,33 +3,41 @@
 // run serves assets (fonts, icons) from the entry's folder down. What a test asks for goes in `open(entry, { host: { params } })`:
 //   start     the dev route ("form=2551Q/2026/3"), as ShellDemo
 //   savePath  a path Save as PDF writes to without the save panel (the Rust side honours it only in a test environment)
+//   pin       true: the owner (Juana Santos, "Just me") has the admin PIN 1234, so the app starts at the sign-in screen (TIN 000123453)
+//             and Lock app / Log out stand in front of the frame again; the dev start route does not survive that sign-in, so
+//             `Test: open the 2551Q` and `Test: open the Q2 return` open the two returns the frame shows
 // Under the frame (a line the window shows, so a test reads what the preview did):
 //   `preview ${code}: revision N`  while a preview of that form code is open
-//   three test-only buttons in the corner: `Test: go Home` (the window's own layout can change once a second window opens: headless, the
+//   test-only buttons in the corner: `Test: go Home` (the window's own layout can change once a second window opens: headless, the
 //   frame reads a 0 x 0 surface then), `Test: save PDF` saves the open preview's PDF to savePath (the toolbar's own button
 //   opens a panel a test cannot press), `Test: read PDF` reads that file back (pages, bytes, drawing, text).
 import { host, mount, signal, Text, View, windowSize } from "nsh";
 import { Button } from "nsh/base";
 import "./theme/fonts";
 import { bir } from "./bir";
-import { createDemoTaxpayer } from "./bir/testing";
+import { createDemoTaxpayer, DEMO } from "./bir/testing";
 import { Print, REAL_ACTIONS, testing } from "./screens/print/native";
 import { previews } from "./screens/print/store";
 import "./screens/print/host";
-import { go } from "./shell";
+import { app, go } from "./shell";
 import { Shell } from "./shell/Shell";
 
 interface Params {
   start?: string;
   savePath?: string;
+  pin?: boolean;
 }
 
 const saved = signal("no pdf yet");
 const read = signal("pdf not read");
 
-function seed() {
+function seed(pin: boolean) {
   const taxpayer = createDemoTaxpayer();
   const head = taxpayer.branches[0];
+  if (pin && !bir.auth_state().mode) {
+    bir.setup_solo(taxpayer.tin_root);
+    bir.set_admin_pin("1234");
+  }
   if (bir.list_tax_years(head.tin).length === 0) {
     const year = new Date().getFullYear();
     bir.add_tax_year(head.tin, year, false);
@@ -39,7 +47,7 @@ function seed() {
 
 function Demo() {
   const p = host.params as Params;
-  seed();
+  seed(p.pin === true);
   testing.savePath = p.savePath;
   const key = "2551Q";
   const line = () => {
@@ -59,6 +67,12 @@ function Demo() {
         <View class="flex-row gap-2">
           <Button testID="px-home" onPress={() => go("home")}>
             <Text>Test: go Home</Text>
+          </Button>
+          <Button testID="px-open" onPress={() => app.openReturn({ tin: DEMO.tin, code: "2551Q", year: 2026, period: 3 })}>
+            <Text>Test: open the 2551Q</Text>
+          </Button>
+          <Button testID="px-open-q2" onPress={() => app.openReturn({ tin: DEMO.tin, code: "2551Q", year: 2026, period: 2 })}>
+            <Text>Test: open the Q2 return</Text>
           </Button>
           <Button
             testID="px-save"

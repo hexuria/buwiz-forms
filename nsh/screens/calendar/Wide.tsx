@@ -3,7 +3,7 @@
 import { computed, View } from "nsh";
 import type { DeadlineRow } from "../../bir";
 import { MONTHS, MONTHS_LONG } from "../../lib/dates";
-import { app, store } from "../../shell";
+import { app, store, today } from "../../shell";
 import { AppButton, EmptyRow, IconButton, Line, ListGroup, MultiCombo, PageHeader, PressCell, Segmented, Text, TOUCH } from "../../ui";
 import { DayRow, DueRow } from "./DueRow";
 import { calendarState } from "./filters";
@@ -230,7 +230,7 @@ function MonthView() {
     const [from, to] = gridRange(y(), m());
     return byWhoAndHowOften({ tps: calendarState.taxpayers(), freq: calendarState.freq() }, store.deadlines(from, to));
   });
-  const cells = computed(() => gridCells(y(), m(), rows()));
+  const cells = computed(() => gridCells(y(), m(), rows(), today()));
   const dayItems = (): DeadlineRow[] => cells().find((c) => c.iso === calendarState.day())?.items ?? [];
   const compact = () => contentWidth() < 560;
   const side = () => contentWidth() >= 760;

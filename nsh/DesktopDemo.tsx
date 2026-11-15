@@ -9,6 +9,8 @@
 //   system   "fake": GlobalShortcut is a fake that takes every chord (the "r-chords" readout lists what is registered; a test presses one
 //            with host.send("run", { id: "chord:ctrl+alt+shift+9" }) and changes the stored combo with { id: "hotkey:control+alt+B" });
 //            absent: the real GlobalShortcut (in a window of a real platform the system answers)
+//   signOut  true: the Buwiz account's sign-out answers signed out at once (no network) and the gate then stays closed; the readout
+//            "r-settings-search" shows Settings' search text
 // Over the frame, a strip of 8-point buttons (off the window's rounded corner, where a click misses the window) runs the installed menu's items (id "run:File > New Return…") and the tray's ("tray:Show
 // eBIRForms"), because a test cannot click the system's menu bar; the readouts say what the menu did. While the window is hidden nothing
 // on it can be pressed or read: a test sends host.send("run", { id }) and reads app.window("main").state(). It sits at the nsh root because a
@@ -19,6 +21,7 @@ import { currentWindow } from "nsh/desktop";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
+import { nav } from "./screens/settings/nav";
 import { app } from "./shell/app";
 import { store } from "./shell/store";
 import { DesktopHost, flatten, hotkeyStatus, installedMenu, installedTray, type UpdaterApi } from "./shell/desktop";
@@ -32,6 +35,7 @@ interface Params {
   updater?: "found" | "current";
   hotkey?: string;
   system?: "fake";
+  signOut?: boolean;
 }
 
 /** What the fake updater was asked, in order. */
@@ -97,6 +101,16 @@ function Demo() {
   }
   if (p.hotkey) bir.set_global_hotkey(p.hotkey);
   if (p.locked) app.setCloudLocked(true);
+  if (p.signOut) {
+    const h = bir as unknown as Record<string, unknown>;
+    let signedOut = false;
+    h.cloud_account_sign_out = async () => {
+      signedOut = true;
+      return { server_url: "http://localhost:3008", server_url_source: "build", signed_in: false, email: null, user_id: null, offline: false, detail: "" };
+    };
+    const realGate = bir.cloud_account_gate;
+    h.cloud_account_gate = () => (signedOut ? { unlocked: false, offline: false, server_url: "http://localhost:3008", email: null, detail: "" } : realGate());
+  }
   const win = currentWindow();
   // A hidden window shows nothing a test can press: the test sends "run" to choose an item while the window is hidden, as the tray
   // (the system's) is chosen from outside the window. (await app.host.send("run", { id: "tray:Show eBIRForms" }))
@@ -125,6 +139,8 @@ function Demo() {
         <Text testID="r-update">{"update=" + (app.updateStatus()?.phase ?? "none")}</Text>
         <Text testID="r-asked">{"asked=" + asked().join(",")}</Text>
         <Text testID="r-menu">{"menu=" + flatten(installedMenu()).length}</Text>
+        <Text testID="r-settings-search">{"settings search=" + nav.query()}</Text>
+        <Text testID="r-gate">{"gate=" + (app.cloudLocked() ? "closed" : "open")}</Text>
       </View>
       <Runner />
     </View>

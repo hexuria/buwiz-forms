@@ -138,15 +138,108 @@ test("a chord the system answers for late is given back when the setting moved o
   expect(await second).toBe("registered");
   expect([...held]).toEqual(["b"]);
 
-  // Off, then the same chord again before the first answer: the late answer is the chord that is wanted, so it stays.
+  // Off, then the same chord again before the first answer: the one register in flight is the chord that is wanted, so it stays
+  // (no second register is asked beside it: the system would refuse the chord it already gave us).
   await hotkey.sync("");
   expect([...held]).toEqual([]);
   const third = hotkey.sync("C");
   const fourth = hotkey.sync("");
   const fifth = hotkey.sync("C");
+  expect(answers.length).toBe(3);
   answers[2](true);
-  answers[3](true);
   await Promise.all([third, fourth, fifth]);
+  expect(answers.length).toBe(3);
   expect([...held]).toEqual(["c"]);
   expect(hotkey.status()).toBe("registered");
+});
+
+/**
+ * A system as the real one behaves: a chord this app already holds is refused when asked again, and a call that starts while
+ * another is still waiting for its answer is counted (`overlaps`).
+ */
+function strictSystem() {
+  const holds = new Set<string>();
+  const waiting: ((took: boolean) => void)[] = [];
+  const calls: string[] = [];
+  let inFlight = 0;
+  let overlaps = 0;
+  const deps: HotkeyDeps = {
+    shortcutFor: (combo) => combo.toLowerCase(),
+    register: (shortcut) => {
+      calls.push("register " + shortcut);
+      if (inFlight > 0) overlaps++;
+      inFlight++;
+      return new Promise<boolean>((done) => {
+        waiting.push((took) => {
+          inFlight--;
+          const answer = took && !holds.has(shortcut);
+          if (answer) holds.add(shortcut);
+          done(answer);
+        });
+      });
+    },
+    unregister: (shortcut) => {
+      calls.push("unregister " + shortcut);
+      if (inFlight > 0) overlaps++;
+      holds.delete(shortcut);
+    },
+    onPress: () => {},
+  };
+  return { deps, holds, waiting, calls, overlaps: () => overlaps };
+}
+
+test("F8-11: a lock and an unlock while the system is still answering leave one chord, tracked, and nothing held when it is off", async () => {
+  const system = strictSystem();
+  const hotkey = createHotkey(system.deps);
+  // Unlocked: the chord is asked. Locked, unlocked again, both before the system answered.
+  const first = hotkey.sync("C");
+  const lock = hotkey.sync("");
+  const unlock = hotkey.sync("C");
+  expect(system.waiting.length).toBe(1);
+  system.waiting[0](true);
+  expect(await Promise.all([first, lock, unlock])).toEqual(["registered", "registered", "registered"]);
+  expect([...system.holds]).toEqual(["c"]);
+  // The next lock gives it back: it was tracked.
+  expect(await hotkey.sync("")).toBe("off");
+  expect([...system.holds]).toEqual([]);
+  expect(system.overlaps()).toBe(0);
+});
+
+test("F8-11: a lock while the system is still answering gives the chord back when the answer comes; one call at a time throughout", async () => {
+  const system = strictSystem();
+  const hotkey = createHotkey(system.deps);
+  const unlocked = hotkey.sync("C");
+  const locked = hotkey.sync("");
+  system.waiting[0](true);
+  expect(await locked).toBe("off");
+  await unlocked;
+  expect([...system.holds]).toEqual([]);
+  expect(hotkey.status()).toBe("off");
+  expect(system.calls).toEqual(["register c", "unregister c"]);
+  // Another chord while one is being asked: it waits its turn, and the first is given back before the second is asked.
+  const e = hotkey.sync("E");
+  const b = hotkey.sync("B");
+  expect(system.waiting.length).toBe(2);
+  system.waiting[1](true);
+  await e;
+  expect([...system.holds]).toEqual([]);
+  expect(system.waiting.length).toBe(3);
+  system.waiting[2](true);
+  expect(await b).toBe("registered");
+  expect([...system.holds]).toEqual(["b"]);
+  expect(system.calls.slice(2)).toEqual(["register e", "unregister e", "register b"]);
+  expect(system.overlaps()).toBe(0);
+});
+
+test("F8-11: stop while the system is answering still gives the chord back", async () => {
+  const system = strictSystem();
+  const hotkey = createHotkey(system.deps);
+  const asked = hotkey.sync("C");
+  hotkey.stop();
+  system.waiting[0](true);
+  await asked;
+  expect([...system.holds]).toEqual([]);
+  expect(hotkey.status()).toBe("off");
+  hotkey.stop();
+  expect(system.overlaps()).toBe(0);
 });

@@ -1,9 +1,9 @@
 // The Calendar's filters and what it has open (old CalendarFilters, made once at boot): they outlive the view, so leaving
 // the Calendar and coming back finds the same taxpayers, chips, year, view and month. One owner: this module holds the
 // signals, the screen reads the accessors and calls the setters.
-import { batch, signal } from "nsh";
+import { batch, effect, signal, untracked } from "nsh";
 import { isoDate } from "../../lib/dates";
-import { app } from "../../shell";
+import { app, todayIso } from "../../shell";
 import { type Filters, filtersActive, type Freq } from "./rows";
 
 /** The two layouts of the wide Calendar. */
@@ -20,10 +20,41 @@ const gridYear = signal(now.getFullYear());
 const gridMonth = signal(now.getMonth());
 const day = signal<string | null>(isoDate(now));
 const picked = signal<string | null>(null);
+/** The day the defaults above were taken on: when the clock moves past it, what followed "today" follows the new day. */
+let shownToday = isoDate(now);
+
+/**
+ * The day changed (midnight, the year end, the app back in the foreground the next morning): the year filter that was this year, the
+ * month shown that held today and today's mark move to the new day. What the person chose (another year, another month) stays.
+ */
+function followToday(iso: string): void {
+  if (iso === shownToday) return;
+  const wasYear = Number(shownToday.slice(0, 4));
+  const wasMonth = Number(shownToday.slice(5, 7)) - 1;
+  const was = shownToday;
+  shownToday = iso;
+  const y = Number(iso.slice(0, 4));
+  const m = Number(iso.slice(5, 7)) - 1;
+  batch(() => {
+    if (year() === wasYear) year.set(y);
+    const onToday = gridYear() === wasYear && gridMonth() === wasMonth;
+    if (onToday) {
+      gridYear.set(y);
+      gridMonth.set(m);
+    }
+    if (day() === was) day.set(onToday || (gridYear() === y && gridMonth() === m) ? iso : null);
+  });
+}
+
+effect(() => {
+  const iso = todayIso();
+  untracked(() => followToday(iso));
+});
 
 // The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in): every filter, the layout and the month.
 app.onSessionChange(() => {
   const today = new Date();
+  shownToday = isoDate(today);
   batch(() => {
     tps.set(null);
     freq.set("all");
@@ -45,7 +76,7 @@ export const calendarState = {
     return { tps: tps(), freq: freq(), month: month(), quarter: quarter(), year: year() };
   },
   /** A filter differs from its start (the Clear filters button shows). */
-  active: (): boolean => filtersActive({ tps: tps(), freq: freq(), month: month(), quarter: quarter(), year: year() }),
+  active: (): boolean => filtersActive({ tps: tps(), freq: freq(), month: month(), quarter: quarter(), year: year() }, new Date(todayIso() + "T12:00:00")),
   taxpayers: (): ReadonlySet<string> | null => tps(),
   setTaxpayers(next: ReadonlySet<string> | null): void {
     tps.set(next);

@@ -2,6 +2,15 @@
 // launch, so one launch gives one screenshot. App.tsx passes process.env.BIR_SHELL_START; a test fixture passes a string.
 // Pure parsing here; app.ts applies the steps. Keys the frame does not know are left to screens (ignored here).
 
+/**
+ * The start route a launch may use: only where the door reports a test environment (EBIR_TEST_ENV, which every dev, test and shots
+ * recipe sets). The route's access steps take secrets (signin=<root>:<pin>, override=<admin pin>, recover=<key>, setuppin=<pin>), so a
+ * shipped app never reads a route out of its environment. Anywhere else: no route.
+ */
+export function allowedStart(raw: string | null | undefined, testEnvironment: boolean): string | undefined {
+  return testEnvironment && raw ? raw : undefined;
+}
+
 /** One "key=value" step of a start route. */
 export interface StartStep {
   key: string;

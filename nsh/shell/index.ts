@@ -8,3 +8,4 @@
 export { app, back, forwardOne as forward, go, openBranch, openProfile, openReturn, openTaxpayer, replace, toast, type Notification, type OpenReturnOptions, type PanelName, type Prefs, type Session } from "./app";
 export { ROUTES, TABS, type Route, type RouteMeta, type ViewLayout, type ViewName, type ViewParams } from "./routes";
 export { store, type Store } from "./store";
+export { refreshToday, today, todayIso } from "./clock";

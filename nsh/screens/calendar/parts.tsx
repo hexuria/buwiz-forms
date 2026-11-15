@@ -2,7 +2,7 @@
 // itself is the kit's PressCell), the taxpayers as choices, and the width of the content column.
 import { View } from "nsh";
 import type { DeadlineRow } from "../../bir";
-import { app, store } from "../../shell";
+import { app, store, today } from "../../shell";
 import { BREAK, SIZE } from "../../theme/tokens";
 import { Avatar, type ChipTone, formatTin, initials, Line, type MultiComboOption, type Tone } from "../../ui";
 import { toneOf } from "./rows";
@@ -41,7 +41,7 @@ const DOT_FILL: Record<ChipTone, string> = {
 
 /** A deadline in a grid cell: 18 tall, "<code> <initials>" in the tone of its state (late, soon, filed, in progress). */
 export function MiniChip(props: { d: DeadlineRow }) {
-  const tone = () => toneOf(props.d);
+  const tone = () => toneOf(props.d, today());
   return (
     <View class={`h-4.5 min-w-0 flex-row items-center overflow-hidden rounded-[5px] px-1.5 ${CHIP_FILL[tone()]}`}>
       <Line variant="cap" tone={CHIP_INK[tone()]} class="font-semibold">{`${props.d.form_code} ${initials(props.d.taxpayer_name)}`}</Line>

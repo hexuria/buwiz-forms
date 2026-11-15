@@ -25,7 +25,7 @@ for (const look of LOOKS.filter((l) => l.width >= 1000)) {
     await app.waitFor("text:preview 2551Q: revision 1", { timeout: 30_000 });
     await app.waitFor("id:print-window");
     await app.wait(2500);
-    const preview = app.window("print:2551Q");
+    const preview = app.window("print:2551Q:2551Q-00012345300000-2026-3-return");
     expect(preview.state()).not.toBeNull();
     const first = `print-${look.name}-preview.png`;
     await preview.screenshot(first).catch((error) => console.log("preview screenshot:", String(error)));

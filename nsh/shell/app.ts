@@ -9,21 +9,21 @@
 //                (appLocked) in front of the frame: screens/auth draws them, this file keeps the state
 //   persistence  redesign.recent, redesign.selection, redesign.read_notifications (each suffixed @<database path>; with the path
 //                unknown they are not kept at all) and redesign.prefs, in NSH Storage; the theme through bir get_setting / set_setting
-//   polls        events 30 s, device filings 5 s, update status 1 s: startPolling(), owned by the root
+//   polls        events 30 s, device filings 5 s, update status 1 s: startPolling(), owned by the root; none shows a toast while a lock is up
 import type { Accessor, Signal } from "nsh";
 import { batch, computed, setColorScheme, signal, Storage, windowSize } from "nsh";
 import { Application } from "nsh/desktop";
-import { bir, doorStatus, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
+import { bir, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
 import { errorText } from "../lib/errors";
 import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
-import { ICONS, toast as kitToast, type IconName } from "../ui";
+import { dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
-import { parseStart, parseStartForm } from "./start";
+import { allowedStart, parseStart, parseStartForm } from "./start";
 import { store } from "./store";
 import { nextThemePreference, parseThemePreference, storedThemePreference, THEME_PREF_KEY, themePreferenceFromStart, type ThemePreference } from "./theme";
 
@@ -129,6 +129,8 @@ const appLocked = signal(false);
 const cloudLocked = signal(false);
 const setup = signal<{ pending: string | null; step: string }>({ pending: null, step: "choose" });
 const updateStatus = signal<UpdateStatus | null>(null);
+/** Why the access state (does the admin have a PIN or an authenticator?) could not be read; set, the app stays locked and the lock screen shows it. */
+const accessError = signal<string | null>(null);
 let lockedFrom: Session | null = null;
 /** Why the account gate cannot open (its read, or the session opening, failed); shown on the gate card. */
 const gateError = signal<string | null>(null);
@@ -218,6 +220,49 @@ const needsSetup = () => FIRST_RUN_GATE() && !authState().mode;
 function applyScope(): void {
   const s = session();
   store.setScope(s.kind === "taxpayer" ? s.root : null);
+}
+
+/**
+ * Whether the admin has a PIN or an authenticator, asked of the host now. Never the cached read (store.authState): its fallback while
+ * the host cannot answer is "no code", and a lock must not open on a fallback. `true`/`false` is the host's own answer; `null` means
+ * the host could not say (its sentence is in accessError, and the app is to stay locked).
+ */
+function readAccess(): boolean | null {
+  try {
+    const state = bir.auth_state();
+    store.forgetWhere(/^auth_state$/);
+    accessError.set(null);
+    return Boolean(state.has_admin_pin || state.has_admin_totp);
+  } catch (error) {
+    accessError.set(errorText(error));
+    return null;
+  }
+}
+
+/** The lock screen's Retry after the access state could not be read: asks again; the sign-in (or the frame) comes only on an answer. */
+function retryAccess(): void {
+  if (accessError() === null) return;
+  const code = readAccess();
+  if (code !== null) appLocked.set(code);
+}
+
+/** The agent host must refuse while the app is locked: the Buwiz gate, the sign-in lock, or not booted yet (first-run setup is not a lock). */
+const agentLocked = () => !booted() || cloudLocked() || appLocked();
+
+let agentAccessSent: string | null = null;
+
+/** Tells the agent host who may use the app (src/agent.rs). Call it from an effect: it reads the signals it depends on. No-op when unchanged. */
+function syncAgentAccess(): void {
+  const locked = agentLocked();
+  const taxpayerSession = session().kind === "taxpayer";
+  const sent = `${locked}|${taxpayerSession}`;
+  if (agentAccessSent === sent) return;
+  agentAccessSent = sent;
+  try {
+    setAgentAccess(locked, taxpayerSession);
+  } catch {
+    agentAccessSent = null;
+  }
 }
 
 // ---------------------------------------------------------------- selection
@@ -451,8 +496,32 @@ function settled(): Promise<void> {
   return leaving ?? Promise.resolve();
 }
 
-/** Quits the app (desktops) once the screens' beforeLeave hooks are done, 3 seconds at most. `exit` is what ends the run. */
-async function quit(exit: () => void = () => Application.quit()): Promise<void> {
+/** The two steps that end the run, as one object so a test can stand in for them; the app never changes it. */
+export const quitSteps = {
+  /** The door's quit path: the submission worker stops and the database is checkpointed (safe to call twice). */
+  shutdown: (): void => shutdown(),
+  /** The application ends. */
+  end: (): void => Application.quit(),
+};
+
+/**
+ * What ends the run once every screen has finished its work: the door's quit path first, then `then` (the app ends). A caller that
+ * ends the run its own way (the updater's install and restart) calls this inside its exit, so no way out skips the door's shutdown.
+ */
+function endRun(then: () => void = () => quitSteps.end()): void {
+  try {
+    quitSteps.shutdown();
+  } catch (error) {
+    store.logScreen("warn", `quit: ${errorText(error)}`);
+  }
+  then();
+}
+
+/**
+ * Quits the app (desktops) once the screens' beforeLeave hooks are done, 3 seconds at most, then the door shuts down and the app ends:
+ * every caller gets all three. `exit` replaces what happens after the hooks (a test's stand-in; the updater, which calls endRun inside it).
+ */
+async function quit(exit: () => void = endRun): Promise<void> {
   await runLeaveHooks();
   exit();
 }
@@ -508,16 +577,18 @@ export function replace(name: ViewName, params: ViewParams = {}): void {
 
 /** Back one step, onto the taxpayer that screen was left on. False when there is none. */
 export function back(): boolean {
-  if (!history().length) return false;
+  if (lastAlive(history()) < 0) return false;
   leave(() => {
     const h = history();
-    if (!h.length) return;
-    const stop = h[h.length - 1];
+    // Stops whose taxpayer is gone are dropped on the way.
+    const at = lastAlive(h);
+    if (at < 0) return;
+    const stop = h[at];
     const here: Stop = { route: route(), sel: currentSelection() };
     restoreSelection(stop.sel);
     batch(() => {
       forward.set([...forward(), here]);
-      history.set(h.slice(0, -1));
+      history.set(h.slice(0, at));
       route.set({ ...stop.route, seq: ++seq });
     });
     closeTransient();
@@ -527,16 +598,17 @@ export function back(): boolean {
 
 /** Forward one step, onto the taxpayer that screen was left on. False when there is none. */
 export function forwardOne(): boolean {
-  if (!forward().length) return false;
+  if (lastAlive(forward()) < 0) return false;
   leave(() => {
     const f = forward();
-    if (!f.length) return;
-    const stop = f[f.length - 1];
+    const at = lastAlive(f);
+    if (at < 0) return;
+    const stop = f[at];
     const here: Stop = { route: route(), sel: currentSelection() };
     restoreSelection(stop.sel);
     batch(() => {
       history.set([...history(), here]);
-      forward.set(f.slice(0, -1));
+      forward.set(f.slice(0, at));
       route.set({ ...stop.route, seq: ++seq });
     });
     closeTransient();
@@ -631,11 +703,67 @@ function bumpRecentReturn(opts: RecentInput): void {
   writeLocal(KEYS.recent, next);
 }
 
-/** Rewrite Recent after a TIN or branch-code move, so the entries still open. */
+/** A route that names a return (the form page) with its TIN moved by `map`; the same route when it names none or the TIN stays. */
+function remapRoute(r: Route, map: (tin: string) => string): Route {
+  const t = r.view === "form" ? (r.params.target as FormTarget | undefined) : undefined;
+  if (!t) return r;
+  const tin = map(String(t.tin));
+  return tin === String(t.tin) ? r : { ...r, params: { ...r.params, target: { ...t, tin } } };
+}
+
+/** A selection (taxpayer root and branch code) moved by `map`, which takes and gives the 14-digit TIN. */
+function remapSelection(sel: Selection, map: (tin: string) => string): Selection {
+  if (!sel.root) return sel;
+  const was = sel.root + (sel.code ?? "00000");
+  const now = map(was);
+  return now === was ? sel : { ...sel, root: now.slice(0, 9), code: sel.code === null ? null : now.slice(9) };
+}
+
+function remapStops(stops: Stop[], map: (tin: string) => string): Stop[] {
+  const next = stops.map((s) => {
+    const r = remapRoute(s.route, map);
+    const sel = remapSelection(s.sel, map);
+    return r === s.route && sel === s.sel ? s : { route: r, sel };
+  });
+  return next.some((s, i) => s !== stops[i]) ? next : stops;
+}
+
+/**
+ * Rewrite what names a TIN after a TIN or branch-code move, so it still opens: Recent, every stop of the history and of Forward (the
+ * route's return and the selection it was left on), and the page on screen. `map` takes and gives the 14-digit TIN.
+ */
 function remapRecent(map: (tin: string) => string): void {
   const next = recent().map((r) => recentEntry({ ...r, tin: map(String(r.tin)) }));
   recent.set(next);
   writeLocal(KEYS.recent, next);
+  batch(() => {
+    const h = remapStops(history(), map);
+    if (h !== history()) history.set(h);
+    const f = remapStops(forward(), map);
+    if (f !== forward()) forward.set(f);
+    const here = remapRoute(route(), map);
+    if (here !== route()) route.set(here);
+  });
+}
+
+/**
+ * Whether a stop can still be shown: its taxpayer (the selection it was left on, the return its page names) is in the database.
+ * A taxpayer that was deleted leaves stops that would show the profile, or a form, of whoever is first now. With no taxpayer at all
+ * (or none the host would list) nothing can be told: the stop stays, and the view falls to Home by itself.
+ */
+function stopAlive(stop: Stop): boolean {
+  const roots = new Set(store.taxpayers().map((t) => t.tin_root));
+  if (!roots.size) return true;
+  const target = stop.route.view === "form" ? (stop.route.params.target as FormTarget | undefined) : undefined;
+  if (stop.sel.root && !roots.has(stop.sel.root)) return false;
+  if (target && !roots.has(String(target.tin).slice(0, 9))) return false;
+  return true;
+}
+
+/** The index of the stop nearest the end that can still be shown, or -1. */
+function lastAlive(stops: Stop[]): number {
+  for (let i = stops.length - 1; i >= 0; i--) if (stopAlive(stops[i])) return i;
+  return -1;
 }
 
 /** Opens a return on the form page: selects its taxpayer and branch (the context pill names whose return it is). */
@@ -867,7 +995,9 @@ function openNotification(id: string): void {
  * background jobs) and announces events that appeared since the last look.
  */
 function pollEvents(): void {
-  if (cloudLocked()) return;
+  // While a lock is up nobody has signed in: another taxpayer's filing events must not toast onto the lock screen (the next person
+  // to sign in hears of what is theirs on the next poll: knownEvents is only updated here).
+  if (cloudLocked() || appLocked()) return;
   store.forgetWhere(/^(returns:|deadlines|forms:|jobs$)/);
   const said = eventToast(takeFresh(knownEvents, notifications()));
   if (said) toast(said.message, said.icon);
@@ -882,7 +1012,8 @@ function pullDeviceFilings(): void {
   } catch {
     return;
   }
-  if (note?.message) toast(note.message, note.icon || "send");
+  // The upload went on whoever is at the keyboard; what it says is for the person who signs in, not for the lock screen.
+  if (note?.message && !appLocked()) toast(note.message, note.icon || "send");
 }
 
 /** The host checks for a release on its own thread; polling is how the prompt appears. */
@@ -898,6 +1029,9 @@ function watchUpdate(): void {
   if (prev && prev.phase === next.phase && prev.version === next.version && prev.message === next.message && prev.auto_download === next.auto_download) return;
   updateStatus.set(next);
 }
+
+/** One run of each poll that can toast, for a fixture that plays a poll at a chosen moment (the app's own runs are startPolling's). */
+export const pollSteps = { events: (): void => pollEvents(), deviceFilings: (): void => pullDeviceFilings() };
 
 /** Starts the three polls; the root calls it on mount and the returned function on unmount. */
 export function startPolling(): () => void {
@@ -916,7 +1050,8 @@ export function startPolling(): () => void {
 /** Nobody can sign back in without a code: with no admin code a taxpayer-less session cannot lock. */
 function endSession(message?: string): void {
   const s = session();
-  if (s.kind !== "taxpayer" && !adminHasCode()) {
+  // Asked of the host now: a read that fails locks anyway (the lock screen says why and offers Retry), never opens.
+  if (s.kind !== "taxpayer" && readAccess() === false) {
     toast("Set your PIN in Settings first. With no PIN there is nothing to sign back in with.", "lock");
     return;
   }
@@ -927,6 +1062,8 @@ function endSession(message?: string): void {
     overlay.set(null);
     appLocked.set(true);
   });
+  // What the last person was told stays with them: no toast outlives the session onto the lock screen.
+  dismissToast();
   sessionChanged();
   store.bump();
   applyScope();
@@ -1039,7 +1176,8 @@ async function loadKept(start?: string): Promise<void> {
   prefs.set({ showRecent: true, compactFormNav: false, ...(await readLocal<Partial<Prefs>>(KEYS.prefs, {})) });
   applyScope();
   // The admin has a PIN or an authenticator: the sign-in screen comes first (old initAuth). With none, nobody can lock anyone out.
-  appLocked.set(adminHasCode());
+  // Asked of the host directly: the app opens only on its clear "no code"; a read that fails keeps it locked (accessError).
+  appLocked.set(readAccess() !== false);
 }
 
 /** The dev route boot() was given, run once the account gate is open. */
@@ -1063,9 +1201,12 @@ function startParams(): Readonly<Record<string, string>> {
  * what stands in front of it: the gate, first-run setup, sign-in). Idempotent. `start` is the dev route (App.tsx passes
  * BIR_SHELL_START): "tp=<root>;branch=<code>;theme=dark;view=library;panel=profile;palette=<text>;form=2551Q/2026/3".
  * `firstRun`: first-run setup stands in front of the frame while the database has no access mode (the shipped app).
+ * The route is honoured only where the door reports a test environment (its access steps take PINs and keys); `testEnvironment`
+ * is for a test of that rule.
  */
-export function boot(start?: string, opts: { firstRun?: boolean } = {}): Promise<void> {
+export function boot(requested?: string, opts: { firstRun?: boolean; testEnvironment?: boolean } = {}): Promise<void> {
   bootPromise ??= (async () => {
+    const start = allowedStart(requested, opts.testEnvironment ?? doorStatus().testEnvironment);
     FIRST_RUN_GATE.set(opts.firstRun === true);
     bootStart = start;
     // The dev environment's host bypass (EBIR_TEST_ENV=1 with BIR_AUTH_BYPASS=1) answers unlocked, as in the old app.
@@ -1108,7 +1249,8 @@ async function finishUnlock(): Promise<boolean> {
     cloudLocked.set(false);
     if (bootStart) runStartRoute(bootStart);
   } else {
-    sessionChanged();
+    // The gate opening again is a new session; a sign-in from Settings while the app is already open is not.
+    if (cloudLocked()) sessionChanged();
     store.bump();
     cloudLocked.set(false);
   }
@@ -1126,6 +1268,7 @@ function lockCloud(): void {
     gateError.set(null);
     cloudLocked.set(true);
   });
+  dismissToast();
   sessionChanged();
 }
 
@@ -1140,8 +1283,8 @@ export const app = {
   /** The view that shows. */
   view,
   params: (): ViewParams => route().params,
-  canBack: () => history().length > 0,
-  canForward: () => forward().length > 0,
+  canBack: () => lastAlive(history()) >= 0,
+  canForward: () => lastAlive(forward()) >= 0,
   // Selection.
   taxpayers: () => store.taxpayers(),
   taxpayer,
@@ -1172,6 +1315,14 @@ export const app = {
   session: readOnly(session),
   appLocked: readOnly(appLocked),
   cloudLocked: readOnly(cloudLocked),
+  /** Why the access state could not be read (the lock screen shows it with Retry), or null. */
+  accessError: readOnly(accessError),
+  retryAccess,
+  /** Whether the admin has a PIN or an authenticator, asked of the host now: null when it could not say. Never the cached read. */
+  adminCodeNow: readAccess,
+  /** The agent host refuses while true (the Buwiz gate, the sign-in lock, not booted); read by the root and the agent bridge. */
+  agentLocked,
+  syncAgentAccess,
   /** Why the account gate cannot open, or null. */
   gateError: readOnly(gateError),
   /** First-run setup's step ("choose" | "helpdesk-pin" | "helpdesk-key") and "solo" while Just me types its first taxpayer. */
@@ -1195,6 +1346,7 @@ export const app = {
   beforeLeave,
   onSessionChange,
   quit,
+  endRun,
   retarget,
   startParams,
   openReturn,

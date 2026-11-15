@@ -171,7 +171,8 @@ async function submitMacLogin(): Promise<void> {
 
 /** The admin has no code, so there is nothing to sign in with: the owner is at the keyboard. */
 function openWithoutSignIn(): void {
-  if (app.adminHasCode()) return;
+  // The host's own "no code" (asked now), never the cached read whose fallback is "no code" too.
+  if (app.adminCodeNow() !== false) return;
   begin({ kind: "open" });
 }
 
@@ -270,19 +271,17 @@ function finishHelpdeskSetup(): void {
 // ---------------------------------------------------------------- the dev start route
 
 /**
- * Steps of BIR_SHELL_START for these screens (old runAccessStep): "setup=solo|helpdesk", "setuppin=<pin>" (logs the
- * recovery key once), "keydone", "lock", "tin=<root>", "forgot", "signin=<root>:<pin>", "override=<admin pin>",
- * "recover=<key>". Each types into the same boxes a person does and presses the same button: every code is still checked
- * by the host.
+ * Steps of BIR_SHELL_START for these screens (old runAccessStep): "setup=solo|helpdesk", "setuppin=<pin>", "keydone", "lock",
+ * "tin=<root>", "forgot", "signin=<root>:<pin>", "override=<admin pin>", "recover=<key>". Each types into the same boxes a person
+ * does and presses the same button: every code is still checked by the host. The route is read only in a test environment
+ * (shell/app.ts boot), and nothing here logs a PIN, a code or the recovery key: the screen shows the key once, as for a person.
  */
 function accessStep(key: string, value: string): void {
   const [a, b = ""] = value.split(":");
   if (key === "setup") return a === "solo" ? chooseSolo() : chooseHelpdesk();
   if (key === "setuppin") {
     setupPin.set(a);
-    submitHelpdeskPin();
-    if (setupKey()) console.log(`dev route: recovery key ${setupKey()}`);
-    return;
+    return submitHelpdeskPin();
   }
   if (key === "keydone") return finishHelpdeskSetup();
   if (key === "lock") return app.lockApp();

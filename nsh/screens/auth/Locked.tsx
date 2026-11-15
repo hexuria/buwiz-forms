@@ -3,6 +3,7 @@
 // while appLocked. Shell.tsx's LockedFrame draws it under the bare title bar.
 import { View } from "nsh";
 import { app } from "../../shell";
+import { AccessError } from "./AccessError";
 import { AccountGate } from "./Gate";
 import { Setup, SoloTaxpayer } from "./Setup";
 import { SignIn } from "./SignIn";
@@ -23,13 +24,16 @@ export function LockedScreen() {
       <If when={app.cloudLocked()}>
         <AccountGate />
       </If>
-      <If when={!app.cloudLocked() && soloPending()}>
+      <If when={!app.cloudLocked() && app.accessError() !== null}>
+        <AccessError />
+      </If>
+      <If when={!app.cloudLocked() && app.accessError() === null && soloPending()}>
         <SoloTaxpayer />
       </If>
-      <If when={!app.cloudLocked() && setupShows() && app.setup().pending !== "solo"}>
+      <If when={!app.cloudLocked() && app.accessError() === null && setupShows() && app.setup().pending !== "solo"}>
         <Setup />
       </If>
-      <If when={!app.cloudLocked() && !setupShows() && app.appLocked()}>
+      <If when={!app.cloudLocked() && app.accessError() === null && !setupShows() && app.appLocked()}>
         <SignIn />
       </If>
     </View>
