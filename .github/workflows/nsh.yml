@@ -3,11 +3,10 @@ name: NSH app
 # The NSH (TSX) app in nsh/ (docs/platforms/nsh.md, nsh/AGENTS.md): type check, build, Rust tests and the headless TSX
 # tests on macOS, plus the plain-SQLite tests of the two crates the app is built on.
 #
-# THIS WORKFLOW CANNOT PASS YET. The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...),
-# so CI checks NSH out next to this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged
-# (local commit c346e920e on branch feat/nsh-tsx of the owner's checkout), and that commit is NOT pushed. Until the
-# owner pushes it to hexuria/nsh, the "Check out NSH" step fails. Nothing here has ever run: it was written without a
-# runner, and its steps are the ones that pass on the owner's Mac (nsh/AGENTS.md "Commands").
+# The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
+# this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged: c346e920e, the tip of the
+# `buwiz` branch since hexuria/nsh#12. NOTHING HERE HAS EVER RUN: it was written without a runner, and its steps are the
+# ones that pass on the owner's Mac (nsh/AGENTS.md "Commands").
 #
 # Secret to create: NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
 # "Contents: read" on that one repository). If hexuria/nsh is public it is not needed (the step falls back to the
@@ -36,8 +35,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # c346e920ee4ba12f6dc5804842e60814d2c02480 = hexuria/nsh, branch feat/nsh-tsx: "Merge upstream v0.5.1 into the buwiz
-  # line". NOT PUSHED yet (see the top of this file): the workflow cannot pass until the owner pushes it.
+  # c346e920ee4ba12f6dc5804842e60814d2c02480 = hexuria/nsh, branch buwiz: "Merge upstream v0.5.1 into the buwiz line"
+  # (hexuria/nsh#12).
   NSH_PINNED_REF: c346e920ee4ba12f6dc5804842e60814d2c02480
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.

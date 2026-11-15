@@ -218,7 +218,15 @@ jobs:
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
         python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
 
+    # bir-app-api (the host functions moved out of bir-shell, with their tests) is a member of this workspace, so its tests
+    # run here. They need what `just shell-check` gives bir-shell's: the debug-only account-gate bypass (release builds
+    # ignore both), the dry-run sender, and no keychain.
     - name: Test
+      env:
+        EBIR_TEST_ENV: "1"
+        BIR_AUTH_BYPASS: "1"
+        BIR_SFTP_DRY_RUN: "1"
+        BUWIZ_NO_KEYCHAIN: "1"
       run: cargo test --locked --workspace
 
     # The production-filing boundary stays gating on every PR, whatever the

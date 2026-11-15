@@ -59,9 +59,15 @@ const GENERATED_MANIFEST_PATH: &str = "crates/bir-rules/src/generated/manifest.j
 const PAYLOAD_PATH: &str = "crates/bir-core/src/form_rules/payload.rs";
 const CORE_FORM_2550Q_PATH: &str = "crates/bir-core/src/forms/form_2550q.rs";
 const CORE_CAPABILITIES_PATH: &str = "crates/bir-core/src/forms/support_level.rs";
-const SHELL_SCREEN_FORM_PATH: &str = "crates/bir-shell/src/screen_form_module.rs";
-const SHELL_BIR_MODULE_PATH: &str = "crates/bir-shell/src/bir_module.rs";
-const SHELL_AGENT_SESSION_PATH: &str = "crates/bir-shell/src/agent/session.rs";
+// The shell's host modules live in bir-app-api (moved out of bir-shell unedited, so the old shell and the NSH app in
+// nsh/ serve the same functions). The freeze follows them: same checks, same expected inventories.
+const SHELL_SCREEN_FORM_PATH: &str = "crates/bir-app-api/src/screen_form_module.rs";
+const SHELL_BIR_MODULE_PATH: &str = "crates/bir-app-api/src/bir_module.rs";
+const SHELL_AGENT_SESSION_PATH: &str = "crates/bir-app-api/src/agent/session.rs";
+
+/// Where application code lives outside bir-core: the host modules, the old shell's glue and the NSH app's Rust side.
+/// Every one is read for the freeze, and the "shell" inventories count all of them.
+const SHELL_SOURCE_ROOTS: [&str; 3] = ["crates/bir-app-api/src", "crates/bir-shell/src", "nsh/src"];
 const VALIDATION_SUMMARY_PATH: &str = "crates/bir-core/src/validation_summary.rs";
 const V1_VALIDATIONS_PATH: &str = "rules/forms/2550q-v2024/validations.json";
 const SHADOW_PATH: &str = "crates/bir-core/src/form_rules/shadow.rs";
@@ -696,7 +702,7 @@ impl FrozenApplicationSources {
         let repo_root = canonical_repo_root(repo_root)
             .map_err(|error| format!("cannot canonicalize frozen repository root: {error}"))?;
         let mut files = BTreeMap::new();
-        for relative_root in ["crates/bir-core/src", "crates/bir-shell/src"] {
+        for relative_root in std::iter::once("crates/bir-core/src").chain(SHELL_SOURCE_ROOTS) {
             let root = resolve_existing_under(&repo_root, relative_root, relative_root).map_err(
                 |error| format!("cannot resolve frozen source root {relative_root}: {error}"),
             )?;
@@ -940,7 +946,12 @@ fn check_shell_evaluator_surface(
 ) {
     let shell: BTreeMap<String, String> = production
         .iter()
-        .filter(|(path, _)| path.starts_with("crates/bir-shell/src/"))
+        .filter(|(path, _)| {
+            SHELL_SOURCE_ROOTS.iter().any(|root| {
+                path.strip_prefix(root)
+                    .is_some_and(|rest| rest.starts_with('/'))
+            })
+        })
         .map(|(path, source)| (path.clone(), source.clone()))
         .collect();
     check_occurrence_inventory(
