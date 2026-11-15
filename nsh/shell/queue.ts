@@ -3,21 +3,12 @@
 // host ("Other error: Only an unclaimed queued 1601C snapshot can be canceled"): the person reads that the return was already sent,
 // and the lists are read again at once (and after 1 s, 3 s and 10 s) so the card stops saying Queued.
 import { errorText } from "../lib/errors";
+import { ALREADY_SENT, cancelQueueMessage, isAlreadySent } from "../lib/queue_message";
 import { toast } from "./app";
 import { store } from "./store";
 
-/** What a person reads when the return had been sent (or claimed by the worker) before the cancel got there. */
-export const ALREADY_SENT = "This return was already sent.";
-
-/** The host's refusal of a cancel-queue: only an unclaimed queued snapshot can be canceled. */
-export function isAlreadySent(error: unknown): boolean {
-  return /unclaimed queued .* can be canceled/i.test(errorText(error));
-}
-
-/** The sentence a failed cancel-queue shows: the plain one for a return that was sent, else the host's own words without its "Other error:" label. */
-export function cancelQueueMessage(error: unknown): string {
-  return isAlreadySent(error) ? ALREADY_SENT : errorText(error).replace(/^Other error:\s*/, "");
-}
+// The sentences live in lib/queue_message.ts (the form page says the same one); re-exported for the screens that import them from here.
+export { ALREADY_SENT, cancelQueueMessage, isAlreadySent };
 
 /**
  * "Cancel queue": the return is an editable draft again, or the person is told why not. The cached lists are dropped either way,

@@ -42,7 +42,9 @@ export function NewReturn() {
         <Text variant="title">Start a return</Text>
         {/* The old header (chrome.js): "name ·", the TIN with its branch code, the branch's name; 4 apart, no dots after the first. */}
         <View testID="new-return-who" class="mt-0.5 flex-row gap-1">
-          <Text variant="meta" tone="fg2">{`${tp()?.name ?? ""} ·`}</Text>
+          <If when={tp()?.name}>
+            <Text variant="meta" tone="fg2">{`${tp()?.name ?? ""} ·`}</Text>
+          </If>
           <Code tone="fg2" class="font-normal">{br()?.tin_display ?? ""}</Code>
           <Text variant="meta" tone="fg2">{br()?.name ?? ""}</Text>
         </View>

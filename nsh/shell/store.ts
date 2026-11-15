@@ -36,6 +36,12 @@ export const QUEUE_FUNCTIONS: ReadonlySet<string> = new Set(["queue_form_draft",
 export const QUEUE_REREAD_MS = [1000, 3000, 10_000] as const;
 /** What the worker changes behind the app's back: the returns lists, their deadlines and yearly form rows, the jobs, the drafts count, the as-needed forms. */
 export const WORKER_KEYS = /^(returns:|deadlines|forms:|jobs$|saved_returns$|as_needed:)/;
+/**
+ * What the plain 30 s events poll drops: WORKER_KEYS less the drafts count and the as-needed forms. The drafts count (SAVED_RETURNS_KEY) is
+ * kept past this poll on purpose, so a visit to Home finds it held and draws at once (Home reads it again in the background after it is
+ * up). The Queued watch and the queue actions use the wider WORKER_KEYS: a return that leaves the queue changes both.
+ */
+export const POLL_KEYS = /^(returns:|deadlines|forms:|jobs$)/;
 
 type Bir = typeof bir;
 type BirName = keyof Bir;
@@ -60,11 +66,27 @@ const entries = new Map<string, Entry>();
 const scope = signal<string | null>(null);
 let rdoList: { value: string; label: string }[] | null = null;
 let zipList: { value: string; label: string }[] | null = null;
+type FormIndex = ReturnType<Bir["screen_forms_index"]>;
 /** The form library's index: it never changes while the app runs and takes about a second to build, so it is kept past bump(). */
-let formIndex: ReturnType<Bir["screen_forms_index"]> | null = null;
-let formIndexError: string | undefined;
+let formIndex: FormIndex | null = null;
+/** What screenIndex() answers while there is no index (a build that failed, waiting out its backoff): one array, so a reader that gets it again is not told of a change. */
+const NO_INDEX: FormIndex = [];
+/**
+ * The index's revision: what shows the index reads it, so it asks again when a failed build is due again and once the index fills after
+ * a failure (a signal is never written inside a read, so both moves come from a timer).
+ */
+const formIndexRev = signal(0);
+/** A build that failed: waiting out its backoff (until the retry timer), how many in a row (the backoff's step), the last error text (logged once), the retry timer. */
+const formIndexFail: { waiting: boolean; count: number; error: string | undefined; retry: ReturnType<typeof setTimeout> | undefined } = {
+  waiting: false,
+  count: 0,
+  error: undefined,
+  retry: undefined,
+};
 /** The pending re-reads after a queue action; a newer action starts the series again. */
 let queueRereads: ReturnType<typeof setTimeout>[] = [];
+/** When the last queue action happened (Date.now()), 0 for none: the Queued watch starts its fast phase again from it. */
+let lastQueueActionAt = 0;
 
 function entryOf(key: string): Entry {
   let e = entries.get(key);
@@ -155,11 +177,33 @@ function rereadWorkerLists(): void {
   store.forgetWhere(WORKER_KEYS);
 }
 
+/** Cancels the pending re-reads of a queue action. */
+function cancelRereads(): void {
+  for (const timer of queueRereads) clearTimeout(timer);
+  queueRereads = [];
+}
+
 /** After a queue action: read now, and again after each of QUEUE_REREAD_MS. */
 function rereadSoon(): void {
-  for (const timer of queueRereads) clearTimeout(timer);
+  cancelRereads();
+  lastQueueActionAt = Date.now();
   rereadWorkerLists();
   queueRereads = QUEUE_REREAD_MS.map((ms) => setTimeout(rereadWorkerLists, ms));
+}
+
+/** The index could not be built (or came back empty): [] until the retry is due, which waits twice as long each time in a row (2 s, 4 s ... a minute). */
+function formIndexFailed(error: unknown): void {
+  const text = String(error);
+  if (formIndexFail.error !== text) logScreen("error", `screen_forms_index: ${errorText(error)}`);
+  formIndexFail.error = text;
+  formIndexFail.waiting = true;
+  formIndexFail.count += 1;
+  if (formIndexFail.retry !== undefined) clearTimeout(formIndexFail.retry);
+  formIndexFail.retry = setTimeout(() => {
+    formIndexFail.retry = undefined;
+    formIndexFail.waiting = false;
+    formIndexRev.update((n) => n + 1);
+  }, failedReadDelay(formIndexFail.count));
 }
 
 /** The app's reads and writes of the Rust brain. One instance; screens use it through shell/index.ts. */
@@ -202,6 +246,10 @@ export const store = {
   afterQueueChange(): void {
     rereadSoon();
   },
+  /** Cancels the re-reads a queue action left pending: the session they were for has ended (a lock, a sign-out) or the frame is gone. */
+  cancelRereads,
+  /** When the last queue action happened (Date.now()), or 0. */
+  lastQueueAction: (): number => lastQueueActionAt,
   /** True when key holds an answer already (a read that is not dropped yet). */
   has(key: string): boolean {
     return entries.get(key)?.has === true;
@@ -265,20 +313,30 @@ export const store = {
   /**
    * The form library's index (code, title, frequency ...). Built once (about a second in a debug build, a sync host call) and kept
    * for the run, past bump(): the library never changes while the app runs. The shell warms it after the first screen is drawn.
-   * A failed or empty build answers [] and is tried again at the next ask.
+   * Reactive: what shows it asks again when it fills after a failure. A failed or empty build answers [] and is logged once; the
+   * host is not asked again until the retry is due (2 s, then 4 s, 8 s ... a minute, as a failed read), when what shows it re-runs.
    */
-  screenIndex(): ReturnType<Bir["screen_forms_index"]> {
+  screenIndex(): FormIndex {
+    formIndexRev();
     if (formIndex) return formIndex;
+    if (formIndexFail.waiting) return NO_INDEX;
     try {
       const rows = bir.screen_forms_index();
-      formIndexError = undefined;
-      if (rows.length) formIndex = rows;
+      if (!rows.length) throw new Error("The form library came back empty.");
+      formIndex = rows;
+      if (formIndexFail.count > 0) {
+        // What showed [] shows the forms now.
+        if (formIndexFail.retry !== undefined) clearTimeout(formIndexFail.retry);
+        formIndexFail.retry = undefined;
+        setTimeout(() => formIndexRev.update((n) => n + 1), 0);
+      }
+      formIndexFail.waiting = false;
+      formIndexFail.count = 0;
+      formIndexFail.error = undefined;
       return rows;
     } catch (error) {
-      const text = String(error);
-      if (formIndexError !== text) logScreen("error", `screen_forms_index: ${errorText(error)}`);
-      formIndexError = text;
-      return [];
+      formIndexFailed(error);
+      return NO_INDEX;
     }
   },
   /** RDO choices as { value, label }. Static, so kept past bump(). */

@@ -10,9 +10,10 @@
 //   persistence  redesign.recent, redesign.selection, redesign.read_notifications (each suffixed @<database path>; with the path
 //                unknown they are not kept at all) and redesign.prefs, in NSH Storage; the theme through bir get_setting / set_setting
 //   polls        events 30 s, device filings 5 s, update status 1 s: startPolling(), owned by the root; none shows a toast while a lock is up;
-//                while a return is Queued the lists are read every 3 s (startQueuedWatch, also in the dev environment)
+//                while a return is Queued the lists are read every 3 s for about 30 s after the Queued set last changed (startQueuedWatch,
+//                also in the dev environment; it and the library warm-up wait for the frame to be shown: nothing is read behind a lock)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
+import { batch, computed, effect, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
 import { Application } from "nsh/desktop";
 import { bir, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
@@ -25,7 +26,7 @@ import { dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
-import { store } from "./store";
+import { POLL_KEYS, store, WORKER_KEYS } from "./store";
 import { nextThemePreference, parseThemePreference, storedThemePreference, THEME_PREF_KEY, themePreferenceFromStart, type ThemePreference } from "./theme";
 
 // ---------------------------------------------------------------- types
@@ -992,14 +993,14 @@ function openNotification(id: string): void {
 // ---------------------------------------------------------------- polls
 
 /**
- * Re-reads what the submission worker changes behind this app's back (returns, their deadlines and yearly form rows,
- * background jobs) and announces events that appeared since the last look.
+ * Re-reads what the submission worker changes behind this app's back (by default POLL_KEYS: returns, their deadlines and yearly form
+ * rows, background jobs; the Queued watch passes the wider WORKER_KEYS) and announces events that appeared since the last look.
  */
-function pollEvents(): void {
+function pollEvents(keys: RegExp = POLL_KEYS): void {
   // While a lock is up nobody has signed in: another taxpayer's filing events must not toast onto the lock screen (the next person
   // to sign in hears of what is theirs on the next poll: knownEvents is only updated here).
   if (cloudLocked() || appLocked()) return;
-  store.forgetWhere(/^(returns:|deadlines|forms:|jobs$)/);
+  store.forgetWhere(keys);
   const said = eventToast(takeFresh(knownEvents, notifications()));
   if (said) toast(said.message, said.icon);
 }
@@ -1033,46 +1034,104 @@ function watchUpdate(): void {
 
 /** How often the lists are read again while a return is Queued (instead of the events poll's 30 s). */
 export const QUEUED_POLL_MS = 3000;
+/** How long after the Queued set last changed (or a queue action) the watch keeps its pace; after that the normal 30 s events poll is enough. */
+export const QUEUED_FAST_MS = 30_000;
 
-/** Whether the cached filed list holds a Queued return (read now when it was dropped). False behind a lock: nothing is read for nobody. */
-function anyQueued(): boolean {
-  if (cloudLocked() || appLocked()) return false;
-  return untracked(() => store.returns("filed")).some((r) => r.status === "Queued");
+/** The watch's pace: the wait before its first look, between two looks, and how long the fast phase lasts. A test shortens them. */
+export interface QueuedTiming {
+  firstMs: number;
+  tickMs: number;
+  fastMs: number;
+}
+
+/** The ids of the Queued returns in the cached filed list (read now when it was dropped), as one sorted text; "" for none. Always "" behind a lock: nothing is read for nobody. */
+function queuedKey(): string {
+  if (cloudLocked() || appLocked()) return "";
+  return untracked(() => store.returns("filed"))
+    .filter((r) => r.status === "Queued")
+    .map((r) => r.id)
+    .sort((a, b) => a - b)
+    .join(",");
+}
+
+/**
+ * One look of the Queued watch. It does nothing until the frame is shown (booted, the account gate open, first-run setup done, no
+ * sign-in in front). With a return Queued it reads the worker's lists (WORKER_KEYS) on each look for fastMs after the Queued set last
+ * changed or a queue action was made; a return that stays Queued (the worker is off, SFTP is down, the computer is offline) is then
+ * left to the 30 s events poll instead of dropping every mounted screen's reads every 3 s for good. A change in the set, a new queue
+ * action, or the frame coming back from a lock starts the fast phase again.
+ */
+function queuedLook(fastMs: number): () => void {
+  let seen = "";
+  let changedAt = 0;
+  return () => {
+    if (!chromeVisible()) {
+      seen = "";
+      return;
+    }
+    const queued = queuedKey();
+    if (queued !== seen) {
+      seen = queued;
+      changedAt = Date.now();
+    }
+    changedAt = Math.max(changedAt, store.lastQueueAction());
+    if (queued !== "" && Date.now() - changedAt < fastMs) pollEvents(WORKER_KEYS);
+  };
 }
 
 /**
  * The submission worker sends a Queued return within a second or two and tells nobody, so Filings and Home would say Queued until
  * something else moved the cache (the old app relied on its 30 s events poll, and a refused Cancel queue). While any return is Queued
- * the events poll runs every 3 s instead of every 30 s, in the dev environment too (where the other polls wait for BIR_SHELL_POLL=1).
- * The root starts it and calls the returned function on unmount.
+ * the worker's lists are read every 3 s (for about 30 s after the Queued set last changed, then the 30 s events poll alone), in the dev
+ * environment too (where the other polls wait for BIR_SHELL_POLL=1). The root starts it and calls the returned function on unmount.
  */
-export function startQueuedWatch(): () => void {
+export function startQueuedWatch(timing: Partial<QueuedTiming> = {}): () => void {
+  const t: QueuedTiming = { firstMs: 1000, tickMs: QUEUED_POLL_MS, fastMs: QUEUED_FAST_MS, ...timing };
   return startPolls(
-    [{ name: "queued", every: QUEUED_POLL_MS, first: 1000, run: () => (anyQueued() ? pollEvents() : undefined) }],
+    [{ name: "queued", every: t.tickMs, first: t.firstMs, run: queuedLook(t.fastMs) }],
     (name, error) => store.logScreen("warn", `poll ${name}: ${errorText(error)}`),
   );
 }
 
-/** How long after the shell is up the form library is built (the first screen has been drawn by then). */
+/** How long after the frame is first shown the form library is built (the first screen has been drawn by then). */
 export const WARM_DELAY_MS = 600;
 
 /**
- * Builds the form library's index once, a moment after boot (a sync host call: about a second in a debug build), so the first
- * visit to the Form library, the palette's forms and New return do not pay for it. Returns the function that cancels it.
+ * Builds the form library's index once (a sync host call: about a second in a debug build), WARM_DELAY_MS after the frame is first
+ * shown, so the first visit to the Form library, the palette's forms and New return do not pay for it. It waits for the frame: not
+ * before boot, and not behind the account gate, first-run setup or the sign-in screen, where the build would freeze the window while
+ * someone types. Call it where an effect can live (the root). Returns the function that cancels it.
  */
 export function warmLibrary(): () => void {
-  const timer = setTimeout(() => {
-    try {
-      store.screenIndex();
-    } catch {
-      // The index is asked for again where it is used; the store logs a failure.
-    }
-  }, WARM_DELAY_MS);
-  return () => clearTimeout(timer);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let started = false;
+  effect(() => {
+    // Always read it, so the effect hears of every lock and unlock (a read skipped by an early return would end the subscription).
+    const shown = chromeVisible();
+    if (started || !shown) return;
+    started = true;
+    timer = setTimeout(() => {
+      timer = undefined;
+      // Locked again within the delay: wait for the next time the frame shows.
+      if (!chromeVisible()) {
+        started = false;
+        return;
+      }
+      try {
+        store.screenIndex();
+      } catch {
+        // The index is asked for again where it is used; the store logs a failure.
+      }
+    }, WARM_DELAY_MS);
+  });
+  return () => {
+    started = true;
+    if (timer !== undefined) clearTimeout(timer);
+  };
 }
 
 /** One run of each poll that can toast, for a fixture that plays a poll at a chosen moment (the app's own runs are startPolling's). */
-export const pollSteps = { events: (): void => pollEvents(), deviceFilings: (): void => pullDeviceFilings(), queued: (): void => (anyQueued() ? pollEvents() : undefined) };
+export const pollSteps = { events: (): void => pollEvents(), deviceFilings: (): void => pullDeviceFilings(), queued: (): void => (queuedKey() !== "" ? pollEvents(WORKER_KEYS) : undefined) };
 
 /** Starts the three polls; the root calls it on mount and the returned function on unmount. */
 export function startPolling(): () => void {
@@ -1097,6 +1156,8 @@ function endSession(message?: string): void {
     return;
   }
   lockedFrom = s;
+  // What the last person queued is read no more: the re-reads of a queue action end with the session they were for.
+  store.cancelRereads();
   batch(() => {
     session.set({ kind: "open" });
     panel.set(null);
@@ -1309,6 +1370,7 @@ function lockCloud(): void {
     gateError.set(null);
     cloudLocked.set(true);
   });
+  store.cancelRereads();
   dismissToast();
   sessionChanged();
 }

@@ -55,6 +55,39 @@ test("a plain bump starts no re-reads; naming a queue action reads at once, agai
     expect(reads).toBeGreaterThan(after1s); // the 3 s
   } finally {
     fake.list_returns = real;
+    store.cancelRereads(); // the 10 s re-read must not outlive the test
+  }
+});
+
+test("cancelRereads ends the pending re-reads of a queue action (a lock, a sign-out, the frame gone), and a new action starts them again", async () => {
+  let reads = 0;
+  const fake = bir as unknown as { list_returns: (which: string) => unknown[] };
+  const real = fake.list_returns;
+  fake.list_returns = () => {
+    reads += 1;
+    return [];
+  };
+  try {
+    store.bump();
+    peek();
+    store.afterQueueChange();
+    peek();
+    const atOnce = reads;
+    store.cancelRereads();
+    expect(store.lastQueueAction()).toBeGreaterThan(0);
+    await pause(1250);
+    peek();
+    expect(reads).toBe(atOnce); // the 1 s re-read never came
+
+    store.afterQueueChange(); // a new action: the series starts again
+    peek();
+    const again = reads;
+    await pause(1250);
+    peek();
+    expect(reads).toBeGreaterThan(again);
+  } finally {
+    fake.list_returns = real;
+    store.cancelRereads();
   }
 });
 

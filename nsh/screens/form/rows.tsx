@@ -6,7 +6,7 @@ import { signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Code, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, type DateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
 import type { AskCard, ElectionCard, FormSession } from "./session";
 
 export interface RowProps {
@@ -113,6 +113,26 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
   };
 }
 
+/**
+ * The days the calendar beside a split date may offer, given the parts that are shut (locked or computed): a shut year limits it to that
+ * year (a 2551Q's year is locked at the return's), a shut year and month to that month. session.pickDate skips a shut part, so a day
+ * from another year would fill the open parts and leave the shut one: half a date. Reads the boxes (reactive). A shut month alone
+ * limits nothing (min and max cannot say "June of any year"), nor does a year that is not a plain number.
+ */
+export function dateRange(s: FormSession, split: DateParts): { min?: string; max?: string } {
+  const shut = (f: SchemaField) => f.c || s.box(f.k).locked();
+  const typed = String(s.box(split.year.k).value() || "");
+  // A year printed as 20YY (1702Q Year Ended) holds its last two digits.
+  const year = /^\d{1,2}$/.test(typed) ? 2000 + Number(typed) : Number(typed || "");
+  if (!shut(split.year) || !Number.isInteger(year) || year < 1900 || year > 9999) return {};
+  const month = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
+  if (shut(split.month) && month >= 1 && month <= 12) {
+    const mm = String(month).padStart(2, "0");
+    return { min: `${year}-${mm}-01`, max: `${year}-${mm}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}` };
+  }
+  return { min: `${year}-01-01`, max: `${year}-12-31` };
+}
+
 /** What a row draws for its boxes: a schedule, a note, a fold of extra fields, one date, a TIN, or its boxes. */
 function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean> }) {
   const s = props.s;
@@ -151,6 +171,8 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
     if (!(m >= 1 && m <= 12 && y > 1900)) return "";
     return `${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`;
   };
+  // What the calendar may offer: nothing outside the year (and month) that is locked.
+  const splitRange = () => (split ? dateRange(s, split) : {});
   const body = (
     <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3">
       {radios.length ? <RadioGroupControl {...radioProps(s, props.id, it, radios, props.narrow)} /> : null}
@@ -164,7 +186,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         );
       })}
       <If when={splitOpen()}>
-        <CalendarButton id={`fp-date-${props.id}`} value={splitIso()} onPick={(iso) => s.pickDate(split!, iso)} />
+        <CalendarButton id={`fp-date-${props.id}`} value={splitIso()} min={splitRange().min} max={splitRange().max} onPick={(iso) => s.pickDate(split!, iso)} />
       </If>
     </View>
   );

@@ -30,6 +30,28 @@ test("F9-3 desktop: a date in split boxes has a calendar button beside them (255
   expect(app.shows("text:Dec")).toBe(true);
 });
 
+test("F9-3 desktop: the calendar beside a split date with a locked year (2551Q 2025) offers no day outside that year", async () => {
+  const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2025, period: 1 } } });
+  await app.waitFor("id:fp-parts-toggle");
+  await app.waitFor("id:fp-date-0:1");
+  expect(app.texts()).toContain("12 - December");
+  await app.press("id:fp-date-0:1");
+  await app.waitFor("text:Su");
+  // The popup opens on December 2025. A day of November 2025 is inside the year: the month box takes it ...
+  await app.press("label:Previous month");
+  await app.press("text:15");
+  await app.waitFor("text:11 - November");
+  // ... but a day past the end of the year is out of reach: go on to February 2026 and a press on its 15th does nothing (it used to
+  // fill the month list with February and leave the locked year, half a date).
+  await app.press("id:fp-date-0:1");
+  await app.waitFor("text:Su");
+  for (let i = 0; i < 3; i++) await app.press("label:Next month");
+  await app.press("text:15").catch(() => {});
+  await app.wait(300);
+  expect(app.texts()).toContain("11 - November");
+  expect(app.texts()).not.toContain("02 - February");
+});
+
 test("F9-4 desktop: a locked box's hint is shown whole, in a box that grows to it (0619E Due Date MM and YYYY)", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "0619E", year: 0, period: 0, mode: "sample" } } });
   await app.waitFor("id:fp-parts-toggle");

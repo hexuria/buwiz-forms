@@ -31,9 +31,9 @@ export interface ShellProps {
   start?: string;
   /** Run the polls (events 30 s, device filings 5 s, update status 1 s). Default true; test fixtures turn it off. */
   polling?: boolean;
-  /** While any return is Queued, read the lists every 3 s (the worker sends it within seconds and tells nobody). Default: with the polls; the app turns it on in the dev environment too. */
+  /** While any return is Queued, read the lists every 3 s, for about 30 s after the Queued set last changed (the worker sends it within seconds and tells nobody). Default: with the polls; the app turns it on in the dev environment too. */
   watchQueued?: boolean;
-  /** Build the form library's index a moment after boot, so the first Form library visit is not the one that waits. The app turns it on; fixtures leave it off. */
+  /** Build the form library's index a moment after the frame is first shown (not behind the sign-in), so the first Form library visit is not the one that waits. The app turns it on; fixtures leave it off. */
   warm?: boolean;
   /** First-run setup in front of the frame while the database has no access mode (the shipped app; fixtures leave it off). */
   firstRun?: boolean;
@@ -239,6 +239,8 @@ export function Shell(props: ShellProps) {
   // A queued return is watched where the polls run, and in the dev environment too (the app asks); fixtures leave it off.
   if (props.watchQueued ?? props.polling !== false) cleanup(startQueuedWatch());
   if (props.warm === true) cleanup(warmLibrary());
+  // The re-reads a queue action leaves pending (1 s, 3 s, 10 s later) end with the root.
+  cleanup(() => store.cancelRereads());
   // The agent remote control (Rust feature `agent`, GPUI_AGENT=1): its commands are applied here, polled only while it listens.
   // Not tied to `polling`: the dev environment runs with the polls off, and an agent run is a dev run.
   if (props.agent === true) cleanup(startAgentBridge());

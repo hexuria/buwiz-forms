@@ -33,6 +33,7 @@ import {
   type ScreenFormStatus,
 } from "../../bir";
 import { errorText } from "../../lib/errors";
+import { cancelQueueMessage } from "../../lib/queue_message";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
@@ -831,9 +832,11 @@ export class FormSession {
   }
 
   /**
-   * A day picked on the calendar beside an item's split month, day and year boxes ("YYYY-MM-DD") fills the parts that are open.
-   * A part that is a list takes the choice by its value, or a year list by the whole year it shows ("26" listed for 2026).
-   * One part whose list does not hold the pick refuses the whole pick, so the date is never half changed.
+   * A day picked on the calendar beside an item's split month, day and year boxes ("YYYY-MM-DD") fills the parts that are open:
+   * a locked part is skipped (the old app did the same), so the page's calendar offers only the days the locked parts allow
+   * (rows.tsx dateRange passes min and max). A part that is a list takes the choice by its value, or a year list by the whole
+   * year it shows ("26" listed for 2026). Only an open list that cannot hold the pick refuses the whole pick, so a date is never
+   * half changed by a list.
    */
   pickDate(date: DateParts, iso: string) {
     if (!this.st.editable || !this.st.draft) return;
@@ -2299,15 +2302,20 @@ export class FormSession {
   cancelQueue() {
     const s = this.st;
     if (s.sample) return;
+    const name = this.usesPeriodPath() ? "cancel_queued" : "screen_form_cancel_queue";
     try {
       if (this.usesPeriodPath()) bir.cancel_queued(s.target.tin, s.target.formCode, s.target.year, s.target.period || null);
       else bir.screen_form_cancel_queue(s.target.formCode, s.draft!);
-      this.wrote(this.usesPeriodPath() ? "cancel_queued" : "screen_form_cancel_queue");
+      this.wrote(name);
       this.toast("Queue cancelled. The return is an editable draft again.", "undo-2");
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
-      this.toast(errorText(e), "triangle-alert");
+      // Refused: the worker has most likely sent it already (the frame's Cancel queue says it in the same sentence). Either way the
+      // page and the lists read the return again, so neither goes on saying Queued.
+      this.toast(cancelQueueMessage(e), "triangle-alert");
+      this.wrote(name);
+      void this.reload();
     }
   }
 
