@@ -9,7 +9,9 @@ import { afterApply, checkText, templateErrorText, type ReplaceAsk, type Section
 
 // ---------------------------------------------------------------- state
 
-const openSecs = signal<Record<SectionId, boolean>>({ taxpayer: true, branch: true, taxtypes: true, facts: true, address: true, inbox: true, agent: false });
+/** The profile sections open as a first visit finds them. */
+const firstVisit = (): Record<SectionId, boolean> => ({ taxpayer: true, branch: true, taxtypes: true, facts: true, address: true, inbox: true, agent: false });
+const openSecs = signal<Record<SectionId, boolean>>(firstVisit());
 const replaceAsk = signal<ReplaceAsk | null>(null);
 const inboxMsg = signal<{ ok: boolean; text: string } | null>(null);
 const inboxBusy = signal(false);
@@ -41,6 +43,13 @@ export function resetShared(): void {
 export function leaveYearShared(): void {
   replaceAsk.set(null);
 }
+
+// The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in): the sections as a first visit
+// finds them, no question or inbox line about the last taxpayer. (An open edit lives in the page, which goes with the lock.)
+app.onSessionChange(() => {
+  resetShared();
+  openSecs.set(firstVisit());
+});
 
 const fail = (e: unknown) => toast(errorText(e), "triangle-alert");
 

@@ -1,7 +1,7 @@
 // Settings > Account > Security (old SecurityCard): My PIN (four cells, Set PIN or Change, Remove), My authenticator (Add, the key
 // and six cells with Confirm and Cancel, Remove) and, for the admin, the Recovery key. One place for every lock; the Tax profile
 // page has none. The lock screens that use these codes are D2's.
-import { Card, AppButton, Code, PinCells } from "../../ui";
+import { AppButton, Card, Code, PinCells, SettingRow } from "../../ui";
 import { app } from "../../shell";
 import { StackRow } from "./parts";
 import { cancelTotp, clearPin, clearTotp, confirmTotp, newRecoveryKey, security, securityTarget, setPin, startTotp } from "./securityState";
@@ -56,23 +56,23 @@ export function SecurityCard() {
         </If>
       </StackRow>
       <If when={t().admin}>
-        <StackRow testID="settings-recovery" title="Recovery key" hint={recoveryHint()}>
-          <If
-            when={security.recoveryKey()}
-            else={
-              <If when={hasCode()}>
+        <If when={hasCode() || security.recoveryKey()} else={<SettingRow testID="settings-recovery" title="Recovery key" hint={recoveryHint()} />}>
+          <StackRow testID="settings-recovery" title="Recovery key" hint={recoveryHint()}>
+            <If
+              when={security.recoveryKey()}
+              else={
                 <AppButton
                   testID="settings-recovery-btn"
                   label={app.authState().has_recovery_key ? "Make a new key" : "Make a key"}
                   size="sm"
                   onPress={newRecoveryKey}
                 />
-              </If>
-            }
-          >
-            <Code testID="settings-recovery-key">{security.recoveryKey() ?? ""}</Code>
-          </If>
-        </StackRow>
+              }
+            >
+              <Code testID="settings-recovery-key">{security.recoveryKey() ?? ""}</Code>
+            </If>
+          </StackRow>
+        </If>
       </If>
     </Card>
   );

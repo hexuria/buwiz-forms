@@ -19,7 +19,8 @@
     "titleBar": {
       "style": "hidden",
       "height": 40
-    }
+    },
+    "restoreBounds": true
   },
   "tailwind": {
     "fontSize": {

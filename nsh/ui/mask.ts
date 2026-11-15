@@ -364,6 +364,15 @@ export function moneyMask(o?: MoneyMaskOptions): Mask {
 /** The money mask with no minus to type. */
 export const MONEY_MASK = moneyMask();
 
+/**
+ * Whether a number box shows an amount of zero ("0", "0.00", "-0.0", "₱ 0"): it has a digit and nothing but zeros and the
+ * marks of an amount. An empty text is not (nothing to replace), nor is text that is not an amount ("1e21", "abc").
+ */
+export function isZeroAmount(text: string): boolean {
+  const t = String(text ?? "");
+  return /\d/.test(t) && /^[₱\s,.\-0]*$/.test(t);
+}
+
 /** The plain numeric string of a money text: "1,250,000.50" -> "1250000.50", "₱ -12" -> "-12"; "" stays "". */
 export function moneyPlain(text: string): string {
   return String(text ?? "").replace(/[₱,\s]/g, "");

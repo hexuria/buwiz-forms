@@ -44,7 +44,7 @@ for (const look of LOOKS) {
       await shoot(app, `shell-${look.name}-new-return`);
       await app.press("id:new-return-cancel");
       await app.press("id:nav-library");
-      await app.waitFor("id:placeholder-library");
+      await app.waitFor("id:library");
       await app.wait(300);
       await shoot(app, `shell-${look.name}-library`);
     } else {
@@ -64,7 +64,7 @@ for (const look of LOOKS) {
       await shoot(app, `shell-${look.name}-palette`);
       await app.keyboard.press("escape");
       await app.press("id:tab-library");
-      await app.waitFor("id:placeholder-library");
+      await app.waitFor("id:library");
       await app.wait(300);
       await shoot(app, `shell-${look.name}-library`);
     }

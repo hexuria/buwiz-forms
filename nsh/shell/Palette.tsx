@@ -3,7 +3,7 @@
 import { keymap, Scroll, View } from "nsh";
 import { Avatar, Dialog, EmptyRow, GroupLabel, Icon, Kbd, NavRow, TextField, Text } from "../ui";
 import { app } from "./app";
-import { movePalette, paletteItems, paletteRow, runPaletteItem, type PaletteItem } from "./paletteItems";
+import { indexPalette, movePalette, paletteItems, paletteRow, runPaletteItem, type PaletteItem } from "./paletteItems";
 
 /** The list as drawn rows: a heading where the group changes, then the item with its index. */
 type Row = { kind: "group"; id: string; label: string } | { kind: "item"; id: string; index: number; item: PaletteItem };
@@ -23,6 +23,8 @@ function rows(): Row[] {
 
 export function Palette() {
   keymap.bind({ down: () => movePalette(1), up: () => movePalette(-1) });
+  // The forms index is built as the palette opens, so the first typed letter filters at once like the rest.
+  indexPalette();
   return (
     <Dialog testID="palette" open={true} onOpenChange={(open) => !open && app.closeOverlay()} top width={560}>
       <View class="flex-row items-center gap-2.5 border-b border-border px-4 py-2">

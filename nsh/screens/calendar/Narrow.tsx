@@ -6,11 +6,11 @@ import type { DeadlineRow } from "../../bir";
 import { MONTHS_LONG } from "../../lib/dates";
 import { app, store } from "../../shell";
 import {
-  AppButton, Chip, CheckboxLabel, EmptyRow, IconButton, Line, ListGroup, Segmented, Sheet, Text, TextField,
+  AppButton, Chip, CheckboxLabel, EmptyRow, IconButton, Line, ListGroup, PressCell, Segmented, Sheet, Text, TextField,
 } from "../../ui";
 import { DueRow } from "./DueRow";
 import { calendarState } from "./filters";
-import { DayCell, Dot, taxpayerOptions } from "./parts";
+import { Dot, taxpayerOptions } from "./parts";
 import {
   byWhoAndHowOften, type Cell, dayTone, FREQ_OPTIONS, type Freq, gridCells, gridRange, inMonthCount, longDay, plural, rowKey, upcomingRange,
   upcomingRows, WEEKDAYS,
@@ -117,12 +117,12 @@ function NarrowCell(props: { c: () => Cell }) {
   const c = props.c;
   const tone = () => dayTone(c().items);
   return (
-    <DayCell
+    <PressCell
       testID={`calendar-day-${c().iso}`}
       label={`${c().label}${c().items.length > 0 && tone() === "danger" ? ", late" : ""}`}
       selected={calendarState.picked() === c().iso}
       onPress={() => calendarState.togglePicked(c().iso)}
-      minHeight={44}
+      style={{ minHeight: 44 }}
       class={`items-center gap-0.5 rounded-(--radius-row) py-1 ${c().inMonth ? "" : "opacity-40"}`}
     >
       <View
@@ -136,7 +136,7 @@ function NarrowCell(props: { c: () => Cell }) {
           <Dot testID={`calendar-dot-${c().iso}`} tone={tone()} />
         </If>
       </View>
-    </DayCell>
+    </PressCell>
   );
 }
 

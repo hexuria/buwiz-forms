@@ -19,13 +19,14 @@
 //!
 //! Nothing here changes the process environment, sends anything, or opens a database.
 
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -67,8 +68,6 @@ pub struct UpdateReport {
     pub version: Option<String>,
     /// A sentence the page can show.
     pub message: Option<String>,
-    /// Whether a newer release is downloaded without asking first.
-    pub auto_download: bool,
 }
 
 impl UpdateReport {
@@ -79,7 +78,6 @@ impl UpdateReport {
             phase: "idle".to_owned(),
             version: None,
             message: Some(NOT_CONFIGURED.to_owned()),
-            auto_download: true,
         }
     }
 }
@@ -119,6 +117,9 @@ struct Mailbox {
     chrome_open: bool,
     menu_revision: u32,
     update: UpdateReport,
+    /// "Download updates automatically": what the database says (read once, `auto_known`), or what the switch last set.
+    auto_download: bool,
+    auto_known: bool,
     commands: VecDeque<UpdateCommand>,
 }
 
@@ -128,6 +129,8 @@ impl Mailbox {
             chrome_open: false,
             menu_revision: 0,
             update: UpdateReport::unconfigured(),
+            auto_download: true,
+            auto_known: false,
             commands: VecDeque::new(),
         }
     }
@@ -163,7 +166,7 @@ impl Mailbox {
                 phase: "idle".to_owned(),
                 version: None,
                 message: Some(NOT_CONFIGURED.to_owned()),
-                auto_download: report.auto_download,
+                auto_download: self.auto_download,
                 current_version,
             };
         }
@@ -171,7 +174,7 @@ impl Mailbox {
             phase: report.phase.clone(),
             version: report.version.clone(),
             message: report.message.clone(),
-            auto_download: report.auto_download,
+            auto_download: self.auto_download,
             current_version,
         }
     }
@@ -198,7 +201,8 @@ impl Mailbox {
     }
 
     fn set_auto_download(&mut self, enabled: bool) {
-        self.update.auto_download = enabled;
+        self.auto_download = enabled;
+        self.auto_known = true;
         self.queue(if enabled {
             UpdateCommand::AutoOn
         } else {
@@ -211,54 +215,95 @@ impl Mailbox {
     }
 }
 
-fn mailbox() -> MutexGuard<'static, Mailbox> {
-    static MAILBOX: OnceLock<Mutex<Mailbox>> = OnceLock::new();
-    MAILBOX
-        .get_or_init(|| Mutex::new(Mailbox::new()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+thread_local! {
+    /// The engine thread's mailbox. The hooks run inside host calls and `Desktop` is called by the TSX, both on the engine thread, so
+    /// one engine has one mailbox: the app has one engine, and each engine a test starts has its own (they never share a queue).
+    static MAILBOX: RefCell<Mailbox> = RefCell::new(Mailbox::new());
+}
+
+/// Runs `work` on this thread's mailbox. Never call it from inside `work`.
+fn mailbox<R>(work: impl FnOnce(&mut Mailbox) -> R) -> R {
+    MAILBOX.with(|mailbox| work(&mut mailbox.borrow_mut()))
 }
 
 // The bodies of the hooks (`hooks.rs` delegates here). They run on the engine thread, inside a host call.
 
 /// The app menu is rebuilt: the session, the gate or the chrome changed.
 pub(crate) fn refresh_menu() {
-    mailbox().refresh_menu();
+    mailbox(Mailbox::refresh_menu);
 }
 
 /// The script is on the main window (`true`) or back on the gate.
 pub(crate) fn set_shell_chrome_open(open: bool) {
-    mailbox().set_chrome_open(open);
+    mailbox(|mailbox| mailbox.set_chrome_open(open));
 }
 
 /// The session opened: ask the updater to start.
 pub(crate) fn start_updater() {
-    mailbox().queue(UpdateCommand::Start);
+    mailbox(|mailbox| mailbox.queue(UpdateCommand::Start));
 }
 
 /// The updater's state as the page reads it.
 pub(crate) fn update_status() -> UpdateStatus {
-    mailbox().status()
+    auto_download();
+    mailbox(|mailbox| mailbox.status())
+}
+
+/// `0`, `false` and `off` turn the automatic download off; anything else, a missing or blank value included, leaves it on
+/// (the old updater's rule, `auto_download_enabled`).
+pub(crate) fn auto_download_enabled(value: Option<&str>) -> bool {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return true;
+    };
+    !matches!(value.to_ascii_lowercase().as_str(), "0" | "false" | "off")
+}
+
+/// What the database says about "Download updates automatically", on the thread that owns the database slot. The page cannot read
+/// this setting itself (`get_setting` answers only the theme), so the host reports it through `update_status`.
+fn stored_auto_download() -> Option<bool> {
+    let handle = bir_app_api::bir_module::database_handle().ok()?;
+    let db = bir_core::lock_timing::lock(&handle).ok()?;
+    let value = db.get_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING).ok().flatten();
+    Some(auto_download_enabled(value.as_deref()))
+}
+
+/// Whether newer releases are downloaded without asking: the stored setting (read once), or what the switch set last. On until the
+/// database can say otherwise.
+pub(crate) fn auto_download() -> bool {
+    if let Some(known) = mailbox(|mailbox| mailbox.auto_known.then_some(mailbox.auto_download)) {
+        return known;
+    }
+    // Not inside the mailbox: reading the database is a host call of its own.
+    let stored = stored_auto_download();
+    mailbox(|mailbox| {
+        if !mailbox.auto_known
+            && let Some(stored) = stored
+        {
+            mailbox.auto_download = stored;
+            mailbox.auto_known = true;
+        }
+        mailbox.auto_download
+    })
 }
 
 /// "Install now".
 pub(crate) fn install_update() {
-    mailbox().queue(UpdateCommand::Install);
+    mailbox(|mailbox| mailbox.queue(UpdateCommand::Install));
 }
 
 /// "Later".
 pub(crate) fn dismiss_update() {
-    mailbox().dismiss();
+    mailbox(Mailbox::dismiss);
 }
 
 /// "Check for Updates…".
 pub(crate) fn check_for_updates() {
-    mailbox().queue(UpdateCommand::Check);
+    mailbox(|mailbox| mailbox.queue(UpdateCommand::Check));
 }
 
 /// "Download updates automatically" changed (the host already stored the setting).
 pub(crate) fn set_auto_update_download(enabled: bool) {
-    mailbox().set_auto_download(enabled);
+    mailbox(|mailbox| mailbox.set_auto_download(enabled));
 }
 
 // ------------------------------------------------------------------------------- the hotkey combo language
@@ -577,18 +622,22 @@ pub struct Desktop;
 impl Desktop {
     /// What changed since the last call: a second launch asking for the window, updater requests, menu refreshes.
     pub fn poll() -> DesktopPoll {
-        let mut mailbox = mailbox();
-        DesktopPoll {
+        mailbox(|mailbox| DesktopPoll {
             activate: ACTIVATE.swap(false, Ordering::SeqCst),
             update_commands: mailbox.take_commands(),
             menu_revision: mailbox.menu_revision,
             chrome_open: mailbox.chrome_open,
-        }
+        })
     }
 
     /// Says what the updater is doing: `bir.update_status()` answers it. Throws for a phase the page does not know.
     pub fn publish_update(report: UpdateReport) -> Result<(), String> {
-        mailbox().publish(report)
+        mailbox(|mailbox| mailbox.publish(report))
+    }
+
+    /// Whether newer releases are downloaded without asking: the "Download updates automatically" setting (on when it was never set).
+    pub fn auto_download() -> bool {
+        auto_download()
     }
 
     /// The keystroke `GlobalShortcut.register` takes for a stored combo (`control+alt+E` becomes `ctrl+alt+e`), by the rules
@@ -615,6 +664,7 @@ mod tests {
     use std::io::{BufRead, BufReader};
     use std::process::{Child, Command, Stdio};
     use std::sync::mpsc::{self, Receiver};
+    use std::sync::{Mutex, MutexGuard};
     use std::time::Instant;
 
     use super::*;
@@ -638,7 +688,6 @@ mod tests {
             phase: phase.to_owned(),
             version: Some("0.3.0".to_owned()),
             message: Some("a sentence".to_owned()),
-            auto_download: true,
         }
     }
 
@@ -742,6 +791,81 @@ mod tests {
         assert_eq!(mailbox.menu_revision, 2, "the same answer is no change");
         mailbox.set_chrome_open(false);
         assert_eq!((mailbox.menu_revision, mailbox.chrome_open), (3, false));
+    }
+
+    #[test]
+    fn the_automatic_download_setting_is_on_unless_it_says_off() {
+        for on in [None, Some(""), Some("  "), Some("1"), Some("true"), Some("on"), Some("yes")] {
+            assert!(auto_download_enabled(on), "{on:?}");
+        }
+        for off in ["0", "false", "off", " OFF ", "False"] {
+            assert!(!auto_download_enabled(Some(off)), "{off:?}");
+        }
+    }
+
+    /// The host functions the page calls reach the mailbox, through the door and the installed hooks, and the status they answer
+    /// is the mailbox's. (The mailbox is the test thread's own.)
+    #[test]
+    fn the_host_functions_reach_the_mailbox_through_the_door() {
+        use serde_json::json;
+
+        let (folder, database) = scratch();
+        let named = database.display().to_string();
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_AUTH_BYPASS", Some("1")),
+                ("BIR_SFTP_DRY_RUN", Some("1")),
+                ("BIR_SFTP_LIVE", None),
+                ("BIR_SFTP_HOST", None),
+                ("BIR_DATABASE_PATH", Some(named.as_str())),
+            ],
+            || {
+                bir_core::db::set_database_path_override(None);
+                guards::with_home_for_test(folder.path(), || {
+                    mailbox(|mailbox| *mailbox = Mailbox::new());
+                    // A build with no update source: idle, with the sentence, and the setting reads as on (never set).
+                    let status = crate::door::call("update_status", vec![]).expect("update_status");
+                    assert_eq!(status["phase"], "idle");
+                    assert_eq!(status["version"], serde_json::Value::Null);
+                    assert_eq!(status["message"], NOT_CONFIGURED);
+                    assert_eq!(status["auto_download"], true);
+                    assert_eq!(status["current_version"], env!("CARGO_PKG_VERSION"));
+
+                    // The switch: stored by the host function, passed to the hook, answered by the status, queued for the driver.
+                    crate::door::call("set_auto_update_download", vec![json!(false)]).expect("off");
+                    let status = crate::door::call("update_status", vec![]).expect("update_status");
+                    assert_eq!(status["auto_download"], false);
+                    // A restart forgets the mailbox; the database remembers.
+                    mailbox(|mailbox| *mailbox = Mailbox::new());
+                    let status = crate::door::call("update_status", vec![]).expect("update_status");
+                    assert_eq!(status["auto_download"], false, "read back from the database");
+                    assert!(!Desktop::auto_download());
+
+                    crate::door::call("check_for_updates", vec![]).expect("check");
+                    crate::door::call("install_update", vec![]).expect("install");
+                    crate::door::call("dismiss_update", vec![]).expect("dismiss");
+                    crate::door::call("shell_set_chrome", vec![json!(true)]).expect("chrome");
+
+                    let seen = Desktop::poll();
+                    assert_eq!(seen.update_commands, ["check", "install", "dismiss"]);
+                    assert!(seen.chrome_open);
+                    assert!(seen.menu_revision >= 1, "the chrome switch and the refresh were counted");
+                    let again = Desktop::poll();
+                    assert!(again.update_commands.is_empty(), "each command comes once");
+                    assert_eq!(again.menu_revision, seen.menu_revision);
+
+                    // The driver says a release is downloaded: with a source configured the page hears it.
+                    Desktop::publish_update(report("ready")).expect("published");
+                    let status = crate::door::call("update_status", vec![]).expect("update_status");
+                    assert_eq!(status["phase"], "ready");
+                    assert_eq!(status["version"], "0.3.0");
+                    mailbox(|mailbox| *mailbox = Mailbox::new());
+                });
+                bir_core::db::set_database_path_override(None);
+            },
+        );
     }
 
     // ---- the hotkey combo language

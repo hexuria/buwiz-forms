@@ -3,7 +3,7 @@
 // this stores the chord through set_global_hotkey, which the tray already polls.
 import { View } from "nsh";
 import { errorText } from "../../lib/errors";
-import { app, store, toast } from "../../shell";
+import { store, toast } from "../../shell";
 import { Card, Dropdown, SettingRow, Text } from "../../ui";
 import { hotkeyChoices, OFF, retentionChoices } from "./logic";
 import { Labeled, NoteRow } from "./parts";

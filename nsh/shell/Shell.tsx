@@ -18,6 +18,7 @@ import { NewReturn } from "./NewReturn";
 import { Palette } from "./Palette";
 import { RightPanel } from "./Panels";
 import { ROUTES, type Route } from "./routes";
+import { startAgentBridge } from "./agent";
 import { Sidebar } from "./Sidebar";
 import { store } from "./store";
 import { TitleBar } from "./TitleBar";
@@ -32,6 +33,8 @@ export interface ShellProps {
   polling?: boolean;
   /** First-run setup in front of the frame while the database has no access mode (the shipped app; fixtures leave it off). */
   firstRun?: boolean;
+  /** Start the agent remote control and apply its commands (the shipped app, also in the dev environment; fixtures leave it off). Inert unless the Rust feature `agent` is built in and GPUI_AGENT=1. */
+  agent?: boolean;
 }
 
 /** The chords the frame owns (Cmd on macOS, Ctrl elsewhere), and Esc. Each has one owner: this root. */
@@ -228,6 +231,9 @@ export function Shell(props: ShellProps) {
   if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
   // The polls end with the root; headless fixtures leave them off unless a test asks.
   if (props.polling !== false) cleanup(startPolling());
+  // The agent remote control (Rust feature `agent`, GPUI_AGENT=1): its commands are applied here, polled only while it listens.
+  // Not tied to `polling`: the dev environment runs with the polls off, and an agent run is a dev run.
+  if (props.agent === true) cleanup(startAgentBridge());
   // Under 860 points the sidebar and the panel float and start closed; back above it the sidebar docks open again.
   effect(() => {
     const overlays = app.layout.overlayMode();

@@ -8,7 +8,7 @@ import {
   AppButton, Avatar, Banner, Card, Checkbox, CheckboxLabel, Chip, Code, ComboField, ContextPill, DateField, Dialog, Disclosure,
   DisclosureGroup, Dropdown, EmptyRow, Field, FieldCell, FieldGrid, FormActions, GroupLabel, Hairline, Icon, IconButton, type IconName,
   ICONS, IntInput, Kbd, Line, ListGroup, ListRow, Menu, MenuItem, MenuSeparator, MetaLine, MoneyInput, MultiCombo, NameCell, NavRow,
-  PageHeader, PageTitle, PercentInput, PinCells, Popover, RadioGroup, SectionTitle, Segmented, SettingRow, Sheet, SidePanel, Spinner,
+  PageHeader, PageTitle, PercentInput, PinCells, Popover, PressCard, PressCell, RadioGroup, SectionTitle, Segmented, SettingRow, Sheet, SidePanel, Spinner,
   StatusChip, StepCircle, Switch, Tabs, Text, TextField, TinInput, toast, Toaster, undoToast,
 } from "../../ui";
 
@@ -225,6 +225,56 @@ function RowsSection() {
   );
 }
 
+function PressSection() {
+  const presses = signal(0);
+  const picked = signal(false);
+  const day = signal("11");
+  return (
+    <Section title="Pressable cards and cells" testID="kit-press">
+      <Text tone="fg2" testID="kit-press-count">{`Card presses: ${presses()}`}</Text>
+      <Demo label="Tile, lift, selected, disabled">
+        <PressCard testID="kit-press-tile" label="Form 2551Q" lift class="w-48 gap-2" onPress={() => presses.update((n) => n + 1)}>
+          <Text variant="title">2551Q</Text>
+          <Text variant="control" lines={2}>Quarterly Percentage Tax Return</Text>
+        </PressCard>
+        <PressCard testID="kit-press-pick" label="Draft: 3" selected={picked()} align="start" class="w-36 gap-0.5" onPress={() => picked.update((v) => !v)}>
+          <Text variant="meta" tone="fg2">Draft</Text>
+          <Text variant="page" class="tabular-nums">3</Text>
+          <Text variant="meta" tone="fg3">{picked() ? "Picked" : "Not picked"}</Text>
+        </PressCard>
+        <PressCard testID="kit-press-off" label="Not available" disabled class="w-36 gap-0.5">
+          <Text variant="control">Not available</Text>
+        </PressCard>
+      </Demo>
+      <Demo label="Row card" column>
+        <PressCard testID="kit-press-row" label="2551Q Q3 2026" size="row" class="w-full gap-1" onPress={() => presses.update((n) => n + 1)}>
+          <Text variant="emph">2551Q Q3 2026</Text>
+          <Text variant="meta" tone="fg2">Juana Santos</Text>
+        </PressCard>
+      </Demo>
+      <Demo label="Cells: fill and outline">
+        <View class="h-14 w-40 flex-row gap-1">
+          <PressCell testID="kit-cell-11" label="November 11" selected={day() === "11"} class="flex-1 items-center justify-center rounded-(--radius-row)" onPress={() => day.set("11")}>
+            <Text variant="control">11</Text>
+          </PressCell>
+          <PressCell testID="kit-cell-12" label="November 12" selected={day() === "12"} class="flex-1 items-center justify-center rounded-(--radius-row)" onPress={() => day.set("12")}>
+            <Text variant="control">12</Text>
+          </PressCell>
+        </View>
+        <View class="h-14 w-40 flex-row gap-1">
+          <PressCell testID="kit-strip-13" label="November 13" tone="outline" selected={day() === "13"} class="flex-1 items-center justify-center rounded-(--radius-ctl)" onPress={() => day.set("13")}>
+            <Text variant="control">13</Text>
+          </PressCell>
+          <PressCell testID="kit-strip-14" label="November 14" tone="outline" selected={day() === "14"} class="flex-1 items-center justify-center rounded-(--radius-ctl)" onPress={() => day.set("14")}>
+            <Text variant="control">14</Text>
+          </PressCell>
+        </View>
+        <Text tone="fg2" testID="kit-press-day">{`Day: ${day()}`}</Text>
+      </Demo>
+    </Section>
+  );
+}
+
 function StatusSection() {
   const open = signal(false);
   return (
@@ -262,6 +312,9 @@ function StatusSection() {
         <StatusChip status="not_started" />
         <StatusChip status="draft" />
         <StatusChip status="queued" />
+        <StatusChip status="submitted" />
+        <StatusChip status="confirmed" />
+        <StatusChip status="paid" />
         <StatusChip status="filed" />
         <StatusChip status="due_soon" days={0} />
         <StatusChip status="due_soon" days={5} />
@@ -560,6 +613,7 @@ export function KitPage() {
           <TextSection />
           <ButtonSection />
           <RowsSection />
+          <PressSection />
           <StatusSection />
           <ChoiceSection />
           <EntrySection />

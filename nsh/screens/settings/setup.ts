@@ -54,13 +54,16 @@ export function resetSetup(): void {
   });
 }
 
+// A change in progress does not outlive the session (a lock, a sign-out or another taxpayer signing in): nobody else sees its codes.
+app.onSessionChange(resetSetup);
+
 export function goStep(next: SetupStep): void {
   step.set(next);
 }
 
-/** The computer's sign-out after a change: the admin moved, so the old session must not carry on. */
+/** The computer's sign-out after a change: the admin moved, so the old session must not carry on (and nobody keeps their place). */
 function signOutAfterChange(): void {
-  app.endSession("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN.");
+  app.signOutAfterSetupChange();
 }
 
 /** Settings was left. A finished change has already moved the admin: sign out even if "I wrote it down" was never pressed. */

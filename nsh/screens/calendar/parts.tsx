@@ -1,8 +1,6 @@
-// Parts the Calendar shares between its wide and narrow layouts: the pressable day cell, the chip and the dot a deadline
-// draws in a cell, the taxpayers as choices, and the width of the content column.
-import type { JSX } from "nsh";
+// Parts the Calendar shares between its wide and narrow layouts: the chip and the dot a deadline draws in a day cell (the cell
+// itself is the kit's PressCell), the taxpayers as choices, and the width of the content column.
 import { View } from "nsh";
-import { Button } from "nsh/base";
 import type { DeadlineRow } from "../../bir";
 import { app, store } from "../../shell";
 import { BREAK, SIZE } from "../../theme/tokens";
@@ -23,37 +21,6 @@ export function taxpayerOptions(): MultiComboOption[] {
     sub: tp.tin_display || formatTin(tp.tin_root),
     lead: () => <Avatar name={tp.name} size={20} hueKey={tp.tin_root} />,
   }));
-}
-
-/** Props of DayCell. */
-export interface DayCellProps {
-  testID: string;
-  /** What screen readers say: "November 15, 2 deadlines". */
-  label: string;
-  /** The chosen day: the selected fill. */
-  selected: boolean;
-  onPress: () => void;
-  /** Layout and look: padding, borders. */
-  class?: string;
-  /** The least height, in points. */
-  minHeight?: number;
-  children?: JSX.Element;
-}
-
-/** A day of the grid: a pressable cell (hover fill, the selected fill while chosen). The kit has no grid cell, so this one lives with the Calendar. */
-export function DayCell(props: DayCellProps) {
-  return (
-    <Button
-      testID={props.testID}
-      accessibilityLabel={props.label}
-      selected={props.selected}
-      onPress={props.onPress}
-      style={{ minHeight: props.minHeight }}
-      class={`min-w-0 enabled:hover:bg-hover active:bg-selected selected:bg-selected selected:hover:bg-selected selected:focus-visible:bg-selected focus-visible:bg-hover ${props.class ?? ""}`}
-    >
-      {props.children}
-    </Button>
-  );
 }
 
 const CHIP_FILL: Record<ChipTone, string> = {

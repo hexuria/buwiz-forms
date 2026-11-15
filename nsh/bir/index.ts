@@ -9,3 +9,4 @@
 // Boot, the send guard and the database guard happen inside the door on the first call (nsh/AGENTS.md, "The door").
 export * from "./functions";
 export * from "./door";
+export * from "./agent";

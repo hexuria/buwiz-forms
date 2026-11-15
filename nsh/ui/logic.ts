@@ -46,18 +46,28 @@ export function avatarColors(key: string, scheme: "light" | "dark"): { bg: strin
 }
 
 /** A return's status as the chips name it. */
-export type ReturnStatus = "not_started" | "draft" | "queued" | "filed" | "due_soon" | "overdue";
+export type ReturnStatus = "not_started" | "draft" | "queued" | "submitted" | "confirmed" | "paid" | "filed" | "due_soon" | "overdue";
 /** A chip's tone. */
 export type ChipTone = "neutral" | "accent" | "success" | "warning" | "danger";
 
-/** What a status chip says and its tone: "In 3 days" (warning), "2 days overdue" (danger), "Filed" (success, a check). */
-export function statusChip(status: ReturnStatus | string, days?: number): { label: string; tone: ChipTone; check: boolean } {
+/**
+ * What a status chip says and its tone: "In 3 days" (warning), "2 days overdue" (danger), "Filed" (success, a check). Filings
+ * names the filed states by their own words: "Submitted" (neutral, a send mark: waiting for BIR), "Confirmed" and "Paid"
+ * (success, a check).
+ */
+export function statusChip(status: ReturnStatus | string, days?: number): { label: string; tone: ChipTone; check: boolean; send?: boolean } {
   const n = Math.abs(days ?? 0);
   switch (status) {
     case "draft":
       return { label: "Draft", tone: "accent", check: false };
     case "queued":
       return { label: "Queued", tone: "accent", check: false };
+    case "submitted":
+      return { label: "Submitted", tone: "neutral", check: false, send: true };
+    case "confirmed":
+      return { label: "Confirmed", tone: "success", check: true };
+    case "paid":
+      return { label: "Paid", tone: "success", check: true };
     case "filed":
       return { label: "Filed", tone: "success", check: true };
     case "due_soon":

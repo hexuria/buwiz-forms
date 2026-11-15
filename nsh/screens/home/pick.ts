@@ -3,9 +3,15 @@
 // shows the list you left. One owner: this file's signals; the view reads the accessors and calls the actions.
 import { signal } from "nsh";
 import type { HomePick } from "../../lib/dashboard";
+import { app } from "../../shell";
 
 const pick = signal<HomePick | null>(null);
 const day = signal<string | null>(null);
+// The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in): nothing picked.
+app.onSessionChange(() => {
+  pick.set(null);
+  day.set(null);
+});
 
 /** The picked tile or day (reactive). */
 export const homePick = {

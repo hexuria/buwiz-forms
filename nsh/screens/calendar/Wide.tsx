@@ -4,10 +4,10 @@ import { computed, View } from "nsh";
 import type { DeadlineRow } from "../../bir";
 import { MONTHS, MONTHS_LONG } from "../../lib/dates";
 import { app, store } from "../../shell";
-import { AppButton, EmptyRow, IconButton, Line, ListGroup, MultiCombo, PageHeader, Segmented, Text, TOUCH } from "../../ui";
+import { AppButton, EmptyRow, IconButton, Line, ListGroup, MultiCombo, PageHeader, PressCell, Segmented, Text, TOUCH } from "../../ui";
 import { DayRow, DueRow } from "./DueRow";
 import { calendarState } from "./filters";
-import { contentWidth, DayCell, MiniChip, taxpayerOptions } from "./parts";
+import { contentWidth, MiniChip, taxpayerOptions } from "./parts";
 import {
   byWhoAndHowOften, calendarRows, type Cell, countText, FREQ_OPTIONS, type Freq, gridCells, gridRange, groupRows, inMonthCount, longDay,
   plural, QUARTER_MONTHS, rowKey, WEEKDAYS,
@@ -189,12 +189,12 @@ function ListView() {
 function MonthCell(props: { c: () => Cell; compact: boolean }) {
   const c = props.c;
   return (
-    <DayCell
+    <PressCell
       testID={`calendar-day-${c().iso}`}
       label={c().label}
       selected={calendarState.day() === c().iso}
       onPress={() => calendarState.setDay(c().iso)}
-      minHeight={props.compact ? 52 : 78}
+      style={{ minHeight: props.compact ? 52 : 78 }}
       class={`gap-[3px] ${props.compact ? "p-1" : "p-1.5"} ${c().col > 0 ? "border-l border-border" : ""} ${c().row > 0 ? "border-t border-border" : ""} ${c().inMonth ? "" : "opacity-40"}`}
     >
       <View
@@ -218,7 +218,7 @@ function MonthCell(props: { c: () => Cell; compact: boolean }) {
           <Text variant="cap" tone="fg3" class="pl-1">{`+${c().items.length - 2} more`}</Text>
         </If>
       </If>
-    </DayCell>
+    </PressCell>
   );
 }
 

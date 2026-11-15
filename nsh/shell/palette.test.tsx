@@ -18,7 +18,7 @@ test("desktop: Cmd+K searches taxpayers by name and by TIN, and Enter runs the r
   expect(app.texts()).toContain("Juana Santos");
   expect(app.shows("id:palette-item-1")).toBe(false);
   await app.submit("id:palette-input");
-  await app.waitFor("id:placeholder-profile");
+  await app.waitFor("id:tp-page-profile");
   expect(app.shows("id:palette-input")).toBe(false);
 
   // Digits match a TIN, with or without dashes: nine name the taxpayer, ten or more a branch.
@@ -46,14 +46,14 @@ test("desktop: the arrows move the highlight, a page runs, a form opens the star
   await app.keyboard.press("down");
   await app.keyboard.press("down");
   await app.submit("id:palette-input");
-  await app.waitFor("id:placeholder-library");
+  await app.waitFor("id:library");
 
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
   await app.type("id:palette-input", "calen");
   await app.waitFor("id:palette-item-0");
   await app.press("id:palette-item-0");
-  await app.waitFor("id:placeholder-calendar");
+  await app.waitFor("id:calendar");
 
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
@@ -71,7 +71,7 @@ test("desktop: the arrows move the highlight, a page runs, a form opens the star
   await app.submit("id:palette-input");
   await app.waitFor("id:dev-pages");
   await app.press("id:dev-back");
-  await app.waitFor("id:placeholder-calendar");
+  await app.waitFor("id:calendar");
 });
 
 test("desktop: the start-a-return dialog lists the year's forms, period, template and what is not set, and opens the form", async () => {
@@ -131,7 +131,7 @@ test("desktop: Recent lists the returns opened (the last four), marks the one on
 
   // Leaving the form and pressing its Recent row opens it again.
   await app.press("id:nav-home");
-  await app.waitFor("id:placeholder-home");
+  await app.waitFor("id:home");
   await app.press(`text:${row()}`);
   await app.waitFor("id:form-page", { timeout: 20000 });
 }, 90_000);
@@ -155,7 +155,7 @@ test("phone: the palette opens from the header and a taxpayer opens its profile"
   await app.waitFor("id:palette-input");
   await app.type("id:palette-input", "juana");
   await app.press("id:palette-item-0");
-  await app.waitFor("id:placeholder-profile");
+  await app.waitFor("id:tp-page-profile");
   expect(app.shows("id:palette-input")).toBe(false);
 });
 

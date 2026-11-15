@@ -126,10 +126,10 @@ export function Chip(props: { label: string; tone?: ChipTone; icon?: IconName; t
   );
 }
 
-/** A return's status as a chip: Not started, Draft, Queued, Filed (a check), In N days / Due today, N days overdue. */
+/** A return's status as a chip: Not started, Draft, Queued, Submitted (a send mark), Confirmed and Paid (a check), Filed (a check), In N days / Due today, N days overdue. */
 export function StatusChip(props: { status: ReturnStatus | string; days?: number }) {
   const s = () => statusChip(props.status, props.days);
-  return <Chip label={s().label} tone={s().tone} icon={s().check ? "check" : undefined} />;
+  return <Chip label={s().label} tone={s().tone} icon={s().check ? "check" : s().send ? "send" : undefined} />;
 }
 
 /** A band on the accent tint: radius 12, 12 by 16 padding, items in a wrapping row (the Add year band). */

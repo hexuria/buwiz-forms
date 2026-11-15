@@ -3,6 +3,7 @@
 // signals, the screen reads the accessors and calls the setters.
 import { batch, signal } from "nsh";
 import { isoDate } from "../../lib/dates";
+import { app } from "../../shell";
 import { type Filters, filtersActive, type Freq } from "./rows";
 
 /** The two layouts of the wide Calendar. */
@@ -19,6 +20,23 @@ const gridYear = signal(now.getFullYear());
 const gridMonth = signal(now.getMonth());
 const day = signal<string | null>(isoDate(now));
 const picked = signal<string | null>(null);
+
+// The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in): every filter, the layout and the month.
+app.onSessionChange(() => {
+  const today = new Date();
+  batch(() => {
+    tps.set(null);
+    freq.set("all");
+    month.set(0);
+    quarter.set(0);
+    year.set(today.getFullYear());
+    view.set("list");
+    gridYear.set(today.getFullYear());
+    gridMonth.set(today.getMonth());
+    day.set(isoDate(today));
+    picked.set(null);
+  });
+});
 
 /** The filters and the month shown. Read the accessors inside JSX or a closure; write through the setters. */
 export const calendarState = {

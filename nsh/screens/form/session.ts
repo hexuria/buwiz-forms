@@ -16,6 +16,7 @@
 // - Errors show only after the user has left a box of the row (touched), or after Check (all). The to-do list counts
 //   required-empty boxes always, and messages only where they show.
 import { batch, signal, untracked, type Accessor, type Signal } from "nsh";
+import { isAvailable as hasSecondWindow } from "nsh/desktop";
 import {
   bir,
   type IncomeTaxElectionReadiness,
@@ -37,6 +38,17 @@ import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, sho
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
 import { isTinItem, keysOf, oneDate, optionOf, plainRefusal, withoutHidden, type OneDate } from "./schema";
+
+/** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
+const NUMBER_KINDS = new Set(["money", "pct", "int"]);
+/** What an emptied number box is staged as when the host refuses a blank: the host's cleared value. */
+const CLEARED = "0";
+
+/** What a fill answers, with the boxes an emptied number box was cleared in. */
+type Filled = ScreenFormFilled & { cleared?: string[] };
+
+/** What a device with no second window says for Print preview (screens/print/host.tsx and src/print.rs say the same). */
+const NO_PREVIEW = "Print preview is not available on this device.";
 
 /** A flush runs this long after the last edit (ms). */
 export const VALIDATE_DELAY = 300;
@@ -934,6 +946,13 @@ export class FormSession {
     else this.publish();
   }
 
+  /** The part whose box has the keyboard now, or null: the page keeps that part's rows drawn wherever it scrolls. */
+  focusedPart(): number | null {
+    const k = this.st.focusKey;
+    const id = k ? this.keyIndex.get(this.oneDates.get(k)?.date.month.k ?? k) : undefined;
+    return id ? Number(id.split(":")[0]) : null;
+  }
+
   /** Mark a row touched without a blur (a pick in a choice, a schedule row closed). */
   touch(id: string) {
     this.st.touched.add(id);
@@ -972,7 +991,7 @@ export class FormSession {
     if (Object.keys(edits).length) {
       this.retireRemovalUndo();
       try {
-        const r = bir.screen_form_fill(s.target.formCode, s.draft, edits, this.unlockedFor(edits));
+        const r = this.fill(s.draft, edits);
         if (r.removes) return this.holdRemoval(r, edits);
         this.applyFill(r, edits);
         filled = true;
@@ -986,8 +1005,35 @@ export class FormSession {
     if (filled) this.scheduleAutosave();
   }
 
+  /**
+   * The host's fill for staged edits, with the rule for a number box the filer emptied. Select-all and Backspace, Cut: the box
+   * reports "" and the host refuses a blank amount or whole number ("must be an amount ... (got ``)"), so the draft kept its
+   * old number and the box got it back. A refused blank in a money, percent or integer box is staged as the host's cleared
+   * value instead, zero, and `edits` is changed to say so (the caller applies and records what the host took). The draft and
+   * the box then agree, and a box the host does hold blank (a nullable amount, a schedule row cell, a text) stays blank:
+   * only a refusal asks again. `cleared` lists the boxes that now hold zero: applyFill shows it in them.
+   */
+  private fill(draft: object, edits: Record<string, string>): Filled {
+    const code = this.st.target.formCode;
+    const r: Filled = bir.screen_form_fill(code, draft, edits, this.unlockedFor(edits));
+    if (r.removes) return r;
+    const refused = Object.keys(r.rejected || {}).filter((k) => k in edits && String(edits[k]).trim() === "" && NUMBER_KINDS.has(this.kindOf.get(k) ?? ""));
+    if (!refused.length) return r;
+    const zero = Object.fromEntries(refused.map((k) => [k, CLEARED]));
+    const z: Filled = bir.screen_form_fill(code, r.draft, zero, this.unlockedFor(zero));
+    const cleared = refused.filter((k) => !(k in (z.rejected || {})));
+    if (!cleared.length) return r;
+    // The first answer's refusals stay for the boxes that could not be cleared either.
+    const rejected = { ...r.rejected };
+    for (const k of cleared) {
+      delete rejected[k];
+      edits[k] = CLEARED;
+    }
+    return { ...z, rejected, cleared };
+  }
+
   /** Take what the host applied for edits. */
-  private applyFill(r: ScreenFormFilled, edits: Record<string, string>) {
+  private applyFill(r: Filled, edits: Record<string, string>) {
     const s = this.st;
     this.accepted(edits, r.rejected);
     if (s.sample && Array.isArray(r.blank)) s.blank = new Set(r.blank);
@@ -1020,6 +1066,8 @@ export class FormSession {
       s.touched.add(id);
       if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
     }
+    // An emptied number box the host holds as zero shows the zero (the box selects it, so the next digit replaces it).
+    for (const k of r.cleared || []) if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
   }
 
   /** An answer that removes typed rows asks first: the old answer shows until Continue. */
@@ -1068,7 +1116,7 @@ export class FormSession {
     if (held && Object.keys(held.typed).length) {
       const typed = held.typed;
       try {
-        const r = bir.screen_form_fill(s.target.formCode, s.draft!, typed, this.unlockedFor(typed));
+        const r = this.fill(s.draft!, typed);
         if (r.removes) {
           for (const k of Object.keys(typed)) this.sValue.get(k).set(this.shownText(k));
         } else {
@@ -2037,7 +2085,7 @@ export class FormSession {
     try {
       if (Object.keys(edits).length) {
         this.retireRemovalUndo();
-        const f = bir.screen_form_fill(s.target.formCode, s.draft, edits, this.unlockedFor(edits));
+        const f = this.fill(s.draft, edits);
         if (f.removes) {
           s.saveState = this.restingSaveState();
           this.holdRemoval(f, edits);
@@ -2096,7 +2144,7 @@ export class FormSession {
     let r;
     try {
       if (Object.keys(edits).length) {
-        const f = bir.screen_form_fill(s.target.formCode, s.draft!, edits, this.unlockedFor(edits));
+        const f = this.fill(s.draft!, edits);
         this.accepted(edits, f.rejected);
         s.draft = f.draft;
         s.values = this.shown(f.values);
@@ -2230,10 +2278,15 @@ export class FormSession {
     return this.open({ ...t, mode: t.mode === "amend" ? "return" : t.mode });
   }
 
-  /** Print preview: of the saved return (saved first), an unsaved amendment from the page, a sample as it stands. */
+  /**
+   * Print preview: of the saved return (saved first), an unsaved amendment from the page, a sample as it stands. A device with
+   * no second window (a phone) says so, once: nothing is saved, asked of the host or claimed opened (the preview host would
+   * say the same sentence a second time, beside "opened ... follows your edits live").
+   */
   print() {
     const s = this.st;
     if (!s.draft) return;
+    if (!hasSecondWindow) return void this.toast(NO_PREVIEW, "printer");
     if (s.sample) {
       try {
         bir.screen_form_print_sample(s.target.formCode, s.draft, s.pending, this.unlockedFor(s.pending));
@@ -2372,7 +2425,7 @@ export class FormSession {
     for (const k of Object.keys(typed)) s.typed.add(k);
     if (Object.keys(typed).length) {
       try {
-        const f = bir.screen_form_fill(s.target.formCode, s.draft!, typed, this.unlockedFor(typed));
+        const f = this.fill(s.draft!, typed);
         s.draft = f.draft;
         s.values = this.shown(f.values);
         s.options = (f.options || {}) as Record<string, unknown[]>;
@@ -2731,7 +2784,7 @@ export class FormSession {
       const edits = s.pending;
       s.pending = {};
       try {
-        const r = bir.screen_form_fill(s.target.formCode, s.draft, edits, this.unlockedFor(edits));
+        const r = this.fill(s.draft, edits);
         if (r.removes) {
           s.pending = { ...edits, ...s.pending };
           return `Not saved: ${r.removes.message}`;

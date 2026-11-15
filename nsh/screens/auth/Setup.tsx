@@ -92,13 +92,16 @@ function RecoveryKey() {
  * the choice.
  */
 export function SoloTaxpayer() {
+  // The page is left once the route moved off New taxpayer after reaching it (its Cancel goes back).
+  let reached = false;
   effect(() => {
     const list = store.taxpayers();
     const view = app.route().view;
     untracked(() => {
       if (app.setup().pending !== "solo") return;
       if (list.length) auth.finishSoloSetup(list[0].tin_root);
-      else if (view !== "new_taxpayer") auth.cancelSetup();
+      else if (view === "new_taxpayer") reached = true;
+      else if (reached) auth.cancelSetup();
     });
   });
   const padX = () => (windowSize().width < BREAK.narrowContent ? 16 : 32);

@@ -7,11 +7,13 @@
 //!
 //! Its TypeScript declarations are generated from these types into `.nsh/types/ebirforms/native.d.ts`.
 
+pub mod agent;
 mod auth;
 mod desktop;
 pub mod door;
 pub mod guards;
 mod hooks;
+mod print;
 
 use nsh_core::JsonValue;
 use nsh_core::prelude::*;
@@ -24,7 +26,7 @@ fn native(registry: &mut Registry) {
     door::prepare_process();
     // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).
     desktop::prepare_process();
-    registry.module::<Bridge>().module::<Door>().module::<desktop::Desktop>();
+    registry.module::<Bridge>().module::<Door>().module::<agent::Agent>().module::<desktop::Desktop>().module::<print::Print>();
 }
 
 /// Proof that TSX reaches this crate.

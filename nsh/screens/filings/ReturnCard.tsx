@@ -3,21 +3,8 @@
 // the two differ (Paid under Confirmed, or every card on the narrow list's All tab).
 import { View } from "nsh";
 import type { ReturnRow } from "../../bir";
-import { AppButton, Chip, Line, StatusChip, Text } from "../../ui";
+import { AppButton, Line, PressCard, StatusChip, Text } from "../../ui";
 import { cardLabel, dateLine, type FormIndex, namedBranch, returnTitle } from "./model";
-import { PressCard } from "./PressCard";
-
-/** A return's status as a chip: Draft and Queued are the kit's StatusChip; Submitted, Confirmed and Paid keep their own words. */
-function StatusBadge(props: { status: string }) {
-  return (
-    <If
-      when={props.status === "Draft" || props.status === "Queued"}
-      else={<Chip label={props.status} tone={props.status === "Submitted" ? "neutral" : "success"} icon={props.status === "Submitted" ? "send" : "check"} />}
-    >
-      <StatusChip status={props.status === "Queued" ? "queued" : "draft"} />
-    </If>
-  );
-}
 
 /** Props of ReturnCard. */
 export interface ReturnCardProps {
@@ -32,12 +19,12 @@ export interface ReturnCardProps {
 /** A return as a card. */
 export function ReturnCard(props: ReturnCardProps) {
   return (
-    <PressCard testID={`return-${props.row.id}`} label={cardLabel(props.row)} onPress={() => props.onOpen(props.row)}>
+    <PressCard testID={`return-${props.row.id}`} label={cardLabel(props.row)} size="row" class="w-full gap-1" onPress={() => props.onOpen(props.row)}>
       <View testID={`return-${props.row.id}-head`} class="w-full flex-row items-center gap-1.5">
         <Line variant="emph" class="flex-1">{returnTitle(props.index, props.row)}</Line>
         <If when={props.column !== props.row.status}>
           <View testID={`return-${props.row.id}-status`} class="shrink-0">
-            <StatusBadge status={props.row.status} />
+            <StatusChip status={props.row.status.toLowerCase()} />
           </View>
         </If>
       </View>

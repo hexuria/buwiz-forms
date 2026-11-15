@@ -139,6 +139,7 @@ shell-check: shell-ui-test
     cargo clippy --locked --manifest-path crates/bir-shell/Cargo.toml --features mas_build --all-targets -- -D warnings
     {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 cargo test --locked --manifest-path crates/bir-shell/Cargo.toml" } }}
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --lib agent::
+    {{ if os_family() == "windows" { "$env:EBIR_TEST_ENV='1'; $env:BIR_AUTH_BYPASS='1'; $env:BIR_SFTP_DRY_RUN='1'; $env:BUWIZ_NO_KEYCHAIN='1'; cargo test --locked -p bir-app-api --features headless --lib agent::" } else { "EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BUWIZ_NO_KEYCHAIN=1 cargo test --locked -p bir-app-api --features headless --lib agent::" } }}
     cargo test --locked --manifest-path crates/bir-shell/Cargo.toml --features agent --test headless_detach
 
 # bir-core and bir-app-api tests in the plain-SQLite build the NSH app ships (no sqlcipher), with the four safety variables:
@@ -954,6 +955,10 @@ nsh-build *args="":
 # nsh-test also sets the dev environment, so a test that reaches the door can never read the keychain or send. It never sets BIR_DATABASE_PATH.
 
 # NSH: Rust tests, then every *.test.tsx and *.test.ts, headless (390x844 phone viewport unless a test opens another).
+# With no path: nsh/verify/ (git-ignored real-window verifier scripts that need the owner's data copy, so they always fail headless)
+# is left out. `nsh test` has no exclude option and a folder path must hold the app's App.tsx, so the Rust tests run once with
+# cargo and every other test file gets its own `nsh test <file>` run; the recipe fails if any of them did. A path in the
+# arguments (`just nsh-test shell/frame.test.tsx`, `just nsh-test verify`) runs exactly that, as before.
 [unix]
 nsh-test *args="":
     #!/usr/bin/env bash
@@ -962,7 +967,33 @@ nsh-test *args="":
     export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
     unset BIR_SFTP_LIVE BIR_DATABASE_PATH
     cd nsh
-    exec nsh test {{args}}
+    args=({{args}})
+    has_path=0 skip=0 filter=()
+    for a in ${args[@]+"${args[@]}"}; do
+        if [ "$skip" = 1 ]; then skip=0; continue; fi
+        case "$a" in
+            --filter) skip=1 ;;
+            --filter=*) filter=("${a#--filter=}") ;;
+            --junit|--target|--browser|--web-host|--display) skip=1 ;;
+            -*) ;;
+            *) has_path=1 ;;
+        esac
+    done
+    for ((i = 0; i < ${#args[@]}; i++)); do
+        if [ "${args[$i]}" = "--filter" ] && [ $((i + 1)) -lt ${#args[@]} ]; then filter=("${args[$((i + 1))]}"); fi
+    done
+    if [ "$has_path" = 1 ]; then exec nsh test ${args[@]+"${args[@]}"}; fi
+    failed=()
+    cargo test --manifest-path Cargo.toml --no-fail-fast ${filter[@]+"${filter[@]}"} || failed+=("rust crate")
+    while IFS= read -r file; do
+        nsh test "$file" ${args[@]+"${args[@]}"} || failed+=("$file")
+    done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | sort)
+    if [ ${#failed[@]} -gt 0 ]; then
+        echo "nsh-test: failed in:"
+        printf '  %s\n' "${failed[@]}"
+        exit 1
+    fi
+    echo "nsh-test: every test file passed (nsh/verify left out)"
 
 # Refuses a database path inside the owner's live data, the migrated copy or the migration folder (Hard rules 2 and 3).
 # The same checks as the door's guard (nsh/src/guards.rs, which a test compares with this script): the home folder
@@ -1053,6 +1084,46 @@ nsh-run db=env_var_or_default("BIR_DATABASE_PATH", "") *args="": (_nsh-db-guard 
     exec nsh run --target macos {{args}}
 
 # Opens real macOS windows for a minute or so. BIR_DATABASE_PATH, if set in the environment, is passed on (and guarded).
+
+# Starts the app in a real window with the `agent` feature built into its host (a scratch database, dry run, no keychain; the token is made here and
+# never printed), then runs nsh/tests/window_plane.rs against both control planes: the window's (tree, press, type, screenshot) and the data plane's
+# (app.info, profile.*, form.*). Nothing is sent anywhere. See crates/bir-shell/docs/AGENT.md. nsh's CLI builds its hosts without app features;
+# nsh/agent/cargo-with-agent.sh, set as $CARGO for that one command, adds the feature to the host build.
+
+# NSH: an external agent against the real app window (cargo feature `agent`, both control planes).
+[macos]
+nsh-agent-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="$(pwd -P)"
+    export PATH="$HOME/BuwizNsh/tools/bin:$PATH" CARGO_TARGET_DIR="$HOME/BuwizNsh/target-nsh"
+    export BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1
+    unset BIR_SFTP_LIVE BIR_DATABASE_PATH
+    work="$(mktemp -d)"
+    out="$HOME/BuwizNsh/evidence/agent"
+    mkdir -p "$out"
+    port="$(python3 -I -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+    export GPUI_AGENT=1 GPUI_AGENT_TOKEN="$(openssl rand -hex 16)" GPUI_AGENT_ADDR="127.0.0.1:$port" GPUI_AGENT_RUNTIME_DIR="$work/runtime"
+    cargo test --manifest-path nsh/Cargo.toml --features agent --test window_plane --no-run
+    holder=""
+    trap 'kill -INT "$holder" 2>/dev/null || true; wait "$holder" 2>/dev/null || true; rm -rf "$work"' EXIT
+    # A host binary that was just linked can take longer than nsh's 60 s to start the first time (the system checks it); the next launch is quick.
+    up=0
+    for attempt in 1 2 3; do
+        (cd "$out" && CARGO="$root/nsh/agent/cargo-with-agent.sh" exec nsh test "$root/nsh/shots/agent.test.tsx" --target macos) &
+        holder=$!
+        for _ in $(seq 1 90); do
+            if nc -z 127.0.0.1 "$port" 2>/dev/null; then up=1; break; fi
+            kill -0 "$holder" 2>/dev/null || break
+            sleep 2
+        done
+        [ "$up" = 1 ] && break
+        wait "$holder" 2>/dev/null || true
+        echo "attempt $attempt: the app did not come up"
+    done
+    [ "$up" = 1 ] || { echo "the window's control plane never came up on port $port"; exit 1; }
+    sleep 3
+    cargo test --manifest-path nsh/Cargo.toml --features agent --test window_plane -- --ignored --nocapture
 
 # NSH: real-window screenshots from nsh/shots/<name>.test.tsx into ~/BuwizNsh/evidence/<name>/ (never the worktree).
 [macos]

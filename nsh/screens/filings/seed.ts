@@ -1,8 +1,5 @@
 // Test and fixture data for Filings (the screen never imports this file): returns of every status created through the host
 // against the scratch database, for the demo taxpayer (Juana Santos), her Cebu branch and one generated taxpayer.
-// save_form_draft and queue_form_draft are two of the host functions nsh/bir does not wrap (the old app never calls them), so
-// the seed calls them through the door; nothing else in Filings does.
-import { Door } from "ebirforms/native";
 import { bir } from "../../bir";
 import { createDemoTaxpayer, DEMO } from "../../bir/testing";
 
@@ -57,7 +54,7 @@ export function seedPeople(): void {
 }
 
 function save(tin: string, code: string, year: number, period: number | null, status: string, data: object = {}): void {
-  Door.call("save_form_draft", [tin, code, year, period, status, data]);
+  bir.save_form_draft(tin, code, year, period, status, data);
 }
 
 /** People and seven returns, one of each status and three taxpayers' worth: see IDS. A fresh database only (ids follow the order). */
@@ -67,7 +64,7 @@ export function seedFilings(): void {
   bir.set_year_facts(DEMO.tin, YEAR, { eopt_tier: "Micro" });
   save(DEMO.tin, "2551Q", YEAR, 3, "Draft");
   save(DEMO.tin, "1601C", YEAR, 9, "Draft", { tax_14_total_compensation: 100000, tax_25_total_taxes_withheld: 10000 });
-  Door.call("queue_form_draft", [DEMO.tin, "1601C", YEAR, 9]);
+  bir.queue_form_draft(DEMO.tin, "1601C", YEAR, 9);
   save(DEMO.tin, "2550Q", YEAR, 2, "Submitted");
   save(DEMO.tin, "1701Q", YEAR, 1, "Confirmed");
   save(DEMO.tin, "1604C", YEAR - 1, null, "Paid");

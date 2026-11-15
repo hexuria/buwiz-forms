@@ -2,7 +2,7 @@
 import { expect, test } from "nsh/test";
 import {
   applyMask, DATE_ERROR, digitsOnly, formatIso, formatLongDate, formatMDY, formatMoney, formatTin, formatTinDigits, intMask,
-  isPlainAmount, MONEY_MASK, moneyMask, moneyPlain, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownDate, shownMoney,
+  isPlainAmount, isZeroAmount, MONEY_MASK, moneyMask, moneyPlain, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownDate, shownMoney,
   TIN_MASK,
 } from "./mask";
 
@@ -328,4 +328,89 @@ test("money: a stored value is laid out, never rounded away; rounding is for wha
   expect(shownMoney("1.255", false)).toBe("1.255");
   expect(shownMoney("1234.5678", false)).toBe("1,234.5678");
   expect(shownMoney("1234.5", false)).toBe("1,234.50");
+});
+
+// ---------------------------------------------------------------- selections: one edit, however the text lost its range
+
+// NSH reports every deletion as a "Backspace" key press (Backspace, Delete, Cmd+A and Backspace, Cut: macOS text_input.rs
+// should_change) and every typed digit over a selection as that digit, each BEFORE the text changes, with the selection the edit
+// started from known from onSelectionChange. reconcile gets the texts before and after and that selection.
+
+test("selection: the whole text selected and deleted leaves nothing, in every mask", () => {
+  const all = (text: string) => ({ start: 0, end: text.length });
+  for (const [mask, text] of [
+    [MONEY_MASK, "1,250,000.00"],
+    [moneyMask({ negative: true }), "-1,250.50"],
+    [PERCENT_MASK, "12.5"],
+    [intMask(4), "0123"],
+    [TIN_MASK, "000-123-453-00000"],
+  ] as const) {
+    expect(reconcile(text, "", mask, undefined, all(text))).toEqual({ text: "", caret: 0 });
+    // Without the selection (an edit of unknown origin) the two texts say the same.
+    expect(reconcile(text, "", mask)).toEqual({ text: "", caret: 0 });
+    // Whichever end the selection was made from.
+    expect(reconcile(text, "", mask, undefined, { start: text.length, end: 0 })).toEqual({ text: "", caret: 0 });
+  }
+});
+
+test("selection: a range in the middle that holds a separator, deleted (Backspace, Delete or Cut: the same edit)", () => {
+  // "1,2[50,0]00.00": the range is 3..7.
+  expect(reconcile("1,250,000.00", "1,200.00", MONEY_MASK, undefined, { start: 3, end: 7 })).toEqual({ text: "1,200.00", caret: 3 });
+  // "1,[250,]000.00": the range is 2..6; what is left is "1," and "000.00".
+  expect(reconcile("1,250,000.00", "1,000.00", MONEY_MASK, undefined, { start: 2, end: 6 })).toEqual({ text: "1,000.00", caret: 1 });
+  // "[1,2]50,000": the first three characters.
+  expect(reconcile("1,250,000", "50,000", MONEY_MASK, undefined, { start: 0, end: 3 })).toEqual({ text: "50,000", caret: 0 });
+  // A range at the end that holds the last separator: "1,250[,000]".
+  expect(reconcile("1,250,000", "1,250", MONEY_MASK, undefined, { start: 5, end: 9 })).toEqual({ text: "1,250", caret: 5 });
+  // TIN: "000[-123-]453" leaves the digits to regroup: "000-453", caret after the third digit.
+  expect(reconcile("000-123-453", "000453", TIN_MASK, undefined, { start: 3, end: 8 })).toEqual({ text: "000-453", caret: 3 });
+  // Percent and integer boxes have no separators to cross: "1[2.]5" and "01[23]".
+  expect(reconcile("12.5", "15", PERCENT_MASK, undefined, { start: 1, end: 3 })).toEqual({ text: "15", caret: 1 });
+  expect(reconcile("0123", "01", intMask(4), undefined, { start: 2, end: 4 })).toEqual({ text: "01", caret: 2 });
+  // The same range with no selection known: the texts alone find the same edit.
+  expect(reconcile("1,250,000", "50,000", MONEY_MASK)).toEqual({ text: "50,000", caret: 0 });
+  expect(reconcile("1,250,000", "1,250", MONEY_MASK)).toEqual({ text: "1,250", caret: 5 });
+  // Deleted from the other end of the selection (shift+left from the right): the same range.
+  expect(reconcile("1,250,000", "50,000", MONEY_MASK, undefined, { start: 3, end: 0 })).toEqual({ text: "50,000", caret: 0 });
+});
+
+test("selection: a typed digit over a selection replaces it, and lands in the right place among equal digits", () => {
+  // Money "[1,2]50,000" + "9": the typed key is the digit.
+  expect(reconcile("1,250,000", "950,000", MONEY_MASK, undefined, { start: 0, end: 3 }, true)).toEqual({ text: "950,000", caret: 1 });
+  // The whole amount selected and a digit typed: that digit alone.
+  expect(reconcile("1,250.00", "7", MONEY_MASK, undefined, { start: 0, end: 8 }, true)).toEqual({ text: "7", caret: 1 });
+  expect(reconcile("0.00", "5", MONEY_MASK, undefined, { start: 0, end: 4 }, true)).toEqual({ text: "5", caret: 1 });
+  expect(reconcile("0", "5", PERCENT_MASK, undefined, { start: 0, end: 1 }, true)).toEqual({ text: "5", caret: 1 });
+  expect(reconcile("0", "42", intMask(4), undefined, { start: 0, end: 1 }, true)).toEqual({ text: "42", caret: 2 });
+  // A digit equal to its neighbours over a range among them: "0.[0]0" + "0" is the same text, the caret after the typed digit.
+  expect(reconcile("0.00", "0.00", MONEY_MASK, undefined, { start: 2, end: 3 }, true)).toEqual({ text: "0.00", caret: 3 });
+  // A letter over a selection is taken back: the range is gone and nothing replaces it.
+  expect(reconcile("12.5", "x", PERCENT_MASK, undefined, { start: 0, end: 4 }, true)).toEqual({ text: "", caret: 0 });
+  // A paste over a selection is judged as a paste: a refused one leaves the box as it was.
+  expect(reconcile("1,250.00", "-5", MONEY_MASK, undefined, { start: 0, end: 8 })).toEqual({ text: "1,250.00", caret: 0, rejected: true });
+  expect(reconcile("1,250.00", "2,500.75", MONEY_MASK, undefined, { start: 0, end: 8 })).toEqual({ text: "2,500.75", caret: 8 });
+});
+
+test("selection: Delete (forward) over a selection and over a caret take what they should", () => {
+  // Over a range, forward and back are one edit.
+  expect(reconcile("1,250,000", "250,000", MONEY_MASK, undefined, { start: 0, end: 2 })).toEqual({ text: "250,000", caret: 0 });
+  // Over a caret, the digit after it: "1|,250" Delete.
+  expect(reconcile("1,250", "1250", MONEY_MASK, undefined, { start: 1, end: 1 })).toEqual({ text: "150", caret: 1 });
+  // The last character, from a caret at the end, is Backspace.
+  expect(reconcile("1,250", "1,25", MONEY_MASK, undefined, { start: 5, end: 5 })).toEqual({ text: "125", caret: 3 });
+});
+
+test("selection: Cut reaches reconcile as the same deletion, with or without the selection known", () => {
+  // The text after a Cut of "250," from "1,250,000" is the one Backspace over that selection gives.
+  const withSelection = reconcile("1,250,000", "1,000", MONEY_MASK, undefined, { start: 2, end: 6 });
+  expect(withSelection).toEqual({ text: "1,000", caret: 1 });
+  // No selection (a Cut that made no key press): a deletion found from the two texts.
+  expect(reconcile("1,250,000", "1,000", MONEY_MASK).text).toBe("1,000");
+  // A Cut of everything.
+  expect(reconcile("12.5", "", PERCENT_MASK, undefined, { start: 0, end: 4 })).toEqual({ text: "", caret: 0 });
+});
+
+test("selection: a zero amount is told apart from an empty or odd text", () => {
+  for (const zero of ["0", "00", "0.00", "0.0", ".0", "-0.00", "₱ 0", "0,000.00"]) expect(isZeroAmount(zero)).toBe(true);
+  for (const other of ["", " ", "abc", "1e21", "0.01", "10", "0.00.1", ".", "-", "₱", "1,250.00", "Infinity"]) expect(isZeroAmount(other)).toBe(false);
 });

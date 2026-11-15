@@ -3,6 +3,7 @@
 // object made at boot and cleared them with Clear filters or a Home tile's preset). Signals are private; read the
 // accessors inside JSX or a closure.
 import { signal } from "nsh";
+import { app } from "../../shell";
 import { type FilingsPreset, type FilterValues, presetFilters } from "./model";
 
 const query = signal("");
@@ -39,6 +40,14 @@ function active(): boolean {
 
 /** The preset's params object last applied, so a Back to the same Filings page does not apply it a second time. */
 let appliedFrom: object | null = null;
+
+// The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in): no filter, the All tab, and a
+// Home tile's preset may apply again.
+app.onSessionChange(() => {
+  reset();
+  tab.set("all");
+  appliedFrom = null;
+});
 
 /** The one owner of Filings' filter state. */
 export const filters = {

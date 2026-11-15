@@ -1,17 +1,14 @@
 // Home's parts: the five status tiles, the 30-day strip, a deadline row, a filed-return row, a taxpayer row, an as-needed row.
-// Built from nsh/ui; the tile and the strip's day are pressable cards the kit has no part for, so they are one nsh/base Button
-// each, styled from theme tokens (the kit's focus ring spelled out here).
+// Built from nsh/ui; the tile is the kit's PressCard and the strip's day its PressCell.
 import { View } from "nsh";
-import { Button } from "nsh/base";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow, Taxpayer } from "../../bir";
 import { nextText, progressText, type DashboardTaxpayerRow, type StripDay, type TileSpec } from "../../lib/dashboard";
 import { daysUntil, MONTHS, shortDate } from "../../lib/dates";
 import { store } from "../../shell";
-import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, StatusChip, Text, Tooltip } from "../../ui";
+import { AppButton, Avatar, Code, Icon, type IconName, Line, ListRow, NameCell, PressCard, PressCell, StatusChip, Text } from "../../ui";
 import { cancelQueued, openDeadline, openListed, openUndated, startAsNeeded, useAsTemplate } from "./actions";
 import { deadlineKey, statusKind, whoLine } from "./rows";
 
-const FOCUS = "focus-visible:ring-2 focus-visible:ring-accent-blue";
 /** The width of the code column (a form code or its blank). */
 const CODE_W = 68;
 /** The progress bar's width. */
@@ -22,12 +19,13 @@ const BAR = 120;
 /** One of the five counts: icon and label, the number, a caption. A press picks it or opens Filings; `picked` is the filled look with an x. */
 export function StatTile(props: { spec: TileSpec; width: number; picked: boolean; onPress: () => void }) {
   return (
-    <Button
+    <PressCard
       testID={`home-tile-${props.spec.key}`}
       selected={props.picked}
-      accessibilityLabel={`${props.spec.label}: ${props.spec.n}`}
+      label={`${props.spec.label}: ${props.spec.n}`}
       onPress={props.onPress}
-      class={`shrink-0 flex-col items-start gap-0.5 rounded-(--radius-card) border border-border bg-card px-4 py-3.5 enabled:hover:border-border-strong selected:border-border-strong selected:bg-selected selected:hover:bg-selected ${FOCUS}`}
+      align="start"
+      class="shrink-0 gap-0.5"
       style={{ width: props.width }}
     >
       <View class="w-full flex-row items-center gap-1.5">
@@ -39,7 +37,7 @@ export function StatTile(props: { spec: TileSpec; width: number; picked: boolean
       </View>
       <Text variant="page" class="tabular-nums">{String(props.spec.n)}</Text>
       <Text variant="meta" tone="fg3" class="w-full min-w-0">{props.spec.sub}</Text>
-    </Button>
+    </PressCard>
   );
 }
 
@@ -58,13 +56,14 @@ function StripDayButton(props: { day: StripDay; index: number; everyDay: boolean
     return `${props.index === 0 ? "Today, " : ""}${MONTHS[props.day.date.getMonth()]} ${props.day.date.getDate()}: ${n ? `${n} deadline${n === 1 ? "" : "s"}` : "nothing due"}`;
   };
   return (
-    <Button
+    <PressCell
       testID={`home-strip-${props.day.iso}`}
       selected={props.picked}
-      accessibilityLabel={label()}
-      tooltip={<Tooltip label={label()} />}
+      label={label()}
+      tooltip={label()}
       onPress={props.onPress}
-      class={`h-full min-w-0 flex-1 flex-col-reverse items-center gap-0.75 rounded-(--radius-ctl) border border-transparent pb-2 enabled:hover:border-border selected:bg-selected selected:hover:bg-selected ${FOCUS}`}
+      tone="outline"
+      class="h-full flex-1 flex-col-reverse items-center gap-0.75 rounded-(--radius-ctl) pb-2"
     >
       <If when={props.everyDay || props.index % 7 === 0} else={<View class="h-3" />}>
         <Text variant="cap" tone={props.index === 0 ? "fg" : "fg3"} class="tabular-nums whitespace-nowrap">{String(props.day.date.getDate())}</Text>
@@ -72,7 +71,7 @@ function StripDayButton(props: { day: StripDay; index: number; everyDay: boolean
       <Each of={(props.day.rows as DeadlineRow[]).slice(0, 5)} key={deadlineKey}>
         {(d) => <Dot d={d()} />}
       </Each>
-    </Button>
+    </PressCell>
   );
 }
 

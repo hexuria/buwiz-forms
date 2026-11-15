@@ -14,34 +14,34 @@ test("desktop: the frame names the taxpayer and the sidebar walks the pages, wit
   expect(app.shows("id:tab-bar")).toBe(false);
   expect(app.texts()).toContain("Juana Santos");
   expect(app.texts()).toContain("000-123-453-00000");
-  expect(app.shows("id:placeholder-home")).toBe(true);
+  expect(app.shows("id:home")).toBe(true);
   expect(app.enabled("id:tb-back")).toBe(false);
   expect(app.enabled("id:tb-forward")).toBe(false);
 
   await app.press("id:nav-library");
-  await app.waitFor("id:placeholder-library");
+  await app.waitFor("id:library");
   await app.press("id:nav-filings");
-  await app.waitFor("id:placeholder-filings");
+  await app.waitFor("id:filings");
   await app.press("id:nav-calendar");
-  await app.waitFor("id:placeholder-calendar");
+  await app.waitFor("id:calendar");
   expect(app.enabled("id:tb-back")).toBe(true);
   expect(app.enabled("id:tb-forward")).toBe(false);
 
   await app.press("id:tb-back");
-  await app.waitFor("id:placeholder-filings");
+  await app.waitFor("id:filings");
   expect(app.enabled("id:tb-forward")).toBe(true);
   await app.keyboard.press("mod+[");
-  await app.waitFor("id:placeholder-library");
+  await app.waitFor("id:library");
   await app.keyboard.press("mod+]");
-  await app.waitFor("id:placeholder-filings");
+  await app.waitFor("id:filings");
   await app.press("id:tb-forward");
-  await app.waitFor("id:placeholder-calendar");
+  await app.waitFor("id:calendar");
   expect(app.enabled("id:tb-forward")).toBe(false);
 
   // Moving somewhere new empties Forward.
   await app.press("id:tb-back");
   await app.press("id:nav-home");
-  await app.waitFor("id:placeholder-home");
+  await app.waitFor("id:home");
   expect(app.enabled("id:tb-forward")).toBe(false);
 });
 
@@ -65,7 +65,7 @@ test("desktop: the sidebar, the profile panel and the notifications toggle from 
   expect(app.texts()).toContain("Add branch");
   expect(app.texts()).toContain("Quezon City");
   await app.press("id:panel-open-forms");
-  await app.waitFor("id:placeholder-forms");
+  await app.waitFor("id:tp-page-forms");
   await app.press("id:context-pill");
   expect(app.shows("id:panel-profile")).toBe(false);
 
@@ -118,7 +118,7 @@ test("desktop: below 860 points the sidebar and the panel float, close on a move
   await app.press("id:tb-sidebar");
   await app.waitFor("id:sidebar-overlay");
   await app.press("id:nav-library");
-  await app.waitFor("id:placeholder-library");
+  await app.waitFor("id:library");
   expect(app.shows("id:sidebar-overlay")).toBe(false); // moving closes it
 
   // Esc: the dialog over a panel closes first, then the panel.
@@ -178,7 +178,7 @@ test("desktop: the account menu offers Lock app, Account settings and Log out", 
   expect(app.texts()).toContain("Lock app");
   expect(app.texts()).toContain("Log out");
   await app.press("id:menu-account");
-  await app.waitFor("id:placeholder-settings");
+  await app.waitFor("id:settings");
   await app.press("id:account-row");
   await app.press("id:menu-lock");
   // No PIN is set, so there would be nothing to sign back in with.
@@ -192,24 +192,24 @@ test("desktop: Cmd+comma opens Settings; a view that needs a taxpayer falls back
   expect(app.texts()).toContain("Add a taxpayer");
   expect(app.shows("id:dev-door")).toBe(false); // no dev strip on an empty database: the dev pages are in the palette only
   await app.keyboard.press("mod+,");
-  await app.waitFor("id:placeholder-settings");
+  await app.waitFor("id:settings");
   // The panel says there is no taxpayer yet, and offers one.
   await app.press("id:context-pill");
   await app.waitFor("id:profile-empty");
   expect(app.texts()).toContain("No taxpayer yet");
   await app.press("id:panel-new-taxpayer");
-  await app.waitFor("id:placeholder-new_taxpayer");
+  await app.waitFor("id:new-tp");
 });
 
 test("desktop: the dev start route opens a view, the panel and the palette at launch", async () => {
   const library = await open(ENTRY, { ...WIDE, ...asking({ start: "view=library;panel=profile" }) });
-  await library.waitFor("id:placeholder-library");
+  await library.waitFor("id:library");
   await library.waitFor("id:panel-profile");
   const palette = await open(ENTRY, { ...WIDE, ...asking({ start: "palette=calendar" }) });
   await palette.waitFor("id:palette-input");
   expect(palette.value("id:palette-input")).toBe("calendar");
   const dark = await open(ENTRY, { ...WIDE, colorScheme: "light", ...asking({ start: "theme=dark;view=filings" }) });
-  await dark.waitFor("id:placeholder-filings");
+  await dark.waitFor("id:filings");
   expect(dark.shows("label:Theme: dark, press to change")).toBe(true);
 });
 
@@ -253,7 +253,7 @@ test("desktop: a page that throws shows a message, and the frame stays", async (
   expect(app.shows("id:sidebar")).toBe(true);
   expect(app.texts()).toContain("This page could not be shown");
   await app.press("id:view-error-home");
-  await app.waitFor("id:placeholder-home");
+  await app.waitFor("id:home");
   expect(app.shows("id:view-error")).toBe(false);
 });
 
@@ -272,7 +272,7 @@ test("desktop: filing events become notifications: an unread dot, the list, Mark
 
   // A press reads that one and shows Filings.
   await app.press("id:notif-return:9001:submitted");
-  await app.waitFor("id:placeholder-filings");
+  await app.waitFor("id:filings");
   expect(app.shows("id:panel-notifications")).toBe(true); // docked: it stays beside the page
   await app.waitFor("id:notif-unread-return:9001:submitted", { state: "gone" });
   expect(app.shows("id:notif-unread-return:9002:confirmed")).toBe(true);

@@ -312,9 +312,12 @@ function iconOf(name: string | undefined): IconName | undefined {
   return name && name in ICONS ? (name as IconName) : undefined;
 }
 
-/** A toast at the bottom (the Toaster mounted by the frame). `icon`: an icon name of ui/icons; others show the default. */
-export function toast(message: string, icon?: string): string {
-  return kitToast(message, { icon: iconOf(icon) });
+/**
+ * A toast at the bottom (the Toaster mounted by the frame); answers its id (dismissToast closes it). `icon`: an icon name of
+ * ui/icons; others show the default. `action`: a button on the toast (the form page's Undo), shown with the countdown bar.
+ */
+export function toast(message: string, icon?: string, action?: { label: string; onPress: () => void }): string {
+  return kitToast(message, { icon: iconOf(icon), action });
 }
 
 // ---------------------------------------------------------------- navigation
@@ -363,6 +366,47 @@ function beforeLeave(hook: LeaveHook): () => void {
     leaveHooks.delete(entry);
   };
 }
+
+// ---- the session changes
+
+/** What a screen registers with onSessionChange: it puts the screen's own state back to how a first visit finds it. */
+export type SessionChangeHook = () => void;
+
+const sessionHooks = new Set<SessionChangeHook>();
+
+/**
+ * A screen that keeps state in module-level signals (its filters, a pick, a search, an open edit with typed values) registers
+ * the reset of that state here, so it does not outlive the session it belongs to: the next person in help-desk mode starts
+ * from the defaults and sees nothing of the last one's selection. The hooks run, synchronously and in registration order,
+ * when the app locks, signs out, unlocks (a sign-in, the account gate opening again) and when another taxpayer signs in; a
+ * hook that throws is logged and does not stop the others. Returns the function that unregisters it.
+ */
+function onSessionChange(hook: SessionChangeHook): () => void {
+  const entry: SessionChangeHook = () => hook(); // two registrations of one function stay two
+  sessionHooks.add(entry);
+  return () => {
+    sessionHooks.delete(entry);
+  };
+}
+
+function sessionChanged(): void {
+  for (const hook of [...sessionHooks]) {
+    try {
+      hook();
+    } catch (error) {
+      store.logScreen("warn", `resetting a screen for the next session: ${errorText(error)}`);
+    }
+  }
+}
+
+// The frame's own state of the same kind: the palette's search and the New return dialog's picks.
+onSessionChange(() => {
+  batch(() => {
+    paletteQuery.set("");
+    paletteIndex.set(0);
+    newReturn.set({ code: null, period: null });
+  });
+});
 
 /** Runs every registered hook and waits for them all, but not longer than LEAVE_HOOKS_CAP_MS. */
 async function runLeaveHooks(): Promise<void> {
@@ -883,6 +927,7 @@ function endSession(message?: string): void {
     overlay.set(null);
     appLocked.set(true);
   });
+  sessionChanged();
   store.bump();
   applyScope();
   if (message) toast(message, "log-out");
@@ -896,6 +941,7 @@ function startSession(next: Session): void {
     appLocked.set(false);
   });
   lockedFrom = null;
+  sessionChanged();
   store.bump();
   applyScope();
   if (next.kind === "taxpayer") {
@@ -998,6 +1044,19 @@ async function loadKept(start?: string): Promise<void> {
 
 /** The dev route boot() was given, run once the account gate is open. */
 let bootStart: string | undefined;
+let startParsed: { raw: string | undefined; params: Readonly<Record<string, string>> } | null = null;
+
+/**
+ * The dev start route's steps as key -> value (the last of a repeated key wins), for the screens that take a start key of their
+ * own (Library reads `scope`). Read-only and fixed once boot() has the route; empty with none. The frame acts on the keys it
+ * knows; every other key is only listed here, and a screen that does not know a key ignores it.
+ */
+function startParams(): Readonly<Record<string, string>> {
+  if (startParsed === null || startParsed.raw !== bootStart) {
+    startParsed = { raw: bootStart, params: Object.freeze(Object.fromEntries(parseStart(bootStart).map((step) => [step.key, step.value]))) };
+  }
+  return startParsed.params;
+}
 
 /**
  * Asks the host whether the Buwiz account gate is open; if so loads what the app keeps (loadKept), then shows the frame (or
@@ -1049,6 +1108,7 @@ async function finishUnlock(): Promise<boolean> {
     cloudLocked.set(false);
     if (bootStart) runStartRoute(bootStart);
   } else {
+    sessionChanged();
     store.bump();
     cloudLocked.set(false);
   }
@@ -1066,6 +1126,7 @@ function lockCloud(): void {
     gateError.set(null);
     cloudLocked.set(true);
   });
+  sessionChanged();
 }
 
 // ---------------------------------------------------------------- the public handle
@@ -1132,8 +1193,10 @@ export const app = {
   forward: forwardOne,
   settled,
   beforeLeave,
+  onSessionChange,
   quit,
   retarget,
+  startParams,
   openReturn,
   openProfile,
   openTaxpayer,

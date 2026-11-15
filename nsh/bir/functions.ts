@@ -116,6 +116,9 @@ export const forms_catalog = (...args: Parameters<typeof Host.forms_catalog>): R
 export const generate_totp_secret = (...args: Parameters<typeof Host.generate_totp_secret>): ReturnType<typeof Host.generate_totp_secret> =>
   Door.call("generate_totp_secret", args) as ReturnType<typeof Host.generate_totp_secret>;
 
+export const get_form_draft = (...args: Parameters<typeof Host.get_form_draft>): ReturnType<typeof Host.get_form_draft> =>
+  Door.call("get_form_draft", args) as ReturnType<typeof Host.get_form_draft>;
+
 export const get_setting = (...args: Parameters<typeof Host.get_setting>): ReturnType<typeof Host.get_setting> =>
   Door.call("get_setting", args) as ReturnType<typeof Host.get_setting>;
 
@@ -190,6 +193,9 @@ export const record_screen_log = (...args: Parameters<typeof Host.record_screen_
 
 export const revoke_send = (...args: Parameters<typeof Host.revoke_send>): ReturnType<typeof Host.revoke_send> =>
   Door.call("revoke_send", args) as ReturnType<typeof Host.revoke_send>;
+
+export const save_form_draft = (...args: Parameters<typeof Host.save_form_draft>): ReturnType<typeof Host.save_form_draft> =>
+  Door.call("save_form_draft", args) as ReturnType<typeof Host.save_form_draft>;
 
 export const save_setup = (...args: Parameters<typeof Host.save_setup>): ReturnType<typeof Host.save_setup> =>
   Door.call("save_setup", args) as ReturnType<typeof Host.save_setup>;
@@ -460,6 +466,7 @@ export const bir = {
   export_profile,
   forms_catalog,
   generate_totp_secret,
+  get_form_draft,
   get_setting,
   grant_send,
   import_archive,
@@ -485,6 +492,7 @@ export const bir = {
   record_income_tax_election,
   record_screen_log,
   revoke_send,
+  save_form_draft,
   save_setup,
   screen_form_amend,
   screen_form_cancel_queue,
@@ -580,6 +588,7 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "export_profile", kind: "async" },
   { name: "forms_catalog", kind: "sync" },
   { name: "generate_totp_secret", kind: "sync" },
+  { name: "get_form_draft", kind: "sync" },
   { name: "get_setting", kind: "sync" },
   { name: "grant_send", kind: "sync" },
   { name: "import_archive", kind: "async" },
@@ -605,6 +614,7 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "record_income_tax_election", kind: "sync" },
   { name: "record_screen_log", kind: "sync" },
   { name: "revoke_send", kind: "sync" },
+  { name: "save_form_draft", kind: "sync" },
   { name: "save_setup", kind: "sync" },
   { name: "screen_form_amend", kind: "async" },
   { name: "screen_form_cancel_queue", kind: "sync" },
@@ -668,14 +678,12 @@ export const NOT_WRAPPED: readonly string[] = [
   "delete_profile",
   "delete_setting",
   "form_print_html",
-  "get_form_draft",
   "get_taxpayer",
   "list_deadlines",
   "list_drafts",
   "list_profiles",
   "list_queued",
   "profile_detail",
-  "save_form_draft",
   "save_profile",
   "set_profile_archived",
   "set_profile_pin",

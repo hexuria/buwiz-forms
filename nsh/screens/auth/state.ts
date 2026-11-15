@@ -208,8 +208,8 @@ function chooseSolo(): void {
     return;
   }
   // No taxpayer yet: New taxpayer, with no chrome; Create finishes the setup (SoloTaxpayer watches for it).
-  app.setSetup("solo", "choose");
   go("new_taxpayer");
+  app.setSetup("solo", "choose");
 }
 
 /** The New taxpayer page was left during first launch: back to the choice. */

@@ -46,6 +46,8 @@ export function leaveSecurity(): void {
   totpSecret.set(null);
   recoveryKey.set(null);
 }
+// Nor does it outlive the session (a lock, a sign-out or another taxpayer signing in): the next person never sees a half-typed code.
+app.onSessionChange(leaveSecurity);
 
 function fail(error: unknown): void {
   toast(errorText(error), "triangle-alert");

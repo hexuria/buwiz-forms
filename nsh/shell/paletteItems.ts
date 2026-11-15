@@ -1,6 +1,6 @@
 // What the command palette lists (old main.js paletteItems): Taxpayers, Branches, Go to, Forms, Actions. Typing narrows
 // them; digits match a TIN (nine digits name a taxpayer, ten or more a branch). Pure over the app state: Palette.tsx draws it.
-import { computed, keymap } from "nsh";
+import { computed, keymap, signal, untracked } from "nsh";
 import { doorStatus } from "../bir";
 import { formUi } from "../screens/form/formUi";
 import type { IconName } from "../ui";
@@ -27,6 +27,31 @@ export interface PaletteItem {
 
 /** The pages "Go to" offers, in order (the dev views follow, where the dev environment is on). */
 const PAGES: ViewName[] = ["home", "library", "calendar", "filings", "profile", "forms", "templates", "settings"];
+
+/** The forms the palette starts: label and code, from the form library (screen_forms_index). */
+interface FormRow {
+  code: string;
+  label: string;
+}
+
+/**
+ * The palette's index of forms. Building it is a host call that makes the whole form library (about a second in a debug build),
+ * so it is made when the palette opens (Palette.tsx calls indexPalette as it mounts) and not by the first typed letter, which
+ * used to hold the list unfiltered for that second. The library never changes while the app runs, so what was built stays
+ * (store.bump() drops the store's copy at every save; this one is kept, as the store keeps the RDO and ZIP lists).
+ */
+const formRows = signal<FormRow[] | null>(null);
+
+function buildFormRows(): FormRow[] {
+  return store.screenIndex().map((f) => ({ code: f.c, label: `${f.c} · ${f.t}` }));
+}
+
+/** Builds the form index if it is not built yet (a read that came back empty is tried again at the next open). */
+export function indexPalette(): void {
+  if (untracked(formRows) !== null) return;
+  const rows = buildFormRows();
+  if (rows.length) formRows.set(rows);
+}
 
 /** The rows for the typed text, in group order. */
 export const paletteItems = computed<PaletteItem[]>(() => {
@@ -75,8 +100,9 @@ export const paletteItems = computed<PaletteItem[]>(() => {
     items.push({ group: "Go to", label: meta.label, icon: meta.icon, run: () => app.go(view) });
   }
   if (q) {
-    for (const f of store.screenIndex()) {
-      items.push({ group: "Forms", label: `${f.c} · ${f.t}`, icon: "file-text", run: () => app.startNewReturn(f.c) });
+    // The index built at open; a palette read without opening (a test, a hook) builds it here, once.
+    for (const f of formRows() ?? buildFormRows()) {
+      items.push({ group: "Forms", label: f.label, icon: "file-text", run: () => app.startNewReturn(f.code) });
     }
   }
   // The open form's pill steps (old main.js: only while a form is open and shows its pill).

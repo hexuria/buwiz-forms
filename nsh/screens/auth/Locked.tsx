@@ -10,13 +10,20 @@ import { SignIn } from "./SignIn";
 /** True while first launch (or its recovery key) is in front. */
 const setupShows = () => app.needsSetup() || app.setup().step === "helpdesk-key";
 
+/**
+ * "Just me" is half done: first launch chose it and the first taxpayer is not typed yet. It stands in front whatever the
+ * access mode says (a refresh or a restart in the middle can leave the mode set already), but never over the sign-in
+ * screen: an app locked by an admin code asks for the code first.
+ */
+const soloPending = () => app.setup().pending === "solo" && (setupShows() || !app.appLocked());
+
 export function LockedScreen() {
   return (
     <View testID="locked-screen" class="min-h-0 flex-1">
       <If when={app.cloudLocked()}>
         <AccountGate />
       </If>
-      <If when={!app.cloudLocked() && setupShows() && app.setup().pending === "solo"}>
+      <If when={!app.cloudLocked() && soloPending()}>
         <SoloTaxpayer />
       </If>
       <If when={!app.cloudLocked() && setupShows() && app.setup().pending !== "solo"}>

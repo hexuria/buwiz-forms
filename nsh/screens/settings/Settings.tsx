@@ -18,9 +18,8 @@ import { SetupCard } from "./SetupCard";
 import { leaveSetup, resetSetup, setupChange } from "./setup";
 import { TransferSection } from "./Transfer";
 
-/** The cards' column on the right of the list: 560 wide, 720 for Jobs (the rows have buttons). */
-const COLUMN = 560;
-const JOBS_COLUMN = 720;
+/** The cards' column on the right of the list: one width for every section, so the title never moves (the Jobs rows need it). */
+const COLUMN = 640;
 /** The section list's width beside the cards. */
 const RAIL = 220;
 
@@ -100,7 +99,7 @@ function Pane(props: { narrow: boolean; back?: () => void }) {
       class="min-h-0 flex-1"
       contentClass={props.narrow ? "px-4 pt-3 pb-14" : "items-center px-8 pt-7 pb-14"}
     >
-      <View class="w-full min-w-0 gap-5" style={{ maxWidth: shown()?.id === "jobs" ? JOBS_COLUMN : COLUMN }}>
+      <View class="w-full min-w-0 gap-5" style={{ maxWidth: COLUMN }}>
         <If when={props.narrow && props.back && !keyOnly()}>
           <View class="self-start">
             <AppButton testID="settings-back" label="Settings" icon="chevron-left" variant="ghost" size="sm" onPress={() => props.back?.()} />

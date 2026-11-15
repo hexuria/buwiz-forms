@@ -61,6 +61,12 @@ impl UiQueue {
     }
 }
 
+impl Default for UiQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct OpenForm {
     kind: AgentFormKind,
     year: u16,
@@ -1406,11 +1412,7 @@ fn queue_validated(kind: AgentFormKind, db: &Database, draft: &mut Value) -> Res
 ///
 /// Calls [`agent::validate`] (the page's Validate) before any queue write.
 /// Errors from that call are the `field_errors` returned to the assistant.
-pub fn send_draft(
-    db: &Database,
-    kind: AgentFormKind,
-    draft: &mut Value,
-) -> Result<Value, String> {
+pub fn send_draft(db: &Database, kind: AgentFormKind, draft: &mut Value) -> Result<Value, String> {
     let identity = agent::identity(kind, draft)?;
     let code = kind.form_code().to_string();
     if !db

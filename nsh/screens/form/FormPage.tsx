@@ -15,6 +15,9 @@
 // given another item draws a new row (an Each keyed by the item), so nothing created in a row moves to another item.
 // A row holding the keyboard focus or an open popover stays bound wherever the page scrolls (lists' kept rows). A step
 // to a row not drawn yet asks its part's list to scroll to it (scrollToIndex), then measures and focuses it.
+// Lists that scrolled far away keep their recycled cells (hidden, still views), so a part's list exists only while its
+// card is within a viewport above or two below the one on screen (or holds the keyboard); elsewhere an open part keeps
+// its rows' last measured height as an empty box, and its list is made again as it comes near.
 // The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
 import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
 import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
@@ -112,7 +115,16 @@ export function FormPage(props: FormPageProps) {
   keymap.bind("mod+left", () => s.step(-1), { when: "notEditing" });
   keymap.bind("mod+right", () => s.step(1), { when: "notEditing" });
   // The frame's palette steps through this too ("Next to do", "Previous to do"), while the pill shows.
-  cleanup(formUi.attach({ pillShown: () => Boolean(s.schema) && !s.header().error && !s.header().loading, step: (dir) => s.step(dir) }));
+  cleanup(
+    formUi.attach({
+      pillShown: () => Boolean(s.schema) && !s.header().error && !s.header().loading,
+      step: (dir) => s.step(dir),
+      // What an agent's commands ask (shell/agent): which return this is, when it has loaded, a fill committed as a choice.
+      target: () => ({ tin: props.tin, formCode: props.formCode, year: props.year, period: props.period }),
+      ready: () => s.ready(),
+      choose: (edits) => s.choose(edits),
+    }),
+  );
 
   // A step: once its row is drawn, scroll it near the top (under the sticky title) and put the keyboard in it.
   // A part the navigator or a part step went to: its card's top to the top of the viewport.
@@ -120,9 +132,29 @@ export function FormPage(props: FormPageProps) {
   const lists = new Map<number, PartList>();
   const cards = new Map<number, ViewRef>();
   // Where the part cards start in the scroll's content: the column's top, the parts box's top in it, each card's in that.
-  const tops = { column: 0, parts: 0, cards: [] as number[] };
+  const tops = { column: 0, parts: 0, cards: [] as number[], heights: [] as number[] };
   let scrollRef: ScrollRef | undefined;
   let scrollY = 0;
+  let viewH = untracked(() => windowSize().height);
+  // The parts whose rows are drawn now ("0,1,2"): near the viewport, or holding the keyboard.
+  const near = signal("");
+  // A part's rows come when its card is within a viewport above or two below; they go only past three above or four
+  // below, so a part whose height changes as its rows are measured never flips between drawn and not drawn.
+  const updateNear = () => {
+    const base = tops.column + tops.parts;
+    const keep = s.focusedPart();
+    const now = new Set(untracked(near).split(",").filter(Boolean).map(Number));
+    const within = (pi: number, above: number, below: number) => {
+      const top = base + tops.cards[pi];
+      return top <= scrollY + below * viewH && top + (tops.heights[pi] ?? 0) >= scrollY - above * viewH;
+    };
+    const shown = tops.cards
+      .map((_top, pi) => (pi === keep || (now.has(pi) ? within(pi, 3, 4) : within(pi, 1, 2)) ? pi : -1))
+      .filter((pi) => pi >= 0)
+      .join(",");
+    if (shown !== untracked(near)) near.set(shown);
+  };
+  const isNear = (pi: number) => near().split(",").includes(String(pi));
   const followScroll = (y: number) => {
     scrollY = y;
     let at = 0;
@@ -130,6 +162,7 @@ export function FormPage(props: FormPageProps) {
       if (tops.column + tops.parts + top <= y + 1) at = pi;
     });
     s.setCurrent(at);
+    updateNear();
   };
   effect(() => {
     const r = s.reveal();
@@ -144,11 +177,14 @@ export function FormPage(props: FormPageProps) {
       const ref = row ? rowRefs.get(row) : cards.get(part);
       if (!ref) {
         // A row not drawn yet: its part's list scrolls the page to it with the sizes it knows, and draws it there.
+        // A part far away has no list yet: the page goes to its card first, which brings the list.
         const list = row ? lists.get(part) : undefined;
         const index = row && list ? list.indexOf(row) : -1;
         if (list && index >= 0 && !asked) {
           list.ref.scrollToIndex({ index, viewOffset: 72, animated: false });
           asked = true;
+        } else if (row && !list && tops.cards[part] !== undefined) {
+          scrollRef.scrollTo({ y: tops.column + tops.parts + tops.cards[part], animated: false });
         }
         continue;
       }
@@ -173,6 +209,10 @@ export function FormPage(props: FormPageProps) {
           class="min-h-0 flex-1"
           contentClass={narrow() ? "px-4 pt-5 pb-32" : "px-6 pt-7 pb-28"}
           onScroll={(e) => followScroll(e.offset.y)}
+          onLayout={(e) => {
+            viewH = e.bounds.size.height;
+            updateNear();
+          }}
           scrollEventThrottle={50}
         >
           <View class="w-full self-center" style={{ maxWidth: 920 }} onLayout={(e) => (tops.column = e.bounds.origin.y)}>
@@ -189,7 +229,12 @@ export function FormPage(props: FormPageProps) {
                     onUnref={(id, ref) => rowRefs.get(id) === ref && rowRefs.delete(id)}
                     onList={(list) => (list ? lists.set(pi, list) : lists.delete(pi))}
                     onCard={(ref) => cards.set(pi, ref)}
-                    onTop={(y) => (tops.cards[pi] = y)}
+                    near={() => isNear(pi)}
+                    onTop={(y, h) => {
+                      tops.cards[pi] = y;
+                      tops.heights[pi] = h;
+                      updateNear();
+                    }}
                   />
                 ))}
               </View>
@@ -272,6 +317,9 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
           <If when={h().loading}>
             <Chip label="Opening…" tone="accent" />
           </If>
+          <If when={formUi.reviewing()}>
+            <Chip testID="fp-agent-review" label="Prepared by the assistant — review, then Queue" tone="accent" />
+          </If>
         </View>
       </View>
       <View class="items-end gap-1.5" classList={{ "w-full items-start": props.narrow() }}>
@@ -298,7 +346,7 @@ function Header(props: { s: FormSession; narrow: Accessor<boolean> }) {
               }
               onPress={() => s.check()}
             />
-            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" disabled={h().loading} onPress={() => s.queue()} />
+            <AppButton testID="fp-queue" size="sm" icon="send" label="Queue" variant={formUi.reviewing() ? "primary" : undefined} disabled={h().loading} onPress={() => s.queue()} />
           </If>
           <If when={h().status === "Queued" && !h().sample}>
             <AppButton testID="fp-cancel-queue" size="sm" label="Cancel queue" onPress={() => s.cancelQueue()} />
@@ -355,6 +403,9 @@ function Notes(props: { s: FormSession }) {
 
 // ---------------------------------------------------------------- parts
 
+/** What a row is taken to be tall before it is drawn (points). */
+const ROW_ESTIMATE = 104;
+
 /** An open part's list, for a step to a row it has not drawn: its ref and where the row is in it. */
 interface PartList {
   ref: ListRef;
@@ -376,7 +427,9 @@ interface PartCardProps {
   onUnref: (id: string, ref: ViewRef) => void;
   onList: (list: PartList | null) => void;
   onCard: (ref: ViewRef) => void;
-  onTop: (y: number) => void;
+  onTop: (y: number, height: number) => void;
+  /** Its rows are drawn now (the card is near the viewport). */
+  near: Accessor<boolean>;
 }
 
 /** An item row of a part's list: it hands the page its view while it is drawn. */
@@ -402,16 +455,18 @@ function PartItem(props: { card: PartCardProps; ii: number; first: Accessor<bool
 }
 
 /** An open part's rows: a list in the page's viewport (only the rows near it exist). */
-function PartRows(props: { card: PartCardProps; rows: Accessor<PartRow[]> }) {
+function PartRows(props: { card: PartCardProps; rows: Accessor<PartRow[]>; estimate: number }) {
   const c = props.card;
   const pi = c.pi;
+  // Read once: rows drawn before give this part's own row height, so the list comes back as long as it went.
+  const estimate = untracked(() => props.estimate);
   cleanup(() => c.onList(null));
   return (
     <List
       viewport="parent"
       each={props.rows()}
       keyExtractor={(r: PartRow) => r.key}
-      estimatedItemSize={104}
+      estimatedItemSize={estimate}
       ref={(ref: ListRef) =>
         c.onList({ ref, indexOf: (row) => props.rows().findIndex((r) => !r.fold && `${pi}:${r.ii}` === row) })
       }
@@ -437,6 +492,8 @@ function PartCard(props: PartCardProps) {
   const p = s.schema!.parts[props.pi];
   const info = s.part(props.pi);
   const pi = props.pi;
+  // The rows' height when they were last drawn: the empty box that stands in for them while the part is far away.
+  const rowsHeight = signal(0);
   const made = new Map<string, PartRow>();
   const rowOf = (fold: boolean, ii: number) => {
     const key = `${fold ? "f" : "i"}${ii}`;
@@ -463,7 +520,7 @@ function PartCard(props: PartCardProps) {
       ref={(r: ViewRef) => props.onCard(r)}
       testID={`fp-part-${pi}`}
       class="rounded-(--radius-card) border border-border bg-card"
-      onLayout={(e) => props.onTop(e.bounds.origin.y)}
+      onLayout={(e) => props.onTop(e.bounds.origin.y, e.bounds.size.height)}
     >
       <View class="sticky top-0 z-10 rounded-t-(--radius-card) bg-card" classList={{ "rounded-b-(--radius-card)": !info().open, "border-b border-border": info().open }}>
         <ListRow testID={`fp-part-${pi}-toggle`} accessibilityLabel={partName(p, pi)} onPress={() => s.togglePart(pi)}>
@@ -473,7 +530,11 @@ function PartCard(props: PartCardProps) {
         </ListRow>
       </View>
       <If when={info().open}>
-        <PartRows card={props} rows={rows} />
+        <If when={props.near()} else={<View style={{ height: rowsHeight() || rows().length * ROW_ESTIMATE }} />}>
+          <View onLayout={(e) => rowsHeight.set(e.bounds.size.height)}>
+            <PartRows card={props} rows={rows} estimate={rowsHeight() && rows().length ? rowsHeight() / rows().length : ROW_ESTIMATE} />
+          </View>
+        </If>
       </If>
     </View>
   );

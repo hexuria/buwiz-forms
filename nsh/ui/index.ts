@@ -12,6 +12,7 @@ export {
   type TextFieldProps, TinInput, type TinInputProps,
 } from "./fields";
 export { type IconName, ICONS } from "./icons";
+export { PressCard, type PressCardProps, PressCell, type PressCellProps } from "./press";
 export {
   Dialog, type DialogProps, Disclosure, DisclosureGroup, type DisclosureProps, dismissToast, Menu, MenuItem, type MenuItemProps,
   type MenuProps, MenuSeparator, Popover, type PopoverProps, Sheet, type SheetProps, SidePanel, type SidePanelProps, toast,

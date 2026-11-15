@@ -36,9 +36,9 @@ function Choose() {
 function PickOwner() {
   return (
     <>
-      <StackRow testID="setup-change-owner-head" title="New owner" hint="The owner is the admin of this computer. Only a taxpayer with a PIN or authenticator can be chosen.">
+      <SettingRow testID="setup-change-owner-head" title="New owner" hint="The owner is the admin of this computer. Only a taxpayer with a PIN or authenticator can be chosen.">
         <Cancel />
-      </StackRow>
+      </SettingRow>
       <If when={candidates().length === 0}>
         <SettingRow testID="setup-change-none" title="No other taxpayers" hint="Add the taxpayer first, then come back here." />
       </If>
@@ -62,13 +62,13 @@ function PickOwner() {
 function HelpdeskPin() {
   return (
     <>
-      <StackRow
+      <SettingRow
         testID="setup-change-helpdesk-head"
         title="Switch to a help desk"
         hint="The admin signs in with TIN 000-000-000. The current owner stays a taxpayer with their own PIN."
       >
         <Cancel />
-      </StackRow>
+      </SettingRow>
       <StackRow testID="setup-change-newpin" title="New admin PIN" hint="4 digits, for TIN 000-000-000">
         <PinCells testID="setup-change-newpin-cells" length={4} masked label="New admin PIN" value={setupChange.newPin()} onChange={setupChange.setNewPin} />
         <AppButton testID="setup-change-newpin-next" label="Continue" variant="primary" size="sm" onPress={pickHelpdeskPin} />
@@ -86,9 +86,9 @@ function Confirm() {
   };
   return (
     <>
-      <StackRow testID="setup-change-what" title="Confirm the change" hint={what()}>
+      <SettingRow testID="setup-change-what" title="Confirm the change" hint={what()}>
         <Cancel />
-      </StackRow>
+      </SettingRow>
       <StackRow
         testID="setup-change-confirm"
         title={setupChange.useCode() ? "Your admin authenticator code" : "Your current admin PIN"}

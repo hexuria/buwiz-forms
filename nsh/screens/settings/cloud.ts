@@ -1,10 +1,10 @@
 // Settings > Account > Buwiz (old account.js AccountActions): the cloud account's status, the refresh when Settings opens, sign
 // in and sign out. The sign-in screens (the gate) are D2's; these are the same host calls the old card made, and the gate's
-// seam on the frame: app.setCloudLocked. One owner: this file's private signals.
+// seam on the frame: app.finishUnlock and app.lockCloud. One owner: this file's private signals.
 import { signal } from "nsh";
-import { type CloudAccountStatus } from "../../bir";
+import type { CloudAccountStatus } from "../../bir";
 import { errorText } from "../../lib/errors";
-import { app, store, toast } from "../../shell";
+import { app, store } from "../../shell";
 
 const status = signal<CloudAccountStatus | null>(null);
 const busy = signal(false);
@@ -50,29 +50,6 @@ export async function refresh(): Promise<void> {
   }
 }
 
-/** The computer is signed in with Buwiz: the gate opens and what was read before it is read again. */
-function finishUnlock(): void {
-  try {
-    store.call("cloud_account_session_opened");
-  } catch (error) {
-    toast(errorText(error), "triangle-alert");
-    app.setCloudLocked(true);
-    return;
-  }
-  app.setCloudLocked(false);
-  store.bump();
-}
-
-/** Signing out locks the gate again; the host has already dropped the refresh token. */
-function lockCloud(): void {
-  try {
-    store.call("cloud_account_session_closed");
-  } catch {
-    /* the host already locked the process */
-  }
-  app.setCloudLocked(true);
-}
-
 /** The browser sign-in: the host opens it, this says what to do while it waits, and finishes when it is approved. */
 export async function signIn(): Promise<void> {
   if (busy()) return;
@@ -90,7 +67,7 @@ export async function signIn(): Promise<void> {
     });
     status.set(await store.call("cloud_account_finish_sign_in"));
     failure.set(null);
-    finishUnlock();
+    await app.finishUnlock();
   } catch (error) {
     failure.set(errorText(error));
     try {
@@ -109,7 +86,7 @@ export async function signOut(): Promise<void> {
   try {
     status.set(await store.call("cloud_account_sign_out"));
     failure.set(null);
-    lockCloud();
+    app.lockCloud();
   } catch (error) {
     failure.set(errorText(error));
   }

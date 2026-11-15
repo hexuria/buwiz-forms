@@ -18,9 +18,6 @@ use nsh_core::file_dialog::{OpenDialog, SaveDialog};
 use nsh_core::prelude::{Spawned, pick_paths, pick_save_path, spawn, try_os};
 use serde_json::Value;
 
-/// The sentence behind every "not yet" answer of this wave.
-const NOT_YET: &str = "is not available in the NSH app yet";
-
 pub(crate) struct NshHooks;
 
 impl Hooks for NshHooks {
@@ -58,29 +55,33 @@ impl Hooks for NshHooks {
         crate::desktop::set_auto_update_download(enabled);
     }
 
-    // The print window is wave 4 (D3). The host function still writes the preview file and answers its
-    // path; no window opens, and no preview ever counts as open (the default would claim one did).
-    fn print_preview_request(&self, path: PathBuf, _title: String, _key: String) {
-        tracing::warn!(path = %path.display(), "the print preview window {NOT_YET}");
+    // The print preview window (D3) is `print.rs` with the TSX host in `screens/print`: the hooks only delegate. With
+    // no host listening, no preview counts as open.
+    fn print_preview_request(&self, path: PathBuf, title: String, key: String) {
+        crate::print::request(path, title, key);
     }
 
-    fn print_preview_has_live(&self, _key: &str) -> bool {
-        false
+    fn print_preview_has_live(&self, key: &str) -> bool {
+        crate::print::has_live(key)
     }
 
-    fn print_preview_live_update(&self, _key: &str, _produce: PreviewProducer, _started: Instant) {}
+    fn print_preview_live_update(&self, key: &str, produce: PreviewProducer, started: Instant) {
+        crate::print::live_update(key, produce, started);
+    }
 
+    // Agent remote control (D6, `agent.rs`): the same validate-and-queue as the UI, and the commands the
+    // session queued for the frame. Without the `agent` feature they answer honestly that there is none.
     fn agent_send_draft(
         &self,
-        _db: &Database,
-        _kind: AgentFormKind,
-        _draft: &mut Value,
+        db: &Database,
+        kind: AgentFormKind,
+        draft: &mut Value,
     ) -> Result<Value, String> {
-        Err(format!("Agent control {NOT_YET}."))
+        crate::agent::send_draft(db, kind, draft)
     }
 
     fn agent_pop_command(&self) -> Option<Value> {
-        None
+        crate::agent::pop_command()
     }
 
     fn prompt_for_open_path(&self, prompt: &str, answer: PathAnswer) -> bool {

@@ -4,7 +4,7 @@ import { signal, View } from "nsh";
 import type { BackgroundJob } from "../../bir";
 import { AppButton, Chip, EmptyRow, ListGroup, ListRow, NameCell, Segmented, Text } from "../../ui";
 import { archiveJob, cancelQueued, deleteJob, jobsUi, purgeArchived, refreshLog, setFilter, setLogFilter, setTab } from "./jobsState";
-import { filterJobs, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_FILTERS, LOG_LINES, logHeadline, logView, STATUS_FILTERS } from "./logic";
+import { filterJobs, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_FILTERS, logHeadline, logView, STATUS_FILTERS } from "./logic";
 
 /** From this many points of section width the row's buttons sit beside its words; under it they go under them. */
 const ROW_BUTTONS_BESIDE = 560;
@@ -33,7 +33,17 @@ function JobRow(props: { job: BackgroundJob; beside: () => boolean }) {
     <ListRow testID={`job-${jobKey(props.job)}`}>
       <View class="min-w-0 flex-1 gap-2">
         <View class="flex-row items-center gap-3">
-          <NameCell title={props.job.name} sub={jobSub(props.job)} />
+          <If
+            when={props.beside()}
+            else={
+              <View class="min-w-0 flex-1">
+                <Text variant="control">{props.job.name}</Text>
+                <Text variant="meta" tone="fg3">{jobSub(props.job)}</Text>
+              </View>
+            }
+          >
+            <NameCell title={props.job.name} sub={jobSub(props.job)} />
+          </If>
           <Chip label={props.job.status || "Unknown"} tone={jobTone(props.job.status)} />
           <If when={props.beside()}>
             <JobButtons job={props.job} />
@@ -54,14 +64,16 @@ function JobsTab() {
   return (
     <View testID="jobs-tab" class="w-full gap-4" onLayout={(e) => e.bounds.size.width > 0 && width.set(Math.round(e.bounds.size.width))}>
       <View class="flex-row flex-wrap items-center gap-2">
-        <Segmented
-          testID="jobs-filter"
-          label="Status"
-          wrap
-          options={STATUS_FILTERS.map((x) => ({ value: x, label: x }))}
-          value={jobsUi.filter()}
-          onChange={setFilter}
-        />
+        <View class="min-w-0 max-w-full">
+          <Segmented
+            testID="jobs-filter"
+            label="Status"
+            wrap
+            options={STATUS_FILTERS.map((x) => ({ value: x, label: x }))}
+            value={jobsUi.filter()}
+            onChange={setFilter}
+          />
+        </View>
         <View class="flex-1" />
         <AppButton testID="jobs-purge" label="Purge archived" variant="ghost" size="sm" onPress={purgeArchived} />
       </View>
@@ -85,7 +97,9 @@ function LogsTab() {
   return (
     <View testID="logs-tab" class="w-full gap-4">
       <View class="flex-row flex-wrap items-center gap-3">
-        <Segmented testID="logs-filter" label="Log level" wrap options={[...LOG_FILTERS]} value={jobsUi.logFilter()} onChange={setLogFilter} />
+        <View class="min-w-0 max-w-full">
+          <Segmented testID="logs-filter" label="Log level" wrap options={[...LOG_FILTERS]} value={jobsUi.logFilter()} onChange={setLogFilter} />
+        </View>
         <Text testID="logs-headline" variant="meta" tone="fg2" class="min-w-0 shrink">{logHeadline(log().file_name, log().lines, view().matching)}</Text>
         <View class="flex-1" />
         <AppButton testID="logs-refresh" label="Refresh" size="sm" onPress={refreshLog} />

@@ -10,15 +10,26 @@ import { asFrequency, FREQS, type FormScope, type FrequencyFilter, matchingForms
 
 const query = signal("");
 const freq = signal<FrequencyFilter>("All");
-/** null until the person picks a scope: with a taxpayer that is "owned" (the old default), without one "all". */
+/** null until the person picks a scope: the start route's, else with a taxpayer "owned" (the old default), without one "all". */
 const scope = signal<FormScope | null>(null);
+// The next session starts from the defaults (a lock, a sign-out or another taxpayer signing in).
+app.onSessionChange(() => {
+  query.set("");
+  freq.set("All");
+  scope.set(null);
+});
 
 const FREQ_OPTIONS = FREQS.map((x) => ({ value: x, label: x }));
 
 const forms = () => store.screenIndex();
 const owned = () => new Set(app.yearForms());
+/** The dev start route's `scope=all|owned` (BIR_SHELL_START, as the old app took it); any other value is ignored. */
+const startScope = (): FormScope | null => {
+  const asked = app.startParams().scope;
+  return asked === "all" || asked === "owned" ? asked : null;
+};
 /** The scope in effect: with no taxpayer every form shows, as in the old app. */
-const scopeNow = (): FormScope => (app.taxpayer() ? (scope() ?? "owned") : "all");
+const scopeNow = (): FormScope => (app.taxpayer() ? (scope() ?? startScope() ?? "owned") : "all");
 const shown = () => matchingForms(forms(), { scope: scopeNow(), owned: owned(), freq: freq(), query: query() });
 
 const year = () => app.year() ?? "this year";

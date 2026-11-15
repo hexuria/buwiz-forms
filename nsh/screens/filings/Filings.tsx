@@ -128,8 +128,6 @@ function NarrowBar(props: { onFilters: () => void }) {
 
 /** The returns of the saved and filed lists, the filters and the two actions of a card. */
 export function Filings(): JSX.Element {
-  // A save made on the form page does not bump the store, so read the lists again on arriving (the 30 s poll does the rest).
-  untracked(() => store.forgetWhere(/^returns:/));
   // A Home tile's preset, once per navigation: Back to this page hands over the same params object and applies nothing.
   const params = untracked(() => app.params());
   const preset = presetOf(params);

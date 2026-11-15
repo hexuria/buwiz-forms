@@ -11,7 +11,7 @@ import type { IconName } from "./icons";
 import { cx, TOUCH } from "./look";
 import {
   DATE_ERROR, digitsOnly, formatIso, formatLongDate, formatMDY, formatMoney, formatTinDigits, intMask, type Mask, moneyMask, moneyPlain,
-  parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type TextSelection,
+  isZeroAmount, parseTypedDate, PERCENT_MASK, reconcile, sameAmount, shownMoney, TIN_LENGTH, TIN_MASK, type TextSelection,
 } from "./mask";
 import { Chip } from "./status";
 import { Icon, Text } from "./text";
@@ -165,6 +165,11 @@ interface MaskedProps {
   /** The text a box the filer edited settles on when left (the amount rounded to centavos); unset: the shown one. */
   settle?: (text: string) => string;
   keyboardType: KeyboardType;
+  /**
+   * A number box (money, percent, integer): a box of zero is selected as it takes the keys by a click, so the first digit
+   * replaces it; the box's own focus() (the form's step) selects the whole text whatever it holds.
+   */
+  numeric?: boolean;
   /** Defaults where the caller sets none. */
   placeholder?: string;
   prefix?: string;
@@ -173,10 +178,28 @@ interface MaskedProps {
 }
 
 /**
+ * A click's caret follows the focus it gave (the same mouse press): within this many ms of the focus handler's end, which can be
+ * a long turn on a heavy page in a debug build. A caret later than that is the user's own move (an arrow after Tab). A caret
+ * the window wrongly takes for a click's only selects a zero amount whole, which is what typing there wants anyway.
+ */
+const CLICK_MS = 500;
+
+/**
  * A TextField whose text goes through a mask on every edit, the caret kept beside the same digit. The box always shows
  * what was reported: an edit the mask refuses is taken back out of the native box, and leaving a box the filer edited
  * reports the value it settled on (a typed 1.255 shown as 1.26 is 1.26 in the draft too) when that is not the one last
  * reported. A box left unedited never reports: a stored value is shown, not changed.
+ *
+ * Every way the native text changes comes to `change` as one edit of the text the box showed: typing, Backspace or Delete over
+ * a caret or a selection (Cmd+A and Backspace, a drag and Delete), Cut, a paste, a digit over a selection. NSH reports each as a
+ * key press (the typed text, or "Backspace" for any deletion, Cut included) BEFORE the change, with the selection the edit
+ * started from known from the last onSelectionChange; an emptied box reports "" like any other value.
+ *
+ * Where the caret goes as the box takes the keys (macOS, onFocus then onSelectionChange; a click gives the focus, AppKit
+ * selects all, then the click's caret follows within the same mouse press; Tab gives the focus and the whole text stays selected):
+ * a Tab keeps the whole text selected; a click puts the caret where it landed, but in a number box holding zero the whole text is
+ * selected so the first digit replaces it (typing at the caret of "0.00" gave "1,000.00" for 100); a box focused by its own
+ * focus() (the form's step, which NSH gives a caret at the end) is selected whole.
  */
 function MaskedField(props: MaskedProps) {
   let input: InputRef | undefined;
@@ -192,12 +215,40 @@ function MaskedField(props: MaskedProps) {
   let selected: TextSelection | undefined;
   let editFrom: TextSelection | undefined;
   let editTyped = false;
+  // The box took the keys by itself (not through its focus()): until this time (Date.now(), 0: never) a caret is the click's that
+  // gave them, and a key press ends it. A click's caret can come twice (AppKit places it as the press goes down and again when
+  // it ends), so every caret in the window counts, not only the first.
+  let clickUntil = 0;
+  // The page's focus() was called: the box is selected whole, there is no click to wait for.
+  let byFocus = false;
+  // What the page gets as the box's ref: in a number box its focus() selects the whole text (NSH puts the caret at the end).
+  const handle = (r: InputRef): InputRef =>
+    props.numeric
+      ? {
+          focus() {
+            byFocus = true;
+            r.focus();
+            r.setSelection(0, untracked(text).length);
+          },
+          blur: () => r.blur(),
+          measure: () => r.measure(),
+          setSelection: (start, end) => r.setSelection(start, end),
+          insertText: (t) => r.insertText(t),
+        }
+      : r;
   // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
   effect(() => {
     const value = props.value ?? "";
     last = value;
     const now = untracked(text);
-    if (!same(props.valueOf(now), value)) text.set(props.shown(value, untracked(focused)));
+    if (!same(props.valueOf(now), value)) {
+      // The filer emptied this box, and an amount comes back in it (a form that cannot hold a blank amount shows the draft's
+      // again): selected whole, so the digits typed next replace it instead of being appended to it.
+      const refilled = props.numeric && now === "" && edited && untracked(focused);
+      const shown = props.shown(value, untracked(focused));
+      text.set(shown);
+      if (refilled && shown !== "") input?.setSelection(0, shown.length);
+    }
   });
   const change = (raw: string) => {
     const prev = untracked(text);
@@ -225,7 +276,7 @@ function MaskedField(props: MaskedProps) {
       keyboardType={props.keyboardType}
       inputRef={(r) => {
         input = r;
-        props.field.inputRef?.(r);
+        props.field.inputRef?.(handle(r));
       }}
       tabular
       label={props.field.label}
@@ -248,9 +299,14 @@ function MaskedField(props: MaskedProps) {
       testID={props.field.testID}
       onSelectionChange={(e) => {
         selected = { start: e.start, end: e.end };
+        if (e.start === e.end && clickUntil > 0 && Date.now() <= clickUntil && props.numeric) {
+          const now = untracked(text);
+          if (isZeroAmount(now)) input?.setSelection(0, now.length);
+        }
         props.field.onSelectionChange?.(e);
       }}
       onKeyPress={(e) => {
+        clickUntil = 0;
         editFrom = selected;
         editTyped = [...e.key].length === 1;
         props.field.onKeyPress?.(e);
@@ -259,9 +315,13 @@ function MaskedField(props: MaskedProps) {
         focused.set(true);
         edited = false;
         props.field.onFocus?.();
+        clickUntil = byFocus ? 0 : Date.now() + CLICK_MS;
+        byFocus = false;
       }}
       onBlur={() => {
         focused.set(false);
+        clickUntil = 0;
+        byFocus = false;
         editFrom = undefined;
         editTyped = false;
         const laidOut = props.shown(props.valueOf(text()), false);
@@ -338,6 +398,7 @@ export function MoneyInput(props: MoneyInputProps) {
       valueOf={(t) => moneyPlain(t)}
       same={sameAmount}
       keyboardType="decimal-pad"
+      numeric
     />
   );
 }
@@ -361,6 +422,7 @@ export function PercentInput(props: NumberTextProps) {
       shown={(v) => v}
       valueOf={(t) => t}
       keyboardType="decimal-pad"
+      numeric
     />
   );
 }
@@ -376,6 +438,7 @@ export function IntInput(props: NumberTextProps & { maxDigits?: number }) {
       shown={(v) => v}
       valueOf={(t) => t}
       keyboardType="number-pad"
+      numeric
     />
   );
 }

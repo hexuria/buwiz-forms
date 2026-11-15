@@ -110,7 +110,9 @@ pub fn try_start_with(
     ) {
         Ok((addr, shutdown)) => {
             tracing::info!(%addr, "gpui-agent listening (platform=desktop, app=bir-shell, protocol v2 HMAC)");
-            eprintln!("gpui-agent listening on {addr} (platform=desktop, app={APP})");
+            say(&format!(
+                "gpui-agent listening on {addr} (platform=desktop, app={APP})"
+            ));
             let discovery = match discovery::publish_current(addr, APP) {
                 Ok(published) => Some(published),
                 Err(error) => {
@@ -132,6 +134,13 @@ pub fn try_start_with(
             Err(format!("cannot bind {bind}: {error}"))
         }
     }
+}
+
+/// A line on stderr. A write that fails is ignored: a host whose stderr is a closed pipe (a launcher that reads nothing) must
+/// not panic where `eprintln!` would.
+pub fn say(line: &str) {
+    use std::io::Write;
+    let _ = writeln!(std::io::stderr(), "{line}");
 }
 
 /// Answer the whole batch with the sign-in error when the account gate is
