@@ -7,12 +7,12 @@ import { cleanup, effect, ErrorBoundary, keymap, platform, Scroll, untracked, Vi
 import { Button } from "nsh/base";
 import { isAvailable as desktopAvailable, currentWindow } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
-import { doorStatus } from "../bir";
 import { errorText } from "../lib/errors";
+import { LockedScreen } from "../screens/auth/Locked";
 import { BREAK, SIZE } from "../theme/tokens";
 import { AppButton, Text, Toaster } from "../ui";
 import { app, boot, startPolling } from "./app";
-import { DevDoor, DevPages } from "./DevPages";
+import { DevPages } from "./DevPages";
 import { NarrowBar, PanelSheets, TabBar } from "./Narrow";
 import { NewReturn } from "./NewReturn";
 import { Palette } from "./Palette";
@@ -30,23 +30,26 @@ export interface ShellProps {
   start?: string;
   /** Run the polls (events 30 s, device filings 5 s, update status 1 s). Default true; test fixtures turn it off. */
   polling?: boolean;
+  /** First-run setup in front of the frame while the database has no access mode (the shipped app; fixtures leave it off). */
+  firstRun?: boolean;
 }
 
 /** The chords the frame owns (Cmd on macOS, Ctrl elsewhere), and Esc. Each has one owner: this root. */
 function bindKeys(): void {
-  const settings = () => app.chromeVisible() && app.go("settings");
+  // The gate, first launch and sign-in have none of the frame's commands (the old app-root that handled them was not drawn).
+  const open = (run: () => unknown) => () => void (app.chromeVisible() && run());
   keymap.bind(
     {
-      "mod+b": () => app.toggleSidebar(),
-      "mod+t": () => app.cycleTheme(),
-      "mod+shift+b": () => app.togglePanel("profile"),
-      "mod+shift+n": () => app.togglePanel("notifs"),
-      "mod+k": () => app.openPalette(),
-      "mod+n": () => app.startNewReturn(),
-      "mod+,": () => void settings(),
+      "mod+b": open(() => app.toggleSidebar()),
+      "mod+t": open(() => app.cycleTheme()),
+      "mod+shift+b": open(() => app.togglePanel("profile")),
+      "mod+shift+n": open(() => app.togglePanel("notifs")),
+      "mod+k": open(() => app.openPalette()),
+      "mod+n": open(() => app.startNewReturn()),
+      "mod+,": open(() => app.go("settings")),
       "mod+l": () => app.lockApp(),
-      "mod+[": () => void app.back(),
-      "mod+]": () => void app.forward(),
+      "mod+[": open(() => app.back()),
+      "mod+]": open(() => app.forward()),
     },
     { when: "always" },
   );
@@ -127,9 +130,6 @@ function MainSurface() {
           return untracked(() => <ViewFrame />);
         }}
       </View>
-      <If when={doorStatus().testEnvironment && app.isFresh() && app.view() === "home"}>
-        <DevDoor />
-      </If>
     </View>
   );
 }
@@ -198,14 +198,19 @@ function Frame() {
   );
 }
 
-/** First launch, sign-in and the account gate take the whole window (wave 4 fills this): a drag strip and a note. */
+/**
+ * First launch, sign-in and the account gate take the whole window (old renderLockedFrame): only a drag strip with room for
+ * the window controls; nothing that names a taxpayer, no theme, search or account. The update prompt shows over first
+ * launch and sign-in, as before.
+ */
 function LockedFrame() {
   return (
     <View testID="locked-frame" class="min-h-0 flex-1">
-      <View desktop={{ windowDrag: true }} style={{ height: SIZE.titleBar }} />
-      <View class="flex-1 items-center justify-center">
-        <Text tone="fg2">Locked</Text>
-      </View>
+      <View testID="title-bar" desktop={{ windowDrag: true }} class="shrink-0" style={{ height: SIZE.titleBar }} />
+      <LockedScreen />
+      <If when={!app.cloudLocked()}>
+        <UpdateSlot />
+      </If>
     </View>
   );
 }
@@ -215,7 +220,7 @@ const isDevPage = () => app.view() === "kit" || app.view() === "theme";
 
 /** The app root. */
 export function Shell(props: ShellProps) {
-  void boot(props.start);
+  void boot(props.start, { firstRun: props.firstRun === true });
   // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).
   if (desktopAvailable && platform.desktop) currentWindow().set({ titleBar: { style: "hidden", height: SIZE.titleBar } });
   bindKeys();

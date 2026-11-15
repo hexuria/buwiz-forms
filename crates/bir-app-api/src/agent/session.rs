@@ -26,33 +26,33 @@ use super::{APP, database_kind, tree_from_debug};
 
 /// Commands waiting for `bir.agent_take`.
 #[derive(Clone)]
-pub(crate) struct UiQueue {
+pub struct UiQueue {
     inner: Arc<Mutex<VecDeque<Value>>>,
     discard: bool,
 }
 
 impl UiQueue {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(VecDeque::new())),
             discard: false,
         }
     }
 
-    pub(crate) fn discarding() -> Self {
+    pub fn discarding() -> Self {
         Self {
             inner: Arc::new(Mutex::new(VecDeque::new())),
             discard: true,
         }
     }
 
-    pub(crate) fn push(&self, value: Value) {
+    pub fn push(&self, value: Value) {
         if !self.discard {
             self.inner.lock().expect("agent ui queue").push_back(value);
         }
     }
 
-    pub(crate) fn pop(&self) -> Option<Value> {
+    pub fn pop(&self) -> Option<Value> {
         if self.discard {
             None
         } else {
@@ -71,7 +71,7 @@ struct OpenForm {
     dirty: bool,
 }
 
-pub(crate) struct Session {
+pub struct Session {
     db: Option<Arc<Mutex<Database>>>,
     commands: UiQueue,
     selected_tin: Option<String>,
@@ -82,7 +82,7 @@ pub(crate) struct Session {
 }
 
 impl Session {
-    pub(crate) fn new(commands: UiQueue) -> Self {
+    pub fn new(commands: UiQueue) -> Self {
         Self {
             db: None,
             commands,
@@ -94,25 +94,25 @@ impl Session {
         }
     }
 
-    pub(crate) fn headless() -> Self {
+    pub fn headless() -> Self {
         let mut session = Self::new(UiQueue::discarding());
         session.platform = PlatformKind::Headless;
         session
     }
 
-    pub(crate) fn set_db(&mut self, db: Arc<Mutex<Database>>) {
+    pub fn set_db(&mut self, db: Arc<Mutex<Database>>) {
         self.db = Some(db);
     }
 
-    pub(crate) fn needs_db(&self) -> bool {
+    pub fn needs_db(&self) -> bool {
         self.db.is_none()
     }
 
-    pub(crate) fn set_tree(&mut self, tree: UiTree) {
+    pub fn set_tree(&mut self, tree: UiTree) {
         self.tree = tree;
     }
 
-    pub(crate) fn should_quit(&self) -> bool {
+    pub fn should_quit(&self) -> bool {
         self.quit
     }
 
@@ -1406,7 +1406,7 @@ fn queue_validated(kind: AgentFormKind, db: &Database, draft: &mut Value) -> Res
 ///
 /// Calls [`agent::validate`] (the page's Validate) before any queue write.
 /// Errors from that call are the `field_errors` returned to the assistant.
-pub(crate) fn send_draft(
+pub fn send_draft(
     db: &Database,
     kind: AgentFormKind,
     draft: &mut Value,

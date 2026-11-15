@@ -5,7 +5,7 @@
 // grouped only for the eye): money the plain number ("1250000.50", no separators, no peso sign); pct as typed; int digits;
 // a TIN its digits (no dashes); a date MM/DD/YYYY once the text reads as a date, else the text; sel the code; chk
 // "true"/"false". Locked, computed and disabled boxes draw as read-only boxes (no Input) and report nothing.
-import type { InputRef } from "nsh";
+import type { ViewRef } from "nsh";
 import { View } from "nsh";
 import {
   CheckboxLabel, DateField, Dropdown, Icon, IntInput, Line, MoneyInput, moneyPlain, PercentInput, Text, TextField, TinInput, Tooltip, TOUCH,
@@ -90,6 +90,7 @@ function TickBox(props: { p: FieldInput }) {
     <CheckboxLabel
       testID={p.testID}
       label={p.label}
+      focusRef={(ref) => giveFocus(p, ref)}
       checked={isOn(p.box.value())}
       disabled={shut(p)}
       hint={shut(p) && !isOn(p.box.value()) ? p.box.hint() : undefined}
@@ -126,20 +127,26 @@ function Choice(props: { p: FieldInput }) {
             placeholder="Choose…"
             width={widthOf(p)}
             error={p.box.invalid()}
+            focusRef={(ref) => giveFocus(p, ref)}
             onChange={pick}
           />
         </View>
       }
     >
-      <SearchPick
-        testID={p.testID}
-        label={p.label}
-        options={model().options}
-        value={model().shown}
-        width={widthOf(p)}
-        error={p.box.invalid()}
-        onPick={pick}
-      />
+      {/* SearchPick is a popover and a sheet side by side: in the box's own column the closed sheet took a 4-point gap and
+          the trigger sat higher than its neighbours (a multi-control row aligns at the bottom). One box of the trigger's height. */}
+      <View class={cx("min-w-0", TOUCH ? "h-11" : "h-8", p.narrow() && "w-full")} style={{ width: widthOf(p) }}>
+        <SearchPick
+          testID={p.testID}
+          label={p.label}
+          options={model().options}
+          value={model().shown}
+          width={widthOf(p)}
+          error={p.box.invalid()}
+          focusRef={(ref) => giveFocus(p, ref)}
+          onPick={pick}
+        />
+      </View>
     </If>
   );
 }
@@ -160,13 +167,14 @@ function DateBox(props: { p: FieldInput }) {
         onChange={(text) => p.onEdit(text)}
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
+        inputRef={(ref) => giveFocus(p, ref)}
       />
     </View>
   );
 }
 
-/** The ref a text box gives the page, so a pill step can put the keys in it. */
-function giveFocus(p: FieldInput, ref: InputRef) {
+/** The ref a box gives the page (an input's, a select trigger's, a checkbox's), so a pill step can put the keys in it. */
+function giveFocus(p: FieldInput, ref: ViewRef) {
   p.focusRef?.(() => ref.focus());
 }
 
@@ -214,6 +222,7 @@ function TypedBox(props: { p: FieldInput }) {
                     onBlur={() => p.onBlur()}
                     width={widthOf(p)}
                     error={p.box.invalid()}
+                    inputRef={(ref) => giveFocus(p, ref)}
                   />
                 </If>
               }
@@ -229,6 +238,7 @@ function TypedBox(props: { p: FieldInput }) {
                 error={p.box.invalid()}
                 maxDigits={p.field.m}
                 placeholder={p.placeholder}
+                inputRef={(ref) => giveFocus(p, ref)}
               />
             </If>
           }
@@ -243,6 +253,7 @@ function TypedBox(props: { p: FieldInput }) {
             width={widthOf(p)}
             error={p.box.invalid()}
             placeholder={p.placeholder}
+            inputRef={(ref) => giveFocus(p, ref)}
           />
         </If>
       }
@@ -259,6 +270,7 @@ function TypedBox(props: { p: FieldInput }) {
         whole={!!p.field.w}
         negative
         placeholder={p.placeholder}
+        inputRef={(ref) => giveFocus(p, ref)}
       />
     </If>
   );

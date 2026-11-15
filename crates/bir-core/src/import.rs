@@ -376,11 +376,13 @@ impl StagedDatabase {
 
     /// Replace the database at the target path with the staged one.
     ///
-    /// Plain build: the stale `-wal`, `-shm` and `-journal` files of the
-    /// replaced database go first (a log left behind would be replayed into the
-    /// new file), then one rename puts the staged file over the live one, so
-    /// the live path holds the old database or the new one and never a
-    /// half-written file. A failure leaves the old database where it was.
+    /// The stale `-wal`, `-shm` and `-journal` files of the replaced database
+    /// go first (a log left behind would be replayed into the new file), then
+    /// one rename puts the new file over the live one, so the live path holds
+    /// the old database or the new one and never a half-written file. The
+    /// SQLCipher build first encrypts the staged file into a temporary file
+    /// beside the live one and checks that it opens with the current key. A
+    /// failure at any step leaves the old database where it was.
     pub fn install(self) -> Result<(), DbError> {
         install_staged_database(&self.staged, &self.target)
     }
@@ -400,33 +402,44 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(raw)
 }
 
-/// Where an archive's database is extracted, unique per call. The plain build
-/// stages next to the file it will replace, so the final rename never crosses
-/// a file system.
-fn staging_path(out_db_path: &Path) -> PathBuf {
+/// A name no other call of this process, and no other process, uses.
+fn unique_name() -> String {
     use std::sync::atomic::{AtomicU32, Ordering};
     static SEQUENCE: AtomicU32 = AtomicU32::new(0);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_nanos())
         .unwrap_or(0);
-    let unique = format!(
+    format!(
         "{}-{nanos}-{}",
         std::process::id(),
         SEQUENCE.fetch_add(1, Ordering::SeqCst)
-    );
+    )
+}
+
+/// A temporary file named for `out_db_path` and placed beside it, unique per
+/// call, so the rename that puts it over `out_db_path` never crosses a file
+/// system.
+fn sibling_temporary_path(out_db_path: &Path, what: &str) -> PathBuf {
+    let name = out_db_path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "bir_data.db".to_string());
+    out_db_path.with_file_name(format!("{name}.{what}-{}.tmp", unique_name()))
+}
+
+/// Where an archive's database is extracted, unique per call. The plain build
+/// stages next to the file it will replace, so the final rename never crosses
+/// a file system.
+fn staging_path(out_db_path: &Path) -> PathBuf {
     #[cfg(feature = "sqlcipher")]
     {
         let _ = out_db_path;
-        std::env::temp_dir().join(format!("bir_unencrypted_import_{unique}.db"))
+        std::env::temp_dir().join(format!("bir_unencrypted_import_{}.db", unique_name()))
     }
     #[cfg(not(feature = "sqlcipher"))]
     {
-        let name = out_db_path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "bir_data.db".to_string());
-        out_db_path.with_file_name(format!("{name}.import-{unique}.tmp"))
+        sibling_temporary_path(out_db_path, "import")
     }
 }
 
@@ -529,32 +542,45 @@ fn check_restorable_database(path: &Path) -> Result<(), DbError> {
     verdict
 }
 
-/// SQLCipher build: encrypt the staged plain database into `out_db_path`.
-/// The archive was checked when it was staged; the replaced database goes
-/// only now.
+/// A temporary file that is removed, with the sidecar files SQLite may have
+/// made beside it, when this goes out of scope: after a rename it is already
+/// gone, and on every other way out it must not be left behind.
+#[cfg(feature = "sqlcipher")]
+struct TemporaryDatabase(PathBuf);
+
+#[cfg(feature = "sqlcipher")]
+impl Drop for TemporaryDatabase {
+    fn drop(&mut self) {
+        for suffix in ["", "-wal", "-shm", "-journal"] {
+            let _ = fs::remove_file(with_suffix(&self.0, suffix));
+        }
+    }
+}
+
+/// SQLCipher build: encrypt the staged plain database and put it in place of
+/// `out_db_path`, staged like the plain build does. The archive was checked
+/// when it was staged. The export goes into a temporary file beside the live
+/// one, keyed with the current key, and is checked to open with that key; only
+/// then do the replaced database's sidecar files go and one rename put it
+/// over the live file. A failure at any step leaves the current database as
+/// it was, and no temporary file behind.
 #[cfg(feature = "sqlcipher")]
 fn install_staged_database(temp_db_path: &Path, out_db_path: &Path) -> Result<(), DbError> {
-    // Delete the current database so we can cleanly export into a new one
-    if out_db_path.exists() {
-        let _ = fs::remove_file(out_db_path);
-    }
-    let wal_path = out_db_path.with_extension("db-wal");
-    let shm_path = out_db_path.with_extension("db-shm");
-    if wal_path.exists() {
-        let _ = fs::remove_file(wal_path);
-    }
-    if shm_path.exists() {
-        let _ = fs::remove_file(shm_path);
-    }
+    let key_hex = zeroize::Zeroizing::new(Database::get_or_create_master_key()?);
+    let encrypted = TemporaryDatabase(sibling_temporary_path(out_db_path, "encrypted"));
 
-    // Open the unencrypted db
+    // Open the unencrypted db, attach the new encrypted file and export to it.
     let conn = rusqlite::Connection::open(temp_db_path)?;
-    let key_hex = Database::get_or_create_master_key()?;
-
-    // Attach the target db (encrypted) and export to it
+    let target = encrypted
+        .0
+        .to_str()
+        .ok_or_else(|| DbError::Other("The database path is not valid text.".into()))?;
     conn.execute(
-        &format!("ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\";", key_hex),
-        rusqlite::params![out_db_path.to_str().unwrap()],
+        &zeroize::Zeroizing::new(format!(
+            "ATTACH DATABASE ?1 AS encrypted KEY \"x'{}'\";",
+            key_hex.as_str()
+        )),
+        rusqlite::params![target],
     )?;
     let mut stmt = conn.prepare("SELECT sqlcipher_export('encrypted');")?;
     let _ = stmt.query([])?.next()?;
@@ -567,7 +593,51 @@ fn install_staged_database(temp_db_path: &Path, out_db_path: &Path) -> Result<()
     // Small delay to ensure file system operations complete
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    Ok(())
+    check_exported_database(&encrypted.0, &key_hex)?;
+    rename_over_live(&encrypted.0, out_db_path)
+}
+
+/// The file [`install_staged_database`] exported opens with the key it was
+/// exported with and holds the app's core tables. The file is only read.
+#[cfg(feature = "sqlcipher")]
+fn check_exported_database(path: &Path, key_hex: &str) -> Result<(), DbError> {
+    fn refuse(why: impl std::fmt::Display) -> DbError {
+        DbError::Other(format!(
+            "The backup's database could not be encrypted again ({why}), so it was not restored. The current database was left as it is."
+        ))
+    }
+    let verdict = (|| -> Result<(), DbError> {
+        let conn =
+            rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(|error| refuse(format!("it cannot be opened ({error})")))?;
+        conn.execute_batch(&zeroize::Zeroizing::new(format!(
+            "PRAGMA key = \"x'{key_hex}'\";"
+        )))
+        .map_err(|error| refuse(format!("the key was refused ({error})")))?;
+        let mut statement = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .map_err(|error| refuse(format!("it does not open with the key ({error})")))?;
+        let tables: BTreeSet<String> = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .and_then(|rows| rows.collect())
+            .map_err(|error| refuse(format!("it does not open with the key ({error})")))?;
+        let missing: Vec<&str> = CORE_TABLES
+            .into_iter()
+            .filter(|table| !tables.contains(*table))
+            .collect();
+        if !missing.is_empty() {
+            return Err(refuse(format!(
+                "no {} table came across",
+                missing.join(", ")
+            )));
+        }
+        Ok(())
+    })();
+    // A read-only open of a database in WAL mode may have made these.
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let _ = fs::remove_file(with_suffix(path, suffix));
+    }
+    verdict
 }
 
 /// Plain build: there is no key and no `sqlcipher_export`; the staged file
@@ -576,6 +646,14 @@ fn install_staged_database(temp_db_path: &Path, out_db_path: &Path) -> Result<()
 /// failure at any step leaves the current database as it was.
 #[cfg(not(feature = "sqlcipher"))]
 fn install_staged_database(staged: &Path, out_db_path: &Path) -> Result<(), DbError> {
+    rename_over_live(staged, out_db_path)
+}
+
+/// Put `staged`, a finished database beside `out_db_path`, in place of the
+/// live file: the replaced database's sidecar files go first (a log left
+/// behind would be replayed into the new file), then one rename, so the live
+/// path holds the old database or the new one and never a half-written file.
+fn rename_over_live(staged: &Path, out_db_path: &Path) -> Result<(), DbError> {
     for suffix in ["-wal", "-shm", "-journal"] {
         let sidecar = with_suffix(out_db_path, suffix);
         match fs::remove_file(&sidecar) {
@@ -1793,12 +1871,11 @@ mod tests {
         );
     }
 
-    /// Plain build: when the replace itself fails, here because the old
-    /// file's write-ahead log is something that cannot be removed, the
-    /// current database is still there, byte for byte, and the temporary file
-    /// is gone. (Before, the live file was deleted first and the failure came
-    /// after.)
-    #[cfg(not(feature = "sqlcipher"))]
+    /// When the replace itself fails, here because the old file's write-ahead
+    /// log is something that cannot be removed, the current database is still
+    /// there, byte for byte, and the temporary file is gone. (Before, the
+    /// SQLCipher build deleted the live file first and the failure came after;
+    /// it now stages like the plain build, so this runs in both.)
     #[test]
     fn a_replace_that_fails_midway_keeps_the_current_database() {
         let dir = tempdir().unwrap();
@@ -1821,5 +1898,54 @@ mod tests {
             ["bir_data.db", "bir_data.db-wal"],
             "no temporary file"
         );
+    }
+
+    /// SQLCipher build: an export that fails (here the staged file is not a
+    /// database at all) never costs the current database: it is still there,
+    /// byte for byte, and nothing is left beside it. (Before, the live file
+    /// was deleted before the export began.)
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn an_export_that_fails_keeps_the_current_database() {
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        let before = fs::read(&current).unwrap();
+        let scratch = tempdir().unwrap();
+        let staged = scratch.path().join("staged.db");
+        fs::write(&staged, "\u{1}\u{2}not-sqlite-".repeat(512)).unwrap();
+
+        install_staged_database(&staged, &current).expect_err("not a database: nothing to export");
+
+        assert_current_untouched(&current, &before);
+        assert_eq!(names(dir.path()), ["bir_data.db"], "no temporary file");
+    }
+
+    /// SQLCipher build: the replacement is the encrypted export of the
+    /// staged database, made beside the live file and renamed over it. It
+    /// does not open without the key, it does with it, and no temporary file
+    /// or log stays behind.
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn the_installed_database_is_encrypted_with_the_current_key() {
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        let scratch = tempdir().unwrap();
+        let archive = scratch.path().join("backup.zip");
+        write_database_archive(&archive, &good_database_bytes("encrypted"));
+
+        extract_database_zip(&archive, &current).unwrap();
+
+        assert_eq!(names(dir.path()), ["bir_data.db"], "no temporary file");
+        assert_eq!(
+            crate::db::database_file_kind(&current).unwrap(),
+            crate::db::DatabaseFileKind::Other,
+            "not plain SQLite: it is encrypted"
+        );
+        let db = Database::open(&current).unwrap();
+        assert_eq!(
+            db.get_setting("marker").unwrap(),
+            Some("encrypted".to_string())
+        );
+        assert_eq!(db.get_setting("kept").unwrap(), None);
     }
 }

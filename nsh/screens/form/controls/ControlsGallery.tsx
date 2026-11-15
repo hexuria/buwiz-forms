@@ -4,7 +4,7 @@
 // Demo taxpayer (Juana Santos, TIN 000-123-453-00000) and generated data only.
 import type { JSX } from "nsh";
 import { Scroll, signal, View } from "nsh";
-import { Text } from "../../../ui";
+import { AppButton, Text } from "../../../ui";
 import type { ChoiceOption, SchemaField, SchemaItem } from "../contract";
 import { FieldControl, FieldRow, RadioGroupControl, ScheduleControl } from "./index";
 import { mockField, mockRadios, mockSchedule, narrowNow, reports, type Reports } from "./mock";
@@ -135,8 +135,11 @@ function DateSection(props: { log: Reports }) {
 }
 
 function ChoiceSection(props: { log: Reports }) {
+  // What a pill step does: the page keeps each box's focus function and calls it. The buttons stand for the step.
+  let focusAtc: (() => void) | undefined;
+  let focusRegime: (() => void) | undefined;
   const month = mockField(props.log, f("month", "Fiscal start month", "sel", { o: MONTHS }), { value: "03" }, { width: 260 });
-  const atc = mockField(props.log, f("atc", "ATC", "sel"), { value: "", options: ATC }, { width: 360 });
+  const atc = mockField(props.log, f("atc", "ATC", "sel"), { value: "", options: ATC }, { width: 360, focusRef: (focus) => (focusAtc = focus) });
   const waits = mockField(props.log, f("atcWait", "ATC (locked)", "sel"), { value: "", locked: true, hint: "Needs the item above" }, { width: 260 });
   const chk = mockField(props.log, f("chk", "I confirm the amounts are true and correct", "chk"), { value: "false" });
   const lockedChk = mockField(props.log, f("lockedChk", "Amended return", "chk"), { value: "false", locked: true, hint: "Set by the period" });
@@ -146,12 +149,16 @@ function ChoiceSection(props: { log: Reports }) {
   return (
     <Section title="Choices" testID="controls-choices">
       <Row log={props.log} field={month.field} hint="A few choices"><FieldControl {...month} /></Row>
-      <Row log={props.log} field={atc.field} hint="A long list, searched by words"><FieldControl {...atc} /></Row>
+      <Row log={props.log} field={atc.field} hint="A long list, searched by words">
+        <FieldControl {...atc} />
+        <AppButton testID="gallery-focus-atc" size="sm" label="Focus the ATC list" onPress={() => focusAtc?.()} />
+      </Row>
       <Row log={props.log} field={waits.field} hint="Locked and blank"><FieldControl {...waits} /></Row>
       <Row log={props.log} field={chk.field} title="Declaration"><FieldControl {...chk} /></Row>
       <Row log={props.log} field={lockedChk.field} title="Return type" hint="Locked, with its reason"><FieldControl {...lockedChk} /></Row>
       <FieldRow label="Income tax rate" hint="A group of three: press the ticked one to clear it" narrow={narrowNow}>
-        <RadioGroupControl {...regime} />
+        <RadioGroupControl {...regime} focusRef={(focus) => (focusRegime = focus)} />
+        <AppButton testID="gallery-focus-regime" size="sm" label="Focus the rate group" onPress={() => focusRegime?.()} />
         <Text variant="cap" tone="fg3" class="mt-1">{`edit regime: ${picked(props.log, "regime")}`}</Text>
       </FieldRow>
       <FieldRow label="Amended return" hint="A pair keeps one answer" narrow={narrowNow}>

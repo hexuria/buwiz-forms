@@ -44,7 +44,8 @@ gpui-fast = ["gpui-kit/gpui-fast", "gpui-shell/gpui-fast", "gpui-component/gpui-
 # listener still starts only if `GPUI_AGENT=1` (and a release build also
 # needs `GPUI_AGENT_ALLOW_RELEASE=1`). Same protocol rev as bir-shell and
 # bir-mcp.
-agent = ["bir-app-api/agent", "dep:clap", "dep:dotenvy", "dep:gpui-agent", "dep:libc", "dep:socket2"]
+# The session, the daemon and the CLI live in bir-app-api (`agent`, `headless`), shared with the NSH app.
+agent = ["bir-app-api/agent", "bir-app-api/headless", "dep:gpui-agent"]
 mas_build = ["bir-core/mas_build", "bir-app-api/mas_build"]
 
 [dependencies]
@@ -90,10 +91,6 @@ bir-print = { path = "../bir-print" }
 # The host functions (the `bir` module), UI-free; SQLCipher on, like bir-core here.
 bir-app-api = { path = "../bir-app-api", features = ["sqlcipher"] }
 gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3", optional = true }
-clap = { version = "4", features = ["derive"], optional = true }
-dotenvy = { version = "0.15", optional = true }
-libc = { version = "0.2", optional = true }
-socket2 = { version = "0.6", optional = true }
 
 anyhow = "1"
 chrono = "0.4"

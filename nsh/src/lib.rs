@@ -7,6 +7,8 @@
 //!
 //! Its TypeScript declarations are generated from these types into `.nsh/types/ebirforms/native.d.ts`.
 
+mod auth;
+mod desktop;
 pub mod door;
 pub mod guards;
 mod hooks;
@@ -20,7 +22,9 @@ fn native(registry: &mut Registry) {
     // The earliest single point: the generated hosts build the registry before NSH starts, so the door's
     // one change to the process environment happens before any other thread exists (see `door::process`).
     door::prepare_process();
-    registry.module::<Bridge>().module::<Door>();
+    // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).
+    desktop::prepare_process();
+    registry.module::<Bridge>().module::<Door>().module::<desktop::Desktop>();
 }
 
 /// Proof that TSX reaches this crate.

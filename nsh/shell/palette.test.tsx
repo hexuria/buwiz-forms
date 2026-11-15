@@ -158,3 +158,32 @@ test("phone: the palette opens from the header and a taxpayer opens its profile"
   await app.waitFor("id:placeholder-profile");
   expect(app.shows("id:palette-input")).toBe(false);
 });
+
+test("desktop: Next to do and Previous to do are in the palette only while a form is open, and step its pill", async () => {
+  const home = await open(ENTRY, { ...WIDE, ...asking() });
+  await home.waitFor("id:sidebar");
+  await home.keyboard.press("mod+k");
+  await home.waitFor("id:palette-input");
+  await home.type("id:palette-input", "to do");
+  await home.waitFor("text:No matches. Try a form code like 2550Q.");
+
+  const app = await open(ENTRY, { ...WIDE, ...asking({ start: "form=2551Q/2026/3" }) });
+  await app.waitFor("id:fp-pill");
+  await app.keyboard.press("mod+k");
+  await app.waitFor("id:palette-input");
+  await app.type("id:palette-input", "to do");
+  await app.waitFor("text:Next to do");
+  expect(app.texts()).toContain("Previous to do");
+  // Nothing has been checked yet, so a step is a step to the next section (Cmd+Right does the same).
+  expect(app.texts().some((t) => / · 1 of \d+$/.test(t))).toBe(true);
+  await app.submit("id:palette-input");
+  await app.waitFor("id:palette-input", { state: "gone" });
+  await app.waitUntil(() => app.texts().some((t) => / · 2 of \d+$/.test(t)));
+
+  await app.keyboard.press("mod+k");
+  await app.waitFor("id:palette-input");
+  await app.type("id:palette-input", "previous");
+  await app.waitFor("text:Previous to do");
+  await app.submit("id:palette-input");
+  await app.waitUntil(() => app.texts().some((t) => / · 1 of \d+$/.test(t)));
+});

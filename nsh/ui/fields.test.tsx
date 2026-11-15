@@ -4,7 +4,7 @@ import { openKit, readout, SIZES } from "./harness";
 
 for (const size of SIZES) {
   test(`${size.name}: text field types, TIN groups while typing`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.clear("id:kit-name");
     await app.type("id:kit-name", "Juana Santos");
     expect(app.value("id:kit-name")).toBe("Juana Santos");
@@ -22,7 +22,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: TIN paste with dashes keeps every digit`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.clear("id:kit-tin");
     await app.paste("id:kit-tin", { text: "000-123-453-00000" });
     expect(app.value("id:kit-tin")).toBe("000-123-453-00000");
@@ -30,7 +30,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: money groups while typing, plain value out, two decimals on leaving`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(app.value("id:kit-money")).toBe("1,250,000.00");
     await app.clear("id:kit-money");
     expect(readout(app, "Value:")).toBe("Value: empty");
@@ -54,7 +54,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: percent, integer, date, PIN`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.clear("id:kit-pct");
     await app.type("id:kit-pct", "12.5.0a");
     expect(app.value("id:kit-pct")).toBe("12.50");

@@ -7,6 +7,8 @@
 //! the real gpui-shell, and the NSH door calls it directly.
 
 pub mod account_gate;
+#[cfg(feature = "agent")]
+pub mod agent;
 pub mod auth_limiter;
 pub mod bir_module;
 pub mod cloud_account;

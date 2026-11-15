@@ -34,8 +34,6 @@ mod updater;
 
 // The host functions moved to bir-app-api; these keep their `crate::` paths
 // for the gpui glue that still calls them.
-#[cfg(feature = "agent")]
-use bir_app_api::screen_form_module;
 use bir_app_api::{account_gate, bir_module, cloud_account, packaged};
 pub use bir_app_api::{print_sheet, static_html};
 

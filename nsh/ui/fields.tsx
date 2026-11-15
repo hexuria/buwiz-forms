@@ -147,8 +147,8 @@ export function TextField(props: TextFieldProps) {
 
 // ---------------------------------------------------------------- masked fields
 
-/** What the masked fields share with TextField (the value and its events are theirs). */
-export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "inputRef" | "keyboardType" | "masked" | "maxLength">;
+/** What the masked fields share with TextField (the value and its events are theirs). `inputRef` gives the box's InputRef (focus(), setSelection()). */
+export type MaskedFieldProps = Omit<TextFieldProps, "value" | "onChange" | "keyboardType" | "masked" | "maxLength">;
 
 interface MaskedProps {
   /** The caller's TextField props (read where used, so they stay live). */
@@ -223,7 +223,10 @@ function MaskedField(props: MaskedProps) {
       value={text()}
       onChange={change}
       keyboardType={props.keyboardType}
-      inputRef={(r) => (input = r)}
+      inputRef={(r) => {
+        input = r;
+        props.field.inputRef?.(r);
+      }}
       tabular
       label={props.field.label}
       accessibilityLabel={props.field.accessibilityLabel}
@@ -439,6 +442,7 @@ export function DateField(props: DateFieldProps) {
       autoFocus={props.autoFocus}
       returnKeyType={props.returnKeyType}
       onSubmit={props.onSubmit}
+      inputRef={(r) => props.inputRef?.(r)}
       tabular
       value={text()}
       error={bad() ? DATE_ERROR : props.error}

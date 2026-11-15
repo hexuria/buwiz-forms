@@ -2,6 +2,7 @@
 // them; digits match a TIN (nine digits name a taxpayer, ten or more a branch). Pure over the app state: Palette.tsx draws it.
 import { computed, keymap } from "nsh";
 import { doorStatus } from "../bir";
+import { formUi } from "../screens/form/formUi";
 import type { IconName } from "../ui";
 import { app } from "./app";
 import { ROUTES, type ViewName } from "./routes";
@@ -77,6 +78,11 @@ export const paletteItems = computed<PaletteItem[]>(() => {
     for (const f of store.screenIndex()) {
       items.push({ group: "Forms", label: `${f.c} · ${f.t}`, icon: "file-text", run: () => app.startNewReturn(f.c) });
     }
+  }
+  // The open form's pill steps (old main.js: only while a form is open and shows its pill).
+  if (app.view() === "form" && !fresh && formUi.canStep()) {
+    items.push({ group: "Actions", label: "Next to do", icon: "chevron-right", hint: keymap.label("mod+right"), run: () => formUi.step(1) });
+    items.push({ group: "Actions", label: "Previous to do", icon: "chevron-left", hint: keymap.label("mod+left"), run: () => formUi.step(-1) });
   }
   items.push({ group: "Actions", label: "Toggle sidebar", icon: "panel-left", hint: keymap.label("mod+b"), run: app.toggleSidebar });
   items.push({

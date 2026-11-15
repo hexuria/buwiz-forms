@@ -11,8 +11,11 @@ default = ["sqlcipher"]
 # SQLCipher database encryption, passed through to bir-core and bir-print.
 # bir-shell keeps it on; the NSH app turns it off.
 sqlcipher = ["bir-core/sqlcipher", "bir-print/sqlcipher"]
-# Device filings and the agent's send path; enabled by `bir-shell/agent`.
-agent = ["dep:reqwest"]
+# Device filings, the agent's send path and the gpui-agent session both hosts share (`agent/`); enabled by
+# `bir-shell/agent` and `nsh-app-ebirforms/agent`.
+agent = ["dep:reqwest", "dep:gpui-agent"]
+# `bir-headless`: the same session in a daemon with no window (clap CLI, pid file, detach). Needs `agent`.
+headless = ["agent", "dep:clap", "dep:dotenvy", "dep:libc", "dep:socket2"]
 mas_build = ["bir-core/mas_build"]
 # Test helpers (`account_gate::force_locked`) for a host's own tests.
 test-support = []
@@ -26,6 +29,12 @@ bir-print = { path = "../bir-print", default-features = false }
 anyhow = "1"
 chrono = "0.4"
 futures = "0.3"
+# One rev for bir-shell, bir-mcp and the NSH app: they speak one protocol and one discovery format.
+gpui-agent = { workspace = true, optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+dotenvy = { workspace = true, optional = true }
+libc = { version = "0.2", optional = true }
+socket2 = { version = "0.6", optional = true }
 reqwest = { version = "0.12", features = ["rustls-tls", "blocking"], default-features = false, optional = true }
 serde = { version = "1", features = ["derive"] }
 # Object keys keep insertion order, as in the gpui shell (gpui turns it on

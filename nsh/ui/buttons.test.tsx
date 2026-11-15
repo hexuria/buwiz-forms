@@ -4,7 +4,7 @@ import { openKit, readout, SIZES } from "./harness";
 
 for (const size of SIZES) {
   test(`${size.name}: buttons press, disabled ones do not`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(readout(app, "Presses:")).toBe("Presses: 0");
     await app.press("id:kit-primary");
     await app.press("text:Secondary >> nth=0");
@@ -17,7 +17,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: icon buttons and nav rows`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.press("label:Notifications");
     expect(readout(app, "Presses:")).toBe("Presses: 1");
     expect(app.enabled("label:Delete")).toBe(false);

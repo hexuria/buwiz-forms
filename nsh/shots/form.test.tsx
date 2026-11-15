@@ -16,7 +16,7 @@ for (const look of LOOKS) {
     await shoot(app, `form-${look.name}-top`);
     await app.press("id:fp-check");
     await app.waitFor("id:fp-pill-count");
-    // The toast's layer covers the bottom of the window: let it go before pressing the pill.
+    // The fixture's Toaster sits above the pill (bottom 96), as in the frame: the pill is pressable under a toast.
     await app.press("id:fp-pill-next");
     await app.wait(900);
     await shoot(app, `form-${look.name}-step`);
@@ -29,5 +29,5 @@ for (const look of LOOKS) {
     await app.scroll("id:form-scroll", 260).catch(() => {});
     await app.wait(400);
     await shoot(app, `form-${look.name}-schedule`);
-  });
+  }, 120_000);
 }

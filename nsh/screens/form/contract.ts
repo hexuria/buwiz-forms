@@ -184,6 +184,9 @@ export interface RadioGroupProps {
   choices: RadioChoice[];
   /** The ticked radio's key, or null. Its own signal. */
   selected: Accessor<string | null>;
+  /** Whether this radio is ticked (reactive). An item can draw radios of two groups (1701MS item 11: the taxpayer's and
+   * the spouse's), so each choice reads its own; without it, a choice is ticked when it is selected(). */
+  checked?(key: string): boolean;
   /** The whole group takes no pick. */
   locked: Accessor<boolean>;
   /** One choice is locked (others may not be). */

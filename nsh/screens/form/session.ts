@@ -34,6 +34,7 @@ import { errorText } from "../../lib/errors";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
+import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
 import { isTinItem, keysOf, oneDate, optionOf, plainRefusal, withoutHidden, type OneDate } from "./schema";
 
@@ -45,6 +46,8 @@ export const AUTOSAVE_DELAY = 700;
 export const PERIOD_ASK_DELAY = 300;
 /** Live print-preview sync, sooner than the flush (ms). */
 export const LIVE_PREVIEW_DELAY = 120;
+/** A removal's Undo is offered this long (the kit's toast with an action); autosave waits it out (ms). */
+export const UNDO_WINDOW = 5000;
 /** How long "Saving…" shows before the (synchronous) save runs, so it is painted (ms). */
 const SAVING_PAINT = 40;
 
@@ -80,8 +83,12 @@ export interface ToastAction {
 
 /** What the session asks of the page around it. All optional: tests pass none. */
 export interface SessionHooks {
-  /** A toast (icon: an nsh/ui IconName). */
-  toast?(message: string, options?: { icon?: string; action?: ToastAction }): void;
+  /** A toast (icon: an nsh/ui IconName); it may answer the toast's id (a string), so the page can close it again. */
+  toast?(message: string, options?: { icon?: string; action?: ToastAction }): unknown;
+  /** Close a toast the session showed (a removal's Undo that no longer applies). */
+  dismissToast?(id: string): void;
+  /** The session wrote through the door (name: the host function): the frame drops its cached reads. */
+  afterWrite?(name: string): void;
   /** A changed return was saved: the frame bumps it in Recent. */
   onSaved?(target: FormTarget): void;
   /** The session now shows another return (a sample became its return, an offer loaded one, Undo came back). */
@@ -94,6 +101,8 @@ export type SaveState =
   | { state: "idle" }
   | { state: "saving" }
   | { state: "saved" }
+  /** Something is staged or changed and not saved yet. */
+  | { state: "unsaved" }
   | { state: "failed"; message: string }
   /** Not autosaved: why ("Sample · set its period to save", "Amendment · not saved yet"). */
   | { state: "manual"; message: string };
@@ -151,7 +160,7 @@ export interface RowInfo {
 }
 
 export interface PartInfo {
-  /** Rows of the part with a shown message. */
+  /** Messages shown on the part's rows, each host message counted once (two on one row count two). */
   errors: number;
   /** Rows of the part on the to-do list. */
   todo: number;
@@ -276,6 +285,10 @@ interface St {
   messages: Record<string, string>;
   /** Keys each row's messages name (a red border on those boxes). */
   messageKeys: Record<string, string[]>;
+  /** How many messages each row carries (host errors bound to it and refused edits): what the counts add up. */
+  messageCounts: Record<string, number>;
+  /** Boxes the host refused at the last fill, with its message (kept until the box is edited again). */
+  rejected: Record<string, string>;
   formErrors: string[];
   checkable: Record<string, { token: string; label: string }[]>;
   electionAt: string | null;
@@ -317,7 +330,7 @@ function freshState(target: FormTarget): St {
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
-    messageKeys: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
+    messageKeys: {}, messageCounts: {}, rejected: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
@@ -326,6 +339,26 @@ function freshState(target: FormTarget): St {
 }
 
 const sameJson = <T,>(a: T, b: T) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/** Two amounts are the same number; a blank one is zero. */
+function sameNumber(a: string, b: string): boolean {
+  const plain = (t: string) => {
+    const v = t.replace(/[,\s₱%]/g, "");
+    return v === "" || /^[-+]?0*\.?0*$/.test(v) ? "0" : v;
+  };
+  const x = plain(a);
+  const y = plain(b);
+  return x === y || sameAmount(x, y);
+}
+
+/** The pages open now (flushNow saves them all). */
+const live = new Set<FormSession>();
+
+/** Every open form page: typing flushed and saved now where autosave may (the frame awaits it before quit or navigation). False when a save was refused (its message was toasted). */
+export async function flushNow(): Promise<boolean> {
+  const done = await Promise.all([...live].map((s) => s.flushNow()));
+  return done.every(Boolean);
+}
 const ticked = (v: unknown) => v === "true" || v === "1" || v === "Y";
 
 /** Lazily made signals by key. */
@@ -353,6 +386,9 @@ export class FormSession {
   private token = 0;
   private hooks: SessionHooks;
   private removalUndo: (() => void) | null = null;
+  private undoToast: string | null = null;
+  /** A sample became its return and the return is being opened: the page stays up, typing waits in pending. */
+  private reopening = false;
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -391,13 +427,15 @@ export class FormSession {
   private sCurrent = signal(0);
   private sStepAt = signal<string | null>(null);
   private sAllOpen = signal(false);
-  private sReveal = signal<{ row: string; seq: number } | null>(null);
+  private sReveal = signal<{ row: string | null; part: number; seq: number } | null>(null);
+  private sAttention = signal(0);
   private revealSeq = 0;
   private boxes = new Map<string, BoxState>();
 
   constructor(target: FormTarget, hooks: SessionHooks = {}) {
     this.hooks = hooks;
     this.st = freshState(target);
+    live.add(this);
     let schema: FormSchema | null = null;
     try {
       schema = withoutHidden(bir.screen_form_schema(target.formCode) as FormSchema);
@@ -502,7 +540,10 @@ export class FormSession {
   readonly stepAt: Accessor<string | null> = () => this.sStepAt();
   readonly allPartsOpen: Accessor<boolean> = () => this.sAllOpen();
   /** A step's row to reveal (scroll to, then focus); seq changes on every step. */
-  readonly reveal: Accessor<{ row: string; seq: number } | null> = () => this.sReveal();
+  /** What the page brings into view: a step's row (then its keyboard focus), or a part the navigator or a part step went to. */
+  readonly reveal: Accessor<{ row: string | null; part: number; seq: number } | null> = () => this.sReveal();
+  /** Messages shown now, each counted once: the pill's red count, the part badges' sum and Check's toast agree on it. */
+  readonly attention: Accessor<number> = () => this.sAttention();
 
   /** Plain reads (untracked), for tests and one-off decisions. */
   valueOf(k: string): string {
@@ -568,13 +609,17 @@ export class FormSession {
   // ---------------------------------------------------------------- open
 
   /** Load the return (the host's async open). The error text, or null. */
-  async open(target: FormTarget = this.st.target): Promise<string | null> {
+  async open(target: FormTarget = this.st.target, keep = false): Promise<string | null> {
     if (!this.schema) return this.st.error;
     const back = this.st.back;
-    this.st = freshState(target);
-    if (target.mode === "filed_original") this.st.back = back;
     const token = ++this.token;
-    this.publish();
+    // keep: the page stays as it is until the host answers (a sample reopening as its return), typing is kept.
+    this.reopening = keep;
+    if (!keep) {
+      this.st = freshState(target);
+      if (target.mode === "filed_original") this.st.back = back;
+      this.publish();
+    }
     let r: ScreenFormOpened;
     try {
       const key = target.key ?? null;
@@ -585,6 +630,8 @@ export class FormSession {
       else r = await bir.screen_form_open(target.tin, target.formCode, target.year, target.period, key, target.newKey ?? null);
     } catch (e) {
       if (token !== this.token || this.disposed) return null;
+      if (keep) this.st = this.carried(target);
+      this.reopening = false;
       this.st.loading = false;
       this.st.error = errorText(e);
       this.publish();
@@ -592,11 +639,33 @@ export class FormSession {
       return this.st.error;
     }
     if (token !== this.token || this.disposed) return null;
+    if (keep) this.st = this.carried(target);
+    this.reopening = false;
     this.st.loading = false;
     this.takeOpened(r);
+    // What was typed while it opened goes into the new draft.
+    if (Object.keys(this.st.pending).length) {
+      this.st.dirty = true;
+      this.st.saveState = { state: "unsaved" };
+      this.flush();
+    }
     this.publish();
     this.wake();
     return null;
+  }
+
+  /** A fresh state for target that keeps the page as the filer had it: staged typing, open parts, touched rows. */
+  private carried(target: FormTarget): St {
+    const old = this.st;
+    const s = freshState(target);
+    s.pending = { ...old.pending };
+    s.openParts = old.openParts;
+    s.current = old.current;
+    s.touched = old.touched;
+    s.showAll = old.showAll;
+    s.moreOpen = old.moreOpen;
+    s.profileOpen = old.profileOpen;
+    return s;
   }
 
   private wake() {
@@ -664,14 +733,14 @@ export class FormSession {
     if (!s.editable || !s.draft) return { state: "idle" };
     if (s.sample && !s.periodSet) return { state: "manual", message: "Sample · set its period to save" };
     if (s.amends && !s.saved) return { state: "manual", message: "Amendment · not saved yet" };
-    if (s.dirty) return { state: "idle" };
+    if (s.dirty) return { state: "unsaved" };
     return s.saved ? { state: "saved" } : { state: "idle" };
   }
 
   /** Whether autosave may save this return now. */
   private canAutosave(): boolean {
     const s = this.st;
-    if (!s.draft || !s.editable || s.loading || s.removal) return false;
+    if (!s.draft || !s.editable || s.loading || s.removal || this.reopening) return false;
     if (s.target.mode === "filed_original") return false;
     if (s.amends && !s.saved) return false;
     if (s.sample) return s.periodSet && !s.existing && s.periodAnswered === s.periodAsked;
@@ -751,10 +820,12 @@ export class FormSession {
       s.pending[k] = v;
       if (s.opened.has(k) && s.profileSave[k]) s.profileEdited.add(k);
       delete s.kept[k];
+      delete s.rejected[k];
     }
     s.dirty = true;
     this.unquiet(Object.keys(edits));
     this.cancelAutosave();
+    this.markUnsaved();
     const seq = ++s.editSeq;
     const token = this.token;
     if (this.flushTimer) clearTimeout(this.flushTimer);
@@ -782,14 +853,26 @@ export class FormSession {
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
-    for (const k of Object.keys(edits)) delete s.kept[k];
+    for (const k of Object.keys(edits)) {
+      delete s.kept[k];
+      delete s.rejected[k];
+    }
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k] ?? ""]));
     for (const [k, v] of Object.entries(edits)) {
       s.values[k] = String(v);
       this.sValue.get(k).set(this.shownText(k));
     }
     this.cancelAutosave();
+    this.markUnsaved();
     this.flush();
+  }
+
+  /** The save line says "Unsaved changes" the moment something is staged (an explicit-save return keeps its reason). */
+  private markUnsaved() {
+    const s = this.st;
+    if (s.saveState.state === "manual") return;
+    s.saveState = { state: "unsaved" };
+    this.sSave.set(s.saveState);
   }
 
   /** A pick in a radio group, with the old group rules: untick in groups of 3+, a pair keeps one answer, grp siblings untick. */
@@ -799,6 +882,8 @@ export class FormSession {
     const it = id ? this.items.get(id) : null;
     const f = this.fieldOf.get(k);
     if (!it || !f || this.isShut(k)) return;
+    // A pick leaves the row as a blur does: its message may show now.
+    s.touched.add(id!);
     const on = s.values[k] === "true";
     const period = s.periodParts.has(k);
     if (on && !period && (f.rg || 0) >= 3) return this.choose({ [k]: "false" });
@@ -880,7 +965,7 @@ export class FormSession {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
-    if (!s.draft) return;
+    if (!s.draft || this.reopening) return;
     const edits = s.pending;
     s.pending = {};
     let filled = false;
@@ -893,6 +978,7 @@ export class FormSession {
         filled = true;
       } catch (e) {
         s.pending = { ...edits, ...s.pending };
+        s.saveState = { state: "failed", message: errorText(e) };
         this.toast(errorText(e), "triangle-alert");
       }
     }
@@ -925,7 +1011,15 @@ export class FormSession {
     }
     this.syncShown(before, edits);
     this.livePreview();
-    for (const [k, msg] of Object.entries(r.rejected || {})) s.messages[this.keyIndex.get(k) || "form"] = msg;
+    // A refused box shows what the draft holds again; its message shows (its row is touched) until it is edited again.
+    for (const [k, msg] of Object.entries(r.rejected || {})) {
+      const id = this.keyIndex.get(k);
+      s.messages[id || "form"] = msg;
+      if (!id) continue;
+      s.rejected[k] = msg;
+      s.touched.add(id);
+      if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
+    }
   }
 
   /** An answer that removes typed rows asks first: the old answer shows until Continue. */
@@ -937,6 +1031,7 @@ export class FormSession {
     s.removal = { r, edits, typed, draft: s.draft! };
     for (const k of Object.keys(chosen)) this.sValue.get(k).set(this.shownText(k));
     s.overlay = { kind: "removal", message: r.removes!.message };
+    this.markUnsaved();
     this.publish();
   }
 
@@ -950,11 +1045,18 @@ export class FormSession {
     this.applyFill(held.r, held.edits);
     s.dirty = true;
     this.validate();
-    this.scheduleAutosave();
     const state = s;
     const undo = () => this.undoRemoval(held.draft, state, undo);
     this.removalUndo = undo;
-    this.toast(`${held.r.removes!.done}.`, "trash", { label: "Undo", onPress: undo });
+    this.undoToast = this.toast(`${held.r.removes!.done}.`, "trash", { label: "Undo", onPress: undo });
+    // Any save retires the Undo (it would bring back a draft older than the stored one), so autosave waits it out.
+    this.scheduleAutosave();
+    const token = this.token;
+    this.later(UNDO_WINDOW, () => {
+      if (token !== this.token || this.removalUndo !== undo) return;
+      this.retireRemovalUndo();
+      this.scheduleAutosave();
+    });
   }
 
   /** Cancel: the old answer and the rows stay, and so does what was typed with it. */
@@ -993,15 +1095,23 @@ export class FormSession {
     this.removalUndo?.();
   }
 
+  /** The removal's Undo goes (an edit, a save, leaving the page), and its toast with it. */
   private retireRemovalUndo() {
     this.removalUndo = null;
+    const id = this.undoToast;
+    this.undoToast = null;
+    if (id) this.hooks.dismissToast?.(id);
   }
 
   /** Undo a removal: the draft from before the answer comes back, on the same page only. */
   private undoRemoval(draft: object, state: St, undo: () => void) {
     const s = this.st;
-    if (s !== state || this.removalUndo !== undo) return;
+    if (s !== state || this.removalUndo !== undo || !s.editable) return;
     this.removalUndo = null;
+    this.undoToast = null;
+    // Never a draft older than the stored one (a save retires Undo; this guards the rest).
+    const id = (d: object | null) => (d as { id?: number | null } | null)?.id ?? null;
+    if (id(draft) !== id(s.draft)) return void this.toast("Undo is no longer available: the return was saved since.", "triangle-alert");
     try {
       const r = bir.screen_form_fill(s.target.formCode, draft, {}, []);
       const before = { ...s.values };
@@ -1038,6 +1148,7 @@ export class FormSession {
         st.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
         this.syncComputed();
         this.setErrors(r.errors);
+        st.formErrors = [];
         st.checking = false;
         this.publish();
       },
@@ -1056,6 +1167,7 @@ export class FormSession {
     s.errors = [...(errors || []), ...(s.factErrors || [])].filter((e) => !(s.quiet && e.field === s.quiet.field));
     s.messages = {};
     s.messageKeys = {};
+    s.messageCounts = {};
     s.checkable = {};
     s.electionAt = null;
     const items = this.rowIds.map((id) => ({ id, it: this.items.get(id)! }));
@@ -1064,8 +1176,16 @@ export class FormSession {
       if (!id) continue;
       s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
       (s.messageKeys[id] ||= []).push(...(e.keys || []));
+      s.messageCounts[id] = (s.messageCounts[id] || 0) + 1;
       if (e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
       if (e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
+    }
+    for (const [k, msg] of Object.entries(s.rejected)) {
+      const id = this.keyIndex.get(k);
+      if (!id) continue;
+      s.messages[id] = s.messages[id] ? `${msg} · ${s.messages[id]}` : msg;
+      (s.messageKeys[id] ||= []).push(k);
+      s.messageCounts[id] = (s.messageCounts[id] || 0) + 1;
     }
   }
 
@@ -1117,15 +1237,24 @@ export class FormSession {
 
   /** Every box shows what the draft holds (an opening, a rebuild, a restore). */
   private resetShown() {
-    for (const k of this.allKeys) this.sValue.get(k).set(this.shownText(k));
-    for (const k of this.oneDates.keys()) this.sValue.get(k).set(this.shownText(k));
+    const pending = this.st.pending;
+    for (const k of this.allKeys) if (!(k in pending)) this.sValue.get(k).set(this.shownText(k));
+    for (const [k, { date }] of this.oneDates) {
+      if ([date.month.k, date.day?.k, date.year.k].some((p) => p && p in pending)) continue;
+      this.sValue.get(k).set(this.shownText(k));
+    }
   }
 
   /** Shut boxes follow the draft; a box the user can type keeps its text unless the host changed it (old syncChanged). */
   private syncShown(before: Record<string, string>, edits: Record<string, string>) {
     const s = this.st;
     for (const k of this.allKeys) {
-      if (k in edits) continue;
+      if (k in edits) {
+        // A box the host changed to something other than what was typed (a schedule row moved up into a cleared
+        // row) shows the host's value, unless typed again since.
+        if (!(k in s.pending) && !this.pools.has(k) && this.hostChanged(k, edits[k])) this.sValue.get(k).set(this.shownText(k));
+        continue;
+      }
       if (this.isShut(k) || this.pools.has(k) || (before[k] ?? "") !== (s.values[k] ?? "")) this.sValue.get(k).set(this.shownText(k));
     }
     for (const [k, { date }] of this.oneDates) {
@@ -1133,6 +1262,20 @@ export class FormSession {
       if (parts.some((p) => p in edits)) continue;
       if (oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
     }
+  }
+
+  /** The draft holds something else for box k than the text typed into it. */
+  private hostChanged(k: string, typed: string): boolean {
+    const host = String(this.st.values[k] ?? "");
+    const kind = this.kindOf.get(k);
+    if (kind === "money" || kind === "pct" || kind === "int") return !sameNumber(typed, host);
+    if (kind === "sel" || kind === "chk" || kind === "radio") return true;
+    if (kind === "date") {
+      const a = parseTypedDate(typed);
+      const b = parseTypedDate(host);
+      if (a && b) return formatMDY(a) !== formatMDY(b);
+    }
+    return typed.trim().toLowerCase() !== host.trim().toLowerCase();
   }
 
   /** Computed and locked boxes follow the draft (after a validation). */
@@ -1315,6 +1458,7 @@ export class FormSession {
     let r;
     try {
       r = bir.screen_form_save_to_profile(s.target.formCode, s.target.year, s.target.period, s.draft!, keys);
+      this.wrote("screen_form_save_to_profile");
     } catch (e) {
       this.toast(plainRefusal(errorText(e)), "triangle-alert");
       return null;
@@ -1356,6 +1500,8 @@ export class FormSession {
       if (r.pools) s.poolTexts = r.pools;
       if (Array.isArray(r.penalties)) s.penalties = r.penalties;
       this.syncShown(before, {});
+      // A validation sent before this would bring back the pre-profile numbers: a new one replaces it.
+      this.validate();
       return r;
     } catch (e) {
       this.toast(plainRefusal(errorText(e)), "triangle-alert");
@@ -1433,6 +1579,7 @@ export class FormSession {
       if ((s.stopEdits[k] ?? null) === call) continue;
       try {
         const r = bir.set_template_stop(s.target.tin, s.target.formCode, k, call);
+        this.wrote("set_template_stop");
         if (r?.stop_edits && typeof r.stop_edits === "object") s.stopEdits = r.stop_edits;
       } catch (e) {
         return this.toast(errorText(e), "triangle-alert");
@@ -1491,6 +1638,11 @@ export class FormSession {
   }
 
   /** A date or text card's box (kept by the page's input; read on Save). */
+  /** What was typed into a fact card so far (a card scrolled away and back is drawn again with it). */
+  askTextOf(fact: ScreenFormFact): string {
+    return this.st.askText[fact] ?? "";
+  }
+
   typeAsk(fact: ScreenFormFact, text: string) {
     this.st.askText[fact] = text;
   }
@@ -1518,8 +1670,13 @@ export class FormSession {
     const at = [...s.askAt].find(([, asks]) => asks.includes(ask))?.[0] ?? null;
     if (Object.keys(s.pending).length) this.flush();
     try {
-      if (fact === "birth_date") bir.update_taxpayer(String(s.target.tin).slice(0, 9), { birth_date: value } as never);
-      else bir.set_year_facts(s.target.tin, this.taxYear(), { [fact]: value } as never);
+      if (fact === "birth_date") {
+        bir.update_taxpayer(String(s.target.tin).slice(0, 9), { birth_date: value } as never);
+        this.wrote("update_taxpayer");
+      } else {
+        bir.set_year_facts(s.target.tin, this.taxYear(), { [fact]: value } as never);
+        this.wrote("set_year_facts");
+      }
     } catch (e) {
       return this.toast(plainRefusal(errorText(e)), "triangle-alert");
     }
@@ -1553,6 +1710,7 @@ export class FormSession {
     const at = s.electionAt;
     try {
       bir.record_income_tax_election(s.target.tin, year, pick);
+      this.wrote("record_income_tax_election");
     } catch (e) {
       s.electionReady = undefined;
       this.publish();
@@ -1674,6 +1832,7 @@ export class FormSession {
     s.current = pi;
     s.stepAt = row;
     this.publish();
+    this.sReveal.set({ row, part: pi, seq: ++this.revealSeq });
   }
 
   /** The part the scroll shows now (the page reports it; the pill names it). */
@@ -1702,10 +1861,17 @@ export class FormSession {
     if (ids.length) {
       const row = nextRow(ids, dir, s.stepAt, s.current, s.stepFromTop);
       if (row) return { part: Number(row.split(":")[0]), row };
+      // Past the last row › ran Check: ‹ steps back from the end, to the last row to do.
+      if (dir < 0 && !s.stepAt && s.stepFromTop) {
+        const last = ids[ids.length - 1];
+        return { part: Number(last.split(":")[0]), row: last };
+      }
       return dir > 0 ? { check: true } : null;
     }
     const part = s.current + dir;
-    return part >= 0 && part < this.schema.parts.length ? { part, row: null } : null;
+    if (part >= 0 && part < this.schema.parts.length) return { part, row: null };
+    // Nothing shows yet but the host has errors: past the last part, Check shows them.
+    return dir > 0 && s.editable && s.errors.length > 0 ? { check: true } : null;
   }
 
   /** ‹ and › (Cmd/Ctrl+Left/Right): a row step opens its part and asks the page to reveal and focus the row. */
@@ -1723,8 +1889,12 @@ export class FormSession {
     }
     if (s.stepAt && dir > 0) s.passed.add(s.stepAt);
     s.stepFromTop = false;
-    this.jumpTo(target.part, target.row);
-    if (target.row) this.sReveal.set({ row: target.row, seq: ++this.revealSeq });
+    // The target's part opens; the parts already open stay open (after Expand all a step folds nothing).
+    s.openParts.add(target.part);
+    s.current = target.part;
+    s.stepAt = target.row;
+    this.publish();
+    this.sReveal.set({ row: target.row, part: target.part, seq: ++this.revealSeq });
   }
 
   /** The keyboard into a row's box: its first stop box, else its first empty required box, else its first open box. */
@@ -1756,6 +1926,14 @@ export class FormSession {
     return out;
   }
 
+  /** How many messages each row with a shown message carries (a date's own sentence counts once). */
+  private shownCounts(): Record<string, number> {
+    const s = this.st;
+    const out: Record<string, number> = {};
+    for (const id of Object.keys(this.shownMessages())) out[id] = Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1);
+    return out;
+  }
+
   private todoNow(): TodoRow[] {
     const s = this.st;
     if (!this.schema || !s.draft) return [];
@@ -1781,7 +1959,8 @@ export class FormSession {
     const wait = () => {
       if (token !== this.token || this.disposed) return;
       if (this.st.checking) return void this.later(100, wait);
-      const n = this.st.errors.length;
+      // Every message counted once, as the pill and the part badges count them (not the rows they sit on).
+      const n = Object.values(this.shownCounts()).reduce((a, b) => a + b, 0);
       this.toast(n ? `${n} item${n > 1 ? "s need" : " needs"} attention.` : "No problems found.", n ? "triangle-alert" : "circle-check");
     };
     this.later(50, wait);
@@ -1792,12 +1971,14 @@ export class FormSession {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
+    // Never left saying "Saving…" for a save that will not run.
+    if (this.st.saveState.state === "saving") this.st.saveState = this.restingSaveState();
   }
 
   /** After a successful fill: AUTOSAVE_DELAY of quiet saves (when this return may be autosaved). */
   private scheduleAutosave() {
     this.cancelAutosave();
-    if (!this.canAutosave()) {
+    if (!this.canAutosave() || this.removalUndo) {
       if (this.st.saveState.state !== "failed") this.st.saveState = this.restingSaveState();
       this.publish();
       return;
@@ -1866,8 +2047,9 @@ export class FormSession {
         edits = {};
       }
       const r = bir.screen_form_save(s.target.formCode, s.draft);
-      // An autosave keeps a removal's Undo: Undo brings the older draft back and that is saved in turn.
-      if (announce) this.retireRemovalUndo();
+      this.wrote("screen_form_save");
+      // Saved, the return has a new state: a removal's Undo would bring back a draft older than the stored one.
+      this.retireRemovalUndo();
       if (r.draft) s.draft = r.draft;
       if (r.status) s.status = r.status;
       s.dirty = false;
@@ -1882,6 +2064,8 @@ export class FormSession {
     } catch (e) {
       s.pending = { ...edits, ...s.pending };
       s.saveState = { state: "failed", message: errorText(e) };
+      // A refusal shows every message, so what blocks it is on screen.
+      s.showAll = true;
       this.publish();
       return false;
     }
@@ -1920,9 +2104,11 @@ export class FormSession {
         edits = {};
       }
       r = bir.screen_form_save(s.target.formCode, s.draft!);
+      this.wrote("screen_form_save");
     } catch (e) {
       s.pending = { ...edits, ...s.pending };
       s.saveState = { state: "failed", message: errorText(e) };
+      s.showAll = true;
       return this.publish();
     }
     if (!r.saved) {
@@ -1936,10 +2122,11 @@ export class FormSession {
     const target: FormTarget = { tin: s.target.tin, formCode: s.target.formCode, year: opens.year, period: opens.period, key: opens.key ?? null, mode: "return" };
     this.toast("Saved. The sample is now your return for this period.", "save");
     this.periodWaiting = true;
-    void this.open(target).then((error) => {
+    // The page stays up while it reopens: what is typed meanwhile waits and goes into the return.
+    void this.open(target, true).then((error) => {
       this.periodWaiting = false;
       if (error) return;
-      this.st.saveState = { state: "saved" };
+      if (!this.isDirty()) this.st.saveState = { state: "saved" };
       this.publish();
       this.hooks.onSaved?.(target);
       this.hooks.onRetarget?.(target);
@@ -2010,10 +2197,14 @@ export class FormSession {
     try {
       if (this.usesPeriodPath()) bir.queue_form_draft(s.target.tin, s.target.formCode, s.target.year, s.target.period || null);
       else bir.screen_form_queue(s.target.formCode, s.draft!);
+      this.wrote(this.usesPeriodPath() ? "queue_form_draft" : "screen_form_queue");
       this.toast("Queued for background submission.", "send");
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
+      // Refused: every message shows, so what blocks it is on screen.
+      s.showAll = true;
+      this.publish();
       this.toast(errorText(e), "triangle-alert");
     }
   }
@@ -2024,6 +2215,7 @@ export class FormSession {
     try {
       if (this.usesPeriodPath()) bir.cancel_queued(s.target.tin, s.target.formCode, s.target.year, s.target.period || null);
       else bir.screen_form_cancel_queue(s.target.formCode, s.draft!);
+      this.wrote(this.usesPeriodPath() ? "cancel_queued" : "screen_form_cancel_queue");
       this.toast("Queue cancelled. The return is an editable draft again.", "undo-2");
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
@@ -2067,7 +2259,8 @@ export class FormSession {
   openFiledOriginal() {
     const s = this.st;
     if (!s.filedOriginal) return;
-    if (this.isDirty() && !this.ensureSaved()) return this.toast("Save your edits first: viewing the filed original leaves this return.", "triangle-alert");
+    // An unsaved amendment is never saved here: its first save reverts the filed return (the old page asked first).
+    if (this.isDirty() && ((s.amends && !s.saved) || !this.ensureSaved())) return void this.toast("Save your edits first: viewing the filed original leaves this return.", "triangle-alert");
     s.back = { ...s.target };
     void this.open({ ...s.target, mode: "filed_original", snapshotId: s.filedOriginal.id });
   }
@@ -2450,6 +2643,8 @@ export class FormSession {
     const todo = this.todoNow();
     this.sTodo.set(todo);
     const shown = this.shownMessages();
+    const counts = this.shownCounts();
+    this.sAttention.set(Object.values(counts).reduce((a, b) => a + b, 0));
     if (this.schema) {
       this.schema.parts.forEach((p, pi) => {
         const tucked = this.tuckedItems(pi);
@@ -2458,7 +2653,7 @@ export class FormSession {
           return n + fs.filter((f) => f.t !== "radio").length + (fs.some((f) => f.t === "radio") ? 1 : 0);
         }, 0);
         this.sPart.get(String(pi)).set({
-          errors: Object.keys(shown).filter((id) => id.startsWith(`${pi}:`)).length,
+          errors: Object.entries(counts).reduce((n, [id, c]) => (id.startsWith(`${pi}:`) ? n + c : n), 0),
           todo: todo.filter((r) => r.id.startsWith(`${pi}:`)).length,
           open: s.openParts.has(pi),
           fold: tucked.length
@@ -2504,8 +2699,18 @@ export class FormSession {
 
   // ---------------------------------------------------------------- plumbing
 
-  private toast(message: string, icon?: string, action?: ToastAction) {
-    this.hooks.toast?.(message, { icon, action });
+  private toast(message: string, icon?: string, action?: ToastAction): string | null {
+    const id = this.hooks.toast?.(message, { icon, action });
+    return typeof id === "string" ? id : null;
+  }
+
+  /** A write went through the door: the page around tells the frame's cached reads. */
+  private wrote(name: string) {
+    try {
+      this.hooks.afterWrite?.(name);
+    } catch (_) {
+      /* the cache's trouble, not the save's */
+    }
   }
 
   private later(ms: number, fn: () => void): ReturnType<typeof setTimeout> {
@@ -2517,27 +2722,50 @@ export class FormSession {
     return id;
   }
 
-  /** The page goes: what is typed is flushed and, where autosave may, saved; timers stop. */
+  /** Flush what is typed and save it now where autosave may. The reason it is not saved, or null. */
+  private finish(): string | null {
+    const s = this.st;
+    if (!s.draft || !s.editable || s.loading || this.reopening) return null;
+    this.cancelAutosave();
+    if (Object.keys(s.pending).length) {
+      const edits = s.pending;
+      s.pending = {};
+      try {
+        const r = bir.screen_form_fill(s.target.formCode, s.draft, edits, this.unlockedFor(edits));
+        if (r.removes) {
+          s.pending = { ...edits, ...s.pending };
+          return `Not saved: ${r.removes.message}`;
+        }
+        this.applyFill(r, edits);
+        s.dirty = true;
+      } catch (e) {
+        s.pending = { ...edits, ...s.pending };
+        return errorText(e);
+      }
+    }
+    if (!s.dirty || s.sample || !this.canAutosave()) return null;
+    if (this.saveReturn(false)) return null;
+    return s.saveState.state === "failed" ? s.saveState.message : null;
+  }
+
+  /** Typing flushed and saved now where autosave may (the frame awaits it before quit or navigation). False when a save was refused (toasted). */
+  async flushNow(): Promise<boolean> {
+    if (this.disposed) return true;
+    if (this.reopening || this.st.loading) await this.ready();
+    if (this.reopening) await this.idle();
+    const failed = this.finish();
+    this.publish();
+    if (failed) this.toast(failed, "triangle-alert");
+    return !failed;
+  }
+
+  /** The page goes: what is typed is flushed and, where autosave may, saved (a refusal is toasted); Undo and timers stop. */
   dispose() {
     if (this.disposed) return;
-    const s = this.st;
-    if (s.draft && s.editable && !s.loading) {
-      this.cancelAutosave();
-      if (Object.keys(s.pending).length) {
-        try {
-          const edits = s.pending;
-          s.pending = {};
-          const r = bir.screen_form_fill(s.target.formCode, s.draft, edits, this.unlockedFor(edits));
-          if (!r.removes) {
-            this.applyFill(r, edits);
-            s.dirty = true;
-          }
-        } catch (_) {
-          /* leaving: nothing left to show it on */
-        }
-      }
-      if (s.dirty && !s.sample && this.canAutosave()) this.saveReturn(false);
-    }
+    this.retireRemovalUndo();
+    const failed = this.finish();
+    if (failed) this.toast(failed, "triangle-alert");
+    live.delete(this);
     this.disposed = true;
     for (const id of this.timers) clearTimeout(id);
     this.timers.clear();

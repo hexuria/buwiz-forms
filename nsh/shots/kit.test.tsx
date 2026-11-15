@@ -6,7 +6,7 @@ import { LOOKS, shoot } from "./shoot";
 
 for (const look of LOOKS) {
   test(`kit gallery, ${look.name}`, async () => {
-    const app = await open("../App.tsx", { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme });
+    const app = await open("../BasePreview.tsx", { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme });
     await app.press("text:UI kit");
     await app.waitFor("text:Text and marks");
     expect(app.texts()).toContain("Layers");
@@ -31,7 +31,7 @@ for (const look of LOOKS) {
   }, 180_000);
 
   test(`kit layers, ${look.name}`, async () => {
-    const app = await open("../App.tsx", { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme });
+    const app = await open("../BasePreview.tsx", { width: look.width, height: look.height, platform: look.platform, colorScheme: look.colorScheme });
     await app.press("text:UI kit");
     await app.waitFor("text:Text and marks");
     await app.hover("id:kit-primary");

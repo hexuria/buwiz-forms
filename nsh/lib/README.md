@@ -12,6 +12,7 @@ Pure TypeScript helpers ported from app/shell, each with a *.test.ts beside it (
 - `dates.ts`: MONTHS, MONTHS_LONG, DATE_ERROR, isoDate, addDays, daysUntil, shortDate, shortIsoDate, parseTypedDate, formatMDY, formatLongDate, shownDate, oneDateText (13) from the date helpers of app/shell/store.js and the date parsers and formatters of app/shell/form_page.js.
 - `money.ts`: formatMoney, wholePesosOf (2) from app/shell/form_page.js.
 - `errors.ts`: errorText (1) from app/shell/store.js.
+- `format.ts`: formatTin, displayCode (2) from app/shell/store.js.
 
 Changes from the old code (all else is the same behaviour):
 - daysUntil, periodOptions and loadDashboard take an optional clock (the system's by default). loadDashboard takes the reads (DashboardReads) where the old code took app; it never used anything else of app.
@@ -19,4 +20,6 @@ Changes from the old code (all else is the same behaviour):
 - tileSpecs, progressText and nextText were private in dashboard.js; exported because Home draws from them.
 - factValue reads atc_codes only from an array (the old code threw on a non-array); itemKeys reads a table with no keys as no keys (the old code threw).
 
-Not ported here: store.js formatTin and displayCode (not date or error helpers, so not in this brief); the Store class; form_page.js dateParts, oneDate, moveCalendar, needsText, filedOriginalStrip and existingOfferFor (schema or UI); dashboard.js openFilings, openDeadline and the element builders.
+Two formatTin functions, on purpose (different inputs, different answers; each test file pins its own): `lib/format.ts` is the old store.js one, for a STORED TIN (a root string or number, null and undefined allowed, with the branch code given apart): non-digits dropped, a root of 9 or more digits shows its first nine (a 14-digit TIN loses its branch: "00012345300000" is "000-123-453"), a shorter root stays bare digits ("12345" stays "12345", "1234" stays "1234"). `ui/mask.ts` formatTin is the typing one: digits grouped 3-3-3-5 as far as they go ("1234" is "123-4", "12345" is "123-45", "0001234530" is "000-123-453-0", "00012345300000" is "000-123-453-00000"), strings only. They agree only on a 9-digit root, with or without a branch code. Merging them would break one test file or the other.
+
+Not ported here: the Store class; form_page.js dateParts, oneDate, moveCalendar, needsText, filedOriginalStrip and existingOfferFor (schema or UI); dashboard.js openFilings, openDeadline and the element builders.

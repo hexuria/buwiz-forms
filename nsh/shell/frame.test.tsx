@@ -190,7 +190,7 @@ test("desktop: Cmd+comma opens Settings; a view that needs a taxpayer falls back
   const app = await open(ENTRY, { ...WIDE, ...asking({ demo: false }) });
   await app.waitFor("id:sidebar");
   expect(app.texts()).toContain("Add a taxpayer");
-  expect(app.shows("id:dev-door")).toBe(true); // an empty database in the dev environment: a door to the dev pages
+  expect(app.shows("id:dev-door")).toBe(false); // no dev strip on an empty database: the dev pages are in the palette only
   await app.keyboard.press("mod+,");
   await app.waitFor("id:placeholder-settings");
   // The panel says there is no taxpayer yet, and offers one.
@@ -225,16 +225,20 @@ test("desktop: the polls stay off unless a test asks, and run when it does", asy
   await on.waitUntil(() => !on.texts().includes("update: none"));
 });
 
-test("desktop: the dev pages open from the door, and back returns to the app", async () => {
+test("desktop: the dev pages open from the palette, and back returns to the app", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking({ demo: false }) });
-  await app.waitFor("id:dev-door");
-  await app.press("text:UI kit");
+  await app.waitFor("id:sidebar");
+  expect(app.shows("id:dev-door")).toBe(false);
+  await app.keyboard.press("mod+k");
+  await app.waitFor("id:palette-input");
+  await app.type("id:palette-input", "ui kit");
+  await app.submit("id:palette-input");
   await app.waitFor("text:Text and marks");
   expect(app.shows("id:sidebar")).toBe(false); // the dev pages take the whole window
   await app.press("text:Theme");
   await app.waitFor("text:Native module says: pong");
   await app.press("id:dev-back");
-  await app.waitFor("id:placeholder-home");
+  await app.waitFor("id:sidebar");
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
   await app.type("id:palette-input", "theme page");

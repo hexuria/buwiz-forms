@@ -313,10 +313,13 @@ fn spawn_account(
     work: impl FnOnce() -> HostResult + Send + 'static,
 ) -> Result<std::pin::Pin<Box<dyn std::future::Future<Output = HostResult> + Send>>, HostError> {
     let (sender, receiver) = futures::channel::oneshot::channel();
+    // The account file lives next to the database, so this thread must know the database's name as the host
+    // thread does: the in-process name is per thread, and a new thread is given it here.
+    let database = bir_core::db::capture_database_path_override();
     std::thread::Builder::new()
         .name(name.into())
         .spawn(move || {
-            let _ = sender.send(work());
+            let _ = sender.send(database.run(work));
         })
         .map_err(|error| HostError::new(error.to_string()))?;
     Ok(Box::pin(async move {
@@ -414,6 +417,26 @@ fn clear_stored() {
 mod tests {
     use super::*;
     use crate::bir_module::{use_ephemeral_database, with_account_database};
+
+    /// The in-process database name is per thread; the account file lives next to the database, so a thread
+    /// started for an account call works under the name of the thread that started it.
+    #[test]
+    fn an_account_thread_works_under_the_database_name_of_the_thread_that_started_it() {
+        let folder = tempfile::tempdir().expect("scratch folder");
+        let named = folder.path().join("bir_data.db");
+        bir_core::db::set_database_path_override(Some(named.clone()));
+        let seen = spawn_account("buwiz-account-test", || {
+            Ok(HostValue::Str(
+                bir_core::db::app_database_path().display().to_string(),
+            ))
+        })
+        .map(futures::executor::block_on);
+        bir_core::db::set_database_path_override(None);
+        match seen {
+            Ok(Ok(HostValue::Str(path))) => assert_eq!(path, named.display().to_string()),
+            _ => panic!("the account thread did not answer"),
+        }
+    }
 
     #[test]
     fn the_page_cannot_set_a_server_url_and_a_saved_one_is_ignored() {

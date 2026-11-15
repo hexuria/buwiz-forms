@@ -9,7 +9,7 @@ import { Shell } from "./shell/Shell";
 
 function Root() {
   const polling = !doorStatus().testEnvironment || process.env.BIR_SHELL_POLL === "1";
-  return <Shell start={process.env.BIR_SHELL_START} polling={polling} />;
+  return <Shell start={process.env.BIR_SHELL_START} polling={polling} firstRun />;
 }
 
 mount(Root);

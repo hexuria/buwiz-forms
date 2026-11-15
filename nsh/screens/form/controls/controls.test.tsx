@@ -308,3 +308,15 @@ for (const size of SIZES) {
     await app.waitFor("text:Row 3", { state: "gone" });
   });
 }
+
+test("desktop: a pill step's focus function puts the keys in a long-list select's trigger and in a group's first tick box", async () => {
+  const app = await gallery(SIZES[1].options);
+  await app.press("id:gallery-focus-atc");
+  await app.keyboard.press("enter");
+  await app.waitFor("id:fp-atc-search");
+  await app.back();
+  await app.waitFor("id:fp-atc-search", { state: "gone" });
+  await app.press("id:gallery-focus-regime");
+  await app.keyboard.press("space");
+  await app.waitFor("text:edit regime: regime1=true");
+});

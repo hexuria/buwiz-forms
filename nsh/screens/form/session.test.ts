@@ -103,7 +103,9 @@ test("touched-only errors: a message shows after its row was left, all of them a
   s.check();
   await s.idle();
   expect(s.row("2:6")().message).toContain("EOPT tier");
-  expect(s.part(2)().errors).toBe(Object.keys(s.messages()).filter((id) => id.startsWith("2:")).length);
+  // Each host message counts once, also two on one row (F5: the part badges, the pill and Check's toast agree).
+  const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it, ii) => ({ id: `${pi}:${ii}`, it })));
+  expect(s.part(2)().errors).toBe(s.errors().filter((e) => bindError(e, items, (k) => s.itemIdForKey(k))?.startsWith("2:")).length);
   expect(s.part(2)().errors).toBeGreaterThan(0);
   s.dispose();
 });

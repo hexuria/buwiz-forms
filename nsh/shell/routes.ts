@@ -28,7 +28,7 @@ const TABLE = {
   library: { label: "Form library", icon: "file-text", needsTaxpayer: false, layout: "wide" },
   calendar: { label: "Calendar", icon: "calendar", needsTaxpayer: false, layout: "page" },
   filings: { label: "Filings", icon: "history", needsTaxpayer: false, layout: "full" },
-  settings: { label: "Settings", icon: "settings", needsTaxpayer: false, layout: "page" },
+  settings: { label: "Settings", icon: "settings", needsTaxpayer: false, layout: "self" },
   profile: { label: "Tax profile", icon: "user", needsTaxpayer: true, layout: "page" },
   forms: { label: "Forms", icon: "file-text", needsTaxpayer: true, layout: "page" },
   templates: { label: "Templates", icon: "layout-template", needsTaxpayer: true, layout: "page" },

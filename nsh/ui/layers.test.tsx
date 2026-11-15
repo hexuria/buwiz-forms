@@ -4,7 +4,7 @@ import { openKit, readout, SIZES } from "./harness";
 
 for (const size of SIZES) {
   test(`${size.name}: dialog opens and closes by its button and by back`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(app.texts()).not.toContain("Delete this return?");
     await app.press("id:kit-open-dialog");
     await app.waitFor("text:Delete this return?");
@@ -17,7 +17,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: sheet opens with its title and closes`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.press("id:kit-open-sheet");
     await app.waitFor("text:Schedule 1, row 3");
     expect(app.texts()).toContain("Save row");
@@ -26,7 +26,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: popover and menu`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.press("text:Popover");
     await app.waitFor("text:Where this number comes from");
     await app.back();
@@ -40,7 +40,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: undo toast undoes, plain toast times out`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     await app.press("id:kit-undo");
     await app.waitFor("text:Return deleted");
     await app.press("id:toast-action");
@@ -52,7 +52,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: disclosures open and close`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(app.texts()).toContain("Business income, 1,250,000.00");
     expect(app.texts()).not.toContain("40% of gross sales");
     await app.press("id:kit-disc-ded-toggle");

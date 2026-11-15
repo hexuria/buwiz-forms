@@ -202,3 +202,12 @@ export function keysOf(it: SchemaItem): string[] {
   if (it.rows) return (it.keys ?? []).flat();
   return (it.f ?? []).flatMap((f) => (f.pool ? f.pool.keys : [f.k]));
 }
+
+/** An empty schedule cell, as the host reads a row (bir-core's row is_blank): blank text, a zero amount, an unticked box. */
+export function emptyCell(value: string, type: string): boolean {
+  const v = String(value ?? "").trim();
+  if (v === "") return true;
+  if (type === "money" || type === "pct" || type === "int") return /^[-+]?0*\.?0*$/.test(v.replace(/[,₱%\s]/g, ""));
+  if (type === "chk" || type === "radio") return !(v === "true" || v === "1" || v === "Y");
+  return false;
+}

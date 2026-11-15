@@ -24,41 +24,39 @@ const NOT_YET: &str = "is not available in the NSH app yet";
 pub(crate) struct NshHooks;
 
 impl Hooks for NshHooks {
-    // The app menu, the window chrome and the updater belong to the desktop wave (D4). Their calls come
-    // from the host functions as effects with no answer, so there is nothing to say back but a log line.
+    // The app menu, the window chrome and the updater (D4): the menu, the tray and the update check are TSX
+    // (`nsh/shell/desktop`); these calls land in the mailbox in `desktop.rs`, which that host reads.
     fn refresh_menu(&self) {
-        tracing::debug!("app menu refresh {NOT_YET}");
+        crate::desktop::refresh_menu();
     }
 
     fn set_shell_chrome_open(&self, open: bool) {
-        tracing::debug!(open, "shell chrome switch {NOT_YET}");
+        crate::desktop::set_shell_chrome_open(open);
     }
 
     fn start_updater(&self) {
-        tracing::debug!("updater {NOT_YET}");
+        crate::desktop::start_updater();
     }
 
     fn update_status(&self) -> UpdateStatus {
-        UpdateStatus {
-            phase: "idle".to_owned(),
-            version: None,
-            message: Some(format!("Automatic updates {NOT_YET}.")),
-            auto_download: false,
-            current_version: env!("CARGO_PKG_VERSION"),
-        }
+        crate::desktop::update_status()
     }
 
     fn install_update(&self) {
-        tracing::warn!("install update {NOT_YET}");
+        crate::desktop::install_update();
     }
 
-    fn dismiss_update(&self) {}
+    fn dismiss_update(&self) {
+        crate::desktop::dismiss_update();
+    }
 
     fn check_for_updates(&self) {
-        tracing::warn!("check for updates {NOT_YET}");
+        crate::desktop::check_for_updates();
     }
 
-    fn set_auto_update_download(&self, _enabled: bool) {}
+    fn set_auto_update_download(&self, enabled: bool) {
+        crate::desktop::set_auto_update_download(enabled);
+    }
 
     // The print window is wave 4 (D3). The host function still writes the preview file and answers its
     // path; no window opens, and no preview ever counts as open (the default would claim one did).
@@ -126,11 +124,9 @@ impl Hooks for NshHooks {
         true
     }
 
-    // Touch ID and the account password (admin sign-in, recovery) are wave 4 (D2): refusing is the honest
-    // answer of a build with no prompt.
-    fn os_authenticate(&self, _reason: &str) -> bool {
-        tracing::warn!("the OS sign-in prompt {NOT_YET}");
-        false
+    // Touch ID and the account password (admin recovery): `auth.rs` (false in a test environment).
+    fn os_authenticate(&self, reason: &str) -> bool {
+        crate::auth::os_authenticate(reason)
     }
 }
 

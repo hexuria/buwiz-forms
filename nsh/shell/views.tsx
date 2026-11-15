@@ -1,8 +1,14 @@
 // Which component shows for each view. A screen agent replaces the Placeholder of its view here with the real screen (one
 // line), after adding the view to routes.ts if it is new. A view is made once per move (the route's seq), not per param change.
 import type { JSX } from "nsh";
+import { CalendarPage } from "../screens/calendar/CalendarPage";
+import { Filings } from "../screens/filings/Filings";
 import { FormPage, type FormTarget } from "../screens/form/FormPage";
+import { Home } from "../screens/home/Home";
+import { Library } from "../screens/library/Library";
 import { Placeholder } from "../screens/placeholder/Placeholder";
+import { Settings } from "../screens/settings";
+import { NewBranchPage, NewTaxpayerPage, TaxpayerPage } from "../screens/taxpayer";
 import { app } from "./app";
 import type { Route } from "./routes";
 
@@ -32,24 +38,22 @@ export function renderView(route: Route): JSX.Element {
     case "form":
       return <FormView target={route.params.target as FormTarget} />;
     case "library":
-      return <Placeholder view="library" title="Form library" coming="wave 3 (C2)" old="Every form with a search box and frequency filter; a form opens a sample, or the start-a-return dialog." />;
+      return <Library />;
     case "calendar":
-      return <Placeholder view="calendar" title="Calendar" coming="wave 3 (C3)" old="Deadlines as a list or a month grid, with a filter bar." />;
+      return <CalendarPage />;
     case "filings":
-      return <Placeholder view="filings" title="Filings" coming="wave 3 (C4)" old="Returns by status: not started, draft, queued, filed." />;
+      return <Filings />;
     case "settings":
-      return <Placeholder view="settings" title="Settings" coming="wave 4 (D1)" old="General, security, data, jobs and logs." />;
+      return <Settings />;
     case "profile":
-      return <Placeholder view="profile" title="Tax profile" coming="wave 3 (C5)" old="The taxpayer's details, branches and tax years." withTaxpayer />;
     case "forms":
-      return <Placeholder view="forms" title="Forms" coming="wave 3 (C5)" old="The forms this branch files in the tax year." withTaxpayer />;
     case "templates":
-      return <Placeholder view="templates" title="Templates" coming="wave 3 (C5)" old="Saved answers per form." withTaxpayer />;
+      return <TaxpayerPage view={route.view} params={route.params} />;
     case "new_taxpayer":
-      return <Placeholder view="new_taxpayer" title="New taxpayer" coming="wave 3 (C5)" old="The form to add a taxpayer and its head office." />;
+      return <NewTaxpayerPage />;
     case "new_branch":
-      return <Placeholder view="new_branch" title="New branch" coming="wave 3 (C5)" old="The form to add a branch to the taxpayer." withTaxpayer />;
+      return <NewBranchPage />;
     default:
-      return <Placeholder view="home" title="Home" coming="wave 3 (C1)" old="The dashboard: what is overdue, due this week, drafts, waiting to send, and the next 30 days." />;
+      return <Home />;
   }
 }

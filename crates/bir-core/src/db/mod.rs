@@ -461,25 +461,62 @@ pub fn default_database_path() -> std::path::PathBuf {
     crate::platform::data_dir().join("bir_data.db")
 }
 
-/// The database path a host named in-process, with [`set_database_path_override`].
-static DATABASE_PATH_OVERRIDE: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
-
-fn database_path_override() -> Option<PathBuf> {
-    DATABASE_PATH_OVERRIDE
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone()
+thread_local! {
+    /// The database path this thread's host named in-process, with
+    /// [`set_database_path_override`]. Per thread, like the database slot the
+    /// host keeps on the same thread: a second engine thread naming its own
+    /// scratch database must not repoint the first one's.
+    static DATABASE_PATH_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
 }
 
-/// Name the live database file in-process: [`app_database_path`] answers it
-/// (before `BIR_DATABASE_PATH`) for every thread until it is set to `None`.
-/// For a host that picks a scratch database for a test run: the same effect
-/// as setting `BIR_DATABASE_PATH`, without changing the process environment
-/// while other threads may be reading it. The old shell never calls it.
+fn database_path_override() -> Option<PathBuf> {
+    DATABASE_PATH_OVERRIDE.with(|slot| slot.borrow().clone())
+}
+
+/// Name the live database file in-process, for **this thread only**:
+/// [`app_database_path`] answers it (before `BIR_DATABASE_PATH`) on this
+/// thread until it is set to `None`. For a host that gives each of its engine
+/// threads a scratch database for a test run: the same effect as setting
+/// `BIR_DATABASE_PATH`, without changing the process environment while other
+/// threads may be reading it, and without one engine's name reaching another's.
+///
+/// A thread this thread starts does not inherit the name (a thread-local is
+/// read on its own thread). One that goes on to call [`app_database_path`],
+/// or anything that does (the Buwiz account file lives next to the database),
+/// is given the name explicitly: [`capture_database_path_override`] on this
+/// thread, [`DatabasePathOverride::run`] on the new one. The old shell never
+/// calls this.
 pub fn set_database_path_override(path: Option<PathBuf>) {
-    *DATABASE_PATH_OVERRIDE
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = path;
+    DATABASE_PATH_OVERRIDE.with(|slot| *slot.borrow_mut() = path);
+}
+
+/// The database name of one thread, to hand to a thread it starts: see
+/// [`capture_database_path_override`].
+#[derive(Debug, Clone)]
+pub struct DatabasePathOverride(Option<PathBuf>);
+
+/// Take this thread's in-process database name (the one
+/// [`set_database_path_override`] set, or none) so a thread started for this
+/// one can run its work under it with [`DatabasePathOverride::run`].
+pub fn capture_database_path_override() -> DatabasePathOverride {
+    DatabasePathOverride(database_path_override())
+}
+
+impl DatabasePathOverride {
+    /// Run `work` on the current thread with the captured name in force, and
+    /// give the thread's own name back afterwards (also when `work` panics).
+    pub fn run<T>(self, work: impl FnOnce() -> T) -> T {
+        struct Restore(Option<PathBuf>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                set_database_path_override(self.0.take());
+            }
+        }
+        let _restore = Restore(database_path_override());
+        set_database_path_override(self.0);
+        work()
+    }
 }
 
 /// `EBIR_TEST_ENV` is on (`1`, `true`, `yes` or `on`, any case): a dev,
@@ -1898,8 +1935,12 @@ mod tests {
         });
     }
 
-    /// An in-process database path answers for every thread and wins over
-    /// `BIR_DATABASE_PATH`; clearing it gives the environment back.
+    /// An in-process database path answers on the thread that named it, wins
+    /// over `BIR_DATABASE_PATH` there, and clearing it gives the environment
+    /// back. (It used to answer for every thread of the process; a second
+    /// engine naming its own file repointed the first. Now it is per thread,
+    /// like the database slot: another thread sees the environment, and one
+    /// that must see the name is handed it, see the next two tests.)
     #[test]
     fn an_in_process_database_path_wins_over_the_environment() {
         let named = tempfile::tempdir().expect("temporary directory");
@@ -1912,8 +1953,101 @@ mod tests {
             let seen_here = app_database_path();
             set_database_path_override(None);
             assert_eq!(seen_here, in_process);
-            assert_eq!(seen_elsewhere, in_process, "not a per-thread setting");
+            assert_eq!(seen_elsewhere, from_env, "a per-thread setting");
             assert_eq!(app_database_path(), from_env);
+        });
+    }
+
+    /// Two threads (two engines) each name their own database; neither
+    /// repoints the other, in whichever order they name and read.
+    #[test]
+    fn a_second_thread_naming_its_database_does_not_repoint_the_first() {
+        let named = tempfile::tempdir().expect("temporary directory");
+        let first_file = named.path().join("first.db");
+        let second_file = named.path().join("second.db");
+        temp_env::with_var("BIR_DATABASE_PATH", None::<&str>, || {
+            let (named_tx, named_rx) = std::sync::mpsc::channel();
+            let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+            let first = {
+                let first_file = first_file.clone();
+                std::thread::spawn(move || {
+                    set_database_path_override(Some(first_file.clone()));
+                    named_tx.send(()).unwrap();
+                    go_rx.recv().unwrap();
+                    let after_the_second = app_database_path();
+                    set_database_path_override(None);
+                    (after_the_second, app_database_path())
+                })
+            };
+            named_rx.recv().unwrap();
+            let second = {
+                let second_file = second_file.clone();
+                std::thread::spawn(move || {
+                    set_database_path_override(Some(second_file));
+                    app_database_path()
+                })
+                .join()
+                .unwrap()
+            };
+            go_tx.send(()).unwrap();
+            let (first_after, first_cleared) = first.join().unwrap();
+
+            assert_eq!(second, second_file);
+            assert_eq!(
+                first_after, first_file,
+                "the second thread repointed the first"
+            );
+            assert_eq!(first_cleared, default_database_path());
+            assert_eq!(
+                app_database_path(),
+                default_database_path(),
+                "this thread named nothing"
+            );
+        });
+    }
+
+    /// A thread started by one that named a database is given the name
+    /// explicitly, for the length of its work, and keeps its own afterwards.
+    #[test]
+    fn a_thread_started_for_this_one_runs_under_its_database_name_when_given_it() {
+        let named = tempfile::tempdir().expect("temporary directory");
+        let mine = named.path().join("mine.db");
+        let its_own = named.path().join("its-own.db");
+        temp_env::with_var("BIR_DATABASE_PATH", None::<&str>, || {
+            set_database_path_override(Some(mine.clone()));
+            let handed = capture_database_path_override();
+            let uninformed = std::thread::spawn(app_database_path).join().unwrap();
+            let informed = {
+                let its_own = its_own.clone();
+                std::thread::spawn(move || {
+                    set_database_path_override(Some(its_own.clone()));
+                    let during = handed.run(app_database_path);
+                    (during, app_database_path())
+                })
+                .join()
+                .unwrap()
+            };
+            // The same capture, taken again when this thread names nothing.
+            set_database_path_override(None);
+            let nothing = capture_database_path_override();
+            let named_nothing = std::thread::spawn({
+                let its_own = its_own.clone();
+                move || {
+                    set_database_path_override(Some(its_own));
+                    nothing.run(app_database_path)
+                }
+            })
+            .join()
+            .unwrap();
+
+            assert_eq!(
+                uninformed,
+                default_database_path(),
+                "a thread does not inherit it"
+            );
+            assert_eq!(informed.0, mine, "told explicitly, it works under the name");
+            assert_eq!(informed.1, its_own, "and keeps its own afterwards");
+            assert_eq!(named_nothing, default_database_path());
         });
     }
 

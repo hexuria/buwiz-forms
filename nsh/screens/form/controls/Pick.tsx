@@ -1,7 +1,7 @@
 // A searchable list for a long choice (ATC codes, RDOs, regions, cities): a trigger that looks like the kit's Dropdown, a
 // search box that matches every typed word in any order (the kit's ComboField matches one run of text only), and the
 // matches as rows. Wide: a popover at the trigger. Narrow (under BREAK.phone, the kit Sheet's own rule): a bottom sheet.
-import type { Accessor } from "nsh";
+import type { Accessor, ViewRef } from "nsh";
 import { signal, View, windowSize } from "nsh";
 import { Icon, Line, ListGroup, ListRow, Popover, Sheet, Text, TextField, TOUCH } from "../../../ui";
 import { BREAK } from "../../../theme/tokens";
@@ -27,6 +27,8 @@ export interface SearchPickProps {
   disabled?: boolean;
   /** Fires when the list opens. */
   onOpen?: () => void;
+  /** Receives the trigger's ref, so a pill step can put the keyboard on it. */
+  focusRef?: (ref: ViewRef) => void;
 }
 
 /** The search box and the rows, the same in the popover and in the sheet. */
@@ -112,6 +114,7 @@ export function SearchPick(props: SearchPickProps) {
         width={Math.max(props.width ?? 0, 380)}
         trigger={
           <View
+            ref={(r: ViewRef) => props.focusRef?.(r)}
             testID={`${props.testID}-trigger`}
             role="button"
             accessibilityLabel={`${props.label}: ${current()?.label ?? "nothing chosen"}`}

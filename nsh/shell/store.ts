@@ -3,7 +3,8 @@
 // A render must not hit the database: every read here is memoised by key until a write drops it. Each key owns one
 // signal (its revision): a read subscribes to it, forget(key) moves it, so a screen re-runs only the reads whose key
 // changed. A read that throws answers its fallback, logs once, and is asked again after two seconds (a timer moves the
-// key's revision, so what shows the fallback re-reads by itself). The session's scope narrows what taxpayers() and the
+// key's revision, so what shows the fallback re-reads by itself); each further failure of the same key waits twice as
+// long (2 s, 4 s, 8 s ... a minute), and a success, forget(key) or bump() starts the wait over. The session's scope narrows what taxpayers() and the
 // returns and deadlines name: setScope(root) is called by the app state and nowhere else.
 //
 //   const list = store.taxpayers();                       // in JSX or a closure: re-runs when taxpayers change
@@ -15,6 +16,13 @@ import { errorText } from "../lib/errors";
 
 /** A read that failed answers its fallback for this long, then is asked again. */
 export const FAILED_READ_RETRY_MS = 2000;
+/** The longest a failing read waits between two asks. */
+export const FAILED_READ_RETRY_MAX_MS = 60_000;
+
+/** How long a key that has now failed `failures` times in a row answers its fallback: 2 s, 4 s, 8 s ... capped at a minute. */
+export function failedReadDelay(failures: number): number {
+  return Math.min(FAILED_READ_RETRY_MAX_MS, FAILED_READ_RETRY_MS * 2 ** Math.max(0, failures - 1));
+}
 
 /** The cache key of savedReturns(): not a "returns:" key, so the 30 s poll keeps it (Home reads it once per visit). */
 export const SAVED_RETURNS_KEY = "saved_returns";
@@ -31,6 +39,8 @@ interface Entry {
   value: unknown;
   /** When the read failed (Date.now()), so it is asked again. */
   failedAt: number | undefined;
+  /** How many asks in a row have failed since the key was last forgotten or read well: the backoff's step. */
+  failures: number;
   /** The last error text, so one failure is logged once. */
   error: string | undefined;
   retry: ReturnType<typeof setTimeout> | undefined;
@@ -44,7 +54,7 @@ let zipList: { value: string; label: string }[] | null = null;
 function entryOf(key: string): Entry {
   let e = entries.get(key);
   if (!e) {
-    e = { rev: signal(0), has: false, value: undefined, failedAt: undefined, error: undefined, retry: undefined };
+    e = { rev: signal(0), has: false, value: undefined, failedAt: undefined, failures: 0, error: undefined, retry: undefined };
     entries.set(key, e);
   }
   return e;
@@ -61,9 +71,8 @@ function logScreen(level: "error" | "warn" | "info", message: string): void {
   }
 }
 
-function forget(key: string): void {
-  const e = entries.get(key);
-  if (!e) return;
+/** Makes what read the entry ask again; the failure count stays, so the wait keeps growing. */
+function askAgain(e: Entry): void {
   e.has = false;
   e.failedAt = undefined;
   if (e.retry !== undefined) clearTimeout(e.retry);
@@ -71,22 +80,33 @@ function forget(key: string): void {
   e.rev.update((n) => n + 1);
 }
 
+/** An explicit drop: what read the key asks again, and its backoff starts over. */
+function forget(key: string): void {
+  const e = entries.get(key);
+  if (!e) return;
+  e.failures = 0;
+  askAgain(e);
+}
+
 /** Memoised read of key: fn once, then the cached answer until forgotten; the fallback while fn throws. */
 function read<T>(key: string, fn: () => T, fallback: T, label = key): T {
   const e = entryOf(key);
   e.rev();
-  if (e.has && (e.failedAt === undefined || Date.now() - e.failedAt < FAILED_READ_RETRY_MS)) return e.value as T;
+  if (e.has && (e.failedAt === undefined || Date.now() - e.failedAt < failedReadDelay(e.failures))) return e.value as T;
   let value = fallback;
   try {
     value = fn();
     e.error = undefined;
     e.failedAt = undefined;
+    e.failures = 0;
   } catch (error) {
     const text = String(error);
     if (e.error !== text) logScreen("error", `${label}: ${errorText(error)}`);
     e.error = text;
     e.failedAt = Date.now();
-    if (e.retry === undefined) e.retry = setTimeout(() => forget(key), FAILED_READ_RETRY_MS);
+    e.failures += 1;
+    if (e.retry !== undefined) clearTimeout(e.retry);
+    e.retry = setTimeout(() => askAgain(e), failedReadDelay(e.failures));
   }
   e.has = true;
   e.value = value;

@@ -31,6 +31,28 @@ test("phone: open, Check shows the to-dos on the pill, step to one, type, autosa
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
 });
 
+test("desktop: stepping with the pill puts the keyboard in a tick box, then in a money box", async () => {
+  // A 1601C: its first to-do is a group of tick boxes (Item 3), and answering it brings the amounts up as to-dos.
+  const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", host: { params: { form: "1601C", period: 3 } } });
+  await app.waitFor("text:BIR Form 1601C");
+  await app.press("id:fp-check");
+  await app.waitFor("id:fp-pill-count");
+  await app.press("id:fp-pill-next");
+  await app.waitFor("text:/^Item 3 · /");
+  // The keys are in the group's first box without a press on it: Space ticks it.
+  await app.keyboard.press("space");
+  await app.waitFor("text:/^4 to do/");
+  // Item 11 is another group; Item 14 is an amount: a typed key lands in its box.
+  await app.press("id:fp-pill-next");
+  await app.waitFor("text:/^Item 11 · /");
+  await app.press("id:fp-pill-next");
+  await app.waitFor("text:/^Item 14 · /");
+  const box = "id:fp-frm1601c:txtTax14";
+  expect(app.value(box) ?? "").not.toContain("5");
+  await app.keyboard.press("5");
+  await app.waitUntil(() => (app.value(box) ?? "").includes("5"));
+});
+
 test("desktop: the side list, Expand all, Cmd+Right steps, the sections popover", async () => {
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos" });
   await app.waitFor("text:BIR Form 2551Q");
@@ -39,6 +61,8 @@ test("desktop: the side list, Expand all, Cmd+Right steps, the sections popover"
   expect(app.texts()).toContain("1 of 5");
   await app.press("id:fp-parts-toggle");
   await app.waitFor("text:5 parts");
+  // The rows are a list in the page (F5): the last part's first row is drawn once the page scrolls to it.
+  for (let i = 0; i < 12 && !app.shows("id:fp-item-4:0"); i++) await app.scroll("id:form-scroll", 600).catch(() => {});
   expect(app.shows("id:fp-item-4:0")).toBe(true);
   await app.press("id:fp-nav-1");
   await app.waitFor("text:2 of 5");

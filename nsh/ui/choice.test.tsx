@@ -4,7 +4,7 @@ import { openKit, readout, SIZES } from "./harness";
 
 for (const size of SIZES) {
   test(`${size.name}: switch, checkbox, radio, segmented`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(app.texts()).toContain("Autosave on");
     await app.press("id:kit-switch");
     expect(app.texts()).toContain("Autosave off");
@@ -20,7 +20,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: dropdown opens, chooses, closes`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(readout(app, "Form:")).toBe("Form: none");
     await app.press("id:kit-dropdown-trigger");
     await app.waitFor("text:Form 1701Q");
@@ -31,7 +31,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: combo field filters a long list by typing`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(readout(app, "RDO:")).toBe("RDO: 050");
     await app.clear("id:kit-rdo-input");
     await app.type("id:kit-rdo-input", "east mak");
@@ -43,7 +43,7 @@ for (const size of SIZES) {
   });
 
   test(`${size.name}: multi combo selects, clears, selects all`, async () => {
-    const app = await openKit("../App.tsx", size.options);
+    const app = await openKit("../BasePreview.tsx", size.options);
     expect(app.texts()).toContain("All taxpayers");
     await app.press("id:kit-who-trigger");
     await app.waitFor("id:kit-who-clear");

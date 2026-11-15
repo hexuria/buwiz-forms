@@ -3,10 +3,10 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
-import { AppButton, Code, Icon, type IconName, Switch, Text, TextField, Tooltip } from "../../ui";
+import { AppButton, Code, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, isTinItem, needsText, oneDate } from "./schema";
+import { choiceLabel, controlWidth, emptyCell, isTinItem, needsText, oneDate } from "./schema";
 import type { AskCard, ElectionCard, FormSession } from "./session";
 
 export interface RowProps {
@@ -16,6 +16,9 @@ export interface RowProps {
   narrow: Accessor<boolean>;
   /** The row's view, for a step to scroll to. */
   onRef: (id: string, ref: ViewRef) => void;
+  /** The first and the last row of its part's list (the rows are recycled cells, so CSS first:/last: cannot tell). */
+  first?: Accessor<boolean>;
+  last?: Accessor<boolean>;
 }
 
 /** The props of one box's control. */
@@ -34,7 +37,8 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
   };
 }
 
-function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>): RadioGroupProps {
+/** The props of an item's radio group (exported for tests). */
+export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>): RadioGroupProps {
   const keys = radios.map((f) => f.k);
   const boxes = keys.map((k) => s.box(k));
   return {
@@ -42,6 +46,7 @@ function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaFi
     testID: `fp-radio-${id}`,
     choices: radios.map((f) => ({ key: f.k, label: choiceLabel(f), testID: `fp-${f.k}` })),
     selected: s.radioSelected(keys),
+    checked: (k) => s.box(k).value() === "true",
     locked: () => boxes.every((b) => b.locked()),
     choiceLocked: (k) => s.box(k).locked(),
     hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
@@ -59,10 +64,7 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
   const numbered = !it.row_labels || it.numbered !== false;
   const rowName = (r: number) => (numbered ? String((it.start ?? 1) + r) : it.row_labels?.rows[r] || String((it.start ?? 1) + r));
   const openRow = signal<number | null>(null);
-  const filled = (r: number) => columns.some((c) => {
-    const v = s.box(keys[r][c.index]).value();
-    return v !== "" && v !== "0.00" && v !== "0" && v !== "false";
-  });
+  const filled = (r: number) => columns.some((c) => !emptyCell(s.box(keys[r][c.index]).value(), c.col.t));
   return {
     item: it,
     testID: `fp-table-${keys[0]?.[0] ?? id}`,
@@ -74,7 +76,7 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
         .map((c) => {
           const box = s.box(keys[r][c.index]);
           const v = box.value();
-          if (!v || v === "0.00" || v === "false") return "";
+          if (emptyCell(v, c.col.t)) return "";
           if (c.col.t === "sel") return box.options().find((o) => o.value === v)?.label.split(" — ")[0] ?? v;
           return v === "true" ? c.col.l : v;
         })
@@ -177,9 +179,43 @@ function Mark(props: { icon: IconName; tip: string; id: string }) {
   );
 }
 
+/**
+ * A fact card's choice. Wide: the kit's button. Narrow: a full-width pressable row whose label wraps, so a long choice
+ * ("Mixed income (compensation and business)") stays inside the card at 390 points (the kit's button keeps one line).
+ */
+function AskChoice(props: { testID: string; label: string; chosen: boolean; narrow: boolean; onPress: () => void }) {
+  return (
+    <If
+      when={props.narrow}
+      else={
+        <AppButton
+          testID={props.testID}
+          label={props.label}
+          selected={props.chosen}
+          accessibilityLabel={props.chosen ? `${props.label}, chosen` : props.label}
+          onPress={props.onPress}
+        />
+      }
+    >
+      <View
+        class="w-full overflow-hidden rounded-(--radius-ctl) border"
+        classList={{ "border-accent-blue bg-selected": props.chosen, "border-border-strong bg-card": !props.chosen }}
+      >
+        <ListRow testID={props.testID} accessibilityLabel={props.chosen ? `${props.label}, chosen` : props.label} onPress={props.onPress}>
+          <Text variant="control" class="min-w-0 flex-1">{props.label}</Text>
+          <If when={props.chosen}>
+            <Icon name="check" size={14} tone="fg" />
+          </If>
+        </ListRow>
+      </View>
+    </If>
+  );
+}
+
 /** A tax fact the profile has not set, asked where the form uses it. */
-function FactCard(props: { s: FormSession; ask: Accessor<AskCard> }) {
-  const text = signal("");
+function FactCard(props: { s: FormSession; ask: Accessor<AskCard>; narrow: Accessor<boolean> }) {
+  // Drawn again when its row comes back into view (the rows are recycled): it starts from what was typed.
+  const text = signal(untracked(() => props.s.askTextOf(props.ask().fact)));
   const fact = () => props.ask().fact;
   return (
     <View testID={`fp-ask-${fact()}`} class="mt-2 gap-1 rounded-(--radius-row) border border-border-strong bg-card px-3 py-2.5 shadow-xs">
@@ -193,7 +229,7 @@ function FactCard(props: { s: FormSession; ask: Accessor<AskCard> }) {
               testID={`fp-ask-${fact()}-input`}
               accessibilityLabel={props.ask().label}
               value={text()}
-              width={props.ask().control === "date" ? 140 : 320}
+              width={props.narrow() ? undefined : props.ask().control === "date" ? 140 : 320}
               placeholder={props.ask().control === "date" ? "MM/DD/YYYY" : undefined}
               onChange={(v) => {
                 text.set(v);
@@ -204,11 +240,11 @@ function FactCard(props: { s: FormSession; ask: Accessor<AskCard> }) {
         >
           <Each of={props.ask().choices}>
             {(choice, n) => (
-              <AppButton
+              <AskChoice
                 testID={`fp-ask-${fact()}-${n()}`}
                 label={choice().label}
-                selected={props.ask().pick === JSON.stringify(choice().value)}
-                accessibilityLabel={props.ask().pick === JSON.stringify(choice().value) ? `${choice().label}, chosen` : choice().label}
+                chosen={props.ask().pick === JSON.stringify(choice().value)}
+                narrow={props.narrow()}
                 onPress={() => props.s.pickAsk(fact(), choice().value)}
               />
             )}
@@ -230,7 +266,7 @@ function FactCard(props: { s: FormSession; ask: Accessor<AskCard> }) {
 }
 
 /** 2551Q Item 13's card: the year's income-tax election, or why the profile cannot take one. */
-function ElectionCardView(props: { s: FormSession; card: Accessor<ElectionCard> }) {
+function ElectionCardView(props: { s: FormSession; card: Accessor<ElectionCard>; narrow: Accessor<boolean> }) {
   const ask = () => {
     const c = props.card();
     return c.kind === "ask" ? c : null;
@@ -244,6 +280,7 @@ function ElectionCardView(props: { s: FormSession; card: Accessor<ElectionCard> 
       testID={`fp-election-${value}`}
       label={label}
       hint={hint}
+      block={props.narrow()}
       selected={ask()?.pick === value}
       accessibilityLabel={ask()?.pick === value ? `${label}, chosen` : label}
       onPress={() => props.s.pickElection(value)}
@@ -311,8 +348,14 @@ export function ItemRow(props: RowProps) {
     <View
       ref={(r: ViewRef) => props.onRef(id, r)}
       testID={`fp-item-${id}`}
-      class="flex-row gap-3 border-t border-border pt-3.5 pr-5 pb-2 pl-3 first:border-t-0 last:rounded-b-(--radius-card)"
-      classList={{ "bg-background": allCalc && !info().stepHere, "bg-accent-blue-soft": info().stepHere, "pl-2 gap-2 pr-3": props.narrow() }}
+      class="flex-row gap-3 border-border pt-3.5 pr-5 pb-2 pl-3"
+      classList={{
+        "border-t": !props.first?.(),
+        "rounded-b-(--radius-card)": Boolean(props.last?.()),
+        "bg-background": allCalc && !info().stepHere,
+        "bg-accent-blue-soft": info().stepHere,
+        "pl-2 gap-2 pr-3": props.narrow(),
+      }}
     >
       <View class="shrink-0" style={{ width: props.narrow() ? 32 : 44 }}>
         {it.no ? (
@@ -383,12 +426,12 @@ export function ItemRow(props: RowProps) {
           <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
         </View>
         <Each of={info().asks} key={(a: AskCard) => a.fact}>
-          {(ask) => <FactCard s={s} ask={ask} />}
+          {(ask) => <FactCard s={s} ask={ask} narrow={props.narrow} />}
         </Each>
         <If when={info().askSaved}>
           <Saved testID={`fp-ask-saved-${id}`} text={info().askSaved} />
         </If>
-        <If when={info().election}>{(card) => <ElectionCardView s={s} card={card} />}</If>
+        <If when={info().election}>{(card) => <ElectionCardView s={s} card={card} narrow={props.narrow} />}</If>
         <If when={info().electionSaved}>
           <Saved testID="fp-election-saved" text={info().electionSaved} />
         </If>
@@ -405,12 +448,12 @@ export function ItemRow(props: RowProps) {
 }
 
 /** A part's "From tax profile · N filled boxes" fold: profile-filled items fold so what is left to type shows. */
-export function ProfileFold(props: { s: FormSession; pi: number }): JSX.Element {
+export function ProfileFold(props: { s: FormSession; pi: number; first?: Accessor<boolean> }): JSX.Element {
   const part = props.s.part(props.pi);
   return (
     <If when={part().fold}>
       {(fold) => (
-        <View class="border-t border-border bg-background px-1 py-1 first:border-t-0">
+        <View class="border-border bg-background px-1 py-1" classList={{ "border-t": !props.first?.() }}>
           <AppButton
             variant="ghost"
             size="sm"

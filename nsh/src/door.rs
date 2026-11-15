@@ -60,9 +60,11 @@ pub(crate) fn process_prepared() -> bool {
 }
 
 /// Debug builds never reach the OS keychain, whatever the caller set: `BUWIZ_NO_KEYCHAIN=1` before anything
-/// in bir-core runs. A release build leaves the variable to the caller.
+/// in bir-core runs. So does any build running in a test environment (`EBIR_TEST_ENV`, read as bir-core reads
+/// it): a release build under a test must not reach the keychain either. A release build outside a test
+/// environment leaves the variable to the caller.
 fn switch_off_keychain(debug_build: bool) {
-    if debug_build {
+    if debug_build || test_environment() {
         // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
         unsafe { std::env::set_var(bir_core::platform::NO_KEYCHAIN_ENV, "1") };
     }
@@ -127,6 +129,14 @@ const SCRATCH_LIFETIME: std::time::Duration = std::time::Duration::from_secs(24 
 /// removing a file does), so age is the newest change of anything inside, and a folder whose owner lock is
 /// held (a live run has its database open, however quiet) is never touched.
 fn forget_old_scratch(root: &Path, lifetime: std::time::Duration) {
+    forget_old_scratch_with(root, lifetime, |folder| {
+        let _ = std::fs::remove_dir_all(folder);
+    });
+}
+
+/// [`forget_old_scratch`] with the removal of a folder given, so a test can look at what it is doing while the
+/// folder goes.
+fn forget_old_scratch_with(root: &Path, lifetime: std::time::Duration, remove: impl Fn(&Path)) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
@@ -141,14 +151,16 @@ fn forget_old_scratch(root: &Path, lifetime: std::time::Duration) {
         if !quiet {
             continue;
         }
-        // Hold the owner lock while deleting: a run that starts now waits for it, and one that has the
-        // database open keeps it, so we skip. (The lock file is made if the folder has none.)
+        // Hold the owner lock until the folder is gone: a run that opens the database now is refused while
+        // we delete, and one that already has it open keeps the lock, so we skip. (The lock file is made if
+        // the folder has none. Windows cannot delete the lock file it holds open: the folder keeps that
+        // one empty file.)
         let Ok(lock) = bir_core::db::try_acquire_live_owner_lock(&folder.join("bir_data.db"))
         else {
             continue;
         };
+        remove(&folder);
         drop(lock);
-        let _ = std::fs::remove_dir_all(&folder);
     }
 }
 
@@ -811,5 +823,126 @@ mod tests {
         drop(lock);
         forget_old_scratch(root.path(), SCRATCH_LIFETIME);
         assert!(!folder.exists(), "nobody holds it any more");
+    }
+
+    /// A release build that runs in a test environment (`EBIR_TEST_ENV`, read as bir-core reads it) switches
+    /// the keychain off too: before, only a debug build did, so a release-build test run could reach the OS
+    /// keychain. Outside a test environment a release build still leaves the caller's variable alone.
+    #[test]
+    fn a_release_build_in_a_test_environment_switches_the_keychain_off() {
+        for caller in [None, Some(""), Some("0"), Some("false"), Some("1")] {
+            for test_run in ["1", "true", "yes", "on", " YES "] {
+                temp_env::with_vars(
+                    [
+                        ("BUWIZ_NO_KEYCHAIN", caller),
+                        ("EBIR_TEST_ENV", Some(test_run)),
+                    ],
+                    || {
+                        switch_off_keychain(false);
+                        assert_eq!(
+                            std::env::var("BUWIZ_NO_KEYCHAIN").as_deref(),
+                            Ok("1"),
+                            "release, test run {test_run:?}, caller {caller:?}"
+                        );
+                        assert!(bir_core::platform::keychain_disabled());
+                    },
+                );
+            }
+            // A value bir-core does not treat as a test run is not one here either.
+            for not_a_test_run in [None, Some(""), Some("0"), Some("off"), Some("enabled")] {
+                temp_env::with_vars(
+                    [
+                        ("BUWIZ_NO_KEYCHAIN", caller),
+                        ("EBIR_TEST_ENV", not_a_test_run),
+                    ],
+                    || {
+                        switch_off_keychain(false);
+                        assert_eq!(
+                            std::env::var("BUWIZ_NO_KEYCHAIN").ok().as_deref(),
+                            caller,
+                            "release, no test run ({not_a_test_run:?}), caller {caller:?}"
+                        );
+                    },
+                );
+            }
+        }
+    }
+
+    /// A scratch folder goes while its owner lock is still held: a run that starts to open the database
+    /// during the removal is refused, never handed a folder that is being emptied. (Before, the lock was
+    /// dropped first and the folder removed after.)
+    #[test]
+    fn a_scratch_folder_is_removed_while_its_owner_lock_is_held() {
+        let root = tempfile::tempdir().expect("scratch root");
+        let folder = scratch_folder(root.path(), "5-0", LONG_AGO);
+        let seen = std::cell::RefCell::new(Vec::new());
+
+        forget_old_scratch_with(root.path(), SCRATCH_LIFETIME, |doomed| {
+            seen.borrow_mut().push(doomed.to_path_buf());
+            let rival = bir_core::db::try_acquire_live_owner_lock(&doomed.join("bir_data.db"));
+            assert!(
+                matches!(rival, Err(bir_core::db::DbError::LiveDatabaseInUse(_))),
+                "another run could take the owner lock while the folder was being removed: {rival:?}"
+            );
+            let _ = std::fs::remove_dir_all(doomed);
+        });
+
+        assert_eq!(
+            *seen.borrow(),
+            std::slice::from_ref(&folder),
+            "the quiet folder was the one removed"
+        );
+        assert!(!folder.exists(), "and it is gone");
+    }
+
+    /// Two engines in one process each name their own scratch database. The second boot used to repoint the
+    /// first's too (the name was one for the whole process), so the first engine then answered with the
+    /// second's file.
+    #[test]
+    fn a_second_engine_booting_does_not_repoint_the_first() {
+        let home = tempfile::tempdir().expect("home");
+        dev_env(None, Some(home.path()), || {
+            let engine =
+                |boot_second: std::sync::mpsc::Receiver<()>,
+                 first_boot: std::sync::mpsc::Sender<String>,
+                 after: std::sync::mpsc::Sender<(String, String)>| {
+                    std::thread::spawn(move || {
+                        let path = |what: &str| {
+                            let info = call("system_info", vec![]).expect(what);
+                            info["database_path"].as_str().expect("path").to_owned()
+                        };
+                        let before = path("the first boot");
+                        first_boot.send(before.clone()).unwrap();
+                        boot_second.recv().unwrap();
+                        after.send((before, path("a later call"))).unwrap();
+                    })
+                };
+            let (go_tx, go_rx) = std::sync::mpsc::channel();
+            let (booted_tx, booted_rx) = std::sync::mpsc::channel();
+            let (after_tx, after_rx) = std::sync::mpsc::channel();
+            let first = engine(go_rx, booted_tx, after_tx);
+            let first_path = booted_rx.recv().unwrap();
+
+            // The second engine boots now, on a thread of its own.
+            let second_path = std::thread::spawn(|| {
+                let info = call("system_info", vec![]).expect("the second boot");
+                info["database_path"].as_str().expect("path").to_owned()
+            })
+            .join()
+            .unwrap();
+            go_tx.send(()).unwrap();
+            let (before, later) = after_rx.recv().unwrap();
+            first.join().unwrap();
+
+            assert_ne!(
+                first_path, second_path,
+                "two engines, two scratch databases"
+            );
+            assert_eq!(before, first_path);
+            assert_eq!(
+                later, first_path,
+                "the second engine's boot repointed the first one's database"
+            );
+        });
     }
 }

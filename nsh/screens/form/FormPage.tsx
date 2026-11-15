@@ -1,16 +1,23 @@
 // The form page: one renderer for all 43 forms (old app/shell/form_page.js). The session (./session.ts) owns the
 // state; this file draws it from nsh/ui parts and the field controls of ./controls.
 //
+// The page paints no background of its own: it sits on the surface it is mounted on (the frame's card).
 // Layout. Wide (the page 760 points and up): the pinned 208-point "On this form" navigator beside the form, which
 // scrolls on its own. Narrow: one scroll, rows stacked. At every width the floating pill steps the to-dos (‹ ›,
 // Cmd/Ctrl+Left/Right); its section list is a popover when wide and a bottom sheet under 600.
 // Part titles stick to the top of the scroll while their part shows (class "sticky": NSH's position sticky, which
 // keeps a view at the top of the scroll view around it while its parent is in view; website/modules/tailwind-reference.md).
-// Rendering cost: parts mount lazily (only open parts mount their rows; the old page's behaviour), in a plain Scroll:
-// a form is bounded content (at most 157 items, 380 boxes), and List would recycle rows that hold focused inputs and
-// sticky parents (website/docs/lists.md: Scroll and Each for bounded content).
-import type { Accessor, ScrollRef, ViewRef } from "nsh";
-import { cleanup, effect, keymap, Scroll, signal, untracked, View, windowSize } from "nsh";
+// Rendering cost: a heavy annual form expanded (1701, 1700, 1702RT) mounted about 10,000 views and every frame of
+// scrolling paid for all of them (100-point steps took 650 ms against 170 ms on a 2551Q). Each open part's rows are a
+// List in the page's viewport (viewport="parent", website/docs/lists.md "Lists in a page"): only the rows near the
+// viewport exist and their cells are recycled, while the part cards, their sticky titles, the header and the notes stay
+// plain children of the one Scroll. A row's state lives in the session's keyed signals (s.row(id), s.box(k)); a cell
+// given another item draws a new row (an Each keyed by the item), so nothing created in a row moves to another item.
+// A row holding the keyboard focus or an open popover stays bound wherever the page scrolls (lists' kept rows). A step
+// to a row not drawn yet asks its part's list to scroll to it (scrollToIndex), then measures and focuses it.
+// The pill names the part at the top of the viewport: the scroll offset against the part cards' laid-out tops.
+import type { Accessor, ListRef, ScrollRef, ViewRef } from "nsh";
+import { cleanup, computed, effect, keymap, List, Scroll, signal, untracked, View, windowSize } from "nsh";
 import { BREAK } from "../../theme/tokens";
 import {
   AppButton,
@@ -31,12 +38,17 @@ import {
   Text,
   TextField,
   toast as kitToast,
+  dismissToast as kitDismissToast,
 } from "../../ui";
+import { store } from "../../shell";
 import { ItemRow, ProfileFold } from "./rows";
 import { existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
+import { formUi } from "./formUi";
 import { FormSession, type FormTarget, type Overlay, type SessionHooks, type ToastAction } from "./session";
 
 export type { FormTarget } from "./session";
+/** Every open form page's typing flushed and saved now; the frame awaits it before quit or leaving the page. */
+export { flushNow } from "./session";
 
 /** What the frame mounts. The frame's Toaster should sit above the pill while this page shows (bottom 96). */
 export interface FormPageProps {
@@ -56,7 +68,9 @@ export interface FormPageProps {
   /** Open the taxpayer's profile (the frame's panel). */
   onOpenProfile?: () => void;
   /** A toast; the kit's toast (needs a Toaster mounted) when not given. */
-  toast?: (message: string, options?: { icon?: string; action?: ToastAction }) => void;
+  toast?: (message: string, options?: { icon?: string; action?: ToastAction }) => string | void;
+  /** Close a toast this page showed (with props.toast); the kit's dismissToast when not given. */
+  dismissToast?: (id: string) => void;
   /** A changed return was saved (Recent). */
   onSaved?: (target: FormTarget) => void;
   /** Tests: the session the page made. */
@@ -73,8 +87,11 @@ export function FormPage(props: FormPageProps) {
   const hooks: SessionHooks = {
     toast: (message, o) => {
       if (props.toast) return props.toast(message, o);
-      kitToast(message, { icon: kitIcon(o?.icon), action: o?.action });
+      return kitToast(message, { icon: kitIcon(o?.icon), action: o?.action });
     },
+    dismissToast: (id) => (props.toast ? props.dismissToast?.(id) : kitDismissToast(id)),
+    // A write through the door: every cached read of the frame (Filings, Home, the profile) reads again.
+    afterWrite: () => store.bump(),
     onSaved: (t) => props.onSaved?.(t),
     onRetarget: (t) => props.onOpenReturn?.(t),
     onQueueChanged: () => {},
@@ -91,34 +108,61 @@ export function FormPage(props: FormPageProps) {
   const wide = () => width() >= BREAK.formNav;
   const narrow = () => width() < BREAK.phone;
 
-  keymap.bind("mod+left", () => s.step(-1), { when: "always" });
-  keymap.bind("mod+right", () => s.step(1), { when: "always" });
+  // Not while a text box has the keys: there Cmd/Ctrl+Left/Right move the caret (index.d.ts KeyBindingOptions "notEditing").
+  keymap.bind("mod+left", () => s.step(-1), { when: "notEditing" });
+  keymap.bind("mod+right", () => s.step(1), { when: "notEditing" });
+  // The frame's palette steps through this too ("Next to do", "Previous to do"), while the pill shows.
+  cleanup(formUi.attach({ pillShown: () => Boolean(s.schema) && !s.header().error && !s.header().loading, step: (dir) => s.step(dir) }));
 
   // A step: once its row is drawn, scroll it near the top (under the sticky title) and put the keyboard in it.
+  // A part the navigator or a part step went to: its card's top to the top of the viewport.
   const rowRefs = new Map<string, ViewRef>();
+  const lists = new Map<number, PartList>();
+  const cards = new Map<number, ViewRef>();
+  // Where the part cards start in the scroll's content: the column's top, the parts box's top in it, each card's in that.
+  const tops = { column: 0, parts: 0, cards: [] as number[] };
   let scrollRef: ScrollRef | undefined;
   let scrollY = 0;
+  const followScroll = (y: number) => {
+    scrollY = y;
+    let at = 0;
+    tops.cards.forEach((top, pi) => {
+      if (tops.column + tops.parts + top <= y + 1) at = pi;
+    });
+    s.setCurrent(at);
+  };
   effect(() => {
     const r = s.reveal();
-    if (r) untracked(() => void reveal(r.row, r.seq));
+    if (r) untracked(() => void reveal(r.row, r.part, r.seq));
   });
-  async function reveal(row: string, seq: number) {
-    for (let tries = 0; tries < 10; tries++) {
+  async function reveal(row: string | null, part: number, seq: number) {
+    let asked = false;
+    for (let tries = 0; tries < 20; tries++) {
       await new Promise((done) => setTimeout(done, 50));
       if (s.reveal()?.seq !== seq) return;
-      const ref = rowRefs.get(row);
-      if (!ref || !scrollRef) continue;
+      if (!scrollRef) continue;
+      const ref = row ? rowRefs.get(row) : cards.get(part);
+      if (!ref) {
+        // A row not drawn yet: its part's list scrolls the page to it with the sizes it knows, and draws it there.
+        const list = row ? lists.get(part) : undefined;
+        const index = row && list ? list.indexOf(row) : -1;
+        if (list && index >= 0 && !asked) {
+          list.ref.scrollToIndex({ index, viewOffset: 72, animated: false });
+          asked = true;
+        }
+        continue;
+      }
       const [m, area] = await Promise.all([ref.measure(), scrollRef.measure()]);
       if (!m || !area) continue;
-      scrollRef.scrollTo({ y: Math.max(0, scrollY + m.pagePosition.y - area.pagePosition.y - 72), animated: true });
-      s.focusRow(row);
+      scrollRef.scrollTo({ y: Math.max(0, scrollY + m.pagePosition.y - area.pagePosition.y - (row ? 72 : 0)), animated: true });
+      if (row) s.focusRow(row);
       return;
     }
   }
 
   const schema = s.schema;
   return (
-    <View testID="form-page" class="min-h-0 flex-1 flex-row bg-background" onLayout={(e) => width.set(e.bounds.size.width)}>
+    <View testID="form-page" class="min-h-0 flex-1 flex-row" onLayout={(e) => width.set(e.bounds.size.width)}>
       <If when={wide() && schema && !s.header().error && !s.header().loading}>
         <Navigator s={s} />
       </If>
@@ -128,16 +172,25 @@ export function FormPage(props: FormPageProps) {
           testID="form-scroll"
           class="min-h-0 flex-1"
           contentClass={narrow() ? "px-4 pt-5 pb-32" : "px-6 pt-7 pb-28"}
-          onScroll={(e) => (scrollY = e.offset.y)}
+          onScroll={(e) => followScroll(e.offset.y)}
           scrollEventThrottle={50}
         >
-          <View class="w-full self-center" style={{ maxWidth: 920 }}>
+          <View class="w-full self-center" style={{ maxWidth: 920 }} onLayout={(e) => (tops.column = e.bounds.origin.y)}>
             <Header s={s} narrow={narrow} />
             <Notes s={s} />
             <If when={schema && !s.header().loading && !s.header().error}>
-              <View class="gap-4">
+              <View class="gap-4" onLayout={(e) => (tops.parts = e.bounds.origin.y)}>
                 {(schema?.parts || []).map((_p, pi) => (
-                  <PartCard s={s} pi={pi} narrow={narrow} onRef={(id, ref) => rowRefs.set(id, ref)} />
+                  <PartCard
+                    s={s}
+                    pi={pi}
+                    narrow={narrow}
+                    onRef={(id, ref) => rowRefs.set(id, ref)}
+                    onUnref={(id, ref) => rowRefs.get(id) === ref && rowRefs.delete(id)}
+                    onList={(list) => (list ? lists.set(pi, list) : lists.delete(pi))}
+                    onCard={(ref) => cards.set(pi, ref)}
+                    onTop={(y) => (tops.cards[pi] = y)}
+                  />
                 ))}
               </View>
             </If>
@@ -170,6 +223,7 @@ function SaveLine(props: { s: FormSession }) {
     const v = st();
     if (v.state === "saving") return "Saving…";
     if (v.state === "saved") return "✓ Saved";
+    if (v.state === "unsaved") return "Unsaved changes";
     if (v.state === "failed") return v.message;
     if (v.state === "manual") return v.message;
     return "";
@@ -301,13 +355,116 @@ function Notes(props: { s: FormSession }) {
 
 // ---------------------------------------------------------------- parts
 
-function PartCard(props: { s: FormSession; pi: number; narrow: Accessor<boolean>; onRef: (id: string, ref: ViewRef) => void }) {
+/** An open part's list, for a step to a row it has not drawn: its ref and where the row is in it. */
+interface PartList {
+  ref: ListRef;
+  indexOf: (row: string) => number;
+}
+
+/** One row of a part's list: the "From tax profile" fold, or item ii. One object per row for the page's life (a list compares items by identity). */
+interface PartRow {
+  key: string;
+  fold: boolean;
+  ii: number;
+}
+
+interface PartCardProps {
+  s: FormSession;
+  pi: number;
+  narrow: Accessor<boolean>;
+  onRef: (id: string, ref: ViewRef) => void;
+  onUnref: (id: string, ref: ViewRef) => void;
+  onList: (list: PartList | null) => void;
+  onCard: (ref: ViewRef) => void;
+  onTop: (y: number) => void;
+}
+
+/** An item row of a part's list: it hands the page its view while it is drawn. */
+function PartItem(props: { card: PartCardProps; ii: number; first: Accessor<boolean>; last: Accessor<boolean> }) {
+  const c = props.card;
+  const id = `${c.pi}:${props.ii}`;
+  let mine: ViewRef | undefined;
+  cleanup(() => mine && c.onUnref(id, mine));
+  return (
+    <ItemRow
+      s={c.s}
+      id={id}
+      it={c.s.schema!.parts[c.pi].items[props.ii]}
+      narrow={c.narrow}
+      first={props.first}
+      last={props.last}
+      onRef={(rid, ref) => {
+        mine = ref;
+        c.onRef(rid, ref);
+      }}
+    />
+  );
+}
+
+/** An open part's rows: a list in the page's viewport (only the rows near it exist). */
+function PartRows(props: { card: PartCardProps; rows: Accessor<PartRow[]> }) {
+  const c = props.card;
+  const pi = c.pi;
+  cleanup(() => c.onList(null));
+  return (
+    <List
+      viewport="parent"
+      each={props.rows()}
+      keyExtractor={(r: PartRow) => r.key}
+      estimatedItemSize={104}
+      ref={(ref: ListRef) =>
+        c.onList({ ref, indexOf: (row) => props.rows().findIndex((r) => !r.fold && `${pi}:${r.ii}` === row) })
+      }
+    >
+      {(row, index) => (
+        // Keyed by the row: a recycled cell given another row draws that row anew, with its own state.
+        <Each of={[row()]}>
+          {(r) =>
+            r().fold ? (
+              <ProfileFold s={c.s} pi={pi} first={() => index() === 0} />
+            ) : (
+              <PartItem card={c} ii={r().ii} first={() => index() === 0} last={() => index() === props.rows().length - 1} />
+            )
+          }
+        </Each>
+      )}
+    </List>
+  );
+}
+
+function PartCard(props: PartCardProps) {
   const s = props.s;
   const p = s.schema!.parts[props.pi];
   const info = s.part(props.pi);
   const pi = props.pi;
+  const made = new Map<string, PartRow>();
+  const rowOf = (fold: boolean, ii: number) => {
+    const key = `${fold ? "f" : "i"}${ii}`;
+    let r = made.get(key);
+    if (!r) made.set(key, (r = { key, fold, ii }));
+    return r;
+  };
+  // The part's rows: the fold before its first profile item, then every item not folded into it.
+  const rows = computed<PartRow[]>(
+    () => {
+      const fold = info().fold;
+      const hidden = fold && !fold.open ? new Set(fold.items) : null;
+      const out: PartRow[] = [];
+      p.items.forEach((_it, ii) => {
+        if (fold?.first === ii) out.push(rowOf(true, ii));
+        if (!hidden?.has(ii)) out.push(rowOf(false, ii));
+      });
+      return out;
+    },
+    { equals: (a, b) => a.length === b.length && a.every((r, i) => r === b[i]) },
+  );
   return (
-    <View testID={`fp-part-${pi}`} class="rounded-(--radius-card) border border-border bg-card">
+    <View
+      ref={(r: ViewRef) => props.onCard(r)}
+      testID={`fp-part-${pi}`}
+      class="rounded-(--radius-card) border border-border bg-card"
+      onLayout={(e) => props.onTop(e.bounds.origin.y)}
+    >
       <View class="sticky top-0 z-10 rounded-t-(--radius-card) bg-card" classList={{ "rounded-b-(--radius-card)": !info().open, "border-b border-border": info().open }}>
         <ListRow testID={`fp-part-${pi}-toggle`} accessibilityLabel={partName(p, pi)} onPress={() => s.togglePart(pi)}>
           <Icon name={info().open ? "chevron-down" : "chevron-right"} tone="fg3" />
@@ -316,22 +473,7 @@ function PartCard(props: { s: FormSession; pi: number; narrow: Accessor<boolean>
         </ListRow>
       </View>
       <If when={info().open}>
-        <View>
-          {p.items.map((it, ii) => {
-            const id = `${pi}:${ii}`;
-            const row = s.row(id);
-            return (
-              <View>
-                <If when={info().fold?.first === ii}>
-                  <ProfileFold s={s} pi={pi} />
-                </If>
-                <If when={!row().tucked}>
-                  <ItemRow s={s} id={id} it={it} narrow={props.narrow} onRef={props.onRef} />
-                </If>
-              </View>
-            );
-          })}
-        </View>
+        <PartRows card={props} rows={rows} />
       </If>
     </View>
   );
@@ -467,8 +609,6 @@ function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor
   const listOpen = signal(false);
   const cur = () => Math.min(Math.max(s.current(), 0), parts.length - 1);
   const todo = () => s.todo();
-  const flagged = () => todo().filter((r) => r.reason === "message").length;
-  const needingParts = () => parts.filter((_p, i) => s.part(i)().errors > 0).length;
   const small = () => {
     const ids = todo().map((r) => r.id);
     const here = sectionNames(parts[cur()], cur());
@@ -489,10 +629,11 @@ function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor
     }
     return sectionNames(parts[cur()], cur()).short;
   };
-  const red = () => (todo().length ? flagged() : needingParts());
+  // Every shown message counted once: the same number as the part badges' sum and Check's toast.
+  const red = () => s.attention();
   const redLabel = () => {
     const n = red();
-    return todo().length ? `${n} item${n > 1 ? "s" : ""} need${n > 1 ? "" : "s"} attention` : `${n} section${n > 1 ? "s" : ""} need${n > 1 ? "" : "s"} attention`;
+    return `${n} item${n > 1 ? "s" : ""} need${n > 1 ? "" : "s"} attention`;
   };
   const target = (dir: number) => {
     todo();

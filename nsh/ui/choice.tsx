@@ -1,6 +1,6 @@
 // Choice controls: Switch, Checkbox, CheckboxLabel, RadioGroup, Segmented, Dropdown (a select), ComboField
 // (type-to-filter single choice for long lists: RDO, ZIP), MultiCombo (a multi-select filter in a popover).
-import type { JSX } from "nsh";
+import type { JSX, ViewRef } from "nsh";
 import { Scroll, signal, View } from "nsh";
 import {
   Checkbox as BaseCheckbox, Combobox, Radio, RadioGroup as BaseRadioGroup, Select, type SelectEntry, Switch as BaseSwitch,
@@ -58,6 +58,7 @@ interface CheckboxBaseProps {
   disabled?: boolean;
   testID?: string;
   class?: string;
+  focusRef?: (ref: ViewRef) => void;
   children?: JSX.Element;
 }
 
@@ -65,6 +66,7 @@ interface CheckboxBaseProps {
 function CheckboxBase(props: CheckboxBaseProps) {
   return (
     <BaseCheckbox
+      ref={(r: ViewRef) => props.focusRef?.(r)}
       testID={props.testID}
       checked={props.checked}
       indeterminate={props.indeterminate}
@@ -94,6 +96,8 @@ export interface CheckboxProps {
   indeterminate?: boolean;
   disabled?: boolean;
   testID?: string;
+  /** Receives the checkbox's ref: `focus()` gives it the keyboard focus (macOS, the web), where Space or Return toggles it. */
+  focusRef?: (ref: ViewRef) => void;
 }
 
 /** A checkbox alone (its label is for screen readers): a table cell, a row's leading box. */
@@ -106,6 +110,7 @@ export function Checkbox(props: CheckboxProps) {
       indeterminate={props.indeterminate}
       disabled={props.disabled}
       testID={props.testID}
+      focusRef={props.focusRef}
     />
   );
 }
@@ -120,6 +125,7 @@ export function CheckboxLabel(props: CheckboxProps & { hint?: string }) {
       indeterminate={props.indeterminate}
       disabled={props.disabled}
       testID={props.testID}
+      focusRef={props.focusRef}
       class={TOUCH ? "min-h-11" : undefined}
     >
       <View class="min-w-0 shrink">
@@ -283,6 +289,8 @@ export interface DropdownProps {
   disabled?: boolean;
   error?: boolean;
   testID?: string;
+  /** Receives the trigger's ref: `focus()` gives it the keyboard focus (macOS, the web), where Return opens the list. */
+  focusRef?: (ref: ViewRef) => void;
 }
 
 /** A select: a 32-point trigger with a chevron, the list in a popup at it (a sheet on touch). */
@@ -315,6 +323,7 @@ export function Dropdown(props: DropdownProps) {
       empty={<Text variant="meta" tone="fg3" class="px-2 py-1.5">Nothing matches.</Text>}
       trigger={
         <View
+          ref={(r: ViewRef) => props.focusRef?.(r)}
           testID={props.testID ? `${props.testID}-trigger` : undefined}
           class={triggerClass({ open: open(), error: props.error, disabled: props.disabled })}
           style={{ width: props.width }}
@@ -352,7 +361,8 @@ export interface ComboFieldProps {
 /**
  * Type to filter, pick one: the list keeps the options whose label holds the typed text (a code, a place name),
  * ignoring case (nsh/base's listbox filter: one run of text, crates/nsh-base/src/listbox.rs); the list is virtualized,
- * so thousands of rows are fine.
+ * so thousands of rows are fine. It has no focus handle: the input inside is NSH's own (ComboboxProps has `inputTestID` and no
+ * input ref), and the Combobox's ref is its root view, whose focus() puts the keys nowhere (tried on macOS, headless).
  */
 export function ComboField(props: ComboFieldProps) {
   const open = signal(false);
