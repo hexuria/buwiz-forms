@@ -25,7 +25,9 @@ test("desktop: at midnight on December 31 the Calendar moves to the new year, an
   await app.setLifecycle("background");
   app.clock!.setSystemTime(new Date(2027, 0, 2, 10, 0, 0).getTime());
   await app.setLifecycle("active");
-  // (A window shown again headless comes back at 390 x 844: the phone layout from here.)
+  // The phone layout from here (NSH 0.5.1 keeps the window's size across a lifecycle change; before, a window shown again
+  // headless came back at 390 x 844).
+  await app.setViewport(390, 844);
   await app.waitFor("text:In 13 days");
   await app.press("id:tab-home");
   await app.waitFor("text:Saturday, January 2, 2027.");

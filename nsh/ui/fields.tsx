@@ -232,6 +232,7 @@ function MaskedField(props: MaskedProps) {
           },
           blur: () => r.blur(),
           measure: () => r.measure(),
+          reveal: (options) => r.reveal(options),
           setSelection: (start, end) => r.setSelection(start, end),
           insertText: (t) => r.insertText(t),
         }
