@@ -18,8 +18,8 @@ import { SetupCard } from "./SetupCard";
 import { leaveSetup, resetSetup, setupChange } from "./setup";
 import { TransferSection } from "./Transfer";
 
-/** The cards' column on the right of the list: one width for every section, so the title never moves (the Jobs rows need it). */
-const COLUMN = 640;
+/** The cards' column on the right of the list: one width for every section, so the title never moves. The old Jobs column was 680 (JOBS_COLUMN in app/shell/settings.js): Jobs and Logs need it, the rest take it too. */
+const COLUMN = 680;
 /** The section list's width beside the cards. */
 const RAIL = 220;
 

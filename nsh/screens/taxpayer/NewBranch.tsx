@@ -4,7 +4,7 @@ import { signal, untracked, View } from "nsh";
 import type { BranchFieldName } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app, back, go, store, toast } from "../../shell";
-import { Field, FieldCell, FieldGrid, FormActions, IntInput, PageHeader, Switch, TextField } from "../../ui";
+import { DigitCells, Field, FieldCell, FieldGrid, FormActions, PageHeader, Switch, TextField } from "../../ui";
 import { SearchPick } from "../form/controls";
 import { BRANCH_CODE_ERROR, BRANCH_FIELDS, factError, shownErrors } from "./logic";
 import { knownRdo } from "./page";
@@ -117,11 +117,10 @@ export function NewBranchPage() {
         <FieldGrid>
           <FieldCell>
             <Field label="Branch code" error={errors().code}>
-              <IntInput
+              <DigitCells
                 testID="new-branch-code"
-                accessibilityLabel="Branch code"
-                maxDigits={5}
-                width={120}
+                label="Branch code"
+                length={5}
                 value={d().code}
                 onChange={(v) => patch({ code: v }, "code")}
                 onBlur={() => touch("code")}

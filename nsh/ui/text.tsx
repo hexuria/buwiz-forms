@@ -4,7 +4,7 @@ import type { JSX } from "nsh";
 import { Image, Text as NText, View } from "nsh";
 import { TYPE } from "../theme/tokens";
 import { type IconName, ICONS } from "./icons";
-import { cx, TEXT_TONE, TINT_TONE, type Tone } from "./look";
+import { cx, LEADING, TEXT_TONE, TINT_TONE, type Tone } from "./look";
 
 /** A role of the type scale: page 20, title 16, emph 14, body 13, control 13/500, meta 12, metaStrong 12/500, cap 11, num 12/600 tabular. */
 export type TypeRole = keyof typeof TYPE;
@@ -28,7 +28,7 @@ export function Text(props: TextProps) {
   return (
     <NText
       testID={props.testID}
-      class={cx(TYPE[props.variant ?? "body"].cls, TEXT_TONE[props.tone ?? "fg"], props.class)}
+      class={cx(TYPE[props.variant ?? "body"].cls, LEADING, TEXT_TONE[props.tone ?? "fg"], props.class)}
       style={{ numberOfLines: props.lines }}
     >
       {props.children}

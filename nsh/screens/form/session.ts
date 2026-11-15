@@ -13,8 +13,9 @@
 //   a read-only return; an amendment never saved (its first save is the filer's choice: saveNow()); a Form library
 //   sample until its period is set (saveNow() asks for the period; once the host has built the sample for a complete
 //   period that has no stored return, autosave saves it and the session reopens as that period's return).
-// - Errors show only after the user has left a box of the row (touched), or after Check (all). The to-do list counts
-//   required-empty boxes always, and messages only where they show.
+// - Errors show only after the user has left a box of the row (touched), or after Check (all); a stored return's
+//   messages at its opening show at once. Counts never wait for the text: the to-do list, the part badges, "n parts
+//   need attention" and the pill's red count take every message, shown or not (the old page's todo() and partErrors).
 import { batch, signal, untracked, type Accessor, type Signal } from "nsh";
 import { isAvailable as hasSecondWindow } from "nsh/desktop";
 import {
@@ -37,7 +38,7 @@ import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { isTinItem, keysOf, oneDate, optionOf, plainRefusal, withoutHidden, type OneDate } from "./schema";
+import { isTinItem, keysOf, oneDate, optionOf, plainRefusal, withoutHidden, type DateParts, type OneDate } from "./schema";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -655,6 +656,9 @@ export class FormSession {
     this.reopening = false;
     this.st.loading = false;
     this.takeOpened(r);
+    // A stored return was checked before: the messages the host returns at its opening show at once (as the old page
+    // shows them). A message that comes later shows once its row is left, or after Check.
+    if (!keep && this.st.saved) for (const id of Object.keys(this.st.messages)) this.st.touched.add(id);
     // What was typed while it opened goes into the new draft.
     if (Object.keys(this.st.pending).length) {
       this.st.dirty = true;
@@ -824,6 +828,35 @@ export class FormSession {
     const edits: Record<string, string> = { [date.month.k]: m, [date.year.k]: y };
     if (date.day) edits[date.day.k] = d;
     this.stage(edits);
+  }
+
+  /**
+   * A day picked on the calendar beside an item's split month, day and year boxes ("YYYY-MM-DD") fills the parts that are open.
+   * A part that is a list takes the choice by its value, or a year list by the whole year it shows ("26" listed for 2026).
+   * One part whose list does not hold the pick refuses the whole pick, so the date is never half changed.
+   */
+  pickDate(date: DateParts, iso: string) {
+    if (!this.st.editable || !this.st.draft) return;
+    const [y, m, d] = iso.slice(0, 10).split("-");
+    if (!y || !m || !d) return;
+    const valueFor = (f: SchemaField, v: string): string | null => {
+      if (!(f.t === "sel" && f.o)) return v;
+      const listed = f.o.map(optionOf).filter((o) => o !== null);
+      if (!listed.length) return v;
+      const hit = listed.find((o) => o.value === v || o.value === String(Number(v)) || (f === date.year && o.label === String(Number(v))));
+      return hit ? hit.value : null;
+    };
+    const parts: [SchemaField | null, string][] = [[date.month, m], [date.day, d], [date.year, y]];
+    const edits: Record<string, string> = {};
+    for (const [f, v] of parts) {
+      if (!f || this.isShut(f.k)) continue;
+      const chosen = valueFor(f, v);
+      if (chosen === null) return void this.toast("That date is not on this form's list.", "triangle-alert");
+      edits[f.k] = chosen;
+    }
+    if (!Object.keys(edits).length) return;
+    this.setDateError(date.month.k, "");
+    this.choose(edits);
   }
 
   private stage(edits: Record<string, string>) {
@@ -1894,8 +1927,7 @@ export class FormSession {
   nextNeedingPart(): number | null {
     const s = this.st;
     if (!this.schema) return null;
-    const shown = this.shownMessages();
-    const needing = this.schema.parts.map((_p, i) => i).filter((i) => Object.keys(shown).some((id) => id.startsWith(`${i}:`)));
+    const needing = this.schema.parts.map((_p, i) => i).filter((i) => this.partErrors(i) > 0);
     if (!needing.length) return null;
     const openOne = s.openParts.size === 1 ? [...s.openParts][0] : -1;
     return needing.find((i) => i > openOne) ?? needing[0];
@@ -1982,12 +2014,18 @@ export class FormSession {
     return out;
   }
 
+  /** How many rows of part pi hold a validation message, shown or not (the old partErrors: the badges, "n parts need attention"). */
+  private partErrors(pi: number): number {
+    return Object.keys(this.st.messages).filter((id) => id.startsWith(`${pi}:`)).length;
+  }
+
+  /** The to-do list (old todo()): every row with a message counts, whether its text shows yet or not. */
   private todoNow(): TodoRow[] {
     const s = this.st;
     if (!this.schema || !s.draft) return [];
     return todoRows({
       parts: this.schema.parts as unknown as TodoPart[],
-      messages: this.shownMessages(),
+      messages: s.messages,
       values: s.values,
       stops: s.editable ? s.stopKeys : new Set(),
       passed: s.passed,
@@ -2696,9 +2734,9 @@ export class FormSession {
     const s = this.st;
     const todo = this.todoNow();
     this.sTodo.set(todo);
-    const shown = this.shownMessages();
-    const counts = this.shownCounts();
-    this.sAttention.set(Object.values(counts).reduce((a, b) => a + b, 0));
+    // The pill's red count (old drawPill): with rows to do, how many hold a message; else how many parts have one.
+    const partsNeeding = this.schema ? this.schema.parts.filter((_p, i) => this.partErrors(i) > 0).length : 0;
+    this.sAttention.set(todo.length ? todo.filter((r) => r.reason === "message").length : partsNeeding);
     if (this.schema) {
       this.schema.parts.forEach((p, pi) => {
         const tucked = this.tuckedItems(pi);
@@ -2707,7 +2745,7 @@ export class FormSession {
           return n + fs.filter((f) => f.t !== "radio").length + (fs.some((f) => f.t === "radio") ? 1 : 0);
         }, 0);
         this.sPart.get(String(pi)).set({
-          errors: Object.entries(counts).reduce((n, [id, c]) => (id.startsWith(`${pi}:`) ? n + c : n), 0),
+          errors: this.partErrors(pi),
           todo: todo.filter((r) => r.id.startsWith(`${pi}:`)).length,
           open: s.openParts.has(pi),
           fold: tucked.length
@@ -2715,7 +2753,7 @@ export class FormSession {
                 first: tucked[0],
                 items: tucked,
                 label: `From tax profile · ${filled} filled box${filled === 1 ? "" : "es"}`,
-                flagged: tucked.filter((ii) => shown[`${pi}:${ii}`]).length,
+                flagged: tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors[`${pi}:${ii}`]).length,
                 open: s.profileOpen.has(pi),
               }
             : null,

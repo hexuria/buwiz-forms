@@ -8,8 +8,7 @@
 import type { JSX } from "nsh";
 import { computed, Scroll, signal, untracked, View } from "nsh";
 import type { ReturnRow } from "../../bir";
-import { errorText } from "../../lib/errors";
-import { app, openReturn, store, toast } from "../../shell";
+import { app, cancelQueue, openReturn, store } from "../../shell";
 import { BREAK } from "../../theme/tokens";
 import { AppButton, Chip, EmptyRow, Icon, ListGroup, PageHeader, Sheet, Tabs, Text, TextField } from "../../ui";
 import { Board } from "./Board";
@@ -146,14 +145,7 @@ export function Filings(): JSX.Element {
   const open = (r: ReturnRow) =>
     openReturn({ tin: r.tin, code: r.form_code, year: r.taxable_year, period: r.period, ...(r.return_key != null ? { returnKey: r.return_key } : {}) });
   // The card's own press opens the return; this button takes its press (only the innermost pressable responds).
-  const cancel = (r: ReturnRow) => {
-    try {
-      store.write("cancel_queued", r.tin, r.form_code, r.taxable_year, r.period || null);
-      toast("Queue cancelled. The return is an editable draft again.");
-    } catch (e) {
-      toast(errorText(e), "triangle-alert");
-    }
-  };
+  const cancel = (r: ReturnRow) => void cancelQueue(r.tin, r.form_code, r.taxable_year, r.period || null);
 
   const tabs = computed(() => [
     { value: "all", label: "All", count: rows().length },

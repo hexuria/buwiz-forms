@@ -88,11 +88,13 @@ test("validation messages bind to their items: by key, then item number, then TI
 });
 
 test("touched-only errors: a message shows after its row was left, all of them after Check", async () => {
-  const s = await opened();
+  // A return never saved (Q1 is saved by the tests above, and a stored return's opening messages show at once: F9-1).
+  const s = await opened({ ...Q1, period: 4 });
   expect(s.messageOf("1:7")).not.toBe("");
   expect(s.row("1:7")().message).toBe("");
   expect(s.row("2:6")().message).toBe("");
-  expect(s.part(1)().errors).toBe(0);
+  // Counts never wait for the text (F9-1, the old partErrors): Part I's badge says 1 before anything is left.
+  expect(s.part(1)().errors).toBe(1);
   expect(s.box("frm2551Qv2018:taxRate1").invalid()).toBe(false);
   s.focus("frm2551Qv2018:taxRate1");
   s.blur("frm2551Qv2018:taxRate1");
@@ -103,17 +105,21 @@ test("touched-only errors: a message shows after its row was left, all of them a
   s.check();
   await s.idle();
   expect(s.row("2:6")().message).toContain("EOPT tier");
-  // Each host message counts once, also two on one row (F5: the part badges, the pill and Check's toast agree).
+  // A part's badge counts its rows with a message, as the old page's partErrors did (F9-1: two messages on one row are one).
   const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it, ii) => ({ id: `${pi}:${ii}`, it })));
-  expect(s.part(2)().errors).toBe(s.errors().filter((e) => bindError(e, items, (k) => s.itemIdForKey(k))?.startsWith("2:")).length);
+  const rows = new Set(s.errors().map((e) => bindError(e, items, (k) => s.itemIdForKey(k))).filter((id) => id?.startsWith("2:")));
+  expect(s.part(2)().errors).toBe(rows.size);
   expect(s.part(2)().errors).toBeGreaterThan(0);
   s.dispose();
 });
 
-test("the to-do list (lib/todo): required-empty boxes count at once, messages once they show", async () => {
+test("the to-do list (lib/todo): required-empty boxes and messages count at once, shown or not", async () => {
   const s = await opened();
   const parts = s.schema!.parts as unknown as TodoPart[];
-  expect(s.todo()).toEqual([]);
+  const valuesOf = () => Object.fromEntries(s.schema!.parts.flatMap((p) => p.items.flatMap((it) => (it.f || []).map((f) => [f.k, s.valueOf(f.k)]))));
+  // Before anything is left or checked, every row with a host message is already to do (F9-1, the old todo()).
+  expect(s.todo().map((r) => r.id)).toEqual(todoRows({ parts, messages: s.messages(), values: valuesOf(), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
+  expect(s.todo().length).toBeGreaterThan(0);
   // A sample's period boxes are blank and required: they are to do at once, untouched, before any message shows.
   const sample = await opened({ tin: DEMO.tin, formCode: "2551Q", year: 0, period: 0, mode: "sample" });
   const required = sample.todo().filter((r) => r.reason === "required").map((r) => r.id);

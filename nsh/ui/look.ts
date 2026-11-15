@@ -36,6 +36,14 @@ export const TINT_TONE: Record<Tone, string> = {
   danger: "tint-danger",
 };
 
+/**
+ * The old app's line height for every size of text: gpui's default, the golden ratio (1.618) times the font size. The kit's Text sets
+ * it, so a 20-point title takes 32.4 points of line, a 13-point body 21, a 12-point meta 19.4, as the old screens did; the type
+ * classes' own ratios (nsh.json: 1.4 to 1.5) draw every block of text 4 to 8 percent shorter than the old app's. A `leading-*` class
+ * given to a Text replaces it (the library card title fixes 18 points).
+ */
+export const LEADING = "leading-[1.618]";
+
 /** The keyboard focus ring of a pressable control: two points of the accent outside it. */
 export const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-accent-blue";
 

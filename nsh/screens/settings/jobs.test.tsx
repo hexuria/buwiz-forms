@@ -29,6 +29,9 @@ for (const { name, size } of SIZES) {
       "Old export", "Manual", "Archived", "Rebuild the form index", "Completed",
     ]);
     expect(shown(app)).toEqual(ALL);
+    // The name and the line under it are one wrapping block (a job's name carries a TIN and a mailbox: never cut to one line with an
+    // ellipsis, as the 640-wide column did).
+    for (const id of ALL) expect(app.shows(`${id}-words`)).toBe(true);
     const only = async (filter: string, rows: string[]) => {
       await app.press(`id:jobs-filter >> text:${filter}`);
       expect(shown(app)).toEqual(rows);

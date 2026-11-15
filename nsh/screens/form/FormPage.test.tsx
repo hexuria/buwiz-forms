@@ -10,8 +10,9 @@ test("phone: open, Check shows the to-dos on the pill, step to one, type, autosa
   // Narrow: no side list, the pill floats.
   expect(app.count("id:fp-nav")).toBe(0);
   expect(app.shows("id:fp-pill")).toBe(true);
-  // Untouched: no message shows, nothing is counted red.
-  expect(app.count("id:fp-pill-count")).toBe(0);
+  // Untouched: no message text shows, but the pill counts the to-dos in red at once (F9-1: counts never wait for the text).
+  await app.waitFor("id:fp-pill-count");
+  expect(app.texts().some((t) => /^Choose the applicable Item 13/.test(t))).toBe(false);
   await app.press("id:fp-check");
   await app.waitFor("id:fp-pill-count");
   const small = app.texts().find((t) => / to do · /.test(t));

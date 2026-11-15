@@ -16,7 +16,7 @@ function Root() {
   // The desktop host (menu, tray, hotkey, updater) draws nothing but the About dialog; it sits beside the frame.
   return (
     <View class="flex-1">
-      <Shell start={process.env.BIR_SHELL_START} polling={polling} firstRun agent />
+      <Shell start={process.env.BIR_SHELL_START} polling={polling} watchQueued warm firstRun agent />
       <DesktopHost />
     </View>
   );

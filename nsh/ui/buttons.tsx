@@ -142,18 +142,26 @@ export interface NavRowProps {
   trailing?: JSX.Element;
   tooltip?: string;
   testID?: string;
+  /**
+   * default: 32 tall, label 13/500 (the sidebar, the panels, Settings' sections). list: the rows of a list in a dialog (the command
+   * palette, Start a return): at least 36 tall, 6 by 10 inside, label 13/400, as the old dialogs drew them. recent: the sidebar's Recent
+   * rows: the label is 12/500 with the letters a little closer and may take a second line, so "2551Q Q3 2026 · Juana Santos" shows
+   * whole in the 190 points beside the icon (the old row cut it at the SF font's width; Inter is wider).
+   */
+  size?: "default" | "list" | "recent";
   onPress?: () => void;
 }
 
 /** A sidebar or panel row: 32 tall (44 on touch), radius 8, the current one on the selected fill. */
 export function NavRow(props: NavRowProps) {
+  const list = () => props.size === "list";
   return (
     <Button
       testID={props.testID}
       class={cx(
-        "group w-full flex-row items-center gap-2.5 rounded-(--radius-row) px-2 enabled:hover:bg-hover active:bg-selected selected:bg-selected",
+        "group w-full flex-row items-center gap-2.5 rounded-(--radius-row) enabled:hover:bg-hover active:bg-selected selected:bg-selected",
         FOCUS_RING,
-        CTL,
+        list() ? (TOUCH ? "min-h-11 px-2.5" : "min-h-9 px-2.5 py-1.5") : props.size === "recent" ? "min-h-8 px-2 py-1" : cx("px-2", CTL),
       )}
       selected={props.current}
       accessibilityLabel={props.label}
@@ -165,7 +173,16 @@ export function NavRow(props: NavRowProps) {
       ) : (
         props.leading
       )}
-      <Line variant="control" tone="fg2" class="flex-1 group-selected:text-foreground">{props.label}</Line>
+      <If
+        when={props.size === "recent"}
+        else={
+          <Line variant={list() ? "body" : "control"} tone={list() ? "fg" : "fg2"} class={list() ? "flex-1" : "flex-1 group-selected:text-foreground"}>
+            {props.label}
+          </Line>
+        }
+      >
+        <Text variant="metaStrong" tone="fg2" lines={2} class="min-w-0 flex-1 tracking-tight group-selected:text-foreground">{props.label}</Text>
+      </If>
       <If when={props.count !== undefined && props.count !== null && props.count !== ""}>
         <Text variant="meta" tone="fg3" class="tabular-nums">{String(props.count)}</Text>
       </If>

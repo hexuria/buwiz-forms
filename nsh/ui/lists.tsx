@@ -143,7 +143,12 @@ export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: 
             selected={t().value === props.value}
             onPress={() => props.onChange(t().value)}
             accessibilityLabel={t().label}
-            class={cx("group flex-row items-center gap-1.5 rounded-t-(--radius-ctl) px-2.5 hover:bg-hover focus-visible:bg-hover", TOUCH ? "h-11" : "h-9")}
+            class={cx(
+              "group flex-row items-center gap-1.5 rounded-t-(--radius-ctl) px-2.5 hover:bg-hover focus-visible:bg-hover",
+              // The underline is drawn under the tab: a fill over the chosen tab would hide it (hover and focus beat selected:, so say so).
+              "selected:hover:bg-transparent selected:focus-visible:bg-transparent",
+              TOUCH ? "h-11" : "h-9",
+            )}
           >
             <Text variant="control" tone="fg2" class="group-selected:text-foreground">{t().label}</Text>
             <If when={t().count !== undefined && t().count !== null && t().count !== ""}>

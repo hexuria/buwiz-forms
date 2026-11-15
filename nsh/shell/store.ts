@@ -24,8 +24,18 @@ export function failedReadDelay(failures: number): number {
   return Math.min(FAILED_READ_RETRY_MAX_MS, FAILED_READ_RETRY_MS * 2 ** Math.max(0, failures - 1));
 }
 
-/** The cache key of savedReturns(): not a "returns:" key, so the 30 s poll keeps it (Home reads it once per visit). */
+/** The cache key of savedReturns(): not a "returns:" key, so the 30 s poll keeps it (Home refreshes it in the background after it is drawn). */
 export const SAVED_RETURNS_KEY = "saved_returns";
+
+/**
+ * The host functions that queue a return or take it out of the queue. The submission worker answers within a second or two (dry-run:
+ * "Submitted"), and nothing tells the app, so after one of these the lists are read again at once and then at each of QUEUE_REREAD_MS.
+ */
+export const QUEUE_FUNCTIONS: ReadonlySet<string> = new Set(["queue_form_draft", "cancel_queued", "screen_form_queue", "screen_form_cancel_queue"]);
+/** How long after a queue or a cancel-queue the lists are read again (and they are read at once as well). */
+export const QUEUE_REREAD_MS = [1000, 3000, 10_000] as const;
+/** What the worker changes behind the app's back: the returns lists, their deadlines and yearly form rows, the jobs, the drafts count, the as-needed forms. */
+export const WORKER_KEYS = /^(returns:|deadlines|forms:|jobs$|saved_returns$|as_needed:)/;
 
 type Bir = typeof bir;
 type BirName = keyof Bir;
@@ -50,6 +60,11 @@ const entries = new Map<string, Entry>();
 const scope = signal<string | null>(null);
 let rdoList: { value: string; label: string }[] | null = null;
 let zipList: { value: string; label: string }[] | null = null;
+/** The form library's index: it never changes while the app runs and takes about a second to build, so it is kept past bump(). */
+let formIndex: ReturnType<Bir["screen_forms_index"]> | null = null;
+let formIndexError: string | undefined;
+/** The pending re-reads after a queue action; a newer action starts the series again. */
+let queueRereads: ReturnType<typeof setTimeout>[] = [];
 
 function entryOf(key: string): Entry {
   let e = entries.get(key);
@@ -135,6 +150,18 @@ function toIndex<T extends { tin: string; form_code: string; taxable_year: numbe
   return index;
 }
 
+/** Reads the worker-moved lists again (what shows them re-reads). */
+function rereadWorkerLists(): void {
+  store.forgetWhere(WORKER_KEYS);
+}
+
+/** After a queue action: read now, and again after each of QUEUE_REREAD_MS. */
+function rereadSoon(): void {
+  for (const timer of queueRereads) clearTimeout(timer);
+  rereadWorkerLists();
+  queueRereads = QUEUE_REREAD_MS.map((ms) => setTimeout(rereadWorkerLists, ms));
+}
+
 /** The app's reads and writes of the Rust brain. One instance; screens use it through shell/index.ts. */
 export const store = {
   // ------------------------------------------------------------ scope (the session's visibility)
@@ -161,11 +188,23 @@ export const store = {
       for (const key of keysMatching(test)) forget(key);
     });
   },
-  /** Drops every cached read. Call after a write that could touch anything. */
-  bump(): void {
+  /**
+   * Drops every cached read. Call after a write that could touch anything. Name the host function that was written (a page's
+   * afterWrite hook has it): a queue or a cancel-queue also starts the re-reads at once and after 1 s, 3 s and 10 s.
+   */
+  bump(written?: string): void {
     batch(() => {
       for (const key of [...entries.keys()]) forget(key);
     });
+    if (written !== undefined && QUEUE_FUNCTIONS.has(written)) rereadSoon();
+  },
+  /** A return was queued or taken out of the queue (by a path that does not go through write()): read the lists now and again after 1 s, 3 s and 10 s. */
+  afterQueueChange(): void {
+    rereadSoon();
+  },
+  /** True when key holds an answer already (a read that is not dropped yet). */
+  has(key: string): boolean {
+    return entries.get(key)?.has === true;
   },
   /** True when the last read of key failed and holds its fallback. */
   failed(key: string): boolean {
@@ -188,7 +227,7 @@ export const store = {
       logScreen("error", `bir.${name}: ${errorText(error)}`);
       throw error;
     } finally {
-      store.bump();
+      store.bump(name);
     }
   },
   /** A write that drops only the cached reads whose key matches `touches`. */
@@ -200,6 +239,7 @@ export const store = {
       throw error;
     } finally {
       store.forgetWhere(touches);
+      if (QUEUE_FUNCTIONS.has(name)) rereadSoon();
     }
   },
   /** write() for a host function that answers a promise: drops the cache once it settles. */
@@ -210,7 +250,7 @@ export const store = {
       logScreen("error", `bir.${name}: ${errorText(error)}`);
       throw error;
     } finally {
-      store.bump();
+      store.bump(name);
     }
   },
 
@@ -222,8 +262,24 @@ export const store = {
   catalog() {
     return read("forms_catalog", () => bir.forms_catalog(), []);
   },
-  screenIndex() {
-    return read("screen_forms_index", () => bir.screen_forms_index(), []);
+  /**
+   * The form library's index (code, title, frequency ...). Built once (about a second in a debug build, a sync host call) and kept
+   * for the run, past bump(): the library never changes while the app runs. The shell warms it after the first screen is drawn.
+   * A failed or empty build answers [] and is tried again at the next ask.
+   */
+  screenIndex(): ReturnType<Bir["screen_forms_index"]> {
+    if (formIndex) return formIndex;
+    try {
+      const rows = bir.screen_forms_index();
+      formIndexError = undefined;
+      if (rows.length) formIndex = rows;
+      return rows;
+    } catch (error) {
+      const text = String(error);
+      if (formIndexError !== text) logScreen("error", `screen_forms_index: ${errorText(error)}`);
+      formIndexError = text;
+      return [];
+    }
   },
   /** RDO choices as { value, label }. Static, so kept past bump(). */
   rdoOptions(): { value: string; label: string }[] {

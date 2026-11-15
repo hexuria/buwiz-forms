@@ -7,8 +7,8 @@ export {
   type SegmentedProps, type SegmentOption, Switch, type SwitchProps,
 } from "./choice";
 export {
-  DateField, type DateFieldProps, Field, FieldCell, FieldGrid, type FieldProps, FormActions, IntInput, type MaskedFieldProps,
-  MoneyInput, type MoneyInputProps, type NumberTextProps, PercentInput, PinCells, type PinCellsProps, TextField,
+  CalendarButton, type CalendarButtonProps, DateField, type DateFieldProps, Field, FieldCell, FieldGrid, type FieldProps, FormActions, IntInput, type MaskedFieldProps,
+  DigitCells, type DigitCellsProps, MoneyInput, type MoneyInputProps, type NumberTextProps, PercentInput, PinCells, type PinCellsProps, TextField,
   type TextFieldProps, TinInput, type TinInputProps,
 } from "./fields";
 export { type IconName, ICONS } from "./icons";

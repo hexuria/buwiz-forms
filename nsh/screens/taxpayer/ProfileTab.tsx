@@ -10,8 +10,8 @@ import { joinNames, readerChips, type FactName } from "../../lib/facts";
 import { formatTin } from "../../lib/format";
 import { app, go, store } from "../../shell";
 import {
-  AppButton, Card, Chip, Code, Disclosure, DisclosureGroup, Dropdown, Field, FieldCell, FieldGrid, FormActions, IntInput, Line,
-  SectionTitle, Segmented, SettingRow, Sheet, Switch, Text, TextField, TinInput,
+  AppButton, Card, Chip, Code, DigitCells, Disclosure, DisclosureGroup, Dropdown, Field, FieldCell, FieldGrid, FormActions, Line,
+  SectionTitle, Segmented, SettingRow, Sheet, Switch, Text, TextField,
 } from "../../ui";
 import { SearchPick } from "../form/controls";
 import { canRemove, deleteTaxpayer, setGrant, setSectionOpen, shared, toggleArchive } from "./actions";
@@ -209,14 +209,13 @@ function SectionEditor(props: { s: PageState }) {
         <FieldGrid>
           <EditText s={s} field="name" label="Registered name" full />
           <EditCell s={s} field="tin" label="TIN">
-            <TinInput
+            <DigitCells
               testID="tp-taxpayer-tin"
-              accessibilityLabel="TIN"
+              label="TIN"
+              length={9}
+              groups={3}
               value={e()?.values.tin ?? ""}
-              onChange={(d) => {
-                s.setValue("tin", d);
-                s.setValue("tin", d.slice(0, 9));
-              }}
+              onChange={(d) => s.setValue("tin", d)}
               onBlur={() => s.touch("tin")}
               error={Boolean(s.errors().tin)}
             />
@@ -243,11 +242,10 @@ function SectionEditor(props: { s: PageState }) {
         <FieldGrid>
           <If when={e()?.values.code !== undefined} else={<ReadCell label="Branch code" value={app.branch()?.code} />}>
             <EditCell s={s} field="code" label="Branch code">
-              <IntInput
+              <DigitCells
                 testID="tp-branch-code"
-                accessibilityLabel="Branch code"
-                maxDigits={5}
-                width={120}
+                label="Branch code"
+                length={5}
                 value={e()?.values.code ?? ""}
                 onChange={(d) => s.setValue("code", d)}
                 onBlur={() => s.touch("code")}

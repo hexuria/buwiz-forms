@@ -21,3 +21,12 @@ export const LOOKS = [
   { name: "narrow-light", width: 390, height: 844, platform: "macos", colorScheme: "light" },
   { name: "narrow-dark", width: 390, height: 844, platform: "macos", colorScheme: "dark" },
 ] as const;
+
+/**
+ * Empties digit cells (the TIN and branch code of the sign-in and the taxpayer pages) in a real window: `app.clear` does nothing to an
+ * OtpInput there (headless it does), so the cells take the keys and Backspace takes each digit.
+ */
+export async function clearCells(app: App, selector: string, digits = 9): Promise<void> {
+  await app.type(selector, ""); // the click that gives the cells the keys (a press finds nothing pressable in them)
+  for (let i = 0; i < digits; i++) await app.keyboard.press("backspace");
+}

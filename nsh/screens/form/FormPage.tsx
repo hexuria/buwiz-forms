@@ -32,10 +32,11 @@ import {
   type IconName,
   IconButton,
   ICONS,
+  Line,
   ListRow,
   MetaLine,
-  NavRow,
   Popover,
+  PressCell,
   Sheet,
   Spinner,
   Text,
@@ -43,7 +44,7 @@ import {
   toast as kitToast,
   dismissToast as kitDismissToast,
 } from "../../ui";
-import { store } from "../../shell";
+import { app, store } from "../../shell";
 import { ItemRow, ProfileFold } from "./rows";
 import { existingOfferFor, filedOriginalStrip, FILED_KEPT, PERIOD_PART_LABELS, PROFILE_CHANGED_NOTE, partName, profileDiffersNote, profileUpdatesNote, SAMPLE_NOTE, sectionNames } from "./schema";
 import { formUi } from "./formUi";
@@ -81,6 +82,8 @@ export interface FormPageProps {
 }
 
 const PILL_W = 488;
+/** The old shell's cap on a form page's column, padding included (app/main.js layout(): 1120 for "form"). */
+const FORM_COLUMN_MAX = 1120;
 
 function kitIcon(name: string | undefined): IconName | undefined {
   return name && name in ICONS ? (name as IconName) : undefined;
@@ -94,7 +97,7 @@ export function FormPage(props: FormPageProps) {
     },
     dismissToast: (id) => (props.toast ? props.dismissToast?.(id) : kitDismissToast(id)),
     // A write through the door: every cached read of the frame (Filings, Home, the profile) reads again.
-    afterWrite: () => store.bump(),
+    afterWrite: (name) => store.bump(name),
     onSaved: (t) => props.onSaved?.(t),
     onRetarget: (t) => props.onOpenReturn?.(t),
     onQueueChanged: () => {},
@@ -108,7 +111,15 @@ export function FormPage(props: FormPageProps) {
   cleanup(() => s.dispose());
 
   const width = signal(untracked(() => windowSize().width));
-  const wide = () => width() >= BREAK.formNav;
+  // The old shell's measures (app/main.js layout(), form_page.js drawFormSplit and formColumnBox), from the page's own
+  // width (the pane it fills): 32 side padding (16 under 640), a column of at most 1120 less that padding, the side
+  // list from 760 of column, set in by the column's centring edge, and the form 22 beside the list, at most
+  // column - 236 wide (820 for a column of 1056), its text starting at the left of its scroll.
+  const padX = () => (width() < BREAK.narrowContent ? 16 : 32);
+  const column = () => Math.max(200, Math.min(FORM_COLUMN_MAX, width()) - padX() * 2);
+  const edge = () => Math.max(padX(), Math.floor((width() - column()) / 2));
+  const formW = () => column() - 208 - 28;
+  const wide = () => column() >= BREAK.formNav;
   const narrow = () => width() < BREAK.phone;
 
   // Not while a text box has the keys: there Cmd/Ctrl+Left/Right move the caret (index.d.ts KeyBindingOptions "notEditing").
@@ -200,14 +211,14 @@ export function FormPage(props: FormPageProps) {
   return (
     <View testID="form-page" class="min-h-0 flex-1 flex-row" onLayout={(e) => width.set(e.bounds.size.width)}>
       <If when={wide() && schema && !s.header().error && !s.header().loading}>
-        <Navigator s={s} />
+        <Navigator s={s} edge={edge()} />
       </If>
       <View class="min-h-0 min-w-0 flex-1">
         <Scroll
           ref={(r: ScrollRef) => (scrollRef = r)}
           testID="form-scroll"
           class="min-h-0 flex-1"
-          contentClass={narrow() ? "px-4 pt-5 pb-32" : "px-6 pt-7 pb-28"}
+          contentClass={wide() ? "pt-7 pr-7.5 pb-28 pl-5.5" : narrow() ? "px-4 pt-5 pb-32" : "px-8 pt-7 pb-28"}
           onScroll={(e) => followScroll(e.offset.y)}
           onLayout={(e) => {
             viewH = e.bounds.size.height;
@@ -215,7 +226,7 @@ export function FormPage(props: FormPageProps) {
           }}
           scrollEventThrottle={50}
         >
-          <View class="w-full self-center" style={{ maxWidth: 920 }} onLayout={(e) => (tops.column = e.bounds.origin.y)}>
+          <View class="w-full" classList={{ "self-center": !wide() }} style={{ maxWidth: wide() ? formW() : column() }} onLayout={(e) => (tops.column = e.bounds.origin.y)}>
             <Header s={s} narrow={narrow} />
             <Notes s={s} />
             <If when={schema && !s.header().loading && !s.header().error}>
@@ -252,7 +263,7 @@ export function FormPage(props: FormPageProps) {
           </View>
         </Scroll>
         <If when={schema && !s.header().error && !s.header().loading}>
-          <Pill s={s} wide={wide} narrow={narrow} />
+          <Pill s={s} wide={wide} narrow={narrow} box={() => (wide() ? { left: 22, width: formW() } : null)} />
         </If>
       </View>
       <Dialogs s={s} />
@@ -550,7 +561,19 @@ function Badge(props: { text: string; danger?: boolean }) {
   );
 }
 
-function Navigator(props: { s: FormSession }) {
+/**
+ * A part name for the compact navigator's one line (old form_page.js compactPartName): the filing instructions in
+ * parentheses go ("(attach additional sheet/s, if necessary)") and "Schedule" becomes "Sch.".
+ */
+export function compactPartName(name: string): string {
+  const short = name
+    .replace(/\s*\((?:attach|if graduated|except)[^)]*\)/gi, "")
+    .replace(/^Schedule\b/, "Sch.")
+    .trim();
+  return short || name;
+}
+
+function Navigator(props: { s: FormSession; edge: number }) {
   const s = props.s;
   const parts = s.schema!.parts;
   const infos = parts.map((_p, i) => s.part(i));
@@ -559,8 +582,9 @@ function Navigator(props: { s: FormSession }) {
     return open.length === 1 ? open[0] : -1;
   };
   const needing = () => infos.filter((f) => f().errors > 0).length;
+  const compact = () => app.prefs().compactFormNav;
   return (
-    <View testID="fp-nav" class="shrink-0 pt-7 pb-4 pl-4" style={{ width: 208 + 6 + 16 }}>
+    <View testID="fp-nav" class="shrink-0 pt-7 pb-4" style={{ width: props.edge + 208 + 6, paddingLeft: props.edge }}>
       <View class="flex-row items-center gap-1 px-2 pb-1.5" style={{ width: 208 }}>
         <Text variant="metaStrong" tone="fg3">On this form</Text>
         <View class="flex-1" />
@@ -573,37 +597,52 @@ function Navigator(props: { s: FormSession }) {
         />
       </View>
       <If when={needing() > 0}>
-        <View class="px-1 pb-1.5" style={{ width: 208 }}>
-          <AppButton
-            testID="fp-nav-attention"
-            size="sm"
-            variant="danger"
-            label={`${needing()} need${needing() > 1 ? "" : "s"} attention · next ↓`}
-            accessibilityLabel="Go to the next part that needs attention"
-            onPress={() => {
-              const next = s.nextNeedingPart();
-              if (next !== null) s.jumpTo(next);
-            }}
-          />
-        </View>
+        <PressCell
+          testID="fp-nav-attention"
+          label="Go to the next part that needs attention"
+          class="mb-1.5 rounded-(--radius-row) px-2 py-0.5"
+          style={{ width: 208 }}
+          onPress={() => {
+            const next = s.nextNeedingPart();
+            if (next !== null) s.jumpTo(next);
+          }}
+        >
+          <Text variant="meta" tone="danger">{`${needing()} part${needing() > 1 ? "s" : ""} need${needing() > 1 ? "" : "s"} attention · next ↓`}</Text>
+        </PressCell>
       </If>
       <Scroll testID="fp-nav-list" class="min-h-0 flex-1" contentClass="gap-0.5 pr-1.5" style={{ width: 208 + 6 }}>
         {parts.map((p, i) => (
-          <NavRow
+          // Old form_page.js navRows: with "Compact form sections" off (the default) the full part name wraps over as
+          // many lines as it needs (rows at least 32 tall, 6 above and below); on, one 28-point line of the shortened
+          // name, cut with an ellipsis, the full name on hover.
+          <PressCell
             testID={`fp-nav-${i}`}
             label={partName(p, i)}
-            tooltip={partName(p, i)}
-            current={openOne() === i}
-            trailing={
-              <View class="flex-row gap-1">
-                <If when={infos[i]().errors > 0}>
-                  <Badge text={String(infos[i]().errors)} danger />
-                </If>
-                <Badge text={String(p.items.length)} />
-              </View>
-            }
+            tooltip={compact() ? partName(p, i) : undefined}
+            selected={openOne() === i}
+            class={compact() ? "group h-7 flex-row items-center gap-2 rounded-(--radius-row) px-2" : "group flex-row items-start gap-2 rounded-(--radius-row) px-2 py-1.5"}
+            style={compact() ? { width: 208 } : { width: 208, minHeight: 32 }}
             onPress={() => s.jumpTo(i)}
-          />
+          >
+            <If
+              when={compact()}
+              else={
+                <Text variant="control" tone="fg2" class="min-w-0 flex-1 leading-[18px] group-selected:text-foreground">
+                  {partName(p, i)}
+                </Text>
+              }
+            >
+              <Line variant="control" tone="fg2" class="flex-1 group-selected:text-foreground">
+                {compactPartName(partName(p, i))}
+              </Line>
+            </If>
+            <View class="flex-row gap-1">
+              <If when={infos[i]().errors > 0}>
+                <Badge text={String(infos[i]().errors)} danger />
+              </If>
+              <Badge text={String(p.items.length)} />
+            </View>
+          </PressCell>
         ))}
       </Scroll>
     </View>
@@ -664,7 +703,7 @@ function SectionsList(props: { s: FormSession; onPick: () => void; maxHeight: nu
   );
 }
 
-function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor<boolean> }) {
+function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor<boolean>; box: Accessor<{ left: number; width: number } | null> }) {
   const s = props.s;
   const parts = s.schema!.parts;
   const listOpen = signal(false);
@@ -690,7 +729,7 @@ function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor
     }
     return sectionNames(parts[cur()], cur()).short;
   };
-  // Every shown message counted once: the same number as the part badges' sum and Check's toast.
+  // Red (old drawPill): the to-do rows with a message; with nothing to do, the parts that have one. Shown or not.
   const red = () => s.attention();
   const redLabel = () => {
     const n = red();
@@ -721,7 +760,12 @@ function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor
     </View>
   );
   return (
-    <View style={{ pointerEvents: "box-none" }} class="absolute inset-x-0 bottom-4 items-center px-4">
+    // Centred over the form's own column when wide (old formColumnBox), over the whole pane otherwise.
+    <View
+      style={props.box() ? { pointerEvents: "box-none", left: props.box()!.left, width: props.box()!.width } : { pointerEvents: "box-none" }}
+      class="absolute bottom-4 items-center px-4"
+      classList={{ "inset-x-0": !props.box() }}
+    >
       <View testID="fp-pill" class="w-full flex-row items-center gap-1.5 rounded-[22px] border border-border-strong bg-raised p-1.5 shadow-lg" style={{ maxWidth: PILL_W, height: props.narrow() ? 60 : 56 }}>
         <IconButton testID="fp-pill-prev" icon="chevron-left" tooltip={stepLabel(-1)} disabled={!target(-1)} onPress={() => s.step(-1)} />
         <If

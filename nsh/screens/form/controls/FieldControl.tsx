@@ -50,6 +50,9 @@ function ReadBox(props: { p: FieldInput }) {
   const why = () => reasonOf(p);
   // The narrow boxes of a TIN (58, 76 wide) have no room for a lock: they read as the old page's locked boxes did, centred.
   const small = () => !p.narrow() && p.width < 100;
+  // A hint is never cut mid-word (F9-4: "Shows once the period is set" in an 88-wide year box read "Shows o…"): while it
+  // shows, the box is at least its own width and grows to the hint, up to the row's width, where the hint wraps.
+  const grows = () => Boolean(hint()) && !p.narrow();
   return (
     <View
       testID={p.testID}
@@ -57,22 +60,32 @@ function ReadBox(props: { p: FieldInput }) {
       tooltip={why() ? <Tooltip label={why()} /> : undefined}
       class={cx(
         "min-w-0 flex-row items-center gap-1.5 rounded-(--radius-row) border px-2.5",
-        TOUCH ? "min-h-11" : "h-8",
+        TOUCH ? "min-h-11" : grows() ? "min-h-8 py-1" : "h-8",
+        grows() && "max-w-full",
         computed() ? "border-transparent bg-hover" : "border-border bg-hover",
         dimmed() && "opacity-60",
         p.narrow() && "w-full",
       )}
-      style={{ width: widthOf(p) }}
+      style={grows() ? { minWidth: widthOf(p) } : { width: widthOf(p) }}
     >
       <If when={p.field.t === "money" && text()}>
         <Text variant="meta" tone="fg3">₱</Text>
       </If>
-      <Line
-        tone={hint() ? "fg3" : computed() ? "fg" : "fg2"}
-        class={cx("flex-1", right() && "text-right", small() && "text-center", figures() && "tabular-nums", computed() && !hint() && "font-semibold")}
+      <If
+        when={grows()}
+        else={
+          <Line
+            tone={hint() ? "fg3" : computed() ? "fg" : "fg2"}
+            class={cx("flex-1", right() && "text-right", small() && "text-center", figures() && "tabular-nums", computed() && !hint() && "font-semibold")}
+          >
+            {text() || hint()}
+          </Line>
+        }
       >
-        {text() || hint()}
-      </Line>
+        <Text testID={p.testID ? `${p.testID}-hint` : undefined} tone="fg3" class="min-w-0 shrink">
+          {hint()}
+        </Text>
+      </If>
       <If when={p.field.t === "pct" && text()}>
         <Text variant="meta" tone="fg3">%</Text>
       </If>

@@ -60,6 +60,7 @@ function RecentRow(props: { entry: RecentEntry }) {
       testID={`recent-${String(props.entry.key).replace(/[^A-Za-z0-9]/g, "-")}`}
       leading="file-text"
       label={recentLabel(props.entry)}
+      size="recent"
       tooltip={recentLabel(props.entry)}
       current={current()}
       onPress={() => app.openReturn(recentOpenOptions(props.entry))}
@@ -105,12 +106,16 @@ export function Sidebar() {
         <SearchRow shortcut={keymap.label("mod+k")} onPress={app.openPalette} />
         <IconButton testID="sb-new" icon="plus" tooltip="New return" onPress={() => app.startNewReturn()} />
       </View>
-      <Scroll testID="sb-nav" class="min-h-0 flex-1" contentClass="gap-0.5 pt-3">
+      {/* The four pages stay out of the scroll: a first row inside a Scroll has no room above it to be brought into view, and a test or a
+          screen reader that reaches for it makes the sidebar bounce for two seconds (the "Home takes 2 s" of the real-window runs). */}
+      <View testID="sb-nav" class="gap-0.5 pt-3">
         <Each of={NAV} key={(v) => v}>
           {(v) => (
             <NavRow testID={`nav-${v()}`} leading={ROUTES[v()].icon} label={ROUTES[v()].label} current={app.view() === v()} onPress={() => app.go(v())} />
           )}
         </Each>
+      </View>
+      <Scroll testID="sb-recent" class="min-h-0 flex-1" contentClass="gap-0.5">
         <If when={app.prefs().showRecent && !app.isFresh() && visibleRecent().length > 0}>
           <GroupLabel>Recent</GroupLabel>
           <Each of={visibleRecent()} key={(r) => r.key}>{(r) => <RecentRow entry={r()} />}</Each>

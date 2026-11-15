@@ -138,8 +138,8 @@ test("F3-4: every write through the door is told to the page (the frame drops it
 test("F3-5: a queue refusal shows every message; a radio pick marks its row touched; the last part offers Check", async () => {
   const h = hooks();
   const s = await opened(at("2551Q", 2025, 3), h);
-  // Nothing to do yet (no message shows untouched), but the host has errors: past the last part, › is Check.
-  expect(s.todo()).toEqual([]);
+  // The host's messages are to do at once (F9-1), shown or not: Item 13 and Item 20; past the last part, › is Check.
+  expect(s.todo().map((r) => r.id)).toEqual(["1:7", "2:6"]);
   expect(s.errors().length).toBeGreaterThan(0);
   s.jumpTo(s.schema!.parts.length - 1);
   expect(s.stepTarget(1)).toEqual({ check: true });

@@ -9,15 +9,15 @@ import { isAvailable as desktopAvailable, currentWindow } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
 import { errorText } from "../lib/errors";
 import { LockedScreen } from "../screens/auth/Locked";
-import { BREAK, SIZE } from "../theme/tokens";
+import { SIZE } from "../theme/tokens";
 import { AppButton, Text, Toaster } from "../ui";
-import { app, boot, startPolling } from "./app";
+import { app, boot, startPolling, startQueuedWatch, warmLibrary } from "./app";
 import { DevPages } from "./DevPages";
 import { NarrowBar, PanelSheets, TabBar } from "./Narrow";
 import { NewReturn } from "./NewReturn";
 import { Palette } from "./Palette";
 import { RightPanel } from "./Panels";
-import { ROUTES, type Route } from "./routes";
+import { contentBox, ROUTES, type Route } from "./routes";
 import { startAgentBridge } from "./agent";
 import { Sidebar } from "./Sidebar";
 import { store } from "./store";
@@ -31,6 +31,10 @@ export interface ShellProps {
   start?: string;
   /** Run the polls (events 30 s, device filings 5 s, update status 1 s). Default true; test fixtures turn it off. */
   polling?: boolean;
+  /** While any return is Queued, read the lists every 3 s (the worker sends it within seconds and tells nobody). Default: with the polls; the app turns it on in the dev environment too. */
+  watchQueued?: boolean;
+  /** Build the form library's index a moment after boot, so the first Form library visit is not the one that waits. The app turns it on; fixtures leave it off. */
+  warm?: boolean;
   /** First-run setup in front of the frame while the database has no access mode (the shipped app; fixtures leave it off). */
   firstRun?: boolean;
   /** Start the agent remote control and apply its commands (the shipped app, also in the dev environment; fixtures leave it off). Inert unless the Rust feature `agent` is built in and GPUI_AGENT=1. */
@@ -99,14 +103,15 @@ function ViewFrame() {
       </View>
     );
   }
-  const cap = layout === "page" ? SIZE.contentMax : layout === "wide" ? 1120 : undefined;
+  // The old rule: padding 32 (16 under 640 points of surface), the cap of 880 (1120, none) includes it (routes.ts contentBox).
+  const box = () => contentBox(layout, app.layout.mainWidth());
   return (
     <Scroll
       testID="main-scroll"
       class="min-h-0 flex-1"
-      contentClass={`items-center pb-14 ${app.layout.mainWidth() < BREAK.narrowContent ? "px-4 pt-5" : "px-8 pt-7"}`}
+      contentClass={`items-center pb-14 ${box().pad === 16 ? "px-4 pt-5" : "px-8 pt-7"}`}
     >
-      <View class="w-full min-w-0" style={{ maxWidth: cap }}>
+      <View testID="content-column" class="w-full min-w-0" style={{ maxWidth: box().maxWidth }}>
         <Guarded route={{ ...route, view }} />
       </View>
     </Scroll>
@@ -231,6 +236,9 @@ export function Shell(props: ShellProps) {
   if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
   // The polls end with the root; headless fixtures leave them off unless a test asks.
   if (props.polling !== false) cleanup(startPolling());
+  // A queued return is watched where the polls run, and in the dev environment too (the app asks); fixtures leave it off.
+  if (props.watchQueued ?? props.polling !== false) cleanup(startQueuedWatch());
+  if (props.warm === true) cleanup(warmLibrary());
   // The agent remote control (Rust feature `agent`, GPUI_AGENT=1): its commands are applied here, polled only while it listens.
   // Not tied to `polling`: the dev environment runs with the polls off, and an agent run is a dev run.
   if (props.agent === true) cleanup(startAgentBridge());

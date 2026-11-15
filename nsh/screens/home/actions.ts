@@ -3,7 +3,7 @@
 // app.openForm, app.cancelQueuedEntry, app.taxpayerUi.useAsTemplate and app.startNewReturn.
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow } from "../../bir";
 import { errorText } from "../../lib/errors";
-import { app, openReturn, store, toast } from "../../shell";
+import { app, cancelQueue, openReturn, store, toast } from "../../shell";
 
 /** Opens the return a deadline row names (a saved one opens exactly: two in one month stay two). */
 export function openDeadline(d: DeadlineRow): void {
@@ -15,14 +15,9 @@ export function openListed(r: ReturnRow): void {
   openReturn({ tin: r.tin, code: r.form_code, year: r.taxable_year, period: r.period, returnKey: r.return_key });
 }
 
-/** "Cancel queue" on a queued row: the return is an editable draft again. A refusal from the host is said as it is. */
+/** "Cancel queue" on a queued row: the return is an editable draft again, or "This return was already sent." and the lists read again. */
 export function cancelQueued(r: ReturnRow): void {
-  try {
-    store.write("cancel_queued", r.tin, r.form_code, r.taxable_year, r.period || null);
-    toast("Queue cancelled. The return is an editable draft again.");
-  } catch (e) {
-    toast(errorText(e), "triangle-alert");
-  }
+  cancelQueue(r.tin, r.form_code, r.taxable_year, r.period || null);
 }
 
 /** "Use as template" on a filed return: its answers become the form's template for the branch. */

@@ -2,13 +2,12 @@
 // each taxpayer at a glance, the as-needed forms, recently filed; on a fresh install, the welcome with three numbered steps.
 // The numbers come from lib/dashboard.ts over the store's cached reads. Tiles: Overdue and Due in 7 days narrow the list under
 // the strip, Drafts, Waiting to send and Filed this month open Filings with a preset (preset.ts).
-import { computed, signal, View, windowSize } from "nsh";
+import { cleanup, computed, signal, View, windowSize } from "nsh";
 import type { AsNeededForm, AsNeededReturn, DeadlineRow, ReturnRow } from "../../bir";
 import { loadDashboard, pickedDeadlines, tileSpecs, type HomeView, type TileSpec } from "../../lib/dashboard";
 import { MONTHS_LONG } from "../../lib/dates";
-import { app, go, store, today } from "../../shell";
+import { app, contentColumn, go, store, today } from "../../shell";
 import { SAVED_RETURNS_KEY } from "../../shell/store";
-import { BREAK, SIZE } from "../../theme/tokens";
 import { AppButton, EmptyRow, Icon, type IconName, ListGroup, ListRow, NameCell, PageHeader, SectionTitle, StepCircle, Text } from "../../ui";
 import { AsNeededHead, AsNeededUndated, DeadlineStrip, DueRow, FiledRow, StatTile, TaxpayerRow } from "./parts";
 import { homePick } from "./pick";
@@ -29,8 +28,7 @@ function longToday(now: Date): string {
 /** The page's width before its first layout: the window less the frame, as the frame's page column would have it. */
 function firstWidth(): number {
   if (app.layout.narrow()) return windowSize().width - 32;
-  const main = app.layout.mainWidth();
-  return Math.min(SIZE.contentMax, main - (main < BREAK.narrowContent ? 32 : 64));
+  return contentColumn("page", app.layout.mainWidth());
 }
 
 /** Tiles per row: five from 640 wide, three from 420, two under it. */
@@ -191,8 +189,11 @@ function Dashboard(props: { width: () => number }) {
 
 /** The Home view: the dashboard, or the welcome while no taxpayer exists. */
 export function Home() {
-  // Drafts are read once per visit, not on every poll (the store keeps this key outside the poll's sweep).
-  store.forget(SAVED_RETURNS_KEY);
+  // Home draws from what the store holds at once; the drafts (kept outside the poll's sweep) are read again once per visit, in the
+  // background, after the page is up, so the visit never waits for a read.
+  const held = store.has(SAVED_RETURNS_KEY);
+  const refresh = setTimeout(() => held && store.forget(SAVED_RETURNS_KEY), 0);
+  cleanup(() => clearTimeout(refresh));
   const width = signal(firstWidth());
   return (
     <View testID="home" class="w-full" onLayout={(e) => e.bounds.size.width > 0 && width.set(Math.round(e.bounds.size.width))}>

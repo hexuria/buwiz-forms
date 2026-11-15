@@ -3,7 +3,7 @@
 // edit with the setups), Templates, New taxpayer (with its errors) and New branch. `just nsh-shots taxpayer` saves
 // ~/BuwizNsh/evidence/taxpayer/*.png. Headless (plain nsh test) it takes no pictures and passes.
 import { expect, open, test } from "nsh/test";
-import { LOOKS, shoot } from "./shoot";
+import { clearCells, LOOKS, shoot } from "./shoot";
 
 const ENTRY = "../TaxpayerDemo.tsx";
 
@@ -19,7 +19,7 @@ for (const look of LOOKS) {
     await shoot(app, `taxpayer-${look.name}-profile`);
     await app.press("id:tp-sec-taxpayer-edit");
     await app.waitFor("id:tp-taxpayer-name");
-    await app.clear("id:tp-taxpayer-tin");
+    await clearCells(app, "id:tp-taxpayer-tin");
     await app.type("id:tp-taxpayer-tin", "0001");
     await app.press("id:tp-taxpayer-save");
     await app.wait(400);

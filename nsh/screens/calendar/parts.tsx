@@ -2,15 +2,13 @@
 // itself is the kit's PressCell), the taxpayers as choices, and the width of the content column.
 import { View } from "nsh";
 import type { DeadlineRow } from "../../bir";
-import { app, store, today } from "../../shell";
-import { BREAK, SIZE } from "../../theme/tokens";
+import { app, contentColumn, store, today } from "../../shell";
 import { Avatar, type ChipTone, formatTin, initials, Line, type MultiComboOption, type Tone } from "../../ui";
 import { toneOf } from "./rows";
 
-/** The width of the content column: the main pane less the frame's padding, at most the page column (old renderCalendar's width). */
+/** The width of the content column: the main pane less the frame's padding, at most the page column less it too (old renderCalendar's width). */
 export function contentWidth(): number {
-  const w = app.layout.mainWidth();
-  return Math.min(SIZE.contentMax, w - (w < BREAK.narrowContent ? 32 : 64));
+  return contentColumn("page", app.layout.mainWidth());
 }
 
 /** Every taxpayer as a choice: avatar, name, TIN. */

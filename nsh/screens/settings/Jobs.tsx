@@ -2,7 +2,7 @@
 // tails today's ebirforms.*.log. The old "Background tasks" page, and go("cron_tasks"), open this section.
 import { signal, View } from "nsh";
 import type { BackgroundJob } from "../../bir";
-import { AppButton, Chip, EmptyRow, ListGroup, ListRow, NameCell, Segmented, Text } from "../../ui";
+import { AppButton, Chip, EmptyRow, ListGroup, ListRow, Segmented, Text } from "../../ui";
 import { archiveJob, cancelQueued, deleteJob, jobsUi, purgeArchived, refreshLog, setFilter, setLogFilter, setTab } from "./jobsState";
 import { filterJobs, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_FILTERS, logHeadline, logView, STATUS_FILTERS } from "./logic";
 
@@ -33,17 +33,11 @@ function JobRow(props: { job: BackgroundJob; beside: () => boolean }) {
     <ListRow testID={`job-${jobKey(props.job)}`}>
       <View class="min-w-0 flex-1 gap-2">
         <View class="flex-row items-center gap-3">
-          <If
-            when={props.beside()}
-            else={
-              <View class="min-w-0 flex-1">
-                <Text variant="control">{props.job.name}</Text>
-                <Text variant="meta" tone="fg3">{jobSub(props.job)}</Text>
-              </View>
-            }
-          >
-            <NameCell title={props.job.name} sub={jobSub(props.job)} />
-          </If>
+          {/* The words wrap (a job's name carries a TIN and a mailbox, its line a timestamp): never cut to one line with an ellipsis. */}
+          <View testID={`job-${jobKey(props.job)}-words`} class="min-w-0 flex-1">
+            <Text variant="control">{props.job.name}</Text>
+            <Text variant="meta" tone="fg3">{jobSub(props.job)}</Text>
+          </View>
           <Chip label={props.job.status || "Unknown"} tone={jobTone(props.job.status)} />
           <If when={props.beside()}>
             <JobButtons job={props.job} />

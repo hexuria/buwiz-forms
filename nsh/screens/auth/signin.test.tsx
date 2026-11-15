@@ -33,6 +33,36 @@ test("phone: the owner's TIN and PIN sign in; wrong ones say why and clear the c
   await app.waitFor("text:session: admin");
 });
 
+test("desktop: the TIN is nine cells in three groups; the ninth digit moves the keys to the PIN and Backspace in an empty PIN moves them back", async () => {
+  const app = await open(ENTRY, { ...WIDE, host: { params: SOLO } });
+  await app.waitFor("id:auth-card");
+  // 000-000-000 as cells with a dash between the groups (the old DigitCells), not one text box.
+  expect(app.shows("id:auth-tin-dash-1")).toBe(true);
+  expect(app.shows("id:auth-tin-dash-2")).toBe(true);
+  expect(app.shows("id:auth-tin-dash-3")).toBe(false);
+  await app.type("id:auth-tin", "000-123-453");
+  expect(app.value("id:auth-tin")).toBe("000123453");
+  // The ninth digit handed the keys on: the next digits are the PIN's.
+  await app.keyboard.press("1");
+  await app.keyboard.press("2");
+  expect(app.value("id:auth-tp-pin")).toBe("12");
+  await app.keyboard.press("backspace");
+  await app.keyboard.press("backspace");
+  expect(app.value("id:auth-tp-pin")).toBe("");
+  // Backspace in the empty PIN goes back to the TIN: a digit typed now is the TIN's, not the PIN's.
+  await app.keyboard.press("backspace");
+  await app.keyboard.press("7");
+  expect(app.value("id:auth-tp-pin")).toBe("");
+  expect(app.value("id:auth-tin")).toBe("000123453");
+  // The keys are in the TIN: Backspace takes its last digit, the ninth again moves them on to the PIN.
+  await app.keyboard.press("backspace");
+  expect(app.value("id:auth-tin")).toBe("00012345");
+  await app.keyboard.press("3");
+  expect(app.value("id:auth-tin")).toBe("000123453");
+  await app.keyboard.press("1");
+  expect(app.value("id:auth-tp-pin")).toBe("1");
+});
+
 test("desktop: six wrong PINs start the host's wait, which even the right PIN waits out", async () => {
   const app = await open(ENTRY, { ...WIDE, host: { params: SOLO } });
   await app.waitFor("id:auth-card");

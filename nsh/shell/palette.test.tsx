@@ -11,10 +11,17 @@ test("desktop: Cmd+K searches taxpayers by name and by TIN, and Enter runs the r
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
   // Everything is listed before typing: taxpayers, the open taxpayer's branches, pages, actions.
-  for (const word of ["Taxpayers", "Branches", "Go to", "Actions", "Toggle sidebar", "Change theme"]) expect(app.texts()).toContain(word);
+  // The group headings are the one place the design keeps small capitals (the old palette): 11/600, and the rows 13/400 on 36 points.
+  for (const word of ["TAXPAYERS", "BRANCHES", "GO TO", "ACTIONS", "Toggle sidebar", "Change theme"]) expect(app.texts()).toContain(word);
+  expect(app.texts()).not.toContain("Go to");
+  expect(app.texts()).not.toContain("Taxpayers");
+  const heading = app.spanStyle("text:GO TO");
+  expect(heading.fontSize).toBe(11);
+  expect(heading.fontWeight).toBeGreaterThanOrEqual(600);
+  expect(app.spanStyle("text:Toggle sidebar").fontWeight).toBe(400);
 
   await app.type("id:palette-input", "juana");
-  await app.waitUntil(() => !app.texts().includes("Go to")); // the list narrowed to the one taxpayer
+  await app.waitUntil(() => !app.texts().includes("GO TO")); // the list narrowed to the one taxpayer
   expect(app.texts()).toContain("Juana Santos");
   expect(app.shows("id:palette-item-1")).toBe(false);
   await app.submit("id:palette-input");
@@ -80,7 +87,15 @@ test("desktop: the start-a-return dialog lists the year's forms, period, templat
   await app.press("id:sb-new");
   await app.waitFor("id:new-return");
   expect(app.texts()).toContain("Start a return");
+  // The old header: "Juana Santos ·", the TIN with its branch code, "Head office" (no dot between the last two), the code regular.
+  await app.waitFor("id:new-return-who");
+  expect(app.texts()).toContain("Juana Santos ·");
+  expect(app.texts()).toContain("000-123-453-00000");
+  expect(app.texts()).toContain("Head office");
+  expect(app.spanStyle("id:new-return-who >> text:000-123-453-00000").fontWeight).toBe(400);
   expect(app.shows("id:new-return-1601C")).toBe(true);
+  // The list's rows are the old ones: 13/400 labels (the form's title), not the sidebar's 13/500.
+  expect(app.spanStyle("text:Quarterly Percentage Tax Return").fontWeight).toBe(400);
   expect(app.shows("id:new-return-2551Q")).toBe(true);
   expect(app.texts()).toContain("No template");
   expect(app.shows("id:new-return-period")).toBe(true);
@@ -124,6 +139,8 @@ test("desktop: Recent lists the returns opened (the last four), marks the one on
   await app.waitFor("text:Recent");
   const row = () => app.texts().find((t) => /^1601C .* · Juana Santos$/.test(t));
   await app.waitUntil(() => row() !== undefined);
+  // The whole label shows: 12/500 with the letters a little closer, and a second line for a longer name (never an ellipsis cut).
+  expect(app.spanStyle("text:" + row()).fontSize).toBe(12);
   // What the app keeps: under the logical key, suffixed by the database path.
   await app.waitUntil(() => Object.keys(app.storage()).some((k) => k.startsWith("redesign.recent@")));
   const kept = Object.entries(app.storage()).find(([k]) => k.startsWith("redesign.recent@"))!;
@@ -174,16 +191,26 @@ test("desktop: Next to do and Previous to do are in the palette only while a for
   await app.type("id:palette-input", "to do");
   await app.waitFor("text:Next to do");
   expect(app.texts()).toContain("Previous to do");
-  // Nothing has been checked yet, so a step is a step to the next section (Cmd+Right does the same).
-  expect(app.texts().some((t) => / · 1 of \d+$/.test(t))).toBe(true);
+  // The pill counts what is to do before anything is touched; a step goes to the first of those rows (Cmd+Right does the same).
+  expect(app.texts().some((t) => /^\d+ to do · /.test(t))).toBe(true);
   await app.submit("id:palette-input");
   await app.waitFor("id:palette-input", { state: "gone" });
-  await app.waitUntil(() => app.texts().some((t) => / · 2 of \d+$/.test(t)));
+  await app.waitUntil(() => app.texts().some((t) => /^1 of \d+ to do · /.test(t)));
+
+  // Next once more: the second row. Previous: the first again.
+  await app.keyboard.press("mod+k");
+  await app.waitFor("id:palette-input");
+  await app.type("id:palette-input", "next to");
+  await app.waitFor("text:Next to do");
+  await app.submit("id:palette-input");
+  await app.waitFor("id:palette-input", { state: "gone" });
+  await app.waitUntil(() => app.texts().some((t) => /^2 of \d+ to do · /.test(t)));
 
   await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
   await app.type("id:palette-input", "previous");
   await app.waitFor("text:Previous to do");
   await app.submit("id:palette-input");
-  await app.waitUntil(() => app.texts().some((t) => / · 1 of \d+$/.test(t)));
+  await app.waitFor("id:palette-input", { state: "gone" });
+  await app.waitUntil(() => app.texts().some((t) => /^1 of \d+ to do · /.test(t)));
 });

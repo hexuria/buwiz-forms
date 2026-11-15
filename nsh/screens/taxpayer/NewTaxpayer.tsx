@@ -6,7 +6,7 @@ import { batch, signal, untracked, View } from "nsh";
 import type { Taxpayer } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app, back, go, store, toast } from "../../shell";
-import { Dropdown, Field, FieldCell, FieldGrid, FormActions, PageHeader, Text, TextField, TinInput } from "../../ui";
+import { DigitCells, Dropdown, Field, FieldCell, FieldGrid, FormActions, PageHeader, Text, TextField } from "../../ui";
 import { SearchPick } from "../form/controls";
 import { startFromChoice } from "./actions";
 import { emptyNewTaxpayer, newTaxpayerErrors, newTaxpayerProblems, startHint, startYear, TAXPAYER_TYPES, type NewTaxpayerDraft } from "./logic";
@@ -170,15 +170,13 @@ export function NewTaxpayerPage() {
         <FieldGrid>
           <FieldCell>
             <Field label="TIN" error={errors().tin}>
-              <TinInput
+              <DigitCells
                 testID="new-tp-tin"
-                accessibilityLabel="TIN"
-                placeholder="000-000-000"
+                label="TIN"
+                length={9}
+                groups={3}
                 value={n().tin}
-                onChange={(d) => {
-                  set({ tin: d }, "tin");
-                  set({ tin: d.slice(0, 9) }, "tin");
-                }}
+                onChange={(d) => set({ tin: d }, "tin")}
                 onBlur={() => touch("tin")}
                 error={Boolean(errors().tin)}
               />

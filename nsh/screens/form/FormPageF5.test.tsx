@@ -7,15 +7,17 @@ const ENTRY = "./FormPageAny.tsx";
 const DESKTOP = { width: 1440, height: 900, platform: "macos" as const };
 const Q3 = { formCode: "2551Q", year: 2026, period: 3 };
 
-test("F5-2 desktop: Check's toast, the pill's red count and the part badges count every host message once", async () => {
+test("F5-2 desktop: Check's toast counts every host message; the pill and the part badges count the rows holding one", async () => {
+  // F9-1: the owner's pick is the old page's numbers (form_page.js check toast = errors.length; drawPill red = to-do
+  // rows with a message; partErrors = rows with a message), so 4 in the toast, 2 on the pill, 1 and 1 on the parts.
   const app = await open(ENTRY, { ...DESKTOP, host: { params: Q3 } });
   await app.waitFor("text:BIR Form 2551Q");
   await app.press("id:fp-check");
   await app.waitFor("text:4 items need attention.", { timeout: 5000 });
-  await app.waitFor("label:4 items need attention");
-  expect(app.shows("id:fp-pill-count >> text:4")).toBe(true);
-  // Item 13 (Part I) carries three messages, Item 20 (Part II) one: 3 + 1, as the toast says.
-  expect(app.shows("id:fp-nav-1 >> text:3")).toBe(true);
+  await app.waitFor("label:2 items need attention");
+  expect(app.shows("id:fp-pill-count >> text:2")).toBe(true);
+  // Item 13 (Part I) carries three messages, Item 20 (Part II) one: one row each.
+  expect(app.shows("id:fp-nav-1 >> text:1")).toBe(true);
   expect(app.shows("id:fp-nav-2 >> text:1")).toBe(true);
 });
 
@@ -48,12 +50,14 @@ test("F5-4 desktop: the pill names the part at the top of the viewport while the
   await app.waitFor("text:BIR Form 2551Q");
   await app.press("id:fp-parts-toggle");
   await app.waitFor("text:5 parts");
-  await app.waitFor("text:/ · 1 of 5$/");
-  for (let i = 0; i < 10 && app.shows("text:/ · 1 of 5$/"); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
-  await app.waitFor("text:/ · [2-5] of 5$/");
+  // With rows to do the pill reads "n to do · <part>" (F9-1, old drawPill); the part is still the one at the top.
+  const first = "text:/ to do · Page 1$/";
+  await app.waitFor(first);
+  for (let i = 0; i < 10 && app.shows(first); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
+  await app.waitFor("text:/ to do · (Part|Schedule) /");
   // Back at the top: the first part again.
-  for (let i = 0; i < 20 && !app.shows("text:/ · 1 of 5$/"); i++) await app.scroll("id:form-scroll", -400).catch(() => {});
-  await app.waitFor("text:/ · 1 of 5$/");
+  for (let i = 0; i < 20 && !app.shows(first); i++) await app.scroll("id:form-scroll", -400).catch(() => {});
+  await app.waitFor(first);
 });
 
 test("F5-5 phone: a fact card's long choice is a full-width row that takes the press", async () => {

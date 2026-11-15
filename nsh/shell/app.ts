@@ -9,9 +9,10 @@
 //                (appLocked) in front of the frame: screens/auth draws them, this file keeps the state
 //   persistence  redesign.recent, redesign.selection, redesign.read_notifications (each suffixed @<database path>; with the path
 //                unknown they are not kept at all) and redesign.prefs, in NSH Storage; the theme through bir get_setting / set_setting
-//   polls        events 30 s, device filings 5 s, update status 1 s: startPolling(), owned by the root; none shows a toast while a lock is up
+//   polls        events 30 s, device filings 5 s, update status 1 s: startPolling(), owned by the root; none shows a toast while a lock is up;
+//                while a return is Queued the lists are read every 3 s (startQueuedWatch, also in the dev environment)
 import type { Accessor, Signal } from "nsh";
-import { batch, computed, setColorScheme, signal, Storage, windowSize } from "nsh";
+import { batch, computed, setColorScheme, signal, Storage, untracked, windowSize } from "nsh";
 import { Application } from "nsh/desktop";
 import { bir, doorStatus, setAgentAccess, shutdown, type Branch, type ReturnRow, type Taxpayer, type UpdateStatus } from "../bir";
 import { shellChromeVisible } from "../lib/chrome_gate";
@@ -1030,8 +1031,48 @@ function watchUpdate(): void {
   updateStatus.set(next);
 }
 
+/** How often the lists are read again while a return is Queued (instead of the events poll's 30 s). */
+export const QUEUED_POLL_MS = 3000;
+
+/** Whether the cached filed list holds a Queued return (read now when it was dropped). False behind a lock: nothing is read for nobody. */
+function anyQueued(): boolean {
+  if (cloudLocked() || appLocked()) return false;
+  return untracked(() => store.returns("filed")).some((r) => r.status === "Queued");
+}
+
+/**
+ * The submission worker sends a Queued return within a second or two and tells nobody, so Filings and Home would say Queued until
+ * something else moved the cache (the old app relied on its 30 s events poll, and a refused Cancel queue). While any return is Queued
+ * the events poll runs every 3 s instead of every 30 s, in the dev environment too (where the other polls wait for BIR_SHELL_POLL=1).
+ * The root starts it and calls the returned function on unmount.
+ */
+export function startQueuedWatch(): () => void {
+  return startPolls(
+    [{ name: "queued", every: QUEUED_POLL_MS, first: 1000, run: () => (anyQueued() ? pollEvents() : undefined) }],
+    (name, error) => store.logScreen("warn", `poll ${name}: ${errorText(error)}`),
+  );
+}
+
+/** How long after the shell is up the form library is built (the first screen has been drawn by then). */
+export const WARM_DELAY_MS = 600;
+
+/**
+ * Builds the form library's index once, a moment after boot (a sync host call: about a second in a debug build), so the first
+ * visit to the Form library, the palette's forms and New return do not pay for it. Returns the function that cancels it.
+ */
+export function warmLibrary(): () => void {
+  const timer = setTimeout(() => {
+    try {
+      store.screenIndex();
+    } catch {
+      // The index is asked for again where it is used; the store logs a failure.
+    }
+  }, WARM_DELAY_MS);
+  return () => clearTimeout(timer);
+}
+
 /** One run of each poll that can toast, for a fixture that plays a poll at a chosen moment (the app's own runs are startPolling's). */
-export const pollSteps = { events: (): void => pollEvents(), deviceFilings: (): void => pullDeviceFilings() };
+export const pollSteps = { events: (): void => pollEvents(), deviceFilings: (): void => pullDeviceFilings(), queued: (): void => (anyQueued() ? pollEvents() : undefined) };
 
 /** Starts the three polls; the root calls it on mount and the returned function on unmount. */
 export function startPolling(): () => void {

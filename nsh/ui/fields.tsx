@@ -5,7 +5,7 @@
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
 import type { InputRef, JSX } from "nsh";
 import { effect, signal, Text as NText, untracked, View } from "nsh";
-import { type CalendarEntry, DatePicker, Input, OtpInput } from "nsh/base";
+import { type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
 import type { IconName } from "./icons";
 import { cx, TOUCH } from "./look";
@@ -41,6 +41,11 @@ export interface TextFieldProps {
   width?: number;
   /** md: 32 tall, sm: 28 (44 on touch either way). */
   size?: "md" | "sm";
+  /**
+   * No box of its own: no border, fill or padding, and no ring while it has the keys, 14-point text. For a search line that sits
+   * in a row of its own (the command palette's, whose icon and Esc key are beside it); the row draws the frame.
+   */
+  bare?: boolean;
   /** Right-aligned text (amounts, percents). */
   align?: "left" | "right";
   /** Tabular figures (TINs, amounts, dates). */
@@ -85,10 +90,15 @@ export function TextField(props: TextFieldProps) {
       </If>
       <View
         class={cx(
-          "flex-row items-center gap-1.5 rounded-(--radius-row) border px-2.5",
-          TOUCH ? "min-h-11" : sm() ? "h-7" : "h-8",
-          flat() ? "border-border bg-hover" : "bg-card",
-          props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
+          "flex-row items-center gap-1.5",
+          props.bare
+            ? TOUCH ? "min-h-11" : "h-8"
+            : cx(
+                "rounded-(--radius-row) border px-2.5",
+                TOUCH ? "min-h-11" : sm() ? "h-7" : "h-8",
+                flat() ? "border-border bg-hover" : "bg-card",
+                props.error ? "border-danger" : !flat() && "border-border-strong focus-within:border-accent-blue",
+              ),
           props.disabled && "opacity-60",
         )}
       >
@@ -121,7 +131,8 @@ export function TextField(props: TextFieldProps) {
           onSelectionChange={props.onSelectionChange}
           onKeyPress={props.onKeyPress}
           class={cx(
-            "h-full min-w-0 flex-1 bg-transparent text-body caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
+            "h-full min-w-0 flex-1 bg-transparent caret-accent-blue placeholder:text-subtle-foreground selection:bg-accent-blue-soft",
+            props.bare ? "text-emph font-normal" : "text-body",
             flat() ? "text-muted-foreground" : "text-foreground",
             props.align === "right" && "text-right",
             props.tabular && "tabular-nums",
@@ -460,6 +471,101 @@ function CalendarItem(props: { item: CalendarEntry }) {
   return <NText class={cx("text-body tabular-nums", strong ? "font-semibold" : props.item.today ? "font-semibold" : "font-normal")}>{label}</NText>;
 }
 
+/** Props of CalendarPicker (the kit's own: DateField and CalendarButton draw it). */
+interface CalendarPickerProps {
+  /** The picked day as an ISO date (yyyy-mm-dd), or null. */
+  value: string | null;
+  /** Controlled open state; unset, the picker keeps its own. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** A day was picked: its ISO date (yyyy-mm-dd). */
+  onPick: (iso: string) => void;
+  /** What screen readers call the calendar. */
+  label: string;
+  triggerID?: string;
+  disabled?: boolean;
+  /** The first and the last day that can be picked (ISO dates). */
+  min?: string;
+  max?: string;
+}
+
+/** The calendar's icon button and its popup (a sheet on touch): the one DatePicker the kit draws, with its look. */
+function CalendarPicker(props: CalendarPickerProps) {
+  return (
+    <DatePicker
+      value={props.value}
+      open={props.open}
+      onOpenChange={(e) => props.onOpenChange?.(e.open)}
+      onChange={(e) => {
+        const v = typeof e.value === "string" ? parseTypedDate(e.value.slice(0, 10)) : null;
+        if (v) props.onPick(formatIso(v));
+      }}
+      disabled={props.disabled}
+      disabledMatcher={props.min || props.max ? { before: props.min ?? null, after: props.max ?? null } : null}
+      accessibilityLabel={props.label}
+      previousAccessibilityLabel="Previous month"
+      nextAccessibilityLabel="Next month"
+      offset={6}
+      margin={8}
+      popupClass={TOUCH ? "rounded-t-(--radius-dialog) bg-card p-4 pb-8" : "rounded-(--radius-card) border border-border bg-raised p-3 shadow-lg"}
+      backdropClass="bg-scrim"
+      headerClass="mb-2 flex-row items-center justify-between gap-1"
+      renderItem={(item: CalendarEntry) => <CalendarItem item={item} />}
+      rowClass="flex-row justify-between"
+      itemClass={cx(
+        "items-center justify-center rounded-(--radius-ctl) px-1 text-foreground hover:bg-hover focus:bg-hover selected:bg-primary selected:hover:bg-primary selected:focus:bg-primary selected:text-primary-foreground data-outside:text-subtle-foreground disabled:opacity-40",
+        TOUCH ? "h-11 min-w-11" : "h-8 min-w-8",
+      )}
+      trigger={
+        <View
+          testID={props.triggerID}
+          role="button"
+          accessibilityLabel="Open the calendar"
+          class={cx("items-center justify-center rounded-(--radius-ctl) hover:bg-hover active:bg-selected", TOUCH ? "-mr-2 size-11" : "-mr-1.5 size-6")}
+        >
+          <Icon name="calendar" size={14} tone="fg3" />
+        </View>
+      }
+    />
+  );
+}
+
+/** Props of CalendarButton. */
+export interface CalendarButtonProps {
+  /** The trigger's testID (and what a test presses). */
+  id: string;
+  /** The picked day as an ISO date (yyyy-mm-dd), or "" for none. */
+  value: string;
+  /** A day was picked: its ISO date (yyyy-mm-dd). */
+  onPick: (iso: string) => void;
+  disabled?: boolean;
+  /** The first and the last day that can be picked (ISO dates). */
+  min?: string;
+  /** See min. */
+  max?: string;
+}
+
+/**
+ * A calendar button on its own: the icon that DateField carries in its box, for a date entered in split boxes (the form page's
+ * Year Ended month and year). A press opens the popup (a sheet on touch); a day picked calls onPick with its ISO date.
+ */
+export function CalendarButton(props: CalendarButtonProps) {
+  const open = signal(false);
+  return (
+    <CalendarPicker
+      value={props.value ? props.value.slice(0, 10) : null}
+      open={open()}
+      onOpenChange={(o) => open.set(o)}
+      onPick={props.onPick}
+      label="Pick a date"
+      triggerID={props.id}
+      disabled={props.disabled}
+      min={props.min}
+      max={props.max}
+    />
+  );
+}
+
 /** Props of DateField. */
 export interface DateFieldProps extends MaskedFieldProps {
   /** The stored text: MM/DD/YYYY once it reads as a date, else as typed. */
@@ -528,42 +634,20 @@ export function DateField(props: DateFieldProps) {
       }}
       trailing={
         <If when={!props.locked && !props.disabled}>
-          <DatePicker
+          <CalendarPicker
             value={iso()}
             open={open()}
-            onOpenChange={(e) => open.set(e.open)}
-            onChange={(e) => {
-              const v = typeof e.value === "string" ? parseTypedDate(e.value.slice(0, 10)) : null;
+            onOpenChange={(o) => open.set(o)}
+            label={`Pick ${props.label ?? props.accessibilityLabel ?? "a date"}`}
+            triggerID={props.testID ? `${props.testID}-calendar` : undefined}
+            onPick={(iso) => {
+              const v = parseTypedDate(iso);
               if (!v) return;
               text.set(formatLongDate(v));
               edited.set(true);
               props.onChange(formatMDY(v));
             }}
-            accessibilityLabel={`Pick ${props.label ?? props.accessibilityLabel ?? "a date"}`}
-            previousAccessibilityLabel="Previous month"
-            nextAccessibilityLabel="Next month"
-            offset={6}
-            margin={8}
-            popupClass={TOUCH ? "rounded-t-(--radius-dialog) bg-card p-4 pb-8" : "rounded-(--radius-card) border border-border bg-raised p-3 shadow-lg"}
-            backdropClass="bg-scrim"
-            headerClass="mb-2 flex-row items-center justify-between gap-1"
-            renderItem={(item: CalendarEntry) => <CalendarItem item={item} />}
-            rowClass="flex-row justify-between"
-            itemClass={cx(
-              "items-center justify-center rounded-(--radius-ctl) px-1 text-foreground hover:bg-hover focus:bg-hover selected:bg-primary selected:hover:bg-primary selected:focus:bg-primary selected:text-primary-foreground data-outside:text-subtle-foreground disabled:opacity-40",
-              TOUCH ? "h-11 min-w-11" : "h-8 min-w-8",
-            )}
-            trigger={
-              <View
-                testID={props.testID ? `${props.testID}-calendar` : undefined}
-                role="button"
-                accessibilityLabel="Open the calendar"
-                class={cx("items-center justify-center rounded-(--radius-ctl) hover:bg-hover active:bg-selected", TOUCH ? "-mr-2 size-11" : "-mr-1.5 size-6")}
-              >
-                <Icon name="calendar" size={14} tone="fg3" />
-              </View>
-            }
-          />
+                    />
         </If>
       }
     />
@@ -587,6 +671,10 @@ export interface PinCellsProps {
   /** What the code is for, for screen readers. */
   label: string;
   testID?: string;
+  /** Receives the function that puts the keys in the cells (a screen hands them on from another box). */
+  focusRef?: (focus: () => void) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 /** PIN and one-time-code cells: 32-point boxes (44 on touch), radius 8, the accent on the cell that takes the next digit. */
@@ -594,6 +682,9 @@ export function PinCells(props: PinCellsProps) {
   return (
     <OtpInput
       testID={props.testID}
+      ref={(r: OtpInputRef) => props.focusRef?.(() => r.focus())}
+      onFocus={() => props.onFocus?.()}
+      onBlur={() => props.onBlur?.()}
       length={props.length}
       value={props.value}
       onChange={(e) => props.onChange(digitsOnly(e.value))}
@@ -611,6 +702,82 @@ export function PinCells(props: PinCellsProps) {
       )}
       caretClass="h-4 w-0.5 rounded-full bg-foreground"
     />
+  );
+}
+
+/** Props of DigitCells. */
+export interface DigitCellsProps {
+  /** How many digits: 9 for a TIN, 5 for a branch code. */
+  length: number;
+  /** How many groups the cells are drawn in, a dash between them (3 for a TIN: 000-000-000; 1, the default, for a branch code). */
+  groups?: number;
+  /** The digits typed so far (no dashes). */
+  value: string;
+  onChange: (value: string) => void;
+  /** The last cell was filled: the digits. */
+  onComplete?: (value: string) => void;
+  /** The cells lost the keys (a screen that checks a box when it is left). */
+  onBlur?: () => void;
+  error?: boolean;
+  disabled?: boolean;
+  /** What the digits are for, for screen readers. */
+  label: string;
+  testID?: string;
+  /** Receives the function that puts the keys in the cells (the box before it hands over its last digit). */
+  focusRef?: (focus: () => void) => void;
+}
+
+/** A cell of DigitCells, in points: the old app's 24 wide, 32 tall (28 by 44 on touch), 3 apart; groups sit `DIGIT_GROUP_GAP` apart with a dash. */
+const DIGIT_CELL = TOUCH ? { w: 28, h: 44 } : { w: 24, h: 32 };
+const DIGIT_CELL_GAP = 3;
+const DIGIT_GROUP_GAP = 17;
+
+/**
+ * The digits of a TIN or a branch code as one cell each (the old DigitCells): one OtpInput of `length` cells, drawn in `groups`
+ * groups with a dash between them, so 000-123-453 is nine cells in three groups. The last digit calls onComplete (the screen moves
+ * the keys on, see focusRef). nsh/base's OtpInput draws the gap between its groups but not a mark in it: the dashes are texts laid
+ * over those gaps (the groups' widths are fixed, so their places are known) that take no press.
+ */
+export function DigitCells(props: DigitCellsProps) {
+  const groups = () => Math.max(1, props.groups ?? 1);
+  const per = () => Math.ceil(props.length / groups());
+  const groupWidth = () => per() * DIGIT_CELL.w + (per() - 1) * DIGIT_CELL_GAP;
+  const dashes = () => Array.from({ length: groups() - 1 }, (_, i) => i);
+  return (
+    <View class="relative self-start">
+      <OtpInput
+        testID={props.testID}
+        ref={(r: OtpInputRef) => props.focusRef?.(() => r.focus())}
+        length={props.length}
+        value={props.value}
+        onChange={(e) => props.onChange(digitsOnly(e.value).slice(0, props.length))}
+        onComplete={(e) => props.onComplete?.(digitsOnly(e.value).slice(0, props.length))}
+        onBlur={() => props.onBlur?.()}
+        disabled={props.disabled}
+        groups={groups()}
+        accessibilityLabel={`${props.label}, ${props.length} digits`}
+        class="flex-row disabled:opacity-50"
+        style={{ gap: DIGIT_GROUP_GAP }}
+        groupClass="flex-row gap-0.75"
+        cellClass={cx(
+          "items-center justify-center rounded-(--radius-ctl) border bg-card text-emph font-semibold tabular-nums text-foreground focus:border-accent-blue",
+          props.error ? "border-danger" : "border-border-strong",
+        )}
+        cellStyle={{ width: DIGIT_CELL.w, height: DIGIT_CELL.h }}
+        caretClass="h-3.5 w-0.5 rounded-full bg-foreground"
+      />
+      <Each of={dashes()}>
+        {(i) => (
+          <View
+            testID={props.testID ? `${props.testID}-dash-${i() + 1}` : undefined}
+            class="absolute top-0 bottom-0 items-center justify-center"
+            style={{ left: (i() + 1) * groupWidth() + i() * DIGIT_GROUP_GAP, width: DIGIT_GROUP_GAP, pointerEvents: "none" }}
+          >
+            <Text tone="fg3">-</Text>
+          </View>
+        )}
+      </Each>
+    </View>
   );
 }
 

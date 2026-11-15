@@ -3,10 +3,10 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
-import { AppButton, Code, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
+import { AppButton, CalendarButton, Code, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, emptyCell, isTinItem, needsText, oneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
 import type { AskCard, ElectionCard, FormSession } from "./session";
 
 export interface RowProps {
@@ -137,6 +137,20 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   const radios = fs.filter((f) => f.t === "radio");
   const boxes = fs.filter((f) => f.t !== "radio");
   const multi = fs.length > 1;
+  // A date printed in split boxes (Year Ended MM and YYYY) gets a calendar button beside them, as the old page: a day picked
+  // fills the parts that are open. Not when the item has a date box of its own (that box carries its calendar).
+  const split = fs.some((f) => f.t === "date") ? null : dateParts(fs);
+  const splitParts = split ? [split.month, split.day, split.year].filter((f): f is SchemaField => f !== null) : [];
+  const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked());
+  // What the boxes hold now, as the calendar's own day ("" until the month and the year read as one).
+  const splitIso = () => {
+    if (!split) return "";
+    const m = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
+    const y = Number(s.box(split.year.k).value() || "");
+    const d = split.day ? Number(s.box(split.day.k).value() || "") : 1;
+    if (!(m >= 1 && m <= 12 && y > 1900)) return "";
+    return `${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`;
+  };
   const body = (
     <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3">
       {radios.length ? <RadioGroupControl {...radioProps(s, props.id, it, radios, props.narrow)} /> : null}
@@ -149,6 +163,9 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
           </View>
         );
       })}
+      <If when={splitOpen()}>
+        <CalendarButton id={`fp-date-${props.id}`} value={splitIso()} onPick={(iso) => s.pickDate(split!, iso)} />
+      </If>
     </View>
   );
   if (it.l !== "Additional details") return body;

@@ -3,7 +3,7 @@
 import { signal } from "nsh";
 import { bir, type BackgroundJob, type JobLogTail } from "../../bir";
 import { errorText } from "../../lib/errors";
-import { app, store, toast } from "../../shell";
+import { app, cancelQueue, store } from "../../shell";
 
 /** The two tabs of the Jobs section. */
 export type JobsTab = "jobs" | "logs";
@@ -94,10 +94,5 @@ export function purgeArchived(): void {
 
 /** Takes a queued filing out of the queue: the return is an editable draft again. */
 export function cancelQueued(job: BackgroundJob): void {
-  try {
-    store.write("cancel_queued", job.tin ?? "", job.form_code ?? "", job.taxable_year ?? 0, job.quarter ?? job.month ?? null);
-    toast("Queue cancelled. The return is an editable draft again.");
-  } catch (error) {
-    toast(errorText(error), "triangle-alert");
-  }
+  cancelQueue(job.tin ?? "", job.form_code ?? "", job.taxable_year ?? 0, job.quarter ?? job.month ?? null);
 }

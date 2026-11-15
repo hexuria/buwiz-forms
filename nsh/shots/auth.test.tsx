@@ -3,7 +3,7 @@
 // authenticator, Forgot PIN? for a taxpayer and for the admin, Open without signing in). Light and dark, wide and narrow.
 // `just nsh-shots auth` saves ~/BuwizNsh/evidence/auth/*.png. Headless (plain nsh test) it takes no pictures and passes.
 import { open, test } from "nsh/test";
-import { LOOKS, shoot } from "./shoot";
+import { clearCells, LOOKS, shoot } from "./shoot";
 
 const ENTRY = "../AuthDemo.tsx";
 
@@ -69,7 +69,7 @@ for (const look of LOOKS) {
     await app.waitFor("id:auth-admin-pin");
     await app.wait(300);
     await shoot(app, name("forgot-taxpayer"));
-    await app.clear("id:auth-tin");
+    await clearCells(app, "id:auth-tin");
     await app.type("id:auth-tin", "000000000");
     await app.waitFor("id:auth-recovery");
     await app.wait(300);

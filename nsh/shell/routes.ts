@@ -1,5 +1,6 @@
 // The views the frame can show: one table, no UI. A screen agent adds a view here (name, label, icon, whether it needs a
 // taxpayer, how the frame lays it out) and maps it to its component in views.tsx; nothing else in the shell changes.
+import { BREAK, SIZE } from "../theme/tokens";
 import type { IconName } from "../ui";
 
 /**
@@ -44,6 +45,23 @@ export type ViewName = keyof typeof TABLE;
 
 /** Every view by name. */
 export const ROUTES: Readonly<Record<ViewName, RouteMeta>> = TABLE;
+
+/**
+ * The content column of a page, by the old rule (app/main.js layout(), app/shell/ui.js SIZE): the surface's padding is 32 on each side
+ * (16 under 640 points of surface), and the column's cap INCLUDES that padding: 880 (1120 for the wide views), so the content is
+ * 816 wide in a 1182-point surface, not 880. `full` has no cap. `mainWidth` is app.layout.mainWidth().
+ */
+export function contentBox(layout: ViewLayout, mainWidth: number): { pad: number; maxWidth: number | undefined } {
+  const pad = mainWidth < BREAK.narrowContent ? 16 : 32;
+  const cap = layout === "page" ? SIZE.contentMax : layout === "wide" ? 1120 : undefined;
+  return { pad, maxWidth: cap === undefined ? undefined : Math.max(200, cap - pad * 2) };
+}
+
+/** The width of the content column in a surface `mainWidth` wide: the cap less the padding, or the surface less the padding (the old `column`, at least 200). */
+export function contentColumn(layout: ViewLayout, mainWidth: number): number {
+  const { pad, maxWidth } = contentBox(layout, mainWidth);
+  return Math.max(200, Math.min(maxWidth ?? Infinity, mainWidth - pad * 2));
+}
 
 /** What a view is opened with (a Home tile's Filings preset, a settings section, the form to open ...). */
 export type ViewParams = Record<string, unknown>;

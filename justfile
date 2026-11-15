@@ -928,8 +928,8 @@ _package-linux: build-frozen-html-identity
 
 # ---------------------------------------------------------------------------
 # NSH (TSX) app in nsh/. Read nsh/AGENTS.md first.
-# The CLI is ~/BuwizNsh/tools/bin/nsh (NSH 0.5.1 built from the checkout at
-# /Volumes/goldcoders/features/nsh-tsx/nsh); never the obsolete one in ~/.nsh.
+# The CLI is ~/BuwizNsh/tools/bin/nsh (NSH 0.5.1 built from the NSH checkout that
+# sits beside this repo's checkout, ../nsh); never the obsolete one in ~/.nsh.
 # Every recipe puts that CLI first on PATH and sets CARGO_TARGET_DIR. Extra
 # arguments pass through: `just nsh-test --filter ping`.
 # ---------------------------------------------------------------------------

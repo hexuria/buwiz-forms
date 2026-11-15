@@ -3,7 +3,7 @@
 import { View, Scroll } from "nsh";
 import { frequencyOf, periodOptions, type Frequency } from "../lib/periods";
 import { notSetForForm, notSetSentence } from "../lib/facts";
-import { AppButton, Chip, Code, Dialog, Dropdown, Icon, MetaLine, NavRow, Text } from "../ui";
+import { AppButton, Chip, Code, Dialog, Dropdown, Icon, NavRow, Text } from "../ui";
 import { app } from "./app";
 import { store } from "./store";
 
@@ -40,7 +40,12 @@ export function NewReturn() {
     <Dialog testID="new-return" open={true} onOpenChange={(o) => !o && app.closeOverlay()} width={560}>
       <View class="gap-0.5 px-5 pt-4 pb-1">
         <Text variant="title">Start a return</Text>
-        <MetaLine parts={[tp()?.name, <Code tone="fg2">{br()?.tin_display ?? ""}</Code>, br()?.name]} />
+        {/* The old header (chrome.js): "name ·", the TIN with its branch code, the branch's name; 4 apart, no dots after the first. */}
+        <View testID="new-return-who" class="mt-0.5 flex-row gap-1">
+          <Text variant="meta" tone="fg2">{`${tp()?.name ?? ""} ·`}</Text>
+          <Code tone="fg2" class="font-normal">{br()?.tin_display ?? ""}</Code>
+          <Text variant="meta" tone="fg2">{br()?.name ?? ""}</Text>
+        </View>
       </View>
       <Scroll testID="new-return-list" class="shrink" style={{ maxHeight: 360 }} contentClass="gap-0.5 p-3">
         <Each of={forms()} key={(c) => c}>
@@ -49,6 +54,7 @@ export function NewReturn() {
               testID={`new-return-${c()}`}
               leading={<Code class="w-15">{c()}</Code>}
               label={entry(c())?.t ?? c()}
+              size="list"
               count={entry(c())?.freq ?? ""}
               current={c() === code()}
               onPress={() => app.pickNewReturnForm(c())}
@@ -57,19 +63,24 @@ export function NewReturn() {
         </Each>
       </Scroll>
       <If when={notSet()}>
-        <View testID="new-return-not-set" class="flex-row flex-wrap items-center gap-2 px-5 pb-3">
-          <Icon name="triangle-alert" size={14} tone="warning" />
-          <Text variant="meta" tone="fg2" class="min-w-0 flex-1">{notSet() ?? ""}</Text>
-          <AppButton
-            testID="new-return-profile"
-            label="Open the profile"
-            variant="ghost"
-            size="sm"
-            onPress={() => {
-              app.closeOverlay();
-              app.openProfile();
-            }}
-          />
+        <View testID="new-return-not-set" class="gap-2 px-5 pb-3">
+          <View class="flex-row items-center gap-2">
+            <Icon name="triangle-alert" size={14} tone="warning" />
+            <Text variant="meta" tone="fg2" class="min-w-0 flex-1">{notSet() ?? ""}</Text>
+          </View>
+          {/* On its own line under the warning, as the old dialog wraps it (not to the right of the sentence). */}
+          <View class="self-start">
+            <AppButton
+              testID="new-return-profile"
+              label="Open the profile"
+              variant="ghost"
+              size="sm"
+              onPress={() => {
+                app.closeOverlay();
+                app.openProfile();
+              }}
+            />
+          </View>
         </View>
       </If>
       <View class="flex-row flex-wrap items-center justify-between gap-2 border-t border-border px-5 pt-3 pb-4">
