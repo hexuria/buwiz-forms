@@ -8,9 +8,12 @@ publish = false
 [workspace]
 
 # Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork with upstream v0.5.1 merged, NSH 0.5.1).
-# Never mix sources: a version or source mismatch is a cargo error. See nsh/AGENTS.md.
+# The checkout is a SIBLING of the buwiz-forms checkout: <parent>/buwiz-forms and <parent>/nsh, so from this folder it is ../../nsh.
+# The worktree layout (features/nsh-tsx/{buwiz-forms,nsh}) and CI (.github/workflows/nsh.yml) both follow it. The nsh CLI takes
+# the source from these paths (`cargo metadata` makes them absolute), so relative paths work with nsh check/build/test/run.
+# Never mix sources: a version or source mismatch is a cargo error. See nsh/AGENTS.md and docs/platforms/nsh.md.
 [dependencies]
-nsh-core = { path = "/Volumes/goldcoders/features/nsh-tsx/nsh/crates/nsh-core" }
+nsh-core = { path = "../../nsh/crates/nsh-core" }
 
 # The door: the UI-free host functions of the Rust brain, in plain SQLite (no sqlcipher, no database key).
 # default-features = false is what keeps SQLCipher out; the gate is
@@ -44,7 +47,7 @@ block2 = "0.6.2"
 dispatch2 = "0.3.1"
 # The window's own control plane (semantic tree, press, type, screenshot) is NSH's, in nsh-platform-macos: feature
 # `gpui-agent-server`, a second listener. Only under `agent`; see nsh/AGENTS.md "Agent remote control".
-nsh-platform-macos = { path = "/Volumes/goldcoders/features/nsh-tsx/nsh/crates/nsh-platform-macos", default-features = false, optional = true }
+nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos", default-features = false, optional = true }
 
 [features]
 default = []

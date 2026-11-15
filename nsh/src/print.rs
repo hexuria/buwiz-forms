@@ -226,14 +226,17 @@ fn process_alive(pid: u32) -> bool {
 }
 
 /// Where a process cannot be asked here (Windows: no OpenProcess binding in this crate) every one counts as running, so
-/// [`Print::listen`] does not sweep at all there: a stale folder stays until the system cleans its temp folder.
+/// [`Print::listen`] does not sweep at all there: a stale folder stays until the system cleans its temp folder. (Nothing
+/// outside the tests calls it there, so it may stand unused.)
 #[cfg(not(unix))]
+#[cfg_attr(not(test), allow(dead_code))]
 fn process_alive(_pid: u32) -> bool {
     true
 }
 
 /// Deletes the `ebirforms-print-<pid>` folders in `parent` of processes that are gone (a quit with a preview open leaves
 /// its folder: the window's close event may not run). A folder of a running process, and anything else, stays.
+#[cfg_attr(not(any(test, unix)), allow(dead_code))]
 fn sweep_stale(parent: &Path, alive: impl Fn(u32) -> bool) {
     let Ok(entries) = std::fs::read_dir(parent) else { return };
     for entry in entries.flatten() {
@@ -589,20 +592,27 @@ fn snapshot(key: &str) -> Option<(String, String, PathBuf)> {
 
 // ------------------------------------------------------------------------------------------------ the PDF
 
+// The five items below are what the macOS PDF maker (`mac`) and the tests use; elsewhere nothing makes a PDF yet
+// (`platform_pdf`), so they are allowed to stand unused there instead of warning.
+
 /// CSS pixels per PDF point: WebKit captures one point per CSS pixel, the sheets are laid out at 96 per inch.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 const CSS_PER_PT: f64 = 96.0 / 72.0;
 
 /// The capture rectangle of one sheet in CSS pixels: A4, rounded down to whole pixels as WebKit emits it.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 fn capture_size() -> (f64, f64) {
     ((f64::from(PAPER_WIDTH_PT) * CSS_PER_PT).floor(), (f64::from(PAPER_HEIGHT_PT) * CSS_PER_PT).floor())
 }
 
 /// Pins every sheet to A4 with no screen gaps, so that sheet i starts at i times the paper height and each
 /// capture is exactly one page.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 const CAPTURE_CSS: &str = "<style id=\"pdf-capture\">html,body{width:595.28pt !important;margin:0 !important;padding:0 !important;background:#fff !important}\
 .sheet{margin:0 !important;box-shadow:none !important;height:841.89pt !important}.sheet::after{content:none !important}</style>";
 
 /// The document with the capture style last in its head.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 fn for_capture(html: &str) -> String {
     match html.rfind("</head>") {
         Some(at) => format!("{}{CAPTURE_CSS}{}", &html[..at], &html[at..]),
@@ -611,6 +621,7 @@ fn for_capture(html: &str) -> String {
 }
 
 /// Turns one single-page capture per sheet (WebKit's CSS-pixel pages) into one A4 PDF with a page each.
+#[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 pub(crate) fn assemble_pdf(pages: &[Vec<u8>]) -> Result<Vec<u8>, String> {
     let (width, height) = capture_size();
     let expectation = PdfExpectation {
@@ -959,10 +970,11 @@ mod mac {
 
 // ------------------------------------------------------------------------------------------------ what TSX calls
 
-/// Where the save panel starts: the person's Documents folder when there is one.
+/// Where the save panel starts: the person's Documents folder when there is one. The home folder is std's: `$HOME` on
+/// Unix, the profile folder on Windows (where `HOME` is usually not set).
 fn documents() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| PathBuf::from(home).join("Documents"))
+    std::env::home_dir()
+        .map(|home| home.join("Documents"))
         .filter(|folder| folder.is_dir())
 }
 

@@ -10,6 +10,13 @@
 //! Both are plain functions over the environment and a list of folders, so their tests use temp folders and
 //! never touch a real path. Contract: `docs/plans/nsh-tsx-migration.md`, "The door".
 //!
+//! **Platforms.** On Unix (macOS, Linux) the database guard is complete: the account's real home folder from
+//! the password database, and a folder or file known by device and inode. Windows has neither here (std has no
+//! inode, and the profile folder std finds starts from the `USERPROFILE` variable, which a caller can change), and
+//! nobody has run this crate on Windows. So there the guard opens a database only when the caller names it
+//! with `BIR_DATABASE_PATH` ([`unverified_refusal`]); the by-name check still applies to that path. A Windows
+//! owner-folder lookup and same-file check are not written: see `docs/platforms/nsh.md`.
+//!
 //! **Environment.** The send guard is the only code here that changes the process environment (two
 //! variables). It runs once, from the door's process setup, which the native module's registration calls
 //! (see `door::process`); nothing else in this crate sets or removes a variable.
@@ -144,7 +151,9 @@ pub fn protected_folders(home: &Path) -> [PathBuf; 3] {
 
 /// The home folder of the user this process runs as, from the password database (the real uid), never
 /// from `$HOME`: a process started with `HOME=/tmp/x` still protects the owner's real folders. `None` when
-/// the account has no entry. On Windows, where there is no password database, the profile folder std knows.
+/// the account has no entry. On Windows, where there is no password database, the profile folder std knows: that
+/// starts from `USERPROFILE`, so it is a best effort for the by-name check and is not trusted (see
+/// [`unverified_refusal`], which is why Windows opens only a database the caller names).
 pub fn account_home() -> Option<PathBuf> {
     #[cfg(unix)]
     {
@@ -274,7 +283,46 @@ pub fn database_refusal(path: &Path, protected: &[PathBuf]) -> Option<String> {
 /// [`database_refusal`] for the owner's real folders. With no home folder to name them, the answer is a
 /// refusal.
 pub fn database_refusal_here(path: &Path) -> Option<String> {
+    // A test that names its own "home" (the seam) checks the by-name rules on any system.
+    #[cfg(test)]
+    let seamed = TEST_PROTECTED.with(|slot| slot.borrow().is_some());
+    #[cfg(not(test))]
+    let seamed = false;
+    if !seamed
+        && let Some(why) = unverified_refusal(
+            cfg!(unix),
+            path,
+            std::env::var_os(DATABASE_PATH_ENV),
+        )
+    {
+        return Some(why);
+    }
     refusal_with(path, protected_folders_here())
+}
+
+/// The variable that names the database file (bir-core reads it as well).
+const DATABASE_PATH_ENV: &str = "BIR_DATABASE_PATH";
+
+/// Where the guard cannot do what it promises (`can_verify` is false: Windows, anything without Unix's password
+/// database and inodes), it opens no database the caller has not named: `path` must be the file `BIR_DATABASE_PATH`
+/// names (`named`). The default data folder is refused there, whoever asks. `None` when `can_verify` or when the
+/// caller named this very file. Pure, so every branch runs on any system.
+pub(crate) fn unverified_refusal(
+    can_verify: bool,
+    path: &Path,
+    named: Option<std::ffi::OsString>,
+) -> Option<String> {
+    if can_verify {
+        return None;
+    }
+    let named = named.filter(|value| !value.is_empty());
+    if named.is_some_and(|value| canonical_target(Path::new(&value)) == canonical_target(path)) {
+        return None;
+    }
+    Some(format!(
+        "Refusing to open {}: on this system the guard cannot tell which folders are the owner's data (no password database, no file identity), so it opens only a database you name. Set BIR_DATABASE_PATH to the file.",
+        path.display()
+    ))
 }
 
 /// [`database_refusal`] over the folders found, or the refusal for there being none to find.
@@ -730,11 +778,13 @@ mod tests {
     }
 
     /// A folder tree like the owner's, for the identity checks: the three protected folders exist, with a
-    /// database in each, plus a folder that is not protected.
+    /// database in each, plus a folder that is not protected. (Only the Unix tests use it: Windows has no identity checks.)
+    #[cfg(unix)]
     struct Owner {
         home: Home,
     }
 
+    #[cfg(unix)]
     impl Owner {
         fn new() -> Self {
             let home = Home::new();
@@ -863,6 +913,7 @@ mod tests {
         )
         .expect("hard link");
         symlink(owner.real("BuwizNsh/data"), agents.join("to-data")).expect("link");
+        #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
         let mut cases: Vec<(PathBuf, bool)> = vec![
             (owner.real("BuwizNsh/data/bir_data.db"), true),
             (owner.real("BuwizNsh/data/new/deeper.db"), true),
@@ -871,11 +922,14 @@ mod tests {
             (home.join("BuwizNsh/agents/../data/x.db"), true),
             (agents.join("alias.db"), true),
             (agents.join("to-data/x.db"), true),
-            (home.join("buwiznsh/DATA/x.db"), true),
             (agents.join("door.db"), false),
             (owner.real("BuwizNsh/data-copy/x.db"), false),
             (owner.real("BuwizNsh/agents"), false),
         ];
+        // Any spelling of a name reaches the same folder on a case-insensitive file system (macOS by default); the guard
+        // compares names case-sensitively on Linux (`inside`), so this case is only meaningful on macOS.
+        #[cfg(target_os = "macos")]
+        cases.push((home.join("buwiznsh/DATA/x.db"), true));
         #[cfg(target_os = "macos")]
         for (relative, refused) in [
             ("BuwizNsh/data/x.db", true),
@@ -915,6 +969,28 @@ mod tests {
                 candidate.display()
             );
         }
+    }
+
+    /// Windows cannot be verified here, so no database opens unless the caller named exactly that file. The rule is
+    /// pure: this runs it as a system without the Unix lookups would.
+    #[test]
+    fn where_nothing_can_be_verified_only_a_named_database_opens() {
+        let folder = tempfile::tempdir().expect("temp");
+        let db = folder.path().join("bir_data.db");
+        let named = || Some(db.clone().into_os_string());
+        let why = unverified_refusal(false, &db, None).expect("nothing named");
+        assert!(why.contains("BIR_DATABASE_PATH"), "{why}");
+        assert!(unverified_refusal(false, &db, Some("".into())).is_some(), "an empty name names nothing");
+        assert!(
+            unverified_refusal(false, &folder.path().join("other.db"), named()).is_some(),
+            "another file than the one named"
+        );
+        assert_eq!(unverified_refusal(false, &db, named()), None, "the file named");
+        // Spelled with a `..` in between, it is still the same file.
+        let detour = folder.path().join("x/../bir_data.db");
+        assert_eq!(unverified_refusal(false, &detour, named()), None);
+        // Where the lookups exist (Unix) the rule never applies.
+        assert_eq!(unverified_refusal(true, &db, None), None);
     }
 
     /// The protected folders hang off the account's home folder from the password database, not `$HOME`:
