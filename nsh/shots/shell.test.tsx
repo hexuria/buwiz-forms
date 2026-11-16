@@ -81,6 +81,7 @@ for (const look of LOOKS.filter((l) => l.width > 600)) {
     await app.wait(400);
     await shoot(app, `shell-${look.name}-floating-sidebar`);
     await app.press("id:overlay-scrim");
+    await app.waitFor("id:sidebar-overlay", { state: "gone" }); // it slides away, and covers the pill until it has
     await app.press("id:context-pill");
     await app.waitFor("id:panel-overlay");
     await app.wait(400);

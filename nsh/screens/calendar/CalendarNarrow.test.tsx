@@ -153,6 +153,8 @@ test("the filter sheet: how often and taxpayers narrow the grid and the list; a 
   // None checked: the empty state in the list, with Clear filters there too.
   await app.press("id:calendar-tp-clear");
   await app.press("id:calendar-sheet-done");
+  // The sheet slides away: until it is gone it still covers the list (a press on Clear filters reaches the sheet's search box).
+  await app.waitFor("id:calendar-sheet-done", { state: "gone" });
   await app.waitFor("text:No deadlines match these filters.");
   await app.press("id:calendar-clear");
   await app.waitFor("text:Upcoming");
