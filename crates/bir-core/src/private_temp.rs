@@ -201,7 +201,22 @@ mod tests {
 
     fn age(path: &Path, by: std::time::Duration) {
         let when = std::time::SystemTime::now() - by;
-        fs::File::open(path).unwrap().set_modified(when).unwrap();
+        let mut options = fs::OpenOptions::new();
+        #[cfg(not(windows))]
+        options.read(true);
+        // Windows sets a time only through a handle opened with
+        // FILE_WRITE_ATTRIBUTES, and opens a folder only with
+        // FILE_FLAG_BACKUP_SEMANTICS (a plain open answers "Access is denied").
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
+            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+            options
+                .access_mode(FILE_WRITE_ATTRIBUTES)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+        }
+        options.open(path).unwrap().set_modified(when).unwrap();
     }
 
     /// A leftover folder (what an abort leaves: the folder and the plain
