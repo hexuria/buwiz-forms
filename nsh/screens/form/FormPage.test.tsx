@@ -55,7 +55,10 @@ test("desktop: stepping with the pill puts the keyboard in a tick box, then in a
 });
 
 test("desktop: the side list, Expand all, Cmd+Right steps, the sections popover", async () => {
-  const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos" });
+  // A manual clock: `app.scroll` drags 10 points per display frame, so on the system's clock the 3600 points down to the last part
+  // take real time (8 s here, four times that on a slow runner: past the 30 s a test has). On the manual clock the drag runs as fast
+  // as the machine computes. Nothing else in this test waits for a timer.
+  const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", clock: {} });
   await app.waitFor("text:BIR Form 2551Q");
   expect(app.shows("id:fp-nav")).toBe(true);
   expect(app.texts()).toContain("On this form");

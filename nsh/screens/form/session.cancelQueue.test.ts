@@ -6,9 +6,12 @@
 // sentence ("No queued 1601C draft for that period"), and the dry-run worker sends a real queued one before a test can press Cancel.
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
-import { DEMO, createDemoTaxpayer } from "../../bir/testing";
+import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { ALREADY_SENT } from "../../lib/queue_message";
 import { FormSession, type FormTarget, type SessionHooks } from "./session";
+
+// The first form call of a process builds every form's schema; a test's JS call has 2 s on the headless runner, a file's load 10 s.
+warmForms();
 
 const at = (formCode: string, year: number, period: number, mode: FormTarget["mode"] = "return"): FormTarget => ({ tin: DEMO.tin, formCode, year, period, mode });
 

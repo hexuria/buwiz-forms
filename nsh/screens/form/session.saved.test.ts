@@ -3,8 +3,12 @@
 // (scratch database, the demo taxpayer Juana Santos).
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
-import { createDemoTaxpayer, DEMO } from "../../bir/testing";
+import { createDemoTaxpayer, DEMO, warmForms } from "../../bir/testing";
 import { FormSession, type FormTarget, type SessionHooks } from "./session";
+
+// The first form call of a process builds every form's schema (the host does it lazily, once per process); a test's JS call has 2 s on the
+// headless runner, a file's load 10 s.
+warmForms();
 
 const FILED: FormTarget = { tin: DEMO.tin, formCode: "2550Q", year: 2025, period: 2, mode: "return" };
 

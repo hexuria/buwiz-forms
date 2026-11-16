@@ -2,6 +2,7 @@
 // an edit in the form changes it, Save as PDF writes a PDF (a test path stands in for the save panel; the system print panel
 // is never opened here) whose pages and drawing are read back. Light and dark. `just nsh-shots print` saves
 // ~/BuwizNsh/evidence/print/*.png. A phone has no second window, so there are no narrow looks (print.test.tsx says why).
+// Headless (plain `nsh test`, `just nsh-test`, CI) there is no second window to read: the test ends once the form is up, as the other shots do.
 import { open, expect, test } from "nsh/test";
 import { LOOKS, shoot } from "./shoot";
 
@@ -18,7 +19,8 @@ for (const look of LOOKS.filter((l) => l.width >= 1000)) {
     await app.waitFor("text:BIR Form 2551Q");
     await app.waitUntil(() => app.enabled("id:fp-print") && !app.shows("text:Opening…"));
     await app.wait(600);
-    await shoot(app, `print-${look.name}-form`);
+    // `shoot` answers false where a screenshot needs a real platform (headless); everything below needs a real window.
+    if (!(await shoot(app, `print-${look.name}-form`))) return;
 
     // Print preview: one second window, with the filled sheet.
     await app.press("id:fp-print");

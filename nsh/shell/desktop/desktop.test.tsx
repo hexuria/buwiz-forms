@@ -3,7 +3,12 @@
 // works end to end against a fake nsh/updater and says nothing at all when no source is configured.
 // The system's menu bar and tray cannot be clicked from a test: the fixture runs the same items the system was given (their onSelect),
 // and the keys that reach the application menu with no key binding of the frame's own (Cmd+H, Cmd+W) go through the real path.
-import { expect, open, test } from "nsh/test";
+import { type App, expect, open, test } from "nsh/test";
+import { warmForms } from "../../bir/testing";
+
+// The first form an app opens builds every form's schema (the host does it lazily, once per process): a slow machine takes more than the 2 s a
+// headless run gives one JS call, and an app that does it while it loads has only 5 s to show anything. This file's own load has 10 s.
+warmForms();
 
 const ENTRY = "../../DesktopDemo.tsx";
 const WIDE = { width: 1440, height: 900, platform: "macos" as const };
@@ -89,18 +94,30 @@ test("with no taxpayer, New Return and the tax profile do nothing; the rest of t
 const hidden = (app: { window(id: string): { state(): { visible: boolean } | null } }) => app.window("main").state()?.visible === false;
 const shown = (app: { window(id: string): { state(): { visible: boolean } | null } }) => app.window("main").state()?.visible === true;
 
+/**
+ * Presses `keys` until `done()` holds. The application menu is installed again a few times as the frame opens (the host's refresh comes a
+ * tick after the chrome does), and the harness picks the item a key chooses from the menu it has seen: a key pressed in that moment names an
+ * item the app has already dropped, and nothing happens. On a slow machine the moment is long enough to be hit, so the key is pressed again.
+ */
+async function pressUntil(app: App, keys: string, done: () => boolean, cap = 15_000): Promise<void> {
+  const end = Date.now() + cap;
+  while (!done()) {
+    if (Date.now() > end) throw new Error(`${keys} had no effect in ${cap} ms`);
+    await app.keyboard.press(keys);
+    await app.waitUntil(done, { timeout: 1000 }).catch(() => undefined);
+  }
+}
+
 test("Cmd+H and Cmd+W reach the application menu: the window hides, and the tray's Show brings it back", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking() });
   await app.waitFor("id:sidebar");
   expect(shown(app)).toBe(true);
 
-  await app.keyboard.press("mod+h");
-  await app.waitUntil(() => hidden(app));
+  await pressUntil(app, "mod+h", () => hidden(app));
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
 
-  await app.keyboard.press("mod+w");
-  await app.waitUntil(() => hidden(app));
+  await pressUntil(app, "mod+w", () => hidden(app));
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
 
@@ -127,8 +144,7 @@ test("the window's close button hides the window instead of closing it, and the 
 test("Cmd+Q hides to the tray on macOS (the quit is in the tray)", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking() });
   await app.waitFor("id:sidebar");
-  await app.keyboard.press("mod+q");
-  await app.waitUntil(() => hidden(app));
+  await pressUntil(app, "mod+q", () => hidden(app));
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
 });

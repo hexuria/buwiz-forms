@@ -1,10 +1,14 @@
 // The F3 fixes of the wave 2 review, each through the real door (scratch database, the demo taxpayer Juana Santos).
 // Tests in this file share one database, in order; each uses its own form or period.
 import { expect, test } from "nsh/test";
-import { DEMO, createDemoTaxpayer } from "../../bir/testing";
+import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { radioProps } from "./rows";
 import { emptyCell } from "./schema";
 import { FormSession, UNDO_WINDOW, type FormTarget, type SessionHooks, type ToastAction } from "./session";
+
+// The first form call of a process builds every form's schema (the host does it lazily, once per process); a test's JS call has 2 s on the
+// headless runner, a file's load 10 s.
+warmForms();
 
 const at = (formCode: string, year: number, period: number, mode: FormTarget["mode"] = "return"): FormTarget => ({ tin: DEMO.tin, formCode, year, period, mode });
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));

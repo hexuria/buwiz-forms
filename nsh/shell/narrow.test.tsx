@@ -34,7 +34,8 @@ test("phone: four tabs, no sidebar, the header names the page and back leaves a 
   await app.waitFor("text:Theme: light");
   await app.press("id:sheet-settings");
   await app.waitFor("id:settings");
-  expect(app.shows("id:sheet-extras")).toBe(false); // moving closes it
+  await app.waitFor("id:sheet-extras", { state: "gone" }); // moving closes it (the sheet slides away, so not at the same instant)
+  expect(app.shows("id:sheet-extras")).toBe(false);
   expect(app.shows("id:nb-back")).toBe(true);
   await app.press("id:nb-back");
   await app.waitFor("id:home");

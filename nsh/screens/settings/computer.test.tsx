@@ -3,7 +3,7 @@
 // that follows. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
 import { expect, test } from "nsh/test";
 import { totpCode } from "../auth/testTotp";
-import { expectTexts, openSettings, SIZES, state } from "./testing";
+import { expectTexts, goneText, openSettings, SIZES, state } from "./testing";
 
 const SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 const KEY = /^[A-Z0-9]{4}(-[A-Z0-9]{4}){3}$/;
@@ -26,17 +26,20 @@ for (const { name, size } of SIZES) {
     await app.waitFor("text:90 days");
     await app.press("text:90 days");
     await app.waitFor("text:90 days");
+    await goneText(app, "7 days"); // the popup, with all its options, slides away
     expect(app.texts()).not.toContain("7 days");
 
     await app.press("id:settings-hotkey-select-trigger");
     await app.waitFor("text:Ctrl+Option+E");
     await app.press("text:Ctrl+Option+E");
     await app.waitFor("text:Ctrl+Option+E");
+    await goneText(app, "Off");
     expect(app.texts()).not.toContain("Off");
     await app.press("id:settings-hotkey-select-trigger");
     await app.waitFor("text:Off");
     await app.press("text:Off");
     await app.waitFor("text:Off");
+    await goneText(app, "Ctrl+Option+E");
     expect(app.texts()).not.toContain("Ctrl+Option+E");
   }, 90_000);
 
@@ -48,6 +51,7 @@ for (const { name, size } of SIZES) {
     await app.press("text:Ctrl+Option+B");
     await app.waitFor("text:That shortcut is not one this computer can register. Use a letter, digit, or F-key with modifiers, like super+shift+E.");
     expect(app.texts()).toContain("calls: set_global_hotkey control+alt+B");
+    await goneText(app, "Ctrl+Option+B");
     expect(app.texts()).not.toContain("Ctrl+Option+B");
   }, 60_000);
 

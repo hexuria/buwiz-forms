@@ -1,10 +1,14 @@
 // The calendar button beside a date printed in split boxes (old form_page.js pickDate): a day picked fills the parts that are open.
 // Through the real door, against a scratch database and the demo taxpayer (Juana Santos).
 import { expect, test } from "nsh/test";
-import { DEMO, createDemoTaxpayer } from "../../bir/testing";
+import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { dateRange } from "./rows";
 import { dateParts } from "./schema";
 import { FormSession, type FormTarget } from "./session";
+
+// The first form call of a process builds every form's schema (the host does it lazily, once per process); a test's JS call has 2 s on the
+// headless runner, a file's load 10 s.
+warmForms();
 
 async function opened(target: FormTarget): Promise<FormSession> {
   createDemoTaxpayer();

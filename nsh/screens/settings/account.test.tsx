@@ -183,6 +183,8 @@ for (const { name, size } of SIZES) {
       await app.press("id:nb-avatar");
       await app.waitFor("id:sheet-extras");
       await app.press("id:sheet-settings");
+      // The sheet closes as the page moves: until it is gone it still covers the list (a press on a row reaches the avatar in it).
+      await app.waitFor("id:sheet-extras", { state: "gone" });
       await app.waitFor("id:settings-nav-account");
       await app.press("id:settings-nav-account");
     } else {

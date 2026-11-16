@@ -114,6 +114,7 @@ test("desktop", async () => {
 - A press on a text finds the button around it. Selectors must match exactly one view for actions. Test with the demo taxpayer (Juana Santos, TIN 000-123-453-00000) only.
 - Headless proves behavior, not looks. Pure logic tests (no `open`) are fine (`theme/theme.test.ts` imports JSON). In test files `process.env` shows only COLORTERM/LANG/LC_ALL/TERM and `process.cwd` does not exist.
 - `nsh test` hardens the runtime (no eval); `--filter "name"`, `--trace` (mount batches per step), `--junit file.xml`. Default test timeout 30 s.
+- **Slow machines (the CI runner is 3 to 4 times slower).** Headless, one JS call has 2 s ("interrupted"), a file's or bundle's load has 10 s, a new app has 5 s to render. The first form call of a process builds all 43 schemas: call `warmForms()` (`bir/testing.ts`) at the TOP LEVEL of a test file or fixture that opens a form or the library, never inside a test. Never count ticks in a fixed sleep: wait for the condition (`until(...)`), and wait for a sheet or popup to be gone before pressing what it covered. A long `app.scroll` runs in real time unless the app is opened with `clock: {}`.
 
 ## Real-window screenshots (light and dark, wide and narrow)
 Write `shots/<name>.test.tsx` like `shots/base.test.tsx`: loop `LOOKS` from `shots/shoot.ts` (wide-light/dark 1440x900, narrow-light/dark 390x844, platform macos), `open` each,

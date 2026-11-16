@@ -11,7 +11,7 @@
 import { effect, host, mount, Text, untracked, View } from "nsh";
 import "./theme/fonts";
 import { bir, type ReturnRow } from "./bir";
-import { createDemoTaxpayer } from "./bir/testing";
+import { createDemoTaxpayer, warmForms } from "./bir/testing";
 import { app } from "./shell/app";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
@@ -27,6 +27,11 @@ interface Params {
   filed?: boolean;
   show?: "setting" | "update";
 }
+
+// A start route that opens the library, a form or the palette builds every form's schema in the frame's first render (the host does it lazily,
+// once per process): more than the 2 s a headless run gives one JS call on a slow machine, where a bundle's load has 10 s. Any other start
+// leaves it to whoever needs it, so the frame is not made to wait for what it does not use.
+if (/view=library|form=|palette=/.test(String((host.params as { start?: string } | null)?.start ?? ""))) warmForms();
 
 function seed(p: Params) {
   const taxpayer = createDemoTaxpayer();

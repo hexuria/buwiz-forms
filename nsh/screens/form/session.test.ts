@@ -1,10 +1,13 @@
 // The form session through the real door, against an empty scratch database and the demo taxpayer (Juana Santos).
 // Tests in this file share one database, in order.
 import { expect, test } from "nsh/test";
-import { DEMO, createDemoTaxpayer } from "../../bir/testing";
+import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { todoRows, type TodoPart } from "../../lib/todo";
 import type { SchemaItem } from "./contract";
 import { FormSession, bindError, type FormTarget } from "./session";
+
+// The first form call of a process builds every form's schema; a test's JS call has 2 s on the headless runner, a file's load 10 s.
+warmForms();
 
 const Q1: FormTarget = { tin: DEMO.tin, formCode: "2551Q", year: 2025, period: 1, mode: "return" };
 

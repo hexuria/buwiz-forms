@@ -6,6 +6,14 @@ import { startAgentBridge } from "./bridge";
 import { applyCommand, type AgentState, type FrameDeps, parseCommand, REVIEW_MESSAGE, type ReturnRef } from "./commands";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Waits for what a test proves to have happened, not for a count of ticks in a fixed sleep: a slow machine runs fewer ticks in the same time. */
+async function until(condition: () => boolean, what: string, cap = 15_000): Promise<void> {
+  const end = Date.now() + cap;
+  while (!condition()) {
+    if (Date.now() > end) throw new Error(`never happened in ${cap} ms: ${what}`);
+    await sleep(5);
+  }
+}
 
 /** A frame that writes down what it was asked, in order. */
 function recorder(overrides: Partial<FrameDeps> = {}) {
@@ -123,7 +131,7 @@ test("a listening agent is drained on the host's thread as well as polled", asyn
   let drains = 0;
   let takes = 0;
   const stop = startAgentBridge({ start: () => ACTIVE, drain: () => (drains++, false), take: () => (takes++, null), drainEvery: 5, every: 5 });
-  await sleep(80);
+  await until(() => drains > 2 && takes > 2, "the host drained and polled more than twice");
   stop();
   expect(drains).toBeGreaterThan(2);
   expect(takes).toBeGreaterThan(2);
@@ -137,7 +145,8 @@ test("a listening agent is polled and its commands are applied one at a time, in
   const queue = ['{"op":"go","view":"filings"}', "garbage", '{"op":"open","tin":"00012345300000","code":"2551Q","year":2025,"period":1}', '{"op":"choose","edits":{"k":"v"}}'];
   const stop = startAgentBridge({ start: () => ACTIVE, drain: () => false, take: () => queue.shift() ?? null, deps, every: 5, open: OPEN });
   try {
-    await sleep(250);
+    await until(() => said.length >= 4, "the four commands applied");
+    await sleep(60); // and nothing more
   } finally {
     stop();
   }
@@ -161,7 +170,8 @@ test("a command that throws is reported and the poll goes on", async () => {
   const errors: string[] = [];
   const stop = startAgentBridge({ start: () => ACTIVE, drain: () => false, take: () => queue.shift() ?? null, deps, every: 5, open: OPEN, onError: (e) => void errors.push(String((e as Error).message)) });
   try {
-    await sleep(150);
+    await until(() => errors.length >= 1 && said.length >= 1, "the failing command reported and the next one applied");
+    await sleep(60); // and nothing more
   } finally {
     stop();
   }

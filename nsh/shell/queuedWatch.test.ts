@@ -13,6 +13,14 @@ import { app, boot, pollSteps, startQueuedWatch } from "./app";
 import { POLL_KEYS, SAVED_RETURNS_KEY, store, WORKER_KEYS } from "./store";
 
 const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
+/** Waits for what a test proves to have happened, not for a count of looks in a fixed sleep: a slow machine makes fewer looks in the same time. */
+async function until(condition: () => boolean, what: string, cap = 15_000): Promise<void> {
+  const end = Date.now() + cap;
+  while (!condition()) {
+    if (Date.now() > end) throw new Error(`never happened in ${cap} ms: ${what}`);
+    await pause(5);
+  }
+}
 const ROW: ReturnRow = {
   id: 9101, tin: DEMO.tin, tin_root: "000123453", branch_code: "00000", branch_name: "Head office", taxpayer_name: "Juana Santos", branch_count: 1,
   form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10,
@@ -67,14 +75,21 @@ test("the watch looks every tick for fastMs after the Queued set changed, then g
   filed = [ROW];
   store.bump();
   peek();
-  const stop = startQueuedWatch(TIMING);
+  // The fast phase lasts fastMs by Date.now(). Counting looks in a fixed sleep asks the machine for a speed (a slow runner makes a few
+  // in the time this machine makes six), so the phase is a minute here, which no machine takes, and the test moves the clock past it
+  // itself: each phase waits for its looks to come, and "quiet" is the looks that follow the jump.
+  const fastMs = 60_000;
+  const realNow = Date.now;
+  let skew = 0;
+  Date.now = () => realNow() + skew;
+  const pastFastPhase = () => void (skew += fastMs + 1);
+  const stop = startQueuedWatch({ ...TIMING, fastMs });
   try {
     const start = reads;
-    await pause(300);
-    expect(reads - start).toBeGreaterThanOrEqual(3); // fast phase: a read per look
+    await until(() => reads - start >= 3, "a read per look in the fast phase"); // fast phase: a read per look
 
-    await pause(1000); // well past fastMs
-    const settled = reads;
+    pastFastPhase();
+    const settled = reads; // a look is synchronous: none is half done
     await pause(500);
     expect(reads).toBe(settled); // still Queued, nothing changed: no drops, no reads
 
@@ -83,19 +98,19 @@ test("the watch looks every tick for fastMs after the Queued set changed, then g
     store.forget("returns:filed");
     peek();
     const afterChange = reads;
-    await pause(300);
-    expect(reads - afterChange).toBeGreaterThanOrEqual(3);
-    await pause(1000);
+    await until(() => reads - afterChange >= 3, "the fast phase starts again when the Queued set changes");
+    pastFastPhase();
     const quiet = reads;
-    await pause(400);
+    await pause(500);
     expect(reads).toBe(quiet);
 
-    // A queue action with the same set: the fast phase starts again (the action's own re-reads come at 1 s, so look before it).
+    // A queue action with the same set: the fast phase starts again. Its own re-reads (1, 3 and 10 s) are put off, so only looks read.
     store.afterQueueChange();
+    store.cancelRereads();
     const afterAction = reads;
-    await pause(350);
-    expect(reads - afterAction).toBeGreaterThanOrEqual(3);
+    await until(() => reads - afterAction >= 3, "the fast phase starts again after a queue action");
   } finally {
+    Date.now = realNow;
     stop();
     store.cancelRereads();
   }

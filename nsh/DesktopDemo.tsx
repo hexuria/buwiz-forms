@@ -20,12 +20,16 @@ import { Button } from "nsh/base";
 import { currentWindow } from "nsh/desktop";
 import "./theme/fonts";
 import { bir } from "./bir";
-import { createDemoTaxpayer } from "./bir/testing";
+import { createDemoTaxpayer, warmForms } from "./bir/testing";
 import { nav } from "./screens/settings/nav";
 import { app } from "./shell/app";
 import { store } from "./shell/store";
 import { DesktopHost, flatten, hotkeyStatus, installedMenu, installedTray, type UpdaterApi } from "./shell/desktop";
 import { Shell } from "./shell/Shell";
+
+// A start route that opens a form builds every form's schema in the frame's first render (the host does it lazily, once per process): more than the
+// 2 s a headless run gives one JS call on a slow machine, where a bundle's load has 10 s.
+if (/form=/.test(String((host.params as { start?: string } | null)?.start ?? ""))) warmForms();
 
 interface Params {
   demo?: boolean;

@@ -19,6 +19,14 @@ export async function openSettings(size: Size, params: Record<string, unknown> =
   return app;
 }
 
+/**
+ * Waits until `text` is no longer among the texts. A Select's popup is still on screen, with all its options, for a few frames after a
+ * pick: a test that asserts what the page shows now has to let it slide away first (a slow machine takes longer than a fast one).
+ */
+export async function goneText(app: App, text: string): Promise<void> {
+  await app.waitUntil(() => !app.texts().includes(text), { timeout: 15000 });
+}
+
 /** The fixture's readout line. */
 export function state(app: App): string {
   return app.texts().find((t) => t.startsWith("theme=")) ?? "";

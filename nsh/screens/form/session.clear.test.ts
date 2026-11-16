@@ -6,8 +6,12 @@
 // disagreed and a save wrote the old number. Now a refused blank is staged as the host's cleared value, zero.
 // Tests in this file share one database, in order; each uses its own form or period.
 import { expect, test } from "nsh/test";
-import { DEMO, createDemoTaxpayer } from "../../bir/testing";
+import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { FormSession, type FormTarget, type SessionHooks } from "./session";
+
+// The first form call of a process builds every form's schema (the host does it lazily, once per process); a test's JS call has 2 s on the
+// headless runner, a file's load 10 s.
+warmForms();
 
 const at = (formCode: string, year: number, period: number): FormTarget => ({ tin: DEMO.tin, formCode, year, period, mode: "return" });
 
