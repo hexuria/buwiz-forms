@@ -39,7 +39,7 @@ import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { isTinItem, keysOf, oneDate, optionOf, plainRefusal, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, withoutHidden, type DateParts, type OneDate } from "./schema";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -51,6 +51,9 @@ type Filled = ScreenFormFilled & { cleared?: string[] };
 
 /** What a device with no second window says for Print preview (screens/print/host.tsx and src/print.rs say the same). */
 const NO_PREVIEW = "Print preview is not available on this device.";
+
+/** What Check, and a Queue the host refused, say of the items that need attention. */
+const attentionText = (n: number) => `${n} item${n > 1 ? "s need" : " needs"} attention.`;
 
 /** A flush runs this long after the last edit (ms). */
 export const VALIDATE_DELAY = 300;
@@ -832,6 +835,17 @@ export class FormSession {
   }
 
   /**
+   * Whether a split date is a year-end date held at December: the item before it is the "For: Calendar / Fiscal" pair (1702Q, 2551Q, 2550Q
+   * ... Year Ended) and Calendar is ticked. A calendar year ends in December: 1702Q puts the month back at every fill and says nothing, the
+   * others flag it. rows.tsx dateRange limits the calendar to it. Reads the boxes (reactive).
+   */
+  calendarYearEnd(date: DateParts): boolean {
+    const [part, index] = (this.keyIndex.get(date.month.k) ?? "").split(":").map(Number);
+    const before = index > 0 ? this.items.get(`${part}:${index - 1}`) : undefined;
+    return (before?.f ?? []).some((f) => f.t === "radio" && /^calendar\b/i.test(f.l) && this.box(f.k).value() === "true");
+  }
+
+  /**
    * A day picked on the calendar beside an item's split month, day and year boxes ("YYYY-MM-DD") fills the parts that are open:
    * a locked part is skipped (the old app did the same), so the page's calendar offers only the days the locked parts allow
    * (rows.tsx dateRange passes min and max). A part that is a list takes the choice by its value, or a year list by the whole
@@ -842,6 +856,11 @@ export class FormSession {
     if (!this.st.editable || !this.st.draft) return;
     const [y, m, d] = iso.slice(0, 10).split("-");
     if (!y || !m || !d) return;
+    // A calendar year ends in December and the form puts any other month back: where the calendar could not leave the day out (the year is
+    // not locked, a sample) the pick is refused with the reason, never reverted without a word.
+    if (this.calendarYearEnd(date) && Number(m) !== 12 && !this.isShut(date.month.k)) {
+      return void this.toast("A calendar year ends in December. Choose Fiscal to pick another month.", "triangle-alert");
+    }
     const valueFor = (f: SchemaField, v: string): string | null => {
       if (!(f.t === "sel" && f.o)) return v;
       const listed = f.o.map(optionOf).filter((o) => o !== null);
@@ -2050,7 +2069,7 @@ export class FormSession {
       if (this.st.checking) return void this.later(100, wait);
       // Every message counted once, as the pill and the part badges count them (not the rows they sit on).
       const n = Object.values(this.shownCounts()).reduce((a, b) => a + b, 0);
-      this.toast(n ? `${n} item${n > 1 ? "s need" : " needs"} attention.` : "No problems found.", n ? "triangle-alert" : "circle-check");
+      this.toast(n ? attentionText(n) : "No problems found.", n ? "triangle-alert" : "circle-check");
     };
     this.later(50, wait);
   }
@@ -2292,10 +2311,12 @@ export class FormSession {
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
-      // Refused: every message shows, so what blocks it is on screen.
+      // Refused: every message shows, so what blocks it is on screen. The host lists what it refused as "field: message; ..." (its own
+      // names for the boxes): the rows and the pill carry the messages, and the toast counts them as Check does.
       s.showAll = true;
       this.publish();
-      this.toast(errorText(e), "triangle-alert");
+      const listed = listedFields(errorText(e));
+      this.toast(listed ? attentionText(listed) : errorText(e), "triangle-alert");
     }
   }
 
@@ -2319,10 +2340,33 @@ export class FormSession {
     }
   }
 
-  /** Reopen the return as stored (after queueing or cancelling). */
-  reload(): Promise<string | null> {
+  /** Reopen the return as stored (after queueing or cancelling). keep: the page stays drawn while the host answers (a read nobody asked for). */
+  reload(keep = false): Promise<string | null> {
     const t = this.st.target;
-    return this.open({ ...t, mode: t.mode === "amend" ? "return" : t.mode });
+    return this.open({ ...t, mode: t.mode === "amend" ? "return" : t.mode }, keep);
+  }
+
+  /** Whether the page shows a stored return as Queued and read-only: what the submission worker moves on behind the page's back (reactive). */
+  queuedShown(): boolean {
+    const h = this.header();
+    return h.status === "Queued" && !h.loading && !h.error && !h.sample && !h.editable;
+  }
+
+  /** Whether id (a row of the frame's returns lists, bir.list_returns) is this page's return: both name the same stored draft. */
+  isReturn(id: number): boolean {
+    const s = this.st;
+    return !s.sample && s.target.mode === "return" && (s.draft as { id?: number } | null)?.id === id;
+  }
+
+  /**
+   * The frame's lists say the submission worker has moved this Queued return on (it tells nobody): read it again, with the page staying
+   * drawn, so it shows what is stored and stops offering Cancel queue. Never over typing, over a read that is under way, or on a page that
+   * does not show a Queued, read-only return.
+   */
+  refreshQueued(): void {
+    const s = this.st;
+    if (this.disposed || s.loading || this.reopening || s.sample || s.editable || s.status !== "Queued" || this.isDirty()) return;
+    void this.reload(true);
   }
 
   /**

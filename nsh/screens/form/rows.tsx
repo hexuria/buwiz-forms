@@ -113,20 +113,35 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
   };
 }
 
+/** The year a split date's year box holds: one printed as 20YY (1702Q Year Ended) holds its last two digits, read as 20YY. 0 when it holds none. */
+function boxYear(s: FormSession, split: DateParts): number {
+  const typed = String(s.box(split.year.k).value() || "");
+  return /^\d{1,2}$/.test(typed) ? 2000 + Number(typed) : Number(typed || "");
+}
+
+/** What the boxes of a split date hold, as the calendar's own day ("" until the month and the year read as one): the month the calendar opens on. */
+export function splitDay(s: FormSession, split: DateParts): string {
+  const m = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
+  const y = boxYear(s, split);
+  const d = split.day ? Number(s.box(split.day.k).value() || "") : 1;
+  if (!(m >= 1 && m <= 12 && y > 1900)) return "";
+  return `${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`;
+}
+
 /**
  * The days the calendar beside a split date may offer, given the parts that are shut (locked or computed): a shut year limits it to that
  * year (a 2551Q's year is locked at the return's), a shut year and month to that month. session.pickDate skips a shut part, so a day
- * from another year would fill the open parts and leave the shut one: half a date. Reads the boxes (reactive). A shut month alone
- * limits nothing (min and max cannot say "June of any year"), nor does a year that is not a plain number.
+ * from another year would fill the open parts and leave the shut one: half a date. A month the form fixes (a calendar year's December,
+ * session.calendarYearEnd) limits it like a shut month. Reads the boxes (reactive). A shut month alone limits nothing (min and max cannot
+ * say "June of any year"), nor does a year that is not a plain number.
  */
 export function dateRange(s: FormSession, split: DateParts): { min?: string; max?: string } {
   const shut = (f: SchemaField) => f.c || s.box(f.k).locked();
-  const typed = String(s.box(split.year.k).value() || "");
-  // A year printed as 20YY (1702Q Year Ended) holds its last two digits.
-  const year = /^\d{1,2}$/.test(typed) ? 2000 + Number(typed) : Number(typed || "");
+  const year = boxYear(s, split);
   if (!shut(split.year) || !Number.isInteger(year) || year < 1900 || year > 9999) return {};
-  const month = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
-  if (shut(split.month) && month >= 1 && month <= 12) {
+  // A month the form fixes counts as shut: a calendar year ends in December, whatever the month box shows (the form puts it back).
+  const month = s.calendarYearEnd(split) ? 12 : shut(split.month) ? Number(String(s.box(split.month.k).value() || "").slice(0, 2)) : 0;
+  if (month >= 1 && month <= 12) {
     const mm = String(month).padStart(2, "0");
     return { min: `${year}-${mm}-01`, max: `${year}-${mm}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}` };
   }
@@ -162,15 +177,8 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   const split = fs.some((f) => f.t === "date") ? null : dateParts(fs);
   const splitParts = split ? [split.month, split.day, split.year].filter((f): f is SchemaField => f !== null) : [];
   const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked());
-  // What the boxes hold now, as the calendar's own day ("" until the month and the year read as one).
-  const splitIso = () => {
-    if (!split) return "";
-    const m = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
-    const y = Number(s.box(split.year.k).value() || "");
-    const d = split.day ? Number(s.box(split.day.k).value() || "") : 1;
-    if (!(m >= 1 && m <= 12 && y > 1900)) return "";
-    return `${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`;
-  };
+  // What the boxes hold now, as the calendar's own day: the popup opens on its month.
+  const splitIso = () => (split ? splitDay(s, split) : "");
   // What the calendar may offer: nothing outside the year (and month) that is locked.
   const splitRange = () => (split ? dateRange(s, split) : {});
   const body = (

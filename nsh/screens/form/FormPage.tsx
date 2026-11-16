@@ -100,7 +100,8 @@ export function FormPage(props: FormPageProps) {
     afterWrite: (name) => store.bump(name),
     onSaved: (t) => props.onSaved?.(t),
     onRetarget: (t) => props.onOpenReturn?.(t),
-    onQueueChanged: () => {},
+    // A queue or a cancel-queue needs no hook of its own: the session tells afterWrite its host function's name and store.bump(name) starts the
+    // frame's fast Queued watch over (the re-reads at once and after 1, 3 and 10 s, and the watch's 30 s of 3 s looks from store.lastQueueAction).
   };
   const s = new FormSession(
     { tin: props.tin, formCode: props.formCode, year: props.year, period: props.period, key: props.key ?? null, mode: props.mode, snapshotId: props.snapshotId },
@@ -109,6 +110,17 @@ export function FormPage(props: FormPageProps) {
   props.onSession?.(s);
   void s.open().then(() => s.notesDrawn());
   cleanup(() => s.dispose());
+
+  // The submission worker sends a Queued return and tells nobody. The frame reads its lists again (its Queued watch and polls, and a queue
+  // action at once and after 1, 3 and 10 s), so while this page says Queued it looks at what the lists hold: once they no longer list this
+  // return as Queued, the session reads it again (the page stays drawn) and shows what is stored. The lists are read only while the page says
+  // Queued, nothing here asks the host itself or runs a timer, and the effect ends with the page. A page the lists keep disagreeing with
+  // reads once: `behind` is a boolean, so only its change moves the effect, not each look of the frame at the lists.
+  const shownQueued = computed(() => s.queuedShown());
+  const behind = computed(() => shownQueued() && !store.returns("filed").some((r) => r.status === "Queued" && s.isReturn(r.id)));
+  effect(() => {
+    if (behind()) untracked(() => s.refreshQueued());
+  });
 
   const width = signal(untracked(() => windowSize().width));
   // The old shell's measures (app/main.js layout(), form_page.js drawFormSplit and formColumnBox), from the page's own

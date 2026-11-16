@@ -197,6 +197,16 @@ export function plainRefusal(text: string): string {
   return String(text).replace(/^Other error:\s*/, "");
 }
 
+/**
+ * How many items a host refusal lists: bir-core writes a refused Queue as "field: message; field: message", with the host's own names for
+ * the boxes ("taxes_withheld", "tin"). 0 for any other sentence, which is said as it is.
+ */
+export function listedFields(text: string): number {
+  const entry = /^[a-z][a-z0-9_.]*: \S/;
+  const parts = String(text).split(/;\s+(?=[a-z][a-z0-9_.]*: )/);
+  return parts.every((p) => entry.test(p)) ? parts.length : 0;
+}
+
 /** Every key an item binds (a schedule's every cell, a pooled line's pool). */
 export function keysOf(it: SchemaItem): string[] {
   if (it.rows) return (it.keys ?? []).flat();
