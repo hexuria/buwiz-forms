@@ -24,7 +24,7 @@
 //! touching the database (it is thread-local and not `Send`).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError};
 
 use bir_core::db::Database;
 #[cfg(test)]
@@ -367,54 +367,148 @@ fn host_error(message: impl Into<String>) -> HostError {
 
 // ---------------------------------------------------------------- schema
 
-/// The on-screen form schema: one entry per form, parsed once, with the
-/// reviewed corrections in `app/forms/schema-overrides.json` applied.
+/// One form of the on-screen schema. The schema files are parsed once, on
+/// the first call; a form is built (its corrections applied) the first time
+/// it is asked for, so opening one form does not pay for the other 42.
+struct FormSchema {
+    /// The form's code as lookups compare it ([`normalize_code`]).
+    code: Option<String>,
+    /// What the Form library lists of the form. No correction touches these
+    /// entries, so the list is served without building a form.
+    index: Value,
+    /// The extracted entry and the form's reviewed corrections, until the
+    /// build takes them.
+    source: Mutex<Option<(Value, Option<Value>)>>,
+    built: OnceLock<Value>,
+    keys: OnceLock<BTreeSet<String>>,
+}
+
+impl FormSchema {
+    /// The form's schema with its corrections applied, built on first use.
+    fn built(&self) -> &Value {
+        self.built.get_or_init(|| {
+            let (mut form, fixes) = self
+                .source
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take()
+                .expect("a form's schema is built once");
+            build_form(&mut form, fixes.as_ref());
+            form
+        })
+    }
+
+    /// Every control key `k` the built form shows (fields and table cells).
+    fn keys(&self) -> &BTreeSet<String> {
+        self.keys.get_or_init(|| {
+            let mut keys = BTreeSet::new();
+            let items = self.built()["parts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|part| part["items"].as_array().into_iter().flatten());
+            for item in items {
+                for field in item["f"].as_array().into_iter().flatten() {
+                    if let Some(key) = field["k"].as_str() {
+                        keys.insert(key.to_string());
+                    }
+                }
+                for row in item["keys"].as_array().into_iter().flatten() {
+                    for key in row.as_array().into_iter().flatten() {
+                        if let Some(key) = key.as_str() {
+                            keys.insert(key.to_string());
+                        }
+                    }
+                }
+            }
+            keys
+        })
+    }
+}
+
+/// The on-screen form schema as its files hold it: one entry per form of
+/// `app/forms/forms-schema.json`, each with its reviewed corrections from
+/// `app/forms/schema-overrides.json`, none built yet.
 /// 1700's entry is replaced by `app/forms/screen-1700-v2018.json`: the
 /// extracted entry follows the 2013 rule package, while the model, its
 /// upload and the printed sheet are the January 2018 revision.
-fn schema() -> &'static [Value] {
-    static SCHEMA: OnceLock<Vec<Value>> = OnceLock::new();
-    SCHEMA.get_or_init(|| {
-        let mut forms: Vec<Value> =
-            serde_json::from_str(include_str!("../../../app/forms/forms-schema.json"))
-                .expect("app/forms/forms-schema.json is a JSON array of forms");
-        let form_1700: Value =
-            serde_json::from_str(include_str!("../../../app/forms/screen-1700-v2018.json"))
-                .expect("app/forms/screen-1700-v2018.json is one form");
-        for form in forms.iter_mut().filter(|form| form["c"] == "1700") {
-            *form = form_1700.clone();
-        }
-        let overrides: Value =
-            serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json"))
-                .expect("app/forms/schema-overrides.json is a JSON object");
-        for form in &mut forms {
-            let code = form["c"].as_str().unwrap_or_default().to_string();
-            if let Some(fixes) = overrides.get(&code).and_then(Value::as_object) {
-                apply_overrides(form, fixes);
-                if let Some(layout) = fixes.get("layout") {
-                    apply_layout(form, layout);
-                }
+fn parse_form_schemas() -> Vec<FormSchema> {
+    let mut forms: Vec<Value> =
+        serde_json::from_str(include_str!("../../../app/forms/forms-schema.json"))
+            .expect("app/forms/forms-schema.json is a JSON array of forms");
+    let form_1700: Value =
+        serde_json::from_str(include_str!("../../../app/forms/screen-1700-v2018.json"))
+            .expect("app/forms/screen-1700-v2018.json is one form");
+    for form in forms.iter_mut().filter(|form| form["c"] == "1700") {
+        *form = form_1700.clone();
+    }
+    let mut overrides: Value =
+        serde_json::from_str(include_str!("../../../app/forms/schema-overrides.json"))
+            .expect("app/forms/schema-overrides.json is a JSON object");
+    forms
+        .into_iter()
+        .map(|form| {
+            let fixes = form["c"]
+                .as_str()
+                .and_then(|code| overrides.as_object_mut()?.remove(code));
+            FormSchema {
+                code: form["c"].as_str().map(normalize_code),
+                index: json!({
+                    "c": form["c"],
+                    "t": form["t"],
+                    "rev": form["rev"],
+                    "freq": form["freq"],
+                    "pages": form["pages"],
+                    "n": form["n"],
+                    "q": form["q"],
+                }),
+                source: Mutex::new(Some((form, fixes))),
+                built: OnceLock::new(),
+                keys: OnceLock::new(),
             }
-            hide_repeated_occurrences(form);
-            retype_by_binding(form, &code);
-            if code == "2551Q" {
-                inject_2551q_not_applicable(form);
-            }
-            mark_radio_groups(form, &code);
-            rows_dst_pt_vat::mark_calendar_tables(form, &code);
-            rows_income_q::mark_one_date(form, &code);
-            rows_annual_corporate::mark_whole_pesos(form, &code);
-            rows_as_needed::mark_calendar_tables(form, &code);
-            rows_donor_estate::mark_schema(form, &code);
-            rows_as_needed::mark_one_date(form, &code);
-            combs::apply_combs(form, &code);
-            // 1701A's item 9, printed from `derived:` lines (PR 7).
-            rows_annual_individual::mark_pools(form, &code);
-            // 1701 Part VIII item 6's hint from Part VII item 8 (P4-10).
-            rows_annual_individual::mark_from(form, &code);
+        })
+        .collect()
+}
+
+fn form_schemas() -> &'static [FormSchema] {
+    static FORMS: OnceLock<Vec<FormSchema>> = OnceLock::new();
+    FORMS.get_or_init(parse_form_schemas)
+}
+
+/// Every form's built schema, in the file's order. It builds them all:
+/// only what must read every form (tests, the audit) asks for it.
+#[cfg(test)]
+fn schema() -> impl Iterator<Item = &'static Value> {
+    form_schemas().iter().map(FormSchema::built)
+}
+
+/// One form's schema from its extracted entry and its reviewed corrections.
+fn build_form(form: &mut Value, fixes: Option<&Value>) {
+    let code = form["c"].as_str().unwrap_or_default().to_string();
+    let code = code.as_str();
+    if let Some(fixes) = fixes.and_then(Value::as_object) {
+        apply_overrides(form, fixes);
+        if let Some(layout) = fixes.get("layout") {
+            apply_layout(form, layout);
         }
-        forms
-    })
+    }
+    hide_repeated_occurrences(form);
+    retype_by_binding(form, code);
+    if code == "2551Q" {
+        inject_2551q_not_applicable(form);
+    }
+    mark_radio_groups(form, code);
+    rows_dst_pt_vat::mark_calendar_tables(form, code);
+    rows_income_q::mark_one_date(form, code);
+    rows_annual_corporate::mark_whole_pesos(form, code);
+    rows_as_needed::mark_calendar_tables(form, code);
+    rows_donor_estate::mark_schema(form, code);
+    rows_as_needed::mark_one_date(form, code);
+    combs::apply_combs(form, code);
+    // 1701A's item 9, printed from `derived:` lines (PR 7).
+    rows_annual_individual::mark_pools(form, code);
+    // 1701 Part VIII item 6's hint from Part VII item 8 (P4-10).
+    rows_annual_individual::mark_from(form, code);
 }
 
 /// What a number box holds, from the draft field it writes and its label:
@@ -840,6 +934,7 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
             items[first..].sort_by_key(|it| it["order"].as_i64().unwrap_or(i64::MAX));
         }
     }
+    let mut places = KeyPlaces::of(parts);
     for (key, fix) in fixes {
         if key.starts_with("table:") || key.starts_with("move:") {
             continue;
@@ -852,9 +947,25 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
                 && let Some(item) = parts.get_mut(p).and_then(|part| part["items"].get_mut(i))
                 && let Some(fields) = fix["fields"].as_array()
             {
-                match item["f"].as_array_mut() {
-                    Some(existing) => existing.extend(fields.iter().cloned()),
-                    None => item["f"] = Value::Array(fields.clone()),
+                let first = match item["f"].as_array_mut() {
+                    Some(existing) => {
+                        existing.extend(fields.iter().cloned());
+                        existing.len() - fields.len()
+                    }
+                    None => {
+                        item["f"] = Value::Array(fields.clone());
+                        0
+                    }
+                };
+                // A later correction may name a control added here.
+                for (offset, field) in fields.iter().enumerate() {
+                    if let Some(k) = field["k"].as_str() {
+                        places.fields.entry(k.to_string()).or_default().push([
+                            p,
+                            i,
+                            first + offset,
+                        ]);
+                    }
                 }
             }
             continue;
@@ -869,30 +980,80 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
             }
             continue;
         }
-        for part in parts.iter_mut() {
-            let Some(items) = part["items"].as_array_mut() else {
-                continue;
-            };
-            for item in items.iter_mut() {
-                if let Some(fields) = item["f"].as_array_mut() {
-                    for field in fields.iter_mut().filter(|f| f["k"] == key.as_str()) {
-                        set(field, fix, "t");
+        for &[p, i, f] in places.fields.get(key.as_str()).into_iter().flatten() {
+            if let Some(field) = item_at(parts, p, i)
+                .and_then(|item| item.get_mut("f"))
+                .and_then(|fields| fields.get_mut(f))
+            {
+                set(field, fix, "t");
+            }
+        }
+        for &[p, i, c] in places.columns.get(key.as_str()).into_iter().flatten() {
+            if let Some(col) = item_at(parts, p, i)
+                .and_then(|item| item.get_mut("cols"))
+                .and_then(|cols| cols.get_mut(c))
+            {
+                set(col, fix, "t");
+            }
+        }
+    }
+}
+
+/// Item `i` of part `p`.
+fn item_at(parts: &mut [Value], p: usize, i: usize) -> Option<&mut Value> {
+    parts.get_mut(p)?.get_mut("items")?.get_mut(i)
+}
+
+/// Where a form's control keys sit, read once for [`apply_overrides`]: a form
+/// has thousands of corrections, and finding each one by walking every field
+/// and table cell of the form was most of the cost of building the schema.
+/// `[part, item, n]`: `fields` names the n-th field of an item, `columns`
+/// the column of a schedule table that holds the key as a cell.
+#[derive(Default)]
+struct KeyPlaces {
+    fields: BTreeMap<String, Vec<[usize; 3]>>,
+    columns: BTreeMap<String, Vec<[usize; 3]>>,
+}
+
+impl KeyPlaces {
+    fn of(parts: &[Value]) -> Self {
+        let mut places = Self::default();
+        for (p, part) in parts.iter().enumerate() {
+            let items = part["items"].as_array().into_iter().flatten();
+            for (i, item) in items.enumerate() {
+                for (f, field) in item["f"].as_array().into_iter().flatten().enumerate() {
+                    if let Some(k) = field["k"].as_str() {
+                        places
+                            .fields
+                            .entry(k.to_string())
+                            .or_default()
+                            .push([p, i, f]);
                     }
                 }
-                let column = item["keys"].as_array().and_then(|rows| {
-                    rows.iter().find_map(|row| {
-                        row.as_array()?
-                            .iter()
-                            .position(|cell| cell.as_str() == Some(key.as_str()))
-                    })
-                });
-                if let Some(c) = column
-                    && let Some(col) = item["cols"].get_mut(c)
-                {
-                    set(col, fix, "t");
+                // A key's column in a table is where its first row holds it.
+                let mut seen = BTreeSet::new();
+                for row in item["keys"].as_array().into_iter().flatten() {
+                    let Some(row) = row.as_array() else {
+                        continue;
+                    };
+                    let mut in_row = BTreeSet::new();
+                    for (c, cell) in row.iter().enumerate() {
+                        if let Some(k) = cell.as_str()
+                            && !seen.contains(k)
+                            && in_row.insert(k)
+                        {
+                            places
+                                .columns
+                                .entry(k.to_string())
+                                .or_default()
+                                .push([p, i, c]);
+                        }
+                    }
+                    seen.extend(in_row);
                 }
             }
         }
+        places
     }
 }
 
@@ -1436,9 +1597,10 @@ fn normalize_code(code: &str) -> String {
 
 fn schema_entry(form_code: &str) -> Option<&'static Value> {
     let wanted = normalize_code(form_code);
-    schema()
+    form_schemas()
         .iter()
-        .find(|form| form["c"].as_str().map(normalize_code).as_deref() == Some(&wanted))
+        .find(|form| form.code.as_deref() == Some(&wanted))
+        .map(FormSchema::built)
 }
 
 /// Whether the schema marks `key` computed (`c`), as a field or as its
@@ -1494,37 +1656,12 @@ fn schema_whys(form_code: &str) -> Vec<(String, String)> {
 
 /// Every control key `k` the schema shows for a form (fields and table cells).
 fn schema_keys(form_code: &str) -> &'static BTreeSet<String> {
-    static KEYS: OnceLock<BTreeMap<String, BTreeSet<String>>> = OnceLock::new();
     static EMPTY: BTreeSet<String> = BTreeSet::new();
-    let keys = KEYS.get_or_init(|| {
-        schema()
-            .iter()
-            .map(|form| {
-                let mut keys = BTreeSet::new();
-                let items = form["parts"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .flat_map(|part| part["items"].as_array().into_iter().flatten());
-                for item in items {
-                    for field in item["f"].as_array().into_iter().flatten() {
-                        if let Some(key) = field["k"].as_str() {
-                            keys.insert(key.to_string());
-                        }
-                    }
-                    for row in item["keys"].as_array().into_iter().flatten() {
-                        for key in row.as_array().into_iter().flatten() {
-                            if let Some(key) = key.as_str() {
-                                keys.insert(key.to_string());
-                            }
-                        }
-                    }
-                }
-                (normalize_code(form["c"].as_str().unwrap_or_default()), keys)
-            })
-            .collect()
-    });
-    keys.get(&normalize_code(form_code)).unwrap_or(&EMPTY)
+    let wanted = normalize_code(form_code);
+    form_schemas()
+        .iter()
+        .find(|form| form.code.as_deref() == Some(&wanted))
+        .map_or(&EMPTY, FormSchema::keys)
 }
 
 fn screen_form_schema(arguments: &HostArguments) -> HostResult {
@@ -1537,19 +1674,9 @@ fn screen_form_schema(arguments: &HostArguments) -> HostResult {
 
 fn screen_forms_index() -> HostResult {
     Ok(HostValue::Array(
-        schema()
+        form_schemas()
             .iter()
-            .map(|form| {
-                json(json!({
-                    "c": form["c"],
-                    "t": form["t"],
-                    "rev": form["rev"],
-                    "freq": form["freq"],
-                    "pages": form["pages"],
-                    "n": form["n"],
-                    "q": form["q"],
-                }))
-            })
+            .map(|form| json(form.index.clone()))
             .collect(),
     ))
 }
@@ -8057,7 +8184,7 @@ mod tests {
                     assert!(keys.contains(key), "{code}: layout names {key}, no control");
                     assert!(seen.insert(key), "{code}: layout names {key} twice");
                 }
-                let form = schema().iter().find(|f| f["c"] == code.as_str()).unwrap();
+                let form = schema().find(|f| f["c"] == code.as_str()).unwrap();
                 let built = form["parts"].as_array().unwrap();
                 for (i, part) in layout["parts"].as_array().unwrap().iter().enumerate() {
                     // A `keep` part without its own name keeps the extracted one.
@@ -11358,6 +11485,80 @@ mod tests {
             );
         }
         assert!(rows.iter().any(|row| row["c"] == "0619E"));
+    }
+
+    /// The Form library's list is served without building a form: what it
+    /// lists of each form is what the built form holds.
+    #[test]
+    fn the_forms_index_is_what_every_built_form_holds() {
+        let forms = parse_form_schemas();
+        let mut codes = BTreeSet::new();
+        for form in &forms {
+            assert!(
+                codes.insert(form.code.clone()),
+                "{:?} is in forms-schema.json twice",
+                form.code
+            );
+            let built = form.built();
+            for key in ["c", "t", "rev", "freq", "pages", "n", "q"] {
+                assert_eq!(form.index[key], built[key], "{:?}: {key}", form.code);
+            }
+        }
+    }
+
+    /// Opening one form builds that form and no other.
+    #[test]
+    fn a_form_is_built_on_its_first_use_and_alone() {
+        let forms = parse_form_schemas();
+        assert!(forms.iter().all(|form| form.built.get().is_none()));
+        let wanted = forms
+            .iter()
+            .find(|form| form.code.as_deref() == Some("2551Q"))
+            .expect("2551Q");
+        assert!(!wanted.keys().is_empty());
+        let built = forms.iter().filter(|form| form.built.get().is_some());
+        assert_eq!(built.count(), 1);
+    }
+
+    /// A correction reaches every field of its key, the column of a table
+    /// that holds the key as a cell, and a control an earlier `add:`
+    /// correction appended.
+    #[test]
+    fn a_correction_finds_its_key_in_fields_columns_and_added_controls() {
+        let mut form = json!({"c": "X", "parts": [
+            {"items": [
+                {"f": [{"k": "a", "l": "A", "t": "text"}, {"k": "b", "l": "B", "t": "text"}]},
+                {
+                    "rows": 2,
+                    "cols": [{"l": "One", "t": "text"}, {"l": "Two", "t": "text"}],
+                    "keys": [["c1", "c2"], ["c3", "c4"]],
+                },
+            ]},
+            {"items": [{"f": [{"k": "a", "l": "A again", "t": "text"}]}]},
+        ]});
+        let fixes = json!({
+            "a": {"label": "Fixed"},
+            "c4": {"kind": "money"},
+            "add:0:0": {"fields": [{"k": "n", "l": "New", "t": "text"}]},
+            "n": {"kind": "int"},
+        });
+        apply_overrides(&mut form, fixes.as_object().unwrap());
+        let first = &form["parts"][0]["items"];
+        assert_eq!(first[0]["f"][0]["l"], "Fixed");
+        assert_eq!(
+            form["parts"][1]["items"][0]["f"][0]["l"], "Fixed",
+            "every field of the key"
+        );
+        assert_eq!(first[0]["f"][1]["l"], "B");
+        assert_eq!(
+            first[1]["cols"][1]["t"], "money",
+            "a cell's correction is its column's"
+        );
+        assert_eq!(first[1]["cols"][0]["t"], "text");
+        assert_eq!(
+            first[0]["f"][2]["t"], "int",
+            "a control an earlier correction added"
+        );
     }
 
     #[test]
