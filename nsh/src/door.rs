@@ -76,6 +76,14 @@ pub fn test_environment() -> bool {
     bir_core::db::test_environment()
 }
 
+const SHELL_POLL: &str = "BIR_SHELL_POLL";
+
+/// Whether a test environment asks for the frame's polls (`BIR_SHELL_POLL=1`): outside one they always run, and
+/// this is not what decides it.
+pub fn shell_poll() -> bool {
+    test_environment() && std::env::var(SHELL_POLL).is_ok_and(|value| value == "1")
+}
+
 const DATABASE_PATH: &str = "BIR_DATABASE_PATH";
 
 /// The scratch folders of earlier runs are cleared out the first time this process names one.
@@ -673,6 +681,22 @@ mod tests {
         for accepted in ["1", "true", "yes", "on"] {
             temp_env::with_var("EBIR_TEST_ENV", Some(accepted), || {
                 assert!(test_environment(), "{accepted:?}");
+            });
+        }
+    }
+
+    /// The frame's polls are asked for only in a test environment, and only by `1`.
+    #[test]
+    fn the_shell_poll_switch_is_read_only_in_a_test_environment() {
+        for (test_env, poll, expected) in [
+            (Some("1"), Some("1"), true),
+            (Some("1"), None, false),
+            (Some("1"), Some("0"), false),
+            (Some("1"), Some("true"), false),
+            (None, Some("1"), false),
+        ] {
+            temp_env::with_vars([("EBIR_TEST_ENV", test_env), (SHELL_POLL, poll)], || {
+                assert_eq!(shell_poll(), expected, "{test_env:?} {poll:?}");
             });
         }
     }

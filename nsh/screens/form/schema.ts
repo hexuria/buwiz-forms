@@ -74,11 +74,15 @@ export interface DateParts {
 }
 
 export function dateParts(fs: SchemaField[]): DateParts | null {
-  const find = (re: RegExp, not?: RegExp) =>
-    fs.find((f) => f.t !== "radio" && f.t !== "chk" && re.test(`${f.l} ${String(f.k).split(":").pop()}`) && !(not && not.test(`${f.l} ${f.k}`)));
+  const box = (f: SchemaField) => f.t !== "radio" && f.t !== "chk";
+  const find = (re: RegExp, not?: RegExp, also: (f: SchemaField) => boolean = () => true) =>
+    fs.find((f) => box(f) && also(f) && re.test(`${f.l} ${String(f.k).split(":").pop()}`) && !(not && not.test(`${f.l} ${f.k}`)));
+  // A box captioned for a day is the day, never the year, whatever else its caption says: 1707A's "Year end day" sits before "Year ended"
+  // and was taken for the year (a picked day wrote the year into it, and the calendar opened on year 20DD).
+  const namesDay = (f: SchemaField) => /\bday\b/i.test(f.l);
   const month = find(/month|\bmm\b/i, /months|no\.? of/i);
-  const year = find(/year|yyyy|\byr\b/i, /month|years ended|no\.? of/i);
-  const day = find(/\bday\b|\bdd\b|[a-z]day\b|day\d*$/i, /days|month|year/i);
+  const year = find(/year|yyyy|\byr\b/i, /month|years ended|no\.? of/i, (f) => !namesDay(f));
+  const day = fs.find((f) => box(f) && namesDay(f) && !/days|month/i.test(`${f.l} ${f.k}`)) ?? find(/\bday\b|\bdd\b|[a-z]day\b|day\d*$/i, /days|month|year/i);
   if (!month || !year || month === year) return null;
   return { month, day: day && day !== month && day !== year ? day : null, year };
 }

@@ -12,7 +12,9 @@ import { Shell } from "./shell/Shell";
 import "./screens/print/host";
 
 function Root() {
-  const polling = !doorStatus().testEnvironment || process.env.BIR_SHELL_POLL === "1";
+  // The door reads BIR_SHELL_POLL: a script under `nsh test` does not see the environment (process.env shows four names there).
+  const status = doorStatus();
+  const polling = !status.testEnvironment || status.shellPoll || process.env.BIR_SHELL_POLL === "1";
   // The desktop host (menu, tray, hotkey, updater) draws nothing but the About dialog; it sits beside the frame.
   return (
     <View class="flex-1">

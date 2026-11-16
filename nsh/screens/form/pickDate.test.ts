@@ -1,8 +1,10 @@
 // The calendar button beside a date printed in split boxes (old form_page.js pickDate): a day picked fills the parts that are open.
 // Through the real door, against a scratch database and the demo taxpayer (Juana Santos).
 import { expect, test } from "nsh/test";
+import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { dateRange, splitDay } from "./rows";
+import type { FormSchema } from "./contract";
 import { dateParts } from "./schema";
 import { FormSession, type FormTarget, type SessionHooks } from "./session";
 
@@ -92,6 +94,30 @@ test("a month with a leap day: February of 2024 ends on the 29th; a year printed
   await tick(q, "frm1702q:rbForClndrFscl_2");
   expect(dateRange(q, ended)).toEqual({ min: "2025-01-01", max: "2025-12-31" });
   q.dispose();
+});
+
+test("1707A item 2: the box captioned Year end day is the day, and Year ended the year", async () => {
+  const fields = ((bir.screen_form_schema("1707A") as FormSchema).parts ?? []).flatMap((part) => part.items ?? []).map((it) => it.f || []);
+  const date = dateParts(fields.find((fs) => fs.some((f) => f.k === "frm1707Av2021:txtI1YearEndMonth"))!)!;
+  expect(date.month.k).toBe("frm1707Av2021:txtI1YearEndMonth");
+  expect(date.day?.k).toBe("frm1707Av2021:txtI1YearEndDay");
+  expect(date.year.k).toBe("frm1707Av2021:txtI1YearEndYear");
+});
+
+test("on no form is a box captioned for a day read as a split date's year, or its month box as anything else", () => {
+  let dates = 0;
+  for (const form of bir.screen_forms_index()) {
+    for (const part of (bir.screen_form_schema(form.c) as FormSchema).parts ?? []) {
+      for (const it of part.items ?? []) {
+        const date = dateParts(it.f || []);
+        if (!date) continue;
+        dates++;
+        expect(`${form.c}: ${/\bday\b/i.test(date.year.l) ? date.year.l : ""}`).toBe(`${form.c}: `);
+        expect(new Set([date.month.k, date.day?.k ?? "none", date.year.k]).size).toBe(3);
+      }
+    }
+  }
+  expect(dates).toBeGreaterThan(20);
 });
 
 test("nothing locked: the calendar offers every day (1706 Date of Transaction)", async () => {

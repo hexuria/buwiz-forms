@@ -33,9 +33,13 @@ use std::time::Instant;
 
 use bir_app_api::hooks::PreviewProducer;
 use bir_app_api::print_sheet::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT};
-use bir_print::html_output::{PdfExpectation, merge_single_page_pdfs, normalize_wkpdf_page_from_css_pixels};
+use bir_print::html_output::{
+    PdfExpectation, merge_single_page_pdfs, normalize_wkpdf_page_from_css_pixels,
+};
 use nsh_core::file_dialog::{FileFilter, SaveDialog};
-use nsh_core::prelude::{Callback, JsObject, PropEnum, Stop, blocking, module, pick_save_path, try_os};
+use nsh_core::prelude::{
+    Callback, JsObject, PropEnum, Stop, blocking, module, pick_save_path, try_os,
+};
 
 /// The sentence of a device that cannot open a second window.
 pub const UNAVAILABLE: &str = "Print preview is not available on this device.";
@@ -179,19 +183,27 @@ fn parse_doc(html: &str) -> Doc {
     let (mut texts, mut shape, mut at) = (Vec::new(), String::with_capacity(body.len()), 0);
     while let Some(found) = body[at..].find("<span ") {
         let open = at + found;
-        let Some(close) = body[open..].find('>') else { break };
+        let Some(close) = body[open..].find('>') else {
+            break;
+        };
         let tag = &body[open..open + close + 1];
         let content = open + close + 1;
         shape.push_str(&body[at..content]);
         at = content;
         if attr(tag, "class").is_some_and(|class| class.split_whitespace().any(|c| c == "fs")) {
-            let Some(span_end) = body[content..].find("</span>") else { break };
+            let Some(span_end) = body[content..].find("</span>") else {
+                break;
+            };
             texts.push(body[content..content + span_end].to_owned());
             at = content + span_end;
         }
     }
     shape.push_str(&body[at..]);
-    Doc { body: body.to_owned(), texts, shape }
+    Doc {
+        body: body.to_owned(),
+        texts,
+        shape,
+    }
 }
 
 /// Whether `html` is a document with printed pages (a failed fill is empty).
@@ -222,7 +234,10 @@ return \"body\";}})({body},{revision});"
 #[cfg(unix)]
 fn process_alive(pid: u32) -> bool {
     // SAFETY: signal 0 only asks whether the process exists.
-    unsafe { libc::kill(pid as libc::pid_t, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
+    unsafe {
+        libc::kill(pid as libc::pid_t, 0) == 0
+            || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
 }
 
 /// Where a process cannot be asked here (Windows: no OpenProcess binding in this crate) every one counts as running, so
@@ -238,10 +253,17 @@ fn process_alive(_pid: u32) -> bool {
 /// its folder: the window's close event may not run). A folder of a running process, and anything else, stays.
 #[cfg_attr(not(any(test, unix)), allow(dead_code))]
 fn sweep_stale(parent: &Path, alive: impl Fn(u32) -> bool) {
-    let Ok(entries) = std::fs::read_dir(parent) else { return };
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        let Some(pid) = name.strip_prefix("ebirforms-print-").and_then(|pid| pid.parse::<u32>().ok()) else { continue };
+        let Some(pid) = name
+            .strip_prefix("ebirforms-print-")
+            .and_then(|pid| pid.parse::<u32>().ok())
+        else {
+            continue;
+        };
         if pid != std::process::id() && !alive(pid) {
             let _ = std::fs::remove_dir_all(entry.path());
         }
@@ -253,7 +275,9 @@ fn url_for(path: &Path) -> String {
     let mut url = String::from("file://");
     for byte in path.to_string_lossy().bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => url.push(byte as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                url.push(byte as char)
+            }
             other => url.push_str(&format!("%{other:02X}")),
         }
     }
@@ -264,19 +288,39 @@ fn url_for(path: &Path) -> String {
 fn sanitize(key: &str) -> String {
     let name: String = key
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
-    if name.is_empty() { "preview".to_owned() } else { name }
+    if name.is_empty() {
+        "preview".to_owned()
+    } else {
+        name
+    }
 }
 
 /// A file name for the sheet: `BIR Form 1701Q - Juana Santos` for "BIR Form 1701Q - Juana Santos" with an em dash.
 fn file_stem(title: &str) -> String {
     let stem: String = title
         .chars()
-        .map(|c| if matches!(c, '/' | ':' | '\\' | '\u{2014}') { '-' } else { c })
+        .map(|c| {
+            if matches!(c, '/' | ':' | '\\' | '\u{2014}') {
+                '-'
+            } else {
+                c
+            }
+        })
         .collect();
     let stem = stem.trim();
-    if stem.is_empty() { "Print preview".to_owned() } else { stem.to_owned() }
+    if stem.is_empty() {
+        "Print preview".to_owned()
+    } else {
+        stem.to_owned()
+    }
 }
 
 /// Makes `dir` (and any folder above it that is missing) readable by this user only (0700 where modes exist). A folder that
@@ -292,7 +336,10 @@ fn private_dir(dir: &Path) -> std::io::Result<()> {
         let meta = std::fs::symlink_metadata(dir)?;
         // SAFETY: geteuid only reads the process's own id.
         if !meta.file_type().is_dir() || meta.uid() != unsafe { libc::geteuid() } {
-            return Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, format!("{} is not a folder of this user", dir.display())));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!("{} is not a folder of this user", dir.display()),
+            ));
         }
         if meta.mode() & 0o777 != 0o700 {
             std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
@@ -359,7 +406,15 @@ struct State {
     previews: HashMap<String, Preview>,
 }
 
-fn event(kind: PrintEventKind, key: &str, title: &str, url: &str, script: String, revision: u32, html: &str) -> PrintEvent {
+fn event(
+    kind: PrintEventKind,
+    key: &str,
+    title: &str,
+    url: &str,
+    script: String,
+    revision: u32,
+    html: &str,
+) -> PrintEvent {
     let info = page_info(html);
     PrintEvent {
         kind,
@@ -378,7 +433,11 @@ fn event(kind: PrintEventKind, key: &str, title: &str, url: &str, script: String
 
 impl State {
     fn new(root: PathBuf) -> Self {
-        State { root, backend: None, previews: HashMap::new() }
+        State {
+            root,
+            backend: None,
+            previews: HashMap::new(),
+        }
     }
 
     fn sheet_path(&self, key: &str) -> PathBuf {
@@ -386,16 +445,30 @@ impl State {
     }
 
     /// A preview was asked for: the events the host hears. A key already open gets a newer document in place.
-    fn request(&mut self, key: &str, title: String, html: String) -> Result<Vec<PrintEvent>, String> {
+    fn request(
+        &mut self,
+        key: &str,
+        title: String,
+        html: String,
+    ) -> Result<Vec<PrintEvent>, String> {
         let path = self.sheet_path(key);
         private_dir(&self.root).map_err(|error| format!("Could not write the preview: {error}"))?;
-        write_atomic(&path, &html).map_err(|error| format!("Could not write the preview: {error}"))?;
+        write_atomic(&path, &html)
+            .map_err(|error| format!("Could not write the preview: {error}"))?;
         let url = url_for(&path);
         let doc = parse_doc(&html);
         let mut events = Vec::new();
         match self.previews.get_mut(key) {
             None => {
-                events.push(event(PrintEventKind::Open, key, &title, &url, String::new(), 1, &html));
+                events.push(event(
+                    PrintEventKind::Open,
+                    key,
+                    &title,
+                    &url,
+                    String::new(),
+                    1,
+                    &html,
+                ));
                 let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
                 self.previews.insert(
                     key.to_owned(),
@@ -416,8 +489,24 @@ impl State {
                 } else {
                     body_script(&doc.body, open.revision)
                 };
-                events.push(event(PrintEventKind::Open, key, &title, &url, String::new(), open.revision, &html));
-                events.push(event(PrintEventKind::Update, key, &title, &url, script, open.revision, &html));
+                events.push(event(
+                    PrintEventKind::Open,
+                    key,
+                    &title,
+                    &url,
+                    String::new(),
+                    open.revision,
+                    &html,
+                ));
+                events.push(event(
+                    PrintEventKind::Update,
+                    key,
+                    &title,
+                    &url,
+                    script,
+                    open.revision,
+                    &html,
+                ));
                 open.title = title;
                 open.html = html;
                 open.texts = doc.texts;
@@ -431,7 +520,9 @@ impl State {
     /// (a failed fill is empty), when it is the document already shown, or when no preview of that key is open.
     fn update(&mut self, key: &str, html: String) -> Vec<PrintEvent> {
         let path = self.sheet_path(key);
-        let Some(open) = self.previews.get_mut(key) else { return Vec::new() };
+        let Some(open) = self.previews.get_mut(key) else {
+            return Vec::new();
+        };
         // A fill that failed answers nothing: what is shown stays.
         if !has_sheets(&html) || html == open.html {
             return Vec::new();
@@ -447,7 +538,15 @@ impl State {
         } else {
             body_script(&doc.body, open.revision)
         };
-        let update = event(PrintEventKind::Update, key, &open.title, &url_for(&path), script, open.revision, &html);
+        let update = event(
+            PrintEventKind::Update,
+            key,
+            &open.title,
+            &url_for(&path),
+            script,
+            open.revision,
+            &html,
+        );
         open.html = html;
         open.texts = doc.texts;
         open.shape = doc.shape;
@@ -492,7 +591,13 @@ impl Backend for HostBackend {
 }
 
 fn backend() -> Option<Rc<dyn Backend>> {
-    STATE.with(|state| state.borrow().backend.as_ref().map(|(_, backend)| Rc::clone(backend)))
+    STATE.with(|state| {
+        state
+            .borrow()
+            .backend
+            .as_ref()
+            .map(|(_, backend)| Rc::clone(backend))
+    })
 }
 
 /// Makes `backend` the one that hears events; the id tells it from a later one.
@@ -510,7 +615,11 @@ fn install(backend: Rc<dyn Backend>) -> u64 {
 fn uninstall(id: u64) {
     STATE.with(|state| {
         let mut state = state.borrow_mut();
-        if state.backend.as_ref().is_some_and(|(current, _)| *current == id) {
+        if state
+            .backend
+            .as_ref()
+            .is_some_and(|(current, _)| *current == id)
+        {
             state.backend = None;
         }
     });
@@ -534,7 +643,15 @@ pub(crate) fn request(path: PathBuf, title: String, key: String) {
         return;
     };
     if !device_has_windows() {
-        let mut said = event(PrintEventKind::Unavailable, &key, &title, "", String::new(), 0, "");
+        let mut said = event(
+            PrintEventKind::Unavailable,
+            &key,
+            &title,
+            "",
+            String::new(),
+            0,
+            "",
+        );
         said.message = Some(UNAVAILABLE.to_owned());
         backend.emit(said);
         return;
@@ -556,7 +673,8 @@ pub(crate) fn request(path: PathBuf, title: String, key: String) {
 /// when the engine's own answer is at hand (a task, not a synchronous call: those have no engine context) it decides
 /// too. The TSX host asks `isAvailable` of `nsh/desktop` as well, which is the engine's answer in every call.
 fn device_has_windows() -> bool {
-    !cfg!(any(target_os = "ios", target_os = "android")) && try_os().is_none_or(|os| os.is_desktop())
+    !cfg!(any(target_os = "ios", target_os = "android"))
+        && try_os().is_none_or(|os| os.is_desktop())
 }
 
 /// `print_preview_has_live`: a window is open for `key` and follows edits.
@@ -571,13 +689,20 @@ pub(crate) fn has_live(key: &str) -> bool {
 /// call of the engine, with no task to hand work to, so the fill runs here: about 35 ms for a 2551Q (808 boxes, 490 KB)
 /// in a debug build, less in a release one. The page itself is patched by script, not reloaded.
 pub(crate) fn live_update(key: &str, produce: PreviewProducer, started: Instant) {
-    let Some(backend) = backend() else { return };
+    let Some(backend) = backend() else {
+        return;
+    };
     if !STATE.with(|state| state.borrow().previews.contains_key(key)) {
         return;
     }
     let html = produce();
     let events = STATE.with(|state| state.borrow_mut().update(key, html));
-    tracing::debug!(key, elapsed_ms = started.elapsed().as_millis() as u64, sent = events.len(), "print preview followed an edit");
+    tracing::debug!(
+        key,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        sent = events.len(),
+        "print preview followed an edit"
+    );
     events.into_iter().for_each(|event| backend.emit(event));
 }
 
@@ -602,7 +727,10 @@ const CSS_PER_PT: f64 = 96.0 / 72.0;
 /// The capture rectangle of one sheet in CSS pixels: A4, rounded down to whole pixels as WebKit emits it.
 #[cfg_attr(not(any(test, target_os = "macos")), allow(dead_code))]
 fn capture_size() -> (f64, f64) {
-    ((f64::from(PAPER_WIDTH_PT) * CSS_PER_PT).floor(), (f64::from(PAPER_HEIGHT_PT) * CSS_PER_PT).floor())
+    (
+        (f64::from(PAPER_WIDTH_PT) * CSS_PER_PT).floor(),
+        (f64::from(PAPER_HEIGHT_PT) * CSS_PER_PT).floor(),
+    )
 }
 
 /// Pins every sheet to A4 with no screen gaps, so that sheet i starts at i times the paper height and each
@@ -658,12 +786,17 @@ pub struct PdfProbe {
 }
 
 fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
-    let bytes = std::fs::metadata(path).map_err(|error| format!("Cannot read {}: {error}", path.display()))?.len();
+    let bytes = std::fs::metadata(path)
+        .map_err(|error| format!("Cannot read {}: {error}", path.display()))?
+        .len();
     let document = lopdf::Document::load(path).map_err(|error| format!("Not a PDF: {error}"))?;
     let pages = document.get_pages();
     let mut content_bytes = 0usize;
     for id in pages.values() {
-        content_bytes += document.get_page_content(*id).map(|content| content.len()).unwrap_or(0);
+        content_bytes += document
+            .get_page_content(*id)
+            .map(|content| content.len())
+            .unwrap_or(0);
     }
     let (width_pt, height_pt) = pages
         .values()
@@ -672,7 +805,12 @@ fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
         .and_then(|page| page.get(b"MediaBox").ok())
         .and_then(|media| media.as_array().ok())
         .map(|media| {
-            let number = |at: usize| media.get(at).and_then(|n| n.as_float().ok()).map_or(0.0, f64::from);
+            let number = |at: usize| {
+                media
+                    .get(at)
+                    .and_then(|n| n.as_float().ok())
+                    .map_or(0.0, f64::from)
+            };
             (number(2) - number(0), number(3) - number(1))
         })
         .unwrap_or((0.0, 0.0));
@@ -728,7 +866,9 @@ mod mac {
     use objc2::runtime::{AnyClass, AnyObject, Bool};
     use objc2_foundation::{NSData, NSPoint, NSRect, NSSize, NSString, NSURL};
 
-    use super::{CSS_PER_PT, PAPER_HEIGHT_PT, PAPER_WIDTH_PT, assemble_pdf, capture_size, for_capture};
+    use super::{
+        CSS_PER_PT, PAPER_HEIGHT_PT, PAPER_WIDTH_PT, assemble_pdf, capture_size, for_capture,
+    };
 
     #[link(name = "WebKit", kind = "framework")]
     unsafe extern "C" {}
@@ -746,9 +886,12 @@ mod mac {
     /// The PDF of `html`: a hidden WKWebView loads it, `createPDF` captures each A4 sheet as one page, bir-print
     /// normalizes the pages from CSS pixels to points and merges them.
     pub(super) fn make_pdf(html: &str) -> Result<Vec<u8>, String> {
-        let _one = CAPTURE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _one = CAPTURE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let pages = capture(for_capture(html));
-        DispatchQueue::main().exec_sync(|| WEB.with(|web| web.borrow_mut().take()).map_or((), drop));
+        DispatchQueue::main()
+            .exec_sync(|| WEB.with(|web| web.borrow_mut().take()).map_or((), drop));
         assemble_pdf(&pages?)
     }
 
@@ -865,14 +1008,16 @@ mod mac {
                 // SAFETY: WebKit's documented API on the main thread; a number result is an NSNumber.
                 unsafe {
                     let js = NSString::from_str(script);
-                    let done = RcBlock::new(move |result: *mut AnyObject, _error: *mut AnyObject| {
-                        let number = result.as_ref().map(|r| {
-                            let value: f64 = msg_send![r, doubleValue];
-                            value
+                    let done =
+                        RcBlock::new(move |result: *mut AnyObject, _error: *mut AnyObject| {
+                            let number = result.as_ref().map(|r| {
+                                let value: f64 = msg_send![r, doubleValue];
+                                value
+                            });
+                            let _ = tx.send(number);
                         });
-                        let _ = tx.send(number);
-                    });
-                    let _: () = msg_send![&*web, evaluateJavaScript: &*js, completionHandler: &*done];
+                    let _: () =
+                        msg_send![&*web, evaluateJavaScript: &*js, completionHandler: &*done];
                 }
             });
         });
@@ -923,7 +1068,8 @@ mod mac {
             let answer = unsafe {
                 (|| -> Result<(), String> {
                     let operation = print_operation(&path)?;
-                    let app_class = AnyClass::get(c"NSApplication").ok_or("AppKit has no NSApplication.")?;
+                    let app_class =
+                        AnyClass::get(c"NSApplication").ok_or("AppKit has no NSApplication.")?;
                     let app: Retained<AnyObject> = msg_send![app_class, sharedApplication];
                     let key: Option<Retained<AnyObject>> = msg_send![&app, keyWindow];
                     let window = match key {
@@ -957,11 +1103,15 @@ mod mac {
     pub(super) fn pdf_text(path: &Path) -> String {
         // SAFETY: PDFKit's documented API; reading a document's text is not main-thread work.
         unsafe {
-            let Some(class) = AnyClass::get(c"PDFDocument") else { return String::new() };
+            let Some(class) = AnyClass::get(c"PDFDocument") else {
+                return String::new();
+            };
             let url = NSURL::fileURLWithPath(&NSString::from_str(&path.display().to_string()));
             let alloc: objc2::rc::Allocated<AnyObject> = msg_send![class, alloc];
             let document: Option<Retained<AnyObject>> = msg_send![alloc, initWithURL: &*url];
-            let Some(document) = document else { return String::new() };
+            let Some(document) = document else {
+                return String::new();
+            };
             let text: Option<Retained<NSString>> = msg_send![&document, string];
             text.map(|text| text.to_string()).unwrap_or_default()
         }
@@ -981,19 +1131,30 @@ fn documents() -> Option<PathBuf> {
 /// A path given for a save is only honoured in a test environment (`EBIR_TEST_ENV`: every run, test and shot
 /// recipe sets it), where it stands in for the save panel; anywhere else the person is asked.
 fn save_target(test_environment: bool, given: Option<&str>) -> Option<PathBuf> {
-    given.filter(|path| test_environment && !path.is_empty()).map(PathBuf::from)
+    given
+        .filter(|path| test_environment && !path.is_empty())
+        .map(PathBuf::from)
 }
 
 /// `path` with the `.pdf` ending a save panel may have left off.
 fn with_pdf_extension(path: PathBuf) -> PathBuf {
-    if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf")) { path } else { path.with_extension("pdf") }
+    if path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+    {
+        path
+    } else {
+        path.with_extension("pdf")
+    }
 }
 
 /// The PDF of the document `key` shows now, its title and its folder (the document is the one the window has: edits
 /// are applied as they come, in order).
 async fn pdf_of(key: &str) -> Result<(Vec<u8>, String, PathBuf), String> {
     let (html, title, dir) = snapshot(key).ok_or("The preview is closed.")?;
-    let pdf = blocking(move || platform_pdf(&html)).await.map_err(|error| error.to_string())??;
+    let pdf = blocking(move || platform_pdf(&html))
+        .await
+        .map_err(|error| error.to_string())??;
     Ok((pdf, title, dir))
 }
 
@@ -1023,14 +1184,20 @@ impl Print {
     /// scaling) as a sheet of the front window. Resolves once the panel is up; rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
         let (pdf, title, dir) = pdf_of(&key).await?;
-        let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
-        blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
+        let path = write_pdf(&dir, &title, &pdf)
+            .map_err(|error| format!("Could not write the PDF: {error}"))?;
+        blocking(move || platform_print(&path))
+            .await
+            .map_err(|error| error.to_string())?
     }
 
     /// Saves the PDF of `key`'s document: asks where with the system save panel and resolves with the path it
     /// wrote, or null when the person cancelled. A path given stands in for the panel in a test environment
     /// (EBIR_TEST_ENV) and is ignored anywhere else.
-    pub async fn save_pdf(key: String, test_path: Option<String>) -> Result<Option<String>, String> {
+    pub async fn save_pdf(
+        key: String,
+        test_path: Option<String>,
+    ) -> Result<Option<String>, String> {
         let (pdf, title, _) = pdf_of(&key).await?;
         let target = match save_target(crate::door::test_environment(), test_path.as_deref()) {
             Some(path) => path,
@@ -1050,7 +1217,8 @@ impl Print {
                 }
             }
         };
-        std::fs::write(&target, &pdf).map_err(|error| format!("Could not save the PDF: {error}"))?;
+        std::fs::write(&target, &pdf)
+            .map_err(|error| format!("Could not save the PDF: {error}"))?;
         Ok(Some(target.display().to_string()))
     }
 
@@ -1082,7 +1250,9 @@ mod tests {
         let inputs: String = fields
             .iter()
             .enumerate()
-            .map(|(i, value)| format!("<input type=\"text\" class=\"fi fh4\" id=\"f{i}\" value=\"{value}\">"))
+            .map(|(i, value)| {
+                format!("<input type=\"text\" class=\"fi fh4\" id=\"f{i}\" value=\"{value}\">")
+            })
             .collect();
         let raw = format!(
             "<html><head><style>@page {{ size: 612pt 936pt; }}</style></head><body><div class=\"page page-1\">{inputs}</div><div class=\"page page-2\"></div></body></html>"
@@ -1093,7 +1263,11 @@ mod tests {
     /// A key no other test uses (every test thread has its own state, but the folders are shared).
     fn key() -> String {
         static NEXT: AtomicU32 = AtomicU32::new(1);
-        format!("T{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed))
+        format!(
+            "T{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        )
     }
 
     /// Hears events.
@@ -1109,7 +1283,12 @@ mod tests {
     }
 
     fn kinds(recorder: &Recorder) -> Vec<PrintEventKind> {
-        recorder.events.borrow().iter().map(|event| event.kind).collect()
+        recorder
+            .events
+            .borrow()
+            .iter()
+            .map(|event| event.kind)
+            .collect()
     }
 
     // The page rule ----------------------------------------------------------------------------------------------
@@ -1121,20 +1300,42 @@ mod tests {
         assert_eq!(info.sheet, "Folio");
         assert_eq!(info.pages, 2);
         // min((595.28 - 20) / 612, (841.89 - 20) / 936) = 0.8782: the height decides.
-        assert!((info.zoom - (841.89 - 20.0) / 936.0).abs() < 1e-3, "zoom {}", info.zoom);
+        assert!(
+            (info.zoom - (841.89 - 20.0) / 936.0).abs() < 1e-3,
+            "zoom {}",
+            info.zoom
+        );
     }
 
     #[test]
     fn a_sheet_that_fits_is_never_scaled_up() {
         let raw = "<html><head><style>@page{size:400pt 500pt}</style></head><body><div class=\"page\"></div></body></html>";
-        let info = page_info(&bir_app_api::static_html::staticize(&bir_app_api::print_sheet::prepare_html(raw)));
-        assert_eq!((info.paper.as_str(), info.sheet.as_str(), info.zoom, info.pages), ("A4", "Custom", 1.0, 1));
+        let info = page_info(&bir_app_api::static_html::staticize(
+            &bir_app_api::print_sheet::prepare_html(raw),
+        ));
+        assert_eq!(
+            (
+                info.paper.as_str(),
+                info.sheet.as_str(),
+                info.zoom,
+                info.pages
+            ),
+            ("A4", "Custom", 1.0, 1)
+        );
     }
 
     #[test]
     fn a_document_without_the_paper_style_is_a4_at_scale_one() {
         let info = page_info("<html><body><div class=\"sheet\"></div></body></html>");
-        assert_eq!((info.paper.as_str(), info.sheet.as_str(), info.zoom, info.pages), ("A4", "A4", 1.0, 1));
+        assert_eq!(
+            (
+                info.paper.as_str(),
+                info.sheet.as_str(),
+                info.zoom,
+                info.pages
+            ),
+            ("A4", "A4", 1.0, 1)
+        );
     }
 
     #[test]
@@ -1175,16 +1376,25 @@ mod tests {
         assert!(script.ends_with("([\"a\",\"\\\"q\\\"\"],7);"), "{script}");
         let body = body_script("<div class=\"sheet\">\"x\"</div>", 2);
         assert!(body.contains("document.body.innerHTML=h"));
-        assert!(body.ends_with("(\"<div class=\\\"sheet\\\">\\\"x\\\"</div>\",2);"), "{body}");
+        assert!(
+            body.ends_with("(\"<div class=\\\"sheet\\\">\\\"x\\\"</div>\",2);"),
+            "{body}"
+        );
     }
 
     #[test]
     fn urls_names_and_stems() {
-        assert_eq!(url_for(Path::new("/tmp/a b/é.html")), "file:///tmp/a%20b/%C3%A9.html");
+        assert_eq!(
+            url_for(Path::new("/tmp/a b/é.html")),
+            "file:///tmp/a%20b/%C3%A9.html"
+        );
         assert_eq!(sanitize("2551Q"), "2551Q");
         assert_eq!(sanitize("../x y"), "---x-y");
         assert_eq!(sanitize(""), "preview");
-        assert_eq!(file_stem("BIR Form 1701Q \u{2014} Juana Santos"), "BIR Form 1701Q - Juana Santos");
+        assert_eq!(
+            file_stem("BIR Form 1701Q \u{2014} Juana Santos"),
+            "BIR Form 1701Q - Juana Santos"
+        );
         assert_eq!(file_stem("a/b:c"), "a-b-c");
         assert_eq!(file_stem("  "), "Print preview");
     }
@@ -1222,25 +1432,47 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let root = folder.path().join("ebirforms-print-1");
         let mut state = State::new(root.clone());
-        state.request("2551Q", "BIR Form 2551Q — Juana".to_owned(), sheet_doc(&["Juana"])).unwrap();
+        state
+            .request(
+                "2551Q",
+                "BIR Form 2551Q — Juana".to_owned(),
+                sheet_doc(&["Juana"]),
+            )
+            .unwrap();
         assert_eq!(mode_of(&root), 0o700, "the folder of the run");
-        assert_eq!(mode_of(&root.join("2551Q")), 0o700, "the folder of the preview");
+        assert_eq!(
+            mode_of(&root.join("2551Q")),
+            0o700,
+            "the folder of the preview"
+        );
         assert_eq!(mode_of(&root.join("2551Q").join(SHEET)), 0o600, "the sheet");
         state.update("2551Q", sheet_doc(&["Santos"]));
-        assert_eq!(mode_of(&root.join("2551Q").join(SHEET)), 0o600, "the sheet rewritten by an edit");
+        assert_eq!(
+            mode_of(&root.join("2551Q").join(SHEET)),
+            0o600,
+            "the sheet rewritten by an edit"
+        );
         let pdf = write_pdf(&root.join("2551Q"), "BIR Form 2551Q — Juana", b"%PDF-1.4").unwrap();
         assert_eq!(pdf, root.join("2551Q").join("BIR Form 2551Q - Juana.pdf"));
         assert_eq!(mode_of(&pdf), 0o600, "the PDF Print writes");
         // A folder left at the predictable name by someone else's umask is made private; a link there is refused.
         let open = folder.path().join("open");
         std::fs::create_dir(&open).unwrap();
-        std::fs::set_permissions(&open, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&open, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
         private_dir(&open).unwrap();
         assert_eq!(mode_of(&open), 0o700);
         let link = folder.path().join("link");
         std::os::unix::fs::symlink(&open, &link).unwrap();
-        assert!(private_dir(&link).is_err(), "a link at the folder's name is not followed");
-        assert!(State::new(link.clone()).request("2551Q", "t".to_owned(), sheet_doc(&["a"])).is_err());
+        assert!(
+            private_dir(&link).is_err(),
+            "a link at the folder's name is not followed"
+        );
+        assert!(
+            State::new(link.clone())
+                .request("2551Q", "t".to_owned(), sheet_doc(&["a"]))
+                .is_err()
+        );
     }
 
     #[test]
@@ -1248,16 +1480,27 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let root = folder.path().join("root");
         let mut state = State::new(root.clone());
-        state.request("2551Q", "t".to_owned(), sheet_doc(&["a"])).unwrap();
-        state.request("1601C", "t".to_owned(), sheet_doc(&["a"])).unwrap();
+        state
+            .request("2551Q", "t".to_owned(), sheet_doc(&["a"]))
+            .unwrap();
+        state
+            .request("1601C", "t".to_owned(), sheet_doc(&["a"]))
+            .unwrap();
         write_pdf(&root.join("1601C"), "t", b"%PDF").unwrap();
         state.close_all();
-        assert!(!root.exists(), "the run's folder, every preview and PDF in it");
+        assert!(
+            !root.exists(),
+            "the run's folder, every preview and PDF in it"
+        );
         assert!(state.previews.is_empty());
         // The hook's thread state too, through what the door's shutdown calls.
         let _recorder = host(folder.path());
         let key = key();
-        request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
+        request(
+            sheet_file(folder.path(), &["a"]),
+            "t".to_owned(),
+            key.clone(),
+        );
         assert!(folder.path().join(sanitize(&key)).exists());
         remove_all();
         assert!(!has_live(&key));
@@ -1271,7 +1514,10 @@ mod tests {
         let key = key();
         let source = sheet_file(folder.path(), &["Juana", ""]);
         request(source.clone(), "BIR Form".to_owned(), key.clone());
-        assert!(!source.exists(), "the filled return is not left in the temp folder");
+        assert!(
+            !source.exists(),
+            "the filled return is not left in the temp folder"
+        );
         assert_eq!(kinds(&recorder), vec![PrintEventKind::Open]);
         // With no host listening the file is not kept either.
         STATE.with(|state| state.borrow_mut().backend = None);
@@ -1288,8 +1534,15 @@ mod tests {
         write_atomic(&path, "one").unwrap();
         write_atomic(&path, "two").unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "two");
-        let names: Vec<_> = std::fs::read_dir(path.parent().unwrap()).unwrap().map(|e| e.unwrap().file_name()).collect();
-        assert_eq!(names, vec![std::ffi::OsString::from(SHEET)], "no half-written file is left");
+        let names: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            names,
+            vec![std::ffi::OsString::from(SHEET)],
+            "no half-written file is left"
+        );
     }
 
     // The previews ------------------------------------------------------------------------------------------------
@@ -1299,10 +1552,19 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let mut state = State::new(folder.path().to_path_buf());
         let html = sheet_doc(&["Juana"]);
-        let events = state.request("2551Q", "BIR Form 2551Q \u{2014} Juana".to_owned(), html.clone()).unwrap();
+        let events = state
+            .request(
+                "2551Q",
+                "BIR Form 2551Q \u{2014} Juana".to_owned(),
+                html.clone(),
+            )
+            .unwrap();
         assert_eq!(events.len(), 1);
         let open = &events[0];
-        assert_eq!((open.kind, open.key.as_str(), open.revision, open.pages), (PrintEventKind::Open, "2551Q", 1, 2));
+        assert_eq!(
+            (open.kind, open.key.as_str(), open.revision, open.pages),
+            (PrintEventKind::Open, "2551Q", 1, 2)
+        );
         assert_eq!((open.paper.as_str(), open.sheet.as_str()), ("A4", "Folio"));
         let file = folder.path().join("2551Q").join(SHEET);
         assert_eq!(open.url, url_for(&file));
@@ -1314,13 +1576,33 @@ mod tests {
     fn asking_again_refreshes_in_place_with_a_patch_or_a_new_body() {
         let folder = tempfile::tempdir().unwrap();
         let mut state = State::new(folder.path().to_path_buf());
-        state.request("2551Q", "t".to_owned(), sheet_doc(&["Juana", ""])).unwrap();
-        let same = state.request("2551Q", "t2".to_owned(), sheet_doc(&["Juana", "Santos"])).unwrap();
-        assert_eq!(same.iter().map(|e| e.kind).collect::<Vec<_>>(), vec![PrintEventKind::Open, PrintEventKind::Update]);
+        state
+            .request("2551Q", "t".to_owned(), sheet_doc(&["Juana", ""]))
+            .unwrap();
+        let same = state
+            .request("2551Q", "t2".to_owned(), sheet_doc(&["Juana", "Santos"]))
+            .unwrap();
+        assert_eq!(
+            same.iter().map(|e| e.kind).collect::<Vec<_>>(),
+            vec![PrintEventKind::Open, PrintEventKind::Update]
+        );
         assert_eq!((same[0].revision, same[0].title.as_str()), (2, "t2"));
-        assert!(same[1].script.contains("span.fs") && same[1].script.contains("Santos"), "{}", same[1].script);
-        let other = state.request("2551Q", "t2".to_owned(), sheet_doc(&["Juana", "Santos", "More"])).unwrap();
-        assert!(other[1].script.contains("document.body.innerHTML"), "a new shape replaces the body");
+        assert!(
+            same[1].script.contains("span.fs") && same[1].script.contains("Santos"),
+            "{}",
+            same[1].script
+        );
+        let other = state
+            .request(
+                "2551Q",
+                "t2".to_owned(),
+                sheet_doc(&["Juana", "Santos", "More"]),
+            )
+            .unwrap();
+        assert!(
+            other[1].script.contains("document.body.innerHTML"),
+            "a new shape replaces the body"
+        );
         assert_eq!(other[1].revision, 3);
     }
 
@@ -1328,13 +1610,26 @@ mod tests {
     fn an_edit_patches_the_open_preview_and_writes_the_new_document() {
         let folder = tempfile::tempdir().unwrap();
         let mut state = State::new(folder.path().to_path_buf());
-        state.request("2551Q", "t".to_owned(), sheet_doc(&["a", ""])).unwrap();
+        state
+            .request("2551Q", "t".to_owned(), sheet_doc(&["a", ""]))
+            .unwrap();
         let events = state.update("2551Q", sheet_doc(&["a", "typed"]));
         assert_eq!(events.len(), 1);
-        assert_eq!((events[0].kind, events[0].revision), (PrintEventKind::Update, 2));
-        assert!(events[0].script.contains("\"typed\""), "{}", events[0].script);
+        assert_eq!(
+            (events[0].kind, events[0].revision),
+            (PrintEventKind::Update, 2)
+        );
+        assert!(
+            events[0].script.contains("\"typed\""),
+            "{}",
+            events[0].script
+        );
         let on_disk = std::fs::read_to_string(folder.path().join("2551Q").join(SHEET)).unwrap();
-        assert_eq!(parse_doc(&on_disk).texts, vec!["a", "typed"], "the file holds what the window shows");
+        assert_eq!(
+            parse_doc(&on_disk).texts,
+            vec!["a", "typed"],
+            "the file holds what the window shows"
+        );
     }
 
     #[test]
@@ -1342,11 +1637,22 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let mut state = State::new(folder.path().to_path_buf());
         let html = sheet_doc(&["a"]);
-        state.request("2551Q", "t".to_owned(), html.clone()).unwrap();
-        assert!(state.update("2551Q", String::new()).is_empty(), "an empty fill is a failed fill");
-        assert!(state.update("2551Q", html).is_empty(), "the same document is no news");
+        state
+            .request("2551Q", "t".to_owned(), html.clone())
+            .unwrap();
+        assert!(
+            state.update("2551Q", String::new()).is_empty(),
+            "an empty fill is a failed fill"
+        );
+        assert!(
+            state.update("2551Q", html).is_empty(),
+            "the same document is no news"
+        );
         assert_eq!(state.previews["2551Q"].revision, 1);
-        assert!(state.update("1601C", sheet_doc(&["x"])).is_empty(), "no window for another form");
+        assert!(
+            state.update("1601C", sheet_doc(&["x"])).is_empty(),
+            "no window for another form"
+        );
     }
 
     #[test]
@@ -1354,8 +1660,12 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let root = folder.path().join("root");
         let mut state = State::new(root.clone());
-        state.request("2551Q", "t".to_owned(), sheet_doc(&["a"])).unwrap();
-        state.request("1601C", "t".to_owned(), sheet_doc(&["a"])).unwrap();
+        state
+            .request("2551Q", "t".to_owned(), sheet_doc(&["a"]))
+            .unwrap();
+        state
+            .request("1601C", "t".to_owned(), sheet_doc(&["a"]))
+            .unwrap();
         state.close("2551Q");
         assert!(!root.join("2551Q").exists() && root.join("1601C").exists());
         state.close("1601C");
@@ -1385,13 +1695,20 @@ mod tests {
         let recorder = host(folder.path());
         let key = key();
         assert!(!has_live(&key));
-        request(sheet_file(folder.path(), &["a", ""]), "BIR Form".to_owned(), key.clone());
+        request(
+            sheet_file(folder.path(), &["a", ""]),
+            "BIR Form".to_owned(),
+            key.clone(),
+        );
         assert!(has_live(&key));
         assert_eq!(kinds(&recorder), vec![PrintEventKind::Open]);
 
         let fill = sheet_doc(&["a", "typed"]);
         live_update(&key, Box::new(move || fill), Instant::now());
-        assert_eq!(kinds(&recorder), vec![PrintEventKind::Open, PrintEventKind::Update]);
+        assert_eq!(
+            kinds(&recorder),
+            vec![PrintEventKind::Open, PrintEventKind::Update]
+        );
         assert!(recorder.events.borrow()[1].script.contains("typed"));
 
         // Another form has no window: nothing to follow.
@@ -1399,7 +1716,11 @@ mod tests {
         assert_eq!(recorder.events.borrow().len(), 2);
 
         // Pressing the button again refreshes and focuses (an Open and an Update, no second window of ours).
-        request(sheet_file(folder.path(), &["b", ""]), "BIR Form".to_owned(), key.clone());
+        request(
+            sheet_file(folder.path(), &["b", ""]),
+            "BIR Form".to_owned(),
+            key.clone(),
+        );
         assert_eq!(recorder.events.borrow().len(), 4);
 
         forget(&key);
@@ -1436,12 +1757,20 @@ mod tests {
             state.root = folder.path().to_path_buf();
             state.backend = None;
         });
-        request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
+        request(
+            sheet_file(folder.path(), &["a"]),
+            "t".to_owned(),
+            key.clone(),
+        );
         assert!(!has_live(&key));
         live_update(&key, Box::new(|| sheet_doc(&["x"])), Instant::now());
         // A host that stops listening (the Stop) takes the preview's liveness with it.
         let recorder = host(folder.path());
-        request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
+        request(
+            sheet_file(folder.path(), &["a"]),
+            "t".to_owned(),
+            key.clone(),
+        );
         assert!(has_live(&key));
         let id = STATE.with(|state| state.borrow().backend.as_ref().unwrap().0);
         uninstall(id);
@@ -1467,11 +1796,18 @@ mod tests {
         let recorder = host(folder.path());
         let hooks = crate::hooks::NshHooks;
         let key = key();
-        hooks.print_preview_request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
+        hooks.print_preview_request(
+            sheet_file(folder.path(), &["a"]),
+            "t".to_owned(),
+            key.clone(),
+        );
         assert!(hooks.print_preview_has_live(&key));
         let fill = sheet_doc(&["z"]);
         hooks.print_preview_live_update(&key, Box::new(move || fill), Instant::now());
-        assert_eq!(kinds(&recorder), vec![PrintEventKind::Open, PrintEventKind::Update]);
+        assert_eq!(
+            kinds(&recorder),
+            vec![PrintEventKind::Open, PrintEventKind::Update]
+        );
         forget(&key);
         assert!(!hooks.print_preview_has_live(&key));
     }
@@ -1480,12 +1816,25 @@ mod tests {
 
     #[test]
     fn a_save_path_is_only_honoured_in_a_test_environment() {
-        assert_eq!(save_target(true, Some("/tmp/x.pdf")), Some(PathBuf::from("/tmp/x.pdf")));
-        assert_eq!(save_target(false, Some("/tmp/x.pdf")), None, "outside a test the person is asked");
+        assert_eq!(
+            save_target(true, Some("/tmp/x.pdf")),
+            Some(PathBuf::from("/tmp/x.pdf"))
+        );
+        assert_eq!(
+            save_target(false, Some("/tmp/x.pdf")),
+            None,
+            "outside a test the person is asked"
+        );
         assert_eq!(save_target(true, Some("")), None);
         assert_eq!(save_target(true, None), None);
-        assert_eq!(with_pdf_extension(PathBuf::from("/a/b")), PathBuf::from("/a/b.pdf"));
-        assert_eq!(with_pdf_extension(PathBuf::from("/a/b.PDF")), PathBuf::from("/a/b.PDF"));
+        assert_eq!(
+            with_pdf_extension(PathBuf::from("/a/b")),
+            PathBuf::from("/a/b.pdf")
+        );
+        assert_eq!(
+            with_pdf_extension(PathBuf::from("/a/b.PDF")),
+            PathBuf::from("/a/b.PDF")
+        );
     }
 
     #[test]
@@ -1503,8 +1852,11 @@ mod tests {
         use lopdf::{Document, Object, Stream, dictionary};
         let mut document = Document::with_version("1.7");
         let pages = document.new_object_id();
-        let font = document.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" });
-        let contents = document.add_object(Stream::new(dictionary! {}, content.as_bytes().to_vec()));
+        let font = document.add_object(
+            dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica" },
+        );
+        let contents =
+            document.add_object(Stream::new(dictionary! {}, content.as_bytes().to_vec()));
         let page = document.add_object(dictionary! {
             "Type" => "Page",
             "Parent" => pages,
@@ -1514,7 +1866,9 @@ mod tests {
         });
         document.objects.insert(
             pages,
-            Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }),
+            Object::Dictionary(
+                dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 },
+            ),
         );
         let catalog = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
         document.trailer.set("Root", catalog);
@@ -1535,10 +1889,17 @@ mod tests {
         std::fs::write(&path, &pdf).unwrap();
         let probe = probe_pdf(&path).unwrap();
         assert_eq!(probe.pages, 3, "a page per sheet");
-        assert!((probe.width_pt - 594.75).abs() < 0.01 && (probe.height_pt - 841.5).abs() < 0.01, "{probe:?}");
+        assert!(
+            (probe.width_pt - 594.75).abs() < 0.01 && (probe.height_pt - 841.5).abs() < 0.01,
+            "{probe:?}"
+        );
         assert!(probe.content_bytes > 0 && probe.bytes as usize == pdf.len());
         #[cfg(target_os = "macos")]
-        assert!(probe.text.contains("Juana Santos") && probe.text.contains("Page three"), "text: {:?}", probe.text);
+        assert!(
+            probe.text.contains("Juana Santos") && probe.text.contains("Page three"),
+            "text: {:?}",
+            probe.text
+        );
     }
 
     /// What the system print panel is asked for: PDFKit's operation for the PDF, A4 with no margins, with the panel. The
@@ -1550,7 +1911,8 @@ mod tests {
         use objc2::rc::Retained;
         use objc2::runtime::{AnyObject, Bool};
         use objc2_foundation::NSSize;
-        let pdf = assemble_pdf(&[captured_page("BT /F1 18 Tf 72 700 Td (Page) Tj ET")]).expect("assembled");
+        let pdf = assemble_pdf(&[captured_page("BT /F1 18 Tf 72 700 Td (Page) Tj ET")])
+            .expect("assembled");
         let folder = tempfile::tempdir().unwrap();
         let path = folder.path().join("sheet.pdf");
         std::fs::write(&path, pdf).unwrap();
@@ -1559,10 +1921,14 @@ mod tests {
         unsafe {
             let info: Retained<AnyObject> = msg_send![&operation, printInfo];
             let paper: NSSize = msg_send![&info, paperSize];
-            let (top, left): (f64, f64) = (msg_send![&info, topMargin], msg_send![&info, leftMargin]);
+            let (top, left): (f64, f64) =
+                (msg_send![&info, topMargin], msg_send![&info, leftMargin]);
             let panel: Bool = msg_send![&operation, showsPrintPanel];
             // A4 to the point: a machine with no printer (a CI runner) reports the sheet in whole points, 595 x 842.
-            assert!((paper.width - 595.28).abs() < 1.0 && (paper.height - 841.89).abs() < 1.0, "paper {paper:?}");
+            assert!(
+                (paper.width - 595.28).abs() < 1.0 && (paper.height - 841.89).abs() < 1.0,
+                "paper {paper:?}"
+            );
             assert_eq!((top, left), (0.0, 0.0));
             assert!(panel.as_bool());
         }

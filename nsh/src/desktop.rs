@@ -211,7 +211,10 @@ impl Mailbox {
     }
 
     fn take_commands(&mut self) -> Vec<String> {
-        self.commands.drain(..).map(|c| c.word().to_owned()).collect()
+        self.commands
+            .drain(..)
+            .map(|c| c.word().to_owned())
+            .collect()
     }
 }
 
@@ -263,7 +266,10 @@ pub(crate) fn auto_download_enabled(value: Option<&str>) -> bool {
 fn stored_auto_download() -> Option<bool> {
     let handle = bir_app_api::bir_module::database_handle().ok()?;
     let db = bir_core::lock_timing::lock(&handle).ok()?;
-    let value = db.get_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING).ok().flatten();
+    let value = db
+        .get_setting(bir_app_api::hooks::AUTO_DOWNLOAD_SETTING)
+        .ok()
+        .flatten();
     Some(auto_download_enabled(value.as_deref()))
 }
 
@@ -423,7 +429,9 @@ pub(crate) fn claim(database: &Path) -> Claim {
         .open(&lock)
     {
         Ok(file) => file,
-        Err(error) => return Claim::Unavailable(format!("cannot open {}: {error}", lock.display())),
+        Err(error) => {
+            return Claim::Unavailable(format!("cannot open {}: {error}", lock.display()));
+        }
     };
     match file.try_lock() {
         Ok(()) => match start_listening(file, port_path(database)) {
@@ -471,7 +479,9 @@ fn listen(listener: TcpListener, stop: &AtomicBool) {
         if stop.load(Ordering::SeqCst) {
             break;
         }
-        let Ok(stream) = stream else { continue };
+        let Ok(stream) = stream else {
+            continue;
+        };
         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
         let mut line = String::new();
         // A line of at most 16 bytes: nothing else is ever sent.
@@ -514,7 +524,10 @@ fn read_port(port_file: &Path) -> Option<u16> {
 /// test environment; `0`/`off`/`false`/`no` turns it off); without it the guard applies to every run except a
 /// test environment (`EBIR_TEST_ENV`), where every test names a scratch database of its own.
 pub(crate) fn guard_wanted(setting: Option<&str>, test_environment: bool) -> bool {
-    match setting.map(|value| value.trim().to_ascii_lowercase()).as_deref() {
+    match setting
+        .map(|value| value.trim().to_ascii_lowercase())
+        .as_deref()
+    {
         Some("1" | "on" | "true" | "yes") => true,
         Some("0" | "off" | "false" | "no") => false,
         _ => !test_environment,
@@ -673,7 +686,9 @@ mod tests {
     static SERIAL: Mutex<()> = Mutex::new(());
 
     fn serial() -> MutexGuard<'static, ()> {
-        SERIAL.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn scratch() -> (tempfile::TempDir, PathBuf) {
@@ -764,7 +779,10 @@ mod tests {
             mailbox.take_commands(),
             ["start", "check", "auto-off", "auto-on", "install"]
         );
-        assert!(mailbox.take_commands().is_empty(), "each command comes once");
+        assert!(
+            mailbox.take_commands().is_empty(),
+            "each command comes once"
+        );
     }
 
     #[test]
@@ -795,7 +813,15 @@ mod tests {
 
     #[test]
     fn the_automatic_download_setting_is_on_unless_it_says_off() {
-        for on in [None, Some(""), Some("  "), Some("1"), Some("true"), Some("on"), Some("yes")] {
+        for on in [
+            None,
+            Some(""),
+            Some("  "),
+            Some("1"),
+            Some("true"),
+            Some("on"),
+            Some("yes"),
+        ] {
             assert!(auto_download_enabled(on), "{on:?}");
         }
         for off in ["0", "false", "off", " OFF ", "False"] {
@@ -842,7 +868,10 @@ mod tests {
                     // A restart forgets the mailbox; the database remembers.
                     mailbox(|mailbox| *mailbox = Mailbox::new());
                     let status = crate::door::call("update_status", vec![]).expect("update_status");
-                    assert_eq!(status["auto_download"], false, "read back from the database");
+                    assert_eq!(
+                        status["auto_download"], false,
+                        "read back from the database"
+                    );
                     assert!(!Desktop::auto_download());
 
                     crate::door::call("check_for_updates", vec![]).expect("check");
@@ -853,7 +882,10 @@ mod tests {
                     let seen = Desktop::poll();
                     assert_eq!(seen.update_commands, ["check", "install", "dismiss"]);
                     assert!(seen.chrome_open);
-                    assert!(seen.menu_revision >= 1, "the chrome switch and the refresh were counted");
+                    assert!(
+                        seen.menu_revision >= 1,
+                        "the chrome switch and the refresh were counted"
+                    );
                     let again = Desktop::poll();
                     assert!(again.update_commands.is_empty(), "each command comes once");
                     assert_eq!(again.menu_revision, seen.menu_revision);
@@ -941,11 +973,18 @@ mod tests {
     /// The four chords the Settings page offers (`hotkey_presets` in bir-app-api) round-trip: stored, mapped, read.
     #[test]
     fn the_settings_presets_round_trip() {
-        let prefix = if cfg!(target_os = "macos") { "control+alt" } else { "super+shift" };
+        let prefix = if cfg!(target_os = "macos") {
+            "control+alt"
+        } else {
+            "super+shift"
+        };
         for key in ["E", "B", "H", "F12"] {
             let stored = format!("{prefix}+{key}");
             let shortcut = hotkey_shortcut(&stored).expect("a preset maps");
-            assert!(shortcut.ends_with(&key.to_ascii_lowercase()), "{stored} -> {shortcut}");
+            assert!(
+                shortcut.ends_with(&key.to_ascii_lowercase()),
+                "{stored} -> {shortcut}"
+            );
             let read = nsh_core::desktop::Shortcut::parse(&shortcut, cfg!(target_os = "macos"))
                 .expect("NSH reads it");
             // The modifiers survived the trip: the keystroke has as many as the combo has words.
@@ -995,7 +1034,10 @@ mod tests {
         }
         let started = Instant::now();
         while !ACTIVATE.swap(false, Ordering::SeqCst) {
-            assert!(started.elapsed() < Duration::from_secs(5), "the first copy heard it");
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "the first copy heard it"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
 
@@ -1051,7 +1093,10 @@ mod tests {
                 ],
                 || guards::with_home_for_test(home.path(), prepare_process),
             );
-            assert!(!database.parent().unwrap().exists(), "{relative}: no folder, no lock file");
+            assert!(
+                !database.parent().unwrap().exists(),
+                "{relative}: no folder, no lock file"
+            );
         }
     }
 
@@ -1110,7 +1155,12 @@ mod tests {
         fn start(mode: &str, database: &Path, env: &[(&str, &str)]) -> Child2 {
             let mut command = Command::new(std::env::current_exe().expect("the test binary"));
             command
-                .args(["--exact", "desktop::tests::child_process", "--nocapture", "--test-threads=1"])
+                .args([
+                    "--exact",
+                    "desktop::tests::child_process",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
                 .env("NSH_DESKTOP_TEST_DB", database)
                 .env("NSH_DESKTOP_TEST_MODE", mode)
                 .env("BUWIZ_NO_KEYCHAIN", "1")
@@ -1161,7 +1211,11 @@ mod tests {
             Claim::Running { notified } => assert!(notified),
             _ => panic!("the other process is the app"),
         }
-        assert_eq!(first.said(), "activated", "the first process heard the second");
+        assert_eq!(
+            first.said(),
+            "activated",
+            "the first process heard the second"
+        );
 
         let (ended_well, rest) = first.finish();
         assert!(ended_well);
@@ -1188,10 +1242,17 @@ mod tests {
         );
         let (ended_well, said) = second.finish();
         assert!(ended_well, "a second launch ends quietly, with success");
-        assert_eq!(said, ["began"], "it started, and never went on to start the app");
+        assert_eq!(
+            said,
+            ["began"],
+            "it started, and never went on to start the app"
+        );
         let started = Instant::now();
         while !ACTIVATE.swap(false, Ordering::SeqCst) {
-            assert!(started.elapsed() < Duration::from_secs(5), "the first heard the second launch");
+            assert!(
+                started.elapsed() < Duration::from_secs(5),
+                "the first heard the second launch"
+            );
             std::thread::sleep(Duration::from_millis(10));
         }
     }

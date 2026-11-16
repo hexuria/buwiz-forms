@@ -26,7 +26,12 @@ fn native(registry: &mut Registry) {
     door::prepare_process();
     // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).
     desktop::prepare_process();
-    registry.module::<Bridge>().module::<Door>().module::<agent::Agent>().module::<desktop::Desktop>().module::<print::Print>();
+    registry
+        .module::<Bridge>()
+        .module::<Door>()
+        .module::<agent::Agent>()
+        .module::<desktop::Desktop>()
+        .module::<print::Print>();
 }
 
 /// Proof that TSX reaches this crate.
@@ -72,6 +77,9 @@ pub struct DoorStatus {
     pub database_path: String,
     /// `EBIR_TEST_ENV` is on: a dev, test or agent run.
     pub test_environment: bool,
+    /// `BIR_SHELL_POLL=1` in a test environment: the frame's polls run there as they do in the shipped app.
+    /// Read here because a script under `nsh test` does not see the environment.
+    pub shell_poll: bool,
 }
 
 /// The door to the Rust brain: the host functions the screens call, with the guards of the migration plan
@@ -115,6 +123,7 @@ impl Door {
             sending_note: mode.note(),
             database_path: door::database_path().display().to_string(),
             test_environment: door::test_environment(),
+            shell_poll: door::shell_poll(),
         }
     }
 
