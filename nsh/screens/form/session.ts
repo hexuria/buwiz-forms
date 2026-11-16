@@ -39,7 +39,7 @@ import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, withoutHidden, type DateParts, type OneDate } from "./schema";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -54,6 +54,9 @@ const NO_PREVIEW = "Print preview is not available on this device.";
 
 /** What Check, and a Queue the host refused, say of the items that need attention. */
 const attentionText = (n: number) => `${n} item${n > 1 ? "s need" : " needs"} attention.`;
+
+/** Why a month other than December is not taken for a calendar year's end (a calendar pick says it; so does a month chosen from the list that the fill put back). */
+const CALENDAR_YEAR_ENDS = "A calendar year ends in December. Choose Fiscal to pick another month.";
 
 /** A flush runs this long after the last edit (ms). */
 export const VALIDATE_DELAY = 300;
@@ -859,7 +862,7 @@ export class FormSession {
     // A calendar year ends in December and the form puts any other month back: where the calendar could not leave the day out (the year is
     // not locked, a sample) the pick is refused with the reason, never reverted without a word.
     if (this.calendarYearEnd(date) && Number(m) !== 12 && !this.isShut(date.month.k)) {
-      return void this.toast("A calendar year ends in December. Choose Fiscal to pick another month.", "triangle-alert");
+      return void this.toast(CALENDAR_YEAR_ENDS, "triangle-alert");
     }
     const valueFor = (f: SchemaField, v: string): string | null => {
       if (!(f.t === "sel" && f.o)) return v;
@@ -1112,6 +1115,7 @@ export class FormSession {
     }
     this.syncShown(before, edits);
     this.livePreview();
+    this.sayYearEndPutBack(edits);
     // A refused box shows what the draft holds again; its message shows (its row is touched) until it is edited again.
     for (const [k, msg] of Object.entries(r.rejected || {})) {
       const id = this.keyIndex.get(k);
@@ -1123,6 +1127,22 @@ export class FormSession {
     }
     // An emptied number box the host holds as zero shows the zero (the box selects it, so the next digit replaces it).
     for (const k of r.cleared || []) if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
+  }
+
+  /**
+   * A month chosen from a year-end date's list while Calendar is ticked, and the fill put another back (1702Q puts December back at every
+   * fill, without a word): the filer is told why, as a calendar pick is. A form that keeps the month (2551Q flags it on the row, 2550Q does
+   * not mind) has nothing put back and nothing to say here.
+   */
+  private sayYearEndPutBack(edits: Record<string, string>) {
+    const s = this.st;
+    for (const [k, chosen] of Object.entries(edits)) {
+      const item = this.items.get(this.keyIndex.get(k) ?? "");
+      const date = item?.f ? dateParts(item.f) : null;
+      if (!date || date.month.k !== k || !this.calendarYearEnd(date)) continue;
+      const asked = Number(String(chosen).slice(0, 2));
+      if (asked >= 1 && asked <= 12 && asked !== Number(String(s.values[k] ?? "").slice(0, 2))) return void this.toast(CALENDAR_YEAR_ENDS, "triangle-alert");
+    }
   }
 
   /** An answer that removes typed rows asks first: the old answer shows until Continue. */
@@ -2059,6 +2079,11 @@ export class FormSession {
 
   /** Check: every message shows; a toast says how many items need attention once validation is back. */
   check() {
+    this.looked((n) => this.toast(n ? attentionText(n) : "No problems found.", n ? "triangle-alert" : "circle-check"));
+  }
+
+  /** Check's look: every message shows, and once validation is back `done` hears how many items need attention. */
+  private looked(done: (n: number) => void) {
     const s = this.st;
     this.unquiet();
     s.showAll = true;
@@ -2068,8 +2093,7 @@ export class FormSession {
       if (token !== this.token || this.disposed) return;
       if (this.st.checking) return void this.later(100, wait);
       // Every message counted once, as the pill and the part badges count them (not the rows they sit on).
-      const n = Object.values(this.shownCounts()).reduce((a, b) => a + b, 0);
-      this.toast(n ? attentionText(n) : "No problems found.", n ? "triangle-alert" : "circle-check");
+      done(Object.values(this.shownCounts()).reduce((a, b) => a + b, 0));
     };
     this.later(50, wait);
   }
@@ -2260,7 +2284,13 @@ export class FormSession {
     return this.st.target.formCode === "1601C" || this.st.target.formCode === "2551Q";
   }
 
-  /** Queue: saved first; tax facts not set that change what is filed stop it; the others are confirmed once. */
+  /** The session token of a Queue that is looking at the return (Check's look) before it asks, else -1: a second press waits for it. */
+  private lookingAt = -1;
+
+  /**
+   * Queue: saved first; tax facts not set that change what is filed stop it; then it looks, as Check does, and a return the host will refuse
+   * says so (the toast, every message on its row, the pill) and nothing is asked; the others are confirmed once (the tier warning) or queued.
+   */
   queue() {
     const s = this.st;
     if (s.sample) return this.saveSample(() => this.queue());
@@ -2278,9 +2308,57 @@ export class FormSession {
       this.publish();
       return this.toast(check.blocks[0].message, "triangle-alert");
     }
-    if (check?.warns?.length) {
-      s.queueWarn = { warns: check.warns };
-      s.overlay = { kind: "queue-confirm", warns: check.warns };
+    const warns = check?.warns ?? [];
+    if (!this.looksFirst()) return this.askQueue(warns);
+    if (this.lookingAt === this.token) return;
+    this.lookingAt = this.token;
+    this.looked((n) => {
+      this.lookingAt = -1;
+      // What Check lists is the page's reading, not the host's verdict, so it is said once. A second Queue with the same list unchanged goes
+      // to the host, which decides (it can accept what Check still lists, as 2551Q's does): nothing the page thinks keeps a return from
+      // being queued.
+      const listed = n > 0 ? this.refusalList() : "";
+      if (listed && listed !== this.toldRefusal) {
+        this.toldRefusal = listed;
+        return void this.toast(attentionText(n), "triangle-alert");
+      }
+      this.toldRefusal = "";
+      this.askQueue(warns);
+    });
+  }
+
+  /** The list a Queue was last told of instead of being asked ("" when none): the same list again goes to the host. */
+  private toldRefusal = "";
+
+  /**
+   * Whether Queue looks before it asks. 2551Q's Queue does not judge the draft the page holds: it reads the stored return again and reconciles
+   * it with the year's tax profile first (queue_form_draft), so the Item 13 election can be answered there while Check still lists it (a
+   * Queue the host accepted, with Check listing it, was measured). For 2551Q what Check lists is not what the host refuses: Queue still
+   * asks, and the host decides. The others judge the saved draft the page validated (1601C's is read back from the row just saved).
+   */
+  private looksFirst(): boolean {
+    return this.st.target.formCode !== "2551Q";
+  }
+
+  /**
+   * The messages of the list the host's Queue refuses for, as one text ("" when none): its validation's, not a page notice (dismissible or
+   * listed in schema.ts) and not a page-only message.
+   */
+  private refusalList(): string {
+    const s = this.st;
+    return s.errors
+      .filter((e) => !e.dismiss && !isPageNotice(s.target.formCode, e.field))
+      .map((e) => `${e.field}: ${e.message}`)
+      .sort()
+      .join("\n");
+  }
+
+  /** Nothing left to fix: the tier warning is asked once, else the return is queued. */
+  private askQueue(warns: string[]) {
+    const s = this.st;
+    if (warns.length) {
+      s.queueWarn = { warns };
+      s.overlay = { kind: "queue-confirm", warns };
       return this.publish();
     }
     this.queueNow();

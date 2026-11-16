@@ -211,6 +211,25 @@ export function listedFields(text: string): number {
   return parts.every((p) => entry.test(p)) ? parts.length : 0;
 }
 
+/**
+ * The host's page notices (screen_form_module.rs `evaluate_here`) are listed beside the validation messages but are not validation: a Queue is
+ * never refused for one. They sit on these fields (a stored 2553 row's ATC, a 1604E legacy total's penalties, 1606's sale date, 1701's imported
+ * spouse RDO, 1702EX's attached rows, 1702RT's MCIT, "one_date": a partial date on an as-needed form).
+ */
+const PAGE_NOTICES: Record<string, RegExp> = {
+  "1604E": /^schedule\d+\[\d+\]\.penalties$/,
+  "1606": /^transaction_date$/,
+  "1701": /^spouse_rdo_code$/,
+  "1702EX": /^(other_credits|other_deductions|special_rows)\.\d+$/,
+  "1702RT": /^schedule_4\.rows\[\d+\]\.mcit$/,
+  "2553": /^schedule\[\d+\]\.atc_code$/,
+};
+
+/** Whether the message the host put on `field` of form `form` is a page notice (never a reason for a refused Queue). */
+export function isPageNotice(form: string, field: string): boolean {
+  return field === "one_date" || Boolean(PAGE_NOTICES[form]?.test(field));
+}
+
 /** Every key an item binds (a schedule's every cell, a pooled line's pool). */
 export function keysOf(it: SchemaItem): string[] {
   if (it.rows) return (it.keys ?? []).flat();

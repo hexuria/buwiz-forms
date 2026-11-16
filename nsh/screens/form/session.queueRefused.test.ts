@@ -1,7 +1,8 @@
 // A Queue the host refuses (the draft fails its validation) says how many items need attention, as Check does, and shows them on the page
 // (every message, the pill's to-dos). The host lists what it refused as "field: message; ..." with its own names for the boxes
 // ("agent_category: Please select an option for Item 8."): those names are not for the filer. Through the real door (scratch database,
-// the demo taxpayer); a 1604C's Item 8 is blank, and its Queue is confirmed (the EOPT tier is not set) before the host refuses it.
+// the demo taxpayer); a 1604C's Item 8 is blank, and the EOPT tier is not set. Queue looks first (session.queueFirst.test.ts): it says the
+// count at once, as Check does, and asks nothing, where it used to ask "Queue this return?" and refuse only after Continue.
 import { expect, test } from "nsh/test";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
 import { FormSession, type FormTarget, type SessionHooks } from "./session";
@@ -11,6 +12,14 @@ import { listedFields } from "./schema";
 warmForms();
 
 const at = (formCode: string, year: number, period: number): FormTarget => ({ tin: DEMO.tin, formCode, year, period, mode: "return" });
+
+async function until(condition: () => boolean, what: string, cap = 15_000): Promise<void> {
+  const t0 = Date.now();
+  while (!condition()) {
+    if (Date.now() - t0 > cap) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
 
 function hooks() {
   const said = { toasts: [] as string[] };
@@ -53,10 +62,10 @@ test("a refused Queue counts the items, names no box of the host, and the page s
     await s.idle();
     said.toasts.length = 0;
     s.queue();
-    // The Queue is confirmed first (the EOPT tier is not set), then the host refuses the draft.
-    expect(s.overlay()?.kind).toBe("queue-confirm");
-    s.confirmQueue();
+    // Queue looks first: the count is said at once and nothing is asked (the EOPT tier is not set, which used to open a question).
+    await until(() => said.toasts.length > 0, "the toast");
     await s.idle();
+    expect(s.overlay()).toBe(null);
     expect(said.toasts).toEqual(["1 item needs attention."]);
     expect(said.toasts.join(" ")).not.toMatch(/agent_category|: /);
     expect(s.status()).toBe("Draft");
