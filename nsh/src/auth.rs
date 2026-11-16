@@ -25,9 +25,7 @@ fn answer(test_environment: bool, reason: &str, ask: impl FnOnce(&str) -> bool) 
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn prompt(reason: &str) -> bool {
-    use robius_authentication::{
-        AndroidText, BiometricStrength, Context, PolicyBuilder, Text, WindowsText,
-    };
+    use robius_authentication::{AndroidText, BiometricStrength, Context, PolicyBuilder, Text, WindowsText};
     let Some(policy) = PolicyBuilder::new()
         .biometrics(Some(BiometricStrength::Strong))
         .password(true)

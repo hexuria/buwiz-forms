@@ -26,12 +26,7 @@ fn native(registry: &mut Registry) {
     door::prepare_process();
     // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).
     desktop::prepare_process();
-    registry
-        .module::<Bridge>()
-        .module::<Door>()
-        .module::<agent::Agent>()
-        .module::<desktop::Desktop>()
-        .module::<print::Print>();
+    registry.module::<Bridge>().module::<Door>().module::<agent::Agent>().module::<desktop::Desktop>().module::<print::Print>();
 }
 
 /// Proof that TSX reaches this crate.

@@ -289,7 +289,11 @@ pub fn database_refusal_here(path: &Path) -> Option<String> {
     #[cfg(not(test))]
     let seamed = false;
     if !seamed
-        && let Some(why) = unverified_refusal(cfg!(unix), path, std::env::var_os(DATABASE_PATH_ENV))
+        && let Some(why) = unverified_refusal(
+            cfg!(unix),
+            path,
+            std::env::var_os(DATABASE_PATH_ENV),
+        )
     {
         return Some(why);
     }
@@ -976,19 +980,12 @@ mod tests {
         let named = || Some(db.clone().into_os_string());
         let why = unverified_refusal(false, &db, None).expect("nothing named");
         assert!(why.contains("BIR_DATABASE_PATH"), "{why}");
-        assert!(
-            unverified_refusal(false, &db, Some("".into())).is_some(),
-            "an empty name names nothing"
-        );
+        assert!(unverified_refusal(false, &db, Some("".into())).is_some(), "an empty name names nothing");
         assert!(
             unverified_refusal(false, &folder.path().join("other.db"), named()).is_some(),
             "another file than the one named"
         );
-        assert_eq!(
-            unverified_refusal(false, &db, named()),
-            None,
-            "the file named"
-        );
+        assert_eq!(unverified_refusal(false, &db, named()), None, "the file named");
         // Spelled with a `..` in between, it is still the same file.
         let detour = folder.path().join("x/../bir_data.db");
         assert_eq!(unverified_refusal(false, &detour, named()), None);

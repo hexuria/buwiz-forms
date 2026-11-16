@@ -84,12 +84,7 @@ impl Agent {
     /// true the agent's requests are refused: its tools are not limited to one taxpayer's data. Call it on the engine thread,
     /// on every change. Until it is called the app counts as locked.
     pub fn set_access(locked: bool, taxpayer_session: bool) {
-        ACCESS.with(|access| {
-            access.set(Access {
-                locked,
-                taxpayer_session,
-            })
-        });
+        ACCESS.with(|access| access.set(Access { locked, taxpayer_session }));
     }
 }
 
@@ -373,52 +368,20 @@ mod tests {
     #[test]
     fn the_lock_refuses_first_then_a_taxpayer_session_and_an_open_frame_is_admitted() {
         assert_eq!(admission(true, false), Err(LOCKED.to_owned()));
-        assert_eq!(
-            admission(true, true),
-            Err(LOCKED.to_owned()),
-            "the lock is said first"
-        );
-        assert_eq!(
-            admission(false, true),
-            Err(TAXPAYER_SESSION_REFUSED.to_owned())
-        );
+        assert_eq!(admission(true, true), Err(LOCKED.to_owned()), "the lock is said first");
+        assert_eq!(admission(false, true), Err(TAXPAYER_SESSION_REFUSED.to_owned()));
         assert_eq!(admission(false, false), Ok(()));
     }
 
     #[test]
     fn the_app_counts_as_locked_until_the_frame_says_otherwise() {
         let now = || ACCESS.with(Cell::get);
-        assert_eq!(
-            now(),
-            Access {
-                locked: true,
-                taxpayer_session: false
-            },
-            "locked at the start"
-        );
+        assert_eq!(now(), Access { locked: true, taxpayer_session: false }, "locked at the start");
         Agent::set_access(false, true);
-        assert_eq!(
-            now(),
-            Access {
-                locked: false,
-                taxpayer_session: true
-            }
-        );
+        assert_eq!(now(), Access { locked: false, taxpayer_session: true });
         Agent::set_access(false, false);
-        assert_eq!(
-            now(),
-            Access {
-                locked: false,
-                taxpayer_session: false
-            }
-        );
+        assert_eq!(now(), Access { locked: false, taxpayer_session: false });
         Agent::set_access(true, false);
-        assert_eq!(
-            now(),
-            Access {
-                locked: true,
-                taxpayer_session: false
-            }
-        );
+        assert_eq!(now(), Access { locked: true, taxpayer_session: false });
     }
 }

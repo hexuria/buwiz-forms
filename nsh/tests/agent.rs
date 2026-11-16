@@ -277,9 +277,7 @@ fn the_listener_answers_nothing_while_the_app_is_locked_or_a_taxpayer_is_signed_
         let data = |listener: &Listener| {
             with_client(listener, |addr| {
                 let mut client = connect(addr);
-                client
-                    .invoke("profile.list", json!({}))
-                    .map(|response| response.result)
+                client.invoke("profile.list", json!({})).map(|response| response.result)
             })
         };
 
