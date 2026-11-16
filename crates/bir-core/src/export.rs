@@ -1,8 +1,9 @@
 use crate::db::{Database, DbError};
+use crate::private_temp::PrivateTempDir;
 use crate::tax_profile::TaxProfileError;
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use zip::write::SimpleFileOptions;
 
 /// Write `tin`'s profile archive. Like every profile archive it carries no
@@ -232,17 +233,28 @@ fn write_profile_to_zip<W: Write + std::io::Seek>(
 }
 
 pub fn export_database_zip(db: &Database, zip_path: &Path) -> Result<(), DbError> {
-    let temp_db_path = temporary_plaintext_database_path("bir_unencrypted");
+    // Copy the current DB to a temporary unencrypted DB, then zip it.
+    with_plaintext_copy(
+        "bir_unencrypted",
+        |temp_db_path| write_plaintext_copy(db, temp_db_path),
+        |temp_db_path| zip_plaintext_database(temp_db_path, zip_path),
+    )
+}
 
-    let result = (|| {
-        // Copy the current DB to a temporary unencrypted DB
-        write_plaintext_copy(db, &temp_db_path)?;
-
-        zip_plaintext_database(&temp_db_path, zip_path)
-    })();
-
-    let _ = fs::remove_file(&temp_db_path);
-    result
+/// Run `write` to put a plain copy of a database into a new, empty file, then
+/// `then` on it. The file (0600) is in a private folder made for this call in
+/// the temp folder (0700; see [`PrivateTempDir`]), which goes with everything
+/// in it on every way out, success or error.
+fn with_plaintext_copy(
+    prefix: &str,
+    write: impl FnOnce(&Path) -> Result<(), DbError>,
+    then: impl FnOnce(&Path) -> Result<(), DbError>,
+) -> Result<(), DbError> {
+    let folder = PrivateTempDir::new(prefix)?;
+    let (temp_db_path, file) = folder.create_file("bir_data.db")?;
+    drop(file);
+    write(&temp_db_path)?;
+    then(&temp_db_path)
 }
 
 /// SQLCipher build: export the encrypted DB into a new unencrypted file.
@@ -252,10 +264,17 @@ fn write_plaintext_copy(db: &Database, temp_db_path: &Path) -> Result<(), DbErro
         "ATTACH DATABASE ?1 AS plaintext KEY '';",
         rusqlite::params![path_as_utf8(temp_db_path)?],
     )?;
-    let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
-    let _ = stmt.query([])?.next()?;
-    drop(stmt);
-    db.conn.execute("DETACH DATABASE plaintext;", [])?;
+    let exported = (|| -> Result<(), DbError> {
+        let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
+        let _ = stmt.query([])?.next()?;
+        Ok(())
+    })();
+    // Detach on every way out: left attached to the live connection,
+    // "plaintext" would make every later export fail until a restart. The
+    // first error is the one reported.
+    let detached = db.conn.execute("DETACH DATABASE plaintext;", []);
+    exported?;
+    detached?;
     Ok(())
 }
 
@@ -288,15 +307,11 @@ pub fn export_existing_database_zip(
 
     crate::db::ensure_openable_file(source_database)?;
 
-    let temp_db_path = temporary_plaintext_database_path("bir_read_only_export");
-    let result = (|| {
-        write_plaintext_copy_of_existing(source_database, &temp_db_path)?;
-
-        zip_plaintext_database(&temp_db_path, zip_path)
-    })();
-
-    let _ = fs::remove_file(&temp_db_path);
-    result
+    with_plaintext_copy(
+        "bir_read_only_export",
+        |temp_db_path| write_plaintext_copy_of_existing(source_database, temp_db_path),
+        |temp_db_path| zip_plaintext_database(temp_db_path, zip_path),
+    )
 }
 
 /// SQLCipher build: attach the encrypted source read-only and export it into
@@ -351,14 +366,6 @@ fn write_plaintext_copy_of_existing(
         rusqlite::params![path_as_utf8(temp_db_path)?],
     )?;
     Ok(())
-}
-
-fn temporary_plaintext_database_path(prefix: &str) -> PathBuf {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    std::env::temp_dir().join(format!("{prefix}_{timestamp}.db"))
 }
 
 fn path_as_utf8(path: &Path) -> Result<&str, DbError> {
@@ -444,6 +451,115 @@ mod tests {
             )
             .expect("read exported value");
         assert_eq!(value, "preserved");
+    }
+
+    /// The permission bits of `path`.
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    /// The whole database's plain copy is made in a folder of its own in the
+    /// temp folder that only this user can open (0700), as a file only this
+    /// user can read (0600), and the folder goes after an export and after a
+    /// failure. (It was a 0644 file straight in the temp folder.)
+    #[cfg(unix)]
+    #[test]
+    fn a_database_export_stages_its_plain_copy_privately_and_leaves_nothing_behind() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let temp = directory.path().join("temp");
+        fs::create_dir(&temp).unwrap();
+        let empty = |folder: &Path| fs::read_dir(folder).unwrap().next().is_none();
+        let db = Database::open(directory.path().join("live.db")).expect("live database");
+        db.set_setting("export_probe", "private").expect("seed");
+        let archive = directory.path().join("backup.zip");
+
+        crate::private_temp::with_root(&temp, || {
+            // During the export: the folder and the copy, as the zip step sees them.
+            let mut seen = None;
+            with_plaintext_copy(
+                "bir_unencrypted",
+                |copy| write_plaintext_copy(&db, copy),
+                |copy| {
+                    let folder = copy.parent().unwrap();
+                    seen = Some((
+                        folder.parent() == Some(temp.as_path()),
+                        mode_of(folder),
+                        mode_of(copy),
+                        fs::metadata(copy).unwrap().len() > 0,
+                    ));
+                    zip_plaintext_database(copy, &archive)
+                },
+            )
+            .expect("export");
+            assert_eq!(
+                seen,
+                Some((true, 0o700, 0o600, true)),
+                "(in temp, folder, file, written)"
+            );
+            assert!(empty(&temp), "nothing left after an export");
+
+            let forced = with_plaintext_copy(
+                "bir_unencrypted",
+                |copy| write_plaintext_copy(&db, copy),
+                |_| Err(DbError::Other("forced".into())),
+            );
+            assert!(forced.is_err());
+            assert!(empty(&temp), "nothing left after a failure");
+
+            // The public paths, through to the end and failing at the zip (no such folder).
+            export_database_zip(&db, &archive).expect("export");
+            assert!(empty(&temp), "nothing left after export_database_zip");
+            let nowhere = directory.path().join("missing").join("backup.zip");
+            export_database_zip(&db, &nowhere).expect_err("no folder for the zip");
+            assert!(
+                empty(&temp),
+                "nothing left after a failed export_database_zip"
+            );
+        });
+        db.close().expect("close");
+        let source = directory.path().join("live.db");
+        crate::private_temp::with_root(&temp, || {
+            export_existing_database_zip(&source, &archive).expect("read-only export");
+            let nowhere = directory.path().join("missing").join("backup.zip");
+            export_existing_database_zip(&source, &nowhere).expect_err("no folder for the zip");
+        });
+        assert!(empty(&temp), "nothing left after the read-only exports");
+    }
+
+    /// A failed `sqlcipher_export` (here: its target is read-only) still
+    /// detaches "plaintext" from the live connection, so the next export
+    /// works. (Before, it stayed attached and every later export failed on the
+    /// ATTACH until a restart.)
+    #[cfg(all(unix, feature = "sqlcipher"))]
+    #[test]
+    fn a_failed_export_detaches_the_plain_copy() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let db = Database::open(directory.path().join("live.db")).expect("live database");
+        db.set_setting("export_probe", "detached").expect("seed");
+        let target = directory.path().join("read-only.db");
+        fs::write(&target, b"").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o400)).unwrap();
+
+        write_plaintext_copy(&db, &target).expect_err("a read-only target fails the export");
+        let attached: Vec<String> = db
+            .conn
+            .prepare("PRAGMA database_list")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            !attached.iter().any(|name| name == "plaintext"),
+            "{attached:?}"
+        );
+
+        let archive = directory.path().join("backup.zip");
+        export_database_zip(&db, &archive).expect("the next export works");
+        assert!(archive.is_file());
     }
 
     // ---------- a profile export carries no credential and no row id ----------

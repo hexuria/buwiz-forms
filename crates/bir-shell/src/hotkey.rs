@@ -122,6 +122,17 @@ mod tests {
         }
     }
 
+    /// This listener registers Shift and a key with no other modifier; the
+    /// shared rule (`is_registrable`) is drawn for it. The NSH app refuses
+    /// such a combo when it is set instead.
+    #[test]
+    fn a_shift_only_combo_registers_with_shift_alone() {
+        assert!(bir_app_api::hotkey_combo::is_registrable("shift+E"));
+        let hotkey = build_hotkey("shift+E").expect("shift and a letter");
+        assert_eq!(hotkey.mods, Modifiers::SHIFT);
+        assert_eq!(hotkey.key, Code::KeyE);
+    }
+
     #[test]
     fn an_unknown_key_is_rejected() {
         assert!(build_hotkey("control+notakey").is_none());

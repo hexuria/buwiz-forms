@@ -42,7 +42,7 @@ fn in_scratch_child(test: &str, body: fn(&Path)) {
             "the scratch database"
         );
         assert!(
-            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            bir_core::db::test_environment(),
             "the key stays off the keychain"
         );
         body(&scratch);

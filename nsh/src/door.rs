@@ -39,13 +39,21 @@ static PROCESS: OnceLock<Process> = OnceLock::new();
 /// and every later reader sees the finished values. Should the registry ever be built later (or never), the
 /// first host call runs this instead, before it opens anything.
 fn process() -> &'static Process {
-    PROCESS.get_or_init(|| {
-        switch_off_keychain(cfg!(debug_assertions));
-        let _ = bir_app_api::install_hooks(NshHooks);
-        Process {
-            send: guards::send_guard(),
-        }
-    })
+    PROCESS.get_or_init(|| set_up(guards::send_guard))
+}
+
+/// The set-up [`process`] runs, with the send guard given (production passes `guards::send_guard`; a test passes one
+/// that refuses, which the environment alone cannot make). A refused send guard holds where the submission worker
+/// starts (bir-app-api's latch), so no route can start it, whatever host function it comes through. The name check in
+/// [`permitted`] stays, for the clear message.
+fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
+    switch_off_keychain(cfg!(debug_assertions));
+    let _ = bir_app_api::install_hooks(NshHooks);
+    let send = send_guard();
+    if !send.worker_may_start() {
+        bir_app_api::bir_module::refuse_submission_worker();
+    }
+    Process { send }
 }
 
 /// Set up the process now. The native module's registration calls it (see [`process`]).
@@ -111,7 +119,7 @@ fn choose_database() -> Result<(), String> {
         bir_core::db::set_database_path_override(Some(named));
         return Ok(());
     }
-    if std::env::var_os(DATABASE_PATH).is_some_and(|value| !value.is_empty()) {
+    if !scratch_database_wanted() {
         return Ok(());
     }
     let root = std::env::temp_dir().join("ebirforms-door");
@@ -125,6 +133,13 @@ fn choose_database() -> Result<(), String> {
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
     bir_core::db::set_database_path_override(Some(folder.join("bir_data.db")));
     Ok(())
+}
+
+/// Whether the door makes a scratch database of its own (per engine thread, in [`choose_database`]): a test environment
+/// whose caller named none (`BIR_DATABASE_PATH` unset or empty). A test's [`use_database`] names one later, per thread.
+/// The one-copy guard asks this at registration, before any thread has named anything.
+pub(crate) fn scratch_database_wanted() -> bool {
+    test_environment() && !std::env::var_os(DATABASE_PATH).is_some_and(|value| !value.is_empty())
 }
 
 /// How long a scratch folder lives after its last change.
@@ -304,12 +319,29 @@ fn arguments(args: Vec<JsonValue>) -> HostArguments {
 }
 
 /// Refuse what the send guard forbids, and say so. The sign-in screen's "session opened" is what would
-/// start the submission worker outside the boot.
+/// start the submission worker outside the boot. The worker itself does not depend on this name: the latch set in
+/// [`set_up`] keeps every route from starting it; this is the clear message.
 fn permitted(name: &str) -> Result<(), String> {
     if name == "cloud_account_session_opened"
         && let SendMode::Refused(reason) = &process().send
     {
         return Err(format!("Not opening the session: {reason}"));
+    }
+    Ok(())
+}
+
+/// `set_global_hotkey` stores only a combo this app's listener registers. The shared rule (`hotkey_combo::is_registrable`)
+/// also takes one with Shift and no Control, Alt or Command (`shift+E`), which the old shell registers and NSH's listener
+/// refuses (`desktop::hotkey_shortcut`): stored, it would never be registered. Refused here, when it is set, with the
+/// host's own sentence for a combo that cannot be registered. Clearing it (`""`) and a value that is not a string go on
+/// to the host.
+fn registrable_here(name: &str, args: &[JsonValue]) -> Result<(), String> {
+    if name == "set_global_hotkey"
+        && let Some(JsonValue::String(combo)) = args.first()
+        && !combo.trim().is_empty()
+        && crate::desktop::hotkey_shortcut(combo.trim()).is_none()
+    {
+        return Err(bir_app_api::hotkey_combo::NOT_REGISTRABLE.to_owned());
     }
     Ok(())
 }
@@ -339,6 +371,7 @@ pub fn call(name: &str, args: Vec<JsonValue>) -> Result<JsonValue, String> {
     let module = booted()?;
     kind_of(&module, name, FunctionKind::Sync)?;
     permitted(name)?;
+    registrable_here(name, &args)?;
     module
         .call(name, &arguments(args))
         .map(|value| bir_app_api::bir_module::to_json(&value))
@@ -465,6 +498,34 @@ mod tests {
             );
             let refused = call("set_global_hotkey", vec![json!(1)]).unwrap_err();
             assert_eq!(refused, "argument 1 must be a string, got a number");
+        });
+    }
+
+    /// The shared rule takes Shift and a key alone (the old shell registers it); NSH's listener does not, so the door refuses
+    /// it when it is set, with the host's sentence, and the stored combo stays as it was. (It used to be stored and never
+    /// registered.) What NSH registers is stored, and clearing works.
+    #[test]
+    fn a_hotkey_this_listener_cannot_register_is_refused_when_it_is_set() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            let stored = || call("system_info", vec![]).expect("system_info")["global_hotkey"].clone();
+            assert_eq!(stored(), JsonValue::Null);
+            for combo in ["shift+E", "Shift+F12", " shift + 9 ", "banana+E"] {
+                assert!(bir_app_api::hotkey_combo::is_registrable(combo.trim()), "{combo}");
+                let refused = call("set_global_hotkey", vec![json!(combo)]).unwrap_err();
+                assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE, "{combo}");
+                assert_eq!(stored(), JsonValue::Null, "{combo}: nothing stored");
+            }
+            call("set_global_hotkey", vec![json!("control+alt+E")]).expect("registrable");
+            assert_eq!(stored(), json!("control+alt+E"));
+            let refused = call("set_global_hotkey", vec![json!("shift+E")]).unwrap_err();
+            assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE);
+            assert_eq!(stored(), json!("control+alt+E"), "the stored combo stays as it was");
+            // The host's own refusal is unchanged for a key nothing registers.
+            let refused = call("set_global_hotkey", vec![json!("control+F13")]).unwrap_err();
+            assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE);
+            call("set_global_hotkey", vec![json!("")]).expect("cleared");
+            assert_eq!(stored(), JsonValue::Null);
         });
     }
 
@@ -761,6 +822,38 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success(), "the registration child failed");
+    }
+
+    /// The process set-up latches the worker off in bir-app-api when the send guard refuses, and not when it allows a
+    /// dry run. The test runs `set_up`, the body `process` runs, with only the guard's verdict given: the environment
+    /// cannot make a refusal (the send guard forces a dry run unless the mock listens). Each case in a process of its own:
+    /// the latch is one way and process-wide.
+    #[test]
+    fn a_refused_send_guard_latches_the_worker_off() {
+        const CHILD: &str = "NSH_DOOR_WORKER_LATCH_CHILD";
+        match std::env::var(CHILD).as_deref() {
+            Ok("refused") => {
+                let process = set_up(|| SendMode::Refused("a reason".into()));
+                assert!(!process.send.worker_may_start());
+                assert!(bir_app_api::bir_module::submission_worker_refused(), "refused: latched");
+                return;
+            }
+            Ok("allowed") => {
+                let process = set_up(|| SendMode::DryRun);
+                assert!(process.send.worker_may_start());
+                assert!(!bir_app_api::bir_module::submission_worker_refused(), "a dry run: no latch");
+                return;
+            }
+            _ => {}
+        }
+        for case in ["refused", "allowed"] {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "door::tests::a_refused_send_guard_latches_the_worker_off", "--nocapture"])
+                .env(CHILD, case)
+                .status()
+                .unwrap();
+            assert!(status.success(), "the {case} child failed");
+        }
     }
 
     /// Set the modified time of a file or folder to `by` ago.

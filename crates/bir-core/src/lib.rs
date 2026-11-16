@@ -52,6 +52,7 @@ pub mod official_import;
 pub mod official_xml;
 pub mod penalties;
 pub mod platform;
+mod private_temp;
 pub mod profile;
 pub mod receipt;
 pub mod reference;

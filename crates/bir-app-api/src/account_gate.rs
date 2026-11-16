@@ -25,6 +25,9 @@ pub fn bypass_from_flags(test_env: bool, auth_bypass: bool) -> bool {
     test_env && auth_bypass
 }
 
+/// Exactly `1`. Deliberately stricter than `bir_core::db::test_environment`
+/// (`1`, `true`, `yes`, `on`), which every other "is this a test run" reader
+/// calls: this one guards the sign-in bypass, so it is not loosened to that list.
 #[cfg(debug_assertions)]
 fn env_flag(name: &str) -> bool {
     std::env::var(name).ok().as_deref() == Some("1")

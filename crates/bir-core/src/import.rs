@@ -1,5 +1,6 @@
 use crate::db::{Database, DbError, Submission};
 use crate::integration::providers::ProviderConfig;
+use crate::private_temp::{PrivateTempDir, unique_name};
 use crate::profile::{ProfileCredentials, TaxpayerProfile};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -366,6 +367,10 @@ fn provider_ids(db: &Database, tin: &str) -> Result<BTreeSet<String>, DbError> {
 pub struct StagedDatabase {
     staged: PathBuf,
     target: PathBuf,
+    /// The private folder the SQLCipher build stages in (the plain build
+    /// stages beside the target and has none). Dropped after the file is
+    /// removed, and removed with whatever SQLite made beside it.
+    folder: Option<PrivateTempDir>,
 }
 
 impl StagedDatabase {
@@ -402,21 +407,6 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(raw)
 }
 
-/// A name no other call of this process, and no other process, uses.
-fn unique_name() -> String {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static SEQUENCE: AtomicU32 = AtomicU32::new(0);
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_nanos())
-        .unwrap_or(0);
-    format!(
-        "{}-{nanos}-{}",
-        std::process::id(),
-        SEQUENCE.fetch_add(1, Ordering::SeqCst)
-    )
-}
-
 /// A temporary file named for `out_db_path` and placed beside it, unique per
 /// call, so the rename that puts it over `out_db_path` never crosses a file
 /// system.
@@ -428,18 +418,22 @@ fn sibling_temporary_path(out_db_path: &Path, what: &str) -> PathBuf {
     out_db_path.with_file_name(format!("{name}.{what}-{}.tmp", unique_name()))
 }
 
-/// Where an archive's database is extracted, unique per call. The plain build
-/// stages next to the file it will replace, so the final rename never crosses
-/// a file system.
-fn staging_path(out_db_path: &Path) -> PathBuf {
+/// Where an archive's database is extracted, unique per call. The SQLCipher
+/// build stages the plain file in a private folder of its own in the temp
+/// folder (see [`PrivateTempDir`]): never with the temp folder's default
+/// permissions. The plain build stages next to the file it will replace (the
+/// live database is plain there too), so the final rename never crosses a
+/// file system.
+fn staging_place(out_db_path: &Path) -> Result<(PathBuf, Option<PrivateTempDir>), DbError> {
     #[cfg(feature = "sqlcipher")]
     {
         let _ = out_db_path;
-        std::env::temp_dir().join(format!("bir_unencrypted_import_{}.db", unique_name()))
+        let folder = PrivateTempDir::new("bir_unencrypted_import")?;
+        Ok((folder.path().join("bir_data.db"), Some(folder)))
     }
     #[cfg(not(feature = "sqlcipher"))]
     {
-        sibling_temporary_path(out_db_path, "import")
+        Ok((sibling_temporary_path(out_db_path, "import"), None))
     }
 }
 
@@ -453,16 +447,23 @@ pub fn stage_database_zip(zip_path: &Path, out_db_path: &Path) -> Result<StagedD
         .by_name("bir_data.db")
         .map_err(|e| DbError::Other(e.to_string()))?;
 
-    // From here on every early return drops the guard, which removes the file.
+    // From here on every early return drops the guard, which removes the file
+    // (and the private folder it is in).
+    let (path, folder) = staging_place(out_db_path)?;
     let staged = StagedDatabase {
-        staged: staging_path(out_db_path),
+        staged: path,
         target: out_db_path.to_path_buf(),
+        folder,
     };
-    #[cfg(not(feature = "sqlcipher"))]
-    if let Some(folder) = staged.staged.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(folder)?;
-    }
-    let mut temp_file = fs::File::create(&staged.staged)?;
+    let mut temp_file = match &staged.folder {
+        Some(folder) => folder.create_file("bir_data.db")?.1,
+        None => {
+            if let Some(parent) = staged.staged.parent().filter(|p| !p.as_os_str().is_empty()) {
+                fs::create_dir_all(parent)?;
+            }
+            fs::File::create(&staged.staged)?
+        }
+    };
     std::io::copy(&mut db_file_in_zip, &mut temp_file)?;
     // The bytes are on disk before anything depends on them.
     temp_file.sync_all()?;
@@ -1832,6 +1833,62 @@ mod tests {
             db.get_setting("kept").unwrap(),
             None,
             "the old data is gone"
+        );
+    }
+
+    /// The permission bits of `path`.
+    #[cfg(all(unix, feature = "sqlcipher"))]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path).unwrap().permissions().mode() & 0o777
+    }
+
+    /// The SQLCipher build stages the backup's plain database in the temp
+    /// folder: in a folder of its own that only this user can open (0700),
+    /// as a file only this user can read (0600), and the folder goes after an
+    /// install and after a refusal. (It was a 0644 file straight in the temp
+    /// folder.)
+    #[cfg(all(unix, feature = "sqlcipher"))]
+    #[test]
+    fn a_restore_stages_the_plain_database_privately_and_leaves_nothing_behind() {
+        let dir = tempdir().unwrap();
+        let temp = dir.path().join("temp");
+        fs::create_dir(&temp).unwrap();
+        let live = dir.path().join("live");
+        fs::create_dir(&live).unwrap();
+        let current = current_database(&live);
+        let archive = dir.path().join("backup.zip");
+        write_database_archive(&archive, &good_database_bytes("private"));
+        let unfit = dir.path().join("unfit.zip");
+        write_database_archive(&unfit, &"not-sqlite-".repeat(512).into_bytes());
+
+        crate::private_temp::with_root(&temp, || {
+            let staged = stage_database_zip(&archive, &current).unwrap();
+            let folder = staged.path().parent().unwrap().to_path_buf();
+            assert_eq!(
+                folder.parent(),
+                Some(temp.as_path()),
+                "staged in the temp folder"
+            );
+            assert_eq!(mode_of(&folder), 0o700, "the staging folder");
+            assert_eq!(mode_of(staged.path()), 0o600, "the staged plain database");
+            staged.install().unwrap();
+            assert!(names(&temp).is_empty(), "nothing left after a restore");
+
+            stage_database_zip(&unfit, &current).expect_err("an unfit backup is refused");
+            assert!(names(&temp).is_empty(), "nothing left after a refusal");
+
+            // Staged and dropped without an install (the caller's safety copy failed).
+            drop(stage_database_zip(&archive, &current).unwrap());
+            assert!(
+                names(&temp).is_empty(),
+                "nothing left after a staging that was dropped"
+            );
+        });
+        let db = Database::open(&current).unwrap();
+        assert_eq!(
+            db.get_setting("marker").unwrap(),
+            Some("private".to_string())
         );
     }
 

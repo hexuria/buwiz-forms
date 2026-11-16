@@ -210,7 +210,7 @@ pub(crate) fn dry_run_from_inputs(inputs: SftpDryRunInputs) -> bool {
 
 fn sftp_dry_run_requested() -> bool {
     dry_run_from_inputs(SftpDryRunInputs {
-        test_env: env_flag_enabled("EBIR_TEST_ENV"),
+        test_env: crate::db::test_environment(),
         dry_run: env_flag_enabled("BIR_SFTP_DRY_RUN"),
         live_disabled: env_flag_disabled("BIR_SFTP_LIVE"),
         live_enabled: env_flag_enabled("BIR_SFTP_LIVE"),

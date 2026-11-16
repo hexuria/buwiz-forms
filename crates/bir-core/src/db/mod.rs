@@ -273,6 +273,41 @@ enum MasterKeyPlan {
     OsStore,
 }
 
+/// The plan the environment dictates now. The test key only under
+/// [`test_environment`] (`1`, `true`, `yes`, `on`): `EBIR_TEST_ENV=0`, `false`
+/// or empty is not a test run, and keying the real database with the public
+/// test key would fail to open it (`NotADatabase`), which
+/// [`Database::open_or_recreate`] answers by quarantining it and starting an
+/// empty one.
+#[cfg(feature = "sqlcipher")]
+fn master_key_plan_from_environment() -> MasterKeyPlan {
+    master_key_plan(test_environment(), crate::platform::keychain_disabled())
+}
+
+/// Whether an unreadable file may be moved aside and replaced under `plan`.
+/// Never under the test key: it is public and fixed, so a file it cannot open
+/// was not made in a test run (it is a taxpayer's database keyed from the OS
+/// store, or not ours at all), and a test run must not cost it.
+#[cfg(feature = "sqlcipher")]
+fn quarantine_permitted(plan: MasterKeyPlan) -> bool {
+    plan != MasterKeyPlan::TestKey
+}
+
+/// The plan [`Database::open_or_recreate`] judges a quarantine by: the one
+/// that keyed the open. bir-core's own unit tests key every database with the
+/// test key whatever the environment (`get_or_create_master_key` under
+/// `cfg(test)`) and test the quarantine itself, so they judge it as a store
+/// key; [`quarantine_permitted`] is unit-tested, and an integration test
+/// (`tests/test_key_never_quarantines_test.rs`, the non-test library) covers
+/// this wiring.
+#[cfg(feature = "sqlcipher")]
+fn key_plan_for_recovery() -> MasterKeyPlan {
+    #[cfg(test)]
+    return MasterKeyPlan::OsStore;
+    #[cfg(not(test))]
+    return master_key_plan_from_environment();
+}
+
 #[cfg(feature = "sqlcipher")]
 fn master_key_plan(test_env: bool, keychain_off: bool) -> MasterKeyPlan {
     if test_env {
@@ -282,6 +317,60 @@ fn master_key_plan(test_env: bool, keychain_off: bool) -> MasterKeyPlan {
     } else {
         MasterKeyPlan::OsStore
     }
+}
+
+/// How long a connection waits for a lock before SQLite answers "busy".
+const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// How long [`Database::checkpoint`] keeps trying while readers hold the log.
+const CHECKPOINT_PATIENCE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// `PRAGMA wal_checkpoint(TRUNCATE)` until every page of the log is in the
+/// main file and the log is emptied, for at most [`CHECKPOINT_PATIENCE`].
+///
+/// SQLite does not report a checkpoint that readers kept from finishing as an
+/// error: it answers one row `(busy, log, checkpointed)`, so the row is read.
+/// Done is `busy = 0` and `log = checkpointed` (both 0 after a truncate, both
+/// -1 for a database that is not in WAL mode). The connection's own busy
+/// handler is off while this polls, so the wait is this one bound and not
+/// [`BUSY_TIMEOUT`] per try.
+fn checkpoint_connection(conn: &Connection) -> Result<(), DbError> {
+    conn.busy_timeout(std::time::Duration::ZERO)?;
+    let deadline = std::time::Instant::now() + CHECKPOINT_PATIENCE;
+    let outcome = loop {
+        let answer = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        });
+        let unfinished = match answer {
+            Ok((0, log, checkpointed)) if log == checkpointed => break Ok(()),
+            Ok((_, log, checkpointed)) => {
+                format!("{checkpointed} of {log} log pages reached the file")
+            }
+            Err(rusqlite::Error::SqliteFailure(failure, _))
+                if matches!(
+                    failure.code,
+                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
+                ) =>
+            {
+                "the log is locked".to_string()
+            }
+            Err(error) => break Err(DbError::Sqlite(error)),
+        };
+        if std::time::Instant::now() >= deadline {
+            break Err(DbError::Other(format!(
+                "The database is in use elsewhere, so its recent changes could not be \
+                 written into the database file ({unfinished} after {} s).",
+                CHECKPOINT_PATIENCE.as_secs()
+            )));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+    conn.busy_timeout(BUSY_TIMEOUT)?;
+    outcome
 }
 
 /// The first 16 bytes of every plain (unencrypted) SQLite file.
@@ -395,6 +484,16 @@ pub enum DbError {
         .0.display()
     )]
     NotEncrypted(PathBuf),
+    /// SQLCipher build, keyed with the public test key (`EBIR_TEST_ENV` is
+    /// on): the file does not open with it, which proves it was not made in
+    /// a test run. It is never renamed, recreated or deleted.
+    #[error(
+        "The database file {} does not open with the test key, so it was not made in a test run \
+         (EBIR_TEST_ENV is on). It was left in place under its own name. Name another database with \
+         BIR_DATABASE_PATH, or unset EBIR_TEST_ENV to open this one.",
+        .0.display()
+    )]
+    NotATestDatabase(PathBuf),
     #[error("Keychain CLI error: {0}")]
     KeychainCli(String),
     #[error("Zip error: {0}")]
@@ -733,7 +832,9 @@ impl Database {
     /// recreating it when the on-disk contents are not a usable SQLCipher DB.
     ///
     /// A file with the plain SQLite header is never quarantined: it is not
-    /// encrypted, so it is not unreadable, and the error says so.
+    /// encrypted, so it is not unreadable, and the error says so. Nor is any
+    /// file under the test key (`EBIR_TEST_ENV`): one it cannot open was not
+    /// made in a test run ([`DbError::NotATestDatabase`]).
     #[cfg(feature = "sqlcipher")]
     pub fn open_or_recreate<P: AsRef<Path>>(path: P) -> Result<(Self, Option<PathBuf>), DbError> {
         let path = path.as_ref();
@@ -773,7 +874,7 @@ impl Database {
         Self::apply_key(&conn, &key_hex)?;
 
         // Improve concurrency and wait for locks instead of failing immediately (fixes UI freezes)
-        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;",
@@ -837,7 +938,7 @@ impl Database {
         ensure_openable_file(path)?;
         let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         Self::unlock_existing(&conn)?;
-        conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        conn.busy_timeout(BUSY_TIMEOUT)?;
 
         let mut check_stmt = conn.prepare("SELECT count(*) FROM sqlite_master")?;
         let _: i64 = check_stmt
@@ -919,10 +1020,7 @@ impl Database {
     /// OS store decides.
     #[cfg(all(feature = "sqlcipher", not(test)))]
     fn master_key_from_environment() -> Result<Option<String>, DbError> {
-        match master_key_plan(
-            std::env::var("EBIR_TEST_ENV").is_ok(),
-            crate::platform::keychain_disabled(),
-        ) {
+        match master_key_plan_from_environment() {
             MasterKeyPlan::TestKey => Ok(Some(TEST_MASTER_KEY_HEX.to_string())),
             MasterKeyPlan::KeychainOff => Err(DbError::KeychainCli(format!(
                 "The OS keychain is switched off ({}=1), so there is no database key. \
@@ -1158,6 +1256,9 @@ impl Database {
         if database_file_kind(path)? == DatabaseFileKind::PlainSqlite {
             return Err(DbError::NotEncrypted(path.to_path_buf()));
         }
+        if !quarantine_permitted(key_plan_for_recovery()) {
+            return Err(DbError::NotATestDatabase(path.to_path_buf()));
+        }
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -1175,21 +1276,26 @@ impl Database {
 
     /// Checkpoint WAL without consuming self.
     /// Flushes all data from the WAL file into the main database file.
+    ///
+    /// An error when that did not happen: another connection still reads an
+    /// older snapshot (or holds the log) after [`CHECKPOINT_PATIENCE`] of
+    /// retries. The main file alone then does not hold every commit, so a
+    /// caller that copies it or deletes the log must stop.
     pub fn checkpoint(&self) -> Result<(), DbError> {
-        self.conn
-            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-        Ok(())
+        checkpoint_connection(&self.conn)
     }
 
-    /// Consume self and close cleanly after a WAL checkpoint.
+    /// Consume self and close cleanly after a WAL checkpoint. The connection
+    /// closes either way; a checkpoint that could not finish is the error
+    /// (the log stays beside the file and SQLite replays it at the next open).
     pub fn close(self) -> Result<(), DbError> {
         let Database {
             conn, _owner_lock, ..
         } = self;
-        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let checkpointed = checkpoint_connection(&conn);
         let result = conn.close().map_err(|(_, e)| DbError::Sqlite(e));
         drop(_owner_lock);
-        result
+        checkpointed.and(result)
     }
 
     /// Remove old `.corrupt-*.bak` files, keeping only the most recent `keep`.
@@ -2724,6 +2830,106 @@ mod tests {
         assert_eq!(master_key_plan(true, false), MasterKeyPlan::TestKey);
         assert_eq!(master_key_plan(false, true), MasterKeyPlan::KeychainOff);
         assert_eq!(master_key_plan(false, false), MasterKeyPlan::OsStore);
+    }
+
+    /// SQLite answers a TRUNCATE checkpoint that a reader holds back with a row
+    /// (`busy = 1`), not an error, and `checkpoint` used to ignore the row: it
+    /// said done while the latest commit was only in the log. Now it is an
+    /// error, the log keeps the commit, and once the reader is done the same
+    /// call empties the log.
+    #[test]
+    fn a_checkpoint_a_reader_holds_back_is_an_error_and_loses_nothing() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("bir_data.db");
+        let wal = directory.path().join("bir_data.db-wal");
+        let mut db = Database::open(&path).expect("open");
+        db.set_setting("first", "1").expect("first commit");
+        db.checkpoint().expect("nobody reads: done");
+        assert_eq!(
+            std::fs::metadata(&wal).unwrap().len(),
+            0,
+            "the log is emptied"
+        );
+
+        let reader = db
+            .open_reader()
+            .expect("reader")
+            .expect("a file has a reader");
+        reader.conn.execute_batch("BEGIN").unwrap();
+        let _: i64 = reader
+            .conn
+            .query_row("SELECT count(*) FROM settings", [], |row| row.get(0))
+            .unwrap();
+        db.set_setting("second", "2")
+            .expect("a commit after the reader's snapshot");
+
+        let started = std::time::Instant::now();
+        let error = db
+            .checkpoint()
+            .expect_err("the reader holds the log")
+            .to_string();
+        assert!(error.contains("in use elsewhere"), "{error}");
+        assert!(
+            started.elapsed() < CHECKPOINT_PATIENCE + std::time::Duration::from_secs(2),
+            "bounded: {:?}",
+            started.elapsed()
+        );
+        assert!(
+            std::fs::metadata(&wal).unwrap().len() > 0,
+            "the commit is still in the log"
+        );
+        assert_eq!(db.get_setting("second").unwrap().as_deref(), Some("2"));
+
+        reader.conn.execute_batch("COMMIT").unwrap();
+        db.checkpoint().expect("the reader is done");
+        assert_eq!(
+            std::fs::metadata(&wal).unwrap().len(),
+            0,
+            "the log is emptied"
+        );
+        drop(reader);
+        db.close().expect("close");
+        let reopened = Database::open(&path).expect("reopen");
+        assert_eq!(
+            reopened.get_setting("second").unwrap().as_deref(),
+            Some("2")
+        );
+    }
+
+    /// Under the test key nothing is ever quarantined; under the others the
+    /// quarantine works as before (the tests above).
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn only_a_store_key_may_quarantine() {
+        assert!(!quarantine_permitted(MasterKeyPlan::TestKey));
+        assert!(quarantine_permitted(MasterKeyPlan::OsStore));
+        assert!(quarantine_permitted(MasterKeyPlan::KeychainOff));
+    }
+
+    /// The key plan reads `EBIR_TEST_ENV` as [`test_environment`] does: only an
+    /// "on" value is a test run. `0`, `false` or empty used to pick the public
+    /// test key (any value counted), and the real database, keyed with it, does
+    /// not open and is quarantined. The keychain stays off here, so the other
+    /// answer is `KeychainOff`: nothing reaches the OS.
+    #[cfg(feature = "sqlcipher")]
+    #[test]
+    fn the_master_key_plan_takes_the_test_key_only_in_a_test_environment() {
+        for (value, expected) in [
+            (None, MasterKeyPlan::KeychainOff),
+            (Some(""), MasterKeyPlan::KeychainOff),
+            (Some("0"), MasterKeyPlan::KeychainOff),
+            (Some("false"), MasterKeyPlan::KeychainOff),
+            (Some("1"), MasterKeyPlan::TestKey),
+            (Some("true"), MasterKeyPlan::TestKey),
+        ] {
+            temp_env::with_vars(
+                [
+                    ("EBIR_TEST_ENV", value),
+                    (crate::platform::NO_KEYCHAIN_ENV, Some("1")),
+                ],
+                || assert_eq!(master_key_plan_from_environment(), expected, "{value:?}"),
+            );
+        }
     }
 
     #[cfg(feature = "sqlcipher")]

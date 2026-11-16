@@ -310,7 +310,7 @@ fn node_for(component: &str, id: &str) -> UiNode {
 
 /// `test` or `real`, from the environment this process started with.
 pub fn database_kind() -> &'static str {
-    let test_env = std::env::var_os("EBIR_TEST_ENV").is_some();
+    let test_env = bir_core::db::test_environment();
     let override_path = std::env::var_os("BIR_DATABASE_PATH")
         .filter(|path| !path.is_empty())
         .map(PathBuf::from);
@@ -321,8 +321,9 @@ pub fn database_kind() -> &'static str {
     )
 }
 
-/// `test` when `EBIR_TEST_ENV` is set or `BIR_DATABASE_PATH` points outside
-/// the default data directory; `real` otherwise.
+/// `test` when `EBIR_TEST_ENV` is on (`bir_core::db::test_environment`)
+/// or `BIR_DATABASE_PATH` points outside the default data directory; `real`
+/// otherwise.
 pub fn database_kind_for(
     test_env: bool,
     override_path: Option<&Path>,
@@ -452,5 +453,24 @@ mod tests {
             "real"
         );
         assert_eq!(database_kind_for(false, None, data), "real");
+    }
+
+    /// `EBIR_TEST_ENV` is read as bir-core reads it: `0`, `false` or empty
+    /// is not a test run (any value used to count).
+    #[test]
+    fn database_kind_reads_the_test_env_as_bir_core_does() {
+        for (value, kind) in [
+            (Some("0"), "real"),
+            (Some("false"), "real"),
+            (Some(""), "real"),
+            (None, "real"),
+            (Some("1"), "test"),
+            (Some("true"), "test"),
+        ] {
+            temp_env::with_vars(
+                [("EBIR_TEST_ENV", value), ("BIR_DATABASE_PATH", None)],
+                || assert_eq!(database_kind(), kind, "{value:?}"),
+            );
+        }
     }
 }

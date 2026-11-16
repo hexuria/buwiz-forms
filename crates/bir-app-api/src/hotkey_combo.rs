@@ -4,6 +4,10 @@
 //! macOS, Super+Shift elsewhere. The setting is `global_hotkey_key`. The host
 //! maps a combo to its listener's key codes; this module only reads it.
 
+/// What `set_global_hotkey` answers for a combo the listener cannot register;
+/// the Settings page shows it as it is.
+pub const NOT_REGISTRABLE: &str = "That shortcut is not one this computer can register. Use a letter, digit, or F-key with modifiers, like super+shift+E.";
+
 /// The keys a stored combo may name (upper case).
 pub const KEYS: &[&str] = &[
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S",
@@ -63,6 +67,15 @@ mod tests {
         let (mods, key) = split_combo("e").expect("bare key");
         assert_eq!(key, "E");
         assert_eq!(mods, default_modifier_tokens());
+    }
+
+    /// The line between the two listeners: the old shell registers Shift and a
+    /// key alone (`bir-shell` `hotkey::build_hotkey`), so this shared rule
+    /// keeps taking it; the NSH app refuses it where it is set (its door).
+    #[test]
+    fn a_shift_only_combo_stays_registrable_for_the_old_listener() {
+        assert!(is_registrable("shift+E"));
+        assert!(is_registrable("Shift+F12"));
     }
 
     #[test]

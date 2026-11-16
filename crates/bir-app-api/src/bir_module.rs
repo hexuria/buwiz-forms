@@ -96,6 +96,22 @@ static WORKER_THREAD: std::sync::Mutex<Option<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(None);
 static OWNER_LOCK_RELEASED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+static SUBMISSION_WORKER_REFUSED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// The host refused sending for this process (the NSH door's send guard):
+/// from now on no route starts the submission worker (the launch, a sign-in's
+/// "session opened", anything that reaches [`open_database_at_launch`]). One
+/// way: nothing clears it. A worker already running is not stopped; the host
+/// sets this before anything opens the database.
+pub fn refuse_submission_worker() {
+    SUBMISSION_WORKER_REFUSED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Whether [`refuse_submission_worker`] was called in this process.
+pub fn submission_worker_refused() -> bool {
+    SUBMISSION_WORKER_REFUSED.load(std::sync::atomic::Ordering::SeqCst)
+}
 
 /// Start `bir_core::background_cron` — queued submissions, their retries,
 /// confirmation-inbox polls and scheduled jobs — once per process, on its own
@@ -103,6 +119,10 @@ static OWNER_LOCK_RELEASED: std::sync::atomic::AtomicBool =
 /// do. It shares `db`, the one owner-locked connection, rather than opening
 /// a second. `BIR_SFTP_DRY_RUN` is read by the worker's transport, unchanged.
 fn start_submission_worker(db: std::sync::Arc<std::sync::Mutex<Database>>) {
+    if SUBMISSION_WORKER_REFUSED.load(std::sync::atomic::Ordering::SeqCst) {
+        tracing::warn!("submission worker not started: the host refused sending in this process");
+        return;
+    }
     if SUBMISSION_WORKER.set(()).is_err() {
         return;
     }
@@ -455,9 +475,7 @@ fn system_info() -> HostResult {
 fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
     let combo = arguments.string(0)?.trim().to_string();
     if !combo.is_empty() && !crate::hotkey_combo::is_registrable(&combo) {
-        return Err(HostError::new(
-            "That shortcut is not one this computer can register. Use a letter, digit, or F-key with modifiers, like super+shift+E.",
-        ));
+        return Err(HostError::new(crate::hotkey_combo::NOT_REGISTRABLE));
     }
     with_database(|db| {
         db.set_setting("global_hotkey_key", &combo)
@@ -2268,6 +2286,14 @@ fn restore_database_archive(archive: &std::path::Path, stamp: u64) -> HostResult
     restore_staged_database(staged, &db_path, stamp)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Runs once on the restoring thread between the checkpoint and the safety
+    /// copy, with the database lock held: a test's writer tries to commit there.
+    static AFTER_RESTORE_CHECKPOINT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// Steps 2 and 3 of [`restore_database_archive`] for a database already
 /// staged and checked. The staged file is removed on every path out.
 fn restore_staged_database(
@@ -2278,10 +2304,30 @@ fn restore_staged_database(
     if db_path.exists()
         && let Some(parent) = db_path.parent()
     {
+        crate::account_gate::ensure_unlocked()?;
+        let handle = open_database_slot()?;
+        // One lock across the checkpoint, the safety copy and the swap. The
+        // submission worker writes through this same connection (the one
+        // `Arc<Mutex<Database>>`), and no other connection of this process
+        // writes (the reader is read-only, another process is kept out by the
+        // owner lock), so while it is held nothing commits and no
+        // auto-checkpoint writes the main file: the copy holds every commit,
+        // and the connection let go is the one it was copied from.
+        let mut db = bir_core::lock_timing::lock(&handle)
+            .map_err(|_| HostError::new("database lock poisoned"))?;
         // Flush the WAL first: a raw copy of bir_data.db alone can miss
         // commits still living in -wal, and this copy is the restore
-        // point if the replace goes wrong.
-        with_database(|db| db.checkpoint().map_err(db_error))?;
+        // point if the replace goes wrong. A checkpoint a reader keeps from
+        // finishing is an error: the import stops here, before the copy and
+        // before the install deletes any -wal or -shm, with the live database
+        // as it was.
+        db.checkpoint().map_err(|error| {
+            HostError::new(format!(
+                "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
+            ))
+        })?;
+        #[cfg(test)]
+        AFTER_RESTORE_CHECKPOINT.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
         let copy = parent.join(format!("bir_data.safety-{stamp}.db"));
         if let Err(error) = std::fs::copy(db_path, &copy) {
             let _ = std::fs::remove_file(&copy);
@@ -2289,8 +2335,13 @@ fn restore_staged_database(
                 "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
             )));
         }
+        // What `reset_database` does, under the lock already held.
+        drop_reader();
+        *db = Database::open_ephemeral().map_err(db_error)?;
+        RELEASED.set(true);
+    } else {
+        reset_database()?;
     }
-    reset_database()?;
     match staged.install() {
         Ok(()) => Ok(HostObject::new().field("kind", "database").into()),
         Err(error) => {
@@ -4340,7 +4391,7 @@ mod tests {
         let file = scratch.join("bir_data.db");
         assert_eq!(db::app_database_path(), file, "the scratch database");
         assert!(
-            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            bir_core::db::test_environment(),
             "the key stays off the keychain"
         );
         with_database(|db| {
@@ -4443,7 +4494,7 @@ mod tests {
             "the scratch database"
         );
         assert!(
-            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            bir_core::db::test_environment(),
             "the key stays off the keychain"
         );
         with_database(|db| {
@@ -4566,6 +4617,148 @@ mod tests {
         );
     }
 
+    /// A checkpoint that another connection's read snapshot holds back is an
+    /// error, and the import stops on it: no safety copy, the connection is
+    /// never let go, the live database keeps its latest commit and no file
+    /// beside it (the -wal holding that commit, the -shm) was deleted.
+    /// (Before, the busy answer was ignored: the safety copy missed the
+    /// commit still in the -wal, and the install deleted the -wal.)
+    #[test]
+    fn a_checkpoint_a_reader_holds_back_stops_the_database_import() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            let db_path = db::app_database_path();
+            let reader = Database::open_existing_read_only(&db_path).unwrap();
+            reader.conn_for_tests().execute_batch("BEGIN").unwrap();
+            let _: i64 = reader
+                .conn_for_tests()
+                .query_row("SELECT count(*) FROM profiles", [], |row| row.get(0))
+                .unwrap();
+            with_database(|db| {
+                db.create_taxpayer(new_taxpayer("111222333", "Latest Commit Corp"))
+                    .map_err(db_error)?;
+                Ok(())
+            })
+            .unwrap();
+            let files = || {
+                let mut names: Vec<String> = std::fs::read_dir(scratch.join("data"))
+                    .unwrap()
+                    .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                    .collect();
+                names.sort();
+                names
+            };
+            let before = files();
+            assert!(
+                before.contains(&"bir_data.db-wal".to_string()),
+                "{before:?}"
+            );
+
+            match restore_database_archive(&archive, 11) {
+                Ok(_) => panic!("the import went on over a checkpoint that did not finish"),
+                Err(error) => {
+                    assert!(
+                        error.message().contains("in use elsewhere"),
+                        "{}",
+                        error.message()
+                    );
+                    assert!(error.message().contains("nothing was imported"));
+                }
+            }
+            assert_eq!(files(), before, "no file made, none deleted");
+            assert_eq!(import_leftovers(&scratch), Vec::<String>::new());
+            assert!(!RELEASED.get(), "the live connection was never let go");
+            assert_eq!(profile_names(), ["Kept Trading Corp", "Latest Commit Corp"]);
+
+            // The reader done, the same import goes through.
+            reader.conn_for_tests().execute_batch("COMMIT").unwrap();
+            drop(reader);
+            restore_database_archive(&archive, 12).expect("nothing holds the log now");
+            assert_eq!(profile_names(), ["Restored Holdings Inc"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "a_checkpoint_a_reader_holds_back_stops_the_database_import",
+            &ScratchDir::new("busy"),
+        );
+    }
+
+    /// The safety copy holds every commit: one lock is held from the
+    /// checkpoint to the swap, so a writer on the shared connection (as the
+    /// submission worker is) that tries to commit between the checkpoint and
+    /// the copy waits, or its commit is in the copy. (Before, the lock was let
+    /// go after the checkpoint: such a commit went to the -wal only, after the
+    /// checkpoint, and the copy missed it.)
+    #[test]
+    fn a_commit_between_the_checkpoint_and_the_safety_copy_waits_or_is_copied() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            let archive = good_database_archive(&scratch);
+            let handle = open_database_slot().unwrap();
+            let committed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let seen_before_copy = std::rc::Rc::new(std::cell::Cell::new(None));
+            let writer = std::rc::Rc::new(std::cell::RefCell::new(None));
+            {
+                let committed = committed.clone();
+                let seen_before_copy = seen_before_copy.clone();
+                let writer = writer.clone();
+                AFTER_RESTORE_CHECKPOINT.with(|hook| {
+                    *hook.borrow_mut() = Some(Box::new(move || {
+                        let flag = committed.clone();
+                        *writer.borrow_mut() = Some(std::thread::spawn(move || {
+                            let db = bir_core::lock_timing::lock(&handle).unwrap();
+                            db.create_taxpayer(new_taxpayer("111222333", "Gap Writer Corp"))
+                                .unwrap();
+                            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        }));
+                        // Give the writer every chance to commit before the copy.
+                        let until = std::time::Instant::now() + std::time::Duration::from_secs(1);
+                        while !committed.load(std::sync::atomic::Ordering::SeqCst)
+                            && std::time::Instant::now() < until
+                        {
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                        }
+                        seen_before_copy
+                            .set(Some(committed.load(std::sync::atomic::Ordering::SeqCst)));
+                    }));
+                });
+            }
+
+            restore_database_archive(&archive, 21).expect("the import");
+            let writer = writer.borrow_mut().take().expect("the hook ran");
+            writer.join().expect("the writer committed after the swap");
+            let committed_before_copy = seen_before_copy.get().expect("the hook ran");
+
+            let copy = Database::open(scratch.join("data").join("bir_data.safety-21.db")).unwrap();
+            let in_copy = copy
+                .list_profiles()
+                .unwrap()
+                .iter()
+                .any(|profile| profile.full_name == "Gap Writer Corp");
+            assert!(
+                !committed_before_copy || in_copy,
+                "a commit made before the copy is missing from it"
+            );
+            assert!(!committed_before_copy, "the writer waited for the lock");
+            assert!(
+                copy.list_profiles()
+                    .unwrap()
+                    .iter()
+                    .any(|profile| profile.full_name == "Kept Trading Corp")
+            );
+            drop(copy);
+            assert_eq!(profile_names(), ["Restored Holdings Inc"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "a_commit_between_the_checkpoint_and_the_safety_copy_waits_or_is_copied",
+            &ScratchDir::new("gap"),
+        );
+    }
+
     /// Plain build: the replace fails after the connection was let go (the
     /// checked file is gone, so the rename has nothing to move). The import
     /// reports it and the connection is back on the file that is still
@@ -4635,6 +4828,41 @@ mod tests {
         );
     }
 
+    /// The host's refusal holds where the worker starts, not only by the name
+    /// of the host function the NSH door refuses: with the latch set, the
+    /// launch and a sign-in's "session opened" (through the module, as the
+    /// page calls it) open the database and start no worker. A child process:
+    /// the latch and the worker are once per process.
+    #[test]
+    fn a_refused_worker_is_started_by_no_route() {
+        if let Some(scratch) = std::env::var_os(IMPORT_CHILD) {
+            let scratch = import_child(&scratch);
+            assert!(!submission_worker_refused());
+            refuse_submission_worker();
+            assert!(submission_worker_refused());
+
+            open_database_at_launch();
+            assert!(!submission_worker_started(), "the launch");
+            module()
+                .call(
+                    "cloud_account_session_opened",
+                    &gpui_shell::HostArguments::new([]),
+                )
+                .expect("the session opens");
+            assert!(!submission_worker_started(), "a sign-in's session opened");
+            open_database_at_launch();
+            assert!(!submission_worker_started(), "a second launch");
+            // The database itself opens as before.
+            assert_eq!(profile_names(), ["Kept Trading Corp"]);
+            std::fs::write(scratch.join("child-done"), "ok").unwrap();
+            return;
+        }
+        run_in_scratch_process(
+            "a_refused_worker_is_started_by_no_route",
+            &ScratchDir::new("refused"),
+        );
+    }
+
     /// The child's half of the test above. A profile with the test
     /// notification on makes every worker tick record a heartbeat alert, so
     /// the alert appearing proves the worker runs on the shell's database.
@@ -4645,7 +4873,7 @@ mod tests {
             "the scratch database"
         );
         assert!(
-            std::env::var_os("EBIR_TEST_ENV").is_some(),
+            bir_core::db::test_environment(),
             "the key stays off the keychain"
         );
         assert!(!submission_worker_started(), "nothing runs before launch");

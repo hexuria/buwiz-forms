@@ -5,12 +5,13 @@ name: NSH app
 #
 # The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
 # this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged: c346e920e, the tip of the
-# `buwiz` branch since hexuria/nsh#12. NOTHING HERE HAS EVER RUN: it was written without a runner, and its steps are the
-# ones that pass on the owner's Mac (nsh/AGENTS.md "Commands").
+# `buwiz` branch since hexuria/nsh#12. It runs on GitHub's hosted runners (macos-15 for the app, ubuntu-24.04 for the
+# plain-SQLite tests) and has run and passed there; its steps are the ones that pass on the owner's Mac (nsh/AGENTS.md
+# "Commands").
 #
-# Secret to create: NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
-# "Contents: read" on that one repository). If hexuria/nsh is public it is not needed (the step falls back to the
-# job's own token); if it is private, the step fails without it. Pull requests from forks never get the secret.
+# hexuria/nsh is public, so no secret is needed today: the checkout falls back to the job's own token. If it ever turns
+# private, create NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
+# "Contents: read" on that one repository); without it the step then fails. Pull requests from forks never get it.
 
 on:
   pull_request:
@@ -22,6 +23,11 @@ on:
       # What those crates are built on, and this file.
       - "crates/bir-print/**"
       - "crates/bir-rules/**"
+      # The workspace the jobs build in: its manifest, lock file, recipes and toolchain.
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "justfile"
+      - "rust-toolchain.toml"
       - ".github/workflows/nsh.yml"
   workflow_dispatch:
 

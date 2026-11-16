@@ -565,20 +565,27 @@ pub(crate) fn prepare_process_at(database: &Path) -> bool {
     }
 }
 
+/// The database the one-copy guard locks for this launch: the one this process opens, decided as the door decides it.
+/// `None` when no guard applies: turned off or a test environment by default (`guard_wanted`); a door that makes a
+/// scratch database of its own (a test environment with no `BIR_DATABASE_PATH`, even under `BIR_SINGLE_INSTANCE=1`: that
+/// database is made per engine thread, later, and two copies never share one; locking `app_database_path()` here was
+/// locking a file the process never opens); or the owner's data (never written beside, as the door refuses it).
+fn guarded_database() -> Option<PathBuf> {
+    let setting = std::env::var("BIR_SINGLE_INSTANCE").ok();
+    if !guard_wanted(setting.as_deref(), bir_core::db::test_environment()) || crate::door::scratch_database_wanted() {
+        return None;
+    }
+    let database = bir_core::db::app_database_path();
+    guards::database_refusal_here(&database).is_none().then_some(database)
+}
+
 /// The launch's guard, from the registration of the native module (before any window opens): a second copy on
 /// the same database tells the first to come forward and ends here.
 pub(crate) fn prepare_process() {
-    let setting = std::env::var("BIR_SINGLE_INSTANCE").ok();
-    if !guard_wanted(setting.as_deref(), bir_core::db::test_environment()) {
+    let Some(database) = guarded_database() else {
         let _ = INSTANCE.set((InstanceState::NotNeeded, None));
         return;
-    }
-    let database = bir_core::db::app_database_path();
-    // Never write beside the owner's data: the door refuses these on its first call, and so do we.
-    if guards::database_refusal_here(&database).is_some() {
-        let _ = INSTANCE.set((InstanceState::NotNeeded, None));
-        return;
-    }
+    };
     if !prepare_process_at(&database) {
         eprintln!(
             "eBIRForms is already running on {}. It was asked to come to the front.",
@@ -976,6 +983,34 @@ mod tests {
         // Anything else is not an answer.
         assert!(guard_wanted(Some("maybe"), false));
         assert!(!guard_wanted(Some(""), true));
+    }
+
+    /// The guard locks the database this process opens. A test environment with no `BIR_DATABASE_PATH` opens a scratch
+    /// database the door makes per engine thread, so even `BIR_SINGLE_INSTANCE=1` locks nothing there (it used to lock
+    /// `app_database_path()`, a file the process never opens). Named, the named file is locked. Nothing is claimed here:
+    /// only the decision is asked.
+    #[test]
+    fn the_guard_locks_the_database_the_door_opens() {
+        let _turn = serial();
+        let (folder, database) = scratch();
+        let named = database.display().to_string();
+        let decide = |single: Option<&str>, test_env: Option<&str>, path: Option<&str>| {
+            let vars = [("BIR_SINGLE_INSTANCE", single), ("EBIR_TEST_ENV", test_env), ("BIR_DATABASE_PATH", path)];
+            temp_env::with_vars(vars, || {
+                bir_core::db::set_database_path_override(None);
+                guards::with_home_for_test(folder.path(), guarded_database)
+            })
+        };
+        for test_env in ["1", "true"] {
+            let on = Some(test_env);
+            assert_eq!(decide(Some("1"), on, None), None, "{test_env}: the door makes a scratch database");
+            assert_eq!(decide(Some("1"), on, Some("")), None, "{test_env}: an empty path names nothing");
+            assert_eq!(decide(Some("1"), on, Some(&named)), Some(database.clone()), "{test_env}: the named database");
+            assert_eq!(decide(None, on, Some(&named)), None, "{test_env}: not guarded by default");
+        }
+        // Not a test environment: the database it opens.
+        assert_eq!(decide(None, Some("0"), Some(&named)), Some(database.clone()));
+        assert!(!database.parent().unwrap().exists(), "deciding wrote nothing");
     }
 
     #[test]
