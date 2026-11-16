@@ -40,8 +40,13 @@ test("desktop: stepping with the pill puts the keyboard in a tick box, then in a
   await app.waitFor("id:fp-pill-count");
   await app.press("id:fp-pill-next");
   await app.waitFor("text:/^Item 3 · /");
-  // The keys are in the group's first box without a press on it: Space ticks it.
-  await app.keyboard.press("space");
+  // The keys are in the group's first box without a press on it: Space ticks it. The step puts the keyboard there after its scroll, a moment
+  // after the pill names the item; a Space pressed before that goes nowhere (seen on the CI runner), so it is pressed again only while the
+  // item is still unanswered.
+  for (let i = 0; i < 8 && !app.shows("text:/^4 to do/"); i++) {
+    await app.keyboard.press("space");
+    await app.waitFor("text:/^4 to do/", { timeout: 1500 }).catch(() => undefined);
+  }
   await app.waitFor("text:/^4 to do/");
   // Item 11 is another group; Item 14 is an amount: a typed key lands in its box.
   await app.press("id:fp-pill-next");
@@ -50,8 +55,12 @@ test("desktop: stepping with the pill puts the keyboard in a tick box, then in a
   await app.waitFor("text:/^Item 14 · /");
   const box = "id:fp-frm1601c:txtTax14";
   expect(app.value(box) ?? "").not.toContain("5");
-  await app.keyboard.press("5");
-  await app.waitUntil(() => (app.value(box) ?? "").includes("5"));
+  // The same moment as above: the key is pressed again until the box has it.
+  for (let i = 0; i < 8 && !(app.value(box) ?? "").includes("5"); i++) {
+    await app.keyboard.press("5");
+    await app.waitUntil(() => (app.value(box) ?? "").includes("5"), { timeout: 1500 }).catch(() => undefined);
+  }
+  expect(app.value(box) ?? "").toContain("5");
 });
 
 test("desktop: the side list, Expand all, Cmd+Right steps, the sections popover", async () => {
