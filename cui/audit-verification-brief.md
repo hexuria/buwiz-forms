@@ -215,3 +215,18 @@ and the R-5 validation misses on 1702mx/1604f/1702rt/2550q (possible real
 validation gaps).
 EOF
 wc -l /tmp/audit-verification-brief.md
+## 9. Environment notes (so you don't re-debug this)
+
+- **`GH_TOKEN` env var is a stale sandbox token — always `401`.** Unset it
+  (`env -u GH_TOKEN`) before `gh` commands; stored `hosts.yml` creds are
+  also invalid.
+- **The egress proxy (`192.0.2.1:8889`) breaks api.github.com** — it returns
+  `401 Bad credentials` even for unauthenticated endpoints. `gh` and proxied
+  `curl` cannot reach the API. Bypass with `curl --noproxy '*'` or
+  `urllib.request.ProxyHandler({})`. A valid PAT worked this way (secret
+  gist: https://gist.github.com/hexuria/69546fd4e2bcd8d53165856c453998f2).
+- **This clone has NO git remote** — local-only, nothing to push.
+- `cargo test -p bir-app-api` fails here (unfetchable git-pinned deps
+  `gpui-component`/`gpui-agent`); run tests through the `cui` crate instead.
+- `cargo test dump_effective_schemas -- --ignored` in `cui/` regenerates
+  `/tmp/effective-schemas/` (43 files).
