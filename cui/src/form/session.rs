@@ -5344,3 +5344,214 @@ impl OneDate {
         format!("{}#date", self.month.k)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::path::Path;
+    use std::time::{Duration, Instant};
+
+    /// The dev environment of the door tests: a scratch database, no keychain, auth bypassed.
+    /// `bir::call` reaches the host through the engine thread, which reads the same process env.
+    fn dev_env<R>(database: &Path, home: &Path, body: impl FnOnce() -> R) -> R {
+        temp_env::with_vars(
+            [
+                ("BUWIZ_NO_KEYCHAIN", Some("1")),
+                ("EBIR_TEST_ENV", Some("1")),
+                ("BIR_AUTH_BYPASS", Some("1")),
+                ("BIR_SFTP_DRY_RUN", Some("1")),
+                ("BIR_SFTP_LIVE", None),
+                ("BIR_SFTP_HOST", None),
+                (
+                    "BIR_DATABASE_PATH",
+                    Some(database.to_str().expect("utf8 path")),
+                ),
+            ],
+            || crate::guards::with_home_for_test(home, body),
+        )
+    }
+
+    /// Poll until every in-flight host call and pending open/validate/period resolves.
+    fn settle(s: &mut FormSession, what: &str) -> Result<(), String> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            s.poll();
+            let busy = s.st.loading
+                || s.st.checking
+                || s.pending_open.is_some()
+                || s.pending_validate.is_some()
+                || s.pending_period.is_some()
+                || s.pending_placeholder.is_some();
+            if !busy {
+                return Ok(());
+            }
+            if Instant::now() > deadline {
+                return Err(format!("{what}: timed out"));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// One form's full session lifecycle on a library sample: open, step through every step
+    /// target, edit one field of each editable kind, flush, validate, let autosave run.
+    fn exercise(code: &str) -> Result<String, String> {
+        let target = FormTarget {
+            tin: "00012345300000".to_owned(),
+            form_code: code.to_owned(),
+            year: 2026,
+            period: 0,
+            key: None,
+            mode: "sample".to_owned(),
+            snapshot_id: None,
+            new_key: None,
+            new_key_from: None,
+        };
+        let mut s = FormSession::new(target);
+        if s.schema.is_none() {
+            return Err(format!("schema: {}", s.st.error));
+        }
+        if let Some(e) = s.open(None, false) {
+            return Err(format!("open refused: {e}"));
+        }
+        settle(&mut s, "open")?;
+        if !s.st.error.is_empty() {
+            return Err(format!("open error: {}", s.st.error));
+        }
+        if s.st.draft.is_none() {
+            return Err("opened with no draft".to_owned());
+        }
+        let parts = s.schema.as_ref().map(|sc| sc.parts.len()).unwrap_or(0);
+
+        // Step through every step target once (bounded), then back to the top.
+        let mut steps = 0usize;
+        while steps < 80 {
+            if s.step_target(1).is_none() {
+                break;
+            }
+            s.step(1);
+            steps += 1;
+        }
+        s.jump_to(0, None);
+
+        // One edit of each editable kind the schema offers.
+        let mut by_kind: HashMap<String, Vec<String>> = HashMap::new();
+        for k in &s.all_keys {
+            if let Some(t) = s.kind_of.get(k) {
+                by_kind.entry(t.clone()).or_default().push(k.clone());
+            }
+        }
+        let mut edits = 0usize;
+        for (kind, text) in [
+            ("text", "Tester"),
+            ("money", "12.5"),
+            ("pct", "12.5"),
+            ("int", "12"),
+            ("date", "01/15/2026"),
+            ("tin", "000-123-453-00000"),
+        ] {
+            if let Some(k) = by_kind.get(kind).and_then(|v| v.first()) {
+                s.edit(k, text);
+                edits += 1;
+            }
+        }
+        for kind in ["sel", "chk"] {
+            if let Some(k) = by_kind.get(kind).and_then(|v| v.first()).cloned() {
+                if kind == "sel" {
+                    let (_shown, options) = s.sel_shown(&k);
+                    if let Some(o) = options.first() {
+                        s.choose(HashMap::from([(k.clone(), o.value.clone())]));
+                        edits += 1;
+                    }
+                } else {
+                    s.choose(HashMap::from([(k.clone(), "true".to_owned())]));
+                    edits += 1;
+                }
+            }
+        }
+        if let Some(k) = by_kind.get("radio").and_then(|v| v.first()) {
+            s.pick_radio(k);
+            edits += 1;
+        }
+        s.flush();
+        s.check();
+        settle(&mut s, "check")?;
+
+        // Let the autosave/save_sample path run to quiescence.
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            s.poll();
+            let quiescent = !s.st.checking
+                && !matches!(s.st.save_state, SaveState::Saving)
+                && s.pending_open.is_none()
+                && s.pending_validate.is_none()
+                && s.pending_period.is_none()
+                && s.pending_placeholder.is_none()
+                && bir::async_in_flight() == 0;
+            if quiescent {
+                break;
+            }
+            if Instant::now() > deadline {
+                return Err("save wait timed out".to_owned());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let problems: usize = s.shown_counts().values().sum::<usize>();
+        let save = match &s.st.save_state {
+            SaveState::Failed(m) => format!("FAILED({m})"),
+            SaveState::Manual(m) => format!("manual({m})"),
+            other => format!("{other:?}"),
+        };
+        if let SaveState::Failed(m) = &s.st.save_state {
+            return Err(format!("save failed: {m}"));
+        }
+        Ok(format!(
+            "parts={parts} steps={steps} keys={} edits={edits} problems={problems} save={save}",
+            s.all_keys.len()
+        ))
+    }
+
+    /// Every form in the bundled schema index opens a sample, steps, edits, validates and
+    /// autosaves on a scratch database — the engine-level half of the all-43 audit.
+    #[test]
+    fn all_form_sessions_open_edit_and_check() {
+        let folder = tempfile::tempdir().expect("temp folder");
+        let database = folder.path().join("data").join("bir_data.db");
+        dev_env(&database, folder.path(), || {
+            bir::call(
+                "create_taxpayer",
+                vec![json!({
+                    "tin_root": "000-123-453",
+                    "name": "Juana Santos",
+                    "taxpayer_type": "Individual",
+                    "head_office": {
+                        "rdo_code": "039",
+                        "registered_address": "Quezon City",
+                        "zip_code": "1100"
+                    }
+                })],
+            )
+            .expect("create_taxpayer");
+            let text = std::fs::read_to_string("../app/forms/forms-schema.json")
+                .expect("bundled schema index");
+            let forms: Vec<Value> = serde_json::from_str(&text).unwrap();
+            assert_eq!(forms.len(), 43, "the bundled schema index lists every form");
+            let mut failures = Vec::new();
+            for f in &forms {
+                let code = f["c"].as_str().unwrap().to_owned();
+                match exercise(&code) {
+                    Ok(report) => eprintln!("{code}\tOK\t{report}"),
+                    Err(e) => {
+                        eprintln!("{code}\tFAIL\t{e}");
+                        failures.push(format!("{code}: {e}"));
+                    }
+                }
+            }
+            assert!(
+                failures.is_empty(),
+                "form session failures:\n{}",
+                failures.join("\n")
+            );
+        });
+    }
+}

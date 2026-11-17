@@ -49,6 +49,22 @@ Implementation: `cui/src/form/` (schema/model/session) + `cui/src/screens/form.r
 - sample-period: "Which period is this return for?", PERIOD_PART_LABELS inputs, quarter
   parts as single-select Q1-Q4 buttons (one "true", rest "false"), error line, Cancel/Save.
 
+## Session-level audit — `form::session::tests::all_form_sessions_open_edit_and_check`
+
+Drives the real `FormSession` against the host on a scratch database for **all 43 codes**
+(sample mode, demo taxpayer): open → step through every step target → one edit of each
+editable kind present (text/money/pct/int/date/tin/sel/chk/radio) → `flush` → `check`
+(validate) → autosave quiescence. 13s total, all PASS:
+
+- Every form opens with a draft (no "no on-screen layout", no open errors).
+- `screen_form_fill` accepts the edits on every form (no `SaveState::Failed`).
+- `screen_form_validate` answers on every form; `shown_counts` reports the expected
+  attention items for an intentionally-touched sample.
+- Sample saves correctly report `manual(Sample · set its period to save)` — the NSH
+  period gate, not a bug (1702MX reports `Unsaved`, also correct).
+- `steps=80` is the test's bound: `step_target(1)` wraps, so each form cycled its full
+  step list repeatedly without error.
+
 ## Live audit — all 43 forms (audit-forms.sh, display :1)
 
 Every code opened its sample and rendered parts/fields/navigator/pill with no
