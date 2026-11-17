@@ -592,7 +592,9 @@ impl FormSession {
             form_undo: None,
             fast_lane_drafts: false,
             disposed: false,
-            has_second_window: true, // set by the frame (isAvailable)
+            // CUI has no second window or HTML renderer on any platform (print.rs answers
+            // every request honestly), so the preview is never "available" here.
+            has_second_window: false,
             key_index: HashMap::new(),
             field_of: HashMap::new(),
             kind_of: HashMap::new(),
@@ -5511,6 +5513,119 @@ mod tests {
         ))
     }
 
+    /// One form as a real return (not a library sample): open for its first valid period,
+    /// answer the asks the host offers, take the income-tax election when validation asks
+    /// for it, edit, check, save — the non-sample half of the lifecycle.
+    fn exercise_new(code: &str, period: i64) -> Result<String, String> {
+        let target = FormTarget {
+            tin: "00012345300000".to_owned(),
+            form_code: code.to_owned(),
+            year: 2026,
+            period,
+            key: None,
+            mode: "return".to_owned(),
+            snapshot_id: None,
+            new_key: None,
+            new_key_from: None,
+        };
+        let mut s = FormSession::new(target);
+        if s.schema.is_none() {
+            return Err(format!("schema: {}", s.st.error));
+        }
+        if let Some(e) = s.open(None, false) {
+            return Err(format!("open refused: {e}"));
+        }
+        settle(&mut s, "open")?;
+        if !s.st.error.is_empty() {
+            return Err(format!("open error: {}", s.st.error));
+        }
+        if s.st.draft.is_none() {
+            return Err("opened with no draft".to_owned());
+        }
+
+        // Answer every ask the host offers: a choice takes its first answer, a date a
+        // typed date, anything else a short text — through the same save_ask path the UI uses.
+        let asks = s.st.asks.clone();
+        let mut answered = 0usize;
+        for ask in &asks {
+            match ask.control.as_str() {
+                "choice" => {
+                    if let Some(c) = ask.choices.as_ref().and_then(|c| c.first()) {
+                        s.st.ask_pick.insert(ask.fact.clone(), c.value.clone());
+                        s.save_ask(&ask.fact);
+                        answered += 1;
+                    }
+                }
+                "date" => {
+                    s.st.ask_text
+                        .insert(ask.fact.clone(), "01/15/2026".to_owned());
+                    s.save_ask(&ask.fact);
+                    answered += 1;
+                }
+                _ => {
+                    s.st.ask_text
+                        .insert(ask.fact.clone(), "Test answer".to_owned());
+                    s.save_ask(&ask.fact);
+                    answered += 1;
+                }
+            }
+        }
+        settle(&mut s, "asks")?;
+
+        // Validation can ask for the year's income-tax election; answer it when it does.
+        s.check();
+        settle(&mut s, "check")?;
+        let mut election = "none".to_owned();
+        if s.st.election_at.is_some() {
+            s.pick_election("graduated");
+            s.record_election();
+            election = "graduated".to_owned();
+            settle(&mut s, "election")?;
+        }
+
+        // One edit of the first editable text field, then check and save for real.
+        let mut edits = 0usize;
+        let first_text = s
+            .all_keys
+            .iter()
+            .find(|k| s.kind_of.get(*k).is_some_and(|t| t == "text"))
+            .cloned();
+        if let Some(k) = first_text {
+            s.edit(&k, "Tester");
+            edits += 1;
+        }
+        s.flush();
+        s.check();
+        settle(&mut s, "check")?;
+        s.save_now();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            s.poll();
+            let quiescent = !s.st.checking
+                && !matches!(s.st.save_state, SaveState::Saving)
+                && s.pending_open.is_none()
+                && s.pending_validate.is_none()
+                && s.pending_period.is_none()
+                && s.pending_placeholder.is_none()
+                && bir::async_in_flight() == 0;
+            if quiescent {
+                break;
+            }
+            if Instant::now() > deadline {
+                return Err("save wait timed out".to_owned());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if let SaveState::Failed(m) = &s.st.save_state {
+            return Err(format!("save failed: {m}"));
+        }
+        Ok(format!(
+            "asks={answered}/{} election={election} edits={edits} save={:?}",
+            asks.len(),
+            s.st.save_state
+        ))
+    }
+
     /// Every form in the bundled schema index opens a sample, steps, edits, validates and
     /// autosaves on a scratch database — the engine-level half of the all-43 audit.
     #[test]
@@ -5536,14 +5651,28 @@ mod tests {
                 .expect("bundled schema index");
             let forms: Vec<Value> = serde_json::from_str(&text).unwrap();
             assert_eq!(forms.len(), 43, "the bundled schema index lists every form");
+            let now = chrono::Local::now();
             let mut failures = Vec::new();
             for f in &forms {
                 let code = f["c"].as_str().unwrap().to_owned();
                 match exercise(&code) {
-                    Ok(report) => eprintln!("{code}\tOK\t{report}"),
+                    Ok(report) => eprintln!("{code}\tsample\tOK\t{report}"),
                     Err(e) => {
-                        eprintln!("{code}\tFAIL\t{e}");
-                        failures.push(format!("{code}: {e}"));
+                        eprintln!("{code}\tsample\tFAIL\t{e}");
+                        failures.push(format!("{code} sample: {e}"));
+                    }
+                }
+                let freq =
+                    crate::lib::periods::Frequency::parse(f["freq"].as_str().unwrap_or("Annual"));
+                let period = crate::lib::periods::period_options(&code, freq, 2026, now)
+                    .first()
+                    .map(|o| o.value)
+                    .unwrap_or(0);
+                match exercise_new(&code, period) {
+                    Ok(report) => eprintln!("{code}\treturn\tOK\t{report}"),
+                    Err(e) => {
+                        eprintln!("{code}\treturn\tFAIL\t{e}");
+                        failures.push(format!("{code} return: {e}"));
                     }
                 }
             }
