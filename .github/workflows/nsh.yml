@@ -6,9 +6,10 @@ name: NSH app
 #
 # The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
 # this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes:
-# 87e0a4ea4, the tip of the `buwiz` branch since hexuria/nsh#13. It runs on GitHub's hosted runners (macos-15 for the app, ubuntu-24.04 for the
-# plain-SQLite tests) and has run and passed there; its steps are the ones that pass on the owner's Mac (nsh/AGENTS.md
-# "Commands").
+# 87e0a4ea4, the tip of the `buwiz` branch since hexuria/nsh#13. It runs on GitHub's hosted runners (macos-15 for the
+# app, windows-2025 for the app on Windows, ubuntu-24.04 for the plain-SQLite tests) and has run and passed there; its
+# steps are the ones that pass on the owner's Mac (nsh/AGENTS.md "Commands"), and the Windows job's those that pass by
+# hand on Windows Server 2022.
 #
 # hexuria/nsh is public, so no secret is needed today: the checkout falls back to the job's own token. If it ever turns
 # private, create NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
@@ -150,14 +151,17 @@ jobs:
             exit 1
           fi
 
-  # The same app on Windows (the NSH Win32 backend), as far as a machine without a display reaches: the CLI built from the
-  # pin, the crate and its TSX types, the bundle, and the Windows development host `nsh run --target windows` builds, which
-  # links NSH's Win32 backend with its development features. A pin whose Windows backend does not build is caught here
-  # (c346e920e's did not: chrome.rs called choose() with three arguments, hexuria/nsh#13). The crate's Rust tests, the
-  # headless TSX tests and real windows are not run here yet (docs/platforms/nsh-windows-handover.md, W5 onwards).
+  # The same app on Windows (the NSH Win32 backend), as far as a machine without a display reaches: the CLI built from
+  # the pin, the crate and its TSX types, the bundle, and the Windows development host `nsh run --target windows`
+  # builds, which links NSH's Win32 backend with its development features. A pin whose Windows backend does not build is
+  # caught here (c346e920e's did not: chrome.rs called choose() with three arguments, hexuria/nsh#13). The crate's Rust
+  # tests, the headless TSX tests and real windows are not run here yet (docs/platforms/nsh-windows-handover.md, W5
+  # onwards).
   nsh-windows:
     name: NSH app (Windows)
-    runs-on: windows-latest
+    # Pinned, as the other jobs are: the steps below name paths of this image (Strawberry Perl, LLVM). windows-2025 is
+    # Windows Server 2025 with Visual Studio 2026, the image the job was first verified on.
+    runs-on: windows-2025
     # Cold: the nsh command line took 31 minutes on a 2-vCPU Windows machine; the host is a further debug build.
     timeout-minutes: 150
     env:
@@ -183,10 +187,18 @@ jobs:
           path: nsh
           persist-credentials: false
 
+      - name: Check the two checkouts line up
+        shell: pwsh
+        run: |
+          if (-not (Test-Path nsh/crates/nsh-core/Cargo.toml)) { throw "nsh/crates/nsh-core/Cargo.toml is missing" }
+          if (-not (Test-Path buwiz-forms/nsh/Cargo.toml)) { throw "buwiz-forms/nsh/Cargo.toml is missing" }
+          git -C nsh log -1 --format='NSH at %H %s'
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.0
+          components: clippy, rustfmt
 
       - name: Install huacnlee/cargo
         uses: ./nsh/.github/actions/cargo
@@ -194,8 +206,8 @@ jobs:
           cache: buwiz-nsh-app-windows
           lockfiles: buwiz-forms/nsh/Cargo.lock
 
-      # bir-core builds OpenSSL from source (openssl "vendored"), whose Configure needs Strawberry Perl: Git's perl, which
-      # can come first on the path, fails in it. The image ships Strawberry Perl; put it first.
+      # bir-core builds OpenSSL from source (openssl "vendored"), whose Configure needs Strawberry Perl: Git's perl,
+      # which can come first on the path, fails in it. The image ships Strawberry Perl; put it first.
       - name: Put Strawberry Perl first on the path
         shell: pwsh
         run: |
