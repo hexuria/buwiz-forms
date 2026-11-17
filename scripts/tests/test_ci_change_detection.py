@@ -263,6 +263,22 @@ class CiChangeDetectionTests(unittest.TestCase):
             changed=("crates/bir-core/src/lib.rs", "app/main.js"),
         )
 
+    def test_nsh_app_only_change_skips_check(self) -> None:
+        # nsh/ is a workspace of its own, which the NSH app workflow tests.
+        self.assert_decisions(
+            systems=(),
+            check_reason="NSH app files only (tested by the NSH app workflow)",
+            changed=("nsh/screens/home/Home.tsx", ".github/workflows/nsh.yml"),
+        )
+
+    def test_nsh_src_stays_app_code(self) -> None:
+        # The production-boundary check scans nsh/src.
+        self.assert_decisions(
+            systems=self.ALL_SYSTEMS,
+            check_reason="app file changed: nsh/src/print.rs",
+            changed=("nsh/screens/home/Home.tsx", "nsh/src/print.rs"),
+        )
+
     def test_rules_markdown_is_app_code_and_validation_input(self) -> None:
         self.assert_decisions(
             systems=self.ALL_SYSTEMS,

@@ -369,9 +369,14 @@ jobs:
         macos_pkg_re='^(assets/macos/|scripts/(dev_bundle_macos|package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
         linux_pkg_re='^packaging/linux/'
         shell_re='^(crates/bir-shell/|app/)'
+        # The NSH (TSX) app is a workspace of its own that nothing `check` builds or tests reads, and nsh.yml tests it.
+        # nsh/src/ stays app code: the production-boundary check scans it (bir-rules-codegen status.rs,
+        # SHELL_SOURCE_ROOTS). So do nsh/Cargo.toml and nsh/Cargo.lock, to stay on the safe side.
+        nsh_re='^(nsh/|\.github/workflows/nsh\.yml$)'
+        nsh_app_re='^nsh/(src/|Cargo\.(toml|lock)$)'
         scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos)\.sh$|scripts/setup-windows\.ps1$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
 
-        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false
+        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false; nsh=false
         app_reason=""
         if [[ "$EVENT" != pull_request && "$EVENT" != push ]]; then
           app=true; app_reason="event $EVENT tests everything"
@@ -394,6 +399,8 @@ jobs:
               scripts=true
             elif [[ "$path" =~ $shell_re ]]; then
               shell=true
+            elif [[ "$path" =~ $nsh_re && ! "$path" =~ $nsh_app_re ]]; then
+              nsh=true
             elif [[ "$app" != true ]]; then
               app=true; app_reason="app file changed: $path"
             fi
@@ -414,6 +421,8 @@ jobs:
             scripts=true; check_reason="no app code changed"
           elif [[ "$shell" == true ]]; then
             check_reason="shell workspace changed (covered by shell-check)"
+          elif [[ "$nsh" == true ]]; then
+            check_reason="NSH app files only (tested by the NSH app workflow)"
           else
             check_reason="docs-only changes"
           fi
@@ -462,6 +471,7 @@ jobs:
         echo "script tests on their own: $scripts" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "packaging changed: linux=$linux_pkg windows=$windows_pkg macos=$macos_pkg" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "gpui-shell workspace check: $shell" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "NSH app files changed (NSH app workflow): $nsh" | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The Python script tests on their own, for changes `check` does not run for
   # (packaging, setup scripts, release workflows, the tests themselves). When
