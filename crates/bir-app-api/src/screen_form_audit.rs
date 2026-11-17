@@ -3141,3 +3141,22 @@ fn every_shell_form_print_map_has_a_sheet_or_reviewed_reason() {
         }
     }
 }
+
+#[test]
+#[ignore = "audit tooling: writes /tmp/effective-schemas"]
+fn dump_effective_schemas() {
+    use_ephemeral_database();
+    let dir = std::path::Path::new("/tmp/effective-schemas");
+    std::fs::create_dir_all(dir).unwrap();
+    let index = call("screen_forms_index", vec![]).expect("index");
+    for row in index.as_array().expect("array") {
+        let code = row["c"].as_str().expect("code").to_string();
+        let entry = call("screen_form_schema", vec![code.clone().into()])
+            .unwrap_or_else(|e| panic!("{code} schema: {e}"));
+        std::fs::write(
+            dir.join(format!("{code}.json")),
+            serde_json::to_string_pretty(&entry).unwrap(),
+        )
+        .unwrap();
+    }
+}
