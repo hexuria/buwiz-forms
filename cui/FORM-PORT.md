@@ -71,6 +71,21 @@ in two passes (18s total, all PASS):
 - `steps=80` is the test's bound: `step_target(1)` wraps, so each form cycled its full
   step list repeatedly without error.
 
+## Interactive per-form sweep — schedules (display :1, fresh Xvfb)
+
+Follow-up to the smoke audit: every schedule-bearing form was driven
+individually — launch via `BIR_OPEN_SAMPLE`, OCR the navigator, click through
+the part rows, scroll each part, and screenshot/OCR-verify the schedule UI
+("+ Add row" / "No rows yet" / "Total … 0.00" / inline fixed-row grids).
+
+- **33/33 schedule forms reached their schedule part and rendered schedule UI.**
+  "Add row" affordance confirmed on 30; inline fixed-row grids (no add-row by
+  design) confirmed visually on 2200C, 1603Q, 2551Q, 1702MX.
+- **Row drawer opened** (Done/Delete chrome) on: 1601C, 1602Q, 1604E, 1604F,
+  1700, 1702EX, 2000, 2000OT, 2200T, 2553; full add→edit→delete lifecycle on
+  2550Q (earlier pass).
+- Screenshots + OCR text: `/tmp/sweep/*-s6-*`, `*-s7-*`, `*-s8c-*` (ephemeral).
+
 ## Live audit — all 43 forms (audit-forms.sh, display :1)
 
 Every code opened its sample and rendered parts/fields/navigator/pill with no
