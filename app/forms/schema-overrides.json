@@ -32490,15 +32490,18 @@
     },
     "frm1707Av2021:txtI5TIN1": {
       "label": "TIN (1-3)",
-      "evidence": "P4: printed caption '6 TIN (1-3)' (html-frozen/1707a-2021/writer-cells.json joins)"
+      "evidence": "P4: printed caption '6 TIN (1-3)' (html-frozen/1707a-2021/writer-cells.json joins) | required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset.",
+      "required": true
     },
     "frm1707Av2021:txtI5TIN2": {
       "label": "TIN (4-6)",
-      "evidence": "P4: printed caption '6 TIN (4-6)' (html-frozen/1707a-2021/writer-cells.json joins)"
+      "evidence": "P4: printed caption '6 TIN (4-6)' (html-frozen/1707a-2021/writer-cells.json joins) | required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset.",
+      "required": true
     },
     "frm1707Av2021:txtI5TIN3": {
       "label": "TIN (7-9)",
-      "evidence": "P4: printed caption '6 TIN (7-9)' (html-frozen/1707a-2021/writer-cells.json joins)"
+      "evidence": "P4: printed caption '6 TIN (7-9)' (html-frozen/1707a-2021/writer-cells.json joins) | required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset.",
+      "required": true
     },
     "frm1707Av2021:txtS1I20TotalCapitalGains": {
       "label": "TOTAL (E) Capital Gains",
@@ -38901,7 +38904,8 @@
         "11 - November",
         "12 - December"
       ],
-      "evidence": "month select (binding /month, whole number 1-12)"
+      "evidence": "month select (binding /month, whole number 1-12) | required: the return validator blocks a blank period month/year although the extractor left r unset.",
+      "required": true
     },
     "frm2200ANv2018:txtDate": {
       "label": "Day",
@@ -38910,7 +38914,8 @@
     },
     "frm2200ANv2018:txtYear": {
       "kind": "int",
-      "evidence": "binding type whole; fields.json text/code"
+      "evidence": "binding type whole; fields.json text/code | required: the return validator blocks a blank period month/year although the extractor left r unset.",
+      "required": true
     },
     "frm2200ANv2018:txtSheets": {
       "label": "Number of Sheet/s Attached",
@@ -53191,6 +53196,22 @@
           ]
         }
       ]
+    },
+    "frm2552:txtPg1TIN1": {
+      "required": true,
+      "evidence": "required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset."
+    },
+    "frm2552:txtPg1TIN2": {
+      "required": true,
+      "evidence": "required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset."
+    },
+    "frm2552:txtPg1TIN3": {
+      "required": true,
+      "evidence": "required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset."
+    },
+    "frm2552:txtPg1TIN4": {
+      "required": true,
+      "evidence": "required: the return validator blocks a blank TIN (rules corpus marks the TIN boxes required) although the extractor left r unset."
     }
   },
   "2553": {

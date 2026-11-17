@@ -1731,6 +1731,7 @@ impl FormSession {
         let relocks = string_map(&r.relocks);
         let relock_notes = r.relock_notes.clone();
         let rejected_map = r.rejected.clone();
+        let before_vals = self.st.values.clone();
         {
             let s = &mut self.st;
             self_accepted(s, &edits, Some(&rejected));
@@ -1739,7 +1740,7 @@ impl FormSession {
                     s.blank = blank.iter().cloned().collect();
                 }
             }
-            let before_vals = s.values.clone();
+            s.notes_always = r.notes_always.iter().cloned().collect();
             s.draft = Some(draft);
             s.values = values_raw;
             s.options = options_raw;
@@ -1760,12 +1761,11 @@ impl FormSession {
                     }
                 }
             }
-            let _ = before_vals;
         }
         // shown_values needs &self.st; apply after values are in.
         let vals = self.st.values.clone();
         self.st.values = self.shown_values(vals);
-        let before = self.st.values.clone();
+        let before = before_vals;
         // sync_shown compares pre-fill values; approximate with post-fill (shut boxes resync anyway)
         self.sync_shown(&before, &edits);
         self.live_preview();
@@ -2149,19 +2149,35 @@ impl FormSession {
             }
         }
         let value = s.values.get(k).cloned().unwrap_or_default();
-        // controls/model.ts `selectModel`: the marked choice wins, zeros and a lone dash read as
-        // empty, an unknown value stays choosable (appended below, without the "Choose…" head the
-        // list itself does not carry here).
-        let (_options, shown) = model::select_model(&listed, &value);
-        let mut options = listed;
-        if !shown.is_empty() && !options.iter().any(|o| o.value == shown) {
-            options.push(ScreenFormOption {
-                value: shown.clone(),
-                label: shown.clone(),
-                selected: None,
-            });
-        }
+        // controls/model.ts `selectModel`: a "Choose…" head, the marked choice wins, zeros and a
+        // lone dash read as empty, an unknown value stays choosable (appended to the list).
+        let (options, shown) = model::select_model(&listed, &value);
         (shown, options)
+    }
+
+    /// Whether box `k` wears the invalid mark this frame (NSH `box.invalid`): its item shows a
+    /// validation message naming it — messages follow the same touched/all rule the page uses —
+    /// or, for a one-date's synthetic key, one of its parts does or the row has a date error.
+    pub fn field_invalid(&self, k: &str) -> bool {
+        let s = &self.st;
+        let shown_item = |id: &str| s.show_all || s.touched.contains(id);
+        let msg_keys: HashSet<&str> = s
+            .message_keys
+            .iter()
+            .filter(|(id, _)| shown_item(id))
+            .flat_map(|(_, keys)| keys.iter().map(String::as_str))
+            .collect();
+        if let Some((date, row)) = self.one_dates.get(k) {
+            if !shown_item(row) {
+                return false;
+            }
+            return s.date_errors.contains_key(row)
+                || [Some(&date.month), date.day.as_ref(), Some(&date.year)]
+                    .into_iter()
+                    .flatten()
+                    .any(|f| msg_keys.contains(f.k.as_str()));
+        }
+        msg_keys.contains(k)
     }
 
     /// Every box shows what the draft holds (an opening, a rebuild, a restore).
@@ -5453,7 +5469,8 @@ mod tests {
             if let Some(k) = by_kind.get(kind).and_then(|v| v.first()).cloned() {
                 if kind == "sel" {
                     let (_shown, options) = s.sel_shown(&k);
-                    if let Some(o) = options.first() {
+                    // options[0] is the "Choose…" head; pick a real choice.
+                    if let Some(o) = options.iter().find(|o| !o.value.is_empty()) {
                         s.choose(HashMap::from([(k.clone(), o.value.clone())]));
                         edits += 1;
                     }

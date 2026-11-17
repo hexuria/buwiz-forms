@@ -9,8 +9,11 @@ use chrono::Datelike;
 use cui::Ui;
 use serde_json::json;
 
+use crate::form::model;
 use crate::form::schema::{self, SchemaField, SchemaItem};
-use crate::form::session::{ElectionCard, FormSession, Overlay, SamplePeriodPart, SessionEvent};
+use crate::form::session::{
+    ElectionCard, FormSession, Overlay, PartFold, SamplePeriodPart, SessionEvent,
+};
 use crate::lib::mask;
 use crate::state::{self, AppState, FormTarget, ViewName};
 use crate::store;
@@ -935,16 +938,6 @@ fn draw_form_body(ui: &mut Ui, app: &mut AppState, s: &mut FormSession) {
                     ..Default::default()
                 },
                 |ui| {
-                    if let Some(fold) = &info.fold {
-                        let label = format!(
-                            "{} ({})",
-                            fold.label,
-                            if fold.open { "hide" } else { "show" }
-                        );
-                        if ui.ghost_button(&label, true) {
-                            s.toggle_profile_fold(pi);
-                        }
-                    }
                     draw_part_items(ui, app, s, pi);
                 },
             );
@@ -1770,12 +1763,47 @@ fn draw_sections_list(ui: &mut Ui, s: &mut FormSession) {
 
 fn draw_part_items(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, pi: usize) {
     let count = s.part_item_count(pi);
+    // NSH rows.tsx: the "From tax profile" fold sits before its first tucked item and hides the
+    // rest while closed — the tucked items are skipped, not just drawn under a note.
+    let fold = s.part_info(pi).fold;
     for ii in 0..count {
+        if let Some(f) = &fold {
+            if f.first == ii {
+                draw_profile_fold(ui, s, pi, f);
+            }
+            if !f.open && f.items.contains(&ii) {
+                continue;
+            }
+        }
         let id = format!("{pi}:{ii}");
         let Some(item) = s.item(&id).cloned() else {
             continue;
         };
         draw_item(ui, app, s, &id, &item);
+    }
+}
+
+/// The part's "From tax profile · N filled boxes" fold row (rows.tsx `ProfileFold`).
+fn draw_profile_fold(ui: &mut Ui, s: &mut FormSession, pi: usize, fold: &PartFold) {
+    let mut label = fold.label.clone();
+    if fold.flagged > 0 {
+        label = format!(
+            "{label}  ·  {} need{} attention",
+            fold.flagged,
+            if fold.flagged == 1 { "" } else { "s" }
+        );
+    }
+    if kit::icon_ghost_button(
+        ui,
+        if fold.open {
+            "chevron-down"
+        } else {
+            "chevron-right"
+        },
+        &label,
+        true,
+    ) {
+        s.toggle_profile_fold(pi);
     }
 }
 
@@ -1785,18 +1813,8 @@ fn draw_item(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it:
     let info = s.row_info(id);
     let card_tag = format!("fp-item-{id}");
     kit::card_styled_tagged(ui, Some(&card_tag), 8.0, 6.0, false, info.step_here, |ui| {
-        if !it.l.is_empty() {
-            kit::section_title(ui, &it.l);
-        }
-        if !info.message.is_empty() {
-            kit::danger_text(ui, &info.message);
-        }
-        for n in &info.notes {
-            kit::meta_text(ui, n);
-        }
-        for n in &info.needs {
-            kit::warning_text(ui, n);
-        }
+        draw_item_title(ui, it);
+        // Title-row chrome: kept/profile marks, Edit, penalties, Stop here (rows.tsx marks).
         if !info.kept.is_empty() {
             kit::meta_text(ui, &format!("Kept from {}", info.kept));
         }
@@ -1809,13 +1827,6 @@ fn draw_item(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it:
             } else {
                 s.start_profile_edit(id);
             }
-        }
-        if let Some((on, note)) = &info.to_profile {
-            let mut v = *on;
-            if kit::checkbox(ui, "Save to profile too", &mut v) {
-                s.set_to_profile(id, v);
-            }
-            kit::meta_text(ui, note);
         }
         if let Some(pen) = info.penalty {
             if pen == "edit" && ui.ghost_button("Edit penalties", true) {
@@ -1835,112 +1846,36 @@ fn draw_item(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it:
                 s.set_stop(id, !info.is_stop);
             }
         }
+        // needs sit above the boxes (rows.tsx).
+        for n in &info.needs {
+            kit::warning_text(ui, n);
+        }
+
+        if it.rows.is_some() {
+            draw_schedule(ui, app, s, id, it);
+        } else {
+            draw_item_controls(ui, app, s, id, it);
+        }
+
+        // to_profile / from / notes / message — rows.tsx order: after the boxes.
+        if let Some((on, note)) = &info.to_profile {
+            let mut v = *on;
+            if kit::checkbox(ui, "Save to profile too", &mut v) {
+                s.set_to_profile(id, v);
+            }
+            kit::meta_text(ui, note);
+        }
         if !info.from.is_empty() {
             kit::meta_text(ui, &info.from);
             if ui.ghost_button("Use it", true) {
                 s.use_from(id);
             }
         }
-        for (token, label) in &info.checkable {
-            if ui.ghost_button(label, true) {
-                s.mark_checked(token);
-            }
+        for n in &info.notes {
+            kit::meta_text(ui, n);
         }
-
-        if it.rows.is_some() {
-            draw_schedule(ui, app, s, id, it);
-        } else {
-            // An item the host marks one_date draws its month, day and year boxes as ONE date box
-            // (rows.tsx); the three keys are skipped and the "<month>#date" key edits them together.
-            let one = schema::one_date(it);
-            let one_keys: Vec<String> = one
-                .as_ref()
-                .map(|o| {
-                    [
-                        Some(o.month.k.clone()),
-                        o.day.as_ref().map(|d| d.k.clone()),
-                        Some(o.year.k.clone()),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect()
-                })
-                .unwrap_or_default();
-            // A date printed in split boxes gets a calendar button beside them — not when the item
-            // has a date box of its own (that box carries its calendar).
-            let split = if one.is_none() && !it.f.iter().any(|f| f.t == "date") {
-                schema::date_parts(&it.f)
-            } else {
-                None
-            };
-            for f in &it.f {
-                if f.t == "hidden" || f.t == "radio" {
-                    continue;
-                }
-                // The one-date box stands where the month box was; day and year stay skipped.
-                if let Some(o) = &one
-                    && f.k == o.month.k
-                {
-                    let sf = SchemaField {
-                        k: o.one_key.clone(),
-                        l: o.month.l.clone(),
-                        t: "date".to_owned(),
-                        c: None,
-                        r: None,
-                        m: None,
-                        o: None,
-                        a: None,
-                        w: None,
-                        grp: None,
-                        rg: None,
-                        pool: None,
-                    };
-                    draw_field(ui, s, &sf, id);
-                    continue;
-                }
-                if one_keys.contains(&f.k) {
-                    continue;
-                }
-                draw_field(ui, s, f, id);
-            }
-            // The calendar beside the split boxes (rows.tsx `splitOpen`/`splitIso`/`splitRange`).
-            if let Some(dp) = &split {
-                let parts = [Some(&dp.month), dp.day.as_ref(), Some(&dp.year)]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>();
-                let open =
-                    s.editable() && !parts.iter().all(|f| f.c == Some(true) || s.is_shut(&f.k));
-                if open {
-                    let key = format!("split-date:{id}");
-                    let _g = ui.push_id(key.clone());
-                    let (min, max) = split_date_range(s, dp);
-                    let current = split_iso(s, dp);
-                    // NSH's CalendarButton trigger: a small icon-only calendar button (fields.tsx
-                    // CalendarPicker), not a labelled ghost button.
-                    if kit::icon_button(ui, "calendar", Some("Pick a date")) {
-                        open_date_picker(ui, &key, &current, min, max);
-                    }
-                    if let Some(iso) = date_picker(ui, &key) {
-                        s.pick_date(dp, &iso);
-                    }
-                }
-            }
-            // radio groups: one row of tick boxes per grp
-            let mut groups: Vec<(String, Vec<&SchemaField>)> = Vec::new();
-            for f in it.f.iter().filter(|f| f.t == "radio") {
-                let g = f.grp.clone().unwrap_or_else(|| f.k.clone());
-                if let Some((_, v)) = groups.iter_mut().find(|(k, _)| *k == g) {
-                    v.push(f);
-                } else {
-                    groups.push((g, vec![f]));
-                }
-            }
-            for (_, fs) in groups {
-                for f in fs {
-                    draw_radio(ui, s, f);
-                }
-            }
+        if !info.message.is_empty() {
+            kit::danger_text(ui, &info.message);
         }
 
         for ask in &info.asks {
@@ -1949,44 +1884,107 @@ fn draw_item(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it:
                 kit::meta_text(ui, &ask.note);
             }
             if ask.control == "choice" {
-                for c in &ask.choices {
-                    let picked = ask.pick.as_ref() == Some(&c.value);
-                    let label = format!("{}{}", if picked { "● " } else { "○ " }, c.label);
-                    if ui.ghost_button(&label, true) {
-                        s.pick_ask(&ask.fact, c.value.clone());
-                    }
-                }
+                ui.row(
+                    &cui::Row {
+                        wrap: true,
+                        gap: 8.0,
+                        ..Default::default()
+                    },
+                    |ui| {
+                        for c in &ask.choices {
+                            let picked = ask.pick.as_ref() == Some(&c.value);
+                            let label = format!("{}{}", if picked { "● " } else { "○ " }, c.label);
+                            if ui.ghost_button(&label, true) {
+                                s.pick_ask(&ask.fact, c.value.clone());
+                            }
+                        }
+                    },
+                );
             } else {
                 let mut text = s.ask_text_of(&ask.fact);
-                if ui.text_input(&format!("ask-{}", ask.fact), &mut text, &ask.label, false) {
+                // NSH FactCard: a date ask is a date box (MM/DD/YYYY, 140 wide); anything else a
+                // labelled text field.
+                let changed = if ask.control == "date" {
+                    if text.capacity() < 256 {
+                        text.reserve(256);
+                    }
+                    ui.input_with(
+                        &format!("ask-{}", ask.fact),
+                        &mut text,
+                        &cui::Input {
+                            placeholder: Some("MM/DD/YYYY"),
+                            width: cui::Size::px(140.0),
+                            ..Default::default()
+                        },
+                    )
+                    .changed()
+                } else {
+                    kit::text_input(
+                        ui,
+                        &format!("ask-{}", ask.fact),
+                        &mut text,
+                        &ask.label,
+                        false,
+                    )
+                };
+                if changed {
                     s.type_ask(&ask.fact, &text);
                 }
             }
-            if ui.primary_button("Save", true) {
+            // NSH FactCard: Save stays disabled until a choice is picked.
+            if ui.primary_button("Save", ask.control != "choice" || ask.pick.is_some()) {
                 s.save_ask(&ask.fact);
             }
-            if !info.ask_saved.is_empty() {
-                kit::meta_text(ui, &info.ask_saved);
-            }
+        }
+        if !info.ask_saved.is_empty() {
+            kit::meta_text(ui, &info.ask_saved);
         }
         if let Some(card) = &info.election {
             match card {
                 ElectionCard::Ask { question, pick } => {
                     kit::section_title(ui, question);
-                    for (v, label) in [
-                        ("graduated", "Graduated rates"),
-                        ("eight_percent", "8% flat rate"),
-                        ("not_applicable", "Not applicable"),
-                    ] {
-                        let on = pick.as_deref() == Some(v);
-                        if ui.ghost_button(
-                            &format!("{} {}", if on { "●" } else { "○" }, label),
-                            true,
-                        ) {
-                            s.pick_election(v);
-                        }
-                    }
-                    if ui.primary_button("Save", true) {
+                    kit::meta_text(
+                        ui,
+                        "We save it on the tax profile, so you answer once a year.",
+                    );
+                    ui.row(
+                        &cui::Row {
+                            wrap: true,
+                            gap: 8.0,
+                            ..Default::default()
+                        },
+                        |ui| {
+                            for (v, label, hint) in [
+                                ("graduated", "Graduated rates", "Tax on net taxable income"),
+                                (
+                                    "eight_percent",
+                                    "8% flat rate",
+                                    "8% of gross sales or receipts",
+                                ),
+                                ("not_applicable", "Not applicable", ""),
+                            ] {
+                                let on = pick.as_deref() == Some(v);
+                                ui.column(
+                                    &cui::Column {
+                                        gap: 2.0,
+                                        ..Default::default()
+                                    },
+                                    |ui| {
+                                        let text =
+                                            format!("{} {}", if on { "●" } else { "○" }, label);
+                                        if ui.ghost_button(&text, true) {
+                                            s.pick_election(v);
+                                        }
+                                        if !hint.is_empty() {
+                                            kit::meta_text(ui, hint);
+                                        }
+                                    },
+                                );
+                            }
+                        },
+                    );
+                    // NSH ElectionCardView: Save stays disabled until a choice is picked.
+                    if ui.primary_button("Save to tax profile", pick.is_some()) {
                         s.record_election();
                     }
                 }
@@ -2017,43 +2015,403 @@ fn draw_item(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it:
         if !info.election_saved.is_empty() {
             kit::meta_text(ui, &info.election_saved);
         }
+        for (token, label) in &info.checkable {
+            if ui.ghost_button(label, true) {
+                s.mark_checked(token);
+            }
+        }
     });
-    let _ = app;
 }
 
 // ---------------------------------------------------------------- fields
 
-fn draw_field(ui: &mut Ui, s: &mut FormSession, f: &SchemaField, _item: &str) {
-    let k = &f.k;
-    let shut = s.is_shut(k);
-    if shut {
-        // locked/computed: shown text or the reason it is blank
-        let text = s.shown_of(k);
-        if text.is_empty() {
-            let reason = s.lock_reason(k);
-            if !reason.is_empty() {
-                kit::meta_text(ui, &format!("{}: {}", f.l, reason));
+/// The item's heading: the printed item-number chip, its label with a required `*`, and a
+/// schedule's row count (rows.tsx item header).
+fn draw_item_title(ui: &mut Ui, it: &SchemaItem) {
+    let req = it.f.iter().any(|f| f.r == Some(true));
+    let label = if req {
+        format!("{} *", it.l)
+    } else {
+        it.l.clone()
+    };
+    ui.row(
+        &cui::Row {
+            gap: 6.0,
+            align: cui::Align::Start,
+            ..Default::default()
+        },
+        |ui| {
+            if !it.no.is_empty() {
+                let p = kit::frame_palette();
+                ui.box_(
+                    &cui::BoxOpts {
+                        pad_x: 6.0,
+                        pad_y: 2.0,
+                        radius: 4.0,
+                        bg: p.hover,
+                        ..Default::default()
+                    },
+                    |ui| {
+                        ui.text_with(
+                            &it.no,
+                            &cui::Text {
+                                size: 11.0,
+                                color: p.muted_foreground,
+                                ..Default::default()
+                            },
+                        );
+                    },
+                );
             }
-        } else {
-            kit::meta_text(ui, &format!("{}: {}", f.l, text));
+            if let Some(rows) = it.rows {
+                kit::meta_text(ui, &format!("{rows} rows"));
+            }
+            if !label.is_empty() {
+                kit::section_title(ui, &label);
+            }
+        },
+    );
+}
+
+/// What a non-schedule item draws for its boxes (rows.tsx `Controls`): a note, the
+/// "Additional details" fold, one date, a TIN, or the boxes themselves.
+fn draw_item_controls(
+    ui: &mut Ui,
+    app: &mut AppState,
+    s: &mut FormSession,
+    id: &str,
+    it: &SchemaItem,
+) {
+    let _ = app;
+    if it.f.is_empty() {
+        if let Some(note) = &it.note {
+            kit::meta_text(ui, note);
         }
         return;
     }
-    let kind = f.t.as_str();
-    match kind {
-        "sel" => draw_select(ui, s, f),
-        "chk" => {
-            let mut v = s.value_of(k) == "true" || s.value_of(k) == "1";
-            if kit::checkbox(ui, &f.l, &mut v) {
-                let edits =
-                    HashMap::from([(k.clone(), if v { "true" } else { "false" }.to_owned())]);
-                s.choose(edits);
+    // one_date: the month/day/year boxes are ONE date box; the "<month>#date" key edits them.
+    if let Some(o) = schema::one_date(it) {
+        let sf = SchemaField {
+            k: o.one_key,
+            l: it.l.clone(),
+            t: "date".to_owned(),
+            c: None,
+            r: None,
+            m: None,
+            o: None,
+            a: None,
+            w: None,
+            grp: None,
+            rg: None,
+            pool: None,
+        };
+        draw_field_w(ui, s, &sf, &it.l, None);
+        return;
+    }
+    if schema::is_tin_item(it) {
+        draw_tin_row(ui, s, it);
+        return;
+    }
+    // "Additional details": the fold of fields not yet placed on the paper layout.
+    if it.l == "Additional details" {
+        let n = it.f.len();
+        let open = s.more_open(id);
+        let label = format!(
+            "{} more field{} not yet placed on the paper layout",
+            n,
+            if n == 1 { "" } else { "s" }
+        );
+        if kit::icon_ghost_button(
+            ui,
+            if open {
+                "chevron-down"
+            } else {
+                "chevron-right"
+            },
+            &label,
+            true,
+        ) {
+            s.toggle_more(id);
+        }
+        if !open {
+            return;
+        }
+    }
+    draw_item_body(ui, app, s, id, it);
+}
+
+/// A TIN item's 3–5 boxes in one wrapping row with "-" separators (rows.tsx `isTinItem`).
+fn draw_tin_row(ui: &mut Ui, s: &mut FormSession, it: &SchemaItem) {
+    ui.row(
+        &cui::Row {
+            wrap: true,
+            gap: 6.0,
+            align: cui::Align::Center,
+            ..Default::default()
+        },
+        |ui| {
+            for (j, f) in it.f.iter().enumerate() {
+                if j > 0 {
+                    kit::meta_text(ui, "-");
+                }
+                // NSH: the 4th box (the branch code) is wider.
+                let w = if j == 3 { 76.0 } else { 58.0 };
+                draw_field_w(ui, s, f, &it.l, Some(w));
+            }
+        },
+    );
+}
+
+/// The item's radios first, then its boxes in a wrapping row with sub-labels, then the
+/// split-date calendar — rows.tsx `body`.
+fn draw_item_body(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it: &SchemaItem) {
+    let _ = app;
+    // Radio groups: one per `grp`, before the boxes.
+    let mut groups: Vec<(String, Vec<&SchemaField>)> = Vec::new();
+    for f in it.f.iter().filter(|f| f.t == "radio") {
+        let g = f.grp.clone().unwrap_or_else(|| f.k.clone());
+        if let Some((_, v)) = groups.iter_mut().find(|(k, _)| *k == g) {
+            v.push(f);
+        } else {
+            groups.push((g, vec![f]));
+        }
+    }
+    let narrow = app.narrow();
+    for (_, fs) in &groups {
+        draw_radio_group(ui, s, narrow, fs);
+    }
+    // The boxes in paper order, wrapping; a field whose label differs from the item's gets a
+    // small sub-label (rows.tsx `sub`), except tick boxes which carry their own words.
+    let multi = it.f.len() > 1;
+    let numeric_label = |l: &str| {
+        let b = l.as_bytes();
+        let digits = if b.last().is_some_and(|c| c.is_ascii_uppercase()) {
+            &b[..b.len() - 1]
+        } else {
+            b
+        };
+        !digits.is_empty() && digits.iter().all(|c| c.is_ascii_digit())
+    };
+    ui.row(
+        &cui::Row {
+            wrap: true,
+            gap: 18.0,
+            align: cui::Align::End,
+            ..Default::default()
+        },
+        |ui| {
+            for f in it.f.iter().filter(|f| f.t != "radio" && f.t != "hidden") {
+                let w = item_cell_width(f);
+                let fixed = f.t != "chk";
+                let sub =
+                    multi && !f.l.is_empty() && f.l != it.l && !numeric_label(&f.l) && f.t != "chk";
+                ui.column(
+                    &cui::Column {
+                        gap: 4.0,
+                        width: if fixed {
+                            cui::Size::px(w)
+                        } else {
+                            cui::Size::FIT
+                        },
+                        ..Default::default()
+                    },
+                    |ui| {
+                        if sub {
+                            kit::meta_text(ui, &f.l);
+                        }
+                        draw_field_w(ui, s, f, &it.l, if fixed { Some(w) } else { None });
+                    },
+                );
+            }
+        },
+    );
+    // A date printed in split boxes gets a calendar button beside them — not when the item has a
+    // date box of its own (that box carries its calendar). rows.tsx `splitOpen`/`splitIso`.
+    let split = if !it.f.iter().any(|f| f.t == "date") {
+        schema::date_parts(&it.f)
+    } else {
+        None
+    };
+    if let Some(dp) = &split {
+        let parts = [Some(&dp.month), dp.day.as_ref(), Some(&dp.year)]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let open = s.editable() && !parts.iter().all(|f| f.c == Some(true) || s.is_shut(&f.k));
+        if open {
+            let key = format!("split-date:{id}");
+            let _g = ui.push_id(key.clone());
+            let (min, max) = split_date_range(s, dp);
+            let current = split_iso(s, dp);
+            // NSH's CalendarButton trigger: a small icon-only calendar button (fields.tsx
+            // CalendarPicker), not a labelled ghost button.
+            if kit::icon_button(ui, "calendar", Some("Pick a date")) {
+                open_date_picker(ui, &key, &current, min, max);
+            }
+            if let Some(iso) = date_picker(ui, &key) {
+                s.pick_date(dp, &iso);
             }
         }
-        "date" => draw_date(ui, s, f),
-        "text" | "money" | "pct" | "int" | "tin" | _ => draw_text(ui, s, f),
     }
-    let _ = kind;
+}
+
+/// The width one of an item's boxes gets (controls/model.ts `controlWidth`): money 230, selects
+/// 260, short ints/texts 88, pct 88; a date needs its text plus the calendar button; tick boxes
+/// fit their label.
+fn item_cell_width(f: &SchemaField) -> f32 {
+    match f.t.as_str() {
+        "chk" => 0.0,
+        "date" => 210.0,
+        t => schema::control_width(t, f.m, 320.0) as f32,
+    }
+}
+
+/// One radio group: a wrapping row of tick boxes — a column when the window is narrow or a
+/// choice's words run long (controls/RadioGroup.tsx `stacked`). A locked group with nothing
+/// ticked says why underneath.
+fn draw_radio_group(ui: &mut Ui, s: &mut FormSession, narrow: bool, fs: &[&SchemaField]) {
+    let stacked = narrow
+        || fs
+            .iter()
+            .any(|f| schema::choice_label(f).chars().count() > 24);
+    let draw = |ui: &mut Ui| {
+        for f in fs {
+            let k = f.k.clone();
+            let mut v = model::is_on(&s.value_of(&k));
+            if ui.checkbox_with(
+                schema::choice_label(f),
+                &mut v,
+                &cui::Check {
+                    disabled: s.is_shut(&k),
+                    ..Default::default()
+                },
+            ) {
+                s.pick_radio(&k);
+            }
+        }
+    };
+    if stacked {
+        ui.column(
+            &cui::Column {
+                gap: 6.0,
+                ..Default::default()
+            },
+            draw,
+        );
+    } else {
+        ui.row(
+            &cui::Row {
+                wrap: true,
+                gap: 18.0,
+                ..Default::default()
+            },
+            draw,
+        );
+    }
+    let all_shut = fs.iter().all(|f| s.is_shut(&f.k));
+    let none_on = fs.iter().all(|f| s.value_of(&f.k) != "true");
+    if all_shut
+        && none_on
+        && let Some(reason) = fs
+            .iter()
+            .map(|f| s.lock_reason(&f.k))
+            .find(|r| !r.is_empty())
+    {
+        ui.row(
+            &cui::Row {
+                gap: 4.0,
+                align: cui::Align::Center,
+                ..Default::default()
+            },
+            |ui| {
+                kit::icon(ui, "lock", 12.0);
+                kit::meta_text(ui, &reason);
+            },
+        );
+    }
+}
+
+/// One box: a tick box draws even when shut (dimmed — NSH's TickBox), a shut box reads as text,
+/// a select its list, a date its typed text plus calendar, everything else masked text.
+fn draw_field_w(
+    ui: &mut Ui,
+    s: &mut FormSession,
+    f: &SchemaField,
+    item_l: &str,
+    width: Option<f32>,
+) {
+    let k = &f.k;
+    if f.t == "chk" {
+        let mut v = model::is_on(&s.value_of(k));
+        let label = if f.l.is_empty() { item_l } else { f.l.as_str() };
+        if ui.checkbox_with(
+            label,
+            &mut v,
+            &cui::Check {
+                disabled: s.is_shut(k),
+                ..Default::default()
+            },
+        ) {
+            let edits = HashMap::from([(k.clone(), if v { "true" } else { "false" }.to_owned())]);
+            s.choose(edits);
+        }
+        return;
+    }
+    if s.is_shut(k) {
+        draw_shut(ui, s, f);
+        return;
+    }
+    match f.t.as_str() {
+        "sel" => draw_select(ui, s, f, width),
+        "date" => draw_date(ui, s, f),
+        _ => draw_text_w(ui, s, f, width),
+    }
+}
+
+/// A locked box reads as a read-only line — lock icon, label, the shown value with its unit —
+/// or the reason it is blank (controls/FieldControl.tsx `ReadBox`).
+fn draw_shut(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
+    let text = s.shown_of(&f.k);
+    if text.is_empty() {
+        let reason = s.lock_reason(&f.k);
+        if !reason.is_empty() {
+            kit::meta_text(ui, &format!("{}: {}", f.l, reason));
+        }
+        return;
+    }
+    let kind = s.field_kind(&f.k);
+    let (prefix, suffix) = match kind.as_str() {
+        "money" => ("₱", ""),
+        "pct" => ("", "%"),
+        _ => ("", ""),
+    };
+    ui.row(
+        &cui::Row {
+            gap: 6.0,
+            align: cui::Align::Center,
+            ..Default::default()
+        },
+        |ui| {
+            kit::icon(ui, "lock", 12.0);
+            if !f.l.is_empty() {
+                kit::meta_text(ui, &f.l);
+            }
+            if !prefix.is_empty() {
+                kit::meta_text(ui, prefix);
+            }
+            ui.text_with(
+                &text,
+                &cui::Text {
+                    font: cui::font::MEDIUM,
+                    size: 13.0,
+                    ..Default::default()
+                },
+            );
+            if !suffix.is_empty() {
+                kit::meta_text(ui, suffix);
+            }
+        },
+    );
 }
 
 /// A date box (controls/FieldControl.tsx `DateBox`): typed text that reads as a date, plus the
@@ -2096,43 +2454,28 @@ fn draw_date(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
     }
 }
 
-fn draw_text(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
-    draw_text_w(ui, s, f, None);
-}
-
-/// `draw_text` with an optional fixed width — the date box shares its row with the calendar
-/// button, so it takes a compact width instead of filling the item.
+/// A text-like box with masked typing; `width` fixes its size (the date box shares its row with
+/// the calendar button). A box a validation message names wears the invalid mark. NSH boxes
+/// carry no placeholder — the item's title or sub-label names them.
 fn draw_text_w(ui: &mut Ui, s: &mut FormSession, f: &SchemaField, width: Option<f32>) {
     let k = f.k.clone();
     let mut text = s.shown_of(&k);
     let prev = text.clone();
-    let label = if f.l.is_empty() {
-        k.clone()
-    } else {
-        f.l.clone()
-    };
-    let changed = match width {
-        Some(w) => {
-            if text.capacity() < 256 {
-                text.reserve(256);
-            }
-            ui.input_with(
-                &format!("fp-{k}"),
-                &mut text,
-                &cui::Input {
-                    placeholder: Some(label.as_str()),
-                    width: cui::Size::px(w),
-                    ..Default::default()
-                },
-            )
-            .changed()
-        }
-        None => ui.text_input(&format!("fp-{k}"), &mut text, &label, false),
-    };
-    if !changed {
-        return;
+    if text.capacity() < 256 {
+        text.reserve(256);
     }
-    if text == prev {
+    let changed = ui
+        .input_with(
+            &format!("fp-{k}"),
+            &mut text,
+            &cui::Input {
+                width: width.map(cui::Size::px).unwrap_or(cui::Size::FILL),
+                error: if s.field_invalid(&k) { Some(" ") } else { None },
+                ..Default::default()
+            },
+        )
+        .changed();
+    if !changed || text == prev {
         return;
     }
     s.focus(&k);
@@ -2148,44 +2491,55 @@ fn draw_text_w(ui: &mut Ui, s: &mut FormSession, f: &SchemaField, width: Option<
         s.set_shown(&k, &m.text);
         s.edit(&k, &m.text);
     } else {
-        s.set_shown(&k, &text);
-        s.edit(&k, &text);
+        // No mask: the TIN boxes take digits only up to their mask length, every other box its
+        // maxLength (NSH FieldControl/TinInput).
+        let mut t = text;
+        if matches!(
+            model::tin_kind(&k, &f.l, &kind, f.m),
+            Some(model::TinKind::Part) | Some(model::TinKind::Full)
+        ) {
+            t = mask::digits_only(&t);
+            if let Some(m) = f.m {
+                t = t.chars().take(m.max(0.0) as usize).collect();
+            }
+        } else if let Some(max) = max {
+            t = t.chars().take(max).collect();
+        }
+        if t == prev {
+            s.blur(&k);
+            return;
+        }
+        s.set_shown(&k, &t);
+        s.edit(&k, &t);
     }
     s.blur(&k);
 }
 
-fn draw_select(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
+/// A select box: "Choose…" heads the list so an empty box never reads as its first option, and
+/// lists of a dozen or more options get the searchable combobox.
+fn draw_select(ui: &mut Ui, s: &mut FormSession, f: &SchemaField, width: Option<f32>) {
     let k = f.k.clone();
     let (shown, options) = s.sel_shown(&k);
     let labels: Vec<String> = options.iter().map(|o| o.label.clone()).collect();
     let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let cur = options.iter().position(|o| o.value == shown).unwrap_or(0) as i32;
     let mut idx = cur;
-    let label = if f.l.is_empty() {
-        k.clone()
-    } else {
-        f.l.clone()
-    };
-    if ui.select(&format!("fp-{k}"), &refs, &mut idx) && (idx as usize) < options.len() {
+    if ui.select_with(
+        &format!("fp-{k}"),
+        &refs,
+        &mut idx,
+        &cui::Select {
+            searchable: options.len() > 12,
+            width: width.map(cui::Size::px).unwrap_or(cui::Size::FILL),
+            ..Default::default()
+        },
+    ) && (idx as usize) < options.len()
+    {
         let v = options[idx as usize].value.clone();
         if v != shown {
             let edits = HashMap::from([(k.clone(), v)]);
             s.choose(edits);
         }
-    }
-    let _ = label;
-}
-
-fn draw_radio(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
-    let k = f.k.clone();
-    let mut v = s.value_of(&k) == "true" || s.value_of(&k) == "1";
-    let label = if f.l.is_empty() {
-        k.clone()
-    } else {
-        f.l.clone()
-    };
-    if kit::checkbox(ui, &label, &mut v) {
-        s.pick_radio(&k);
     }
 }
 
@@ -2345,6 +2699,16 @@ fn open_row_set(table_id: &str, row: Option<usize>) {
 /// The read-only text of an open row's cell for the totals card (controls/model.ts `readText`,
 /// simplified to the session's shown text: the host already formats money, dates and choices).
 fn cell_read_text(s: &FormSession, k: &str) -> String {
+    // A select cell's totals read its option label, not the stored code.
+    if s.field_kind(k) == "sel" {
+        let v = s.value_of(k);
+        if !v.is_empty() {
+            let (_shown, options) = s.sel_shown(k);
+            if let Some(o) = options.iter().find(|o| o.value == v) {
+                return o.label.clone();
+            }
+        }
+    }
     let shown = s.shown_of(k);
     if shown.is_empty() {
         s.value_of(k)
@@ -2470,11 +2834,23 @@ fn draw_schedule(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str,
                             rg: None,
                             pool: None,
                         };
+                        // A cell is shut when the schedule is, the column is computed, or the
+                        // session locks the key — tick cells draw dimmed, the rest read as text.
+                        let cell_shut = locked || col.c == Some(true) || s.is_shut(k);
                         match col.t.as_str() {
-                            "sel" => draw_select(ui, s, &f),
-                            "chk" => {
-                                let mut v = matches!(s.value_of(k).as_str(), "true" | "1");
-                                if kit::checkbox(ui, &col.l, &mut v) {
+                            "chk" | "radio" => {
+                                // A tick cell is always a tick box; a shut one is dimmed and
+                                // ignores clicks (NSH TickBox disabled).
+                                let mut v = model::is_on(&s.value_of(k));
+                                if ui.checkbox_with(
+                                    &col.l,
+                                    &mut v,
+                                    &cui::Check {
+                                        disabled: cell_shut,
+                                        ..Default::default()
+                                    },
+                                ) && !cell_shut
+                                {
                                     let edits = HashMap::from([(
                                         k.clone(),
                                         if v { "true" } else { "false" }.to_owned(),
@@ -2482,8 +2858,19 @@ fn draw_schedule(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str,
                                     s.choose(edits);
                                 }
                             }
-                            "radio" => draw_radio(ui, s, &f),
-                            _ => draw_field(ui, s, &f, id),
+                            _ if cell_shut => {
+                                let text = cell_read_text(s, k);
+                                if text.is_empty() {
+                                    let reason = s.lock_reason(k);
+                                    if !reason.is_empty() {
+                                        kit::meta_text(ui, &reason);
+                                    }
+                                } else {
+                                    kit::meta_text(ui, &text);
+                                }
+                            }
+                            "sel" => draw_select(ui, s, &f, None),
+                            _ => draw_field_w(ui, s, &f, &it.l, None),
                         }
                     }
                 }

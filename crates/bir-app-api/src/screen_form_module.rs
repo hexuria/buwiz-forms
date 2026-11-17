@@ -807,6 +807,16 @@ fn apply_overrides(form: &mut Value, fixes: &serde_json::Map<String, Value>) {
                 object.remove("c");
             }
         }
+        // `required: true` marks a box the validator blocks on although the
+        // extractor left it optional (1707A/2552 TIN parts, 2200AN month/year);
+        // `required: false` clears a mark the extractor got wrong.
+        if let Some(required) = fix.get("required").and_then(Value::as_bool) {
+            if required {
+                target["r"] = json!(1);
+            } else if let Some(object) = target.as_object_mut() {
+                object.remove("r");
+            }
+        }
     };
     let Some(parts) = form["parts"].as_array_mut() else {
         return;

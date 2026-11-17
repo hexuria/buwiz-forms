@@ -393,6 +393,10 @@ pub struct ScreenFormFilled {
     /// Boxes an emptied number box was cleared in (the session's own rule).
     #[serde(skip)]
     pub cleared: Vec<String>,
+    /// Keys the filer may fill although the tax profile filled them (the host's
+    /// `notes_always`); the page keeps a note on each after every fill.
+    #[serde(default)]
+    pub notes_always: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
