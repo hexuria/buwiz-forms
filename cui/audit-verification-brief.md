@@ -230,3 +230,23 @@ wc -l /tmp/audit-verification-brief.md
   `gpui-component`/`gpui-agent`); run tests through the `cui` crate instead.
 - `cargo test dump_effective_schemas -- --ignored` in `cui/` regenerates
   `/tmp/effective-schemas/` (43 files).
+
+## 10. Provenance & handoff state (for the verifying agent)
+
+- **Repo:** `hexuria/buwiz-forms` on GitHub. Audit work lives on branch
+  **`feat/cui-forms-port`** (pushed; 13 commits ahead of local `master`
+  baseline `4c8b35f`). Check out that branch — `main` does NOT contain the
+  CUI port work.
+- **Local clone had no remote** originally; `origin` was added pointing at
+  the GitHub repo. Local `master` is a local-only baseline checkpoint —
+  remote default branch is `main`.
+- **Reference repo:** `betterebirforms/ebirforms` was fetched as a codeload
+  tarball (public repo; git auth was broken) and extracted to
+  `/tmp/ebirforms-main` — ephemeral, re-fetch if gone:
+  `curl -L https://codeload.github.com/betterebirforms/ebirforms/tar.gz/refs/heads/main | tar xz`
+- **Audit trail commits on the branch:** `44b340e` (round-2 findings +
+  `FORM-AUDIT.md` + `audit-validation-misses.json`), `7ffee38` + `2d48d53`
+  (this brief), plus earlier port commits back to `85304b1`.
+- **To verify:** read `cui/FORM-AUDIT.md` top-to-bottom, then work through
+  §5 recipes. Start with R-2 (1700 payment details) and I-15 (schedule
+  radios) — highest-value targets.
