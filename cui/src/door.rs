@@ -947,4 +947,23 @@ mod tests {
             );
         });
     }
+
+    /// Every form code in the bundled schema index must answer `screen_form_schema` with a payload
+    /// the app's `FormSchema` model parses — the contract the Form Library and Return screen rely on.
+    #[test]
+    fn screen_form_schema_all_parse() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            let text = std::fs::read_to_string("../app/forms/forms-schema.json").unwrap();
+            let forms: Vec<JsonValue> = serde_json::from_str(&text).unwrap();
+            assert_eq!(forms.len(), 43, "the bundled schema index lists every form");
+            for f in &forms {
+                let code = f["c"].as_str().unwrap().to_owned();
+                let v = call("screen_form_schema", vec![json!(code)])
+                    .unwrap_or_else(|e| panic!("screen_form_schema({code}): {e}"));
+                serde_json::from_value::<crate::form::schema::FormSchema>(v)
+                    .unwrap_or_else(|e| panic!("screen_form_schema({code}) does not parse: {e}"));
+            }
+        });
+    }
 }

@@ -43,7 +43,7 @@ thread_local! {
     static CLOUD_STATUS: RefCell<Option<Value>> = const { RefCell::new(None) };
     static CLOUD_BUSY: RefCell<bool> = const { RefCell::new(false) };
     static CLOUD_FAILURE: RefCell<Option<String>> = const { RefCell::new(None) };
-    static CLOUD_PENDING: RefCell<Option<(CloudJob, std::sync::mpsc::Receiver<Result<Value, String>>)>> =
+    static CLOUD_PENDING: RefCell<Option<(CloudJob, crate::bir::AsyncReply)>> =
         const { RefCell::new(None) };
     /// The once-per-run server check of a saved sign-in (openAccount's freshStarted).
     static CLOUD_FRESH: RefCell<bool> = const { RefCell::new(false) };
@@ -661,7 +661,7 @@ fn draw_identity(ui: &mut Ui, app: &mut AppState) {
 // ---- Google (Google.tsx): Gmail connect, receipt tracking, Disconnect.
 
 thread_local! {
-    static GOOGLE_PENDING: RefCell<Option<std::sync::mpsc::Receiver<Result<Value, String>>>> =
+    static GOOGLE_PENDING: RefCell<Option<crate::bir::AsyncReply>> =
         const { RefCell::new(None) };
 }
 
@@ -1157,7 +1157,7 @@ enum TransferJob {
 
 struct TransferPending {
     job: TransferJob,
-    rx: std::sync::mpsc::Receiver<Result<Value, String>>,
+    rx: crate::bir::AsyncReply,
 }
 
 thread_local! {

@@ -50,8 +50,23 @@ pub fn card_styled(
     selected: bool,
     f: impl FnOnce(&mut Ui),
 ) {
+    card_styled_tagged(ui, None, pad, gap, muted, selected, f)
+}
+
+/// `card_styled` with a stable id, so `ui.get_rect(ui.make_id(tag))` can find the card's
+/// rectangle on a later frame (the form page's scroll-to reveal).
+pub fn card_styled_tagged(
+    ui: &mut Ui,
+    tag: Option<&str>,
+    pad: f32,
+    gap: f32,
+    muted: bool,
+    selected: bool,
+    f: impl FnOnce(&mut Ui),
+) {
     ui.card(
         &Card {
+            id: tag,
             pad,
             gap,
             muted,
@@ -379,6 +394,38 @@ fn remember_rect(id: &str, rect: cui::Rect) {
     });
 }
 
+/// A floating layer (popover, sheet) covers the page: custom hit-tested widgets must not take
+/// the click. CUI's own controls are modal already; `press_hit`-based ones are not.
+thread_local! {
+    static MODAL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether a floating layer covers the page this frame.
+pub fn modal() -> bool {
+    MODAL.with(|m| m.get())
+}
+
+/// Mark whether a floating layer covers the page (call at the top of a screen's draw).
+pub fn set_modal(on: bool) {
+    MODAL.with(|m| m.set(on));
+}
+
+/// Clears the modal guard for the scope — for the floating layer's OWN custom widgets,
+/// which must still take clicks while the page behind them is suppressed.
+pub struct ModalOff(bool);
+
+impl Drop for ModalOff {
+    fn drop(&mut self) {
+        set_modal(self.0);
+    }
+}
+
+pub fn modal_off() -> ModalOff {
+    let was = modal();
+    set_modal(false);
+    ModalOff(was)
+}
+
 /// Point-in-rect for the manual hit-tests (a `PressCell` press, a strip day).
 pub fn press_hit(r: cui::Rect, x: f32, y: f32) -> bool {
     rect_hit(r, x, y)
@@ -414,7 +461,7 @@ pub fn pressable_row(ui: &mut Ui, id: &str, f: impl FnOnce(&mut Ui)) -> bool {
     let rect = ui.get_rect(wid);
     remember_rect(id, rect);
     let mouse = ui.mouse_pos();
-    ui.mouse_clicked(cui::MouseButton::Left) && rect_hit(rect, mouse.x, mouse.y)
+    !modal() && ui.mouse_clicked(cui::MouseButton::Left) && rect_hit(rect, mouse.x, mouse.y)
 }
 
 /// A `PressCell` stand-in for grid cells: a minimum height, a selected fill, a press anywhere.
@@ -451,7 +498,7 @@ pub fn press_cell(
     let rect = ui.get_rect(wid);
     remember_rect(id, rect);
     let mouse = ui.mouse_pos();
-    ui.mouse_clicked(cui::MouseButton::Left) && rect_hit(rect, mouse.x, mouse.y)
+    !modal() && ui.mouse_clicked(cui::MouseButton::Left) && rect_hit(rect, mouse.x, mouse.y)
 }
 
 /// A `ListGroup`: one card, rows inside it.

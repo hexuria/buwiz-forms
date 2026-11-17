@@ -22,6 +22,17 @@ fn default_text() -> String {
     "text".to_owned()
 }
 
+/// The door's JSON writes absent fields as explicit `null` (the TS side never sees them);
+/// `#[serde(default)]` only covers a missing key, so collections and numbers that can arrive
+/// as `null` deserialize through this to their empty/zero value instead of failing the form.
+fn null_default<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
+}
+
 /// One box of an item. Flags are 1 when set (the schema writes 1, not true).
 #[derive(Debug, Clone, Deserialize)]
 pub struct SchemaField {
@@ -41,9 +52,9 @@ pub struct SchemaField {
     /// Max length of the typed text.
     #[serde(default)]
     pub m: Option<f64>,
-    /// Listed choices of a "sel" ("03 - March": code, then label).
+    /// Listed choices of a "sel": "03 - March" strings, or {value, label} objects.
     #[serde(default)]
-    pub o: Option<Vec<String>>,
+    pub o: Option<Vec<serde_json::Value>>,
     /// Filled from the tax profile by the extractor's guess.
     #[serde(default, deserialize_with = "flex_flag")]
     pub a: Option<bool>,
@@ -63,6 +74,7 @@ pub struct SchemaField {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PoolKeys {
+    #[serde(default, deserialize_with = "null_default")]
     pub keys: Vec<String>,
 }
 
@@ -78,7 +90,7 @@ pub struct SchemaColumn {
     #[serde(default, deserialize_with = "flex_flag")]
     pub w: Option<bool>,
     #[serde(default)]
-    pub o: Option<Vec<String>>,
+    pub o: Option<Vec<serde_json::Value>>,
 }
 
 /// A hint offering another item's amount for this item's box ("Use it").
@@ -92,7 +104,9 @@ pub struct FromHint {
 /// A schedule's preprinted row captions.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RowLabels {
+    #[serde(default, deserialize_with = "null_default")]
     pub caption: String,
+    #[serde(default, deserialize_with = "null_default")]
     pub rows: Vec<String>,
 }
 
@@ -105,15 +119,15 @@ pub struct SchemaItem {
     #[serde(default)]
     pub l: String,
     /// The page of the paper form it prints on.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub p: f64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub f: Vec<SchemaField>,
     #[serde(default)]
     pub rows: Option<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub cols: Vec<SchemaColumn>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub keys: Vec<Vec<String>>,
     /// A printed item with no box: what the paper prints there.
     #[serde(default)]
@@ -142,7 +156,7 @@ pub struct SchemaPart {
     /// "Part I · Background Information", or "Page 1" for the untitled first part.
     #[serde(default)]
     pub n: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub items: Vec<SchemaItem>,
 }
 
@@ -169,7 +183,7 @@ pub struct FormSchema {
     /// Layout quality 0..1 (under 0.8 the page says "Draft layout").
     #[serde(default)]
     pub q: f64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub parts: Vec<SchemaPart>,
 }
 

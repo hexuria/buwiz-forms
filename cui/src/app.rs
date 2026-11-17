@@ -2153,6 +2153,22 @@ pub fn run() -> i32 {
     if state.booted && !state.cloud_locked {
         crate::seed::run(&mut state);
     }
+    // Dev deep link: BIR_OPEN_SAMPLE=<form code> opens that form's sample on launch (form-port audit).
+    if let Ok(code) = std::env::var("BIR_OPEN_SAMPLE")
+        && !code.is_empty()
+    {
+        state.open_return(crate::state::OpenReturnOptions {
+            tin: "00012345300000".to_owned(),
+            code,
+            year: 2026,
+            period: 0,
+            return_key: None,
+            mode: Some("sample".to_owned()),
+            snapshot_id: None,
+            new_key: None,
+            new_key_from: None,
+        });
+    }
 
     // Session change: every screen's own state back to a first visit's.
     state.on_session_change(std::rc::Rc::new(std::cell::RefCell::new(|| {
@@ -2191,10 +2207,21 @@ pub fn run() -> i32 {
                 crate::theme::ThemePreference::System => {}
             }
             crate::ui::kit::set_frame_palette(crate::ui::kit::palette(&mut ui));
+            // Modal guard for custom hit tests: raised for the whole frame while a screen's
+            // floating layer is open (the form page's sections popover), so chrome widgets
+            // drawn before the page cannot fire under it either.
+            crate::ui::kit::set_modal(
+                state.view() == ViewName::Form && screens::form::sections_popover_open(),
+            );
             shortcuts(&mut ui, &mut state);
             draw_auth_or_shell(&mut ui, &mut state, &auth);
             if state.about_open {
                 desktop_host::draw_about(&mut ui, &mut state);
+            }
+            // CUI draws on demand: keep frames coming while spawned host calls await collection,
+            // or their replies would sit unread until the next input event.
+            if crate::bir::async_in_flight() > 0 {
+                ui.request_redraw();
             }
         }
         if state.quit_requested {

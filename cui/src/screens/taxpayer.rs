@@ -1346,7 +1346,7 @@ enum InboxJob {
 
 struct InboxPending {
     job: InboxJob,
-    rx: std::sync::mpsc::Receiver<Result<Value, String>>,
+    rx: crate::bir::AsyncReply,
 }
 
 thread_local! {

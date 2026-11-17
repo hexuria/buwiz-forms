@@ -8,7 +8,6 @@
 //! the frame drains into `AppState` (toasts, cache bumps, retargets).
 
 use std::collections::{HashMap, HashSet};
-use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
@@ -505,13 +504,13 @@ struct PendingOpen {
     token: u64,
     target: FormTarget,
     keep: bool,
-    rx: Receiver<Result<Value, String>>,
+    rx: crate::bir::AsyncReply,
 }
 
 struct PendingPeriod {
     asked: String,
     token: u64,
-    rx: Receiver<Result<Value, String>>,
+    rx: crate::bir::AsyncReply,
 }
 
 // ---------------------------------------------------------------- the session
@@ -527,9 +526,9 @@ pub struct FormSession {
     toast_seq: u64,
     timers: Vec<(Instant, Timer)>,
     pending_open: Option<PendingOpen>,
-    pending_validate: Option<(u64, u64, Receiver<Result<Value, String>>)>,
+    pending_validate: Option<(u64, u64, crate::bir::AsyncReply)>,
     pending_period: Option<PendingPeriod>,
-    pending_placeholder: Option<(u64, u64, Receiver<Result<Value, String>>)>,
+    pending_placeholder: Option<(u64, u64, crate::bir::AsyncReply)>,
     reopening: bool,
     period_waiting: bool,
     period_then: Option<PeriodThen>,
@@ -1350,11 +1349,7 @@ impl FormSession {
         }
         let listed: Vec<(String, String)> =
             f.o.as_ref()
-                .map(|os| {
-                    os.iter()
-                        .filter_map(|o| schema::option_of(&Value::String(o.clone())))
-                        .collect()
-                })
+                .map(|os| os.iter().filter_map(schema::option_of).collect())
                 .unwrap_or_default();
         if listed.is_empty() {
             return Some(v.to_owned());
@@ -2140,7 +2135,7 @@ impl FormSession {
             if let Some(f) = self.field_of.get(k) {
                 if let Some(os) = &f.o {
                     for o in os {
-                        if let Some((value, label)) = schema::option_of(&Value::String(o.clone())) {
+                        if let Some((value, label)) = schema::option_of(o) {
                             listed.push(ScreenFormOption {
                                 value,
                                 label,
@@ -5017,23 +5012,12 @@ impl FormSession {
     pub fn schema_part_count(&self) -> usize {
         self.schema.as_ref().map(|s| s.parts.len()).unwrap_or(0)
     }
-    /// A part's title (its first item's label or the part label).
+    /// A part's name as NSH's `partName`: "Return details" for an untitled "Page 1", else `p.n`.
     pub fn part_title(&self, pi: usize) -> String {
         self.schema
             .as_ref()
             .and_then(|s| s.parts.get(pi))
-            .map(|p| {
-                p.items
-                    .first()
-                    .map(|i| {
-                        if !i.no.is_empty() {
-                            format!("Item {}", i.no)
-                        } else {
-                            i.l.clone()
-                        }
-                    })
-                    .unwrap_or_else(|| format!("Part {}", pi + 1))
-            })
+            .map(|p| schema::part_name(p, pi))
             .unwrap_or_else(|| format!("Part {}", pi + 1))
     }
     pub fn part_item_count(&self, pi: usize) -> usize {

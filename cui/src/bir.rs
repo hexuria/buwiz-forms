@@ -8,10 +8,60 @@
 //! Everything the engine owns is reached through the same channel: `desktop::poll`, the print preview's
 //! state and the agent command queue live on the engine thread (their mailboxes are thread-local there).
 
+use std::cell::Cell;
 use std::sync::OnceLock;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
 use serde_json::Value;
+
+/// Async host calls the UI has not yet collected. CUI only draws when asked, so the frame loop
+/// requests redraws while this is non-zero — otherwise a reply that lands while the window is idle
+/// would sit unread until the next input event.
+static ASYNC_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+/// How many spawned async calls still await collection on the UI thread.
+pub fn async_in_flight() -> usize {
+    ASYNC_IN_FLIGHT.load(Ordering::SeqCst)
+}
+
+/// The receiving end of [`call_async_spawn`]: counts the call as in flight until its answer is
+/// collected (or the receiver is dropped), so the frame loop knows to keep drawing.
+pub struct AsyncReply {
+    rx: Receiver<Result<Value, String>>,
+    live: Cell<bool>,
+}
+
+impl AsyncReply {
+    /// Same contract as `Receiver::try_recv`, plus releasing the in-flight count once the call
+    /// resolves or the channel dies.
+    pub fn try_recv(&self) -> Result<Result<Value, String>, TryRecvError> {
+        let r = self.rx.try_recv();
+        match r {
+            Ok(_) | Err(TryRecvError::Disconnected) => self.release(),
+            Err(TryRecvError::Empty) => {}
+        }
+        r
+    }
+
+    fn release(&self) {
+        if self.live.replace(false) {
+            ASYNC_IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+        }
+    }
+}
+
+impl std::fmt::Debug for AsyncReply {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AsyncReply").finish_non_exhaustive()
+    }
+}
+
+impl Drop for AsyncReply {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
 
 /// One request to the engine thread.
 enum Request {
@@ -151,7 +201,7 @@ pub fn call_async(name: &str, args: Vec<Value>) -> Result<Value, String> {
 
 /// Fire an asynchronous host function without waiting: the answer arrives on `reply` whenever the
 /// engine finishes. Several may be in flight at once.
-pub fn call_async_spawn(name: &str, args: Vec<Value>) -> Receiver<Result<Value, String>> {
+pub fn call_async_spawn(name: &str, args: Vec<Value>) -> AsyncReply {
     let (tx, rx) = mpsc::channel();
     engine()
         .send(Request::CallAsync {
@@ -160,7 +210,11 @@ pub fn call_async_spawn(name: &str, args: Vec<Value>) -> Receiver<Result<Value, 
             reply: tx,
         })
         .expect("the engine thread is alive");
-    rx
+    ASYNC_IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+    AsyncReply {
+        rx,
+        live: Cell::new(true),
+    }
 }
 
 /// Whether `name` is an async host function (needs `call_async`, not `call`).

@@ -115,7 +115,7 @@ pub struct AuthState {
     /// A sign-in/sign-up flow in flight: the host call that will answer (polled in tick).
     pending_flow: Option<PendingFlow>,
     /// A mac_login reset in flight (the OS prompt runs off the engine thread).
-    pub pending_mac: Option<std::sync::mpsc::Receiver<Result<Value, String>>>,
+    pub pending_mac: Option<crate::bir::AsyncReply>,
     // sign-in
     pub tin: String,
     pub method_totp: bool,
@@ -147,13 +147,9 @@ pub struct CellState {
 #[derive(Debug)]
 enum PendingFlow {
     /// cloud_account_begin_sign_in/up: the answer carries the user code and verification URI.
-    Begin {
-        rx: std::sync::mpsc::Receiver<Result<Value, String>>,
-    },
+    Begin { rx: crate::bir::AsyncReply },
     /// cloud_account_finish_sign_in: the approval arrived.
-    Finish {
-        rx: std::sync::mpsc::Receiver<Result<Value, String>>,
-    },
+    Finish { rx: crate::bir::AsyncReply },
 }
 
 pub type SharedAuth = Rc<RefCell<AuthState>>;

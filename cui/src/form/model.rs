@@ -25,7 +25,7 @@ pub fn option_of(o: &serde_json::Value) -> Option<ScreenFormOption> {
 
 /// A sel box's listed choices: the host's win, else the schema's own (`listedOptions`).
 pub fn listed_options(
-    field_o: &Option<Vec<String>>,
+    field_o: &Option<Vec<serde_json::Value>>,
     host: &[ScreenFormOption],
 ) -> Vec<ScreenFormOption> {
     if !host.is_empty() {
@@ -33,11 +33,7 @@ pub fn listed_options(
     }
     field_o
         .as_ref()
-        .map(|os| {
-            os.iter()
-                .filter_map(|o| option_of(&serde_json::Value::String(o.clone())))
-                .collect()
-        })
+        .map(|os| os.iter().filter_map(|o| option_of(o)).collect())
         .unwrap_or_default()
 }
 
@@ -150,7 +146,7 @@ pub fn mdy(text: &str) -> String {
 pub fn read_text(
     t: &str,
     w: Option<bool>,
-    o: &Option<Vec<String>>,
+    o: &Option<Vec<serde_json::Value>>,
     value: &str,
     host: &[ScreenFormOption],
     zero_when_blank: bool,
@@ -271,12 +267,9 @@ mod tests {
     #[test]
     fn listed_options_host_wins() {
         let host = vec![opt("x", "X")];
+        assert_eq!(listed_options(&Some(vec![json!("01 - A")]), &host), host);
         assert_eq!(
-            listed_options(&Some(vec!["01 - A".to_owned()]), &host),
-            host
-        );
-        assert_eq!(
-            listed_options(&Some(vec!["01 - A".to_owned(), "\"x\"".to_owned()]), &[]),
+            listed_options(&Some(vec![json!("01 - A"), json!("\"x\"")]), &[]),
             vec![opt("01", "01 - A")]
         );
         assert!(listed_options(&None, &[]).is_empty());
@@ -393,7 +386,7 @@ mod tests {
             read_text("date", None, &None, "12/01/2020", &[], false),
             "Dec 1, 2020"
         );
-        let o = Some(vec!["01 - January".to_owned()]);
+        let o = Some(vec![json!("01 - January")]);
         assert_eq!(read_text("sel", None, &o, "01", &[], false), "01 - January");
         assert_eq!(read_text("sel", None, &o, "", &[], false), "");
     }
