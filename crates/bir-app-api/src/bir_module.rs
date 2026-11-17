@@ -2321,10 +2321,17 @@ fn restore_staged_database(
         // finishing is an error: the import stops here, before the copy and
         // before the install deletes any -wal or -shm, with the live database
         // as it was.
-        db.checkpoint().map_err(|error| {
-            HostError::new(format!(
+        db.checkpoint().map_err(|error| match error {
+            // The one a person can act on, in words without the log's detail.
+            bir_core::db::DbError::InUseElsewhere(detail) => {
+                tracing::warn!("database import stopped: checkpoint held back ({detail})");
+                HostError::new(
+                    "The database is in use elsewhere (another program has it open, or this app is still reading it), so nothing was imported. Wait a moment, close any other program that uses it, and try again. The current database was left as it is.",
+                )
+            }
+            error => HostError::new(format!(
                 "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
-            ))
+            )),
         })?;
         #[cfg(test)]
         AFTER_RESTORE_CHECKPOINT.with(|hook| hook.borrow_mut().take().map(|hook| hook()));
@@ -4664,6 +4671,17 @@ mod tests {
                         error.message()
                     );
                     assert!(error.message().contains("nothing was imported"));
+                    // Words for a person: no error kind, no page counts.
+                    assert!(
+                        !error.message().contains("Other error"),
+                        "{}",
+                        error.message()
+                    );
+                    assert!(
+                        !error.message().contains("log pages"),
+                        "{}",
+                        error.message()
+                    );
                 }
             }
             assert_eq!(files(), before, "no file made, none deleted");

@@ -361,9 +361,8 @@ fn checkpoint_connection(conn: &Connection) -> Result<(), DbError> {
             Err(error) => break Err(DbError::Sqlite(error)),
         };
         if std::time::Instant::now() >= deadline {
-            break Err(DbError::Other(format!(
-                "The database is in use elsewhere, so its recent changes could not be \
-                 written into the database file ({unfinished} after {} s).",
+            break Err(DbError::InUseElsewhere(format!(
+                "{unfinished} after {} s",
                 CHECKPOINT_PATIENCE.as_secs()
             )));
         }
@@ -494,6 +493,14 @@ pub enum DbError {
         .0.display()
     )]
     NotATestDatabase(PathBuf),
+    /// A WAL checkpoint another connection kept from finishing: the main
+    /// file alone does not hold every commit. The field is the detail for a
+    /// log (how far it got); a page says its own sentence for this case.
+    #[error(
+        "The database is in use elsewhere, so its recent changes could not be written into the \
+         database file ({0})."
+    )]
+    InUseElsewhere(String),
     #[error("Keychain CLI error: {0}")]
     KeychainCli(String),
     #[error("Zip error: {0}")]

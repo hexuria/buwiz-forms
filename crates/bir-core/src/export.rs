@@ -267,7 +267,8 @@ fn write_plaintext_copy(db: &Database, temp_db_path: &Path) -> Result<(), DbErro
     let exported = (|| -> Result<(), DbError> {
         let mut stmt = db.conn.prepare("SELECT sqlcipher_export('plaintext');")?;
         let _ = stmt.query([])?.next()?;
-        Ok(())
+        drop(stmt);
+        copy_schema_version(&db.conn, "main", "plaintext")
     })();
     // Detach on every way out: left attached to the live connection,
     // "plaintext" would make every later export fail until a restart. The
@@ -275,6 +276,22 @@ fn write_plaintext_copy(db: &Database, temp_db_path: &Path) -> Result<(), DbErro
     let detached = db.conn.execute("DETACH DATABASE plaintext;", []);
     exported?;
     detached?;
+    Ok(())
+}
+
+/// Give the attached database `to` the `user_version` of `from`.
+/// `sqlcipher_export` copies the schema and the rows but not the version, and
+/// a database that says 0 is migrated again from the start at its next open
+/// (see `version_by_shape` in `db/migrations.rs`).
+#[cfg(feature = "sqlcipher")]
+pub(crate) fn copy_schema_version(
+    conn: &rusqlite::Connection,
+    from: &str,
+    to: &str,
+) -> Result<(), DbError> {
+    let version: i32 =
+        conn.query_row(&format!("PRAGMA {from}.user_version"), [], |row| row.get(0))?;
+    conn.execute_batch(&format!("PRAGMA {to}.user_version = {version};"))?;
     Ok(())
 }
 
@@ -344,6 +361,7 @@ fn write_plaintext_copy_of_existing(
         connection.prepare("SELECT sqlcipher_export('main', 'encrypted_source');")?;
     let _ = statement.query([])?.next()?;
     drop(statement);
+    copy_schema_version(&connection, "encrypted_source", "main")?;
     connection.execute("DETACH DATABASE encrypted_source;", [])?;
     drop(connection);
     Ok(())

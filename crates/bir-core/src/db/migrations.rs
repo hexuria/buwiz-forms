@@ -26,10 +26,16 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
             .unwrap_or(false);
 
         if has_profiles {
-            info!("Legacy database detected. Setting version to 1 to run incremental migrations.");
-            // Set to v1 (not CURRENT) so v2+ migrations still execute sequentially.
-            // v1 uses CREATE TABLE IF NOT EXISTS, so re-running it is safe.
-            version = 1;
+            // A database with the app's tables and no version: an unversioned
+            // legacy file, or a copy that lost its version on the way (see
+            // `version_by_shape`). Start from the newest migration its
+            // schema shows, never from the top: v1 for a legacy file, whose
+            // v2+ migrations then run in order (v1 is CREATE TABLE IF NOT
+            // EXISTS, so running it again is safe).
+            version = version_by_shape(conn)?;
+            info!(
+                "Database without a schema version detected. Its schema shows v{version}; migrating from there."
+            );
             conn.pragma_update(None, "user_version", version)?;
         }
     }
@@ -490,6 +496,63 @@ pub(crate) fn migrate_database(conn: &Connection) -> Result<(), DbError> {
     conn.execute_batch(SETUPS_TABLE)?;
 
     Ok(())
+}
+
+/// What the migrations that make a table or a column of their own leave in
+/// the schema, newest first: `(version, table, column)`.
+///
+/// Every mark is made by its migration's own step and by nothing an older
+/// build runs, and the steps run in order, so a mark's presence says every
+/// migration up to its version ran. A migration with no table or column of
+/// its own (a data step) has no mark here: 2 to 6, 8, 9 and 11 to 17 have
+/// none, so a copy that lost its version there reads as the mark below and
+/// those steps run again, as they all did before.
+const SHAPE_MARKS: &[(i32, &str, Option<&str>)] = &[
+    (24, "setups", None),
+    (23, "year_facts", None),
+    (22, "taxpayers", Some("pin_hash")),
+    (21, "legacy_filed_returns", None),
+    (20, "taxpayers", None),
+    (19, "amendment_snapshots", None),
+    (18, "inbox_oauth_tokens", None),
+    (10, "profile_calendar_links", None),
+    (7, "per_year_forms", None),
+];
+
+/// The schema version of a database that has the app's tables and
+/// `user_version` 0, read from its schema.
+///
+/// SQLCipher's `sqlcipher_export` copies the schema and the rows but not
+/// `user_version`, so a database the encrypted build restored from a backup,
+/// and the database inside every backup archive it exported, says 0 whatever
+/// its schema is. Read as "legacy, version 1", such a copy had every
+/// migration run over it again, and the one-time data steps (the v8 and v9
+/// per-year forms backfills among them) replaced what the person had set
+/// since. The export and the restore now carry the version across
+/// (`export.rs`, `import.rs`); this is for the copies made before that.
+///
+/// The answer is the newest of [`SHAPE_MARKS`] the schema has, or 1 when it
+/// has none (an unversioned legacy file). It is never above the version the
+/// database was at: a migration without a mark may run again, as all of them
+/// did before; none is skipped.
+fn version_by_shape(conn: &Connection) -> Result<i32, DbError> {
+    for (version, table, column) in SHAPE_MARKS {
+        let there = match column {
+            None => table_exists(conn, table)?,
+            Some(column) => conn
+                .query_row(
+                    "SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2",
+                    [table, column],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some(),
+        };
+        if there {
+            return Ok(*version);
+        }
+    }
+    Ok(1)
 }
 
 /// v24: the `setups` table.
@@ -1898,6 +1961,156 @@ mod tests {
     /// Helper: opens an unencrypted in-memory SQLite connection for testing.
     fn test_conn() -> Connection {
         Connection::open_in_memory().unwrap()
+    }
+
+    /// A current database reads as the current version by its schema alone:
+    /// a migration that adds a table or a column needs its line in
+    /// `SHAPE_MARKS` (one that only moves data must be safe to run twice, and
+    /// then this expects the newest mark instead).
+    #[test]
+    fn the_schema_of_a_current_database_reads_as_the_current_version() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+        assert_eq!(version_by_shape(&conn).unwrap(), CURRENT_MIGRATION_VERSION);
+        let versions: Vec<i32> = SHAPE_MARKS.iter().map(|mark| mark.0).collect();
+        assert!(
+            versions.windows(2).all(|pair| pair[0] > pair[1]),
+            "newest first"
+        );
+        assert!(
+            versions
+                .iter()
+                .all(|v| (2..=CURRENT_MIGRATION_VERSION).contains(v))
+        );
+    }
+
+    /// No mark says 1 (the legacy file); then, each mark added in turn, the
+    /// newest one is the version.
+    #[test]
+    fn the_newest_mark_in_a_schema_is_its_version() {
+        let conn = test_conn();
+        conn.execute_batch(
+            "CREATE TABLE profiles (id INTEGER PRIMARY KEY, tin TEXT, data_json TEXT);",
+        )
+        .unwrap();
+        assert_eq!(version_by_shape(&conn).unwrap(), 1);
+        for (expected, sql) in [
+            (7, "CREATE TABLE per_year_forms (id INTEGER PRIMARY KEY);"),
+            (
+                10,
+                "CREATE TABLE profile_calendar_links (id INTEGER PRIMARY KEY);",
+            ),
+            (
+                18,
+                "CREATE TABLE inbox_oauth_tokens (email TEXT PRIMARY KEY);",
+            ),
+            (
+                19,
+                "CREATE TABLE amendment_snapshots (id INTEGER PRIMARY KEY);",
+            ),
+            (20, "CREATE TABLE taxpayers (tin_root TEXT PRIMARY KEY);"),
+            (
+                21,
+                "CREATE TABLE legacy_filed_returns (id INTEGER PRIMARY KEY);",
+            ),
+            (22, "ALTER TABLE taxpayers ADD COLUMN pin_hash TEXT;"),
+            (23, "CREATE TABLE year_facts (tin TEXT);"),
+            (24, "CREATE TABLE setups (id INTEGER PRIMARY KEY);"),
+        ] {
+            conn.execute_batch(sql).unwrap();
+            assert_eq!(version_by_shape(&conn).unwrap(), expected, "{sql}");
+        }
+    }
+
+    /// A copy of a current database that lost its `user_version` (what
+    /// `sqlcipher_export` leaves: every restore and every backup archive of
+    /// the encrypted build) is not migrated again from the start: the forms a
+    /// person set for a year stay as they set them. Before, the v8 and v9
+    /// backfills replaced them with generated rows.
+    #[test]
+    fn a_copy_that_lost_its_version_keeps_what_the_person_set() {
+        let conn = test_conn();
+        migrate_database(&conn).unwrap();
+
+        let profile_json = serde_json::json!({
+            "id": 1,
+            "full_name": "Juana Santos",
+            "tin": { "segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000" },
+            "rdo_code": "039",
+            "line_of_business": "Consulting",
+            "registered_address": "QC",
+            "zip_code": "1100",
+            "phone": "09156837000",
+            "email": "test@example.com",
+            "default_form_type": "2551Q",
+            "taxpayer_type": "Individual",
+            "is_vat_registered": false,
+            "compliance_source_mode": "CorVersioned",
+            "profile_versions": [
+                {
+                    "id": "v1",
+                    "label": "Version 1",
+                    "status": "Confirmed",
+                    "source": "ManualCor",
+                    "effective_from": "2026-01-01",
+                    "effective_until": null,
+                    "cor": {},
+                    "registered_tax_types": ["IncomeTax", "PercentageTax"],
+                    "taxpayer_type": "Individual",
+                    "is_vat_registered": false,
+                    "obligation_overrides": []
+                }
+            ]
+        })
+        .to_string();
+        conn.execute(
+            "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+            rusqlite::params!["000-123-453-00000", profile_json],
+        )
+        .unwrap();
+        // What the person set for 2026: one form on, one generated form off.
+        conn.execute_batch(
+            "INSERT INTO per_year_forms (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+             VALUES ('00012345300000', 2026, '1701', 'annual', 1, 'manual', 0, 'Added by hand'),
+                    ('00012345300000', 2026, '2551Q', 'quarterly', 0, 'manual', 0, 'Turned off by hand');",
+        )
+        .unwrap();
+        // One open as a current database, so what follows is only the lost version.
+        migrate_database(&conn).unwrap();
+        let picture = |conn: &Connection| -> Vec<(i64, String, i64, String, Option<String>)> {
+            conn.prepare(
+                "SELECT id, form_code, active, source, reason FROM per_year_forms ORDER BY id",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+        };
+        let profile = |conn: &Connection| -> String {
+            conn.query_row("SELECT data_json FROM profiles", [], |row| row.get(0))
+                .unwrap()
+        };
+        let (forms_before, profile_before) = (picture(&conn), profile(&conn));
+        assert_eq!(forms_before.len(), 2);
+
+        conn.pragma_update(None, "user_version", 0i32).unwrap();
+        migrate_database(&conn).unwrap();
+
+        let version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, CURRENT_MIGRATION_VERSION);
+        assert_eq!(picture(&conn), forms_before, "the forms set for the year");
+        assert_eq!(profile(&conn), profile_before, "the profile as stored");
     }
 
     #[test]

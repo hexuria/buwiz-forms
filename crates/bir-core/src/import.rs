@@ -586,6 +586,7 @@ fn install_staged_database(temp_db_path: &Path, out_db_path: &Path) -> Result<()
     let mut stmt = conn.prepare("SELECT sqlcipher_export('encrypted');")?;
     let _ = stmt.query([])?.next()?;
     drop(stmt);
+    crate::export::copy_schema_version(&conn, "main", "encrypted")?;
     conn.execute("DETACH DATABASE encrypted;", [])?;
 
     // Explicitly close the connection to ensure all data is flushed
@@ -1833,6 +1834,144 @@ mod tests {
             db.get_setting("kept").unwrap(),
             None,
             "the old data is gone"
+        );
+    }
+
+    /// The schema version a database file says, read without opening it as
+    /// the app does (no migration).
+    fn stored_schema_version(path: &Path) -> i32 {
+        Database::open_existing_read_only(path)
+            .unwrap()
+            .conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap()
+    }
+
+    /// The database in a backup archive, and the database a restore installs,
+    /// say the schema version of the database they were made from. (The
+    /// SQLCipher build's `sqlcipher_export` does not copy it: both said 0, and
+    /// the next open ran every migration again over the person's data.)
+    #[test]
+    fn a_backup_and_a_restore_keep_the_schema_version() {
+        let current_version = crate::db::current_schema_version().unwrap();
+        assert!(current_version > 1);
+
+        let scratch = tempdir().unwrap();
+        let exported = scratch.path().join("exported.db");
+        fs::write(&exported, good_database_bytes("versioned")).unwrap();
+        let in_archive: i32 = rusqlite::Connection::open(&exported)
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(in_archive, current_version, "the archive's database");
+
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        let archive = scratch.path().join("backup.zip");
+        write_database_archive(&archive, &fs::read(&exported).unwrap());
+        extract_database_zip(&archive, &current).unwrap();
+        assert_eq!(
+            stored_schema_version(&current),
+            current_version,
+            "the restored database, before anything opens it"
+        );
+
+        // The read-only export of a database nobody has open.
+        let read_only = scratch.path().join("read-only.zip");
+        crate::export::export_existing_database_zip(&current, &read_only).unwrap();
+        let mut zip = ZipArchive::new(fs::File::open(&read_only).unwrap()).unwrap();
+        let mut bytes = Vec::new();
+        zip.by_name("bir_data.db")
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        let out = scratch.path().join("read-only.db");
+        fs::write(&out, bytes).unwrap();
+        let read_only_version: i32 = rusqlite::Connection::open(&out)
+            .unwrap()
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(read_only_version, current_version, "the read-only export");
+    }
+
+    /// A backup archive an older encrypted build exported says version 0
+    /// whatever its schema is. Restored and opened, it is not migrated again
+    /// from the start: the forms the person set for a year are as they set
+    /// them (the v8 and v9 backfills used to replace them).
+    #[test]
+    fn a_restored_backup_that_says_version_zero_keeps_what_the_person_set() {
+        let scratch = tempdir().unwrap();
+        let old_export = scratch.path().join("old-export.db");
+        fs::write(&old_export, good_database_bytes("old export")).unwrap();
+        {
+            let conn = rusqlite::Connection::open(&old_export).unwrap();
+            let profile = serde_json::json!({
+                "id": 1,
+                "full_name": "Juana Santos",
+                "tin": { "segment1": "000", "segment2": "123", "segment3": "453", "branch": "00000" },
+                "rdo_code": "039",
+                "line_of_business": "Consulting",
+                "registered_address": "QC",
+                "zip_code": "1100",
+                "phone": "09156837000",
+                "email": "test@example.com",
+                "default_form_type": "2551Q",
+                "taxpayer_type": "Individual",
+                "is_vat_registered": false,
+                "compliance_source_mode": "CorVersioned",
+                "profile_versions": [{
+                    "id": "v1",
+                    "label": "Version 1",
+                    "status": "Confirmed",
+                    "source": "ManualCor",
+                    "effective_from": "2026-01-01",
+                    "effective_until": null,
+                    "cor": {},
+                    "registered_tax_types": ["IncomeTax", "PercentageTax"],
+                    "taxpayer_type": "Individual",
+                    "is_vat_registered": false,
+                    "obligation_overrides": []
+                }]
+            })
+            .to_string();
+            conn.execute(
+                "INSERT INTO profiles (tin, data_json) VALUES (?1, ?2)",
+                rusqlite::params!["000-123-453-00000", profile],
+            )
+            .unwrap();
+            conn.execute_batch(
+                "INSERT INTO per_year_forms (tin, taxable_year, form_code, frequency, active, source, custom, reason)
+                 VALUES ('00012345300000', 2026, '2551Q', 'quarterly', 0, 'manual', 0, 'Turned off by hand');
+                 PRAGMA user_version = 0;",
+            )
+            .unwrap();
+        }
+        let archive = scratch.path().join("backup.zip");
+        write_database_archive(&archive, &fs::read(&old_export).unwrap());
+
+        let dir = tempdir().unwrap();
+        let current = current_database(dir.path());
+        extract_database_zip(&archive, &current).unwrap();
+        assert_eq!(stored_schema_version(&current), 0, "as the archive said");
+
+        let db = Database::open(&current).unwrap();
+        let forms: Vec<(String, i64, String)> = db
+            .conn
+            .prepare("SELECT form_code, active, source FROM per_year_forms ORDER BY id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            forms,
+            [("2551Q".to_string(), 0, "manual".to_string())],
+            "the form turned off by hand is still off, and nothing was generated"
+        );
+        drop(db);
+        assert_eq!(
+            stored_schema_version(&current),
+            crate::db::current_schema_version().unwrap()
         );
     }
 
