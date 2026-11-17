@@ -2,22 +2,54 @@
 
 ## Use the migration
 
-On Windows, the Import Data screen looks for the standard `C:\eBIRForms`
-installation (including the current system drive) and offers **Scan**. On
-Windows, macOS, and Linux, use **Choose folder…** to select the installation
-root, `profile\`, or `IAF_RDO_Copy\` folder. If the old Windows installation is
-not available on your Mac or Linux machine, copy the `profile/` and
-`IAF_RDO_Copy/` folders from its `C:\eBIRForms\` directory to removable storage
-or another transfer location, then choose the copied root or either copied
-folder.
+In the eBIRForms app (the NSH desktop app), open **Settings > Import / Export**.
+Under **Import data** is **Import from BIR eBIRForms**:
+
+- **Choose folder…** opens the computer's own folder dialog. Pick the old
+  program's installation folder (on Windows normally `C:\eBIRForms`), or its
+  `profile\` or `IAF_RDO_Copy\` folder. This works on Windows, macOS and
+  Linux. If the old Windows installation is not on this computer, copy the
+  `profile/`, `IAF_RDO_Copy/` (and, if you like, `savefile/`) folders from
+  its `C:\eBIRForms\` directory to removable storage or another transfer
+  location, then choose the copied root or either copied folder.
+- On Windows, when the standard folder exists (`C:\eBIRForms`, also on the
+  current system drive), it is listed as **Found on this computer** with its
+  path and a **Scan** button.
 
 Scanning reads profile XML and filed Final Copies without changing, moving, or
-deleting any source files. Review the summary, then select **Migrate**. Taxpayer
-profiles are created or filled only where the corresponding saved field is
-empty; values already present in a profile are preserved. Filed returns are
-stored as opaque historical records, including their original bytes. They do
-not become drafts or submissions and are never sent to BIR. `savefile/` holds
-plain drafts, so those files are counted in the preview but are not migrated.
+deleting any source files. The card then shows a review: how many taxpayers
+and filed returns were found, how many saved drafts (`savefile/`) were counted
+but will not be imported, and every file that was not read, with its name and
+the reason. A folder that is not an eBIRForms folder, or one with no taxpayer
+profile and no filed return in it, says so instead, and nothing can be
+imported from it.
+
+Select **Import** to bring in exactly what was reviewed, or **Cancel** to drop
+it. If the folder (or the open database) changed after the scan, the import is
+refused and asks for a new scan. Taxpayer profiles are created or filled only
+where the corresponding saved field is empty; values already present in a
+profile are preserved. Filed returns are stored as opaque historical records,
+including their original bytes. They do not become drafts or submissions and
+are never sent to BIR. After the import the card shows what happened
+(taxpayers added, filled in, already there; filed returns added, already
+there; files not read) and a short message confirms it. Importing the same folder
+again adds nothing new.
+
+Where the returns show: open **Filings**. Under the board (or, on a narrow
+window, under the list on the **All** tab) the group **Filed in BIR eBIRForms**
+lists the returns imported for the taxpayer you have open, across its branches,
+newest period first: the form, the period, "Amended (v2)" for an amendment,
+"E-mailed copy" for the copy that was e-mailed to BIR, and "Imported <date>".
+They are records only: nothing in the group opens, edits, queues or sends a
+return. The group is not drawn when the taxpayer has none, and it steps aside
+while a search or a filter is on, since those speak of this app's own returns.
+The host function is `list_legacy_filed_returns(tin)` (one branch's TIN; the
+answer holds no file bytes and no field values).
+
+The page never gives the host a path. The host functions are
+`legacy_standard_folders`, `legacy_scan_folder` (the host's folder dialog),
+`legacy_scan_standard(index)`, `legacy_import(scan)` and
+`legacy_scan_cancel` in `crates/bir-app-api/src/legacy_import_module.rs`.
 
 The importer recognizes the `profile/`, `IAF_RDO_Copy/`, and `savefile/`
 directories case-insensitively. Other installation folders, including

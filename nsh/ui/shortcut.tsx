@@ -1,11 +1,13 @@
 // ShortcutRecorder: a box that records the keys a person presses, as macOS System Settings does. NSH has no raw key-down event in TSX
 // (an Input's onKeyPress gives only the key, no modifiers), so while the box is recording it binds every chord a person could mean
-// with nsh/keymap (each subset of ctrl, alt, shift and cmd with a to z, 0 to 9 and f1 to f12, plus escape, backspace and delete; tab only
-// to end the recording as the focus moves) and takes the one that fires. One keymap.bind with a record sends the platform its table
-// once; the keystrokes the platform keeps (Cmd+Q ...) are found once by halving (chords.ts bindAvailable) and left out, so they still do
-// what the system does. Everything is unbound when recording ends, and when the part goes away.
+// with nsh/keymap (each subset of ctrl, alt, shift and cmd with a to z, 0 to 9, f1 to f12, the space bar, the arrows, home, end, page up and
+// down, the punctuation keys and f13 to f20 (chords.ts), plus escape, backspace and delete; tab only to end the recording as the focus
+// moves) and takes the one that fires. One keymap.bind with a record sends the platform its table once; the keystrokes the platform keeps
+// (Cmd+Q ...) are found once by halving (chords.ts bindAvailable) and left out, so they still do what the system does. Everything is
+// unbound when recording ends, and when the part goes away. It also ends, as Escape ends it, when the app stops being the active one (the
+// person switched to another app: the keys they press now are that app's).
 import type { ViewRef } from "nsh";
-import { cleanup, keymap, Overlay, signal, View } from "nsh";
+import { cleanup, effect, keymap, lifecycle, Overlay, signal, untracked, View } from "nsh";
 import { Button } from "nsh/base";
 import { allChords, bindAvailable, CANCEL_KEY, CLEAR_KEYS, LEAVE_KEYS } from "./chords";
 import { Tooltip } from "./layers";
@@ -137,6 +139,13 @@ export function ShortcutRecorder(props: ShortcutRecorderProps) {
     props.onRecordingChange?.(true);
   };
   cleanup(() => finish());
+  // The person switched to another app (or the window lost the keys): what they press next belongs to that app, and the chord that is
+  // waited for could be one it uses. Ends as Escape ends it: nothing stored, everything unbound, the screen told so it lets go of what
+  // it held off (the global hotkey). It runs when the state changes, not while recording: a recording started in a window that is not
+  // active yet (a test window opens in the background) goes on until the state changes again.
+  effect(() => {
+    if (lifecycle() !== "active") untracked(() => finish());
+  });
 
   const id = (suffix: string) => (props.testID ? `${props.testID}-${suffix}` : undefined);
   const clearable = () => !recording() && !!props.value && !props.disabled;

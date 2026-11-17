@@ -49,6 +49,35 @@ test("desktop: a Queued page moves on once the lists stop listing it as Queued, 
   expect(app.texts()).toContain("Submitted · read-only");
 });
 
+test("desktop: Cancel queue and the chip move together: both say Queued until the host's read answers, then both change at once", async () => {
+  const app = await open(ENTRY, DESKTOP);
+  await app.waitFor("text:Queued · read-only", { timeout: 15_000 });
+  await app.waitUntil(() => opens(app) === 1);
+  /** One look at the screen: Cancel queue and the chip, from the one list of texts. The two never disagree. */
+  const view = () => {
+    const texts = app.texts();
+    const chip = texts.includes("Queued · read-only") ? "Queued" : texts.includes("Submitted · read-only") ? "Submitted" : "none";
+    const cancel = texts.includes("Cancel queue") && app.shows("id:fp-cancel-queue");
+    return { chip, cancel };
+  };
+  expect(view()).toEqual({ chip: "Queued", cancel: true });
+
+  // The worker sent it and the frame looks at the lists: they say Submitted, but the page's own read of the return is still under
+  // way (held, as a slow one is). The page has not moved: it says Queued and offers Cancel queue, the two from the one answer.
+  await app.press("id:fx-send");
+  await app.press("id:fx-hold");
+  await look(app);
+  await app.waitUntil(() => opens(app) === 2, { timeout: 10_000 });
+  for (let i = 0; i < 5; i++) {
+    expect(view()).toEqual({ chip: "Queued", cancel: true });
+    await app.wait(40);
+  }
+  // The read answers: the chip says Submitted and Cancel queue is gone in the same step.
+  await app.press("id:fx-release");
+  await app.waitUntil(() => view().chip === "Submitted", { timeout: 10_000 });
+  expect(view()).toEqual({ chip: "Submitted", cancel: false });
+});
+
 test("desktop: a page the lists keep disagreeing with reads once, not on every look", async () => {
   const app = await open(ENTRY, DESKTOP);
   await app.waitFor("text:Queued · read-only", { timeout: 15_000 });

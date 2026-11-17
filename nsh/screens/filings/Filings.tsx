@@ -4,6 +4,7 @@
 // the one button a card keeps is Cancel queue. Ported from app/shell/filings.js; the narrow layout is new (plan, UI decisions).
 //
 // Reads: the two cached lists Home also makes, bir.list_returns("filed") and ("saved"), through the store. Writes: bir.cancel_queued.
+// Under them, "Filed in BIR eBIRForms" (LegacyGroup): what the import brought in from the old program, for the taxpayer in view.
 // A Home tile arrives with params { statuses, updatedMonth } (the old FilingsPreset's names): they replace every filter, once.
 import type { JSX } from "nsh";
 import { computed, Scroll, signal, untracked, View } from "nsh";
@@ -14,6 +15,7 @@ import { AppButton, Chip, EmptyRow, Icon, ListGroup, PageHeader, Sheet, Tabs, Te
 import { Board } from "./Board";
 import { FilterCombos } from "./FilterCombos";
 import { filters } from "./filters";
+import { LegacyGroup } from "./LegacyGroup";
 import { COLUMNS, type FormIndex, filterRows, monthLabel, newestFirst, plural, presetOf } from "./model";
 import { NarrowList } from "./NarrowList";
 
@@ -185,6 +187,10 @@ export function Filings(): JSX.Element {
             <NarrowList rows={rows()} index={index()} onOpen={open} onCancel={cancel} />
           </If>
         </If>
+      </If>
+      {/* What was filed in the old program is not one of this app's returns: no status, no card, nothing filters it. It shows while nothing is narrowed. */}
+      <If when={!filters.active() && (wide() || filters.tab() === "all")}>
+        <LegacyGroup wide={wide()} />
       </If>
       <If when={!wide()}>
         <Sheet

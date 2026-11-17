@@ -1,9 +1,11 @@
 import { describe, expect, test } from "nsh/test";
+import { allChords, CHORD_KEYS, CHORD_MODIFIERS, EXTRA_KEYS } from "../ui/chords";
 import {
   THEME_OPTIONS,
   accountSummary,
   hits,
   HOTKEY_KEYS,
+  HOTKEY_NSH_KEYS,
   comboToKeystroke,
   hotkeyProblem,
   hotkeyRegistrable,
@@ -41,6 +43,9 @@ describe("settingsView", () => {
     expect(settingsView("theme", true).map((s) => [s.id, s.rows])).toEqual([["general", ["theme"]]]);
     expect(settingsView("buwiz", true).map((s) => [s.id, s.rows])).toEqual([["account", ["buwiz"]]]);
     expect(settingsView("HOTKEY", true).map((s) => [s.id, s.rows])).toEqual([["computer", ["hotkey"]]]);
+    // "eBIRForms" also names the app (the version row); in Import / Export it is the import from the old program.
+    expect(rowsOf(settingsView("eBIRForms", true), "transfer")).toEqual(["import"]);
+    expect(settingsView("eBIRForms folder", true).map((s) => [s.id, s.rows])).toEqual([["transfer", ["import"]]]);
   });
   test("a section word keeps every row of that section", () => {
     const view = settingsView("personal", true);
@@ -131,8 +136,11 @@ describe("the global hotkey: stored combo and keystroke", () => {
     expect(comboToKeystroke(undefined, "macos")).toBeNull();
     expect(comboToKeystroke(" + ", "macos")).toBeNull();
     expect(comboToKeystroke("control+notakey", "macos")).toBeNull();
-    expect(comboToKeystroke("control+alt+F13", "macos")).toBeNull();
-    expect(comboToKeystroke("control+alt+space", "macos")).toBeNull();
+    expect(comboToKeystroke("control+alt+F21", "macos")).toBeNull();
+    // The character is never a stored key ("+" is the separator), and a word of the old list's neighbours is no key.
+    for (const key of ["-", "=", "[", "tab", "enter", "escape", "insert", "bracketleft", "arrowleft", "plus"]) {
+      expect(comboToKeystroke(`control+alt+${key}`, "macos")).toBeNull();
+    }
   });
   test("a keystroke is the stored combo: ctrl+alt+e is control+alt+E, cmd is super, the order is control, alt, shift, super", () => {
     expect(keystrokeToCombo("ctrl+alt+e")).toBe("control+alt+E");
@@ -144,8 +152,12 @@ describe("the global hotkey: stored combo and keystroke", () => {
   test("no modifier (it would read as the platform's defaults), a modifier it cannot read, or a key outside the list is null", () => {
     expect(keystrokeToCombo("e")).toBeNull();
     expect(keystrokeToCombo("mod+e")).toBeNull();
-    expect(keystrokeToCombo("ctrl+space")).toBeNull();
-    expect(keystrokeToCombo("ctrl+f13")).toBeNull();
+    expect(keystrokeToCombo("space")).toBeNull();
+    expect(keystrokeToCombo("shift+left")).not.toBeNull();
+    expect(keystrokeToCombo("ctrl+f21")).toBeNull();
+    expect(keystrokeToCombo("ctrl+tab")).toBeNull();
+    expect(keystrokeToCombo("ctrl+enter")).toBeNull();
+    expect(keystrokeToCombo("ctrl+escape")).toBeNull();
     expect(keystrokeToCombo("ctrl+")).toBeNull();
     expect(keystrokeToCombo("")).toBeNull();
     expect(keystrokeToCombo(null)).toBeNull();
@@ -165,6 +177,70 @@ describe("the global hotkey: stored combo and keystroke", () => {
       }
     }
     expect(n).toBe(15 * 48);
+  });
+  test("the keys only this app registers: space, the arrows, home, end, page up and down, punctuation, F13 to F20, each a word, never the character", () => {
+    // The words and how keymap spells each (src/desktop.rs key_name and hotkey_combo.rs NSH_KEYS hold the same list; hotkey.test.ts asks the host).
+    const pairs: [string, string][] = [
+      ["SPACE", "space"], ["UP", "up"], ["DOWN", "down"], ["LEFT", "left"], ["RIGHT", "right"], ["HOME", "home"], ["END", "end"],
+      ["PAGEUP", "pageup"], ["PAGEDOWN", "pagedown"], ["MINUS", "minus"], ["EQUAL", "plus"], ["LEFTBRACKET", "["], ["RIGHTBRACKET", "]"],
+      ["BACKSLASH", "\\"], ["SEMICOLON", ";"], ["QUOTE", "'"], ["COMMA", ","], ["PERIOD", "."], ["SLASH", "/"], ["BACKTICK", "`"],
+      ["F13", "f13"], ["F14", "f14"], ["F15", "f15"], ["F16", "f16"], ["F17", "f17"], ["F18", "f18"], ["F19", "f19"], ["F20", "f20"],
+    ];
+    expect(Object.entries(HOTKEY_NSH_KEYS)).toEqual(pairs);
+    for (const [word] of pairs) expect(HOTKEY_KEYS).not.toContain(word);
+    for (const [word, key] of pairs) {
+      expect(comboToKeystroke(`control+alt+${word}`, "macos")).toBe(`ctrl+alt+${key}`);
+      expect(keystrokeToCombo(`ctrl+alt+${key}`)).toBe(`control+alt+${word}`);
+    }
+    expect(comboToKeystroke("control+alt+space", "macos")).toBe("ctrl+alt+space");
+    expect(comboToKeystroke("super+shift+LEFT", "windows")).toBe("shift+cmd+left");
+    expect(keystrokeToCombo("cmd+minus")).toBe("super+MINUS");
+    expect(keystrokeToCombo("ctrl+alt+shift+cmd+f20")).toBe("control+alt+shift+super+F20");
+    // A bare stored NSH key takes the platform's default modifiers like any other.
+    expect(comboToKeystroke("SPACE", "macos")).toBe("ctrl+alt+space");
+    expect(comboToKeystroke("COMMA", "linux")).toBe("shift+cmd+,");
+  });
+  test("keymap's other spellings of the same keys mean the same word", () => {
+    expect(keystrokeToCombo("ctrl+-")).toBe("control+MINUS");
+    expect(keystrokeToCombo("ctrl+=")).toBe("control+EQUAL");
+    expect(keystrokeToCombo("ctrl+plus")).toBe("control+EQUAL");
+    expect(keystrokeToCombo("ctrl+arrowleft")).toBe("control+LEFT");
+    expect(keystrokeToCombo("ctrl+ArrowUp")).toBe("control+UP");
+    expect(keystrokeToCombo("Ctrl+Alt+SPACE")).toBe("control+alt+SPACE");
+    // The recorder's own spelling is the one that comes back.
+    expect(comboToKeystroke(keystrokeToCombo("ctrl+-"), "macos")).toBe("ctrl+minus");
+    expect(comboToKeystroke(keystrokeToCombo("ctrl+="), "macos")).toBe("ctrl+plus");
+  });
+  test("round trip: every modifier subset with every key only this app registers, stored to keystroke and back", () => {
+    const words = Object.keys(HOTKEY_NSH_KEYS);
+    expect(words.length).toBe(28);
+    let n = 0;
+    for (const mods of subsets()) {
+      for (const key of words) {
+        const stored = [...mods, key].join("+");
+        const keystroke = comboToKeystroke(stored, "macos");
+        expect(keystroke).not.toBeNull();
+        expect(keystrokeToCombo(keystroke)).toBe(stored);
+        expect(comboToKeystroke(keystrokeToCombo(keystroke), "linux")).toBe(keystroke);
+        n++;
+      }
+    }
+    expect(n).toBe(15 * 28);
+  });
+  test("every chord the recorder offers is one the page can store, and writes back as it was recorded", () => {
+    expect(CHORD_KEYS.length).toBe(HOTKEY_KEYS.length + Object.keys(HOTKEY_NSH_KEYS).length);
+    expect(EXTRA_KEYS.length).toBe(28);
+    for (const chord of allChords()) {
+      const stored = keystrokeToCombo(chord);
+      // A chord with no modifier at all is not a stored combo (a bare stored key would mean the platform's modifiers).
+      if (!chord.includes("+")) {
+        expect(stored).toBeNull();
+        continue;
+      }
+      expect(stored).not.toBeNull();
+      expect(comboToKeystroke(stored, "macos")).toBe(chord);
+    }
+    expect(CHORD_MODIFIERS.length).toBe(4);
   });
   test("the four old presets (the host's chords) read as the chord they are; macOS's write back byte for byte", () => {
     // macOS: control+alt+E ... are in the order the recorder stores (control, alt, shift, super), so nothing stored changes.
@@ -194,7 +270,14 @@ describe("the global hotkey: stored combo and keystroke", () => {
     expect(hotkeyRegistrable("shift+e")).toBe(false);
     expect(hotkeyRegistrable("e")).toBe(false);
     expect(hotkeyRegistrable("f5")).toBe(false);
-    expect(hotkeyRegistrable("ctrl+space")).toBe(false);
+    expect(hotkeyRegistrable("space")).toBe(false);
+    expect(hotkeyRegistrable("shift+space")).toBe(false);
+    expect(hotkeyRegistrable("shift+left")).toBe(false);
+    expect(hotkeyRegistrable("f13")).toBe(false);
+    expect(hotkeyRegistrable("ctrl+alt+space")).toBe(true);
+    expect(hotkeyRegistrable("cmd+,")).toBe(true);
+    expect(hotkeyRegistrable("alt+f20")).toBe(true);
+    expect(hotkeyRegistrable("ctrl+f21")).toBe(false);
     expect(hotkeyRegistrable("")).toBe(false);
   });
   test("what the box says about a chord with no modifier, in the platform's words; and about the host's answer", () => {

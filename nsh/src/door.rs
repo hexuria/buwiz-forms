@@ -330,22 +330,6 @@ fn permitted(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `set_global_hotkey` stores only a combo this app's listener registers. The shared rule (`hotkey_combo::is_registrable`)
-/// also takes one with Shift and no Control, Alt or Command (`shift+E`), which the old shell registers and NSH's listener
-/// refuses (`desktop::hotkey_shortcut`): stored, it would never be registered. Refused here, when it is set, with the
-/// host's own sentence for a combo that cannot be registered. Clearing it (`""`) and a value that is not a string go on
-/// to the host.
-fn registrable_here(name: &str, args: &[JsonValue]) -> Result<(), String> {
-    if name == "set_global_hotkey"
-        && let Some(JsonValue::String(combo)) = args.first()
-        && !combo.trim().is_empty()
-        && crate::desktop::hotkey_shortcut(combo.trim()).is_none()
-    {
-        return Err(bir_app_api::hotkey_combo::NOT_REGISTRABLE.to_owned());
-    }
-    Ok(())
-}
-
 fn kind_of(module: &HostModule, name: &str, wanted: FunctionKind) -> Result<(), String> {
     if !module.has(name) {
         return Err(format!("There is no host function named {name}."));
@@ -366,16 +350,41 @@ fn kind_of(module: &HostModule, name: &str, wanted: FunctionKind) -> Result<(), 
     }
 }
 
+/// What a person reads when another copy of the app holds the database: it happens with the one-copy guard off (a test
+/// environment, `BIR_SINGLE_INSTANCE=0`); with it on, the second copy hands over to the first and never gets here.
+pub const SECOND_COPY: &str = "eBIRForms is already open on this database. Close the other window and try again.";
+
+/// Whether `message` is bir-core's own sentence for a database another process owns (`DbError::LiveDatabaseInUse`): the text
+/// is read back from core, with a marker where the path goes, so it follows core if core's words change.
+fn is_database_in_use(message: &str) -> bool {
+    const MARK: &str = "\u{1}";
+    let sample = bir_core::db::DbError::LiveDatabaseInUse(PathBuf::from(MARK)).to_string();
+    let Some((head, tail)) = sample.split_once(MARK) else {
+        return false;
+    };
+    message.len() >= head.len() + tail.len() && message.starts_with(head) && message.ends_with(tail)
+}
+
+/// A host function's error as the page is told it: the host's own sentence, unchanged, except for a second copy's. Core's
+/// sentence for that names the painted app and a protocol (it is a developer's, and the old shell shows it as it is); here the
+/// page gets [`SECOND_COPY`] and core's sentence, with the path, goes to the log.
+fn said(message: &str) -> String {
+    if is_database_in_use(message) {
+        tracing::warn!("{message}");
+        return SECOND_COPY.to_owned();
+    }
+    message.to_owned()
+}
+
 /// Call a synchronous host function.
 pub fn call(name: &str, args: Vec<JsonValue>) -> Result<JsonValue, String> {
     let module = booted()?;
     kind_of(&module, name, FunctionKind::Sync)?;
     permitted(name)?;
-    registrable_here(name, &args)?;
     module
         .call(name, &arguments(args))
         .map(|value| bir_app_api::bir_module::to_json(&value))
-        .map_err(|error| error.message().to_owned())
+        .map_err(|error| said(error.message()))
 }
 
 /// Call an asynchronous host function.
@@ -385,11 +394,11 @@ pub async fn call_async(name: String, args: Vec<JsonValue>) -> Result<JsonValue,
     permitted(&name)?;
     let future = module
         .begin(&name, &arguments(args))
-        .map_err(|error| error.message().to_owned())?;
+        .map_err(|error| said(error.message()))?;
     future
         .await
         .map(|value| bir_app_api::bir_module::to_json(&value))
-        .map_err(|error| error.message().to_owned())
+        .map_err(|error| said(error.message()))
 }
 
 /// Every host function with its kind, sorted by name. Needs no database.
@@ -501,9 +510,10 @@ mod tests {
         });
     }
 
-    /// The shared rule takes Shift and a key alone (the old shell registers it); NSH's listener does not, so the door refuses
-    /// it when it is set, with the host's sentence, and the stored combo stays as it was. (It used to be stored and never
-    /// registered.) What NSH registers is stored, and clearing works.
+    /// The shared rule takes Shift and a key alone (the old shell registers it); NSH's listener does not, so `set_global_hotkey`
+    /// refuses it when it is set (the hooks' `global_hotkey_registrable`: `NshHooks` asks `desktop::hotkey_shortcut`), with the
+    /// host's sentence, and the stored combo stays as it was. (It used to be stored and never registered.) What NSH registers is
+    /// stored (also the keys only NSH registers: space, the arrows, punctuation, F13 to F20), and clearing works.
     #[test]
     fn a_hotkey_this_listener_cannot_register_is_refused_when_it_is_set() {
         let (folder, database) = empty();
@@ -521,12 +531,67 @@ mod tests {
             let refused = call("set_global_hotkey", vec![json!("shift+E")]).unwrap_err();
             assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE);
             assert_eq!(stored(), json!("control+alt+E"), "the stored combo stays as it was");
-            // The host's own refusal is unchanged for a key nothing registers.
-            let refused = call("set_global_hotkey", vec![json!("control+F13")]).unwrap_err();
-            assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE);
+            // F13 to F20 and the keys only NSH registers are stored; the old shell's rule would have refused them.
+            for combo in ["control+F13", "alt+SPACE", "control+alt+LEFT", "cmd+COMMA", "control+alt+BACKTICK", "control+alt+F20"] {
+                assert!(!bir_app_api::hotkey_combo::is_registrable(combo), "{combo}");
+                call("set_global_hotkey", vec![json!(combo)]).unwrap_or_else(|error| panic!("{combo}: {error}"));
+                assert_eq!(stored(), json!(combo), "{combo}");
+            }
+            // Not these: a key no listener of ours registers, a character, F21 (macOS keyboards end at F20), Shift with a NSH-only key.
+            for combo in ["control+F21", "control+-", "control+TAB", "shift+SPACE", "control+space bar"] {
+                let refused = call("set_global_hotkey", vec![json!(combo)]).unwrap_err();
+                assert_eq!(refused, bir_app_api::hotkey_combo::NOT_REGISTRABLE, "{combo}");
+            }
+            assert_eq!(stored(), json!("control+alt+F20"), "a refusal leaves the stored combo");
             call("set_global_hotkey", vec![json!("")]).expect("cleared");
             assert_eq!(stored(), JsonValue::Null);
         });
+    }
+
+    /// A second copy on the same database (the one-copy guard is off in a test environment): the engine thread of another copy
+    /// cannot take the owner lock, and the page is told in plain words, not in bir-core's developer sentence, which stays in the log.
+    #[test]
+    fn a_second_copy_on_the_same_database_is_told_in_plain_words() {
+        let (folder, database) = empty();
+        dev_env(Some(&database), Some(folder.path()), || {
+            call("list_taxpayers", vec![]).expect("the first copy opens the database and holds its lock");
+            // Another copy: another engine thread of this process (the door boots, and the database slot lives, per thread).
+            let second = std::thread::scope(|scope| scope.spawn(|| call("list_taxpayers", vec![])).join().expect("the thread ran"));
+            assert_eq!(second.unwrap_err(), SECOND_COPY);
+            let asked = std::thread::scope(|scope| {
+                scope
+                    .spawn(|| {
+                        let args = vec![json!("000123453"), json!("1601C"), json!(2025), json!(3), JsonValue::Null];
+                        futures::executor::block_on(call_async("screen_form_open".into(), args))
+                    })
+                    .join()
+                    .expect("the thread ran")
+            });
+            assert_eq!(asked.unwrap_err(), SECOND_COPY);
+            // The first copy goes on as it was.
+            call("list_taxpayers", vec![]).expect("the first copy still has it");
+        });
+    }
+
+    /// Only bir-core's sentence for a database another process owns is replaced, whatever path it names; every other
+    /// error, even one that says "already open", reaches the page as the host wrote it.
+    #[test]
+    fn only_the_second_copy_sentence_is_said_in_other_words() {
+        for path in ["/tmp/a/bir_data.db", "C:\\Users\\x y\\bir_data.db", "/data/with space/bir_data.db", ""] {
+            let core = bir_core::db::DbError::LiveDatabaseInUse(PathBuf::from(path)).to_string();
+            assert!(core.contains("Op::Yield"), "the developer's sentence: {core}");
+            assert_eq!(said(&core), SECOND_COPY, "{path:?}");
+        }
+        for other in [
+            "The database is already open on this thread; call useDatabase before anything else.",
+            "Refusing to open the owner's data folder.",
+            "The database is in use elsewhere, so its recent changes could not be written into the database file (x).",
+            "live database",
+            "",
+        ] {
+            assert_eq!(said(other), other);
+        }
+        assert!(!SECOND_COPY.contains("painted") && !SECOND_COPY.contains("Op::Yield"));
     }
 
     #[test]

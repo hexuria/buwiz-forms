@@ -1,10 +1,11 @@
-// Settings > Import / Export (old transferCards): Import data (a zip the host's file dialog picks) and Export this profile (the
-// Tax profile's card, reused). Without a taxpayer there is nothing to export.
+// Settings > Import / Export (old transferCards): Import data (a zip the host's file dialog picks), Import from BIR eBIRForms (the old
+// program's folder, EbirFormsImport.tsx) and Export this profile (the Tax profile's card, reused). Without a taxpayer there is nothing to export.
 import { app } from "../../shell";
 import { AppButton, Card, SettingRow, Text } from "../../ui";
 import { ProfileExportCard } from "../taxpayer";
 import { Labeled } from "./parts";
 import { importing, runImport } from "./importState";
+import { EbirFormsImport } from "./EbirFormsImport";
 
 export function TransferSection(props: { rows: string[] }) {
   const has = (id: string) => props.rows.includes(id);
@@ -24,6 +25,7 @@ export function TransferSection(props: { rows: string[] }) {
                 onPress={() => void runImport()}
               />
             </SettingRow>
+            <EbirFormsImport />
           </Card>
         </Labeled>
       </If>

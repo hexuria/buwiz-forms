@@ -474,7 +474,7 @@ fn system_info() -> HostResult {
 /// An unknown key is refused and the stored chord is left as it was.
 fn set_global_hotkey(arguments: &gpui_shell::HostArguments) -> HostResult {
     let combo = arguments.string(0)?.trim().to_string();
-    if !combo.is_empty() && !crate::hotkey_combo::is_registrable(&combo) {
+    if !combo.is_empty() && !crate::hooks::hooks().global_hotkey_registrable(&combo) {
         return Err(HostError::new(crate::hotkey_combo::NOT_REGISTRABLE));
     }
     with_database(|db| {
@@ -2157,7 +2157,10 @@ fn open_in_system_browser(path: &std::path::Path) -> Result<(), HostError> {
 /// shares the handle, so the connection is swapped for an in-memory
 /// placeholder inside it rather than the handle being dropped: dropping it
 /// would leave the worker holding the old file and its owner lock.
-fn reset_database() -> Result<(), HostError> {
+pub(crate) fn reset_database() -> Result<(), HostError> {
+    // A folder scanned for the eBIRForms import was reviewed against the
+    // database that is going away: it is not imported into the next one.
+    crate::legacy_import_module::forget_scan();
     DATABASE.with(|slot| {
         let slot = slot.borrow();
         let Some(handle) = slot.as_ref() else {
@@ -2181,7 +2184,7 @@ fn reset_database() -> Result<(), HostError> {
 /// and answers through [`crate::hooks::PathAnswer`], on the thread that owns
 /// the database slot, outside any UI borrow; `work` runs in that answer. The
 /// promise answers `{ kind: "cancelled" }` when the panel is dismissed.
-fn after_path_prompt(
+pub(crate) fn after_path_prompt(
     prompt: impl FnOnce(crate::hooks::PathAnswer) -> bool,
     work: impl FnOnce(std::path::PathBuf) -> HostResult + 'static,
 ) -> Result<gpui_shell::host_modules::HostFuture, HostError> {
@@ -2700,13 +2703,15 @@ pub fn module() -> HostModule {
     let module = crate::tax_profile_module::register(module);
     let module = crate::screen_form_module::register(module);
     let module = crate::dashboard_module::register(module);
+    let module = crate::legacy_import_module::register(module);
     // bir-shell appends its scroll exports (GPUI elements) after these.
     module.declarations(format!(
-        "{BASE_DECLARATIONS}{}{}{}{}",
+        "{BASE_DECLARATIONS}{}{}{}{}{}",
         crate::cloud_account::DECLARATIONS,
         crate::tax_profile_module::DECLARATIONS,
         crate::screen_form_module::DECLARATIONS,
         crate::dashboard_module::DECLARATIONS,
+        crate::legacy_import_module::DECLARATIONS,
     ))
 }
 
@@ -3223,6 +3228,35 @@ mod tests {
 
         set_global_hotkey(&args(vec![s("  ")])).unwrap();
         assert!(to_json(&system_info().unwrap())["global_hotkey"].is_null());
+    }
+
+    /// The old shell's listener registers a to z, 0 to 9 and F1 to F12: with its hooks (the default ones here) the keys only the
+    /// NSH app registers are refused by `set_global_hotkey`, whatever the case, and the stored chord is left as it was.
+    #[test]
+    fn global_hotkey_refuses_the_keys_only_the_nsh_app_registers() {
+        setup();
+        set_global_hotkey(&args(vec![s("control+alt+E")])).unwrap();
+        for key in crate::hotkey_combo::NSH_KEYS {
+            for combo in [
+                format!("control+alt+{key}"),
+                format!("super+shift+{}", key.to_lowercase()),
+            ] {
+                let refused = set_global_hotkey(&args(vec![s(&combo)])).unwrap_err();
+                assert_eq!(
+                    refused.message(),
+                    crate::hotkey_combo::NOT_REGISTRABLE,
+                    "{combo}"
+                );
+            }
+        }
+        assert_eq!(
+            to_json(&system_info().unwrap())["global_hotkey"],
+            "control+alt+E",
+            "a refused chord leaves the stored one"
+        );
+        // The old keys still register, F12 the last of them.
+        set_global_hotkey(&args(vec![s("control+alt+F12")])).unwrap();
+        set_global_hotkey(&args(vec![s("")])).unwrap();
     }
 
     #[test]

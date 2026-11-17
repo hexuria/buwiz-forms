@@ -609,7 +609,10 @@ pub fn apply_legacy_migration(
         )?);
     }
 
-    // Profiles commit separately; re-running the idempotent migration recovers partial failure.
+    // One transaction for the taxpayers and the filed returns: `save_profile`
+    // rides a transaction its caller holds, so a failure anywhere below
+    // rolls every write back and the database is as it was.
+    let transaction = db.conn.unchecked_transaction().map_err(DbError::from)?;
     for profile in &existing_profiles {
         let tin = profile.tin.full();
         if modified_existing.contains(&tin) {
@@ -623,7 +626,6 @@ pub fn apply_legacy_migration(
     report.profiles_updated = updated_keys.len();
     report.profiles_unchanged = unchanged_keys.difference(&updated_keys).count();
 
-    let transaction = db.conn.unchecked_transaction().map_err(DbError::from)?;
     for legacy_return in &scan.returns {
         let branch = format!(
             "{:05}",
@@ -1406,5 +1408,39 @@ mod tests {
         assert_eq!(profile.tin.branch, "00000");
         assert_eq!(profile.rdo_code, "039");
         assert_eq!(profile.default_form_type, "1601Cv2018");
+    }
+
+    /// A failure after the taxpayers were written takes them back too: the
+    /// import is all or nothing, and running it again then imports it all.
+    #[test]
+    fn apply_that_fails_part_way_leaves_the_database_as_it_was() {
+        let db = Database::open_ephemeral().unwrap();
+        let scan = LegacyScan {
+            returns: vec![synthetic_return("062025", "Latest Test Name", "latest")],
+            ..LegacyScan::default()
+        };
+        db.conn
+            .execute_batch(
+                "CREATE TRIGGER refuse_legacy_returns BEFORE INSERT ON legacy_filed_returns
+                 BEGIN SELECT RAISE(FAIL, 'the disk is full'); END;",
+            )
+            .unwrap();
+        apply_legacy_migration(&db, &scan).expect_err("the returns could not be written");
+        assert!(
+            db.list_profiles().unwrap().is_empty(),
+            "the taxpayer of a failed import stayed"
+        );
+        assert!(
+            db.conn.is_autocommit(),
+            "the failed import left a transaction open"
+        );
+
+        db.conn
+            .execute_batch("DROP TRIGGER refuse_legacy_returns;")
+            .unwrap();
+        let report = apply_legacy_migration(&db, &scan).unwrap();
+        assert_eq!(report.profiles_created, 1);
+        assert_eq!(report.returns_imported, 1);
+        assert_eq!(db.list_profiles().unwrap().len(), 1);
     }
 }

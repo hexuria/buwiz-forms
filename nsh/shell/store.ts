@@ -433,6 +433,13 @@ export const store = {
   savedReturns() {
     return read(SAVED_RETURNS_KEY, () => bir.list_returns("saved"), []).filter((r) => store.canSee(r.tin_root));
   },
+  /**
+   * The returns imported from BIR's official eBIRForms for one branch (records only, oldest import first). Not a worker key: only an
+   * import changes it, and that is a write, which drops it. Nothing for a taxpayer the session may not see.
+   */
+  legacyFiled(tin: string | null | undefined) {
+    return tin && store.canSee(tin.slice(0, 9)) ? read(`legacy_filed:${tin}`, () => bir.list_legacy_filed_returns(tin), []) : [];
+  },
   authState() {
     return read("auth_state", () => bir.auth_state(), {
       mode: null,

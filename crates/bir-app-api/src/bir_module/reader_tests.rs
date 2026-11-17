@@ -187,7 +187,31 @@ fn polled_reads() -> Vec<(&'static str, Vec<Value>)> {
         ("list_form_templates", vec![json!(HEAD)]),
         ("list_background_jobs", vec![]),
         ("list_taxpayers", vec![]),
+        ("list_legacy_filed_returns", vec![json!(HEAD)]),
     ]
+}
+
+/// One return imported from the old program, for the taxpayer `create_juana` makes.
+fn import_legacy_return() {
+    with_database(|db| {
+        db.insert_legacy_filed_return(&bir_core::db::LegacyFiledReturn {
+            id: None,
+            sha256: "reader-test".into(),
+            tin: HEAD.into(),
+            form_identity: "1601Cv2018".into(),
+            form_id: Some("1601Cv2018".into()),
+            period: "062025".into(),
+            amendment_version: None,
+            email_copy: None,
+            encrypted: false,
+            source_filename: "00012345300000-1601Cv2018-062025.xml".into(),
+            raw_file: b"stored".to_vec(),
+            fields_json: "{}".into(),
+            imported_at: None,
+        })
+        .map_err(db_error)
+    })
+    .unwrap();
 }
 
 /// T2: each polled read answers in bounded time, with the rows it answers
@@ -206,6 +230,7 @@ fn polled_reads_answer_while_the_worker_holds_the_writer() {
                 &[json!(HEAD), json!(YEAR), json!(["2551Q", "1600WP"])],
             );
             save_2551q();
+            import_legacy_return();
             ok(
                 &bir,
                 "create_template_from_latest",

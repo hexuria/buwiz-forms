@@ -1,6 +1,7 @@
 // Settings > Computer at phone size and at desktop size: the local files, log retention and the global hotkey (a shortcut recorder: the box is
 // pressed, then the keys; stored through the real host), how closing behaves, the version, and the "who uses this computer" change (an owner
 // or a help desk) with its recovery key and the sign-out that follows. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
+import { keymap } from "nsh";
 import { expect, test } from "nsh/test";
 import { totpCode } from "../auth/testTotp";
 import { calls, expectTexts, goneText, openSettings, SIZES, state } from "./testing";
@@ -65,6 +66,45 @@ for (const { name, size } of SIZES) {
     expect(calls(app)).toEqual(["set_global_hotkey control+alt+B", "set_global_hotkey shift+super+F12", "set_global_hotkey"]);
     expect(app.shows(CLEAR)).toBe(false);
   }, 60_000);
+
+  test(`${name}: the space bar, the arrows, punctuation and F13 to F20 are recorded and stored through the real host, as their words`, async () => {
+    // The host (set_global_hotkey, whose hooks are this app's) stores what the box offers: the box shows the chord read back from it.
+    const app = await openSettings(size, { solo: true, hotkey: "note" }, "computer");
+    await app.waitFor("id:settings-hotkey");
+    const sent: string[] = [];
+    for (const [chord, stored] of [
+      ["ctrl+alt+space", "control+alt+SPACE"],
+      ["alt+left", "alt+LEFT"],
+      ["ctrl+alt+pagedown", "control+alt+PAGEDOWN"],
+      ["shift+cmd+,", "shift+super+COMMA"],
+      ["ctrl+alt+[", "control+alt+LEFTBRACKET"],
+      ["ctrl+alt+plus", "control+alt+EQUAL"],
+      ["ctrl+alt+minus", "control+alt+MINUS"],
+      ["ctrl+alt+\\", "control+alt+BACKSLASH"],
+      ["ctrl+alt+`", "control+alt+BACKTICK"],
+      ["cmd+f13", "super+F13"],
+    ] as const) {
+      await app.press(BOX);
+      await app.waitFor("text:Type shortcut");
+      await app.keyboard.press(chord);
+      await app.waitFor(`text:${keymap.label(chord)}`);
+      await goneText(app, "Type shortcut");
+      sent.push(`set_global_hotkey ${stored}`);
+      expect(calls(app)).toEqual(sent);
+    }
+    // A new key alone, or with Shift alone, is answered like any bare key, and the host is not asked.
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    for (const bare of ["space", "left", "shift+space", "f13", "shift+,"]) {
+      await app.keyboard.press(bare);
+      await app.waitFor(`text:${NEED_MODIFIER}`);
+      expect(app.texts()).toContain("Type shortcut");
+    }
+    expect(calls(app)).toEqual(sent);
+    await app.keyboard.press("escape");
+    await goneText(app, "Type shortcut");
+    expect(app.texts()).toContain(keymap.label("cmd+f13"));
+  }, 90_000);
 
   test(`${name}: Escape cancels and stores nothing; Delete removes the chord; a key with no Control, Option or Command is answered and the box keeps listening`, async () => {
     const app = await openSettings(size, { solo: true, hotkey: "note" }, "computer");

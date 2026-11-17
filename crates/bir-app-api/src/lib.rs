@@ -15,6 +15,7 @@ pub mod cloud_account;
 pub mod dashboard_module;
 pub mod hooks;
 pub mod hotkey_combo;
+pub mod legacy_import_module;
 pub mod logging;
 pub mod packaged;
 pub mod print_sheet;

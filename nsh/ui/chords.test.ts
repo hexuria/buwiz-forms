@@ -1,22 +1,43 @@
-// The recorder's pure rules: the 768 chords, and finding the ones the platform lets an app bind with few calls.
+// The recorder's pure rules: the 1216 chords, and finding the ones the platform lets an app bind with few calls.
+import { keymap } from "nsh";
 import { expect, test } from "nsh/test";
-import { allChords, bindAvailable, CHORD_KEYS, CHORD_MODIFIERS, splitChord } from "./chords";
+import { allChords, bindAvailable, CANCEL_KEY, CHORD_KEYS, CHORD_MODIFIERS, CLEAR_KEYS, EXTRA_KEYS, LEAVE_KEYS, splitChord } from "./chords";
 
-test("every subset of ctrl, alt, shift and cmd with each of the 48 keys, modifiers in one order", () => {
+test("every subset of ctrl, alt, shift and cmd with each of the 76 keys, modifiers in one order", () => {
   const chords = allChords();
-  expect(CHORD_KEYS.length).toBe(48);
-  expect(chords.length).toBe(16 * 48);
+  expect(CHORD_KEYS.length).toBe(76);
+  expect(chords.length).toBe(16 * 76);
   expect(new Set(chords).size).toBe(chords.length);
   expect(chords).toContain("a");
   expect(chords).toContain("ctrl+alt+e");
   expect(chords).toContain("ctrl+alt+shift+cmd+f12");
   expect(chords).toContain("cmd+0");
+  expect(chords).toContain("alt+space");
+  expect(chords).toContain("ctrl+alt+left");
+  expect(chords).toContain("shift+cmd+,");
+  expect(chords).toContain("ctrl+alt+shift+cmd+f20");
   // Modifiers always come in the order ctrl, alt, shift, cmd, so a recorded keystroke is one spelling.
   for (const chord of chords) {
     const { mods, key } = splitChord(chord);
     expect(CHORD_KEYS).toContain(key);
     expect(mods).toEqual(CHORD_MODIFIERS.filter((m) => mods.includes(m)));
   }
+});
+
+test("the keys beyond letters, digits and f1 to f12: space, arrows, home, end, page up and down, punctuation, f13 to f20", () => {
+  expect(EXTRA_KEYS).toEqual([
+    "space", "up", "down", "left", "right", "home", "end", "pageup", "pagedown",
+    "minus", "plus", "[", "]", "\\", ";", "'", ",", ".", "/", "`",
+    "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
+  ]);
+  expect(CHORD_KEYS.slice(-EXTRA_KEYS.length)).toEqual(EXTRA_KEYS);
+  expect(new Set(CHORD_KEYS).size).toBe(CHORD_KEYS.length);
+  // The recorder keeps these for itself, and "+" would be read as the separator.
+  const keptForTheRecorder = [CANCEL_KEY, ...CLEAR_KEYS, ...LEAVE_KEYS, "tab", "+", "enter", "return", "insert"];
+  for (const key of keptForTheRecorder) expect(CHORD_KEYS).not.toContain(key);
+  for (const key of CHORD_KEYS) expect(key.includes("+")).toBe(false);
+  // Each chord is one keymap reads: keymap.label throws a TypeError for a keystroke it cannot read (bindAvailable would take that for a key the platform keeps and leave it out without a word).
+  for (const chord of allChords()) expect(() => keymap.label(chord)).not.toThrow();
 });
 
 test("splitChord", () => {
@@ -54,6 +75,22 @@ test("the keystrokes the platform keeps are left out and every other one is boun
   // Unbinding twice changes nothing.
   done.unbind();
   expect(world.live.size).toBe(0);
+});
+
+test("with the real keymap every chord binds but the few the platform keeps, whichever platform runs the test", () => {
+  const keys = [...allChords(), CANCEL_KEY, ...CLEAR_KEYS];
+  const reserved = ["cmd+q", "cmd+h", "alt+cmd+h", "cmd+m", "ctrl+cmd+f", "ctrl+q", "alt+f4", "f11"];
+  const done = bindAvailable(keys, (group) => {
+    const record: Record<string, () => void> = {};
+    for (const key of group) record[key] = () => {};
+    return keymap.bind(record, { when: "always" });
+  });
+  expect(done.kept.filter((key) => !reserved.includes(key))).toEqual([]);
+  expect(done.bound.length + done.kept.length).toBe(keys.length);
+  // Every new key binds with every modifier subset: none of them is a kept one.
+  for (const key of EXTRA_KEYS) for (const chord of allChords().filter((c) => splitChord(c).key === key)) expect(done.bound).toContain(chord);
+  expect(done.calls < 120).toBe(true);
+  done.unbind();
 });
 
 test("nothing kept: one call; everything kept: nothing bound", () => {

@@ -786,3 +786,74 @@ export interface ReturnRow {
     return_key: number | null;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
+
+export interface LegacySkippedFile {
+    /** The file's name, without its folder. */
+    file: string;
+    /** Why it was not read, in words ("not an XML file", "could not decrypt return" ...). */
+    reason: string;
+}
+export interface LegacyScanSummary {
+    /** "scanned": there is something to import and the host holds the scan for legacy_import; "empty": an eBIRForms folder with no
+     *  taxpayer and no filed return in it; "not_ebirforms": the folder has no profile or IAF_RDO_Copy folder. Nothing is held unless "scanned". */
+    kind: "scanned" | "empty" | "not_ebirforms";
+    /** The number to hand legacy_import; 0 unless kind is "scanned". */
+    scan: number;
+    /** The folder that was read. */
+    folder: string;
+    /** Taxpayers (TIN and branch) the profiles and filed returns name. */
+    taxpayers: number;
+    /** Filed returns (Final Copies) that can be imported. */
+    filed_returns: number;
+    /** Saved drafts (savefile): counted, never imported. */
+    drafts: number;
+    /** Files that were not read, with the reason. */
+    skipped: LegacySkippedFile[];
+}
+export type LegacyScanAnswer = LegacyScanSummary | { kind: "cancelled" };
+export interface LegacyStandardFolder {
+    index: number;
+    path: string;
+}
+/** The standard places the old program installs to (C:\eBIRForms, also on the system drive) that exist on this computer: always empty off Windows. */
+export function legacy_standard_folders(): LegacyStandardFolder[];
+/** Opens the host's folder dialog and reads the eBIRForms folder the person picks (the installation, its profile or its IAF_RDO_Copy folder). Takes no path. */
+export function legacy_scan_folder(): Promise<LegacyScanAnswer>;
+/** Reads the standard folder at `index` of legacy_standard_folders, looked up again now. */
+export function legacy_scan_standard(index: number): LegacyScanSummary;
+export interface LegacyImportReport {
+    taxpayers_created: number;
+    taxpayers_updated: number;
+    taxpayers_unchanged: number;
+    /** Empty details of a taxpayer filled from the old program (what was already there is kept). */
+    fields_filled: number;
+    returns_imported: number;
+    returns_already_present: number;
+    /** Files the scan skipped. */
+    skipped: number;
+}
+/** Imports the scan the person reviewed (`scan` from its summary). Refused when there is none, it is another one, or the folder or the open database changed since. */
+export function legacy_import(scan: number): LegacyImportReport;
+/** Lets go of the held scan (the review was cancelled). */
+export function legacy_scan_cancel(): null;
+/** One return that was filed in BIR's official eBIRForms and imported. Records only: no file bytes, no field values, nothing to send. */
+export interface LegacyFiledReturn {
+    /** The row's number, to key a list by. */
+    id: number;
+    /** The form as the old program named it: the id it matched to a form this app knows ("1601Cv2018"), else the name in the file's name. */
+    form: string;
+    /** This app's code for that form ("1601C"), or null when it has none. */
+    form_code: string | null;
+    /** The period as the file's name wrote it: "062025" (month), "2026Q1" (quarter), "122026Q1" (fiscal quarter), "2025" (year), "03152026" (a date). */
+    period: string;
+    /** The amendment's number ("V2" is 2), or null for an original. */
+    amendment_version: number | null;
+    /** True for the copy that was e-mailed to BIR. */
+    email_copy: boolean;
+    /** The file's name in the old program's folder, without the e-mail address an e-mailed copy's name carries. */
+    source_file: string;
+    /** When it was imported, as the database writes it ("2026-11-17 08:30:00", UTC). */
+    imported_at: string;
+}
+/** The returns imported from the old program for one branch's TIN (12 to 14 digits, dashes allowed), oldest import first; none for a TIN the import never named. */
+export function list_legacy_filed_returns(tin: string): LegacyFiledReturn[];

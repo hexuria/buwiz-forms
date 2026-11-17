@@ -2,6 +2,7 @@
 import { signal } from "nsh";
 import { errorText } from "../../lib/errors";
 import { store, toast } from "../../shell";
+import { legacyDatabaseReplaced } from "./legacyState";
 
 const busy = signal(false);
 
@@ -17,7 +18,10 @@ export async function runImport(): Promise<void> {
   busy.set(true);
   try {
     const result = await store.writeAsync("import_archive");
-    if (result.kind === "database") toast("Database imported.", "upload");
+    if (result.kind === "database") {
+      legacyDatabaseReplaced();
+      toast("Database imported.", "upload");
+    }
     else if (result.kind === "profile") toast("Taxpayer data restored.", "upload");
     else if (result.kind === "invalid") toast("That zip has no taxpayer or database export in it.", "triangle-alert");
   } catch (error) {

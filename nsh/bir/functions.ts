@@ -140,11 +140,29 @@ export const install_update = (...args: Parameters<typeof Host.install_update>):
 export const job_log_tail = (...args: Parameters<typeof Host.job_log_tail>): ReturnType<typeof Host.job_log_tail> =>
   Door.call("job_log_tail", args) as ReturnType<typeof Host.job_log_tail>;
 
+export const legacy_import = (...args: Parameters<typeof Host.legacy_import>): ReturnType<typeof Host.legacy_import> =>
+  Door.call("legacy_import", args) as ReturnType<typeof Host.legacy_import>;
+
+export const legacy_scan_cancel = (...args: Parameters<typeof Host.legacy_scan_cancel>): ReturnType<typeof Host.legacy_scan_cancel> =>
+  Door.call("legacy_scan_cancel", args) as ReturnType<typeof Host.legacy_scan_cancel>;
+
+export const legacy_scan_folder = (...args: Parameters<typeof Host.legacy_scan_folder>): ReturnType<typeof Host.legacy_scan_folder> =>
+  Door.callAsync("legacy_scan_folder", args) as ReturnType<typeof Host.legacy_scan_folder>;
+
+export const legacy_scan_standard = (...args: Parameters<typeof Host.legacy_scan_standard>): ReturnType<typeof Host.legacy_scan_standard> =>
+  Door.call("legacy_scan_standard", args) as ReturnType<typeof Host.legacy_scan_standard>;
+
+export const legacy_standard_folders = (...args: Parameters<typeof Host.legacy_standard_folders>): ReturnType<typeof Host.legacy_standard_folders> =>
+  Door.call("legacy_standard_folders", args) as ReturnType<typeof Host.legacy_standard_folders>;
+
 export const list_background_jobs = (...args: Parameters<typeof Host.list_background_jobs>): ReturnType<typeof Host.list_background_jobs> =>
   Door.call("list_background_jobs", args) as ReturnType<typeof Host.list_background_jobs>;
 
 export const list_form_templates = (...args: Parameters<typeof Host.list_form_templates>): ReturnType<typeof Host.list_form_templates> =>
   Door.call("list_form_templates", args) as ReturnType<typeof Host.list_form_templates>;
+
+export const list_legacy_filed_returns = (...args: Parameters<typeof Host.list_legacy_filed_returns>): ReturnType<typeof Host.list_legacy_filed_returns> =>
+  Door.call("list_legacy_filed_returns", args) as ReturnType<typeof Host.list_legacy_filed_returns>;
 
 export const list_rdos = (...args: Parameters<typeof Host.list_rdos>): ReturnType<typeof Host.list_rdos> =>
   Door.call("list_rdos", args) as ReturnType<typeof Host.list_rdos>;
@@ -425,6 +443,12 @@ export type {
   AsNeededReturn,
   AsNeededForm,
   ReturnRow,
+  LegacySkippedFile,
+  LegacyScanSummary,
+  LegacyScanAnswer,
+  LegacyStandardFolder,
+  LegacyImportReport,
+  LegacyFiledReturn,
 } from "./types";
 
 /** Every wrapper above, for bir.system_info()-style calls. */
@@ -474,8 +498,14 @@ export const bir = {
   income_tax_election_readiness,
   install_update,
   job_log_tail,
+  legacy_import,
+  legacy_scan_cancel,
+  legacy_scan_folder,
+  legacy_scan_standard,
+  legacy_standard_folders,
   list_background_jobs,
   list_form_templates,
+  list_legacy_filed_returns,
   list_rdos,
   list_returns,
   list_send_grants,
@@ -596,8 +626,14 @@ export const WRAPPED: readonly { name: string; kind: "sync" | "async" }[] = [
   { name: "income_tax_election_readiness", kind: "sync" },
   { name: "install_update", kind: "sync" },
   { name: "job_log_tail", kind: "sync" },
+  { name: "legacy_import", kind: "sync" },
+  { name: "legacy_scan_cancel", kind: "sync" },
+  { name: "legacy_scan_folder", kind: "async" },
+  { name: "legacy_scan_standard", kind: "sync" },
+  { name: "legacy_standard_folders", kind: "sync" },
   { name: "list_background_jobs", kind: "sync" },
   { name: "list_form_templates", kind: "sync" },
+  { name: "list_legacy_filed_returns", kind: "sync" },
   { name: "list_rdos", kind: "sync" },
   { name: "list_returns", kind: "sync" },
   { name: "list_send_grants", kind: "sync" },

@@ -71,6 +71,28 @@ test("recording gives the hotkey back to the system, cancelling takes it again, 
   await app.waitUntil(() => shown(app));
 });
 
+test("switching to another app ends the recording: the old chord is the system's again, nothing is stored", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ hotkey: "control+alt+shift+9" }) });
+  await app.waitFor("id:settings-hotkey", { timeout: 30000 });
+  await app.waitFor("text:chords=ctrl+alt+shift+9");
+  await app.press(BOX);
+  await app.waitFor("text:Type shortcut");
+  await app.waitFor("text:chords=");
+  expect(app.texts()).toContain("hotkey=off");
+  // The person goes to another app: the keys are theirs there, and the hold on the global hotkey is let go.
+  await app.setLifecycle("inactive");
+  await app.waitFor("text:chords=ctrl+alt+shift+9");
+  await app.waitFor("text:hotkey=registered");
+  expect(app.texts()).not.toContain("Type shortcut");
+  expect(app.texts()).toContain("⌃⌥⇧9");
+  await app.setLifecycle("active");
+  // Nothing listens any more: a chord pressed back in the window records nothing.
+  await app.keyboard.press("ctrl+alt+b");
+  expect(app.texts()).toContain("⌃⌥⇧9");
+  expect(app.texts()).toContain("chords=ctrl+alt+shift+9");
+  expect(app.texts()).not.toContain("⌃⌥B");
+});
+
 test("a chord another app holds is said under the box in plain words, and another chord takes the words away", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking({ refuse: "ctrl+alt+b" }) });
   await app.waitFor("id:settings-hotkey", { timeout: 30000 });

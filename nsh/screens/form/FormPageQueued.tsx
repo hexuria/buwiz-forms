@@ -6,6 +6,7 @@
 //   fx-send   the worker sends the return: the host's open and the lists both say Submitted
 //   fx-list   the lists say Submitted while the host's open still says Queued (a page the lists keep disagreeing with)
 //   fx-hide   the page goes away (the route changed)
+//   fx-hold   the host's next open waits (a slow read: the real one takes a few tenths of a second) until fx-release answers it
 // Readouts (texts): "opens: N" calls of bir.screen_form_open, "reads: N" reads of the filed list, "queue action: set|none" what
 // store.lastQueueAction() was when the filed list was last read.
 import { effect, mount, signal, Text, View } from "nsh";
@@ -24,6 +25,9 @@ const shown = signal(true);
 /** What the host's open says (Queued until the worker sends), and what the filed list says. */
 let opened: "Queued" | "Submitted" = "Queued";
 let listed: "Queued" | "Submitted" = "Queued";
+/** The open that fx-hold holds (answered by fx-release), and whether the next open is to wait. */
+let holding = false;
+let answer: (() => void) | null = null;
 
 function Fixture() {
   createDemoTaxpayer();
@@ -35,6 +39,10 @@ function Fixture() {
   fake.screen_form_open = async (...args: Parameters<typeof bir.screen_form_open>) => {
     setTimeout(() => opens.update((n) => n + 1), 0);
     const r = await real.open(...args);
+    if (holding) {
+      holding = false;
+      await new Promise<void>((done) => (answer = done));
+    }
     return { ...r, status: opened, editable: false };
   };
   fake.list_returns = (which: "filed" | "saved" | "all") => {
@@ -67,6 +75,8 @@ function Fixture() {
         />
         <AppButton testID="fx-list" size="sm" label="List" onPress={() => void (listed = "Submitted")} />
         <AppButton testID="fx-hide" size="sm" label="Hide" onPress={() => shown.set(false)} />
+        <AppButton testID="fx-hold" size="sm" label="Hold" onPress={() => void (holding = true)} />
+        <AppButton testID="fx-release" size="sm" label="Release" onPress={() => answer?.()} />
         <Text testID="fx-opens">{`opens: ${opens()}`}</Text>
         <Text testID="fx-reads">{`reads: ${reads()}`}</Text>
         <Text testID="fx-queue-at">{`queue action: ${queueAt() > 0 ? "set" : "none"}`}</Text>

@@ -3,3 +3,11 @@
 save_form_draft
 queue_form_draft
 get_form_draft
+# F18: the import from BIR's official eBIRForms (Settings > Import / Export).
+legacy_standard_folders
+legacy_scan_folder
+legacy_scan_standard
+legacy_import
+legacy_scan_cancel
+# F20: the returns imported from the old program, read back for one branch's TIN (Filings).
+list_legacy_filed_returns

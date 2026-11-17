@@ -109,6 +109,12 @@ pub trait Hooks: Send + Sync + 'static {
     fn prompt_for_open_path(&self, _prompt: &str, _answer: PathAnswer) -> bool {
         false
     }
+    /// Show an open panel that picks one folder, its button labelled
+    /// `prompt`; `answer` gets the result. False when no UI is running to
+    /// show it.
+    fn prompt_for_folder(&self, _prompt: &str, _answer: PathAnswer) -> bool {
+        false
+    }
     /// Show a save panel in `directory` proposing `file_name`.
     /// False when no UI is running to show it.
     fn prompt_for_save_path(
@@ -124,6 +130,15 @@ pub trait Hooks: Send + Sync + 'static {
     /// Runs on its own thread; blocking is fine.
     fn os_authenticate(&self, _reason: &str) -> bool {
         false
+    }
+
+    /// Whether this host's listener can register `combo` as the global show
+    /// hotkey: `set_global_hotkey` stores only a combo this accepts. The
+    /// default is the shared rule, [`crate::hotkey_combo::is_registrable`],
+    /// which is the old shell's listener's; a host with a listener that takes
+    /// more (or fewer) keys says so here.
+    fn global_hotkey_registrable(&self, combo: &str) -> bool {
+        crate::hotkey_combo::is_registrable(combo)
     }
 }
 

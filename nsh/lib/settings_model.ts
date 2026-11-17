@@ -63,7 +63,7 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
     { id: "security", search: "pin authenticator recovery key security" },
   ],
   transfer: [
-    { id: "import", search: "import zip restore database", adminOnly: true },
+    { id: "import", search: "import zip restore database ebirforms bir official old program folder migrate filed returns", adminOnly: true },
     { id: "export", search: "export profile archive backup zip" },
   ],
   jobs: [{ id: "jobs", search: "jobs background tasks queue logs confirmation watcher cron archive" }],
@@ -147,18 +147,73 @@ export function rowShown(section: { rows: readonly string[] } | null | undefined
 // ---- the global show hotkey: the stored combo language and the keystrokes the shortcut recorder speaks
 
 /**
- * The stored combo is words joined by "+", the key last and upper case ("control+alt+E", "super+shift+F12"). Modifier words the listeners read:
+ * The stored combo is words joined by "+", the key last and upper case ("control+alt+E", "super+shift+F12", "control+alt+SPACE": a key that is
+ * not a letter, digit or F1 to F12 is a word, never the character). Modifier words the listeners read:
  * control|ctrl, alt|option|opt, shift, platform|super|cmd|meta|win (Command, the Windows key or Super). A bare key means the platform's
  * default modifiers: control+alt on macOS, super+shift elsewhere (crates/bir-app-api/src/hotkey_combo.rs split_combo). A keystroke is
  * nsh/keymap's: "ctrl+alt+e", modifiers in the order ctrl, alt, shift, cmd, the key lower case.
  */
 
-/** The keys a stored combo may name: A to Z, 0 to 9, F1 to F12 (hotkey_combo.rs KEYS), upper case. */
+/** The keys a stored combo may name that the old app's listener registers too: A to Z, 0 to 9, F1 to F12 (hotkey_combo.rs KEYS), upper case. */
 export const HOTKEY_KEYS: readonly string[] = [
   ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
   ..."0123456789".split(""),
   ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
 ];
+
+/**
+ * The keys only this app registers (hotkey_combo.rs NSH_KEYS): the stored word (upper case: the character is never stored, "+" is the
+ * separator) and the key as nsh/keymap spells it (src/desktop.rs key_name is the same table). The old app's listener cannot register
+ * them and its set_global_hotkey refuses them; stored by this app and met by the old one, a combo is simply not registered there.
+ */
+export const HOTKEY_NSH_KEYS: Readonly<Record<string, string>> = {
+  SPACE: "space",
+  UP: "up",
+  DOWN: "down",
+  LEFT: "left",
+  RIGHT: "right",
+  HOME: "home",
+  END: "end",
+  PAGEUP: "pageup",
+  PAGEDOWN: "pagedown",
+  MINUS: "minus",
+  EQUAL: "plus",
+  LEFTBRACKET: "[",
+  RIGHTBRACKET: "]",
+  BACKSLASH: "\\",
+  SEMICOLON: ";",
+  QUOTE: "'",
+  COMMA: ",",
+  PERIOD: ".",
+  SLASH: "/",
+  BACKTICK: "`",
+  ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`F${i + 13}`, `f${i + 13}`])),
+};
+
+/** Other spellings nsh/keymap reads for the same key (a keystroke written by hand or by another version): they mean the stored word. */
+const KEY_ALIASES: Readonly<Record<string, string>> = {
+  "-": "MINUS",
+  "=": "EQUAL",
+  arrowup: "UP",
+  arrowdown: "DOWN",
+  arrowleft: "LEFT",
+  arrowright: "RIGHT",
+};
+
+/** The stored word for a key as nsh/keymap spells it (lower case), or null when no listener of ours registers it. */
+function wordOfKey(key: string): string | null {
+  const upper = key.toUpperCase();
+  if (HOTKEY_KEYS.includes(upper)) return upper;
+  const alias = KEY_ALIASES[key];
+  if (alias) return alias;
+  return Object.keys(HOTKEY_NSH_KEYS).find((word) => HOTKEY_NSH_KEYS[word] === key) ?? null;
+}
+
+/** The key as nsh/keymap spells it (lower case) for a stored word (upper case), or null when it is no key of ours. */
+function keyOfWord(word: string): string | null {
+  if (HOTKEY_KEYS.includes(word)) return word.toLowerCase();
+  return HOTKEY_NSH_KEYS[word] ?? null;
+}
 
 type Modifier = "ctrl" | "alt" | "shift" | "cmd";
 /** The modifiers in the order both languages write them. */
@@ -174,11 +229,11 @@ const KEYSTROKE_WORDS: Readonly<Record<string, Modifier>> = {
 /** The word a stored combo uses for each modifier. */
 const STORED: Readonly<Record<Modifier, string>> = { ctrl: "control", alt: "alt", shift: "shift", cmd: "super" };
 
-/** The stored combo's parts (empty ones dropped), and its key upper case; null when it names no key of HOTKEY_KEYS. */
+/** The stored combo's parts (empty ones dropped), and its key upper case; null when it names no key this app registers. */
 function storedParts(combo: string | null | undefined): { words: string[]; key: string } | null {
   const words = String(combo ?? "").split("+").map((part) => part.trim()).filter(Boolean);
   const key = (words.pop() ?? "").toUpperCase();
-  return HOTKEY_KEYS.includes(key) ? { words, key } : null;
+  return keyOfWord(key) !== null ? { words, key } : null;
 }
 
 /**
@@ -191,18 +246,19 @@ export function comboToKeystroke(combo: string | null | undefined, os: string): 
   if (!parts) return null;
   const words = parts.words.length ? parts.words : os === "macos" ? ["control", "alt"] : ["platform", "shift"];
   const on = new Set(words.map((word) => STORED_WORDS[word.toLowerCase()]).filter(Boolean));
-  return [...ORDER.filter((m) => on.has(m)), parts.key.toLowerCase()].join("+");
+  return [...ORDER.filter((m) => on.has(m)), keyOfWord(parts.key)].join("+");
 }
 
 /**
- * The stored combo a keystroke is: "ctrl+alt+e" is "control+alt+E", cmd (or super, win, meta) is "super". Null for a keystroke that names a
- * key outside HOTKEY_KEYS, a modifier word it cannot read (mod), or no modifier at all (a bare stored key would mean the platform's default
+ * The stored combo a keystroke is: "ctrl+alt+e" is "control+alt+E", "ctrl+alt+space" is "control+alt+SPACE", "cmd+minus" is "super+MINUS",
+ * cmd (or super, win, meta) is "super". Null for a keystroke that names a key no listener of ours registers (HOTKEY_KEYS and
+ * HOTKEY_NSH_KEYS), a modifier word it cannot read (mod), or no modifier at all (a bare stored key would mean the platform's default
  * modifiers, not the bare key).
  */
 export function keystrokeToCombo(keystroke: string | null | undefined): string | null {
   const words = String(keystroke ?? "").split("+").map((part) => part.trim().toLowerCase()).filter(Boolean);
-  const key = (words.pop() ?? "").toUpperCase();
-  if (!HOTKEY_KEYS.includes(key) || !words.length) return null;
+  const key = words.length ? wordOfKey(words.pop() as string) : null;
+  if (key === null || !words.length) return null;
   const on = new Set<Modifier>();
   for (const word of words) {
     const modifier = KEYSTROKE_WORDS[word];
@@ -212,7 +268,7 @@ export function keystrokeToCombo(keystroke: string | null | undefined): string |
   return [...ORDER.filter((m) => on.has(m)).map((m) => STORED[m]), key].join("+");
 }
 
-/** Whether the door takes this keystroke as the global hotkey: a key of HOTKEY_KEYS with Control, Alt or Command (Shift alone, or a bare key, is refused with hotkey_combo::NOT_REGISTRABLE). */
+/** Whether the door takes this keystroke as the global hotkey: a key of HOTKEY_KEYS or HOTKEY_NSH_KEYS with Control, Alt or Command (Shift alone, or a bare key, is refused with hotkey_combo::NOT_REGISTRABLE). */
 export function hotkeyRegistrable(keystroke: string | null | undefined): boolean {
   const combo = keystrokeToCombo(keystroke);
   if (combo === null) return false;

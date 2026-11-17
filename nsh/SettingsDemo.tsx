@@ -15,6 +15,11 @@
 //   log       "mixed" (every level), "long" (300 lines, to see the 200 cap), "empty" (no file yet), "error" (the read fails); else the real file
 //   cloud     "out" (signed out; sign-in works), "in" (signed in as juana@example.com; sign-out works), "down" (the server is unreachable)
 //   import    "database" | "profile" | "invalid" | "cancelled" | "fail": what import_archive answers (the dialog is the host's)
+//   ebir      F18, the eBIRForms import (the folder dialog is the host's): "found" (a folder with 1 taxpayer, 3 filed returns, 1 draft,
+//             1 file not read; Import creates the committed fixture's taxpayer for real, so the frame's lists re-read), "standard" (the
+//             same, plus a standard folder C:\eBIRForms with Scan), "empty", "wrong" (not an eBIRForms folder), "cancelled", "fail"
+//             (the scan throws), "importfail" (the import throws), "slow" (the scan answers after 1.5 s). The taxpayer count shows as
+//             demo-taxpayers.
 //   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened)
 //   hotkey    "refuse": set_global_hotkey is refused, as the host does for a chord it cannot register; "note": it is listed in the calls
 //             readout (noise) and then done by the real host, so the box shows what was stored
@@ -27,6 +32,8 @@
 import { effect, host, mount, signal, Text, untracked, View } from "nsh";
 import "./theme/fonts";
 import { bir, type BackgroundJob, type CloudAccountStatus, type InboxState, type UpdateStatus } from "./bir";
+import type { LegacyScanAnswer, LegacyScanSummary } from "./bir";
+import { store } from "./shell/store";
 import { createDemoTaxpayer } from "./bir/testing";
 import { totpCode } from "./screens/auth/testTotp";
 import { app } from "./shell/app";
@@ -49,6 +56,7 @@ interface Params {
   log?: "mixed" | "long" | "empty" | "error";
   cloud?: "out" | "in" | "down";
   import?: "database" | "profile" | "invalid" | "cancelled" | "fail";
+  ebir?: "found" | "standard" | "empty" | "wrong" | "cancelled" | "fail" | "importfail" | "slow";
   status?: "refused" | "invalid";
   update?: boolean;
   noise?: boolean;
@@ -187,6 +195,44 @@ function fakeImport(kind: NonNullable<Params["import"]>): void {
   });
 }
 
+function fakeEbir(kind: NonNullable<Params["ebir"]>): void {
+  const folder = kind === "standard" ? "C:\\eBIRForms" : "/Volumes/TRANSFER/eBIRForms";
+  const found: LegacyScanSummary = {
+    kind: "scanned", scan: 7, folder, taxpayers: 1, filed_returns: 3, drafts: 1,
+    skipped: [{ file: "garbage.xml", reason: "invalid return filename" }],
+  };
+  const answer = (): LegacyScanAnswer => {
+    if (kind === "cancelled") return { kind: "cancelled" };
+    if (kind === "fail") throw new Error("The file dialog could not open: no window");
+    if (kind === "empty") return { ...found, kind: "empty", scan: 0, taxpayers: 0, filed_returns: 0, drafts: 2, skipped: [] };
+    if (kind === "wrong") return { ...found, kind: "not_ebirforms", scan: 0, taxpayers: 0, filed_returns: 0, drafts: 0, skipped: [] };
+    return found;
+  };
+  swap("legacy_standard_folders", () => () => (kind === "standard" ? [{ index: 0, path: "C:\\eBIRForms" }] : []));
+  swap("legacy_scan_folder", () => async () => {
+    note("legacy_scan_folder");
+    if (kind === "slow") await new Promise<void>((done) => setTimeout(done, 1500));
+    return answer();
+  });
+  swap("legacy_scan_standard", () => (index) => {
+    note(`legacy_scan_standard ${index}`);
+    return answer() as LegacyScanSummary;
+  });
+  swap("legacy_scan_cancel", () => () => {
+    note("legacy_scan_cancel");
+    return null;
+  });
+  swap("legacy_import", () => (scan) => {
+    note(`legacy_import ${scan}`);
+    if (kind === "importfail") throw new Error("The folder changed since it was read. Scan it again before importing.");
+    // What the committed fixture folder brings in (crates/bir-core/tests/legacy-ebirforms), made for real so the lists re-read.
+    if (!bir.list_taxpayers().some((t) => t.tin_root === "123456788")) {
+      bir.create_taxpayer({ tin_root: "123-456-788", name: "Juan Dela Cruz Test", taxpayer_type: "Individual", head_office: { rdo_code: "039", registered_address: "123 Test Street", zip_code: "1100", email: "legacy@example.test" } });
+    }
+    return { taxpayers_created: 1, taxpayers_updated: 0, taxpayers_unchanged: 0, fields_filled: 8, returns_imported: 3, returns_already_present: 0, skipped: 1 };
+  });
+}
+
 function fakeUpdate(): void {
   let auto = true;
   swap("update_status", () => (): UpdateStatus => ({ phase: "idle", version: null, message: null, auto_download: auto, current_version: "0.2.0" }));
@@ -263,6 +309,7 @@ function Demo() {
   if (p.log) fakeLog(p.log);
   if (p.cloud) fakeCloud(p.cloud);
   if (p.import) fakeImport(p.import);
+  if (p.ebir) fakeEbir(p.ebir);
   if (p.update) fakeUpdate();
   if (p.google) fakeGoogle();
   if (p.hotkey === "refuse") fakeHotkeyRefusal();
@@ -292,6 +339,11 @@ function Demo() {
               `mode=${app.authState().mode}`,
             ].join(" ")}
           </Text>
+        </View>
+      </If>
+      <If when={p.ebir && p.noise}>
+        <View class="absolute top-0 right-0" style={{ pointerEvents: "none" }}>
+          <Text testID="demo-taxpayers">{`taxpayers=${store.taxpayers().length}`}</Text>
         </View>
       </If>
       <If when={p.noise}>

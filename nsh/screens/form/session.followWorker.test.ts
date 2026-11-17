@@ -2,6 +2,7 @@
 // longer hold it as Queued (FormPage asks it; FormPageQueued.test.tsx proves the page's side). The page stays drawn while it reads, never
 // reads over typing or over a read already under way, and the lists and the page name a return by the same stored id.
 // Through the real door (scratch database, the demo taxpayer); the host's open is stood in for, to answer the return Queued or Submitted.
+import { effect } from "nsh";
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
@@ -66,6 +67,31 @@ test("a Queued page reads the return again when asked, stays drawn while it read
     // A page that no longer says Queued reads nothing.
     s.refreshQueued();
     expect(spy.count.opens).toBe(2);
+  } finally {
+    spy.restore();
+    s.dispose();
+  }
+});
+
+test("a Queued page moves to Submitted in ONE update of what the page shows: Cancel queue and the chip read the same value, nothing in between", async () => {
+  const stored = { now: "Queued" as "Draft" | "Queued" | "Submitted" };
+  const spy = storedAs(stored);
+  const s = await opened(at("1601C", 2025, 3));
+  try {
+    // What the page draws from: the header's status (the chip's words and Cancel queue's condition: FormPage Header) and what its
+    // other parts say (read-only, opening, an error). Every value it takes while the worker's move is read is kept.
+    const seen: string[] = [];
+    effect(() => {
+      const h = s.header();
+      seen.push(`${h.status} editable=${h.editable} loading=${h.loading} error=${h.error} sample=${h.sample}`);
+    });
+    expect(seen).toEqual(["Queued editable=false loading=false error= sample=false"]);
+    stored.now = "Submitted";
+    s.refreshQueued();
+    await until(() => s.status() === "Submitted", "the page shows the stored status");
+    await new Promise<void>((done) => setTimeout(done, 100));
+    // One new value, and it is the final one: the page never showed Opening..., a Draft, an editable page or an error on the way.
+    expect(seen).toEqual(["Queued editable=false loading=false error= sample=false", "Submitted editable=false loading=false error= sample=false"]);
   } finally {
     spy.restore();
     s.dispose();

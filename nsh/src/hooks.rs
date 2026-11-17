@@ -104,6 +104,26 @@ impl Hooks for NshHooks {
         true
     }
 
+    fn prompt_for_folder(&self, prompt: &str, answer: PathAnswer) -> bool {
+        // NSH's open panel in folder mode (nsh-core file_dialog.rs `OpenDialog::folders`), one folder.
+        if try_os().is_none() {
+            return false;
+        }
+        let panel = pick_paths(OpenDialog::folders().button_label(prompt));
+        keep(async move {
+            let choice = match panel.await {
+                Ok(Some(paths)) => paths
+                    .into_iter()
+                    .next()
+                    .map_or(PathChoice::Cancelled, PathChoice::Picked),
+                Ok(None) => PathChoice::Cancelled,
+                Err(error) => PathChoice::Failed(error),
+            };
+            answer(choice);
+        });
+        true
+    }
+
     fn prompt_for_save_path(&self, directory: &Path, file_name: &str, answer: PathAnswer) -> bool {
         if try_os().is_none() {
             return false;
@@ -128,6 +148,12 @@ impl Hooks for NshHooks {
     // Touch ID and the account password (admin recovery): `auth.rs` (false in a test environment).
     fn os_authenticate(&self, reason: &str) -> bool {
         crate::auth::os_authenticate(reason)
+    }
+
+    // The global hotkey: this app's listener registers more keys than the old shell's (space, the arrows, punctuation,
+    // F13 to F20) and refuses a combo with no Control, Alt or Command. `set_global_hotkey` stores what this accepts.
+    fn global_hotkey_registrable(&self, combo: &str) -> bool {
+        crate::desktop::hotkey_shortcut(combo).is_some()
     }
 }
 

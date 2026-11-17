@@ -52,7 +52,7 @@ pub(crate) mod taxpayers;
 #[cfg(test)]
 mod year_facts_tests;
 pub use inbox_oauth::{InboxOAuthPersistResult, InboxOAuthTokens};
-pub use legacy_filed_returns::LegacyFiledReturn;
+pub use legacy_filed_returns::{LegacyFiledReturn, LegacyFiledReturnSummary};
 pub use submissions::SubmissionSummary;
 pub use taxpayers::{BulkCopyReport, MissingFormPolicy, TemplateConflictPolicy};
 

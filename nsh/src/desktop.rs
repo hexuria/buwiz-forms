@@ -14,8 +14,9 @@
 //!   finds the lock taken, sends "show" to that port and exits, and the first copy's host brings its window to
 //!   the front (`Desktop.poll().activate`).
 //! * **The hotkey combo language.** [`hotkey_shortcut`] turns a stored combo (`control+alt+E`) into the keystroke
-//!   `GlobalShortcut.register` takes (`ctrl+alt+e`), by the rules of `bir_app_api::hotkey_combo`, which the
-//!   Settings page and `set_global_hotkey` use too, so the page and the listener agree.
+//!   `GlobalShortcut.register` takes (`ctrl+alt+e`), by the rules of `bir_app_api::hotkey_combo` (its `KEYS` and the
+//!   NSH app's own `NSH_KEYS`: space, arrows, punctuation ...), which the Settings page and `set_global_hotkey` use too
+//!   (through the hooks: [`NshHooks`](crate::hooks) asks this file), so the page and the listener agree.
 //!
 //! Nothing here changes the process environment, sends anything, or opens a database.
 
@@ -310,16 +311,16 @@ pub(crate) fn set_auto_update_download(enabled: bool) {
 
 /// The keystroke `GlobalShortcut.register` takes for a stored combo, or `None` when the combo cannot be registered.
 ///
-/// The rules are `bir_app_api::hotkey_combo`'s (the key list, the platform's default modifiers for a bare key),
-/// so `set_global_hotkey` accepts exactly what this maps. Modifier words are the old listener's: `control`/`ctrl`,
-/// `alt`/`option`/`opt`, `shift`, and `platform`/`super`/`cmd`/`meta`/`win` for Command, the Windows key or Super; any
-/// other word is ignored. A combo with no Control, Alt or Command left is refused: the old listener would have
-/// registered the bare key (or Shift and a letter) for the whole computer.
+/// The rules are `bir_app_api::hotkey_combo`'s (the key lists, the platform's default modifiers for a bare key),
+/// and `set_global_hotkey` accepts exactly what this maps (`NshHooks::global_hotkey_registrable`). The keys are
+/// `KEYS` (the old listener's: a to z, 0 to 9, F1 to F12) and `NSH_KEYS`, which only this app registers (space, the
+/// arrows, punctuation, F13 to F20: [`key_name`] says how `nsh/keymap` spells each). Modifier words are the old
+/// listener's: `control`/`ctrl`, `alt`/`option`/`opt`, `shift`, and `platform`/`super`/`cmd`/`meta`/`win` for Command, the
+/// Windows key or Super; any other word is ignored. A combo with no Control, Alt or Command left is refused: the old
+/// listener would have registered the bare key (or Shift and a letter) for the whole computer.
 pub fn hotkey_shortcut(combo: &str) -> Option<String> {
-    if !hotkey_combo::is_registrable(combo) {
-        return None;
-    }
     let (words, key) = hotkey_combo::split_combo(combo)?;
+    let key = key_name(&key)?;
     let (mut ctrl, mut alt, mut shift, mut cmd) = (false, false, false, false);
     for word in &words {
         match word.to_ascii_lowercase().as_str() {
@@ -339,8 +340,42 @@ pub fn hotkey_shortcut(combo: &str) -> Option<String> {
             parts.push(name.to_owned());
         }
     }
-    parts.push(key.to_ascii_lowercase());
+    parts.push(key);
     Some(parts.join("+"))
+}
+
+/// How `nsh/keymap` spells the key a stored word (upper case) names: the lower-case word for a letter, digit or
+/// function key (`E` is `e`, `F12` is `f12`, `F13` is `f13`), a name or the character for the others. `None` for a word
+/// no listener of ours registers. The punctuation keys are written as the character they type without Shift on a
+/// US keyboard (`[`, `;`, `,`), `-` as `minus` and `=` as `plus`, which is what `keymap.bind` calls them.
+fn key_name(word: &str) -> Option<String> {
+    let name = match word {
+        "SPACE" => "space",
+        "UP" => "up",
+        "DOWN" => "down",
+        "LEFT" => "left",
+        "RIGHT" => "right",
+        "HOME" => "home",
+        "END" => "end",
+        "PAGEUP" => "pageup",
+        "PAGEDOWN" => "pagedown",
+        "MINUS" => "minus",
+        "EQUAL" => "plus",
+        "LEFTBRACKET" => "[",
+        "RIGHTBRACKET" => "]",
+        "BACKSLASH" => "\\",
+        "SEMICOLON" => ";",
+        "QUOTE" => "'",
+        "COMMA" => ",",
+        "PERIOD" => ".",
+        "SLASH" => "/",
+        "BACKTICK" => "`",
+        other if hotkey_combo::KEYS.contains(&other) || hotkey_combo::NSH_KEYS.contains(&other) => {
+            return Some(other.to_ascii_lowercase());
+        }
+        _ => return None,
+    };
+    Some(name.to_owned())
 }
 
 // ------------------------------------------------------------------------------------- one copy running
@@ -909,9 +944,22 @@ mod tests {
             "  ",
             " + ",
             "control+notakey",
-            "control+F13",
-            "control+space",
+            // The character is never a stored key (+ is the separator); a word of the old list's neighbours is no key.
             "control+-",
+            "control+=",
+            "control+[",
+            "control+F21",
+            "control+F24",
+            "control+TAB",
+            "control+ENTER",
+            "control+ESCAPE",
+            "control+BACKSPACE",
+            "control+DELETE",
+            "control+INSERT",
+            "control+PLUS",
+            "control+SPACEBAR",
+            "control+ARROWLEFT",
+            "control+BRACKETLEFT",
             // No Control, Alt or Command: the bare key, or Shift and a key, would be taken from every app.
             "shift+E",
             "banana+E",
@@ -942,6 +990,80 @@ mod tests {
                         .unwrap_or_else(|error| panic!("{combo} -> {shortcut}: {error:?}"));
                 }
             }
+        }
+    }
+
+    /// The keys only this app registers (`NSH_KEYS`) map with every modifier set, to the spelling `nsh/keymap` and
+    /// `GlobalShortcut.register` read, and to one keystroke each. The old shell's rule (`is_registrable`) still refuses
+    /// every one of them: it is the old listener's, and that listener cannot register them.
+    #[test]
+    fn every_nsh_only_key_is_a_keystroke_nsh_reads_and_the_old_rule_still_refuses_it() {
+        let sets = ["control+alt", "alt", "cmd", "super+shift", "control+alt+shift+super", "shift+control"];
+        let mut seen = std::collections::BTreeSet::new();
+        for key in hotkey_combo::NSH_KEYS {
+            for mods in sets {
+                let combo = format!("{mods}+{key}");
+                assert!(!hotkey_combo::is_registrable(&combo), "{combo}: the old listener's rule");
+                let shortcut = hotkey_shortcut(&combo).unwrap_or_else(|| panic!("{combo} maps"));
+                for mod_is_meta in [true, false] {
+                    let read = nsh_core::desktop::Shortcut::parse(&shortcut, mod_is_meta)
+                        .unwrap_or_else(|error| panic!("{combo} -> {shortcut}: {error:?}"));
+                    assert!(read.ctrl || read.alt || read.meta || read.shift, "{combo} -> {shortcut}");
+                }
+                // The keymap reads the same text as the keystroke the recorder binds.
+                nsh_core::keymap::Keystroke::parse(&shortcut, nsh_core::platform::Os::MacOs)
+                    .unwrap_or_else(|error| panic!("{combo} -> {shortcut}: {error:?}"));
+            }
+            let alone = key_name(key).expect("a name");
+            assert!(seen.insert(alone.clone()), "{key} -> {alone}: two words, one key");
+        }
+        assert_eq!(seen.len(), hotkey_combo::NSH_KEYS.len());
+    }
+
+    /// The spelling of each word of `NSH_KEYS`: what the recorder binds and what the page's `comboToKeystroke` writes
+    /// (`lib/settings_model.ts`, the same table; its test lists the same pairs).
+    #[test]
+    fn the_nsh_only_keys_have_the_names_the_page_writes() {
+        for (word, name) in [
+            ("SPACE", "space"),
+            ("UP", "up"),
+            ("DOWN", "down"),
+            ("LEFT", "left"),
+            ("RIGHT", "right"),
+            ("HOME", "home"),
+            ("END", "end"),
+            ("PAGEUP", "pageup"),
+            ("PAGEDOWN", "pagedown"),
+            ("MINUS", "minus"),
+            ("EQUAL", "plus"),
+            ("LEFTBRACKET", "["),
+            ("RIGHTBRACKET", "]"),
+            ("BACKSLASH", "\\"),
+            ("SEMICOLON", ";"),
+            ("QUOTE", "'"),
+            ("COMMA", ","),
+            ("PERIOD", "."),
+            ("SLASH", "/"),
+            ("BACKTICK", "`"),
+            ("F13", "f13"),
+            ("F20", "f20"),
+        ] {
+            assert!(hotkey_combo::NSH_KEYS.contains(&word), "{word}");
+            assert_eq!(key_name(word).as_deref(), Some(name), "{word}");
+            assert_eq!(
+                hotkey_shortcut(&format!("control+alt+{word}")),
+                Some(format!("ctrl+alt+{name}")),
+                "{word}"
+            );
+        }
+        // Lower case in a stored combo, as for every key.
+        assert_eq!(hotkey_shortcut("Control+Alt+space").as_deref(), Some("ctrl+alt+space"));
+        assert_eq!(hotkey_shortcut("alt+pagedown").as_deref(), Some("alt+pagedown"));
+        // Shift and a key is still no hotkey: it would be taken from every app (a bare key is the platform's default modifiers).
+        for combo in ["space", "SPACE", "shift+SPACE", "shift+LEFT", "F13", "shift+F20"] {
+            // A bare key means the platform's default modifiers (control+alt, or super+shift: both have a Control, Alt or
+            // Command), so it is a hotkey; Shift and a key, with nothing else, is not.
+            assert_eq!(hotkey_shortcut(combo).is_some(), !combo.starts_with("shift+"), "{combo}");
         }
     }
 

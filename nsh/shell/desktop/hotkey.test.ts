@@ -2,6 +2,7 @@
 // (src/desktop.rs, which bir-app-api's hotkey_combo feeds) reached through the door, so the Settings page and the listener agree.
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
+import { HOTKEY_KEYS, HOTKEY_NSH_KEYS } from "../../lib/settings_model";
 import { createHotkey, type HotkeyDeps } from "./hotkey";
 import { holdHotkey, hotkeyHeld, hotkeyStatus, setHotkeyStatus } from "./hotkey_state";
 import { hotkeyShortcut } from "./native";
@@ -92,7 +93,10 @@ test("the host's combo rules reach TSX: what Settings stores, GlobalShortcut can
 });
 
 test("the page and the host agree: whatever the host can map the page stores, and what the page refuses the host does not map", () => {
-  const combos = ["control+alt+E", "control+alt+F12", "super+shift+B", "control+alt+notakey", "control+alt+F13", "control+alt+space", "alt+9", "control+alt+0"];
+  const combos = [
+    "control+alt+E", "control+alt+F12", "super+shift+B", "control+alt+notakey", "control+alt+F13", "control+alt+space", "alt+9", "control+alt+0",
+    "control+alt+F21", "control+alt+-", "control+alt+TAB", "shift+SPACE", "control+alt+COMMA",
+  ];
   for (const combo of combos) {
     let stored = true;
     try {
@@ -102,6 +106,29 @@ test("the page and the host agree: whatever the host can map the page stores, an
     }
     expect(stored).toBe(hotkeyShortcut(combo) !== null);
   }
+  bir.set_global_hotkey("");
+  expect(bir.system_info().global_hotkey).toBeNull();
+});
+
+test("F19: the keys only this app registers: the host maps and stores each stored word, and the page's table spells them the same", () => {
+  expect(Object.keys(HOTKEY_NSH_KEYS).length).toBe(28);
+  for (const [word, key] of Object.entries(HOTKEY_NSH_KEYS)) {
+    const combo = `control+alt+${word}`;
+    expect(hotkeyShortcut(combo)).toBe(`ctrl+alt+${key}`);
+    // The same word in lower case, as a hand-written setting could have it.
+    expect(hotkeyShortcut(combo.toLowerCase())).toBe(`ctrl+alt+${key}`);
+    bir.set_global_hotkey(combo);
+    expect(bir.system_info().global_hotkey).toBe(combo);
+  }
+  // The old keys keep their old spelling (the lower-case word).
+  for (const word of HOTKEY_KEYS) expect(hotkeyShortcut(`alt+${word}`)).toBe(`alt+${word.toLowerCase()}`);
+  // A refused combo leaves what was stored.
+  bir.set_global_hotkey("control+alt+SPACE");
+  for (const refused of ["control+alt+F21", "control+alt+TAB", "control+alt+ENTER", "control+alt+-", "control+alt+[", "shift+SPACE", "shift+F20"]) {
+    expect(() => bir.set_global_hotkey(refused)).toThrow(/not one this computer can register/);
+    expect(hotkeyShortcut(refused)).toBeNull();
+  }
+  expect(bir.system_info().global_hotkey).toBe("control+alt+SPACE");
   bir.set_global_hotkey("");
   expect(bir.system_info().global_hotkey).toBeNull();
 });
