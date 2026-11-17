@@ -21,7 +21,7 @@ No Windows or Linux machine was available, so nothing below was run there. "Writ
 |---|---|---|---|
 | Forms, tax profile, filings, send queue (`bir-core`, `bir-app-api`, plain SQLite) | built and tested | written | written |
 | Send guard: a dry run is forced; only the local mock BIR may differ | built and tested | written (plain Rust, its tests run on macOS) | written |
-| Database guard: never opens the owner's data folders | built and tested (home folder from the password database; folders also known by device and inode) | **refuses every database unless `BIR_DATABASE_PATH` names that file.** Not written: a profile-folder lookup that ignores `USERPROFILE`, and a same-file check | written (the macOS code); names compared case-sensitively; never run |
+| Database guard: never opens the owner's data folders | built and tested (home folder from the password database; folders also known by device and inode) | built and tested (profile folder from the process's token, never `USERPROFILE`; folders and files also known by volume and file index) | written (the macOS code); names compared case-sensitively; never run |
 | OS sign-in for admin recovery (Touch ID or password; Windows Hello) | written; no test shows the real prompt (a test environment answers "no" without asking) | written (`robius-authentication`), never run | stub: answers "no" (`this platform has no OS sign-in prompt`). PIN, authenticator and recovery key work as everywhere |
 | Print preview window | built and tested | the TSX side is shared; never opened | the same |
 | Print and Save as PDF | built and tested (WebKit makes the PDF, the system print panel prints) | stub: "Print and Save as PDF are available on macOS only for now." | the same stub |
@@ -71,12 +71,12 @@ just core-plain-test                  # bir-core and bir-app-api tests, plain SQ
 
 Without just: `export PATH="$HOME/BuwizNsh/tools/bin:$PATH"; cd nsh; nsh check; nsh build; nsh test`, and `cargo test --manifest-path nsh/Cargo.toml` for the Rust crate.
 `nsh run --target windows` and `--target linux` are NSH's commands for those backends; nobody has run them with this app, and `nsh-run` and `nsh-shots` pass `--target macos`.
-On Windows, tests that reach the database need `BIR_DATABASE_PATH` set (the guard above), and engines in one run cannot share one file.
+On Windows, as on macOS, a test environment's scratch database needs no `BIR_DATABASE_PATH` (the guard verifies there). Engines in one run cannot share one named file.
 
 CI: `.github/workflows/nsh.yml` runs the macOS steps above and `just core-plain-test` on pull requests that touch `nsh/` or the crates it uses. It has never run and cannot pass until the NSH commit above is pushed and the `NSH_REPO_TOKEN` secret exists.
 
 ## Parked
 
-- Windows: the profile-folder lookup and the same-file check for the database guard, stale print-folder sweep (`OpenProcess`), Print and Save as PDF (a web view that can make a PDF), running any of it.
+- Windows: stale print-folder sweep (`OpenProcess`), Print and Save as PDF (a web view that can make a PDF), the real-window tests.
 - Linux: the same PDF work, an OS sign-in prompt, running any of it.
 - iOS and Android: everything. Screens are already built wide and narrow with a test at 390x844; the Rust side (guards, print, desktop glue) has no phone paths yet.
