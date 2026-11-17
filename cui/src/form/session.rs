@@ -2364,7 +2364,7 @@ impl FormSession {
             return Vec::new();
         }
         let mut notes: Vec<String> = Vec::new();
-        let mut add = |text: &str, notes: &mut Vec<String>| {
+        let add = |text: &str, notes: &mut Vec<String>| {
             if !text.is_empty() && !notes.iter().any(|n| n == text) {
                 notes.push(text.to_owned());
             }
@@ -4673,10 +4673,6 @@ impl FormSession {
         self.st.period_set
     }
 
-    pub fn st_ref(&self) -> &St {
-        &self.st
-    }
-
     /// A row's RowInfo (computed on demand; immediate mode needs no signals).
     pub fn row_info(&mut self, id: &str) -> RowInfo {
         let shown = self.shown_messages();
@@ -4855,7 +4851,7 @@ impl FormSession {
             } else {
                 None
             },
-            penalty: penalty.map(|p| if penalty_open { "computed" } else { "edit" }),
+            penalty: penalty.map(|_| if penalty_open { "computed" } else { "edit" }),
             tucked,
             asks,
             ask_saved: s.ask_saved_at.get(id).cloned().unwrap_or_default(),
@@ -5264,10 +5260,6 @@ fn same_number(a: &str, b: &str) -> bool {
     let x = plain(a);
     let y = plain(b);
     x == y || mask::same_amount(&x, &y)
-}
-
-fn ticked(v: Option<&String>) -> bool {
-    matches!(v.map(String::as_str), Some("true") | Some("1") | Some("Y"))
 }
 
 /// The three boxes' values as the MM/DD/YYYY text a date box reads.
