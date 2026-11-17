@@ -9,10 +9,11 @@ publish = false
 
 [dependencies]
 # The CUI immediate-mode UI library, through its safe Rust bindings (vendored C amalgamation,
-# compiled by cc). Crate `cui-rs`, library `cui`.
-cui-rs = "0.1.3"
-# The raw FFI bindings, for the one control cui-rs has no safe wrapper for (the sections popover).
-cui-sys = "=0.1.3+cui1.4.0"
+# compiled by cc). Crate `cui-rs`, library `cui`. Local checkout: it carries the
+# `cui_popover_opts.anchor_off` patch the sections popover needs.
+cui-rs = { path = "../../cui-rs/cui" }
+# The raw FFI bindings, for the controls cui-rs has no safe wrapper for (the sections popover).
+cui-sys = { path = "../../cui-rs/cui-sys" }
 
 # The door: the UI-free host functions of the Rust brain, in plain SQLite (no sqlcipher, no database key).
 bir-app-api = { path = "../crates/bir-app-api", default-features = false }

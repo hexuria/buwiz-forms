@@ -1568,6 +1568,8 @@ fn draw_pill_bar(
             // The popover anchors to the last widget drawn — the next icon at the pill's
             // right edge. TOP_END puts the list's right edge on the icon's right edge; at
             // 476pt (pill width - 12) it lands centred on the pill, like NSH's section list.
+            // anchor_off lifts it the rest of the way: the icon's top sits 13pt under the
+            // pill's, so 15 puts the list's bottom 2pt above the pill instead of inside it.
             // popover_begin must stay the last thing in the bar so the anchor is stable.
             let opts = cui_sys::cui_popover_opts {
                 _pad: 0,
@@ -1575,6 +1577,7 @@ fn draw_pill_bar(
                 width: 476.0,
                 pad: 8.0,
                 gap: 6.0,
+                anchor_off: 15.0,
             };
             if ui.popover_begin("fp-sections", &opts) {
                 // The page's press_hit widgets stay suppressed under the popover, but the
