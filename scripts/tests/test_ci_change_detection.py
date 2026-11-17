@@ -415,6 +415,7 @@ class CiChangeDetectionTests(unittest.TestCase):
             check_reason="event schedule tests everything",
             validation="true",
             validation_reason="nightly run",
+            shell="true",
             event="schedule",
         )
 
@@ -423,6 +424,7 @@ class CiChangeDetectionTests(unittest.TestCase):
             systems=self.ALL_SYSTEMS,
             check_reason="event workflow_dispatch tests everything",
             validation_reason="manual run, box not ticked",
+            shell="true",
             event="workflow_dispatch",
         )
 
@@ -432,6 +434,7 @@ class CiChangeDetectionTests(unittest.TestCase):
             check_reason="event workflow_dispatch tests everything",
             validation="true",
             validation_reason="manual run",
+            shell="true",
             event="workflow_dispatch",
             force="true",
         )
