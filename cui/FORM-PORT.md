@@ -117,7 +117,7 @@ Every code opened its sample and rendered parts/fields/navigator/pill with no
 | 2200S | PASS | percentage fields |
 | 2200T | PASS | percentage fields |
 | 2550M | PASS | monthly fields |
-| 2550Q | PASS | quarterly + schedule rows (verified rendering) |
+| 2550Q | PASS | quarterly + schedule rows (verified live: add row → drawer edit → Done → summary in list → reopen → Delete row → cells cleared) |
 | 2551Q | PASS | quarterly fields |
 | 2552 | PASS | quarterly fields |
 | 2553 | PASS | quarterly fields |
