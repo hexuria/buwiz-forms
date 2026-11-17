@@ -128,7 +128,10 @@ Every code opened its sample and rendered parts/fields/navigator/pill with no
 - Schedules render as row lists + right sheet drawer editor (NSH Schedule.tsx), per-row
   number/caption, add/remove/done.
 - One-date items collapse month/day/year into a single date box; split dates get a
-  calendar button beside the boxes (`pick_date` fills open parts).
+  calendar button beside the boxes (`pick_date` fills open parts). Plain `date` fields
+  draw a 170pt input with the calendar icon at its right edge (NSH DateField); the
+  picker's `popover_begin` runs inside the trigger's `pick-` id scope so `cui_make_id`
+  hashes the same popup id `popover_open` set (verified live on 1701 item 10).
 - Date picker is a real calendar popover (`fp-cal-*`): Su–Sa day grid with dimmed
   outside-month days, ‹ › month paging, month and year label buttons switching to
   12-month and 12-year grids (nsh-base DatePicker's month/year toggle views), min/max
