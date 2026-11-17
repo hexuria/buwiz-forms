@@ -3,6 +3,7 @@
 // a fresh scratch database for this engine, so nothing here touches the NSH app's data folder or anyone's data.
 import { Door } from "ebirforms/native";
 import { expect, test } from "nsh/test";
+import { platform } from "os";
 import { NOT_WRAPPED, WRAPPED, bir, doorStatus, hostFunctions, shutdown } from "./index";
 import type { ScreenFormOpened, Taxpayer } from "./index";
 import { DEMO, createDemoTaxpayer } from "./testing";
@@ -16,7 +17,8 @@ test("the door says how sending stands: a dry run, in a test environment", () =>
 test("system_info answers from an empty scratch database in the temp folder", () => {
   const info = bir.system_info();
   expect(info.app_version).toBe("0.2.0");
-  expect(info.os).toBe("macos");
+  // The system the test runs on, named as Rust names it (std::env::consts::OS), as the standard `os` module does.
+  expect(info.os).toBe(platform());
   expect(info.database_path).toContain("ebirforms-door");
   expect(info.database_path).toContain("bir_data.db");
   // The scratch file is not the NSH app's data folder, and certainly not the owner's.
