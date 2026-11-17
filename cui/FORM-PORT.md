@@ -123,6 +123,12 @@ Every code opened its sample and rendered parts/fields/navigator/pill with no
   number/caption, add/remove/done.
 - One-date items collapse month/day/year into a single date box; split dates get a
   calendar button beside the boxes (`pick_date` fills open parts).
+- Date picker is a real calendar popover (`fp-cal-*`): Su–Sa day grid with dimmed
+  outside-month days, ‹ › month paging, month and year label buttons switching to
+  12-month and 12-year grids (nsh-base DatePicker's month/year toggle views), min/max
+  days disabled per `dateRange`, pick writes back and closes, outside click/Escape
+  dismisses. A `settle` frame guard stops the opening/view-switch press from landing
+  on a cell that appears under the cursor (CUI buttons re-report the press).
 - Elections, asks (choice/text), penalties (edit/use computed), stop-here, from-hints
   ("Use it"), to-profile switches, profile-edit cards all wired in the item footer.
 - "Additional details" items fold behind a ghost toggle (`more_open`).

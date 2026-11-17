@@ -29,166 +29,416 @@ thread_local! {
     static DATE_PICKER: RefCell<Option<DatePicker>> = const { RefCell::new(None) };
 }
 
-/// The calendar beside a date box (NSH's CalendarButton/DateField calendar): which field it is for
-/// and the month on screen. `min`/`max` are the days the calendar may offer (rows.tsx `dateRange`).
+/// The calendar beside a date box (NSH's CalendarButton/DateField calendar — a real
+/// nsh-base `DatePicker` popup): which field it is for, the month on screen, the grid's
+/// view (days / months / years, the header toggles), the day the field holds and the
+/// days the calendar may offer (rows.tsx `dateRange`).
 struct DatePicker {
     field: String,
     year: i32,
     month: u32,
+    /// 0 = day grid, 1 = month grid, 2 = year grid.
+    view: u8,
+    /// The day the field holds, highlighted in the day grid.
+    value: Option<chrono::NaiveDate>,
     min: Option<chrono::NaiveDate>,
     max: Option<chrono::NaiveDate>,
+    /// Frames to ignore cell picks after open or a view change: the press that
+    /// opened/switched the grid must not land on a cell that appears under it.
+    settle: u8,
 }
 
 /// Opens the picker for `field` showing the month of `current` (a typed date) or today.
 fn open_date_picker(
+    ui: &Ui,
     field: &str,
     current: &str,
     min: Option<chrono::NaiveDate>,
     max: Option<chrono::NaiveDate>,
 ) {
     let today = chrono::Local::now().date_naive();
-    let (mut year, mut month) = (today.year(), today.month());
-    if let Some(d) = crate::lib::dates::parse_typed_date(current) {
+    let (mut year, mut month, mut value) = (today.year(), today.month(), None);
+    if let Some(d) = crate::lib::dates::parse_typed_date(current)
+        && let Some(date) = chrono::NaiveDate::from_ymd_opt(d.y, d.m, d.d)
+    {
         year = d.y;
         month = d.m;
+        value = Some(date);
     }
     DATE_PICKER.with(|p| {
         *p.borrow_mut() = Some(DatePicker {
             field: field.to_owned(),
             year,
             month,
+            view: 0,
+            value,
             min,
             max,
+            settle: 3,
         });
     });
+    ui.popover_open(&format!("fp-cal-{field}"));
 }
 
-/// Draws the picker while it is open for `field`; returns the picked day as "YYYY-MM-DD".
-fn date_picker(ui: &mut Ui, field: &str) -> Option<String> {
-    let open = DATE_PICKER.with(|p| p.borrow().as_ref().is_some_and(|d| d.field == field));
-    if !open {
-        return None;
+const MONTH_NAMES: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+const MONTH_SHORT: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+const WEEKDAYS: [&str; 7] = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+/// A square calendar cell: fixed width, label centered, picked day on the primary fill.
+fn cal_cell(
+    ui: &mut Ui,
+    label: &str,
+    selected: bool,
+    subtle: bool,
+    enabled: bool,
+    width: f32,
+) -> bool {
+    let p = kit::frame_palette();
+    let mut b = cui::Button {
+        variant: if selected {
+            cui::ButtonVariant::Primary
+        } else {
+            cui::ButtonVariant::Ghost
+        },
+        size: cui::ControlSize::Md,
+        width: cui::Size::px(width),
+        disabled: !enabled,
+        ..Default::default()
+    };
+    if subtle && !selected {
+        b.color = p.subtle_foreground;
     }
+    ui.button_with(label, &b)
+}
+
+/// Draws the picker as a calendar popover anchored to its trigger while it is open for
+/// `field`; returns the picked day as "YYYY-MM-DD".
+fn date_picker(ui: &mut Ui, field: &str) -> Option<String> {
+    let pid = format!("fp-cal-{field}");
+    let opts = cui_sys::cui_popover_opts {
+        placement: cui_sys::CUI_PLACE_BOTTOM_START,
+        width: 292.0,
+        pad: 12.0,
+        gap: 6.0,
+        ..Default::default()
+    };
     let mut picked: Option<String> = None;
-    let mut dialog_open = true;
-    let title = DATE_PICKER.with(|p| {
-        p.borrow()
-            .as_ref()
-            .map(|d| format!("Pick a date — {}-{:02}", d.year, d.month))
-            .unwrap_or_default()
-    });
-    ui.dialog(&title, &mut dialog_open, |ui| {
-        use chrono::Datelike;
-        // The dialog's own day cells are press_hit widgets — exempt them from the page guard.
+    let open = ui.popover_begin(&pid, &opts);
+    if open {
+        // The calendar's own cells are native buttons — modal-safe inside the popover.
         let _m = kit::modal_off();
-        // ‹ Month Year ›
-        ui.row(&Default::default(), |ui| {
-            if kit::icon_button(ui, "chevron-left", Some("Previous month")) {
-                DATE_PICKER.with(|p| {
-                    if let Some(d) = p.borrow_mut().as_mut() {
-                        if d.month == 1 {
-                            d.month = 12;
-                            d.year -= 1;
-                        } else {
-                            d.month -= 1;
-                        }
+        if DATE_PICKER.with(|p| p.borrow().as_ref().is_some_and(|d| d.field == field)) {
+            // ‹ header › — chevrons page the grid; the month and year labels toggle the
+            // month and year grids (nsh-base DatePicker's monthToggle/yearToggle views).
+            ui.row(
+                &cui::Row {
+                    width: cui::Size::FILL,
+                    justify: cui::Justify::Between,
+                    ..Default::default()
+                },
+                |ui| {
+                    if kit::icon_button(ui, "chevron-left", Some("Previous")) {
+                        DATE_PICKER.with(|p| {
+                            if let Some(d) = p.borrow_mut().as_mut() {
+                                match d.view {
+                                    2 => d.year -= 12,
+                                    _ => {
+                                        if d.month == 1 {
+                                            d.month = 12;
+                                            d.year -= 1;
+                                        } else {
+                                            d.month -= 1;
+                                        }
+                                    }
+                                }
+                                d.view = 0;
+                                d.settle = 3;
+                            }
+                        });
                     }
-                });
-            }
-            let label = DATE_PICKER.with(|p| {
+                    let (month_label, year_label) = DATE_PICKER.with(|p| {
+                        p.borrow()
+                            .as_ref()
+                            .map(|d| {
+                                (
+                                    MONTH_NAMES[(d.month - 1) as usize].to_owned(),
+                                    if d.view == 2 {
+                                        format!("{} – {}", d.year - 5, d.year + 6)
+                                    } else {
+                                        d.year.to_string()
+                                    },
+                                )
+                            })
+                            .unwrap_or_default()
+                    });
+                    ui.row(
+                        &cui::Row {
+                            gap: crate::theme::space(1),
+                            ..Default::default()
+                        },
+                        |ui| {
+                            if kit::ghost_button(ui, &month_label, true) {
+                                DATE_PICKER.with(|p| {
+                                    if let Some(d) = p.borrow_mut().as_mut() {
+                                        d.view = if d.view == 1 { 0 } else { 1 };
+                                        d.settle = 3;
+                                    }
+                                });
+                            }
+                            if kit::ghost_button(ui, &year_label, true) {
+                                DATE_PICKER.with(|p| {
+                                    if let Some(d) = p.borrow_mut().as_mut() {
+                                        d.view = if d.view == 2 { 0 } else { 2 };
+                                        d.settle = 3;
+                                    }
+                                });
+                            }
+                        },
+                    );
+                    if kit::icon_button(ui, "chevron-right", Some("Next")) {
+                        DATE_PICKER.with(|p| {
+                            if let Some(d) = p.borrow_mut().as_mut() {
+                                match d.view {
+                                    2 => d.year += 12,
+                                    _ => {
+                                        if d.month == 12 {
+                                            d.month = 1;
+                                            d.year += 1;
+                                        } else {
+                                            d.month += 1;
+                                        }
+                                    }
+                                }
+                                d.view = 0;
+                                d.settle = 3;
+                            }
+                        });
+                    }
+                },
+            );
+
+            let (year, month, view, value, min, max, settle) = DATE_PICKER.with(|p| {
                 p.borrow()
                     .as_ref()
-                    .map(|d| {
-                        const MONTHS: [&str; 12] = [
-                            "January",
-                            "February",
-                            "March",
-                            "April",
-                            "May",
-                            "June",
-                            "July",
-                            "August",
-                            "September",
-                            "October",
-                            "November",
-                            "December",
-                        ];
-                        format!("{} {}", MONTHS[(d.month - 1) as usize], d.year)
-                    })
-                    .unwrap_or_default()
+                    .map(|d| (d.year, d.month, d.view, d.value, d.min, d.max, d.settle))
+                    .unwrap_or((0, 1, 0, None, None, None, 0))
             });
-            kit::section_title(ui, &label);
-            if kit::icon_button(ui, "chevron-right", Some("Next month")) {
-                DATE_PICKER.with(|p| {
-                    if let Some(d) = p.borrow_mut().as_mut() {
-                        if d.month == 12 {
-                            d.month = 1;
-                            d.year += 1;
-                        } else {
-                            d.month += 1;
-                        }
-                    }
-                });
-            }
-        });
-        // The month grid, one row per week. Days outside min/max stay visible but cannot be picked
-        // (NSH's CalendarButton dims them).
-        let (year, month, min, max) = DATE_PICKER.with(|p| {
-            p.borrow()
-                .as_ref()
-                .map(|d| (d.year, d.month, d.min, d.max))
-                .unwrap_or((0, 1, None, None))
-        });
-        let Some(first) = chrono::NaiveDate::from_ymd_opt(year, month, 1) else {
-            return;
-        };
-        let days_in = {
-            let (ny, nm) = if month == 12 {
-                (year + 1, 1)
-            } else {
-                (year, month + 1)
+            let armed = settle == 0;
+            let allowed = |date: chrono::NaiveDate| {
+                min.map(|m| date >= m).unwrap_or(true) && max.map(|m| date <= m).unwrap_or(true)
             };
-            chrono::NaiveDate::from_ymd_opt(ny, nm, 1)
-                .map(|n| (n - chrono::Duration::days(1)).day())
-                .unwrap_or(31)
-        };
-        let offset = first.weekday().num_days_from_sunday() as i64;
-        let cells = offset + days_in as i64;
-        let weeks = (cells + 6) / 7;
-        ui.row(&Default::default(), |ui| {
-            for head in ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] {
-                kit::meta_text(ui, head);
-            }
-        });
-        for w in 0..weeks {
-            ui.row(&Default::default(), |ui| {
-                for i in 0..7 {
-                    let idx = w * 7 + i - offset;
-                    if !(0..days_in as i64).contains(&idx) {
-                        kit::meta_text(ui, "");
-                        continue;
-                    }
-                    let day = (idx + 1) as u32;
-                    let date = chrono::NaiveDate::from_ymd_opt(year, month, day);
-                    let Some(date) = date else {
-                        continue;
-                    };
-                    let allowed = min.map(|m| date >= m).unwrap_or(true)
-                        && max.map(|m| date <= m).unwrap_or(true);
-                    let label = day.to_string();
-                    if allowed {
-                        if ui.button(&label) {
-                            picked = Some(format!("{:04}-{:02}-{:02}", year, month, day));
+            let grid = |ui: &mut Ui, f: &mut dyn FnMut(&mut Ui)| {
+                ui.column(
+                    &cui::Column {
+                        width: cui::Size::FILL,
+                        align: cui::Align::Center,
+                        gap: crate::theme::space(1),
+                        ..Default::default()
+                    },
+                    f,
+                );
+            };
+            match view {
+                // The month grid: a pick lands on that month, back to its days.
+                1 => {
+                    grid(ui, &mut |ui| {
+                        for w in 0..3u32 {
+                            ui.row(
+                                &cui::Row {
+                                    justify: cui::Justify::Center,
+                                    gap: crate::theme::space(1),
+                                    ..Default::default()
+                                },
+                                |ui| {
+                                    for i in 0..4u32 {
+                                        let m = w * 4 + i + 1;
+                                        if m > 12 {
+                                            ui.box_(
+                                                &cui::BoxOpts {
+                                                    width: cui::Size::px(64.0),
+                                                    height: cui::Size::px(32.0),
+                                                    ..Default::default()
+                                                },
+                                                |_| {},
+                                            );
+                                            continue;
+                                        }
+                                        let selected = m == month;
+                                        if armed
+                                            && cal_cell(
+                                                ui,
+                                                MONTH_SHORT[(m - 1) as usize],
+                                                selected,
+                                                false,
+                                                true,
+                                                64.0,
+                                            )
+                                        {
+                                            DATE_PICKER.with(|p| {
+                                                if let Some(d) = p.borrow_mut().as_mut() {
+                                                    d.month = m;
+                                                    d.view = 0;
+                                                    d.settle = 3;
+                                                }
+                                            });
+                                        }
+                                    }
+                                },
+                            );
                         }
-                    } else {
-                        let _dim = ui.disabled(true);
-                        let _ = ui.button(&label);
+                    });
+                }
+                // The year grid: the twelve years around the shown one.
+                2 => {
+                    grid(ui, &mut |ui| {
+                        for w in 0..3i32 {
+                            ui.row(
+                                &cui::Row {
+                                    justify: cui::Justify::Center,
+                                    gap: crate::theme::space(1),
+                                    ..Default::default()
+                                },
+                                |ui| {
+                                    for i in 0..4i32 {
+                                        let y = year - 5 + w * 4 + i;
+                                        let selected =
+                                            y == year || Some(y) == value.map(|d| d.year());
+                                        if armed
+                                            && cal_cell(
+                                                ui,
+                                                &y.to_string(),
+                                                selected,
+                                                false,
+                                                true,
+                                                64.0,
+                                            )
+                                        {
+                                            DATE_PICKER.with(|p| {
+                                                if let Some(d) = p.borrow_mut().as_mut() {
+                                                    d.year = y;
+                                                    d.view = 0;
+                                                    d.settle = 3;
+                                                }
+                                            });
+                                        }
+                                    }
+                                },
+                            );
+                        }
+                    });
+                }
+                // The day grid: weekday heads, then the weeks — adjacent-month days show
+                // dimmed and still pick (NSH's `data-outside` cells).
+                _ => {
+                    ui.row(
+                        &cui::Row {
+                            width: cui::Size::FILL,
+                            justify: cui::Justify::Center,
+                            gap: crate::theme::space(1),
+                            ..Default::default()
+                        },
+                        |ui| {
+                            for head in WEEKDAYS {
+                                ui.box_(
+                                    &cui::BoxOpts {
+                                        width: cui::Size::px(36.0),
+                                        align: cui::Align::Center,
+                                        justify: cui::Justify::Center,
+                                        ..Default::default()
+                                    },
+                                    |ui| kit::meta_text(ui, head),
+                                );
+                            }
+                        },
+                    );
+                    if let Some(first) = chrono::NaiveDate::from_ymd_opt(year, month, 1) {
+                        let days_in = {
+                            let (ny, nm) = if month == 12 {
+                                (year + 1, 1)
+                            } else {
+                                (year, month + 1)
+                            };
+                            chrono::NaiveDate::from_ymd_opt(ny, nm, 1)
+                                .map(|n| (n - chrono::Duration::days(1)).day())
+                                .unwrap_or(31)
+                        };
+                        let offset = first.weekday().num_days_from_sunday() as i64;
+                        let weeks = ((offset + days_in as i64) + 6) / 7;
+                        for w in 0..weeks {
+                            ui.row(
+                                &cui::Row {
+                                    width: cui::Size::FILL,
+                                    justify: cui::Justify::Center,
+                                    gap: crate::theme::space(1),
+                                    ..Default::default()
+                                },
+                                |ui| {
+                                    for i in 0..7i64 {
+                                        let idx = w * 7 + i - offset;
+                                        let date = first + chrono::Duration::days(idx);
+                                        let in_month = date.year() == year && date.month() == month;
+                                        let enabled = allowed(date);
+                                        let selected = value == Some(date);
+                                        if armed
+                                            && cal_cell(
+                                                ui,
+                                                &date.day().to_string(),
+                                                selected,
+                                                !in_month,
+                                                enabled,
+                                                36.0,
+                                            )
+                                        {
+                                            picked = Some(format!(
+                                                "{:04}-{:02}-{:02}",
+                                                date.year(),
+                                                date.month(),
+                                                date.day()
+                                            ));
+                                        }
+                                    }
+                                },
+                            );
+                        }
                     }
                 }
-            });
+            }
+        }
+    }
+    // Count down the post-switch guard once the grid has been drawn.
+    DATE_PICKER.with(|p| {
+        if let Some(d) = p.borrow_mut().as_mut()
+            && d.field == field
+            && d.settle > 0
+        {
+            d.settle -= 1;
         }
     });
-    if picked.is_some() || !dialog_open {
+    ui.popover_end();
+    if picked.is_some() {
+        DATE_PICKER.with(|p| {
+            if p.borrow().as_ref().is_some_and(|d| d.field == field) {
+                *p.borrow_mut() = None;
+            }
+        });
+        ui.popover_close(&pid);
+    } else if !open && DATE_PICKER.with(|p| p.borrow().as_ref().is_some_and(|d| d.field == field)) {
+        // Dismissed by an outside click or Escape: drop the picker's month state.
         DATE_PICKER.with(|p| {
             if p.borrow().as_ref().is_some_and(|d| d.field == field) {
                 *p.borrow_mut() = None;
@@ -208,7 +458,7 @@ fn date_pick_button(
 ) {
     let _g = ui.push_id(format!("pick-{field}"));
     if kit::icon_button(ui, "calendar", Some("Pick a date")) {
-        open_date_picker(field, current, min, max);
+        open_date_picker(ui, field, current, min, max);
     }
 }
 
@@ -1663,8 +1913,10 @@ fn draw_item(ui: &mut Ui, app: &mut AppState, s: &mut FormSession, id: &str, it:
                     let _g = ui.push_id(key.clone());
                     let (min, max) = split_date_range(s, dp);
                     let current = split_iso(s, dp);
-                    if kit::icon_ghost_button(ui, "calendar", "Pick a date", true) {
-                        open_date_picker(&key, &current, min, max);
+                    // NSH's CalendarButton trigger: a small icon-only calendar button (fields.tsx
+                    // CalendarPicker), not a labelled ghost button.
+                    if kit::icon_button(ui, "calendar", Some("Pick a date")) {
+                        open_date_picker(ui, &key, &current, min, max);
                     }
                     if let Some(iso) = date_picker(ui, &key) {
                         s.pick_date(dp, &iso);
