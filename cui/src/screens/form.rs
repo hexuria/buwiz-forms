@@ -2056,13 +2056,29 @@ fn draw_field(ui: &mut Ui, s: &mut FormSession, f: &SchemaField, _item: &str) {
 /// A date box (controls/FieldControl.tsx `DateBox`): typed text that reads as a date, plus the
 /// calendar a pick fills in — `pick` writes "MM/DD/YYYY" through the same edit path as typing.
 fn draw_date(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
-    draw_text(ui, s, f);
+    let k = f.k.clone();
+    // NSH's DateField: the typed box and its calendar button share one row, the button at
+    // the box's right edge — not a stray icon under the field.
+    ui.row(
+        &cui::Row {
+            gap: 6.0,
+            align: cui::Align::Center,
+            ..Default::default()
+        },
+        |ui| {
+            draw_text_w(ui, s, f, Some(170.0));
+            if !s.is_shut(&k) {
+                let current = s.shown_of(&k);
+                date_pick_button(ui, &k, &current, None, None);
+            }
+        },
+    );
     if s.is_shut(&f.k) {
         return;
     }
-    let k = f.k.clone();
-    let current = s.shown_of(&k);
-    date_pick_button(ui, &k, &current, None, None);
+    // popover_open ran inside the button's "pick-" id scope, so the picker must begin in the
+    // same scope or cui_make_id gives it a different popup id and it never opens.
+    let _g = ui.push_id(format!("pick-{k}"));
     if let Some(iso) = date_picker(ui, &k) {
         // "YYYY-MM-DD" -> "MM/DD/YYYY", the shape the typed-date parser reads.
         let parts: Vec<&str> = iso.split('-').collect();
@@ -2078,6 +2094,12 @@ fn draw_date(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
 }
 
 fn draw_text(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
+    draw_text_w(ui, s, f, None);
+}
+
+/// `draw_text` with an optional fixed width — the date box shares its row with the calendar
+/// button, so it takes a compact width instead of filling the item.
+fn draw_text_w(ui: &mut Ui, s: &mut FormSession, f: &SchemaField, width: Option<f32>) {
     let k = f.k.clone();
     let mut text = s.shown_of(&k);
     let prev = text.clone();
@@ -2086,7 +2108,25 @@ fn draw_text(ui: &mut Ui, s: &mut FormSession, f: &SchemaField) {
     } else {
         f.l.clone()
     };
-    if !ui.text_input(&format!("fp-{k}"), &mut text, &label, false) {
+    let changed = match width {
+        Some(w) => {
+            if text.capacity() < 256 {
+                text.reserve(256);
+            }
+            ui.input_with(
+                &format!("fp-{k}"),
+                &mut text,
+                &cui::Input {
+                    placeholder: Some(label.as_str()),
+                    width: cui::Size::px(w),
+                    ..Default::default()
+                },
+            )
+            .changed()
+        }
+        None => ui.text_input(&format!("fp-{k}"), &mut text, &label, false),
+    };
+    if !changed {
         return;
     }
     if text == prev {
