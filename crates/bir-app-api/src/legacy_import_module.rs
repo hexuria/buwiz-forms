@@ -351,6 +351,12 @@ pub(crate) fn forget_scan() {
     HELD.with(|slot| slot.borrow_mut().take());
 }
 
+/// Whether a scan is held for `legacy_import`.
+#[cfg(test)]
+pub(crate) fn holds_scan() -> bool {
+    HELD.with(|slot| slot.borrow().is_some())
+}
+
 /// A file's name as the page may show it. The old program writes the address
 /// an e-mailed copy went to into the name, between two `#`
 /// (`...-062025#someone@example.test#.xml`): that part is left out.

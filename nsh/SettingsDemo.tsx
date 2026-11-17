@@ -18,7 +18,8 @@
 //   ebir      F18, the eBIRForms import (the folder dialog is the host's): "found" (a folder with 1 taxpayer, 3 filed returns, 1 draft,
 //             1 file not read; Import creates the committed fixture's taxpayer for real, so the frame's lists re-read), "standard" (the
 //             same, plus a standard folder C:\eBIRForms with Scan), "empty", "wrong" (not an eBIRForms folder), "cancelled", "fail"
-//             (the scan throws), "importfail" (the import throws), "slow" (the scan answers after 1.5 s). The taxpayer count shows as
+//             (the scan throws), "importfail" (the import throws), "slow" (the scan answers after 1.5 s), "foundonce" (the first folder dialog finds the folder,
+//             every later one is dismissed). The taxpayer count shows as
 //             demo-taxpayers.
 //   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened)
 //   hotkey    "refuse": set_global_hotkey is refused, as the host does for a chord it cannot register; "note": it is listed in the calls
@@ -56,7 +57,7 @@ interface Params {
   log?: "mixed" | "long" | "empty" | "error";
   cloud?: "out" | "in" | "down";
   import?: "database" | "profile" | "invalid" | "cancelled" | "fail";
-  ebir?: "found" | "standard" | "empty" | "wrong" | "cancelled" | "fail" | "importfail" | "slow";
+  ebir?: "found" | "standard" | "empty" | "wrong" | "cancelled" | "fail" | "importfail" | "slow" | "foundonce";
   status?: "refused" | "invalid";
   update?: boolean;
   noise?: boolean;
@@ -201,8 +202,10 @@ function fakeEbir(kind: NonNullable<Params["ebir"]>): void {
     kind: "scanned", scan: 7, folder, taxpayers: 1, filed_returns: 3, drafts: 1,
     skipped: [{ file: "garbage.xml", reason: "invalid return filename" }],
   };
+  let asked = 0;
   const answer = (): LegacyScanAnswer => {
-    if (kind === "cancelled") return { kind: "cancelled" };
+    asked += 1;
+    if (kind === "cancelled" || (kind === "foundonce" && asked > 1)) return { kind: "cancelled" };
     if (kind === "fail") throw new Error("The file dialog could not open: no window");
     if (kind === "empty") return { ...found, kind: "empty", scan: 0, taxpayers: 0, filed_returns: 0, drafts: 2, skipped: [] };
     if (kind === "wrong") return { ...found, kind: "not_ebirforms", scan: 0, taxpayers: 0, filed_returns: 0, drafts: 0, skipped: [] };

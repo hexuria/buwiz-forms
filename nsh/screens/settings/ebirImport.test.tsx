@@ -71,6 +71,19 @@ for (const { name, size } of SIZES) {
     for (const id of ["review", "result", "problem"]) expect(dismissed.shows(`id:settings-ebir-${id}`)).toBe(false);
   }, 120_000);
 
+  test(`${name}: a dismissed folder dialog leaves the result on the card as it was`, async () => {
+    const app = await openSettings(size, { ebir: "foundonce" }, "transfer");
+    await review(app);
+    await app.press("id:settings-ebir-import");
+    await app.waitFor("id:settings-ebir-result", { timeout: 10000 });
+    // The person opens the folder dialog again and dismisses it: the result is still there to read.
+    await app.press("id:settings-ebir-choose");
+    await app.waitFor("text:calls: legacy_scan_folder | legacy_import 7 | legacy_scan_folder");
+    await app.waitFor("id:settings-ebir-result");
+    expectTexts(app, ["Import finished"]);
+    expect(app.enabled("id:settings-ebir-choose")).toBe(true);
+  }, 120_000);
+
   test(`${name}: restoring a database backup during the review ends the review`, async () => {
     // The host lets a scan go when the open database is replaced; the page must not keep offering to import it.
     const app = await openSettings(size, { ebir: "found", import: "database" }, "transfer");

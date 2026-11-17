@@ -2345,7 +2345,11 @@ fn restore_staged_database(
                 "Could not save a safety copy of the current database ({error}), so nothing was imported. The current database was left as it is."
             )));
         }
-        // What `reset_database` does, under the lock already held.
+        // What `reset_database` does, under the lock already held: the
+        // database a folder was scanned against for the eBIRForms import
+        // goes away here, so that scan is let go and never imported into the
+        // restored one.
+        crate::legacy_import_module::forget_scan();
         drop_reader();
         *db = Database::open_ephemeral().map_err(db_error)?;
         RELEASED.set(true);
@@ -4450,9 +4454,20 @@ mod tests {
         bir_core::export::export_database_zip(&source, &archive).unwrap();
         drop(source);
 
+        // A folder under review for the eBIRForms import, read against the
+        // database about to be replaced.
+        let legacy_folder = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../bir-core/tests/legacy-ebirforms");
+        crate::legacy_import_module::scan_folder(&legacy_folder).unwrap();
+        assert!(crate::legacy_import_module::holds_scan());
+
         assert_eq!(
             to_json(&import_archive_from(&archive).unwrap()),
             serde_json::json!({ "kind": "database" })
+        );
+        assert!(
+            !crate::legacy_import_module::holds_scan(),
+            "a scan reviewed against the replaced database is still held"
         );
         let safety_copies: Vec<_> = std::fs::read_dir(scratch)
             .unwrap()

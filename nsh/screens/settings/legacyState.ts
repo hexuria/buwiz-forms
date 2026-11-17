@@ -36,8 +36,12 @@ export const NOTHING_FOUND = "Nothing to import here: this eBIRForms folder has 
 /** Lets a frame paint the busy state before a sync host call blocks the engine. */
 const paint = () => new Promise<void>((done) => setTimeout(done, 0));
 
+/** The card as it was when a scan started, for a dismissed folder dialog to put back. */
+let before: { phase: LegacyPhase; summary: LegacyScanSummary | null; report: LegacyImportReport | null; problem: string } | null = null;
+
 function start(): boolean {
   if (legacy.busy()) return false;
+  before = { phase: phase(), summary: summary(), report: report(), problem: problem() };
   report.set(null);
   problem.set("");
   phase.set("scanning");
@@ -46,8 +50,11 @@ function start(): boolean {
 
 function show(answer: LegacyScanAnswer): void {
   if (answer.kind === "cancelled") {
-    summary.set(null);
-    phase.set("idle");
+    // Nothing was read and the host holds what it held: the card goes back to what it showed.
+    summary.set(before?.summary ?? null);
+    report.set(before?.report ?? null);
+    problem.set(before?.problem ?? "");
+    phase.set(before?.phase ?? "idle");
     return;
   }
   summary.set(answer);
@@ -96,8 +103,11 @@ export async function scanStandardFolder(index: number): Promise<void> {
 export async function importLegacyScan(): Promise<void> {
   const scan = summary();
   if (phase() !== "review" || !scan) return;
+  const began = session;
   phase.set("importing");
   await paint();
+  // A lock or sign-out in that one frame ended the session the scan was reviewed in (and let the scan go).
+  if (began !== session) return;
   try {
     const done = store.write("legacy_import", scan.scan);
     report.set(done);
@@ -158,6 +168,6 @@ export function importedSentence(r: LegacyImportReport): string {
 // A lock, sign-out or sign-in starts the card over and lets a held scan go.
 app.onSessionChange(() => {
   session += 1;
-  if (phase() === "review") letGo();
+  if (phase() === "review" || phase() === "importing") letGo();
   reset();
 });
