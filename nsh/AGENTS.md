@@ -1,6 +1,6 @@
 # nsh/ - the NSH (TSX) app
 
-eBIRForms on Native Shell (NSH 0.5.1: the hexuria/nsh fork with upstream v0.5.1 merged, commit `c346e920e`, the tip of its `buwiz` branch), mixed mode: TSX screens over a Rust crate.
+eBIRForms on Native Shell (NSH 0.5.1: the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes, commit `87e0a4ea4`, the tip of its `buwiz` branch), mixed mode: TSX screens over a Rust crate.
 Id `dev.goldcoders.bir.nsh`, version 0.2.0, own cargo workspace (empty `[workspace]` in Cargo.toml). The old app (`app/`,
 `crates/bir-shell`) is untouched. Contract and Hard rules: `docs/plans/nsh-tsx-migration.md`. Read this file fully first.
 
