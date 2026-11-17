@@ -45,7 +45,7 @@ All systems:
 - Rust 1.99.0 with `rustfmt` and `clippy` (`rust-toolchain.toml`), and a C compiler (SQLite and `ring` are C; OpenSSL is built from source, which needs Perl).
 - [huacnlee/cargo](https://github.com/huacnlee/cargo): what the owner's Mac and NSH's own CI use (`curl -fsSL https://huacnlee.github.io/cargo/install.sh | sh`). Building the app with stock cargo has not been tried.
 - `just` 1.45.0 (the recipes are `[unix]`: bash).
-- **The NSH checkout beside this repository**: `<parent>/buwiz-forms` and `<parent>/nsh`. `nsh/Cargo.toml` names the NSH crates as `../../nsh/crates/...`. The commit is the hexuria/nsh fork with upstream v0.5.1 merged, `c346e920ee4ba12f6dc5804842e60814d2c02480` (the tip of branch `buwiz` since hexuria/nsh#12).
+- **The NSH checkout beside this repository**: `<parent>/buwiz-forms` and `<parent>/nsh`. `nsh/Cargo.toml` names the NSH crates as `../../nsh/crates/...`. The commit is the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes, `87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8` (the tip of branch `buwiz` since hexuria/nsh#13).
 - The `nsh` command line, built from that checkout: `cargo install --locked --path <parent>/nsh/crates/nsh-cli --root ~/BuwizNsh/tools` (10 minutes cold on the owner's Mac). The recipes call `~/BuwizNsh/tools/bin/nsh`.
 - Network on the first `nsh check`: it downloads the TypeScript 7.0.2 compiler from npm.
 

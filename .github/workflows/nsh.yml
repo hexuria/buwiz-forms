@@ -4,8 +4,8 @@ name: NSH app
 # tests on macOS, plus the plain-SQLite tests of the two crates the app is built on.
 #
 # The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
-# this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged: c346e920e, the tip of the
-# `buwiz` branch since hexuria/nsh#12. It runs on GitHub's hosted runners (macos-15 for the app, ubuntu-24.04 for the
+# this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes:
+# 87e0a4ea4, the tip of the `buwiz` branch since hexuria/nsh#13. It runs on GitHub's hosted runners (macos-15 for the app, ubuntu-24.04 for the
 # plain-SQLite tests) and has run and passed there; its steps are the ones that pass on the owner's Mac (nsh/AGENTS.md
 # "Commands").
 #
@@ -41,9 +41,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # c346e920ee4ba12f6dc5804842e60814d2c02480 = hexuria/nsh, branch buwiz: "Merge upstream v0.5.1 into the buwiz line"
-  # (hexuria/nsh#12).
-  NSH_PINNED_REF: c346e920ee4ba12f6dc5804842e60814d2c02480
+  # 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8 = hexuria/nsh, branch buwiz: "windows: Apply an input's text alpha to what
+  # RichEdit draws" (hexuria/nsh#13, on the v0.5.1 merge of hexuria/nsh#12).
+  NSH_PINNED_REF: 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"
