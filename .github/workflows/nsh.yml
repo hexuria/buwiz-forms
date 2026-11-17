@@ -16,6 +16,25 @@ name: NSH app
 # "Contents: read" on that one repository); without it the step then fails. Pull requests from forks never get it.
 
 on:
+  # main runs too, and only main's runs save caches every pull request can read: a cache saved by a pull request's run
+  # lives under refs/pull/<n>/merge, which no other pull request restores. That covers the dependency builds of
+  # ./nsh/.github/actions/cargo (it saves on refs/heads/main only), the nsh command line, and core-plain's rust-cache.
+  push:
+    branches: [main]
+    paths:
+      - "nsh/**"
+      - "crates/bir-app-api/**"
+      - "crates/bir-core/**"
+      - "crates/bir-host-shim/**"
+      # What those crates are built on, and this file.
+      - "crates/bir-print/**"
+      - "crates/bir-rules/**"
+      # The workspace the jobs build in: its manifest, lock file, recipes and toolchain.
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "justfile"
+      - "rust-toolchain.toml"
+      - ".github/workflows/nsh.yml"
   pull_request:
     paths:
       - "nsh/**"
@@ -38,10 +57,14 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's older run is superseded. main's run is left to finish: it is the one that saves the caches.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
+  # No debug info in CI's debug builds, as NSH's own CI: faster builds and much smaller dependency caches (the
+  # repository's cache storage is full); panics still name their file and line.
+  CARGO_PROFILE_DEV_DEBUG: "0"
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
   # 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8 = hexuria/nsh, branch buwiz: "windows: Apply an input's text alpha to what
   # RichEdit draws" (hexuria/nsh#13, on the v0.5.1 merge of hexuria/nsh#12).
@@ -55,7 +78,14 @@ env:
 
 jobs:
   nsh-macos:
-    name: NSH app (macOS)
+    # A pull request splits the headless TSX test files over three runners (every third file of the sorted list each);
+    # shard 0 also runs the type check, the build and the Rust tests. main and manual runs use one runner for
+    # everything, so the dependency cache main saves holds what every shard needs.
+    name: NSH app (macOS, shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[0, 1, 2]' || '[0]') }}
     runs-on: macos-15
     # Cold: the nsh command line alone is 10 minutes on an M-series Mac, and every test file opens a headless runner.
     timeout-minutes: 120
@@ -64,6 +94,8 @@ jobs:
       # NSH checkout's says "stable" plus mobile targets). Keep it equal to this repository's rust-toolchain.toml.
       RUSTUP_TOOLCHAIN: "1.99.0"
       CARGO_INCREMENTAL: "0"
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 1 }}
     steps:
       # The layout the app's Cargo.toml expects: <workspace>/buwiz-forms and <workspace>/nsh side by side, because
       # buwiz-forms/nsh/Cargo.toml names the NSH crates as ../../nsh/crates/...
@@ -105,10 +137,11 @@ jobs:
           lockfiles: buwiz-forms/nsh/Cargo.lock
 
       # The command line the just recipes call (~/BuwizNsh/tools/bin/nsh), built from the same checkout the app builds
-      # against, so the two always agree. Cached by the pin: a new pin builds it again.
-      - name: Cache the nsh command line
+      # against, so the two always agree. Cached by the pin: a new pin builds it again. Saved right after the build,
+      # not at the end of the job, so a later failing or cancelled step does not throw 25 minutes of building away.
+      - name: Restore the nsh command line
         id: nsh-cli
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/BuwizNsh/tools
           key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_PINNED_REF }}
@@ -118,33 +151,51 @@ jobs:
         working-directory: nsh
         run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
 
+      # Only shard 0 saves: the shards of a new pin's first run all build it, and one copy is enough.
+      - name: Save the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true' && matrix.shard == 0
+        uses: actions/cache/save@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: ${{ steps.nsh-cli.outputs.cache-primary-key }}
+
       - name: Put the nsh command line on the path
         run: |
           echo "$HOME/BuwizNsh/tools/bin" >> "$GITHUB_PATH"
           "$HOME/BuwizNsh/tools/bin/nsh" -V
 
       - name: nsh check (the crate, then the TSX types)
+        if: matrix.shard == 0
         working-directory: buwiz-forms
         run: just nsh-check -v
 
       - name: nsh build (every warning is a finding)
+        if: matrix.shard == 0
         working-directory: buwiz-forms
         run: just nsh-build
 
       - name: Rust tests of the app's crate
+        if: matrix.shard == 0
         working-directory: buwiz-forms
         run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
 
       # Every *.test.ts and *.test.tsx, one headless run per file, as `just nsh-test` does (nsh/verify holds real-window
       # verifiers that need the owner's data copy, so it is left out). `just nsh-test <file>` sets the four safety
       # variables again and never sets BIR_DATABASE_PATH.
+      #
+      # Shards: line k of the sorted list (from 0) belongs to shard k % SHARDS, so every file is in exactly one shard
+      # and the shards together run the same list as before. LC_ALL=C makes the order the same on every runner.
       - name: Headless TSX tests, file by file
         working-directory: buwiz-forms/nsh
         run: |
           failed=()
+          ran=0
           while IFS= read -r file; do
+            ran=$((ran + 1))
             just test "$file" || failed+=("$file")
-          done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | sort)
+          done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | awk -v n="$SHARDS" -v i="$SHARD" '(NR - 1) % n == i')
+          echo "shard $SHARD of $SHARDS ran $ran test files"
+          [ "$ran" -gt 0 ] || { echo "::error::this shard found no test files"; exit 1; }
           if [ ${#failed[@]} -gt 0 ]; then
             echo "failed in:"
             printf '  %s\n' "${failed[@]}"
@@ -214,9 +265,9 @@ jobs:
           if (-not (Test-Path C:\Strawberry\perl\bin\perl.exe)) { throw "Strawberry Perl is not on this image" }
           "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
-      - name: Cache the nsh command line
+      - name: Restore the nsh command line
         id: nsh-cli
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/BuwizNsh/tools
           key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_PINNED_REF }}
@@ -226,6 +277,13 @@ jobs:
         working-directory: nsh
         shell: pwsh
         run: cargo install --locked --path crates/nsh-cli --root "$HOME\BuwizNsh\tools"
+
+      - name: Save the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: ${{ steps.nsh-cli.outputs.cache-primary-key }}
 
       - name: Put the nsh command line on the path
         shell: pwsh
