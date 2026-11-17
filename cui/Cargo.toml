@@ -9,11 +9,13 @@ publish = false
 
 [dependencies]
 # The CUI immediate-mode UI library, through its safe Rust bindings (vendored C amalgamation,
-# compiled by cc). Crate `cui-rs`, library `cui`. Local checkout: it carries the
-# `cui_popover_opts.anchor_off` patch the sections popover needs.
-cui-rs = { path = "../../cui-rs/cui" }
+# compiled by cc). Crate `cui-rs`, library `cui`. Pinned to the fork commit carrying
+# the `cui_popover_opts.anchor_off` patch the sections popover needs
+# (hexuria/cui-rs PR #1; upstream PR Inokinoki/cui-rs#4). Switch back to the
+# crates.io release once a published version includes anchor_off.
+cui-rs = { git = "https://github.com/hexuria/cui-rs", rev = "4b40a6b" }
 # The raw FFI bindings, for the controls cui-rs has no safe wrapper for (the sections popover).
-cui-sys = { path = "../../cui-rs/cui-sys" }
+cui-sys = { git = "https://github.com/hexuria/cui-rs", rev = "4b40a6b" }
 
 # The door: the UI-free host functions of the Rust brain, in plain SQLite (no sqlcipher, no database key).
 bir-app-api = { path = "../crates/bir-app-api", default-features = false }
