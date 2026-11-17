@@ -1,11 +1,14 @@
-// The narrow layout (under 600 points, and phones): a header with the page's name, search, the bell and the avatar (which
-// opens a sheet with the taxpayer switcher, the profile links and Settings), and a bottom bar of four tabs. Back is the
-// platform's back (Android's button); the header's arrow is there for the windows that have none (a narrow desktop window).
+// The narrow layout (under 600 points, and phones): a header with the page's name and the account badge, and a bottom bar of
+// four tabs. The badge is the header's one button: it carries a red dot while notifications are unread and opens a menu
+// with the tax profile (the taxpayer switcher), search, the notifications and Settings. The header keeps clear of the
+// window's own buttons (titleBar()). Back is the platform's back (Android's button); the header's arrow is there for the
+// windows that have none (a narrow desktop window).
+import type { JSX } from "nsh";
 import { safeArea, View } from "nsh";
 import { Button } from "nsh/base";
 import { titleBar } from "nsh/desktop";
 import { SIZE } from "../theme/tokens";
-import { Avatar, IconButton, NavRow, Sheet, Text, TOUCH } from "../ui";
+import { Avatar, Icon, IconButton, Menu, MenuItem, MenuSeparator, NavRow, Sheet, Text, TOUCH } from "../ui";
 import { app } from "./app";
 import { MarkAllRead, NotificationsBody, ProfileBody } from "./Panels";
 import { TabButton } from "./parts";
@@ -23,32 +26,60 @@ function pageTitle(): string {
 }
 
 export function NarrowBar() {
-  const tp = () => app.taxpayer();
   return (
     <View
       testID="narrow-bar"
       desktop={{ windowDrag: true }}
-      class="shrink-0 flex-row items-center gap-1 pr-2"
-      style={{ minHeight: TOUCH ? 52 : SIZE.titleBar, paddingLeft: 8 + titleBar().left, paddingTop: safeArea().top }}
+      class="shrink-0 flex-row items-center gap-1"
+      // The window's own buttons sit at the ends of this bar on the desktops (GTK's, Windows' caption buttons, the
+      // traffic lights): pad by their widths so nothing of ours goes under them (0 on phones).
+      style={{ minHeight: TOUCH ? 52 : SIZE.titleBar, paddingLeft: 8 + titleBar().left, paddingRight: 8 + titleBar().right, paddingTop: safeArea().top }}
     >
       <If when={app.canBack() && !TAB_VIEWS.includes(app.view())}>
         <IconButton testID="nb-back" icon="arrow-left" tooltip="Back" onPress={() => app.back()} />
       </If>
       <Text testID="nb-title" variant="emph" class="min-w-0 flex-1 pl-1" lines={1}>{pageTitle()}</Text>
-      <IconButton testID="nb-search" icon="search" tooltip="Search" onPress={app.openPalette} />
-      <IconButton testID="nb-notifications" icon="bell" tooltip="Notifications" pressed={app.panel() === "notifs"} dot={app.unreadCount() > 0} onPress={() => app.togglePanel("notifs")} />
-      <If when={tp()} else={<IconButton testID="nb-avatar" icon="user" tooltip="Account" onPress={() => app.togglePanel("profile")} />}>
+      <AccountMenu />
+    </View>
+  );
+}
+
+/** The badge (the taxpayer's avatar, or a person when there is none) and its menu: everything the wide title bar has. */
+function AccountMenu() {
+  const tp = () => app.taxpayer();
+  const unread = () => app.unreadCount();
+  return (
+    <Menu
+      testID="nb-account-menu"
+      placement="bottom"
+      align="end"
+      trigger={(open): JSX.Element => (
         <Button
           testID="nb-avatar"
-          accessibilityLabel="Account"
-          selected={app.panel() === "profile"}
+          accessibilityLabel={unread() > 0 ? `Account, ${unread()} unread notifications` : "Account"}
+          selected={open() || app.panel() !== null}
           class={`items-center justify-center rounded-full selected:bg-selected focus-visible:ring-2 focus-visible:ring-accent-blue ${TOUCH ? "size-11" : "size-8"}`}
-          onPress={() => app.togglePanel("profile")}
         >
-          <Avatar name={tp()?.name ?? ""} size={28} hueKey={tp()?.tin_root} />
+          <If when={tp()} else={<Icon name="user" tone="fg2" />}>
+            <Avatar name={tp()?.name ?? ""} size={28} hueKey={tp()?.tin_root} />
+          </If>
+          <If when={unread() > 0}>
+            <View testID="nb-unread-dot" class={`absolute size-2.5 rounded-full border-2 border-background bg-danger ${TOUCH ? "top-1.5 right-1.5" : "top-0 right-0"}`} />
+          </If>
         </Button>
-      </If>
-    </View>
+      )}
+    >
+      <MenuItem testID="nb-menu-profile" label={tp()?.name ?? "Account"} icon="user" onSelect={() => app.togglePanel("profile")} />
+      <MenuSeparator />
+      <MenuItem testID="nb-menu-search" label="Search" icon="search" onSelect={app.openPalette} />
+      <MenuItem
+        testID="nb-menu-notifications"
+        label={unread() > 0 ? `Notifications · ${unread()}` : "Notifications"}
+        icon="bell"
+        onSelect={() => app.togglePanel("notifs")}
+      />
+      <MenuItem testID="nb-menu-settings" label="Settings" icon="settings" onSelect={() => app.go("settings")} />
+    </Menu>
   );
 }
 

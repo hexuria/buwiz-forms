@@ -23,8 +23,11 @@ test("phone: four tabs, no sidebar, the header names the page and back leaves a 
   await app.waitFor("id:home");
   expect(app.shows("id:nb-back")).toBe(false); // a tab is a root
 
-  // The avatar opens a sheet: the taxpayer, the profile links, Settings, the theme.
+  // The badge is the header's one button: its menu's first item opens the sheet (the taxpayer, the profile links, Settings, the theme).
+  expect(app.shows("id:nb-search")).toBe(false);
+  expect(app.shows("id:nb-notifications")).toBe(false);
   await app.press("id:nb-avatar");
+  await app.press("id:nb-menu-profile");
   await app.waitFor("id:sheet-extras");
   expect(app.texts()).toContain("Juana Santos");
   expect(app.texts()).toContain("Forms");
@@ -41,10 +44,15 @@ test("phone: four tabs, no sidebar, the header names the page and back leaves a 
   await app.waitFor("id:home");
 });
 
-test("phone: the bell opens the notifications sheet", async () => {
+test("phone: the badge's menu opens the notifications sheet", async () => {
   const app = await open(ENTRY, asking());
-  await app.waitFor("id:nb-notifications");
-  await app.press("id:nb-notifications");
+  await app.waitFor("id:nb-avatar");
+  expect(app.shows("id:nb-unread-dot")).toBe(false); // nothing unread yet
+  await app.press("id:nb-avatar");
+  await app.waitFor("id:nb-menu-notifications");
+  expect(app.texts()).toContain("Search");
+  expect(app.texts()).toContain("Settings");
+  await app.press("id:nb-menu-notifications");
   await app.waitFor("id:notifications-list");
   expect(app.texts()).toContain("No notifications yet.");
   expect(app.enabled("id:notif-mark-all")).toBe(false);
@@ -56,6 +64,7 @@ test("phone: with no taxpayer the avatar is an account button, and the sheet off
   const app = await open(ENTRY, asking({ demo: false }));
   await app.waitFor("id:nb-avatar");
   await app.press("id:nb-avatar");
+  await app.press("id:nb-menu-profile");
   await app.waitFor("id:profile-empty");
   expect(app.texts()).toContain("No taxpayer yet");
   await app.press("id:panel-new-taxpayer");
@@ -73,4 +82,17 @@ test("a narrow desktop window takes the narrow layout, and widening brings the s
   await app.waitFor("id:sidebar");
   expect(app.shows("id:tab-bar")).toBe(false);
   expect(app.shows("id:library")).toBe(true); // the page stays where it was
+});
+
+test("the badge's menu reaches search and Settings, and names the taxpayer", async () => {
+  const app = await open(ENTRY, { width: 340, height: 760, ...asking() });
+  await app.waitFor("id:nb-avatar");
+  await app.press("id:nb-avatar");
+  await app.waitFor("id:nb-menu-profile");
+  expect(app.texts()).toContain("Juana Santos");
+  await app.press("id:nb-menu-settings");
+  await app.waitFor("id:settings");
+  await app.press("id:nb-avatar");
+  await app.press("id:nb-menu-search");
+  await app.waitFor("id:palette");
 });

@@ -168,7 +168,8 @@ test("desktop: the showRecent preference hides Recent", async () => {
 test("phone: the palette opens from the header and a taxpayer opens its profile", async () => {
   const app = await open(ENTRY, asking());
   await app.waitFor("id:narrow-bar");
-  await app.press("id:nb-search");
+  await app.press("id:nb-avatar");
+  await app.press("id:nb-menu-search");
   await app.waitFor("id:palette-input");
   await app.type("id:palette-input", "juana");
   await app.press("id:palette-item-0");

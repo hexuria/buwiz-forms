@@ -12,10 +12,12 @@ const builds = (app: App): number => {
   return Number(/builds: (\d+)/.exec(text ?? "")?.[1] ?? -1);
 };
 
-/** Opens the palette the way each size does: Cmd+K on a desktop, the search tab on a phone. */
+/** Opens the palette the way each size does: Cmd+K on a desktop, the badge's menu on a phone. */
 async function openPalette(app: App, phone: boolean) {
-  if (phone) await app.press("id:nb-search");
-  else await app.keyboard.press("mod+k");
+  if (phone) {
+    await app.press("id:nb-avatar");
+    await app.press("id:nb-menu-search");
+  } else await app.keyboard.press("mod+k");
   await app.waitFor("id:palette-input");
 }
 
@@ -25,7 +27,7 @@ for (const [name, options, phone] of [
 ] as const) {
   test(`${name}: the forms index is built as the palette opens and not again by any letter`, async () => {
     const app = await open(ENTRY, options);
-    await app.waitFor(phone ? "id:nb-search" : "id:sidebar");
+    await app.waitFor(phone ? "id:nb-avatar" : "id:sidebar");
     await openPalette(app, phone);
     // Built by the open: the settled count, before a letter is typed.
     await app.waitUntil(() => builds(app) >= 1);
@@ -49,7 +51,7 @@ for (const [name, options, phone] of [
 
   test(`${name}: opening the palette again, over a store a save emptied, builds at most once more and never per letter`, async () => {
     const app = await open(ENTRY, options);
-    await app.waitFor(phone ? "id:nb-search" : "id:sidebar");
+    await app.waitFor(phone ? "id:nb-avatar" : "id:sidebar");
     await openPalette(app, phone);
     await app.waitUntil(() => builds(app) >= 1);
     await app.type("id:palette-input", "2551");
