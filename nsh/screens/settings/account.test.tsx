@@ -179,8 +179,9 @@ for (const { name, size } of SIZES) {
     await app.press(name === "phone" ? "id:tab-home" : "id:nav-home");
     await app.waitFor("id:home-dashboard");
     if (name === "phone") {
-      // Home is a tab: Settings is reached again from the avatar's sheet, and opens on its list.
+      // Home is a tab: Settings is reached again from the badge's sheet, and opens on its list.
       await app.press("id:nb-avatar");
+      await app.press("id:nb-menu-profile");
       await app.waitFor("id:sheet-extras");
       await app.press("id:sheet-settings");
       // The sheet closes as the page moves: until it is gone it still covers the list (a press on a row reaches the avatar in it).

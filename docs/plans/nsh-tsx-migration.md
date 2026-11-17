@@ -24,7 +24,7 @@ Replace the gpui-shell UI (`app/` JavaScript hosted by `crates/bir-shell`) with 
 | Area | Decision |
 |---|---|
 | Home of the code | New `nsh/` folder in buwiz-forms, beside the old app. |
-| NSH version | NSH 0.5.1: the hexuria/nsh fork (`buwiz` line) with upstream `v0.5.1` merged, commit `c346e920e`, the tip of `buwiz` since hexuria/nsh#12 (the checkout is the sibling `../nsh`). Read-only for agents: do not patch NSH to fit the app. |
+| NSH version | NSH 0.5.1: the hexuria/nsh fork (`buwiz` line) with upstream `v0.5.1` merged and two Windows fixes, commit `87e0a4ea4`, the tip of `buwiz` since hexuria/nsh#13 (the checkout is the sibling `../nsh`). Read-only for agents: do not patch NSH to fit the app. |
 | Door to Rust | The same host functions the JS calls today, moved into a UI-free crate `crates/bir-app-api`, exposed to TSX through one NSH native module. Existing tests move with the code, unedited. |
 | Data | Plain SQLite copy of the owner's data (done). Scrubbed of PINs, mail credentials, send grants. |
 | Encryption | Gone for the NSH app: plain SQLite, no DB key, no keychain read for it. The old shell keeps SQLCipher through a cargo feature until it is deleted. |

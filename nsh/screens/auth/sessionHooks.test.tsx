@@ -38,6 +38,7 @@ test("phone: the same on the sheet's Log out", async () => {
   await signIn(app, "000123453", "4321");
   await app.waitFor("text:hooks: " + ONE);
   await app.press("id:nb-avatar");
+  await app.press("id:nb-menu-profile");
   await app.waitFor("id:sheet-logout");
   await app.press("id:sheet-logout");
   await app.waitFor("id:auth-card");

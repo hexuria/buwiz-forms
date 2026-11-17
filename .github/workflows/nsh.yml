@@ -1,13 +1,15 @@
 name: NSH app
 
 # The NSH (TSX) app in nsh/ (docs/platforms/nsh.md, nsh/AGENTS.md): type check, build, Rust tests and the headless TSX
-# tests on macOS, plus the plain-SQLite tests of the two crates the app is built on.
+# tests on macOS; type check, build and the Windows development host on Windows; plus the plain-SQLite tests of the two
+# crates the app is built on.
 #
 # The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
-# this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged: c346e920e, the tip of the
-# `buwiz` branch since hexuria/nsh#12. It runs on GitHub's hosted runners (macos-15 for the app, ubuntu-24.04 for the
-# plain-SQLite tests) and has run and passed there; its steps are the ones that pass on the owner's Mac (nsh/AGENTS.md
-# "Commands").
+# this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes:
+# 87e0a4ea4, the tip of the `buwiz` branch since hexuria/nsh#13. It runs on GitHub's hosted runners (macos-15 for the
+# app, windows-2025 for the app on Windows, ubuntu-24.04 for the plain-SQLite tests) and has run and passed there; its
+# steps are the ones that pass on the owner's Mac (nsh/AGENTS.md "Commands"), and the Windows job's those that pass by
+# hand on Windows Server 2022.
 #
 # hexuria/nsh is public, so no secret is needed today: the checkout falls back to the job's own token. If it ever turns
 # private, create NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
@@ -41,9 +43,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # c346e920ee4ba12f6dc5804842e60814d2c02480 = hexuria/nsh, branch buwiz: "Merge upstream v0.5.1 into the buwiz line"
-  # (hexuria/nsh#12).
-  NSH_PINNED_REF: c346e920ee4ba12f6dc5804842e60814d2c02480
+  # 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8 = hexuria/nsh, branch buwiz: "windows: Apply an input's text alpha to what
+  # RichEdit draws" (hexuria/nsh#13, on the v0.5.1 merge of hexuria/nsh#12).
+  NSH_PINNED_REF: 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"
@@ -148,6 +150,105 @@ jobs:
             printf '  %s\n' "${failed[@]}"
             exit 1
           fi
+
+  # The same app on Windows (the NSH Win32 backend), as far as a machine without a display reaches: the CLI built from
+  # the pin, the crate and its TSX types, the bundle, and the Windows development host `nsh run --target windows`
+  # builds, which links NSH's Win32 backend with its development features. A pin whose Windows backend does not build is
+  # caught here (c346e920e's did not: chrome.rs called choose() with three arguments, hexuria/nsh#13). The crate's Rust
+  # tests, the headless TSX tests and real windows are not run here yet (docs/platforms/nsh-windows-handover.md, W5
+  # onwards).
+  nsh-windows:
+    name: NSH app (Windows)
+    # Pinned, as the other jobs are: the steps below name paths of this image (Strawberry Perl, LLVM). windows-2025 is
+    # Windows Server 2025 with Visual Studio 2026, the image the job was first verified on.
+    runs-on: windows-2025
+    # Cold: the nsh command line took 31 minutes on a 2-vCPU Windows machine; the host is a further debug build.
+    timeout-minutes: 150
+    env:
+      # As the macOS job: one compiler for both checkouts. Keep it equal to this repository's rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      CARGO_INCREMENTAL: "0"
+      # QuickJS's bindings are generated with bindgen, which needs libclang (the image's LLVM).
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      # rustc can overflow its default stack on the windows crate's bindings (NSH's own Windows CI sets it).
+      RUST_MIN_STACK: "268435456"
+    steps:
+      - name: Check out buwiz-forms
+        uses: actions/checkout@v4
+        with:
+          path: buwiz-forms
+
+      - name: Check out NSH (the pinned commit, beside buwiz-forms)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NSH_REPOSITORY }}
+          ref: ${{ env.NSH_PINNED_REF }}
+          token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+          path: nsh
+          persist-credentials: false
+
+      - name: Check the two checkouts line up
+        shell: pwsh
+        run: |
+          if (-not (Test-Path nsh/crates/nsh-core/Cargo.toml)) { throw "nsh/crates/nsh-core/Cargo.toml is missing" }
+          if (-not (Test-Path buwiz-forms/nsh/Cargo.toml)) { throw "buwiz-forms/nsh/Cargo.toml is missing" }
+          git -C nsh log -1 --format='NSH at %H %s'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: clippy, rustfmt
+
+      - name: Install huacnlee/cargo
+        uses: ./nsh/.github/actions/cargo
+        with:
+          cache: buwiz-nsh-app-windows
+          lockfiles: buwiz-forms/nsh/Cargo.lock
+
+      # bir-core builds OpenSSL from source (openssl "vendored"), whose Configure needs Strawberry Perl: Git's perl,
+      # which can come first on the path, fails in it. The image ships Strawberry Perl; put it first.
+      - name: Put Strawberry Perl first on the path
+        shell: pwsh
+        run: |
+          if (-not (Test-Path C:\Strawberry\perl\bin\perl.exe)) { throw "Strawberry Perl is not on this image" }
+          "C:\Strawberry\perl\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Cache the nsh command line
+        id: nsh-cli
+        uses: actions/cache@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_PINNED_REF }}
+
+      - name: Build the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        working-directory: nsh
+        shell: pwsh
+        run: cargo install --locked --path crates/nsh-cli --root "$HOME\BuwizNsh\tools"
+
+      - name: Put the nsh command line on the path
+        shell: pwsh
+        run: |
+          "$HOME\BuwizNsh\tools\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & "$HOME\BuwizNsh\tools\bin\nsh.exe" -V
+
+      - name: nsh check (the crate, then the TSX types)
+        working-directory: buwiz-forms/nsh
+        shell: pwsh
+        run: nsh check -v
+
+      - name: nsh build
+        working-directory: buwiz-forms/nsh
+        shell: pwsh
+        run: nsh build
+
+      # The host `nsh run --target windows` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's
+      # Win32 backend with its development features (the dev and agent code a plain build leaves out).
+      - name: Build the Windows development host
+        working-directory: buwiz-forms/nsh
+        shell: pwsh
+        run: cargo build --manifest-path .nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-windows-host
 
   # bir-core and bir-app-api with --no-default-features: the plain-SQLite build the NSH app ships (no sqlcipher).
   # `just core-plain-test` sets the four safety variables itself. Linux, because it is the cheapest runner; the
