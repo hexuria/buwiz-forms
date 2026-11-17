@@ -52,9 +52,15 @@ Implementation: `cui/src/form/` (schema/model/session) + `cui/src/screens/form.r
 ## Session-level audit — `form::session::tests::all_form_sessions_open_edit_and_check`
 
 Drives the real `FormSession` against the host on a scratch database for **all 43 codes**
-(sample mode, demo taxpayer): open → step through every step target → one edit of each
-editable kind present (text/money/pct/int/date/tin/sel/chk/radio) → `flush` → `check`
-(validate) → autosave quiescence. 13s total, all PASS:
+in two passes (18s total, all PASS):
+
+- **Sample pass**: open → step through every step target → one edit of each editable kind
+  present (text/money/pct/int/date/tin/sel/chk/radio) → `flush` → `check` (validate) →
+  autosave quiescence.
+- **Return pass**: open as a real return at the form's first valid period → answer every
+  ask the host offers through `save_ask` → `check` and take the income-tax election when
+  validation asks (2551Q picks `graduated`) → edit → `check` → `save_now` → quiescence.
+  All 43 reach `save=Saved`; asks were offered and answered on 1700, 1701, 1702EX.
 
 - Every form opens with a draft (no "no on-screen layout", no open errors).
 - `screen_form_fill` accepts the edits on every form (no `SaveState::Failed`).
