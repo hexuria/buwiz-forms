@@ -34,6 +34,7 @@ import i_loader from "../assets/icons/loader.svg";
 import i_lock from "../assets/icons/lock.svg";
 import i_log_out from "../assets/icons/log-out.svg";
 import i_map_pin from "../assets/icons/map-pin.svg";
+import i_menu from "../assets/icons/menu.svg";
 import i_minus from "../assets/icons/minus.svg";
 import i_monitor from "../assets/icons/monitor.svg";
 import i_moon from "../assets/icons/moon.svg";
@@ -92,6 +93,7 @@ export const ICONS = {
   lock: i_lock,
   "log-out": i_log_out,
   "map-pin": i_map_pin,
+  menu: i_menu,
   minus: i_minus,
   monitor: i_monitor,
   moon: i_moon,

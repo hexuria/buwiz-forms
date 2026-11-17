@@ -6,6 +6,7 @@ import { titleBar } from "nsh/desktop";
 import { BREAK, SIZE } from "../theme/tokens";
 import { ContextPill, IconButton } from "../ui";
 import { app } from "./app";
+import { chromeNow } from "./chrome";
 import { themeIcon } from "./theme";
 
 /** The panel button's words: the panel it would hide or show. */
@@ -18,9 +19,12 @@ export function TitleBar() {
   const tp = () => app.taxpayer();
   const br = () => app.branch();
   const panelTarget = () => app.panel() ?? app.lastPanel();
+  // One row (macOS, KDE's Global Menu): the window's buttons share this row. Two rows: they are in the menu row above.
+  const left = () => (chromeNow().toolbarHoldsWindowButtons ? titleBar().left : 0);
+  const right = () => (chromeNow().toolbarHoldsWindowButtons ? titleBar().right : 0);
   return (
     <View testID="title-bar" desktop={{ windowDrag: true }} class="shrink-0 flex-row items-center" style={{ height: SIZE.titleBar }}>
-      <View class="min-w-0 flex-1 basis-0 flex-row items-center gap-1" style={{ paddingLeft: 10 + titleBar().left }}>
+      <View class="min-w-0 flex-1 basis-0 flex-row items-center gap-1" style={{ paddingLeft: 10 + left() }}>
         <IconButton
           testID="tb-sidebar"
           icon="panel-left"
@@ -43,6 +47,7 @@ export function TitleBar() {
           empty={!tp()}
           open={app.panel() === "profile"}
           compact={compact()}
+          hideTin={!chromeNow().pillTin}
           name={tp()?.name ?? ""}
           hueKey={tp()?.tin_root ?? ""}
           tin={br()?.tin_display ?? ""}
@@ -50,7 +55,7 @@ export function TitleBar() {
           onPress={() => app.togglePanel("profile")}
         />
       </View>
-      <View class="min-w-0 flex-1 basis-0 flex-row items-center justify-end gap-1" style={{ paddingRight: 10 + titleBar().right }}>
+      <View class="min-w-0 flex-1 basis-0 flex-row items-center justify-end gap-1" style={{ paddingRight: 10 + right() }}>
         <IconButton
           testID="tb-notifications"
           icon="bell"

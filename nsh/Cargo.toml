@@ -33,6 +33,11 @@ gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent",
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# KDE Plasma's Global Menu (src/desktop.rs global_menu): is the AppMenu registrar on the session bus? The zbus that
+# secret-service already brings in on Linux.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "4"
+
 # Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
 # (crates/bir-shell/Cargo.toml). Used by src/auth.rs.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]

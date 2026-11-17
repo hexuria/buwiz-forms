@@ -10,6 +10,8 @@ import { titleBar } from "nsh/desktop";
 import { SIZE } from "../theme/tokens";
 import { Avatar, Icon, IconButton, Menu, MenuItem, MenuSeparator, NavRow, Sheet, Text, TOUCH } from "../ui";
 import { app } from "./app";
+import { chromeNow } from "./chrome";
+import { MenuListButton } from "./MenuRow";
 import { MarkAllRead, NotificationsBody, ProfileBody } from "./Panels";
 import { TabButton } from "./parts";
 import { ROUTES, TABS } from "./routes";
@@ -35,6 +37,10 @@ export function NarrowBar() {
       // traffic lights): pad by their widths so nothing of ours goes under them (0 on phones).
       style={{ minHeight: TOUCH ? 52 : SIZE.titleBar, paddingLeft: 8 + titleBar().left, paddingRight: 8 + titleBar().right, paddingTop: safeArea().top }}
     >
+      {/* Windows and Linux windows whose menu is drawn in the window: ☰ lists every menu (macOS and KDE keep theirs at the top of the screen). */}
+      <If when={chromeNow().hamburger}>
+        <MenuListButton testID="nb-menu" />
+      </If>
       <If when={app.canBack() && !TAB_VIEWS.includes(app.view())}>
         <IconButton testID="nb-back" icon="arrow-left" tooltip="Back" onPress={() => app.back()} />
       </If>

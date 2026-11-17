@@ -37,6 +37,7 @@ Names:
 - lock
 - log-out
 - map-pin
+- menu (Lucide, added for the narrow header's ☰)
 - minus
 - monitor
 - moon

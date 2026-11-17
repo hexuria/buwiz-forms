@@ -5,7 +5,7 @@
 import type { JSX } from "nsh";
 import { cleanup, effect, ErrorBoundary, keymap, platform, Scroll, untracked, View } from "nsh";
 import { Button } from "nsh/base";
-import { isAvailable as desktopAvailable, currentWindow } from "nsh/desktop";
+import { isAvailable as desktopAvailable, currentWindow, titleBar } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
 import { errorText } from "../lib/errors";
 import { LockedScreen } from "../screens/auth/Locked";
@@ -22,6 +22,8 @@ import { startAgentBridge } from "./agent";
 import { Sidebar } from "./Sidebar";
 import { store } from "./store";
 import { TitleBar } from "./TitleBar";
+import { chromeHeight, chromeNow } from "./chrome";
+import { bindMenuKeys, MenuListButton, MenuRow } from "./MenuRow";
 import { UpdateSlot } from "./UpdateSlot";
 import { renderView } from "./views";
 
@@ -148,12 +150,12 @@ function Floating() {
     <If when={app.layout.overlayMode() && !app.layout.narrow() && (app.sidebarOpen() || app.panel() !== null)}>
       <Scrim />
       <If when={app.sidebarOpen()}>
-        <View testID="sidebar-overlay" class="absolute bottom-0 left-0 bg-background shadow-xl" style={{ top: SIZE.titleBar }}>
+        <View testID="sidebar-overlay" class="absolute bottom-0 left-0 bg-background shadow-xl" style={{ top: chromeHeight() }}>
           <Sidebar />
         </View>
       </If>
       <If when={app.panel() !== null}>
-        <View testID="panel-overlay" class="absolute right-0 bottom-0 bg-background shadow-xl" style={{ top: SIZE.titleBar }}>
+        <View testID="panel-overlay" class="absolute right-0 bottom-0 bg-background shadow-xl" style={{ top: chromeHeight() }}>
           <RightPanel />
         </View>
       </If>
@@ -168,9 +170,21 @@ function Scrim() {
       testID="overlay-scrim"
       accessibilityLabel="Close"
       class="absolute inset-x-0 bottom-0 bg-scrim"
-      style={{ top: SIZE.titleBar }}
+      style={{ top: chromeHeight() }}
       onPress={app.closeFloating}
     />
+  );
+}
+
+/** Wide and tablet widths: the toolbar, under the menu row on Windows and Linux without a Global Menu (chrome_layout.ts). */
+function WideChrome() {
+  return (
+    <>
+      <If when={chromeNow().menuRow}>
+        <MenuRow />
+      </If>
+      <TitleBar />
+    </>
   );
 }
 
@@ -178,7 +192,7 @@ function Scrim() {
 function Frame() {
   return (
     <View testID="frame" class="min-h-0 flex-1">
-      <If when={app.layout.narrow()} else={<TitleBar />}>
+      <If when={app.layout.narrow()} else={<WideChrome />}>
         <NarrowBar />
       </If>
       <View class="min-h-0 flex-1 flex-row">
@@ -214,7 +228,19 @@ function Frame() {
 function LockedFrame() {
   return (
     <View testID="locked-frame" class="min-h-0 flex-1">
-      <View testID="title-bar" desktop={{ windowDrag: true }} class="shrink-0" style={{ height: SIZE.titleBar }} />
+      {/* The locked menu (About, Quit, editing) stays reachable where the window draws the menu: the menu row, or ☰ when narrow. */}
+      <If
+        when={chromeNow().menuRow}
+        else={
+          <View testID="title-bar" desktop={{ windowDrag: true }} class="shrink-0 flex-row items-center" style={{ height: SIZE.titleBar, paddingLeft: 8 + titleBar().left, paddingRight: titleBar().right }}>
+            <If when={chromeNow().hamburger}>
+              <MenuListButton testID="locked-menu" />
+            </If>
+          </View>
+        }
+      >
+        <MenuRow />
+      </If>
       <LockedScreen />
       <If when={!app.cloudLocked()}>
         <UpdateSlot />
@@ -230,8 +256,15 @@ const isDevPage = () => app.view() === "kit" || app.view() === "theme";
 export function Shell(props: ShellProps) {
   void boot(props.start, { firstRun: props.firstRun === true });
   // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).
-  if (desktopAvailable && platform.desktop) currentWindow().set({ titleBar: { style: "hidden", height: SIZE.titleBar } });
+  // Two rows (Windows, Linux without a Global Menu): the title bar is the 32-point menu row, whose end holds the window's buttons.
+  if (desktopAvailable && platform.desktop) {
+    effect(() => {
+      const height = chromeNow().titleBarHeight;
+      untracked(() => currentWindow().set({ titleBar: { style: "hidden", height } }));
+    });
+  }
   bindKeys();
+  bindMenuKeys();
   // Android's back button: the topmost layer closes first, then history goes back; else the app leaves.
   if (mobileAvailable && platform.os === "android") BackHandler.on("press", () => app.dismiss() || app.back());
   // The polls end with the root; headless fixtures leave them off unless a test asks.

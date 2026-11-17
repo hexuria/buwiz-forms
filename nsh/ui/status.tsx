@@ -58,6 +58,8 @@ export interface ContextPillProps {
   branchCode?: string;
   /** Narrow windows: avatar and branch code only. */
   compact?: boolean;
+  /** Tablet widths (600 to 860): the name without the TIN. Default false. */
+  hideTin?: boolean;
   /** No taxpayer yet. */
   empty?: boolean;
   /** The panel it opens is open: the selected fill, the chevron points back. */
@@ -97,7 +99,9 @@ export function ContextPill(props: ContextPillProps) {
           else={<Text variant="meta" tone="fg2" class="tabular-nums">{props.branchCode ?? ""}</Text>}
         >
           <Line variant="control" class="font-semibold">{props.name ?? ""}</Line>
-          <Text variant="meta" tone="fg2" lines={1} class="shrink-0 tabular-nums">{props.tin ?? ""}</Text>
+          <If when={!props.hideTin}>
+            <Text testID={props.testID ? props.testID + "-tin" : undefined} variant="meta" tone="fg2" lines={1} class="shrink-0 tabular-nums">{props.tin ?? ""}</Text>
+          </If>
         </If>
       </If>
       <Icon name={props.open ? "chevron-left" : "chevron-right"} size={14} tone="fg3" />

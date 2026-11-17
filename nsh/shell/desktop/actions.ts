@@ -83,8 +83,9 @@ async function checkForUpdates(): Promise<void> {
   if (note) app.toast(note);
 }
 
-/** Carries out one menu, tray or key action. Filing commands do nothing while the chrome is hidden (the old dispatch_if_unlocked). */
-export function perform(action: MenuAction, os: Os): void {
+/** Carries out one menu, tray or key action. Filing commands do nothing while the chrome is hidden (the old dispatch_if_unlocked).
+ * `root` is the taxpayer a "switch-taxpayer" item names. */
+export function perform(action: MenuAction, os: Os, root?: string): void {
   const filing = app.chromeVisible();
   switch (action) {
     case "about":
@@ -95,6 +96,14 @@ export function perform(action: MenuAction, os: Os): void {
       return;
     case "new-return":
       if (filing) app.startNewReturn();
+      return;
+    case "new-tax-profile":
+      // The profile panel's "New taxpayer": the first taxpayer, or the admin in helpdesk mode.
+      if (filing && app.canAddTaxpayer()) app.go("new_taxpayer");
+      return;
+    case "switch-taxpayer":
+      // The profile panel's switcher: the admin moves between taxpayers; the one on screen stays.
+      if (filing && root && root !== app.taxpayer()?.tin_root && app.isAdmin()) app.selectTaxpayer(root);
       return;
     case "toggle-sidebar":
       if (filing) app.toggleSidebar();

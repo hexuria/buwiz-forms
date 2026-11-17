@@ -96,3 +96,30 @@ test("the badge's menu reaches search and Settings, and names the taxpayer", asy
   await app.press("id:nb-menu-search");
   await app.waitFor("id:palette");
 });
+
+// The app menu at phone width (chrome_layout.ts): Windows and Linux windows whose menu is drawn in the window get ☰ before the title,
+// which lists every menu; the badge and its menu stay as they are. macOS keeps its menu at the top of the screen.
+test("a narrow Windows or Linux window: ☰ before the title lists every menu; the badge stays the header's account button", async () => {
+  for (const platform of ["windows", "linux"] as const) {
+    const app = await open(ENTRY, { width: 520, height: 800, platform, ...asking({ second: true }) });
+    await app.waitFor("id:nb-menu");
+    expect(app.shows("id:menu-row")).toBe(false);
+    expect(app.shows("id:nb-avatar")).toBe(true);
+    expect(app.shows("id:nb-search")).toBe(false);
+    await app.press("id:nb-menu");
+    await app.waitUntil(() => app.menu() !== null);
+    const labels = (app.menu() ?? []).map((e) => e.label);
+    for (const path of ["eBIRForms > About eBIRForms", "File > New Tax Profile…", "File > New Return…", "Edit > " /* roles: the platform names them */, "View > Toggle Sidebar", "Help > Contact Support…", "Profiles > New Tax Profile…"]) {
+      expect(labels.some((l) => l.startsWith(path))).toBe(true);
+    }
+    expect((app.menu() ?? []).find((e) => e.label === "Profiles > Juana Santos")?.checked).toBe(true);
+    await app.chooseMenuItem("eBIRForms > Settings…");
+    await app.waitFor("id:settings");
+  }
+});
+
+test("a narrow macOS window has no ☰: the menu stays in the menu bar at the top of the screen", async () => {
+  const app = await open(ENTRY, { width: 520, height: 800, platform: "macos", ...asking() });
+  await app.waitFor("id:nb-avatar");
+  expect(app.shows("id:nb-menu")).toBe(false);
+});

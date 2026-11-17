@@ -655,6 +655,49 @@ pub struct InstanceStatus {
     pub note: Option<String>,
 }
 
+// ---------------------------------------------------------------- the global menu (KDE Plasma)
+
+/// The rule NSH's Linux backend follows to export the application menu to the Global Menu (nsh-platform-linux
+/// `global_menu.rs`): `XDG_CURRENT_DESKTOP` names KDE, `NSH_GLOBAL_MENU` is not `0`, and the registrar is on the session
+/// bus. `registrar` is asked only when the first two hold.
+pub(crate) fn global_menu_rule(current_desktop: Option<&str>, opt_out: Option<&str>, registrar: impl FnOnce() -> bool) -> bool {
+    if opt_out.is_some_and(|v| v.trim() == "0") {
+        return false;
+    }
+    let kde = current_desktop.is_some_and(|d| d.split(':').any(|part| part.trim().eq_ignore_ascii_case("kde")));
+    kde && registrar()
+}
+
+/// Whether the registrar Plasma's Global Menu listens on (kded's appmenu module) has an owner on the session bus.
+#[cfg(target_os = "linux")]
+fn registrar_present() -> bool {
+    const APPMENU_REGISTRAR: &str = "com.canonical.AppMenu.Registrar";
+    let ask = || -> zbus::Result<bool> {
+        let connection = zbus::blocking::Connection::session()?;
+        let bus = zbus::blocking::fdo::DBusProxy::new(&connection)?;
+        Ok(bus.name_has_owner(zbus::names::BusName::try_from(APPMENU_REGISTRAR)?)?)
+    };
+    ask().unwrap_or(false)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn registrar_present() -> bool {
+    false
+}
+
+/// The Global Menu shows this app's menu: Linux under KDE Plasma with the registrar (asked once per process).
+pub(crate) fn global_menu() -> bool {
+    static ANSWER: OnceLock<bool> = OnceLock::new();
+    *ANSWER.get_or_init(|| {
+        cfg!(target_os = "linux")
+            && global_menu_rule(
+                std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(),
+                std::env::var("NSH_GLOBAL_MENU").ok().as_deref(),
+                registrar_present,
+            )
+    })
+}
+
 /// The desktop shell's door to Rust: what the menu, tray and updater of `nsh/shell/desktop` need and TSX cannot know.
 /// Only that folder imports it.
 #[module]
@@ -688,6 +731,12 @@ impl Desktop {
         hotkey_shortcut(&combo)
     }
 
+    /// Whether the application menu shows in KDE Plasma's Global Menu (Linux, KDE, the registrar on the session bus,
+    /// `NSH_GLOBAL_MENU` not `0`): the window then draws no menu row. False on every other platform.
+    pub fn global_menu() -> bool {
+        global_menu()
+    }
+
     /// How the one-copy guard stands in this process.
     pub fn instance() -> InstanceStatus {
         let (state, note) = INSTANCE
@@ -710,6 +759,17 @@ mod tests {
     use std::time::Instant;
 
     use super::*;
+
+    #[test]
+    fn the_global_menu_needs_kde_and_the_registrar_and_no_opt_out() {
+        assert!(global_menu_rule(Some("KDE"), None, || true));
+        assert!(global_menu_rule(Some("ubuntu:KDE"), Some("1"), || true));
+        assert!(!global_menu_rule(Some("KDE"), None, || false)); // no Global Menu widget: the two-row fallback
+        assert!(!global_menu_rule(Some("GNOME"), None, || panic!("not asked off KDE")));
+        assert!(!global_menu_rule(None, None, || panic!("not asked")));
+        assert!(!global_menu_rule(Some("KDE"), Some("0"), || panic!("not asked when opted out")));
+        assert!(!global_menu_rule(Some("XFCE:KDEish"), None, || true));
+    }
 
     /// The tests that use the process-wide "show" flag take turns.
     static SERIAL: Mutex<()> = Mutex::new(());

@@ -20,7 +20,8 @@ import { signOut as signOutOfTheAccount } from "../../screens/settings/cloud";
 import { aboutOpen, closePressed, perform, setSignOutHandler, showMain, toggleMain } from "./actions";
 import { createHotkey } from "./hotkey";
 import { hotkeyHeld, setHotkeyStatus } from "./hotkey_state";
-import { buildMenu, buildTrayMenu, COPYRIGHT, type MenuState, type Os } from "./menu_model";
+import { menuNow as menuForState } from "./menu";
+import { buildTrayMenu, COPYRIGHT, type Os } from "./menu_model";
 import * as native from "./native";
 import icon from "./tray.png";
 import { updates } from "./updates";
@@ -95,8 +96,7 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
   const refreshes = signal(0);
   effect(() => {
     void refreshes();
-    const state: MenuState = { os, unlocked: app.chromeVisible(), hasTaxpayer: !app.isFresh(), formOpen: app.view() === "form" };
-    const items = buildMenu(state, (action) => perform(action, os));
+    const items = menuForState(os);
     untracked(() => {
       Menu.setApplicationMenu(items);
       menuNow.set(items);
