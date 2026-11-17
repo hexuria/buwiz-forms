@@ -44,6 +44,13 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      # bir-shell is the older app, which the NSH app (nsh/) replaces. Its Windows Setup (the release build of
+      # crates/bir-shell, the installer, its audit and the stack-reserve checks: 56 of the Windows leg's 80 minutes)
+      # is built on nightly and manual runs, and on pull requests that change the installer's own files; not on
+      # every app change. The release workflows still build it in full.
+      BUILD_BIR_SHELL_SETUP: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.windows_pkg == 'true' }}
+
     steps:
     - uses: actions/checkout@v4
 
@@ -238,7 +245,7 @@ jobs:
       run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
 
     - name: Install Windows packaging tools
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.BUILD_BIR_SHELL_SETUP == 'true'
       shell: pwsh
       run: |
         choco install innosetup -y --no-progress
@@ -251,7 +258,7 @@ jobs:
         }
 
     - name: Build and audit unsigned Windows Setup
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.BUILD_BIR_SHELL_SETUP == 'true'
       shell: pwsh
       run: |
         just exe
@@ -271,7 +278,7 @@ jobs:
     # and aliased to bir.exe); checking the PE header here means reverting
     # the linker policy fails CI instead of silently returning to 1 MiB.
     - name: Verify shipped bir.exe PE stack reserve
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && env.BUILD_BIR_SHELL_SETUP == 'true'
       shell: pwsh
       run: |
         python scripts/check_pe_stack_reserve.py crates/bir-shell/target/x86_64-pc-windows-msvc/release/bir.exe
@@ -369,12 +376,19 @@ jobs:
         macos_pkg_re='^(assets/macos/|scripts/(dev_bundle_macos|package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
         linux_pkg_re='^packaging/linux/'
         shell_re='^(crates/bir-shell/|app/)'
+        # The NSH (TSX) app is a workspace of its own that nothing `check` builds or tests reads, and nsh.yml tests it.
+        # nsh/src/ stays app code: the production-boundary check scans it (bir-rules-codegen status.rs,
+        # SHELL_SOURCE_ROOTS). So do nsh/Cargo.toml and nsh/Cargo.lock, to stay on the safe side.
+        nsh_re='^(nsh/|\.github/workflows/nsh\.yml$)'
+        nsh_app_re='^nsh/(src/|Cargo\.(toml|lock)$)'
         scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos)\.sh$|scripts/setup-windows\.ps1$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
 
-        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false
+        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false; nsh=false
         app_reason=""
         if [[ "$EVENT" != pull_request && "$EVENT" != push ]]; then
-          app=true; app_reason="event $EVENT tests everything"
+          # Everything includes bir-shell's own workspace (shell-check), which pull requests and pushes check only
+          # when they change it.
+          app=true; shell=true; app_reason="event $EVENT tests everything"
         elif [[ "$changed_known" != true ]]; then
           app=true; app_reason="change range unknown"
         elif [[ -z "$changed" ]]; then
@@ -394,6 +408,8 @@ jobs:
               scripts=true
             elif [[ "$path" =~ $shell_re ]]; then
               shell=true
+            elif [[ "$path" =~ $nsh_re && ! "$path" =~ $nsh_app_re ]]; then
+              nsh=true
             elif [[ "$app" != true ]]; then
               app=true; app_reason="app file changed: $path"
             fi
@@ -414,6 +430,8 @@ jobs:
             scripts=true; check_reason="no app code changed"
           elif [[ "$shell" == true ]]; then
             check_reason="shell workspace changed (covered by shell-check)"
+          elif [[ "$nsh" == true ]]; then
+            check_reason="NSH app files only (tested by the NSH app workflow)"
           else
             check_reason="docs-only changes"
           fi
@@ -462,6 +480,7 @@ jobs:
         echo "script tests on their own: $scripts" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "packaging changed: linux=$linux_pkg windows=$windows_pkg macos=$macos_pkg" | tee -a "$GITHUB_STEP_SUMMARY"
         echo "gpui-shell workspace check: $shell" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "NSH app files changed (NSH app workflow): $nsh" | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The Python script tests on their own, for changes `check` does not run for
   # (packaging, setup scripts, release workflows, the tests themselves). When
