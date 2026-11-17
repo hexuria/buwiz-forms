@@ -3,8 +3,12 @@ import {
   THEME_OPTIONS,
   accountSummary,
   hits,
-  hotkeyLabel,
-  hotkeyOptions,
+  HOTKEY_KEYS,
+  comboToKeystroke,
+  hotkeyProblem,
+  hotkeyRegistrable,
+  keystrokeToCombo,
+  modifierWords,
   queryWords,
   rowShown,
   retentionLabel,
@@ -98,26 +102,109 @@ describe("queryWords and hits", () => {
   });
 });
 
-describe("hotkeyLabel and hotkeyOptions", () => {
-  const presets = [{ value: "super+shift+E", label: "Super+Shift+E" }];
-  test("empty is Off; a preset reads with its label; an unknown chord reads as stored", () => {
-    expect(hotkeyLabel("", [])).toBe("Off");
-    expect(hotkeyLabel("  ", presets)).toBe("Off");
-    expect(hotkeyLabel(null, presets)).toBe("Off");
-    expect(hotkeyLabel("super+shift+E", presets)).toBe("Super+Shift+E");
-    expect(hotkeyLabel("ctrl+alt+Z", [])).toBe("ctrl+alt+Z");
+describe("the global hotkey: stored combo and keystroke", () => {
+  /** Every subset of control, alt, shift, super (as stored, in that order) with one key. */
+  const subsets = (): string[][] => {
+    const words = ["control", "alt", "shift", "super"];
+    const out: string[][] = [];
+    for (let set = 1; set < 16; set++) out.push(words.filter((_, i) => (set & (1 << i)) !== 0));
+    return out;
+  };
+  test("a stored combo is the keystroke keymap names: control+alt+E is ctrl+alt+e, super is cmd", () => {
+    expect(comboToKeystroke("control+alt+E", "macos")).toBe("ctrl+alt+e");
+    expect(comboToKeystroke("super+shift+F12", "linux")).toBe("shift+cmd+f12");
+    expect(comboToKeystroke("ctrl+option+9", "macos")).toBe("ctrl+alt+9");
+    expect(comboToKeystroke("Platform+Win+meta+cmd+b", "windows")).toBe("cmd+b");
+    expect(comboToKeystroke(" control + alt + h ", "macos")).toBe("ctrl+alt+h");
   });
-  test("the options start with Off, then the presets, and a custom chord is kept at the end", () => {
-    expect(hotkeyOptions("ctrl+alt+Z", presets)).toEqual([
-      { value: "", label: "Off" },
-      { value: "super+shift+E", label: "Super+Shift+E" },
-      { value: "ctrl+alt+Z", label: "ctrl+alt+Z" },
-    ]);
+  test("a bare stored key gets the platform's default modifiers: control+alt on macOS, super+shift elsewhere", () => {
+    expect(comboToKeystroke("E", "macos")).toBe("ctrl+alt+e");
+    expect(comboToKeystroke("e", "macos")).toBe("ctrl+alt+e");
+    expect(comboToKeystroke("F12", "windows")).toBe("shift+cmd+f12");
+    expect(comboToKeystroke("B", "linux")).toBe("shift+cmd+b");
   });
-  test("a chord that is a preset is not repeated; no chord gives Off and the presets", () => {
-    expect(hotkeyOptions("super+shift+E", presets).length).toBe(2);
-    expect(hotkeyOptions("", presets)).toEqual([{ value: "", label: "Off" }, ...presets]);
-    expect(hotkeyOptions(undefined, undefined)).toEqual([{ value: "", label: "Off" }]);
+  test("words that are no modifier are ignored; what has no key of the list is null", () => {
+    expect(comboToKeystroke("control+hyper+alt+E", "macos")).toBe("ctrl+alt+e");
+    expect(comboToKeystroke("hyper+E", "macos")).toBe("e");
+    expect(comboToKeystroke("", "macos")).toBeNull();
+    expect(comboToKeystroke(null, "macos")).toBeNull();
+    expect(comboToKeystroke(undefined, "macos")).toBeNull();
+    expect(comboToKeystroke(" + ", "macos")).toBeNull();
+    expect(comboToKeystroke("control+notakey", "macos")).toBeNull();
+    expect(comboToKeystroke("control+alt+F13", "macos")).toBeNull();
+    expect(comboToKeystroke("control+alt+space", "macos")).toBeNull();
+  });
+  test("a keystroke is the stored combo: ctrl+alt+e is control+alt+E, cmd is super, the order is control, alt, shift, super", () => {
+    expect(keystrokeToCombo("ctrl+alt+e")).toBe("control+alt+E");
+    expect(keystrokeToCombo("cmd+shift+f12")).toBe("shift+super+F12");
+    expect(keystrokeToCombo("shift+cmd+ctrl+alt+0")).toBe("control+alt+shift+super+0");
+    expect(keystrokeToCombo("Command+Option+B")).toBe("alt+super+B");
+    expect(keystrokeToCombo("win+h")).toBe("super+H");
+  });
+  test("no modifier (it would read as the platform's defaults), a modifier it cannot read, or a key outside the list is null", () => {
+    expect(keystrokeToCombo("e")).toBeNull();
+    expect(keystrokeToCombo("mod+e")).toBeNull();
+    expect(keystrokeToCombo("ctrl+space")).toBeNull();
+    expect(keystrokeToCombo("ctrl+f13")).toBeNull();
+    expect(keystrokeToCombo("ctrl+")).toBeNull();
+    expect(keystrokeToCombo("")).toBeNull();
+    expect(keystrokeToCombo(null)).toBeNull();
+  });
+  test("round trip: every modifier subset with every key, stored to keystroke and back", () => {
+    expect(HOTKEY_KEYS.length).toBe(48);
+    let n = 0;
+    for (const words of subsets()) {
+      for (const key of HOTKEY_KEYS) {
+        const stored = [...words, key].join("+");
+        const keystroke = comboToKeystroke(stored, "macos");
+        expect(keystroke).not.toBeNull();
+        expect(keystrokeToCombo(keystroke)).toBe(stored);
+        // And the other way: the keystroke's own spelling comes back unchanged.
+        expect(comboToKeystroke(keystrokeToCombo(keystroke), "linux")).toBe(keystroke);
+        n++;
+      }
+    }
+    expect(n).toBe(15 * 48);
+  });
+  test("the four old presets (the host's chords) read as the chord they are; macOS's write back byte for byte", () => {
+    // macOS: control+alt+E ... are in the order the recorder stores (control, alt, shift, super), so nothing stored changes.
+    for (const key of ["E", "B", "H", "F12"]) {
+      const preset = `control+alt+${key}`;
+      const keystroke = comboToKeystroke(preset, "macos");
+      expect(keystroke).toBe(`ctrl+alt+${key.toLowerCase()}`);
+      expect(keystrokeToCombo(keystroke)).toBe(preset);
+      expect(hotkeyRegistrable(keystroke)).toBe(true);
+    }
+    // Elsewhere the host writes super+shift+E: the same chord as shift+super+E, which is how the recorder writes it (same words, the
+    // listeners read them in any order), so a stored preset reads the same and only a chord recorded again is written in the new order.
+    for (const key of ["E", "B", "H", "F12"]) {
+      const preset = `super+shift+${key}`;
+      const keystroke = comboToKeystroke(preset, "windows");
+      expect(keystroke).toBe(`shift+cmd+${key.toLowerCase()}`);
+      expect(keystrokeToCombo(keystroke)).toBe(`shift+super+${key}`);
+      expect(comboToKeystroke(`shift+super+${key}`, "windows")).toBe(keystroke);
+      expect(hotkeyRegistrable(keystroke)).toBe(true);
+    }
+  });
+  test("the door takes Control, Alt or Command with a key; Shift alone or a bare key it refuses", () => {
+    expect(hotkeyRegistrable("ctrl+alt+e")).toBe(true);
+    expect(hotkeyRegistrable("cmd+e")).toBe(true);
+    expect(hotkeyRegistrable("alt+f1")).toBe(true);
+    expect(hotkeyRegistrable("shift+cmd+9")).toBe(true);
+    expect(hotkeyRegistrable("shift+e")).toBe(false);
+    expect(hotkeyRegistrable("e")).toBe(false);
+    expect(hotkeyRegistrable("f5")).toBe(false);
+    expect(hotkeyRegistrable("ctrl+space")).toBe(false);
+    expect(hotkeyRegistrable("")).toBe(false);
+  });
+  test("what the box says about a chord with no modifier, in the platform's words; and about the host's answer", () => {
+    expect(modifierWords("macos")).toBe("Add Control, Option or Command.");
+    expect(modifierWords("ios")).toBe("Add Control, Option or Command.");
+    expect(modifierWords("windows")).toBe("Add Ctrl, Alt or the Windows key.");
+    expect(modifierWords("linux")).toBe("Add Ctrl, Alt or Super.");
+    expect(hotkeyProblem("refused")).toBe("Another app is using this shortcut. Pick another one.");
+    expect(hotkeyProblem("invalid")).toBe("This computer cannot register that shortcut.");
+    for (const status of ["off", "pending", "registered"]) expect(hotkeyProblem(status)).toBe("");
   });
 });
 

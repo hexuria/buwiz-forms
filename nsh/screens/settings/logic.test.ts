@@ -2,7 +2,7 @@
 import { expect, test } from "nsh/test";
 import type { BackgroundJob } from "../../bir";
 import {
-  filterJobs, groupSections, hotkeyChoices, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel, logView, OFF,
+  filterJobs, groupSections, jobActions, jobKey, jobSub, jobTone, levelTone, LOG_LINES, logHeadline, logLineLevel, logView,
   retentionChoices, serverHint,
 } from "./logic";
 
@@ -84,13 +84,6 @@ test("the retention choices are the host's, with an unusual current one added", 
   expect(retentionChoices({ log_retention_choices: [3, 7], log_retention_days: 21 }).map((o) => o.value)).toEqual(["3", "7", "21"]);
   expect(retentionChoices(null).map((o) => o.value)).toEqual(["3", "7", "14", "30", "90"]);
   expect(retentionChoices({ log_retention_choices: [1, 7], log_retention_days: 1 })[0].label).toBe("1 day");
-});
-
-test("the hotkey choices start with Off (as the select's own value), then the presets, then a chord kept as stored", () => {
-  const presets = [{ value: "control+alt+E", label: "Ctrl+Option+E" }];
-  expect(hotkeyChoices("", presets)).toEqual([{ value: OFF, label: "Off" }, presets[0]]);
-  expect(hotkeyChoices(null, presets)[0].value).toBe(OFF);
-  expect(hotkeyChoices("super+shift+Q", presets).map((o) => o.value)).toEqual([OFF, "control+alt+E", "super+shift+Q"]);
 });
 
 test("sections are grouped in the order of the view", () => {

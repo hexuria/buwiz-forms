@@ -3,6 +3,7 @@
 import { expect, test } from "nsh/test";
 import { bir } from "../../bir";
 import { createHotkey, type HotkeyDeps } from "./hotkey";
+import { holdHotkey, hotkeyHeld, hotkeyStatus, setHotkeyStatus } from "./hotkey_state";
 import { hotkeyShortcut } from "./native";
 
 /** A fake GlobalShortcut: the system takes every chord but the ones the test says another app holds. */
@@ -242,4 +243,38 @@ test("F8-11: stop while the system is answering still gives the chord back", asy
   expect(hotkey.status()).toBe("off");
   hotkey.stop();
   expect(system.overlaps()).toBe(0);
+});
+
+test("F17: a hold is counted, let go once, and the status Settings reads is the one the host wrote", () => {
+  expect(hotkeyHeld()).toBe(false);
+  expect(hotkeyStatus()).toBe("off");
+  const first = holdHotkey();
+  const second = holdHotkey();
+  expect(hotkeyHeld()).toBe(true);
+  first();
+  first(); // a second release of the same hold counts for nothing
+  expect(hotkeyHeld()).toBe(true);
+  second();
+  expect(hotkeyHeld()).toBe(false);
+  setHotkeyStatus("refused");
+  expect(hotkeyStatus()).toBe("refused");
+  setHotkeyStatus("off");
+});
+
+test("F17: the hotkey follows an empty combo while it is held, so the chord goes back to the system, and takes the combo again when the hold ends", async () => {
+  // What DesktopHost's effect does: the combo given to the hotkey is "" while a hold is on.
+  const w = world();
+  const hotkey = createHotkey(w.deps);
+  const stored = "control+alt+E";
+  const follow = () => hotkey.sync(hotkeyHeld() ? "" : stored);
+  expect(await follow()).toBe("registered");
+  expect([...w.registered.keys()]).toEqual(["ctrl+alt+e"]);
+  const release = holdHotkey();
+  expect(await follow()).toBe("off");
+  expect([...w.registered.keys()]).toEqual([]);
+  expect(w.log).toEqual(["register ctrl+alt+e", "unregister ctrl+alt+e"]);
+  release();
+  expect(await follow()).toBe("registered");
+  expect([...w.registered.keys()]).toEqual(["ctrl+alt+e"]);
+  hotkey.stop();
 });

@@ -1,8 +1,8 @@
 // The pure rules of the Settings screens (old settings.js, cron_tasks.js, account.js): which words a log line is, which
-// jobs a filter keeps, how a job reads, the choices of the retention and hotkey selects. No nsh import, no host call.
+// jobs a filter keeps, how a job reads, the choices of the retention select. No nsh import, no host call.
 import type { BackgroundJob, SystemInfo } from "../../bir";
 import type { ChipTone } from "../../ui";
-import { hotkeyOptions, retentionLabel, type SettingsPreset, type SettingsViewSection } from "../../lib/settings_model";
+import { retentionLabel, type SettingsPreset, type SettingsViewSection } from "../../lib/settings_model";
 
 /** The status filters of the Jobs list, in the order they show. */
 export const STATUS_FILTERS = ["All Jobs", "Queued", "Failed", "Completed", "Archived"] as const;
@@ -103,14 +103,6 @@ export function retentionChoices(info: Pick<SystemInfo, "log_retention_choices" 
   const current = String(info?.log_retention_days || 7);
   if (!choices.some((option) => option.value === current)) choices.push({ value: current, label: retentionLabel(current) });
   return choices;
-}
-
-/** The value a select that has an "Off" (empty) choice keeps for it: the kit's select takes no empty value. */
-export const OFF = "off";
-
-/** The hotkey select's choices: Off first (as OFF), the presets, a stored chord that is none of them. */
-export function hotkeyChoices(combo: string | null | undefined, presets: readonly SettingsPreset[] | null | undefined): SettingsPreset[] {
-  return hotkeyOptions(combo, presets).map((o) => (o.value === "" ? { ...o, value: OFF } : o));
 }
 
 /** The sections of a settings view grouped by their group name, in order. */

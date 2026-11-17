@@ -144,22 +144,93 @@ export function rowShown(section: { rows: readonly string[] } | null | undefined
   return Boolean(section && section.rows.includes(rowId));
 }
 
-/** The label for a stored chord. Empty is Off; an unknown chord is shown as stored. */
-export function hotkeyLabel(combo: string | null | undefined, presets?: readonly SettingsPreset[] | null): string {
-  const value = String(combo || "").trim();
-  if (!value) return "Off";
-  const found = (presets || []).find((preset) => preset.value === value);
-  return found ? found.label : value;
+// ---- the global show hotkey: the stored combo language and the keystrokes the shortcut recorder speaks
+
+/**
+ * The stored combo is words joined by "+", the key last and upper case ("control+alt+E", "super+shift+F12"). Modifier words the listeners read:
+ * control|ctrl, alt|option|opt, shift, platform|super|cmd|meta|win (Command, the Windows key or Super). A bare key means the platform's
+ * default modifiers: control+alt on macOS, super+shift elsewhere (crates/bir-app-api/src/hotkey_combo.rs split_combo). A keystroke is
+ * nsh/keymap's: "ctrl+alt+e", modifiers in the order ctrl, alt, shift, cmd, the key lower case.
+ */
+
+/** The keys a stored combo may name: A to Z, 0 to 9, F1 to F12 (hotkey_combo.rs KEYS), upper case. */
+export const HOTKEY_KEYS: readonly string[] = [
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),
+  ..."0123456789".split(""),
+  ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`),
+];
+
+type Modifier = "ctrl" | "alt" | "shift" | "cmd";
+/** The modifiers in the order both languages write them. */
+const ORDER: readonly Modifier[] = ["ctrl", "alt", "shift", "cmd"];
+/** What a stored combo's words mean (lower case); any other word is ignored, as the listeners ignore it. */
+const STORED_WORDS: Readonly<Record<string, Modifier>> = {
+  control: "ctrl", ctrl: "ctrl", alt: "alt", option: "alt", opt: "alt", shift: "shift", platform: "cmd", super: "cmd", cmd: "cmd", meta: "cmd", win: "cmd",
+};
+/** What a keystroke's modifier words mean (nsh/keymap's; "mod" depends on the platform, so it is none of them). */
+const KEYSTROKE_WORDS: Readonly<Record<string, Modifier>> = {
+  ctrl: "ctrl", control: "ctrl", alt: "alt", option: "alt", opt: "alt", shift: "shift", cmd: "cmd", command: "cmd", meta: "cmd", super: "cmd", win: "cmd",
+};
+/** The word a stored combo uses for each modifier. */
+const STORED: Readonly<Record<Modifier, string>> = { ctrl: "control", alt: "alt", shift: "shift", cmd: "super" };
+
+/** The stored combo's parts (empty ones dropped), and its key upper case; null when it names no key of HOTKEY_KEYS. */
+function storedParts(combo: string | null | undefined): { words: string[]; key: string } | null {
+  const words = String(combo ?? "").split("+").map((part) => part.trim()).filter(Boolean);
+  const key = (words.pop() ?? "").toUpperCase();
+  return HOTKEY_KEYS.includes(key) ? { words, key } : null;
 }
 
-/** The options for the hotkey pill: Off first, the presets, and a custom chord kept at the end. */
-export function hotkeyOptions(combo: string | null | undefined, presets?: readonly SettingsPreset[] | null): SettingsPreset[] {
-  const options: SettingsPreset[] = [{ value: "", label: "Off" }, ...(presets || [])];
-  const value = String(combo || "").trim();
-  if (value && !options.some((option) => option.value === value)) {
-    options.push({ value, label: value });
+/**
+ * The keystroke a stored combo is: "control+alt+E" is "ctrl+alt+e", "super+shift+F12" is "shift+cmd+f12". A bare stored key takes the
+ * default modifiers of the computer the host runs on (`os`: system_info().os, "macos" or another), as hotkey_combo::split_combo does;
+ * a word that is no modifier is ignored. Null for an empty combo or a key the listeners cannot take.
+ */
+export function comboToKeystroke(combo: string | null | undefined, os: string): string | null {
+  const parts = storedParts(combo);
+  if (!parts) return null;
+  const words = parts.words.length ? parts.words : os === "macos" ? ["control", "alt"] : ["platform", "shift"];
+  const on = new Set(words.map((word) => STORED_WORDS[word.toLowerCase()]).filter(Boolean));
+  return [...ORDER.filter((m) => on.has(m)), parts.key.toLowerCase()].join("+");
+}
+
+/**
+ * The stored combo a keystroke is: "ctrl+alt+e" is "control+alt+E", cmd (or super, win, meta) is "super". Null for a keystroke that names a
+ * key outside HOTKEY_KEYS, a modifier word it cannot read (mod), or no modifier at all (a bare stored key would mean the platform's default
+ * modifiers, not the bare key).
+ */
+export function keystrokeToCombo(keystroke: string | null | undefined): string | null {
+  const words = String(keystroke ?? "").split("+").map((part) => part.trim().toLowerCase()).filter(Boolean);
+  const key = (words.pop() ?? "").toUpperCase();
+  if (!HOTKEY_KEYS.includes(key) || !words.length) return null;
+  const on = new Set<Modifier>();
+  for (const word of words) {
+    const modifier = KEYSTROKE_WORDS[word];
+    if (!modifier) return null;
+    on.add(modifier);
   }
-  return options;
+  return [...ORDER.filter((m) => on.has(m)).map((m) => STORED[m]), key].join("+");
+}
+
+/** Whether the door takes this keystroke as the global hotkey: a key of HOTKEY_KEYS with Control, Alt or Command (Shift alone, or a bare key, is refused with hotkey_combo::NOT_REGISTRABLE). */
+export function hotkeyRegistrable(keystroke: string | null | undefined): boolean {
+  const combo = keystrokeToCombo(keystroke);
+  if (combo === null) return false;
+  return combo.split("+").some((word) => word === "control" || word === "alt" || word === "super");
+}
+
+/** What to say when a chord has no Control, Alt or Command, in the platform's words (`os`: platform.os; iOS follows macOS). */
+export function modifierWords(os: string): string {
+  if (os === "macos" || os === "ios") return "Add Control, Option or Command.";
+  if (os === "windows") return "Add Ctrl, Alt or the Windows key.";
+  return "Add Ctrl, Alt or Super.";
+}
+
+/** Where the host's global hotkey stands (shell/desktop/hotkey.ts), in words for under the box; empty when there is nothing to say. */
+export function hotkeyProblem(status: string): string {
+  if (status === "refused") return "Another app is using this shortcut. Pick another one.";
+  if (status === "invalid") return "This computer cannot register that shortcut.";
+  return "";
 }
 
 /** How long the log is kept, in words. Zero, a negative or an unreadable count is the seven-day default. */

@@ -18,7 +18,8 @@ import { startPolls } from "../../lib/poll";
 import { AppButton, Dialog, Text } from "../../ui";
 import { signOut as signOutOfTheAccount } from "../../screens/settings/cloud";
 import { aboutOpen, closePressed, perform, setSignOutHandler, showMain, toggleMain } from "./actions";
-import { createHotkey, type HotkeyStatus } from "./hotkey";
+import { createHotkey } from "./hotkey";
+import { hotkeyHeld, setHotkeyStatus } from "./hotkey_state";
 import { buildMenu, buildTrayMenu, COPYRIGHT, type MenuState, type Os } from "./menu_model";
 import * as native from "./native";
 import icon from "./tray.png";
@@ -29,15 +30,11 @@ import type { UpdaterApi } from "./updater";
 const menuNow = signal<MenuItem[]>([]);
 /** The tray's menu as it was last handed to the system. */
 const trayNow = signal<MenuItem[]>([]);
-/** Where the global hotkey stands. */
-const hotkeyNow = signal<HotkeyStatus>("off");
 
 /** The application menu now installed: read inside JSX or a closure. */
 export const installedMenu = (): readonly MenuItem[] => menuNow();
 /** The tray icon's menu now installed. */
 export const installedTray = (): readonly MenuItem[] => trayNow();
-/** The global hotkey's status: off, registered, refused, invalid. */
-export const hotkeyStatus = (): HotkeyStatus => hotkeyNow();
 
 /** The desktop platform this run is, or null where there are no desktop windows. */
 export function desktopOs(): Os | null {
@@ -124,11 +121,13 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
     unregister: (shortcut) => (props.shortcuts ?? GlobalShortcut).unregister(shortcut),
     onPress: toggleMain,
     log: (level, message) => store.logScreen(level, message),
-    onStatus: (status) => hotkeyNow.set(status),
+    onStatus: setHotkeyStatus,
   });
   effect(() => {
     // The page may read only the theme setting; system_info carries the stored combo (and a store write drops it when Settings changes it).
-    const combo = app.chromeVisible() ? (store.systemInfo().global_hotkey ?? "") : "";
+    // While Settings' shortcut recorder listens (hotkey_state.ts holdHotkey) the combo is empty: the chord goes back to the system, so
+    // pressing it to record it reaches the window instead of hiding it, and it is taken again (the new chord, or the old) when the hold ends.
+    const combo = app.chromeVisible() && !hotkeyHeld() ? (store.systemInfo().global_hotkey ?? "") : "";
     untracked(() => {
       hotkey.sync(combo).catch((error) => store.logScreen("warn", "hotkey: " + errorText(error)));
     });

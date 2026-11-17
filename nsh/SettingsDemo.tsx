@@ -16,7 +16,9 @@
 //   cloud     "out" (signed out; sign-in works), "in" (signed in as juana@example.com; sign-out works), "down" (the server is unreachable)
 //   import    "database" | "profile" | "invalid" | "cancelled" | "fail": what import_archive answers (the dialog is the host's)
 //   google    true: a fake Gmail inbox for the demo taxpayer (connect, disconnect and tracking change it; the browser sign-in is not opened)
-//   hotkey    "refuse": set_global_hotkey is refused, as the host does for a chord it cannot register
+//   hotkey    "refuse": set_global_hotkey is refused, as the host does for a chord it cannot register; "note": it is listed in the calls
+//             readout (noise) and then done by the real host, so the box shows what was stored
+//   status    "refused" | "invalid": where the desktop host says the global hotkey stands (there is no desktop host in this fixture)
 //   update    true: update_status answers a real-looking status (auto download on)
 //   noise     true: the fixture's fake host calls are listed (testID demo-calls) so a test sees what the page asked
 //   readout   true: the app state in one line (testID demo-state): theme, recent, compact, view, params, session, cloud, admin owner, mode
@@ -28,6 +30,7 @@ import { bir, type BackgroundJob, type CloudAccountStatus, type InboxState, type
 import { createDemoTaxpayer } from "./bir/testing";
 import { totpCode } from "./screens/auth/testTotp";
 import { app } from "./shell/app";
+import { setHotkeyStatus } from "./shell/desktop/hotkey_state";
 import { Shell } from "./shell/Shell";
 
 interface Params {
@@ -40,12 +43,13 @@ interface Params {
   totpSecret?: string;
   signin?: boolean | "taxpayer";
   google?: boolean;
-  hotkey?: "refuse";
+  hotkey?: "refuse" | "note";
   readout?: boolean;
   jobs?: boolean;
   log?: "mixed" | "long" | "empty" | "error";
   cloud?: "out" | "in" | "down";
   import?: "database" | "profile" | "invalid" | "cancelled" | "fail";
+  status?: "refused" | "invalid";
   update?: boolean;
   noise?: boolean;
   start?: string;
@@ -224,6 +228,13 @@ function fakeHotkeyRefusal(): void {
   });
 }
 
+function noteHotkey(): void {
+  swap("set_global_hotkey", (real) => (combo) => {
+    note(`set_global_hotkey ${combo}`);
+    return real(combo);
+  });
+}
+
 function seed(p: Params): void {
   const taxpayer = createDemoTaxpayer();
   const head = taxpayer.branches[0];
@@ -255,6 +266,8 @@ function Demo() {
   if (p.update) fakeUpdate();
   if (p.google) fakeGoogle();
   if (p.hotkey === "refuse") fakeHotkeyRefusal();
+  if (p.hotkey === "note") noteHotkey();
+  if (p.status) setHotkeyStatus(p.status);
   if (p.signin) {
     effect(() => {
       if (!app.booted()) return;

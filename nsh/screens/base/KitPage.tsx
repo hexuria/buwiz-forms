@@ -8,7 +8,7 @@ import {
   AppButton, Avatar, Banner, Card, Checkbox, CheckboxLabel, Chip, Code, ComboField, ContextPill, DateField, Dialog, Disclosure,
   DisclosureGroup, Dropdown, EmptyRow, Field, FieldCell, FieldGrid, FormActions, GroupLabel, Hairline, Icon, IconButton, type IconName,
   ICONS, IntInput, Kbd, Line, ListGroup, ListRow, Menu, MenuItem, MenuSeparator, MetaLine, MoneyInput, MultiCombo, NameCell, NavRow,
-  PageHeader, PageTitle, PercentInput, PinCells, Popover, PressCard, PressCell, RadioGroup, SectionTitle, Segmented, SettingRow, Sheet, SidePanel, Spinner,
+  PageHeader, PageTitle, PercentInput, PinCells, Popover, PressCard, PressCell, RadioGroup, SectionTitle, Segmented, SettingRow, Sheet, ShortcutRecorder, SidePanel, Spinner,
   StatusChip, StepCircle, Switch, Tabs, Text, TextField, TinInput, toast, Toaster, undoToast,
 } from "../../ui";
 
@@ -438,6 +438,9 @@ function EntrySection() {
   const pin = signal("");
   const code = signal("");
   const done = signal("");
+  const shortcut = signal("ctrl+alt+e");
+  const bare = signal("");
+  const recording = signal(false);
   return (
     <Section title="Text entry" testID="kit-entry">
       <FieldGrid>
@@ -508,6 +511,28 @@ function EntrySection() {
         <PinCells length={6} label="Code" value={code()} onChange={(v) => code.set(v)} onComplete={(v) => done.set(v)} testID="kit-code" />
       </Demo>
       <Text tone="fg2" class="tabular-nums">{`PIN digits: ${pin().length} | Code complete: ${done() || "no"}`}</Text>
+      <Demo label="Shortcut recorder: with a shortcut, none, needs Ctrl, Alt or Cmd, with an error, disabled">
+        <ShortcutRecorder
+          testID="kit-shortcut"
+          label="Show shortcut"
+          width={200}
+          value={shortcut()}
+          onChange={(v) => shortcut.set(v)}
+          onRecordingChange={(on) => recording.set(on)}
+        />
+        <ShortcutRecorder
+          testID="kit-shortcut-bare"
+          label="Needs a modifier"
+          width={200}
+          value={bare()}
+          onChange={(v) => bare.set(v)}
+          accepts={(k) => /(^|\+)(ctrl|alt|cmd)\+/.test(k)}
+          unacceptable="Add Control, Option or Command."
+        />
+        <ShortcutRecorder testID="kit-shortcut-taken" label="Taken" width={200} value="ctrl+alt+b" onChange={() => {}} error="Another app is using this shortcut. Pick another one." />
+        <ShortcutRecorder testID="kit-shortcut-locked" label="Locked" width={200} value="ctrl+alt+h" onChange={() => {}} disabled />
+      </Demo>
+      <Text tone="fg2">{`Shortcut: ${shortcut() || "none"} | Recording: ${recording() ? "yes" : "no"} | Needs a modifier: ${bare() || "none"}`}</Text>
       <FormActions onCancel={() => toast("Cancelled")} onSave={() => toast("Saved")} testID="kit-form" />
     </Section>
   );

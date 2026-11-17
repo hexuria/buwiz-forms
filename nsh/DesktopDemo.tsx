@@ -9,6 +9,8 @@
 //   system   "fake": GlobalShortcut is a fake that takes every chord (the "r-chords" readout lists what is registered; a test presses one
 //            with host.send("run", { id: "chord:ctrl+alt+shift+9" }) and changes the stored combo with { id: "hotkey:control+alt+B" });
 //            absent: the real GlobalShortcut (in a window of a real platform the system answers)
+//   solo     true: "Just me" is chosen for the demo taxpayer, so the admin sees Settings > Computer (start "section=computer")
+//   refuse   a chord the fake GlobalShortcut does not take, as the system does for one another app holds ("ctrl+alt+b")
 //   signOut  true: the Buwiz account's sign-out answers signed out at once (no network) and the gate then stays closed; the readout
 //            "r-settings-search" shows Settings' search text
 // Over the frame, a strip of 8-point buttons (off the window's rounded corner, where a click misses the window) runs the installed menu's items (id "run:File > New Return…") and the tray's ("tray:Show
@@ -39,6 +41,8 @@ interface Params {
   updater?: "found" | "current";
   hotkey?: string;
   system?: "fake";
+  solo?: boolean;
+  refuse?: string;
   signOut?: boolean;
 }
 
@@ -47,9 +51,13 @@ const asked = signal<string[]>([]);
 /** The chords the fake GlobalShortcut holds, with what pressing them runs. */
 const chords = signal<Record<string, () => void>>({});
 
-/** A GlobalShortcut that takes every chord. */
+/** The chords the fake GlobalShortcut refuses (another app holds them). */
+const refusing = new Set<string>();
+
+/** A GlobalShortcut that takes every chord but the ones another app holds. */
 const fakeShortcuts = {
   register: async (shortcut: string, onPress: () => void) => {
+    if (refusing.has(shortcut)) return false;
     chords.update((held) => ({ ...held, [shortcut]: onPress }));
     return true;
   },
@@ -103,6 +111,8 @@ function Demo() {
       bir.set_yearly_forms(head.tin, year, ["1601C", "2551Q"]);
     }
   }
+  if (p.solo && bir.auth_state().mode === null) bir.setup_solo(createDemoTaxpayer().tin_root);
+  if (p.refuse) refusing.add(p.refuse);
   if (p.hotkey) bir.set_global_hotkey(p.hotkey);
   if (p.locked) app.setCloudLocked(true);
   if (p.signOut) {

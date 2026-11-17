@@ -1,11 +1,13 @@
 // Settings > Computer (old computerCards; admin only): the local files, how long logs are kept, the global show hotkey, how closing
-// the window behaves, who the computer is set up for, and the version. The hotkey's registration is the app menu agent's hook:
-// this stores the chord through set_global_hotkey, which the tray already polls.
-import { View } from "nsh";
+// the window behaves, who the computer is set up for, and the version. The hotkey is a shortcut recorder (the box is pressed, then the
+// keys): it stores the chord through set_global_hotkey, which the desktop host follows (shell/desktop/Desktop.tsx), holds that host's
+// hotkey off while it listens (so the chord pressed to record it does not hide the window), and says where the registration stands.
+import { cleanup, platform, View } from "nsh";
 import { errorText } from "../../lib/errors";
-import { store, toast } from "../../shell";
-import { Card, Dropdown, SettingRow, Text } from "../../ui";
-import { hotkeyChoices, OFF, retentionChoices } from "./logic";
+import { comboToKeystroke, hotkeyProblem, hotkeyRegistrable, keystrokeToCombo, modifierWords } from "../../lib/settings_model";
+import { holdHotkey, hotkeyStatus, store, toast } from "../../shell";
+import { Card, Dropdown, SettingRow, ShortcutRecorder, Text } from "../../ui";
+import { retentionChoices } from "./logic";
 import { Labeled, NoteRow } from "./parts";
 import { SetupCard } from "./SetupCard";
 
@@ -17,9 +19,12 @@ function setRetention(days: number): void {
   }
 }
 
-function setHotkey(combo: string): void {
+/** Stores the recorded keystroke ("" removes the shortcut). A refusal is said in the host's words and the box shows the stored chord again. */
+function setHotkey(keystroke: string): void {
+  const combo = keystroke === "" ? "" : keystrokeToCombo(keystroke);
+  if (combo === null) return;
   try {
-    store.write("set_global_hotkey", combo === OFF ? "" : combo);
+    store.write("set_global_hotkey", combo);
   } catch (error) {
     toast(errorText(error), "triangle-alert");
   }
@@ -29,6 +34,15 @@ export function ComputerSection(props: { rows: string[] }) {
   const has = (id: string) => props.rows.includes(id);
   const info = () => store.systemInfo();
   const files = () => has("data") || has("logs");
+  /** The stored chord as the recorder speaks it; the default modifiers of a bare stored key are the host's (system_info().os). */
+  const hotkey = () => comboToKeystroke(info().global_hotkey, info().os) ?? "";
+  // The recorder holds the desktop host's hotkey off while it listens; the hold is let go however the recording ends, and when this goes.
+  let release: (() => void) | null = null;
+  const hold = (on: boolean) => {
+    release?.();
+    release = on ? holdHotkey() : null;
+  };
+  cleanup(() => hold(false));
   return (
     <>
       <If when={files()}>
@@ -58,13 +72,16 @@ export function ComputerSection(props: { rows: string[] }) {
         <Labeled label="Shortcuts">
           <Card testID="settings-hotkey">
             <SettingRow testID="settings-hotkey-row" title="Global show hotkey" hint="Shows or hides eBIRForms from any app">
-              <Dropdown
-                testID="settings-hotkey-select"
+              <ShortcutRecorder
+                testID="settings-hotkey-recorder"
                 label="Global show hotkey"
                 width={160}
-                options={hotkeyChoices(info().global_hotkey, info().hotkey_presets)}
-                value={info().global_hotkey || OFF}
+                value={hotkey()}
                 onChange={setHotkey}
+                accepts={hotkeyRegistrable}
+                unacceptable={modifierWords(platform.os)}
+                error={hotkeyProblem(hotkeyStatus())}
+                onRecordingChange={hold}
               />
             </SettingRow>
           </Card>

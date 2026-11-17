@@ -1,20 +1,24 @@
-// Settings > Computer at phone size and at desktop size: the local files, log retention and the global hotkey (stored through the real host),
-// how closing behaves, the version, and the "who uses this computer" change (an owner or a help desk) with its recovery key and the sign-out
-// that follows. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
+// Settings > Computer at phone size and at desktop size: the local files, log retention and the global hotkey (a shortcut recorder: the box is
+// pressed, then the keys; stored through the real host), how closing behaves, the version, and the "who uses this computer" change (an owner
+// or a help desk) with its recovery key and the sign-out that follows. Against a scratch database with the demo taxpayer (SettingsDemo.tsx).
 import { expect, test } from "nsh/test";
 import { totpCode } from "../auth/testTotp";
-import { expectTexts, goneText, openSettings, SIZES, state } from "./testing";
+import { calls, expectTexts, goneText, openSettings, SIZES, state } from "./testing";
+
+const BOX = "id:settings-hotkey-recorder";
+const CLEAR = "id:settings-hotkey-recorder-clear";
+const NEED_MODIFIER = "Add Control, Option or Command.";
 
 const SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 const KEY = /^[A-Z0-9]{4}(-[A-Z0-9]{4}){3}$/;
 
 for (const { name, size } of SIZES) {
-  test(`${name}: the local files, the version and how closing works are told; retention and the hotkey are stored by the host`, async () => {
+  test(`${name}: the local files, the version and how closing works are told; retention is stored by the host`, async () => {
     const app = await openSettings(size, { solo: true }, "computer");
     await app.waitFor("id:settings-files");
     expectTexts(app, [
       "Computer", "Local files", "Database", "Data folder", "Logs folder", "Keep logs for", "Older daily log files are deleted", "7 days",
-      "Shortcuts", "Global show hotkey", "Shows or hides eBIRForms from any app", "Off", "Window", "Close window",
+      "Shortcuts", "Global show hotkey", "Shows or hides eBIRForms from any app", "None", "Click to record", "Window", "Close window",
       "Closing hides eBIRForms to the menu bar when a tray icon exists. With no tray, closing quits. Quit is always in the application menu.",
       "Computer setup", "eBIRForms 0.2.0",
     ]);
@@ -28,31 +32,144 @@ for (const { name, size } of SIZES) {
     await app.waitFor("text:90 days");
     await goneText(app, "7 days"); // the popup, with all its options, slides away
     expect(app.texts()).not.toContain("7 days");
-
-    await app.press("id:settings-hotkey-select-trigger");
-    await app.waitFor("text:Ctrl+Option+E");
-    await app.press("text:Ctrl+Option+E");
-    await app.waitFor("text:Ctrl+Option+E");
-    await goneText(app, "Off");
-    expect(app.texts()).not.toContain("Off");
-    await app.press("id:settings-hotkey-select-trigger");
-    await app.waitFor("text:Off");
-    await app.press("text:Off");
-    await app.waitFor("text:Off");
-    await goneText(app, "Ctrl+Option+E");
-    expect(app.texts()).not.toContain("Ctrl+Option+E");
   }, 90_000);
 
-  test(`${name}: a hotkey the host refuses is said in its words and the choice stays as it was`, async () => {
+  test(`${name}: the hotkey is recorded with the keys: a press on the box, then the chord; the host is asked to store it and the box shows it`, async () => {
+    const app = await openSettings(size, { solo: true, hotkey: "note" }, "computer");
+    await app.waitFor("id:settings-hotkey");
+    expect(app.texts()).toContain("None");
+    expect(app.texts()).toContain("Click to record");
+    expect(app.shows(CLEAR)).toBe(false);
+
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    expect(app.texts()).toContain("Esc to cancel · Delete to remove");
+    expect(app.texts()).not.toContain("None");
+    await app.keyboard.press("ctrl+alt+b");
+    await app.waitFor("text:⌃⌥B");
+    await goneText(app, "Type shortcut");
+    expect(calls(app)).toEqual(["set_global_hotkey control+alt+B"]);
+    expect(app.shows(CLEAR)).toBe(true);
+    expect(app.texts()).not.toContain("Click to record");
+
+    // Another chord replaces it: Command is stored as super, in the order control, alt, shift, super.
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    await app.keyboard.press("cmd+shift+f12");
+    await app.waitFor("text:⇧⌘F12");
+    expect(calls(app)).toEqual(["set_global_hotkey control+alt+B", "set_global_hotkey shift+super+F12"]);
+
+    // The small x removes it: the host is asked to store nothing, and the box says None again.
+    await app.press(CLEAR);
+    await app.waitFor("text:None");
+    expect(calls(app)).toEqual(["set_global_hotkey control+alt+B", "set_global_hotkey shift+super+F12", "set_global_hotkey"]);
+    expect(app.shows(CLEAR)).toBe(false);
+  }, 60_000);
+
+  test(`${name}: Escape cancels and stores nothing; Delete removes the chord; a key with no Control, Option or Command is answered and the box keeps listening`, async () => {
+    const app = await openSettings(size, { solo: true, hotkey: "note" }, "computer");
+    await app.waitFor("id:settings-hotkey");
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    await app.keyboard.press("escape");
+    await goneText(app, "Type shortcut");
+    expect(app.texts()).toContain("None");
+    expect(calls(app)).toEqual([]);
+
+    // A bare key and Shift with a key are answered, and nothing is stored; the box is still waiting.
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    for (const keys of ["b", "shift+b", "f5"]) {
+      await app.keyboard.press(keys);
+      await app.waitFor(`text:${NEED_MODIFIER}`);
+      expect(app.texts()).toContain("Type shortcut");
+    }
+    expect(calls(app)).toEqual([]);
+
+    // A key the platform keeps (Command+Q quits) is not a chord: the box still waits, and the app's own Command+Q is not taken.
+    await app.keyboard.press("mod+q");
+    expect(app.texts()).toContain("Type shortcut");
+    expect(calls(app)).toEqual([]);
+
+    // The next chord with a modifier is the shortcut.
+    await app.keyboard.press("alt+h");
+    await app.waitFor("text:⌥H");
+    await goneText(app, "Type shortcut");
+    expect(app.texts()).not.toContain(NEED_MODIFIER);
+    expect(calls(app)).toEqual(["set_global_hotkey alt+H"]);
+
+    // Recording is over, and nothing is left listening: a chord, Escape and Delete do nothing now.
+    for (const keys of ["ctrl+alt+z", "escape", "delete", "backspace"]) await app.keyboard.press(keys);
+    expect(calls(app)).toEqual(["set_global_hotkey alt+H"]);
+    expect(app.texts()).toContain("⌥H");
+
+    // Delete while recording removes the chord.
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    await app.keyboard.press("delete");
+    await app.waitFor("text:None");
+    expect(calls(app)).toEqual(["set_global_hotkey alt+H", "set_global_hotkey"]);
+    // Delete with nothing to remove asks the host nothing.
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    await app.keyboard.press("backspace");
+    await goneText(app, "Type shortcut");
+    expect(calls(app)).toEqual(["set_global_hotkey alt+H", "set_global_hotkey"]);
+  }, 90_000);
+
+  test(`${name}: while the box listens the app's own shortcuts are chords, and after it ends they are the app's again`, async () => {
+    const app = await openSettings(size, { solo: true, hotkey: "note" }, "computer");
+    await app.waitFor("id:settings-hotkey");
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    // Command+K opens the palette, but while the box listens it is the chord that was pressed.
+    await app.keyboard.press("mod+k");
+    await app.waitFor("text:⌘K");
+    expect(calls(app)).toEqual(["set_global_hotkey super+K"]);
+    expect(app.shows("id:palette-input")).toBe(false);
+    // Recording is over and nothing of it is left bound: Command+K opens the palette again, and Escape (which the box also listened for) closes it.
+    await app.keyboard.press("mod+k");
+    await app.waitFor("id:palette-input");
+    await app.keyboard.press("escape");
+    await app.waitFor("id:palette-input", { state: "gone" });
+    expect(calls(app)).toEqual(["set_global_hotkey super+K"]);
+  }, 60_000);
+
+  test(`${name}: a hotkey the host refuses is said in its words and the box goes back to the stored chord`, async () => {
     const app = await openSettings(size, { solo: true, hotkey: "refuse" }, "computer");
     await app.waitFor("id:settings-hotkey");
-    await app.press("id:settings-hotkey-select-trigger");
-    await app.waitFor("text:Ctrl+Option+B");
-    await app.press("text:Ctrl+Option+B");
+    await app.press(BOX);
+    await app.waitFor("text:Type shortcut");
+    await app.keyboard.press("ctrl+alt+b");
     await app.waitFor("text:That shortcut is not one this computer can register. Use a letter, digit, or F-key with modifiers, like super+shift+E.");
-    expect(app.texts()).toContain("calls: set_global_hotkey control+alt+B");
-    await goneText(app, "Ctrl+Option+B");
-    expect(app.texts()).not.toContain("Ctrl+Option+B");
+    expect(calls(app)).toEqual(["set_global_hotkey control+alt+B"]);
+    await goneText(app, "Type shortcut");
+    // Nothing was stored, so the box says None again and not the chord that was refused.
+    expect(app.texts()).toContain("None");
+    expect(app.texts()).not.toContain("⌃⌥B");
+    expect(app.shows(CLEAR)).toBe(false);
+  }, 60_000);
+
+  test(`${name}: where the system stands is said under the box: a chord another app holds, a chord this computer cannot register`, async () => {
+    for (const [status, words] of [
+      ["refused", "Another app is using this shortcut. Pick another one."],
+      ["invalid", "This computer cannot register that shortcut."],
+    ] as const) {
+      const app = await openSettings(size, { solo: true, status }, "computer");
+      await app.waitFor("id:settings-hotkey");
+      await app.waitFor(`text:${words}`);
+      // While the box listens it shows its prompt, not the words; Escape brings them back.
+      await app.press(BOX);
+      await app.waitFor("text:Type shortcut");
+      expect(app.texts()).not.toContain(words);
+      await app.keyboard.press("escape");
+      await app.waitFor(`text:${words}`);
+    }
+    // Where there is no desktop host (here) or the chord is registered, nothing extra shows.
+    const quiet = await openSettings(size, { solo: true }, "computer");
+    await quiet.waitFor("id:settings-hotkey");
+    expect(quiet.texts()).not.toContain("Another app is using this shortcut. Pick another one.");
+    expect(quiet.texts()).not.toContain("This computer cannot register that shortcut.");
   }, 60_000);
 
   test(`${name}: the owner changes: another taxpayer is chosen, the admin PIN confirms it, a new recovery key shows once, then the computer signs out`, async () => {
