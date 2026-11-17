@@ -1,0 +1,333 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1800-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1800-schedule-a-total",
+                             "1800-schedule-b2-total",
+                             "1800-total-gifts",
+                             "1800-total-deductions",
+                             "1800-current-net-gifts",
+                             "1800-cumulative-net-gifts",
+                             "1800-taxable-net-gifts",
+                             "1800-donor-tax-due",
+                             "1800-tax-credits",
+                             "1800-tax-payable",
+                             "1800-penalties",
+                             "1800-total-amount-payable",
+                             "1800-mutual-recursion-defect"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1800-schedule-a-total",
+                             "outputs":  [
+                                             "frm1800v2018:schedA:txtTotalPayment1",
+                                             "frm1800v2018:PersonalProperties"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:schedA:txtFairMarketValue{index}"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Sum all Schedule A fair-market-value rows; copy the result to Item 25 Personal Properties.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeScheduleA",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeScheduleA:L4435-L4447"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-schedule-b2-total",
+                             "outputs":  [
+                                             "frm1800v2018:schedB2:txtTotal",
+                                             "frm1800v2018:RealProperties"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:schedB2:txtFairMarketValue{index}"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Sum all Schedule B2 fair-market-value rows; copy the result to Item 26 Real Properties.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeScheduleB2",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeScheduleB2:L4448-L4463"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-total-gifts",
+                             "outputs":  [
+                                             "frm1800v2018:TotalGifts"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:PersonalProperties",
+                                            "frm1800v2018:RealProperties"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 27 = Item 25 + Item 26.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute27",
+                             "depends_on":  [
+                                                "1800-schedule-a-total",
+                                                "1800-schedule-b2-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute27:L4333-L4336"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-total-deductions",
+                             "outputs":  [
+                                             "frm1800v2018:TotalDeductionsAllowed"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:DeductionAmt1",
+                                            "frm1800v2018:DeductionAmt2",
+                                            "frm1800v2018:DeductionAmt3",
+                                            "frm1800v2018:DeductionAmt4",
+                                            "frm1800v2018:DeductionAmt5"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 33 = sum of Items 28 through 32.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute33",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute33:L4337-L4341"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-current-net-gifts",
+                             "outputs":  [
+                                             "frm1800v2018:TotalReturnNetGifts"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:TotalGifts",
+                                            "frm1800v2018:TotalDeductionsAllowed"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 34 = Item 27 - Item 33.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute34",
+                             "depends_on":  [
+                                                "1800-total-gifts",
+                                                "1800-total-deductions"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute34:L4342-L4346"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-cumulative-net-gifts",
+                             "outputs":  [
+                                             "frm1800v2018:TotalNetGifts36"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:TotalReturnNetGifts",
+                                            "frm1800v2018:TotalPriorNetGifts"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 36 = Item 34 + Item 35.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute36",
+                             "depends_on":  [
+                                                "1800-current-net-gifts"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute36:L4347-L4351"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-taxable-net-gifts",
+                             "outputs":  [
+                                             "frm1800v2018:TotalNetGiftsSubjectToTax",
+                                             "frm1800v2018:TotalNetGifts"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:TotalNetGifts36"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 38 = Item 36 - 250,000, without a zero floor; Item 14 copies Item 38.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute38",
+                             "depends_on":  [
+                                                "1800-cumulative-net-gifts"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute38:L4352-L4357"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Clamp at zero if required by the revision-matched legal rule.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-donor-tax-due",
+                             "outputs":  [
+                                             "frm1800v2018:DonorTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:TotalNetGifts"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 16 = Item 14 Ã— 6%.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute16",
+                             "depends_on":  [
+                                                "1800-taxable-net-gifts"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute16:L4358-L4362",
+                                                 "official-form-pdf"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-tax-credits",
+                             "outputs":  [
+                                             "frm1800v2018:TaxCredit17D"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:TaxCredit17A",
+                                            "frm1800v2018:TaxCredit17B",
+                                            "frm1800v2018:TaxCredit17C"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 17D = 17A + 17B + 17C.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute17D",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute17D:L4328-L4332"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-tax-payable",
+                             "outputs":  [
+                                             "frm1800v2018:txtTaxPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:DonorTaxDue",
+                                            "frm1800v2018:TaxCredit17D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 18 = Item 16 - Item 17D.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute18",
+                             "depends_on":  [
+                                                "1800-donor-tax-due",
+                                                "1800-tax-credits"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute18:L4363-L4367"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-penalties",
+                             "outputs":  [
+                                             "frm1800v2018:TotalPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:Surcharge",
+                                            "frm1800v2018:Interest",
+                                            "frm1800v2018:Compromise"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 19D = 19A + 19B + 19C.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L4316-L4322"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-total-amount-payable",
+                             "outputs":  [
+                                             "frm1800v2018:TotalAmountPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1800v2018:txtTaxPayable",
+                                            "frm1800v2018:TotalPenalties"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 20 = Item 18 + Item 19D.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTotalAmtPayable",
+                             "depends_on":  [
+                                                "1800-tax-payable",
+                                                "1800-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmtPayable:L4323-L4327"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1800-mutual-recursion-defect",
+                             "outputs":  [
+                                             "frm1800v2018:txtTaxPayable",
+                                             "frm1800v2018:TotalAmountPayable"
+                                         ],
+                             "inputs":  [
+                                            "computation-chain"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "compute18 calls computeTotalAmtPayable, which calls compute18 again; no termination condition exists.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "compute18 or computeTotalAmtPayable",
+                             "depends_on":  [
+                                                "1800-tax-payable",
+                                                "1800-total-amount-payable"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmtPayable:L4323-L4327",
+                                                 "official-hta-runtime#compute18:L4363-L4367"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Evaluate the acyclic intended graph once and reject cyclic calculation contracts.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

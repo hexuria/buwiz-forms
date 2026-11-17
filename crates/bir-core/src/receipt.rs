@@ -1,0 +1,366 @@
+use chrono::{NaiveDate, NaiveTime};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BirReceiptConfirmation {
+    pub filename: String,
+    pub date_received: NaiveDate,
+    pub time_received: NaiveTime,
+    pub source_from: Option<String>,
+    pub raw_text: String,
+    pub raw_html: Option<String>,
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum ReceiptParseError {
+    #[error("missing BIR receipt filename")]
+    MissingFilename,
+    #[error("missing BIR received date")]
+    MissingDate,
+    #[error("missing BIR received time")]
+    MissingTime,
+}
+
+pub fn parse_bir_receipt_email(
+    raw_input: &str,
+    raw_html: Option<String>,
+) -> Result<BirReceiptConfirmation, ReceiptParseError> {
+    // Strip HTML tags in case the email was parsed as HTML rather than plain text
+    let mut raw = String::with_capacity(raw_input.len());
+    let mut in_tag = false;
+    let mut current_tag = String::new();
+
+    for c in raw_input.chars() {
+        if c == '<' {
+            in_tag = true;
+            current_tag.clear();
+        } else if c == '>' {
+            in_tag = false;
+            let tag_lower = current_tag.to_lowercase();
+            if tag_lower == "br"
+                || tag_lower == "br/"
+                || tag_lower == "br /"
+                || tag_lower == "p"
+                || tag_lower == "/p"
+                || tag_lower == "div"
+                || tag_lower == "/div"
+            {
+                raw.push('\n');
+            }
+        } else if in_tag {
+            current_tag.push(c);
+        } else {
+            raw.push(c);
+        }
+    }
+    let raw = raw.replace("&nbsp;", " ");
+    let raw = raw.as_str();
+
+    static FILENAME_RE: OnceLock<Regex> = OnceLock::new();
+    static DATE_RE: OnceLock<Regex> = OnceLock::new();
+    static TIME_RE: OnceLock<Regex> = OnceLock::new();
+    static FROM_RE: OnceLock<Regex> = OnceLock::new();
+
+    let filename_re = FILENAME_RE.get_or_init(|| {
+        Regex::new(r"(?im)^\s*File name:\s*([^\s]+\.xml)\s*$").expect("valid filename regex")
+    });
+    let date_re = DATE_RE.get_or_init(|| {
+        Regex::new(r"(?im)^\s*Date received by BIR:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})\s*$")
+            .expect("valid date regex")
+    });
+    let time_re = TIME_RE.get_or_init(|| {
+        Regex::new(r"(?im)^\s*Time received by BIR:\s*(\d{1,2}:\d{2}\s*[AP]M)\s*$")
+            .expect("valid time regex")
+    });
+    let from_re = FROM_RE.get_or_init(|| {
+        Regex::new(r"(?im)^\s*from:\s*([^\s]+@[^\s]+)\s*$|^\s*(ebirforms-noreply@bir\.gov\.ph)\s*$")
+            .expect("valid from regex")
+    });
+
+    let filename = filename_re
+        .captures(raw)
+        .and_then(|cap| cap.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .ok_or(ReceiptParseError::MissingFilename)?;
+
+    let date_str = date_re
+        .captures(raw)
+        .and_then(|cap| cap.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .ok_or(ReceiptParseError::MissingDate)?;
+    let date_received = NaiveDate::parse_from_str(&date_str, "%d %B %Y")
+        .or_else(|_| NaiveDate::parse_from_str(&date_str, "%e %B %Y"))
+        .map_err(|_| ReceiptParseError::MissingDate)?;
+
+    let time_str = time_re
+        .captures(raw)
+        .and_then(|cap| cap.get(1))
+        .map(|m| m.as_str().trim().to_string())
+        .ok_or(ReceiptParseError::MissingTime)?;
+    let time_received = parse_bir_receipt_time(&time_str).ok_or(ReceiptParseError::MissingTime)?;
+
+    let source_from = from_re.captures(raw).and_then(|cap| {
+        cap.get(1)
+            .or_else(|| cap.get(2))
+            .map(|m| m.as_str().trim().to_string())
+    });
+
+    Ok(BirReceiptConfirmation {
+        filename,
+        date_received,
+        time_received,
+        source_from,
+        raw_text: raw.to_string(),
+        raw_html,
+    })
+}
+
+/// BIR confirmation emails write `3:13 PM` without a leading zero.
+/// Chrono `%I` is zero-padded (`01`–`12`), so pad a single-digit hour.
+fn parse_bir_receipt_time(time: &str) -> Option<NaiveTime> {
+    let normalized = normalize_bir_receipt_meridiem(time);
+    NaiveTime::parse_from_str(&normalized, "%I:%M %p")
+        .or_else(|_| NaiveTime::parse_from_str(&normalized, "%I:%M:%S %p"))
+        .ok()
+}
+
+fn normalize_bir_receipt_meridiem(time: &str) -> String {
+    let compact = time.trim().to_uppercase().replace(' ', "");
+    let (clock, meridiem) = if let Some(clock) = compact.strip_suffix("AM") {
+        (clock, "AM")
+    } else if let Some(clock) = compact.strip_suffix("PM") {
+        (clock, "PM")
+    } else {
+        return time.trim().to_uppercase();
+    };
+    let Some((hour, rest)) = clock.split_once(':') else {
+        return format!("{clock} {meridiem}");
+    };
+    if hour.len() == 1 {
+        format!("0{hour}:{rest} {meridiem}")
+    } else {
+        format!("{hour}:{rest} {meridiem}")
+    }
+}
+
+/// Split `{TIN}-{FormType}-{Period}.xml` and the IAF variant
+/// `{TIN}-{FormType}-{Period}#{email}#.xml`.
+///
+/// The `#email#` suffix is stripped before the hyphen split so IAF copies and
+/// plaintext savefile stems yield the same TIN, form, and period.
+/// Email HTML safe to embed in a print document: scripts, styles, event
+/// handlers and remote-loading tags are stripped. Receipts are cleaned at
+/// ingest too; cleaning again here costs nothing and does not depend on
+/// when the row was written.
+/// `12 September 2026, 02:59 PM` in local time from a stored RFC 3339 email
+/// date; `None` if the value does not parse.
+pub fn display_email_received_at(rfc3339: &str) -> Option<String> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339.trim())
+        .ok()
+        .map(|at| {
+            at.with_timezone(&chrono::Local)
+                .format("%-d %B %Y, %I:%M %p")
+                .to_string()
+        })
+}
+
+pub fn sanitized_receipt_html(raw_html: &str) -> String {
+    ammonia::Builder::default().clean(raw_html).to_string()
+}
+
+pub fn split_bir_filename(filename: &str) -> Option<(String, String, String)> {
+    let stem = filename.strip_suffix(".xml").unwrap_or(filename);
+    let base = stem.split('#').next().unwrap_or(stem);
+    let mut parts = base.splitn(3, '-');
+    let tin = parts.next()?.to_string();
+    let form = parts.next()?.to_string();
+    let period = parts.next()?.to_string();
+    if tin.is_empty() || form.is_empty() || period.is_empty() {
+        return None;
+    }
+    Some((tin, form, period))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn email_date_displays_as_full_local_date() {
+        let shown = super::display_email_received_at("2026-09-12T14:59:00+08:00").unwrap();
+        // Local zone on the test machine decides the clock; the shape is fixed.
+        assert!(shown.contains("2026"), "{shown}");
+        assert!(shown.contains(", "), "{shown}");
+        assert!(shown.ends_with(" AM") || shown.ends_with(" PM"), "{shown}");
+        assert!(super::display_email_received_at("yesterday").is_none());
+    }
+
+    #[test]
+    fn sanitised_receipt_html_drops_scripts_and_handlers() {
+        let dirty = r#"<p onclick="x()">Hi <script>alert(1)</script><b>there</b></p>"#;
+        let clean = super::sanitized_receipt_html(dirty);
+        assert!(!clean.contains("script"), "{clean}");
+        assert!(!clean.contains("onclick"), "{clean}");
+        assert!(clean.contains("<b>there</b>"), "{clean}");
+    }
+
+    use super::*;
+
+    #[test]
+    fn parses_confirmation_email() {
+        let raw = r#"ebirforms-noreply@bir.gov.ph
+
+This confirms receipt of your submission with the following details subject to validation by BIR:
+
+File name: 779025068000-2551Qv2018-122026Q1.xml
+Date received by BIR: 24 April 2026
+Time received by BIR: 05:18 AM
+"#;
+        let receipt = parse_bir_receipt_email(raw, None).unwrap();
+        assert_eq!(receipt.filename, "779025068000-2551Qv2018-122026Q1.xml");
+        assert_eq!(receipt.date_received.to_string(), "2026-04-24");
+        assert_eq!(receipt.time_received.format("%H:%M").to_string(), "05:18");
+        assert_eq!(
+            split_bir_filename(&receipt.filename),
+            Some((
+                "779025068000".to_string(),
+                "2551Qv2018".to_string(),
+                "122026Q1".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_exact_email() {
+        let raw = r#"
+ebirforms-noreply@bir.gov.ph
+1:33 PM (0 minutes ago)
+to me
+
+This confirms receipt of your submission with the following details subject to validation by BIR:
+
+File name: 261708015000-2551Qv2018-122026Q1.xml
+Date received by BIR: 26 April 2026
+Time received by BIR: 01:33 PM
+Penalties may be imposed for any violation of the provisions of the NIRC and issuances thereof.
+"#;
+        let receipt = parse_bir_receipt_email(raw, None).unwrap();
+        assert_eq!(receipt.filename, "261708015000-2551Qv2018-122026Q1.xml");
+        assert_eq!(
+            receipt.date_received,
+            chrono::NaiveDate::from_ymd_opt(2026, 4, 26).unwrap()
+        );
+        assert_eq!(
+            receipt.time_received,
+            chrono::NaiveTime::from_hms_opt(13, 33, 0).unwrap()
+        );
+    }
+
+    #[test]
+    fn split_bir_filename_strips_iaf_email_and_matches_savefile_stem() {
+        let expected = Some((
+            "00000000000000".to_string(),
+            "1601Cv2018".to_string(),
+            "092026".to_string(),
+        ));
+        assert_eq!(
+            split_bir_filename("00000000000000-1601Cv2018-092026.xml"),
+            expected,
+            "plaintext savefile stem must parse TIN/form/period"
+        );
+        assert_eq!(
+            split_bir_filename("00000000000000-1601Cv2018-092026#codeitlikemiley@gmail.com#.xml"),
+            expected,
+            "IAF #email# suffix must not leak into period"
+        );
+    }
+
+    #[test]
+    fn split_bir_filename_strips_iaf_email_for_quarterly_receipt_alias() {
+        assert_eq!(
+            split_bir_filename("01055805400000-2551Qv2018-122026Q1#test@mail.com#.xml"),
+            Some((
+                "01055805400000".to_string(),
+                "2551Qv2018".to_string(),
+                "122026Q1".to_string()
+            ))
+        );
+        assert_eq!(
+            split_bir_filename("01055805400000-2551Qv2018-122026Q1.xml"),
+            split_bir_filename("01055805400000-2551Qv2018-122026Q1#test@mail.com#.xml")
+        );
+    }
+
+    #[test]
+    fn split_bir_filename_keeps_reviewed_period_suffixes_after_stripping_email() {
+        assert_eq!(
+            split_bir_filename("00000000000000-0619F-042026WB#codeitlikemiley@gmail.com#.xml"),
+            Some((
+                "00000000000000".to_string(),
+                "0619F".to_string(),
+                "042026WB".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn parses_live_1601c_october_receipt_email_shape() {
+        // Live BIR confirmation (PR #41 / 68f773c5 session, 11 September 2026).
+        // Transport PUT is empirically PASS. This proves the matcher can read
+        // the unpadded time and the `#email#`-stripped filename BIR emailed.
+        let raw = r#"ebirforms-noreply@bir.gov.ph
+
+This confirms receipt of your submission with the following details subject to validation by BIR:
+
+File name: 00000000000000-1601Cv2018-102026.xml
+Date received by BIR: 11 September 2026
+Time received by BIR: 3:13 PM
+"#;
+        let receipt = parse_bir_receipt_email(raw, None).unwrap();
+        assert_eq!(receipt.filename, "00000000000000-1601Cv2018-102026.xml");
+        assert_eq!(
+            receipt.date_received,
+            chrono::NaiveDate::from_ymd_opt(2026, 9, 11).unwrap()
+        );
+        assert_eq!(
+            receipt.time_received,
+            chrono::NaiveTime::from_hms_opt(15, 13, 0).unwrap()
+        );
+        assert_eq!(
+            split_bir_filename(&receipt.filename),
+            split_bir_filename("00000000000000-1601Cv2018-102026#codeitlikemiley@gmail.com#.xml")
+        );
+        assert_eq!(
+            split_bir_filename(&receipt.filename),
+            Some((
+                "00000000000000".to_string(),
+                "1601Cv2018".to_string(),
+                "102026".to_string()
+            ))
+        );
+        assert_eq!(
+            receipt.source_from.as_deref(),
+            Some("ebirforms-noreply@bir.gov.ph")
+        );
+    }
+
+    #[test]
+    fn parse_bir_receipt_time_accepts_unpadded_hour_and_missing_space() {
+        assert_eq!(
+            parse_bir_receipt_time("3:13 PM").unwrap(),
+            NaiveTime::from_hms_opt(15, 13, 0).unwrap()
+        );
+        assert_eq!(
+            parse_bir_receipt_time("3:13PM").unwrap(),
+            NaiveTime::from_hms_opt(15, 13, 0).unwrap()
+        );
+        assert_eq!(
+            parse_bir_receipt_time("05:18 AM").unwrap(),
+            NaiveTime::from_hms_opt(5, 18, 0).unwrap()
+        );
+        assert_eq!(
+            parse_bir_receipt_time("01:33 PM").unwrap(),
+            NaiveTime::from_hms_opt(13, 33, 0).unwrap()
+        );
+    }
+}

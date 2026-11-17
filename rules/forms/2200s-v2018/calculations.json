@@ -1,0 +1,302 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200s-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2200s-fixed-basic-tax",
+                             "2200s-dynamic-basic-tax",
+                             "2200s-schedule-total",
+                             "2200s-item16",
+                             "2200s-item17c",
+                             "2200s-item18",
+                             "2200s-item20",
+                             "2200s-item21d",
+                             "2200s-item22",
+                             "2200s-item23b",
+                             "2200s-item23c",
+                             "2200s-item24"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200s-fixed-basic-tax",
+                             "outputs":  [
+                                             "frm2200S:txtBasicTaxDue{0..9}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:hideProAppRate{0..9}",
+                                            "frm2200S:txtVolumeRemovals{0..9}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Basic tax due[row] = hidden applicable rate x volume removals.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "computeBasicTaxDue",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeBasicTaxDue:L7388-L7405"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-dynamic-basic-tax",
+                             "outputs":  [
+                                             "frm2200S:txtsched1BasicTaxDue{n}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtsched1AppTaxRate{n}",
+                                            "frm2200S:txtsched1VolumeRemovals{n}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Others basic tax due = applicable rate x volume removals.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "computeSched1BasicTaxDue",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1BasicTaxDue:L7407-L7438"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-schedule-total",
+                             "outputs":  [
+                                             "frm2200S:totalTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtBasicTaxDue{0..8}",
+                                            "frm2200S:txtsched1BasicTaxDue{0..n}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum fixed rows 0..8 (row 9 omitted) plus all Others rows.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "totalTaxDue",
+                             "depends_on":  [
+                                                "2200s-fixed-basic-tax",
+                                                "2200s-dynamic-basic-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totalTaxDue:L7459-L7528"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item16",
+                             "outputs":  [
+                                             "frm2200S:txtTax16"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:totalTaxDue"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "On Schedule OK, Item 16 copies totalTaxDue.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "sched1OK",
+                             "depends_on":  [
+                                                "2200s-schedule-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#sched1OK:L7530-L7533"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item17c",
+                             "outputs":  [
+                                             "frm2200S:txtTax17C"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax17A",
+                                            "frm2200S:txtTax17B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17C = 17A + 17B.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute17C",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute17C:L7535-L7544"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item18",
+                             "outputs":  [
+                                             "frm2200S:txtTax18"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax16",
+                                            "frm2200S:txtTax17C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18 = 16 - 17C.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute18",
+                             "depends_on":  [
+                                                "2200s-item16",
+                                                "2200s-item17c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute18:L7546-L7555"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item20",
+                             "outputs":  [
+                                             "frm2200S:txtTax20"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax18",
+                                            "frm2200S:txtTax19"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20 = 18 - 19.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute20",
+                             "depends_on":  [
+                                                "2200s-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute20:L7557-L7581"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item21d",
+                             "outputs":  [
+                                             "frm2200S:txtTax21D"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax21A",
+                                            "frm2200S:txtTax21B",
+                                            "frm2200S:txtTax21C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21D = 21A + 21B + 21C.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute21D",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute21D:L7583-L7604"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item22",
+                             "outputs":  [
+                                             "frm2200S:txtTax22"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax20",
+                                            "frm2200S:txtTax21D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "22 = 20 + 21D.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute22",
+                             "depends_on":  [
+                                                "2200s-item20",
+                                                "2200s-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute22:L7613-L7635"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item23b",
+                             "outputs":  [
+                                             "frm2200S:txtTax23B"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax21D",
+                                            "frm2200S:PayPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23B copies 21D when Pay Penalties is checked, else 0.00.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "payPenalties",
+                             "depends_on":  [
+                                                "2200s-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#payPenalties:L7605-L7611"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item23c",
+                             "outputs":  [
+                                             "frm2200S:txtTax23C"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax23A",
+                                            "frm2200S:txtTax23B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23C = 23A + 23B.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute23C",
+                             "depends_on":  [
+                                                "2200s-item23b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute23C:L7637-L7646"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200s-item24",
+                             "outputs":  [
+                                             "frm2200S:txtTax24"
+                                         ],
+                             "inputs":  [
+                                            "frm2200S:txtTax22",
+                                            "frm2200S:txtTax23C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23C.",
+                             "rounding":  "roundDownComputation to two displayed decimal places.",
+                             "trigger":  "compute24",
+                             "depends_on":  [
+                                                "2200s-item22",
+                                                "2200s-item23c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute24:L7648-L7671"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve source dependency order except where the source is defective.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

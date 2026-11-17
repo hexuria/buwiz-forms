@@ -1,0 +1,168 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Cargo lock is committed for applications
+# Cargo.lock  # Keep committed — we are an application, not a library
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Database files (contain sensitive taxpayer data)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# User data directory
+/data/
+/profiles/
+
+# Test artifacts
+/test-output/
+
+# Calibration scratch and test artifacts — large, machine-local, never evidence.
+# `tmp/` holds built app binaries and release zips; committing either would put
+# hundreds of megabytes of non-reproducible output into the corpus history.
+/tmp/
+/test-results/
+
+# Generated PDF files
+*.pdf
+
+# Written by the gpui-shell runtime on every launch (set_editor_files); the
+# declarations always describe the engine actually running, never an editor's
+# stale copy.
+app/gpui-kit.d.ts
+*.lock
+!/Cargo.lock
+# bir-shell is a standalone workspace (gpui-kit-assets `links` conflict keeps
+# it out of the root one); its lockfile carries the transitive pins the
+# LLRT/quickjs graph needs, so it is committed like the root one.
+!/crates/bir-shell/Cargo.lock
+
+# AI Agent Artifacts & Scratchpads
+.scratch/
+.agents/
+.antigravitycli/
+
+# Runtime logs — never commit these
+*.log
+crash.log
+debug.log
+dispatch.log
+error.log
+
+# CI/dev generated artifacts — use justfile targets, not committed files
+clippy_errors.txt
+test_errors.txt
+
+# Local interpreter and frontend build output
+**/__pycache__/
+*.py[cod]
+/.ruff_cache/
+/apps/form-calibration/dist/
+
+# Validation codegen transaction leftovers
+/crates/bir-rules/src/generated.bir-rules-codegen-backup-*/
+/crates/bir-rules/src/generated.bir-rules-codegen-staging-*/
+
+# Stray local command-output artifact
+/470
+
+# Reverse-engineering workspace artifacts
+strings_bir.txt
+symbols.txt
+objc_classes.txt
+
+# One-off scratch files
+scratch*.js
+scratch*.rs
+fix_formtypes*.js
+test_objc.rs
+test_windows.rs
+
+# Node JS
+node_modules/
+/assets/form-renderer/
+/assets/form-renderer-build-identity.json
+/test-results/form-renderer/
+
+# Stow directory (managed separately)
+.stow/
+
+# Stowed & Experimental Ideation Files
+.windsurfrules
+.agent/
+
+# Internal documentation and exploratory scripts
+.docs/
+.scripts/
+.impl/
+.formfields/
+
+# Agent configuration and internal research — stowed, not published.
+# These stay on disk so local tooling keeps working; they are tracked in the
+# stow repository instead. Build-critical files formerly under docs/ and
+# .codex/ now live in schemas/validation-rules/, scripts/reference/ and
+# rules/agent-boundaries/ — see .stow-README.md.
+/.claude/
+/.codex/
+/docs/
+/AGENT.md
+/AGENTS.md
+/CLAUDE.md
+/FORM_BUILD_PRIORITY.md
+/HANDOVER_HTML_ONLY_EBIRFORMS_2026-07-19.md
+/api_integration_plan.md
+/form_scaffold.md
+/handoff.md
+/macos-handoff.md
+/prioritized_form.md
+/steps.md
+/.stow-README.md
+
+.keys/
+*.p8
+.archives
+
+# Regenerable intermediates from a local formgen run. Generated/corrected HTML
+# and tools/formgen live in hexuria/buwiz-forms-html. This product repo keeps
+# only html-frozen/ for fill/print.
+/build/
+/forms/
+/forms-corrected/
+/forms-corrected.manifest.json
+.ci-html/
+/assets/form-renderer-build-identity.json
+
+# NSH app (nsh/): its own cargo workspace keeps its lockfile like crates/bir-shell does; generated files stay out.
+!/nsh/Cargo.lock
+/nsh/.nsh/
+/nsh/target/
+# Real-window screenshots go to ~/BuwizNsh/evidence/, never into the worktree (nsh test --target writes PNGs into the current directory).
+/nsh/*.png

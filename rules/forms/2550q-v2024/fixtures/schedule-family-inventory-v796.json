@@ -1,0 +1,177 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "family_count":  28,
+    "maximum_rows":  null,
+    "source_has_maximum_guard":  false,
+    "families":  [
+                     {
+                         "prefix":  "txtDatePurchase1",
+                         "label":  "Schedule 1 purchase date",
+                         "logical_type":  "date",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtSourceCode1",
+                         "label":  "Schedule 1 source code",
+                         "logical_type":  "code",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtDescription1",
+                         "label":  "Schedule 1 description",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtAmountPurchase1",
+                         "label":  "Schedule 1 purchase amount",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtInputTax1",
+                         "label":  "Schedule 1 input tax",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtEstimatedLife1",
+                         "label":  "Schedule 1 estimated useful life",
+                         "logical_type":  "integer",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtRecognizedLife1",
+                         "label":  "Schedule 1 recognized life",
+                         "logical_type":  "integer",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtAllowedInputTax1",
+                         "label":  "Schedule 1 allowable input tax",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtBalanceInputTax1",
+                         "label":  "Schedule 1 input-tax balance",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtDateCovered3",
+                         "label":  "Schedule 3 period from",
+                         "logical_type":  "date",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtDateCovered3To",
+                         "label":  "Schedule 3 period to",
+                         "logical_type":  "date",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtNameWithHoldingAgent3",
+                         "label":  "Schedule 3 withholding-agent name",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtIncomePayment3",
+                         "label":  "Schedule 3 income payment",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtTotalTaxWithHeld3",
+                         "label":  "Schedule 3 tax withheld",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtDate4",
+                         "label":  "Schedule 4 period from",
+                         "logical_type":  "date",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtDate4To",
+                         "label":  "Schedule 4 period to",
+                         "logical_type":  "date",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtNameOfMiller4",
+                         "label":  "Schedule 4 miller name",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtNameOfTaxpayer4",
+                         "label":  "Schedule 4 taxpayer name",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtOfficialReceiptNumber4",
+                         "label":  "Schedule 4 official-receipt number",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "txtAmountPaid4",
+                         "label":  "Schedule 4 amount paid",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo19Description",
+                         "label":  "Item 19 additional description",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo19Amount",
+                         "label":  "Item 19 additional amount",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo42Description",
+                         "label":  "Item 42 additional description",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo42Amount",
+                         "label":  "Item 42 additional amount",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo47Description",
+                         "label":  "Item 47 additional description",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo47Amount",
+                         "label":  "Item 47 additional amount",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo56Description",
+                         "label":  "Item 56 additional description",
+                         "logical_type":  "string",
+                         "index":  "N \u003e= 0"
+                     },
+                     {
+                         "prefix":  "frm2550qv2024:totalTaxPayableNo56Amount",
+                         "label":  "Item 56 additional amount",
+                         "logical_type":  "decimal-money",
+                         "index":  "N \u003e= 0"
+                     }
+                 ]
+}

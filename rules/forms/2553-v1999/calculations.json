@@ -1,0 +1,190 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2553-v1999",
+    "revision":  "1999-07-01",
+    "evaluation_order":  [
+                             "2553-row-tax",
+                             "2553-item19-total-tax",
+                             "2553-item20c-total-credits",
+                             "2553-item21-tax-payable",
+                             "2553-item22d-total-penalties",
+                             "2553-item23-total-payable",
+                             "2553-overpayment-ui-state"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2553-row-tax",
+                             "outputs":  [
+                                             "frm2553:txt14E",
+                                             "frm2553:txt15E",
+                                             "frm2553:txt16E",
+                                             "frm2553:txt17E",
+                                             "frm2553:txt18E"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt14C",
+                                            "frm2553:txt14D",
+                                            "frm2553:txt18C",
+                                            "frm2553:txt18D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each Item 14-18 row: tax due = taxable amount / 100 * tax rate.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "computeTaxDue",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxDue:L2718-L2723"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2553-item19-total-tax",
+                             "outputs":  [
+                                             "frm2553:txt19"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt14E",
+                                            "frm2553:txt15E",
+                                            "frm2553:txt16E",
+                                            "frm2553:txt17E",
+                                            "frm2553:txt18E"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 19 = sum of Item 14E through Item 18E.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "computeTotalTaxDue",
+                             "depends_on":  [
+                                                "2553-row-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalTaxDue:L2725-L2736"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2553-item20c-total-credits",
+                             "outputs":  [
+                                             "frm2553:txt20C"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt20A",
+                                            "frm2553:txt20B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20C = Item 20A + Item 20B.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "computeTotalTaxCreditPayments",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalTaxCreditPayments:L2773-L2778"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2553-item21-tax-payable",
+                             "outputs":  [
+                                             "frm2553:txt21"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt19",
+                                            "frm2553:txt20C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 21 = Item 19 - Item 20C.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "computeTaxPayable",
+                             "depends_on":  [
+                                                "2553-item19-total-tax",
+                                                "2553-item20c-total-credits"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxPayable:L2738-L2742"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2553-item22d-total-penalties",
+                             "outputs":  [
+                                             "frm2553:txt22D"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt22A",
+                                            "frm2553:txt22B",
+                                            "frm2553:txt22C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 22D = Item 22A + Item 22B + Item 22C.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L2744-L2748"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2553-item23-total-payable",
+                             "outputs":  [
+                                             "frm2553:txt23"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt21",
+                                            "frm2553:txt22D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23 = Item 21 + Item 22D.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "computeTotalAmountPayable",
+                             "depends_on":  [
+                                                "2553-item21-tax-payable",
+                                                "2553-item22d-total-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmountPayable:L2750-L2756"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2553-overpayment-ui-state",
+                             "outputs":  [
+                                             "frm2553:ifoverpay_1",
+                                             "frm2553:ifoverpay_2"
+                                         ],
+                             "inputs":  [
+                                            "frm2553:txt23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If parsed Item 23 is negative, enable and clear both disposition radios; otherwise disable and clear both.",
+                             "rounding":  "formatCurrency after source arithmetic; editable inputs round to two decimals on blur where wired.",
+                             "trigger":  "checkOverpayment",
+                             "depends_on":  [
+                                                "2553-item23-total-payable"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#checkOverpayment:L2758-L2771"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Represent overpayment disposition as a conditional enum without clearing an existing valid choice on every recomputation.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

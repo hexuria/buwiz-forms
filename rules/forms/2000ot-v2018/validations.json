@@ -1,0 +1,704 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate and Save alert and return on the first source-ordered failure.",
+    "rules":  [
+                  {
+                      "rule_id":  "2000ot-validate-001-date",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Transaction date is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTransactionDate"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid date on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3681-L3687"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-002-atc",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "No ATC radio is selected.",
+                      "fields":  [
+                                     "frm2000OT:ATC_1",
+                                     "frm2000OT:ATC_2",
+                                     "frm2000OT:ATC_3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please choose an ATC on item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3688-L3692"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-003-tin",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Any taxpayer TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTIN1",
+                                     "frm2000OT:txtTIN2",
+                                     "frm2000OT:txtTIN3",
+                                     "frm2000OT:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3694-L3698"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Apply shared TIN checksum and segment constraints.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-004-rdo",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "RDO value is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3700-L3704"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Validate rejects blank but not the placeholder 000 that Save rejects.",
+                      "recommended_app_behavior":  "Reject both blank and 000 consistently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-005-name",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3706-L3710"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-006-phone",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Telephone is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3711-L3715"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Validate the accepted telephone syntax.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-007-address",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Registered address first line is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3716-L3720"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-008-zip",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Zip code is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 8A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3722-L3726"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-009-other-party",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Neither other-party classification is selected.",
+                      "fields":  [
+                                     "frm2000OT:optParty_1",
+                                     "frm2000OT:optParty_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please choose one (1) Other Party to the transaction on item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3728-L3731"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-010-other-name",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Other-party name is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtOtherName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a name for item 11A. The name that you will enter corresponds to your choice in item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3733-L3737"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-011-other-tin",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Other-party TIN is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtOtherTIN"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter TIN for item 11B. The TIN that you will enter is the TIN of your entry in item 11A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3739-L3743"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Validate the counterparty TIN format/checksum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-012-nature",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "No nature-of-transaction radio is selected.",
+                      "fields":  [
+                                     "frm2000OT:rbTransNature_1",
+                                     "frm2000OT:rbTransNature_2",
+                                     "frm2000OT:rbTransNature_3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please choose one (1) Nature of Transaction on item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3745-L3748"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-013-real-location",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Either real-property nature is selected and location is blank.",
+                      "fields":  [
+                                     "frm2000OT:rbTransNature_2",
+                                     "frm2000OT:rbTransNature_3",
+                                     "frm2000OT:txtRealLocation"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter the address of the Location of Real Property in item 13.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3750-L3758"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-validate-014-success",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "All prior checks pass.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3760-L3763"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Controls are disabled and the success alert is shown.",
+                      "recommended_app_behavior":  "Model validated state explicitly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-save-001-date",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Transaction date is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTransactionDate"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Transaction Date on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3982-L3987"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-save-002-tin",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Any taxpayer TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTIN1",
+                                     "frm2000OT:txtTIN2",
+                                     "frm2000OT:txtTIN3",
+                                     "frm2000OT:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3989-L3993"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Apply shared checksum and format rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-save-003-rdo",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "RDO is 000.",
+                      "fields":  [
+                                     "frm2000OT:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3994-L3997"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-save-004-name",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm2000OT:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Taxpayer\u0027s Name on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3998-L4003"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-save-005-sparse",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "ATC, phone, address, zip, counterparty, nature, or conditional real-property location is invalid.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3982-L4004",
+                                          "official-hta-runtime#validate:L3681-L3764"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save ignores these Validate failures.",
+                      "recommended_app_behavior":  "Use a shared validation graph with documented phase exceptions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-date-001-format",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "A date control is not a real MM/DD/YYYY date.",
+                      "fields":  [
+                                     "date-controls"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L4980-L5038"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-date-002-future",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "Date is after today.",
+                      "fields":  [
+                                     "date-controls"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L5039-L5043"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The field clears but the function still returns true.",
+                      "recommended_app_behavior":  "Return false after clearing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-date-003-pre2018",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "Date year is before 2018.",
+                      "fields":  [
+                                     "date-controls"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be prior to 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L5044-L5050"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The field clears but the function still returns true.",
+                      "recommended_app_behavior":  "Return false after clearing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-serialization-001-collapses",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  null,
+                      "condition":  "Save reaches two-line taxpayer address or other-party name.",
+                      "fields":  [
+                                     "frm2000OT:txtAddress",
+                                     "frm2000OT:txtAddress2",
+                                     "frm2000OT:txtOtherName",
+                                     "frm2000OT:txtOtherName2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXML:L2608-L2615",
+                                          "official-hta-runtime#saveXML:L2670-L2675"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Each pair becomes one key with no inserted separator.",
+                      "recommended_app_behavior":  "Preserve exact compatibility while retaining typed source-line components.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-serialization-002-unprefixed-email",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  null,
+                      "condition":  "Generic serializer reaches email control.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#control",
+                                          "official-hta-runtime#saveXML:L2594-L2693"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The unprefixed ID txtEmail becomes the XML key.",
+                      "recommended_app_behavior":  "Preserve the literal key with a typed alias.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2000ot-legacy-sample-excluded",
+                      "form_id":  "2000ot-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  null,
+                      "condition":  "The available encrypted sample is considered as v2018 evidence.",
+                      "fields":  [
+                                     "frm2000_OT:txtDateMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "legacy-artifact-exclusion",
+                                          "legacy-hta-excluded#control"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The sample contains the legacy split-date key and is not revision-matched.",
+                      "recommended_app_behavior":  "Exclude it from the January 2018 contract.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

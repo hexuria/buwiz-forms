@@ -1,0 +1,388 @@
+{
+    "source_sha256":  "c85f8f1e13e4752549cb2886bc598a0be4cf8b67a709d9a913d09d22f087de1b",
+    "function_count":  22,
+    "functions":  [
+                      {
+                          "name":  "computeTxt20",
+                          "start_line":  2826,
+                          "end_line":  2844,
+                          "body_sha256":  "1b34254380fb9310b6a3981947f2cca4d6ccd7e78d2e0cfc442aee3b8b2a8ba7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:txt20A",
+                                              "frm1701A:txt20B",
+                                              "frm1701A:txt46A",
+                                              "frm1701A:txt46B",
+                                              "frm1701A:txt56A",
+                                              "frm1701A:txt56B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt24",
+                          "start_line":  2845,
+                          "end_line":  2853,
+                          "body_sha256":  "daa37a3d4e3cc6a34de9142128b963861bd38aa0c537186fab1d9b0a221149aa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt22A",
+                                              "frm1701A:txt22B",
+                                              "frm1701A:txt23A",
+                                              "frm1701A:txt23B",
+                                              "frm1701A:txt24A",
+                                              "frm1701A:txt24B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  2854,
+                          "end_line":  2862,
+                          "body_sha256":  "4ec9c898662ccdb538bc8064efd2da11671573047c9432e68964f06d19569949",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt25A",
+                                              "frm1701A:txt25B",
+                                              "frm1701A:txt26A",
+                                              "frm1701A:txt26B",
+                                              "frm1701A:txt27A",
+                                              "frm1701A:txt27B",
+                                              "frm1701A:txt28A",
+                                              "frm1701A:txt28B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt29",
+                          "start_line":  2863,
+                          "end_line":  2879,
+                          "body_sha256":  "8237cf4bfbe6c80897909de8288cf833e40b3ccb971bb939722b60b070439af7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt24A",
+                                              "frm1701A:txt24B",
+                                              "frm1701A:txt28A",
+                                              "frm1701A:txt28B",
+                                              "frm1701A:txt29A",
+                                              "frm1701A:txt29B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt30",
+                          "start_line":  2880,
+                          "end_line":  2885,
+                          "body_sha256":  "ad9e8703e17893cd557cf5f92d6001438d8616695c04b4fbda034736e72eca83",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt29A",
+                                              "frm1701A:txt29B",
+                                              "frm1701A:txt30"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt38",
+                          "start_line":  2886,
+                          "end_line":  2894,
+                          "body_sha256":  "d8284bbf8b20afee1808561f55c15ad04787a8b425d352b022527b3ddf0f7c57",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt36A",
+                                              "frm1701A:txt36B",
+                                              "frm1701A:txt37A",
+                                              "frm1701A:txt37B",
+                                              "frm1701A:txt38A",
+                                              "frm1701A:txt38B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt39",
+                          "start_line":  2895,
+                          "end_line":  2903,
+                          "body_sha256":  "78d3cf97232b4282e5227e35ea040fbe7601bd367a415d2c6588f3314bcb86e9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt38A",
+                                              "frm1701A:txt38B",
+                                              "frm1701A:txt39A",
+                                              "frm1701A:txt39B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt40",
+                          "start_line":  2904,
+                          "end_line":  2912,
+                          "body_sha256":  "cf584c4ff021d88d09378fc69f26f3cfce354c1a678eea0fd275f45165a4c8c9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt38A",
+                                              "frm1701A:txt38B",
+                                              "frm1701A:txt39A",
+                                              "frm1701A:txt39B",
+                                              "frm1701A:txt40A",
+                                              "frm1701A:txt40B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt44",
+                          "start_line":  2913,
+                          "end_line":  2921,
+                          "body_sha256":  "465fbe141c185967ae4ae4446a003086dfda3018b12176b0684b9de782f5e478",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt41A",
+                                              "frm1701A:txt41B",
+                                              "frm1701A:txt42A",
+                                              "frm1701A:txt42B",
+                                              "frm1701A:txt43A",
+                                              "frm1701A:txt43B",
+                                              "frm1701A:txt44A",
+                                              "frm1701A:txt44B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt45",
+                          "start_line":  2922,
+                          "end_line":  2930,
+                          "body_sha256":  "cdf145e689885affc7ce4974049154648cc56f2d2e59257bd1ac947a823dbb19",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt40A",
+                                              "frm1701A:txt40B",
+                                              "frm1701A:txt44A",
+                                              "frm1701A:txt44B",
+                                              "frm1701A:txt45A",
+                                              "frm1701A:txt45B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt46",
+                          "start_line":  2931,
+                          "end_line":  3066,
+                          "body_sha256":  "80c357727f3a4eddc87fcf252bc24ceaef01f7a60fadec994a1fce98f69abfe4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt45A",
+                                              "frm1701A:txt45B",
+                                              "frm1701A:txt46A",
+                                              "frm1701A:txt46B",
+                                              "frm1701A:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt49",
+                          "start_line":  3067,
+                          "end_line":  3075,
+                          "body_sha256":  "7195db2ed4b412ca1149225cfebea97c678e32431c5a14b6bb18882d82631137",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt47A",
+                                              "frm1701A:txt47B",
+                                              "frm1701A:txt48A",
+                                              "frm1701A:txt48B",
+                                              "frm1701A:txt49A",
+                                              "frm1701A:txt49B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt52",
+                          "start_line":  3076,
+                          "end_line":  3084,
+                          "body_sha256":  "6520a7be64a098045d9a05691544893cc2fe5d9b19d1e900fea825ec5a38fb3a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt50A",
+                                              "frm1701A:txt50B",
+                                              "frm1701A:txt51A",
+                                              "frm1701A:txt51B",
+                                              "frm1701A:txt52A",
+                                              "frm1701A:txt52B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt53",
+                          "start_line":  3085,
+                          "end_line":  3094,
+                          "body_sha256":  "66e0f497330c16047d7f44362a9ea70bda9f589e595dc0582bc5065a8c026f2a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt49A",
+                                              "frm1701A:txt49B",
+                                              "frm1701A:txt52A",
+                                              "frm1701A:txt52B",
+                                              "frm1701A:txt53A",
+                                              "frm1701A:txt53B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt55",
+                          "start_line":  3095,
+                          "end_line":  3103,
+                          "body_sha256":  "8e60cc67ca2931b3213f5aa0caf03b19982178cc6f5741f1825d3b7a28700569",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt53A",
+                                              "frm1701A:txt53B",
+                                              "frm1701A:txt54A",
+                                              "frm1701A:txt54B",
+                                              "frm1701A:txt55A",
+                                              "frm1701A:txt55B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt56",
+                          "start_line":  3104,
+                          "end_line":  3120,
+                          "body_sha256":  "ffbf98daa9ca2cdf3ece2d688e2aec28d9da2947e6ced75b58e4ac0661e7e6ed",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt55A",
+                                              "frm1701A:txt55B",
+                                              "frm1701A:txt56A",
+                                              "frm1701A:txt56B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt64",
+                          "start_line":  3121,
+                          "end_line":  3135,
+                          "body_sha256":  "d096e403575eb5df2e8f4be790cbd98d57bb35e4397890f05842ad58b6bdaa02",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt21A",
+                                              "frm1701A:txt21B",
+                                              "frm1701A:txt57A",
+                                              "frm1701A:txt57B",
+                                              "frm1701A:txt58A",
+                                              "frm1701A:txt58B",
+                                              "frm1701A:txt59A",
+                                              "frm1701A:txt59B",
+                                              "frm1701A:txt60A",
+                                              "frm1701A:txt60B",
+                                              "frm1701A:txt61A",
+                                              "frm1701A:txt61B",
+                                              "frm1701A:txt62A",
+                                              "frm1701A:txt62B",
+                                              "frm1701A:txt63A",
+                                              "frm1701A:txt63B",
+                                              "frm1701A:txt64A",
+                                              "frm1701A:txt64B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt65",
+                          "start_line":  3136,
+                          "end_line":  3159,
+                          "body_sha256":  "52863ace954e061cc5131f65931d407b13ee8d5986ba4b4ea3496f9e565804bf",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:optSpouseTaxRate_1",
+                                              "frm1701A:optTaxRate_1",
+                                              "frm1701A:txt22A",
+                                              "frm1701A:txt22B",
+                                              "frm1701A:txt46A",
+                                              "frm1701A:txt46B",
+                                              "frm1701A:txt56A",
+                                              "frm1701A:txt56B",
+                                              "frm1701A:txt64A",
+                                              "frm1701A:txt64B",
+                                              "frm1701A:txt65A",
+                                              "frm1701A:txt65B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePartIVAModal",
+                          "start_line":  3160,
+                          "end_line":  3200,
+                          "body_sha256":  "ac0660132e81e33f21afa6780f44f2cb198d92f5787afa2c14c84eb1b1d21830",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt42A",
+                                              "frm1701A:txt42B",
+                                              "frm1701A:txtmodalPartIVA_C1",
+                                              "frm1701A:txtmodalPartIVA_C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePartIVAOtherIncome",
+                          "start_line":  3201,
+                          "end_line":  3210,
+                          "body_sha256":  "42aa69738982f82a2528442957e2ac50b78f8c7e92c60656d7768d0a11273b73",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt42A",
+                                              "frm1701A:txt42B",
+                                              "frm1701A:txtmodalPartIVA_C1",
+                                              "frm1701A:txtmodalPartIVA_C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePartIVBModal",
+                          "start_line":  3211,
+                          "end_line":  3251,
+                          "body_sha256":  "d07a9692fb162b1b77fb2a85f5ad3f6793efcc9c7ed49b08599cb2020deb5da1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt51A",
+                                              "frm1701A:txt51B",
+                                              "frm1701A:txtmodalPartIVB_C1",
+                                              "frm1701A:txtmodalPartIVB_C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePartIVBOtherIncome",
+                          "start_line":  3252,
+                          "end_line":  3261,
+                          "body_sha256":  "1b1593b1a67337688ad66de266063c7e2a98576e4219dccce793f3cc09703d14",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701A:txt51A",
+                                              "frm1701A:txt51B",
+                                              "frm1701A:txtmodalPartIVB_C1",
+                                              "frm1701A:txtmodalPartIVB_C2"
+                                          ]
+                      }
+                  ]
+}

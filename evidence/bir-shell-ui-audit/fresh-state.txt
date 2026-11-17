@@ -1,0 +1,5 @@
+Prelaunch 2026-11-01T01:42:51+00:00
+ABSENT /tmp/bir-shell-ui-audit-20261101/shell-home
+ABSENT /tmp/bir-shell-ui-audit-20261101/shell-home/bir_data.db
+ABSENT /tmp/bir-shell-ui-audit-20261101/shell-home/cloud-account.json
+ABSENT /tmp/bir-shell-ui-audit-20261101/browser-profile

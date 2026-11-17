@@ -1,0 +1,910 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1702mx-row-column-d",
+                             "1702mx-part2-item14",
+                             "1702mx-part2-item15",
+                             "1702mx-part2-item16",
+                             "1702mx-part2-item20",
+                             "1702mx-part2-item21-nonnegative",
+                             "1702mx-part2-item21-negative-with-penalty",
+                             "1702mx-part2-item21-negative-no-penalty",
+                             "1702mx-schedule2-item3",
+                             "1702mx-schedule2-item5",
+                             "1702mx-schedule2-item7",
+                             "1702mx-schedule2-item8",
+                             "1702mx-schedule2-item9",
+                             "1702mx-schedule2-item10",
+                             "1702mx-schedule2-item11-itemized",
+                             "1702mx-schedule2-item12-osd",
+                             "1702mx-schedule2-item13",
+                             "1702mx-schedule2-item15-special",
+                             "1702mx-schedule2-item15-regular",
+                             "1702mx-schedule2-item17",
+                             "1702mx-schedule2-item18-mcit",
+                             "1702mx-schedule2-item19",
+                             "1702mx-schedule3-item32",
+                             "1702mx-schedule3-item33",
+                             "1702mx-schedule4-item3",
+                             "1702mx-schedule4-item5",
+                             "1702mx-schedule4-item7",
+                             "1702mx-schedule5-item18",
+                             "1702mx-schedule6-item5",
+                             "1702mx-nolco-seed",
+                             "1702mx-nolco-switch-fallthrough",
+                             "1702mx-nolco-tables",
+                             "1702mx-mcit-table",
+                             "1702mx-schedule10-item4",
+                             "1702mx-schedule10-item9",
+                             "1702mx-schedule10-item10"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1702mx-row-column-d",
+                             "outputs":  [
+                                             "applicable schedule column D fields"
+                                         ],
+                             "inputs":  [
+                                            "same-row columns A",
+                                            "same-row column B",
+                                            "same-row column C"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "D = A + B + C, except rows whose printed applicability omits one or more columns.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "schedule-specific compute...ColumnD functions",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getSum:L15580-L15593",
+                                                 "official-hta-runtime#computePg2Sc2ColumnD:L14751-L14793",
+                                                 "official-hta-runtime#computePg2Sc3ColumnD:L11095-L11113"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item14",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I14TotalIncome"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg2Sc2It19D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Part II Item 14 = Schedule 2 Item 19D.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2It14",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item19"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2It14:L10908-L10912"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item15",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I15LessTotalTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg2Sc3It32D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Part II Item 15 = Schedule 3 Item 32D.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2It15",
+                             "depends_on":  [
+                                                "1702mx-schedule3-item32"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2It15:L10914-L10918"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item16",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I16NetTaxPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg1Pt2I14TotalIncome",
+                                            "frm1702MX:txtPg1Pt2I15LessTotalTax"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 16 = Item 14 - Item 15.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2I18",
+                             "depends_on":  [
+                                                "1702mx-part2-item14",
+                                                "1702mx-part2-item15"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2I18:L10902-L10906"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item20",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I20TotalPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg1Pt2I17",
+                                            "frm1702MX:txtPg1Pt2I18",
+                                            "frm1702MX:txtPg1Pt2I19"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 20 = surcharge + interest + compromise.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2I20",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2I20:L11012-L11018"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item21-nonnegative",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I21TotalAmount"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg1Pt2I16NetTaxPayable",
+                                            "frm1702MX:txtPg1Pt2I20TotalPenalties"
+                                        ],
+                             "condition":  "Item 16 is nonnegative.",
+                             "official_formula":  "If Item 16 \u003e= 0, Item 21 = Item 16 + Item 20.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2I21",
+                             "depends_on":  [
+                                                "1702mx-part2-item16",
+                                                "1702mx-part2-item20"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2I21:L11021-L11026"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Retain the official conditional branch explicitly.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item21-negative-with-penalty",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I21TotalAmount"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg1Pt2I16NetTaxPayable",
+                                            "frm1702MX:txtPg1Pt2I20TotalPenalties"
+                                        ],
+                             "condition":  "Item 16 is negative and Item 20 is positive.",
+                             "official_formula":  "If Item 16 \u003c 0 and Item 20 \u003e 0, Item 21 is set to Item 20 only; the negative Item 16 is not netted against penalties.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2I21",
+                             "depends_on":  [
+                                                "1702mx-part2-item16",
+                                                "1702mx-part2-item20"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2I21:L11027-L11032",
+                                                 "repository-model#recompute:L500-L536"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Preserve compatibility evidence, but obtain tax-domain review before reproducing this non-netting behavior.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-part2-item21-negative-no-penalty",
+                             "outputs":  [
+                                             "frm1702MX:txtPg1Pt2I21TotalAmount"
+                                         ],
+                             "inputs":  [
+                                            "frm1702MX:txtPg1Pt2I16NetTaxPayable",
+                                            "frm1702MX:txtPg1Pt2I20TotalPenalties"
+                                        ],
+                             "condition":  "Item 16 is negative and Item 20 is nonpositive.",
+                             "official_formula":  "If Item 16 \u003c 0 and Item 20 \u003c= 0, Item 21 = Item 16.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg1Pt2I21",
+                             "depends_on":  [
+                                                "1702mx-part2-item16",
+                                                "1702mx-part2-item20"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg1Pt2I21:L11033-L11036"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Retain the official conditional branch explicitly.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item3",
+                             "outputs":  [
+                                             "Schedule 2 Item 3 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 1 A-D",
+                                            "Schedule 2 Item 2 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 3 = Item 1 - Item 2 for each column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2Itm3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2Itm3:L14800-L14813",
+                                                 "repository-model#recompute_schedule_2:L539-L552"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item5",
+                             "outputs":  [
+                                             "Schedule 2 Item 5 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 3 A-D",
+                                            "Schedule 2 Item 4 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 5 = Item 3 - Item 4 for each column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2Itm5",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item3"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2Itm5:L14816-L14826",
+                                                 "repository-model#recompute_schedule_2:L553-L560"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item7",
+                             "outputs":  [
+                                             "Schedule 2 Item 7 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 5 A-D",
+                                            "Schedule 2 Item 6 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 7 = Item 5 + Item 6 for each column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2Itm7",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item5"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2Itm7:L14829-L14843",
+                                                 "repository-model#recompute_schedule_2:L561-L568"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item8",
+                             "outputs":  [
+                                             "Schedule 2 Item 8 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 5 Item 18 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 8 copies Schedule 5 Item 18.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2Itm8",
+                             "depends_on":  [
+                                                "1702mx-schedule5-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2Itm8:L14845-L14866"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item9",
+                             "outputs":  [
+                                             "Schedule 2 Item 9 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 6 Item 5 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 9 copies Schedule 6 Item 5.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2Itm9",
+                             "depends_on":  [
+                                                "1702mx-schedule6-item5"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2Itm9:L14868-L14884"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item10",
+                             "outputs":  [
+                                             "Schedule 2 Item 10 B-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 7.1 Item 8D",
+                                            "Schedule 8.1 Item 8D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 10B copies Schedule 8.1 total; Item 10C copies Schedule 7.1 total; Item 10D = B + C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It10",
+                             "depends_on":  [
+                                                "1702mx-nolco-tables"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It10:L14888-L14906"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item11-itemized",
+                             "outputs":  [
+                                             "Schedule 2 Item 11 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Items 8,9,10"
+                                        ],
+                             "condition":  "Itemized deduction selected.",
+                             "official_formula":  "When Itemized is selected: 11A=8A+9A; 11B=8B+9B+10B; 11C=8C+9C+10C; 11D=A+B+C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It11 / computePg2Sch2Items",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item8",
+                                                "1702mx-schedule2-item9",
+                                                "1702mx-schedule2-item10"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It11:L14908-L14956",
+                                                 "official-hta-runtime#computePg2Sch2Items:L14957-L14968"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Encode the column-specific applicability rather than a generic all-column sum.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item12-osd",
+                             "outputs":  [
+                                             "Schedule 2 Item 12 C-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 7C"
+                                        ],
+                             "condition":  "Optional Standard Deduction selected.",
+                             "official_formula":  "When OSD is selected: Item 12C = 40% of Item 7C; Item 12D copies C; Item 11C/D are zeroed.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It12",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It12:L14969-L14982",
+                                                 "repository-model#recompute_schedule_2:L577-L600"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use the official column-specific applicability. The current repository model applies 40% to every column and should not be treated as official evidence.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item13",
+                             "outputs":  [
+                                             "Schedule 2 Item 13 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 7",
+                                            "selected Item 11 or Item 12"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Itemized paths subtract Item 11 by applicable column; OSD path computes only 13C = 7C - 12C and 13D copies C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It11 / computePg2Sch2Items / computePg2Sc2It12",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item11-itemized",
+                                                "1702mx-schedule2-item12-osd"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It11:L14908-L14968",
+                                                 "official-hta-runtime#computePg2Sc2It12:L14969-L14982"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Represent applicability by regime and deduction method.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item15-special",
+                             "outputs":  [
+                                             "Schedule 2 Item 15B"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 1B",
+                                            "Item 3B",
+                                            "Item 7B",
+                                            "Item 14B rate"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "If rounded Item 3B \u003e= rounded Item 7B, Item 15B = Item 1B Ã— rate; otherwise Item 15B = Item 7B Ã— rate.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It15",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item3",
+                                                "1702mx-schedule2-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It15:L14984-L15018"
+                                             ],
+                             "assessment":  "ambiguous",
+                             "recommended_app_behavior":  "Preserve the exact comparison/base selection and flag it for domain review; comments show earlier alternative bases.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item15-regular",
+                             "outputs":  [
+                                             "Schedule 2 Item 15C"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 13C",
+                                            "Item 14C rate"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "The direct product helper exists in computePg2Sc2It14C; another former product line in computePg2Sc2It15C is commented, and that function only copies Item 15C to Item 17C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It14C / computePg2Sc2It15C",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item13"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It14C:L15019-L15021",
+                                                 "official-hta-runtime#computePg2Sc2It15C:L15022-L15027"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Bind calculations to the active event wiring and do not infer execution from a commented line.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item17",
+                             "outputs":  [
+                                             "Schedule 2 Item 17B-C"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Items 15B/C",
+                                            "Item 16B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "17B = 15B - 16B and is copied to 19B; 17C copies 15C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It17B / computePg2Sc2It15C",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item15-special",
+                                                "1702mx-schedule2-item15-regular"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It17B:L15029-L15033",
+                                                 "official-hta-runtime#computePg2Sc2It15C:L15022-L15027"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item18-mcit",
+                             "outputs":  [
+                                             "Schedule 2 Item 18C-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 7C"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "The source line that would compute 2% of Item 7C is commented. computePg2Sc2It18C only triggers Item 19C; Item 18C remains an enabled/input value when IC055 applies.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It18C",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item7"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It18C:L15035-L15039",
+                                                 "official-hta-runtime#enableMCITFields:L10921-L10988",
+                                                 "repository-model#recompute_schedule_2:L616-L621"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Do not silently synthesize 2% as official runtime behavior. The current repository model does so and requires separate legal/product review.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule2-item19",
+                             "outputs":  [
+                                             "Schedule 2 Item 19B-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 17B",
+                                            "Item 15C",
+                                            "Item 18C"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "19B copies 17B; 19C = max(15C,18C); 19D = 19B + 19C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc2It17B / computePg2Sc2It19C / computePg2Sc2ColumnD",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item17",
+                                                "1702mx-schedule2-item18-mcit"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc2It17B:L15029-L15033",
+                                                 "official-hta-runtime#computePg2Sc2It19C:L15042-L15053",
+                                                 "official-hta-runtime#computePg2Sc2ColumnD:L14783-L14787"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule3-item32",
+                             "outputs":  [
+                                             "Schedule 3 Item 32 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 3 Items 20-31 by applicable column"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 32 is the sum of Items 20-31, with A/B omitting inapplicable Items 21 and 23 and C/D including them.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Schd3It32A-D",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Schd3It32:L11200-L11243",
+                                                 "repository-model#recompute_schedule_3:L631-L650"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Model the source column applicability; the current repository helper generically sums the first 12 rows for every column.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule3-item33",
+                             "outputs":  [
+                                             "Schedule 3 Item 33 B-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 19 B-D",
+                                            "Schedule 3 Item 32 B-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 33B-D = Schedule 2 Item 19B-D - Schedule 3 Item 32B-D. The A calculation is commented.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg2Sc3It33",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item19",
+                                                "1702mx-schedule3-item32"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg2Sc3It33:L11115-L11125",
+                                                 "repository-model#recompute_schedule_3:L631-L650"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Preserve that A is not actively computed; do not generalize across all four columns.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule4-item3",
+                             "outputs":  [
+                                             "Schedule 4 Item 3 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 4 Items 1 and 2"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "3A=1A+2A; 3B=1B+2B; 3C=2C; 3D=A+B+C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg3Sc4Itm3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc4Itm3:L15238-L15249",
+                                                 "repository-model#recompute_schedule_4:L652-L665"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use the source column applicability; the repository model currently sums Item 1 + Item 2 in every column.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule4-item5",
+                             "outputs":  [
+                                             "Schedule 4 Item 5 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 4 Items 3 and 4"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "5A copies 3A; 5B=3B-4B; 5C copies 3C; 5D=A+B+C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg3Sc4Itm5",
+                             "depends_on":  [
+                                                "1702mx-schedule4-item3"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc4Itm5:L15251-L15257",
+                                                 "repository-model#recompute_schedule_4:L666-L673"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use the source column applicability; the repository model subtracts Item 4 in every column.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule4-item7",
+                             "outputs":  [
+                                             "Schedule 4 Item 7 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 4 Items 5 and 6"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 7 = Item 5 + Item 6 by A-C; D=A+B+C.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg3Sc4Itm7",
+                             "depends_on":  [
+                                                "1702mx-schedule4-item5"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc4Itm7:L15259-L15264",
+                                                 "repository-model#recompute_schedule_4:L674-L678"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule5-item18",
+                             "outputs":  [
+                                             "Schedule 5 Item 18 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 5 Items 1-17i"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 18 is the sum of the 25 printed ordinary-itemized-deduction rows in each column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg3Schd5It18",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Schd5It18:L11244-L11250",
+                                                 "repository-model#recompute_schedule_5_and_6:L680-L689"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule6-item5",
+                             "outputs":  [
+                                             "Schedule 6 Item 5 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 6 Items 1-4"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 5 is the sum of the four special-allowable-deduction rows by column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "schedule 6 compute functions",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule6-computation",
+                                                 "repository-model#recompute_schedule_5_and_6:L690-L701"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-nolco-seed",
+                             "outputs":  [
+                                             "Schedule 7/8 Item 1-3 values"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Item 7B/C",
+                                            "Schedule 5 Item 18B/C"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "For B, when Item 7B \u003c Item 18B, Schedule 8 Item 1=7B, Item 2=18B, Item 3=1-2. For C, when Item 18C \u003e Item 7C, Schedule 7 Item 1=7C, Item 2=18C, Item 3=1-2; otherwise the negative handler runs.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computeNolco(type)",
+                             "depends_on":  [
+                                                "1702mx-schedule2-item7",
+                                                "1702mx-schedule5-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeNolco:L14522-L14553"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Preserve the active branch semantics but remove fallthrough in a typed implementation.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-nolco-switch-fallthrough",
+                             "outputs":  [
+                                             "Schedule 7/8 seed values"
+                                         ],
+                             "inputs":  [
+                                            "computeNolco type B"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "The switch has no break after case B, so a B call also executes the C case.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computeNolco(type)",
+                             "depends_on":  [
+                                                "1702mx-nolco-seed"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeNolco:L14524-L14551"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Evaluate B and C independently without implicit switch fallthrough.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-nolco-tables",
+                             "outputs":  [
+                                             "Schedule 7.1/8.1 unapplied and totals"
+                                         ],
+                             "inputs":  [
+                                            "amount",
+                                            "applied previous years",
+                                            "expired",
+                                            "applied current year"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Per row, unapplied = amount - (applied previous years + expired + applied current year); total current-year application sums the row current-year applications.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "schedule 7.1/8.1 compute functions",
+                             "depends_on":  [
+                                                "1702mx-nolco-seed"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#schedule7a:L14555-L14640",
+                                                 "repository-model#recompute_nolco_table:L937-L967"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Enforce B+C+D \u003c= A before subtraction and retain signed audit evidence.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-mcit-table",
+                             "outputs":  [
+                                             "Schedule 9 columns C/G and Item 4"
+                                         ],
+                             "inputs":  [
+                                            "MCIT",
+                                            "normal income tax",
+                                            "prior applications",
+                                            "expired",
+                                            "current application"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "C = max(MCIT - normal income tax, 0); G = C - (D+E+F), resetting D/E/F/G to zero if negative; Item 4 = sum of current-year applications (column F).",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg7Sc9I1CC..I4",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg7Sc9I1CC:L14669-L14677",
+                                                 "official-hta-runtime#computePg7Sc9I1CG:L14699-L14709",
+                                                 "official-hta-runtime#computePg7Sc9I4:L14736-L14739",
+                                                 "repository-model#recompute_mcit:L969-L1006"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Return a structured limit error instead of destructive zeroing.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule10-item4",
+                             "outputs":  [
+                                             "Schedule 10 Item 4 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 10 Items 1-3 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 4 = sum of Items 1-3 by column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg4Sc10I4",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg4Sc10I4:L15271-L15277",
+                                                 "repository-model#recompute_schedule_10:L703-L717"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule10-item9",
+                             "outputs":  [
+                                             "Schedule 10 Item 9 A-D"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 10 Items 5-8 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 9 = sum of Items 5-8 by column.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg4Sc10I9",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg4Sc10I9:L15280-L15285",
+                                                 "repository-model#recompute_schedule_10:L718-L726"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use checked signed whole-peso arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702mx-schedule10-item10",
+                             "outputs":  [
+                                             "Schedule 10 Item 10 aliases in Schedule 2 Item 10 keys"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 10 Item 4 A-D",
+                                            "Schedule 10 Item 9 A-D"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 10 = Item 4 - Item 9 by column, written into txtPg2Sc2Itm10A-D.",
+                             "rounding":  "The January 2018C HTA parses commas/parentheses and generally writes whole-peso formatCurrencyWOC values; product helpers use Math.round in several paths.",
+                             "trigger":  "computePg4Sc10I10",
+                             "depends_on":  [
+                                                "1702mx-schedule10-item4",
+                                                "1702mx-schedule10-item9"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg4Sc10I10:L15287-L15292",
+                                                 "repository-model#recompute_schedule_10:L727-L735"
+                                             ],
+                             "assessment":  "ambiguous",
+                             "recommended_app_behavior":  "Keep printed semantics distinct from the historical serialized key names.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

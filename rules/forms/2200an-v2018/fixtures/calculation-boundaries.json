@@ -1,0 +1,29 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200an-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "schedule-row",
+                      "official_output":  15000,
+                      "calculation_id":  "2200an-sched3-row",
+                      "rate":  15,
+                      "amount":  100000
+                  },
+                  {
+                      "item21d":  100,
+                      "item20":  1000,
+                      "calculation_id":  "2200an-item22-double-penalty",
+                      "penalty_components_total":  100,
+                      "case_id":  "double-penalty",
+                      "official_output":  1200,
+                      "recommended_output":  1100
+                  },
+                  {
+                      "case_id":  "item24",
+                      "item22":  1200,
+                      "calculation_id":  "2200an-item24",
+                      "official_output":  100,
+                      "item23c":  1100
+                  }
+              ]
+}

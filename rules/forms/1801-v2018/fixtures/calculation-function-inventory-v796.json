@@ -1,0 +1,232 @@
+{
+    "source_sha256":  "d19c4ebe40ed109094ef43687ed5486a003bd11a67a251bdd5545a41c2f46d8d",
+    "function_count":  12,
+    "functions":  [
+                      {
+                          "name":  "installmentGranted",
+                          "start_line":  4921,
+                          "end_line":  4932,
+                          "body_sha256":  "94dc7477a4c1c15b430c3b7523e272ed26e1f71a5f7fdf177642bac38040ee59",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:freq_Mon",
+                                              "frm1801v2018:freq_Other",
+                                              "frm1801v2018:freq_Qtr",
+                                              "frm1801v2018:freq_Semi",
+                                              "frm1801v2018:instGranted_1"
+                                          ]
+                      },
+                      {
+                          "name":  "setCredits_TaxPrev",
+                          "start_line":  4933,
+                          "end_line":  4937,
+                          "body_sha256":  "433866cea8bf56783dc0985bd3e880f869eb0c7390a26be4bd8391f548e3b085",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:amendedRtn_1",
+                                              "frm1801v2018:txtCredits_TaxPrev"
+                                          ]
+                      },
+                      {
+                          "name":  "calculate_Part2",
+                          "start_line":  4946,
+                          "end_line":  4976,
+                          "body_sha256":  "64561ecb958ed562a6ce6a8171211dbff66223e34bce33d07dc5053aa3dbbe64",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:txtCredits_ForeignEst",
+                                              "frm1801v2018:txtCredits_TaxPrev",
+                                              "frm1801v2018:txtCredits_Tot",
+                                              "frm1801v2018:txtEstTaxDue",
+                                              "frm1801v2018:txtInstallment",
+                                              "frm1801v2018:txtPen_Compromise",
+                                              "frm1801v2018:txtPen_Interest",
+                                              "frm1801v2018:txtPen_Surcharge",
+                                              "frm1801v2018:txtPen_Tot",
+                                              "frm1801v2018:txtTaxPayable",
+                                              "frm1801v2018:txtTaxPayable_1st",
+                                              "frm1801v2018:txtTotPayable"
+                                          ]
+                      },
+                      {
+                          "name":  "calculate_Part4",
+                          "start_line":  4977,
+                          "end_line":  5031,
+                          "body_sha256":  "c6c431d9a52ae239ef82c0f0e19d0df0b424dcbcfcfb3e7afdc8c624ddfdc553",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched1AConj_Total",
+                                              "frm1801v2018:sched1AExc_Total",
+                                              "frm1801v2018:sched1Conj_Total",
+                                              "frm1801v2018:sched1Exc_Total",
+                                              "frm1801v2018:sched2AConj_Total",
+                                              "frm1801v2018:sched2AExc_Total",
+                                              "frm1801v2018:sched2Conj_Total",
+                                              "frm1801v2018:sched2Exc_Total",
+                                              "frm1801v2018:sched3Conj_Total",
+                                              "frm1801v2018:sched3Exc_Total",
+                                              "frm1801v2018:sched4Conj_Total",
+                                              "frm1801v2018:sched4Exc_Total",
+                                              "frm1801v2018:sched5Conj_Total",
+                                              "frm1801v2018:sched5Exc_Total",
+                                              "frm1801v2018:txtBusiness_A",
+                                              "frm1801v2018:txtBusiness_B",
+                                              "frm1801v2018:txtBusiness_C",
+                                              "frm1801v2018:txtEstAfterDed_A",
+                                              "frm1801v2018:txtEstAfterDed_B",
+                                              "frm1801v2018:txtEstAfterDed_C",
+                                              "frm1801v2018:txtFam_A",
+                                              "frm1801v2018:txtFam_B",
+                                              "frm1801v2018:txtFam_C",
+                                              "frm1801v2018:txtFamDed_C",
+                                              "frm1801v2018:txtGrossEst_A",
+                                              "frm1801v2018:txtGrossEst_B",
+                                              "frm1801v2018:txtGrossEst_C",
+                                              "frm1801v2018:txtNetEst_C",
+                                              "frm1801v2018:txtNetTaxEst_C",
+                                              "frm1801v2018:txtOrdDed_A",
+                                              "frm1801v2018:txtOrdDed_B",
+                                              "frm1801v2018:txtOrdDed_C",
+                                              "frm1801v2018:txtOtherDed_C",
+                                              "frm1801v2018:txtPersonalProp_A",
+                                              "frm1801v2018:txtPersonalProp_B",
+                                              "frm1801v2018:txtPersonalProp_C",
+                                              "frm1801v2018:txtRealProp_A",
+                                              "frm1801v2018:txtRealProp_B",
+                                              "frm1801v2018:txtRealProp_C",
+                                              "frm1801v2018:txtShareSpouse_C",
+                                              "frm1801v2018:txtStandardDed_C",
+                                              "frm1801v2018:txtTaxable_A",
+                                              "frm1801v2018:txtTaxable_B",
+                                              "frm1801v2018:txtTaxable_C",
+                                              "frm1801v2018:txtTaxableEstate",
+                                              "frm1801v2018:txtTotalDed_C"
+                                          ]
+                      },
+                      {
+                          "name":  "getRealProp_totals",
+                          "start_line":  5032,
+                          "end_line":  5045,
+                          "body_sha256":  "21b5ef6cfa1dc027530440dabee941ff479fee55f9193d7d7283d505d28cbcc1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched1Conj_",
+                                              "frm1801v2018:sched1Conj_Total",
+                                              "frm1801v2018:sched1Exc_",
+                                              "frm1801v2018:sched1Exc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "getFam_totals",
+                          "start_line":  5046,
+                          "end_line":  5059,
+                          "body_sha256":  "0853ca499214aa7af5f0853d3adc6e7e030000340889787ded5877593acbabd0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched1AConj_",
+                                              "frm1801v2018:sched1AConj_Total",
+                                              "frm1801v2018:sched1AExc_",
+                                              "frm1801v2018:sched1AExc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "getStock_totals",
+                          "start_line":  5060,
+                          "end_line":  5073,
+                          "body_sha256":  "b3664c3278491b7bb00b5aa4f0435cf0e2606fb901a4b9e63d94c6d9444025cc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched2Conj_",
+                                              "frm1801v2018:sched2Conj_Total",
+                                              "frm1801v2018:sched2Exc_",
+                                              "frm1801v2018:sched2Exc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "getOther_totals",
+                          "start_line":  5074,
+                          "end_line":  5087,
+                          "body_sha256":  "a59084f1da23228d36863cd015e35d34f6b65654a1c582c36074fc4c02062b51",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched2AConj_",
+                                              "frm1801v2018:sched2AConj_Total",
+                                              "frm1801v2018:sched2AExc_",
+                                              "frm1801v2018:sched2AExc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "getTransfer_totals",
+                          "start_line":  5088,
+                          "end_line":  5101,
+                          "body_sha256":  "2c650fdcce2b621dde4074c32da92aea4c195bfbac302819391b628416e8d3e8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched3Conj_",
+                                              "frm1801v2018:sched3Conj_Total",
+                                              "frm1801v2018:sched3Exc_",
+                                              "frm1801v2018:sched3Exc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "getBusiness_totals",
+                          "start_line":  5102,
+                          "end_line":  5115,
+                          "body_sha256":  "06b85b537d9fd03735c6a0ca9d0f9b425388d2b713bac62726c43a38e066c19e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched4Conj_",
+                                              "frm1801v2018:sched4Conj_Total",
+                                              "frm1801v2018:sched4Exc_",
+                                              "frm1801v2018:sched4Exc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "getOrdDed_totals",
+                          "start_line":  5116,
+                          "end_line":  5134,
+                          "body_sha256":  "7de93667832723ae704cacc7d1c462e9816e3b7c2356f2a6c528ebaff9b7b404",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:sched5Conj_Total",
+                                              "frm1801v2018:sched5Exc_Total"
+                                          ]
+                      },
+                      {
+                          "name":  "computeNo18",
+                          "start_line":  5359,
+                          "end_line":  5383,
+                          "body_sha256":  "18f0cf7c67ee4ea7d8bf2f1277fab7d9d96114186da9cd3cd1516291f7880aa3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1801v2018:txtEstTaxDue",
+                                              "frm1801v2018:txtTaxableEstate",
+                                              "frm1801v2018:txtTaxRate"
+                                          ]
+                      }
+                  ]
+}

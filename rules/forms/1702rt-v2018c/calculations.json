@@ -1,0 +1,682 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702rt-v2018c",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1702rt-item16-net-tax",
+                             "1702rt-item20-penalties",
+                             "1702rt-item21-total-payable",
+                             "1702rt-item29-gross-profit",
+                             "1702rt-item31-net-other-income",
+                             "1702rt-item33-total-gross",
+                             "1702rt-schedule1-copy-and-loss",
+                             "1702rt-item37-itemized-total",
+                             "1702rt-item38-osd",
+                             "1702rt-item39-net-taxable",
+                             "1702rt-item41-rate-tax",
+                             "1702rt-item42-mcit",
+                             "1702rt-item43-total-income-tax",
+                             "1702rt-item55-tax-credits",
+                             "1702rt-item56-net-tax",
+                             "1702rt-item57-special-tax",
+                             "1702rt-item59-total-special-tax",
+                             "1702rt-schedule1-total",
+                             "1702rt-schedule2-total",
+                             "1702rt-nolco-row-balance",
+                             "1702rt-nolco-total",
+                             "1702rt-schedule3-net-loss",
+                             "1702rt-schedule4-row-balances",
+                             "1702rt-schedule4-total-excess",
+                             "1702rt-schedule5-item4",
+                             "1702rt-schedule5-item9",
+                             "1702rt-schedule5-item10"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1702rt-item16-net-tax",
+                             "outputs":  [
+                                             "frm1702RT:txtPg1Pt2I16NetTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg1Pt2I14IncomeTax",
+                                            "frm1702RT:txtPg1Pt2I15TotalTaxCredits"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "16 = 14 - 15.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP1Pt2I16",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP1Pt2I16:L8176-L8180"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item20-penalties",
+                             "outputs":  [
+                                             "frm1702RT:txtPg1Pt2I20TotalPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg1Pt2I17Surcharge",
+                                            "frm1702RT:txtPg1Pt2I18Interest",
+                                            "frm1702RT:txtPg1Pt2I19Compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20 = 17 + 18 + 19.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP1Pt2I20",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP1Pt2I20:L8181-L8185"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item21-total-payable",
+                             "outputs":  [
+                                             "frm1702RT:txtPg1Pt2I21TotalAmount"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg1Pt2I16NetTax",
+                                            "frm1702RT:txtPg1Pt2I20TotalPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 16 \u003e= 0, 21 = 16 + 20; if 16 \u003c 0 and penalties \u003e 0, 21 = penalties; otherwise 21 = negative Item 16.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP1Pt2I21",
+                             "depends_on":  [
+                                                "1702rt-item16-net-tax",
+                                                "1702rt-item20-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP1Pt2I21:L8186-L8216"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Review whether penalties-only output and overpayment disposition should be represented separately.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item29-gross-profit",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I29NetSales"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I27Sales",
+                                            "frm1702RT:txtPg2Pt4I28LessSales"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "29 = 27 - 28.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I29",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I29:L8217-L8225"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item31-net-other-income",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I31GrossIncome"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I29NetSales",
+                                            "frm1702RT:txtPg2Pt4I30LessCost"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "31 = 29 - 30.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I31",
+                             "depends_on":  [
+                                                "1702rt-item29-gross-profit"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I31:L8226-L8231"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item33-total-gross",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I33TotalGross"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I31GrossIncome",
+                                            "frm1702RT:txtPg2Pt4I32AddOtherTaxable"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "33 = 31 + 32; non-loss state clears NOLCO source fields.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I33",
+                             "depends_on":  [
+                                                "1702rt-item31-net-other-income"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I33:L8232-L8253"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule1-copy-and-loss",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I34OrdinaryAllowable",
+                                             "frm1702RT:txtPg4Sc3I1GrossIncome",
+                                             "frm1702RT:txtPg4Sc3I2TotalDeductions",
+                                             "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg3Sc1I18TotalOrdinaryAllowable",
+                                            "frm1702RT:txtPg2Pt4I33TotalGross"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Copy Schedule 1 Item 18 to Item 34/deductions, copy Item 33 to gross, and compute net operating loss as deductions minus gross when positive.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeItem18and33",
+                             "depends_on":  [
+                                                "1702rt-item33-total-gross",
+                                                "1702rt-schedule1-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem18and33:L8254-L8276"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item37-itemized-total",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I37TotalItemized"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I34OrdinaryAllowable",
+                                            "frm1702RT:txtPg2Pt4I35SpecialAllowable",
+                                            "frm1702RT:txtPg2Pt4I36Nolco"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "When itemized, 37 = 34 + 35 + 36; otherwise zero.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I37",
+                             "depends_on":  [
+                                                "1702rt-schedule1-copy-and-loss",
+                                                "1702rt-schedule2-total",
+                                                "1702rt-nolco-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I37:L8277-L8290"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item38-osd",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I38OptionalStandard"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I33TotalGross"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "When optional standard deduction is selected, 38 = 40% of Item 33; otherwise zero.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I38",
+                             "depends_on":  [
+                                                "1702rt-item33-total-gross"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I38:L8291-L8305"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item39-net-taxable",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                             "frm1702RT:txtPg4Sc3AI4C5",
+                                             "frm1702RT:txtPg4Sc3AI4C6"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I33TotalGross",
+                                            "frm1702RT:txtPg2Pt4I37TotalItemized",
+                                            "frm1702RT:txtPg2Pt4I38OptionalStandard"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "39 = 33 - 38 under OSD, otherwise 33 - 37; also updates current-year NOLCO cells.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I39",
+                             "depends_on":  [
+                                                "1702rt-item37-itemized-total",
+                                                "1702rt-item38-osd"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I39:L8306-L8326"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item41-rate-tax",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I41IncomeTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                            "frm1702RT:Pg2Pt4I40IncomeTaxRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For 2020+, tax due uses user-visible rate / 100 times Item 39, with nonpositive net forced to zero; before 2020 it uses 30%.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I40/computeP2Pt4I41",
+                             "depends_on":  [
+                                                "1702rt-item39-net-taxable"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I40:L8327-L8334",
+                                                 "official-hta-runtime#computeP2Pt4I41:L8335-L8358"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Bind revision-appropriate statutory rates rather than trusting an editable rate field.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item42-mcit",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I42MinimumCorporate"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I33TotalGross",
+                                            "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                            "frm1702RT:rdoPg1I5Atc"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Before 2020 and when IC 055 is selected, MCIT is 2% of gross; 2020+ leaves the enabled value user-controlled except nonpositive net forces zero.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I42",
+                             "depends_on":  [
+                                                "1702rt-item33-total-gross",
+                                                "1702rt-item39-net-taxable"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I42:L8359-L8379"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Derive MCIT rate/applicability from the tax period and law.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item43-total-income-tax",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I43TotalIncomeTax",
+                                             "frm1702RT:txtPg1Pt2I14IncomeTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I41IncomeTaxDue",
+                                            "frm1702RT:txtPg2Pt4I42MinimumCorporate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "43 is the greater of regular income tax and MCIT, then copies to Page 1 Item 14.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I43",
+                             "depends_on":  [
+                                                "1702rt-item41-rate-tax",
+                                                "1702rt-item42-mcit"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I43:L8380-L8415"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item55-tax-credits",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I55TotalTaxCredits",
+                                             "frm1702RT:txtPg1Pt2I15TotalTaxCredits"
+                                         ],
+                             "inputs":  [
+                                            "page2-items-44-through-54"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "55 = sum Items 44 through 54 and copy to Page 1 Item 15.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I55TotalTaxCredits",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I55TotalTaxCredits:L8416-L8423"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item56-net-tax",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I56NetTax",
+                                             "frm1702RT:txtPg1Pt2I16NetTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I43TotalIncomeTax",
+                                            "frm1702RT:txtPg2Pt4I55TotalTaxCredits"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "56 = 43 - 55 and copy to Page 1 Item 16.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt4I56",
+                             "depends_on":  [
+                                                "1702rt-item43-total-income-tax",
+                                                "1702rt-item55-tax-credits"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I56:L8424-L8436"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item57-special-tax",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt5I57SpecialAllowable"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt4I35SpecialAllowable",
+                                            "frm1702RT:Pg2Pt4I40IncomeTaxRate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Only before 2020, Item 57 = Item 35 times income-tax rate / 100; for 2020+ this function leaves Item 57 untouched.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt5I57",
+                             "depends_on":  [
+                                                "1702rt-schedule2-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt5I57:L8437-L8448"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Make the post-2020 source and validation of Item 57 explicit.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-item59-total-special-tax",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt5I59TotalTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+                                            "frm1702RT:txtPg2Pt5I58AddSpecialTax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "59 = 57 + 58.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP2Pt5I59",
+                             "depends_on":  [
+                                                "1702rt-item57-special-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt5I59:L8449-L8454"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule1-total",
+                             "outputs":  [
+                                             "frm1702RT:txtPg3Sc1I18TotalOrdinaryAllowable"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 1 Items 1 through 17i, including modal rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum all ordinary allowable deduction rows into Item 18.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP3Sc1I18TotalOrdinaryAllowable",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP3Sc1I18TotalOrdinaryAllowable:L8455-L8469"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule2-total",
+                             "outputs":  [
+                                             "frm1702RT:txtPg3Sc2I5TotalSpecialAllowable",
+                                             "frm1702RT:txtPg2Pt4I35SpecialAllowable"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 2 Items 1 through 4, including modal rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum special allowable deductions into Item 5 and copy to Page 2 Item 35.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP3Sc2I5TotalSpecialAllowable",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP3Sc2I5TotalSpecialAllowable:L8485-L8496"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-nolco-row-balance",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C6"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C2",
+                                            "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C3",
+                                            "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C4",
+                                            "frm1702RT:txtPg4Sc3AI7.{N\u003e=1}C5"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "C6 = C2 - (C3 + C4 + C5) for each retained modal row.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "saveModalTable",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#saveModalTable:L5444-L5688"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-nolco-total",
+                             "outputs":  [
+                                             "frm1702RT:txtPg2Pt4I36Nolco",
+                                             "frm1702RT:txtPg4Sc4I8TotalNOLCO"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 3A Items 4 through 7 applied-current-year values"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Validate per-row applied/current and remaining balances, then sum NOLCO applied to Page 2 Item 36 and Schedule total.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP4Sc3AI8TotalNOLCO",
+                             "depends_on":  [
+                                                "1702rt-nolco-row-balance"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP4Sc3AI8TotalNOLCO:L8497-L8541"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Represent each row canonically and validate all columns before summing.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule3-net-loss",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg4Sc3I1GrossIncome",
+                                            "frm1702RT:txtPg4Sc3I2TotalDeductions"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "3 = 2 - 1.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computePg4Sc3I3NetOperatingLoss",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg4Sc3I3NetOperatingLoss:L8542-L8546"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule4-row-balances",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc4I1C8",
+                                             "frm1702RT:txtPg4Sc4I2C8",
+                                             "frm1702RT:txtPg4Sc4I3C8"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 4 row columns C through F"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each row, C8 = C4 - (C5 + C6 + C7); negative balances alert.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP4Sc4I1C8/2C8/3C8",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP4Sc4I1C8:L8725-L8732",
+                                                 "official-hta-runtime#computeP4Sc4I2C8:L8733-L8740",
+                                                 "official-hta-runtime#computeP4Sc4I3C8:L8741-L8748"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule4-total-excess",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc4I4TotalExcessMCIT",
+                                             "frm1702RT:txtPg2Pt4I47ExcessMCIT"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg4Sc4I1C8",
+                                            "frm1702RT:txtPg4Sc4I2C8",
+                                            "frm1702RT:txtPg4Sc4I3C8"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the three Schedule 4 balances and copy to Page 2 Item 47.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP4Sc4I4TotalExcessMCIT",
+                             "depends_on":  [
+                                                "1702rt-schedule4-row-balances"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP4Sc4I4TotalExcessMCIT:L8749-L8754"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule5-item4",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc5I4Total"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 5 Items 1 through 3, including modal rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "4 = sum Items 1 through 3.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP4Sc5I4Total",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP4Sc5I4Total:L8755-L8759"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule5-item9",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc5I9Total"
+                                         ],
+                             "inputs":  [
+                                            "Schedule 5 Items 5 through 8, including modal rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "9 = sum Items 5 through 8.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP4Sc5I9Total",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP4Sc5I9Total:L8760-L8763"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1702rt-schedule5-item10",
+                             "outputs":  [
+                                             "frm1702RT:txtPg4Sc5I10NetTaxableIncome"
+                                         ],
+                             "inputs":  [
+                                            "frm1702RT:txtPg4Sc5I4Total",
+                                            "frm1702RT:txtPg4Sc5I9Total"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "10 = 4 - 9.",
+                             "rounding":  "Official helpers strip commas/parentheses and generally format whole pesos; exact helper-specific behavior is retained in source references.",
+                             "trigger":  "computeP4Sc5I10NetTaxableIncome",
+                             "depends_on":  [
+                                                "1702rt-schedule5-item4",
+                                                "1702rt-schedule5-item9"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP4Sc5I10NetTaxableIncome:L8764-L8775"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal/integer arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

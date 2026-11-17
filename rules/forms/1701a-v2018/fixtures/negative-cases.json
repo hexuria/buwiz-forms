@@ -1,0 +1,327 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701a-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1701a-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Save checks nonblankness only.",
+                      "rule_id":  "1701a-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1701a-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer RDO value equals literal 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "Blank can pass this equality-only check.",
+                      "rule_id":  "1701a-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1701a-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The first active branch alerts and returns.",
+                      "rule_id":  "1701a-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1701a-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year in Item 1.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-001"
+                  },
+                  {
+                      "case_id":  "case-05-1701a-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Short-period Yes and return year exceeds current system year."
+                                    },
+                      "expected_message":  "Invalid date entry on Item #1. Since Short Return Period is Yes, valid year entry is only until current year.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-002"
+                  },
+                  {
+                      "case_id":  "case-06-1701a-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Not short-period and return year exceeds current system year."
+                                    },
+                      "expected_message":  "Invalid date entry on Item #1. Year entry cannot be greater than to the current year.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-003"
+                  },
+                  {
+                      "case_id":  "case-07-1701a-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is below 2018."
+                                    },
+                      "expected_message":  "Please file using the old version of the form.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-004"
+                  },
+                  {
+                      "case_id":  "case-08-1701a-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN component or branch is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "No taxpayer checksum is called by Validate.",
+                      "rule_id":  "1701a-validate-005"
+                  },
+                  {
+                      "case_id":  "case-09-1701a-validate-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A taxpayer TIN segment length is not 3 or branch length is below 3."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Branch has a minimum but no maximum in this branch.",
+                      "rule_id":  "1701a-validate-006"
+                  },
+                  {
+                      "case_id":  "case-10-1701a-validate-007",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-007"
+                  },
+                  {
+                      "case_id":  "case-11-1701a-validate-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-008"
+                  },
+                  {
+                      "case_id":  "case-12-1701a-validate-009",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-009"
+                  },
+                  {
+                      "case_id":  "case-13-1701a-validate-010",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Birth date is blank."
+                                    },
+                      "expected_message":  "Please indicate Birth Date of Taxpayer on item 10.",
+                      "expected_behavior":  "Returns true rather than a consistent bare return; caller behavior still stops.",
+                      "rule_id":  "1701a-validate-010"
+                  },
+                  {
+                      "case_id":  "case-14-1701a-validate-012",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Zip Code on Item 9A.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-012"
+                  },
+                  {
+                      "case_id":  "case-15-1701a-validate-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint filing is selected and any spouse TIN segment is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 66.",
+                      "expected_behavior":  "Branch code is not required here.",
+                      "rule_id":  "1701a-validate-013"
+                  },
+                  {
+                      "case_id":  "case-16-1701a-validate-014",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any spouse TIN segment is present and a segment length is not 3 or branch length exceeds 5."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 66.",
+                      "expected_behavior":  "Blank spouse branch passes; only an upper bound is checked.",
+                      "rule_id":  "1701a-validate-014"
+                  },
+                  {
+                      "case_id":  "case-17-1701a-validate-015",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse TIN checksum helper returns nonzero."
+                                    },
+                      "expected_message":  "dynamic: getChkTinErrDesc(tinChkCode) + \" on Item 66.\"",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-015"
+                  },
+                  {
+                      "case_id":  "case-18-1701a-validate-016",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse TIN is present and spouse RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 67.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-016"
+                  },
+                  {
+                      "case_id":  "case-19-1701a-validate-017",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse TIN is present and spouse name is blank."
+                                    },
+                      "expected_message":  "Please enter Spouse Name on Item 70.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-017"
+                  },
+                  {
+                      "case_id":  "case-20-1701a-validate-018",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse TIN is present and no spouse ATC is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 69.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-018"
+                  },
+                  {
+                      "case_id":  "case-21-1701a-validate-019",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer type is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 6.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-019"
+                  },
+                  {
+                      "case_id":  "case-22-1701a-validate-020",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer ATC is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 7.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-020"
+                  },
+                  {
+                      "case_id":  "case-23-1701a-validate-021",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer tax rate is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 19.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-021"
+                  },
+                  {
+                      "case_id":  "case-24-1701a-validate-022",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse name is nonblank and no spouse taxpayer type is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 68.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-022"
+                  },
+                  {
+                      "case_id":  "case-25-1701a-validate-023",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse name is nonblank and no spouse ATC is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 69.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-023"
+                  },
+                  {
+                      "case_id":  "case-26-1701a-validate-024",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Aggregate Item 30 is negative and no overpayment choice is selected."
+                                    },
+                      "expected_message":  "Please select an Overpayment option in Page 1 after Item 30.",
+                      "expected_behavior":  "The branch alerts and stops ordered validation.",
+                      "rule_id":  "1701a-validate-024"
+                  },
+                  {
+                      "case_id":  "case-27-1701a-validate-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All active validation branches pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "The first active branch alerts and returns.",
+                      "rule_id":  "1701a-validate-success"
+                  },
+                  {
+                      "case_id":  "case-28-1701a-birth-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Birth date does not split into exactly three slash-separated components."
+                                    },
+                      "expected_message":  "Invalid birthdate.Format should be MM/DD/YYYY",
+                      "expected_behavior":  "The message omits a space after the period.",
+                      "rule_id":  "1701a-birth-001"
+                  },
+                  {
+                      "case_id":  "case-29-1701a-birth-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month/day/year range or leap-day check fails."
+                                    },
+                      "expected_message":  "Please enter a valid date in Item 10.",
+                      "expected_behavior":  "No minimum year or full future-date comparison; nonnumeric components can evade numeric comparisons.",
+                      "rule_id":  "1701a-birth-002"
+                  },
+                  {
+                      "case_id":  "case-30-1701a-item53-tp",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer Item 53A exceeds 3,000,000."
+                                    },
+                      "expected_message":  "Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.",
+                      "expected_behavior":  "P3M threshold is hard-coded.",
+                      "rule_id":  "1701a-item53-tp"
+                  },
+                  {
+                      "case_id":  "case-31-1701a-item53-sp",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse Item 53B exceeds 3,000,000."
+                                    },
+                      "expected_message":  "Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.",
+                      "expected_behavior":  "P3M threshold is hard-coded.",
+                      "rule_id":  "1701a-item53-sp"
+                  },
+                  {
+                      "case_id":  "case-32-1701a-item54-tp",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 54A exceeds 250,000."
+                                    },
+                      "expected_message":  "Item 54A cannot be more than P250,000.",
+                      "expected_behavior":  "The first active branch alerts and returns.",
+                      "rule_id":  "1701a-item54-tp"
+                  }
+              ]
+}

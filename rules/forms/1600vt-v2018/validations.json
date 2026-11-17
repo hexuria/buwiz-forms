@@ -1,0 +1,1213 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1600vt-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "validateAll and Save preflight stop at the first rejection; blur/change handlers may mutate values independently.",
+    "rules":  [
+                  {
+                      "rule_id":  "1600vt-input-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "A negative-format money field loses focus.",
+                      "fields":  [
+                                     "money-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Legacy formatting permits parentheses/sign conversions and binary float rounding.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#negativeNumbers:L5012-L5037"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Legacy formatting permits parentheses/sign conversions and binary float rounding.",
+                      "recommended_app_behavior":  "Use signed decimal validation and formatting.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-input-002",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A tax rate is at least 100.",
+                      "fields":  [
+                                     "tax-rate-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Resets the rate to 0.00 and focuses the field.",
+                      "exact_message":  "Tax rate should be below 100.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkRate:L3321-L3327"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Resets the rate to 0.00 and focuses the field.",
+                      "recommended_app_behavior":  "Reject without replacing the value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-input-003",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Email does not match the source regex.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1Pt1I11Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Message cites Item 10 although email is printed Item 11; regex caps TLD length at four and is not anchored.",
+                      "exact_message":  "Please enter a valid e-mail address on page 1 item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L3217-L3228"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Message cites Item 10 although email is printed Item 11; regex caps TLD length at four and is not anchored.",
+                      "recommended_app_behavior":  "Use Item 11 and standards-aligned email validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-input-004",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A date fails MM/DD/YYYY calendar validation.",
+                      "fields":  [
+                                     "date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Clears the value; numeric test uses isNaN(a || b || c), so only the first truthy component is directly tested.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateNotCurrent:L3047-L3108"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Clears the value; numeric test uses isNaN(a || b || c), so only the first truthy component is directly tested.",
+                      "recommended_app_behavior":  "Parse all components with a strict calendar parser.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-input-005",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Payment date is malformed or future.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1I1Month",
+                                     "frm1600VT:txtPg1I1Day",
+                                     "frm1600VT:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Function expects a day field although the January 2018 return period is month/year; validateAll instead calls checkDate.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format) in Page 1 Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L2976-L3045"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Function expects a day field although the January 2018 return period is month/year; validateAll instead calls checkDate.",
+                      "recommended_app_behavior":  "Use the revision-specific month/year rule only.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-input-006",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "CTC date year differs from current year.",
+                      "fields":  [
+                                     "CTC-date"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Copied validation cites Item 24, which is Interest on this form, not a CTC field.",
+                      "exact_message":  "CTC year should be {CURRENT_YEAR} only for Page 1 Item 24",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateCTCDate:L3230-L3264"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Copied validation cites Item 24, which is Interest on this form, not a CTC field.",
+                      "recommended_app_behavior":  "Exclude copied rules not bound to actual 1600-VT controls.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-input-007",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Registration date is more than 50 years old.",
+                      "fields":  [
+                                     "registration-date"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Copied CTC/registration rule is not part of the 1600-VT form model.",
+                      "exact_message":  "CTC year should not be less than {CURRENT_YEAR_MINUS_50} for Page 1 Item 24",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateCTCDate:L3230-L3264"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Copied CTC/registration rule is not part of the 1600-VT form model.",
+                      "recommended_app_behavior":  "Exclude copied rules from active validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-change-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Amended Return No is selected.",
+                      "fields":  [
+                                     "frm1600VT:rdoPg1I2AmendedNo",
+                                     "frm1600VT:txtPg1P2I19TaxRemittedInRtrn"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Item 19 is reset, disabled, and downstream totals recompute.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#isAmended:L3302-L3310"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Item 19 is reset, disabled, and downstream totals recompute.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-change-002",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Tax Relief No is selected.",
+                      "fields":  [
+                                     "frm1600VT:rdoPg1I12TaxReliefNo",
+                                     "frm1600VT:txtPg1Pt1I12TaxReliefSpec"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Item 12A is cleared and disabled.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#availTaxRelief:L3312-L3319"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Item 12A is cleared and disabled.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-change-003",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 10 category changes after ATCs exist.",
+                      "fields":  [
+                                     "category-fields",
+                                     "ATC-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Confirmation clears ATCs; cancellation reverses category. Message is ungrammatical.",
+                      "exact_message":  "By changing Category your selected ATC will be remove.",
+                      "source_refs":  [
+                                          "official-hta-runtime#changeCategory:L3468-L3495"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Confirmation clears ATCs; cancellation reverses category. Message is ungrammatical.",
+                      "recommended_app_behavior":  "Use corrected warning and recoverable undo.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-change-004",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 3 changes to No after ATCs exist.",
+                      "fields":  [
+                                     "withheld-fields",
+                                     "ATC-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Confirmation clears ATC computation; cancellation restores Yes.",
+                      "exact_message":  "You are about to change the value. Doing this will clear all \ncomputation in ATC fields. Do you wish to proceed?",
+                      "source_refs":  [
+                                          "official-hta-runtime#changeTaxWithheldNO:L3497-L3523"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Confirmation clears ATC computation; cancellation restores Yes.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-change-005",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Category is Private or Government.",
+                      "fields":  [
+                                     "category-fields",
+                                     "AtcCode1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Private exposes 11 ordered slots; Government exposes 13; ten PG records appear in both lists.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#getPrivateWithholdingAgentATC:L4934-L4955"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Private exposes 11 ordered slots; Government exposes 13; ten PG records appear in both lists.",
+                      "recommended_app_behavior":  "Preserve category-scoped slot semantics.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-change-006",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 22 is negative while Item 26 penalties are positive.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1P2I22TaxStillDueOverremit",
+                                     "frm1600VT:txtPg1P2I26TotPenalties",
+                                     "frm1600VT:txtPg1P2I27TotAmtStillDueOverremit"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Item 27 becomes Item 26 alone, discarding the negative overremittance.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#pageOneComputation:L3445-L3457"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Item 27 becomes Item 26 alone, discarding the negative overremittance.",
+                      "recommended_app_behavior":  "Apply the legally reviewed netting rule and never silently discard Item 22.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-page-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Page input is outside the runtime page range.",
+                      "fields":  [
+                                     "frm1600VT:txtCurrentPage"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Invalid page",
+                      "source_refs":  [
+                                          "official-hta-runtime#goToPage:L6314-L6331"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Two-digit year is outside 18..current two-digit year.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Clears and focuses year.",
+                      "exact_message":  "Year shall not be greater than the present year and not earlier than 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDate:L3329-L3355"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Clears and focuses year.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-002",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Current-year month is later than current month.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1I1Month",
+                                     "frm1600VT:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Date (Page 1 Item 1) cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDate:L3329-L3355"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-003",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Month value is 00.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1I1Month"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select a Month in Page 1 Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkDate:L3329-L3355"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-004",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Item 1 year is blank.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Year field on Page 1 Item 1 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2800-L2807"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-005",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Neither Item 3 option is selected.",
+                      "fields":  [
+                                     "frm1600VT:rdoPg1I3TaxWithheldYes",
+                                     "frm1600VT:rdoPg1I3TaxWithheldNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select an option for item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2808-L2814"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-006",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Visible RDO value is 000.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1I6RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid RDO Code on Page 1 Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2815"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-007",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Item 7 name is blank after trimming.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1Pt1I7WithholdingAgentsName"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Name field on Page 1 Item 7 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2816"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-008",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Item 8 address is blank.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1Pt1I8RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Registered Address field on Page 1 Item 8 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2817"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-009",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Item 8A ZIP is blank.",
+                      "fields":  [
+                                     "frm1600VT:txPg1I8ZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Zip Code field on Page 1 Item 8A is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2818"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-010",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Item 9 contact is blank.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1Pt1I9ContactNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Contact Number field on Page 1 Item 9 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2819"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-011",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Neither Item 10 category is selected.",
+                      "fields":  [
+                                     "category-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select an option for item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2821-L2827"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-012",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Item 11 email is blank.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1Pt1I11Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "E-mail address on page 1 item 11 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2828"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-013",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Tax Relief Yes and Item 12A is blank.",
+                      "fields":  [
+                                     "frm1600VT:rdoPg1I12TaxReliefYes",
+                                     "frm1600VT:txtPg1Pt1I12TaxReliefSpec"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Specify Tax Relief field on Page 1 Item 12A is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2830-L2835"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-014",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Item 3 Yes and first ATC row is blank.",
+                      "fields":  [
+                                     "frm1600VT:txtAtcCd1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please fill up Part II Computation of Tax if item 3 is set to Yes.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2837-L2843"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-015",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Selected ATC row has blank or loosely zero tax base.",
+                      "fields":  [
+                                     "ATC-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid value for tax base for {ATC_CODE}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2844-L2853"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-016",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "A Schedule 1 row mixes identity fields and numeric fields incompletely.",
+                      "fields":  [
+                                     "schedule1-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Rows are scanned 1..5 and stop at first incomplete row.",
+                      "exact_message":  "Please complete Item #{ROW} in Page 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkATCinPageTwo:L2928-L2957"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Rows are scanned 1..5 and stop at first incomplete row.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-017",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "A nonblank combined Schedule 1 TIN has length 11 or less.",
+                      "fields":  [
+                                     "frm1600VT:Pg2Sc1TIN1"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Only minimum string length is tested; no exact shape or checksum.",
+                      "exact_message":  "Please check TIN number in Page 2 row #{ROW}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchOneTIN:L2959-L2974"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only minimum string length is tested; no exact shape or checksum.",
+                      "recommended_app_behavior":  "Validate exact TIN/branch structure and checksum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-018",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Main Page 1 TIN is blank, partial, or invalid.",
+                      "fields":  [
+                                     "frm1600VT:txtPg1TIN1",
+                                     "frm1600VT:txtPg1TIN2",
+                                     "frm1600VT:txtPg1TIN3",
+                                     "frm1600VT:txtPg1TIN4"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "validateAll never calls validateTIN for the main TIN, so any value including blank passes.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L2800-L2856"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "validateAll never calls validateTIN for the main TIN, so any value including blank passes.",
+                      "recommended_app_behavior":  "Require exact main TIN shape and checksum before RDO.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-validate-019",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "All active checks pass.",
+                      "fields":  [
+                                     "frm1600VT:btnValidate"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Disables controls and enables Edit, print, upload, Final Copy, eBIR online and eFPS paths.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5869-L5899"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Disables controls and enables Edit, print, upload, Final Copy, eBIR online and eFPS paths.",
+                      "recommended_app_behavior":  "Use an explicit validated state.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Month is 00 or year is blank.",
+                      "fields":  [
+                                     "month",
+                                     "year"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter date on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5901-L5910"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-002",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Legacy mirrored RDO is 000.",
+                      "fields":  [
+                                     "frm1600VT:rdoPg1Pt1I6RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5911"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-003",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Item 7 name is blank.",
+                      "fields":  [
+                                     "name"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid name on Page 1 Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5912"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-004",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Item 8 address is blank.",
+                      "fields":  [
+                                     "address"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid Registered Address on Page 1 Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5913"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-005",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Item 9 contact is blank.",
+                      "fields":  [
+                                     "contact"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid Contact Number on Page 1 Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5914"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-006",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  6,
+                      "condition":  "Neither Item 10 category is selected.",
+                      "fields":  [
+                                     "category-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select category of agent on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5915-L5917"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-save-007",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  7,
+                      "condition":  "Save preflight passes while TIN, Item 3, ZIP, email, tax relief, ATC, or Schedule 1 is invalid.",
+                      "fields":  [
+                                     "omitted-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Draft Save omits the main TIN and most full validation.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5901-L5919"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Draft Save omits the main TIN and most full validation.",
+                      "recommended_app_behavior":  "Mark drafts unvalidated and require full validation for final actions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-final-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Validated Final Copy is invoked.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Final Copy is submission-first.",
+                      "exact_message":  "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?",
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L6583-L6647"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final Copy is submission-first.",
+                      "recommended_app_behavior":  "Separate local copy and online submission.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-final-002",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  2,
+                      "condition":  "No network is detected.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Sets final flag 3 and creates encrypted offline copy.",
+                      "exact_message":  "The system detected that you have no internet connection.",
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L6583-L6647"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Sets final flag 3 and creates encrypted offline copy.",
+                      "recommended_app_behavior":  "Apply explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-submit-001",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Transport succeeds.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Sets final flag 1.",
+                      "exact_message":  "Submit Successful. Subject to validation by BIR.",
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L6444-L6554"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Sets final flag 1.",
+                      "recommended_app_behavior":  "Require authenticated receipt.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+                                                   "Online submission intentionally not performed."
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600vt-submit-002",
+                      "form_id":  "1600vt-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  2,
+                      "condition":  "Transport fails or throws.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Sets final flag 2 for retry.",
+                      "exact_message":  "Your Tax Return was not submitted online due to any of the following reasons that may interrupt the submission process:",
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L6444-L6554"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Sets final flag 2 for retry.",
+                      "recommended_app_behavior":  "Retain the actual safe error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+                                                   "Online submission intentionally not performed."
+                                               ]
+                  }
+              ]
+}

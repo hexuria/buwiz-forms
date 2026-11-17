@@ -1,0 +1,180 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604c-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1604c-row-total-amount",
+                             "1604c-total-withheld",
+                             "1604c-total-adjustment",
+                             "1604c-total-penalties",
+                             "1604c-grand-total"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1604c-row-total-amount",
+                             "outputs":  [
+                                             "frm1604c:txtSched1TotalAmt1",
+                                             "frm1604c:txtSched1TotalAmt2",
+                                             "frm1604c:txtSched1TotalAmt3",
+                                             "frm1604c:txtSched1TotalAmt4",
+                                             "frm1604c:txtSched1TotalAmt5",
+                                             "frm1604c:txtSched1TotalAmt6",
+                                             "frm1604c:txtSched1TotalAmt7",
+                                             "frm1604c:txtSched1TotalAmt8",
+                                             "frm1604c:txtSched1TotalAmt9",
+                                             "frm1604c:txtSched1TotalAmt10",
+                                             "frm1604c:txtSched1TotalAmt11",
+                                             "frm1604c:txtSched1TotalAmt12"
+                                         ],
+                             "inputs":  [
+                                            "corresponding TaxWheld, Adj, and Pen row values"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each month row, TotalAmt = TaxWheld + Pen + Adj.",
+                             "rounding":  "Row handlers call round(this,2); aggregate results use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTotalAmount(1,row)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAmount:L2932-L2944"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative row inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604c-total-withheld",
+                             "outputs":  [
+                                             "frm1604c:txtSched1TaxWheldTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm1604c:txtSched1TaxWheld1",
+                                            "frm1604c:txtSched1TaxWheld2",
+                                            "frm1604c:txtSched1TaxWheld3",
+                                            "frm1604c:txtSched1TaxWheld4",
+                                            "frm1604c:txtSched1TaxWheld5",
+                                            "frm1604c:txtSched1TaxWheld6",
+                                            "frm1604c:txtSched1TaxWheld7",
+                                            "frm1604c:txtSched1TaxWheld8",
+                                            "frm1604c:txtSched1TaxWheld9",
+                                            "frm1604c:txtSched1TaxWheld10",
+                                            "frm1604c:txtSched1TaxWheld11",
+                                            "frm1604c:txtSched1TaxWheld12"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum 12 monthly tax-withheld values.",
+                             "rounding":  "Row handlers call round(this,2); aggregate results use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTotalWithheld(1)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalWithheld:L2852-L2873"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative row inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604c-total-adjustment",
+                             "outputs":  [
+                                             "frm1604c:txtSched1AdjTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm1604c:txtSched1Adj1",
+                                            "frm1604c:txtSched1Adj2",
+                                            "frm1604c:txtSched1Adj3",
+                                            "frm1604c:txtSched1Adj4",
+                                            "frm1604c:txtSched1Adj5",
+                                            "frm1604c:txtSched1Adj6",
+                                            "frm1604c:txtSched1Adj7",
+                                            "frm1604c:txtSched1Adj8",
+                                            "frm1604c:txtSched1Adj9",
+                                            "frm1604c:txtSched1Adj10",
+                                            "frm1604c:txtSched1Adj11",
+                                            "frm1604c:txtSched1Adj12"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum 12 monthly adjustment values; negatives are accepted by the key handler.",
+                             "rounding":  "Row handlers call round(this,2); aggregate results use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTotalAdjustment",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalAdjustment:L2918-L2931"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative row inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604c-total-penalties",
+                             "outputs":  [
+                                             "frm1604c:txtSched1PenTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm1604c:txtSched1Pen1",
+                                            "frm1604c:txtSched1Pen2",
+                                            "frm1604c:txtSched1Pen3",
+                                            "frm1604c:txtSched1Pen4",
+                                            "frm1604c:txtSched1Pen5",
+                                            "frm1604c:txtSched1Pen6",
+                                            "frm1604c:txtSched1Pen7",
+                                            "frm1604c:txtSched1Pen8",
+                                            "frm1604c:txtSched1Pen9",
+                                            "frm1604c:txtSched1Pen10",
+                                            "frm1604c:txtSched1Pen11",
+                                            "frm1604c:txtSched1Pen12"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum 12 monthly penalty values.",
+                             "rounding":  "Row handlers call round(this,2); aggregate results use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTotalPenalties(1)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalPenalties:L2874-L2896"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative row inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604c-grand-total",
+                             "outputs":  [
+                                             "frm1604c:txtSched1Total"
+                                         ],
+                             "inputs":  [
+                                            "frm1604c:txtSched1TotalAmt1",
+                                            "frm1604c:txtSched1TotalAmt2",
+                                            "frm1604c:txtSched1TotalAmt3",
+                                            "frm1604c:txtSched1TotalAmt4",
+                                            "frm1604c:txtSched1TotalAmt5",
+                                            "frm1604c:txtSched1TotalAmt6",
+                                            "frm1604c:txtSched1TotalAmt7",
+                                            "frm1604c:txtSched1TotalAmt8",
+                                            "frm1604c:txtSched1TotalAmt9",
+                                            "frm1604c:txtSched1TotalAmt10",
+                                            "frm1604c:txtSched1TotalAmt11",
+                                            "frm1604c:txtSched1TotalAmt12"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For Schedule 1, sum only positive monthly TotalAmt values; negative row totals are excluded.",
+                             "rounding":  "Row handlers call round(this,2); aggregate results use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTotal(1)",
+                             "depends_on":  [
+                                                "1604c-row-total-amount"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotal:L2897-L2917"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Negative adjustments can make a row total negative, but the grand total ignores that row entirely.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

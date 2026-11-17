@@ -1,0 +1,158 @@
+{
+    "source_sha256":  "6200b57ef2a3d9d296dc79cbdb9d2f7a605fb92d1dfcdcc4883f08de7c7fa324",
+    "function_count":  12,
+    "functions":  [
+                      {
+                          "name":  "taxTypeCodePropertyJS",
+                          "start_line":  1603,
+                          "end_line":  1611,
+                          "body_sha256":  "c00207687f312b73b0528aa8fe74baddece1d35b59f8d55b4f051b5d30dd6ea8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadXMLTaxTypeCode",
+                          "start_line":  1631,
+                          "end_line":  1652,
+                          "body_sha256":  "e5ef69a3f284b9d8b9f275a8c90c7cb55abbd01637bbb547efd09b1325429269",
+                          "alerts":  [
+                                         "responseTaxTypeCode.innerHTML"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadTaxTypeCode",
+                          "start_line":  1653,
+                          "end_line":  1684,
+                          "body_sha256":  "55647277da00c373caddf2248fb11975f02e3cf8173f88c15540fc248dd26eac",
+                          "alerts":  [
+                                         "\u00270605 successfully created array #\u0027+i",
+                                         "\u00270605 not found in array #\u0027+i"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  2578,
+                          "end_line":  2585,
+                          "body_sha256":  "0f28ecfcd48d445677adec4ea23a50cff642225994ff0b87d9833bb68b4eb711",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtTax20A",
+                                              "frm0605:txtTax20B",
+                                              "frm0605:txtTax20C",
+                                              "frm0605:txtTax20D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOfTax",
+                          "start_line":  2586,
+                          "end_line":  2591,
+                          "body_sha256":  "d4788df7c65eebd1027716c048ad87c0c31b0ed0115038c3973fac8b52b91be2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:txtTax19",
+                                              "frm0605:txtTax20D",
+                                              "frm0605:txtTax21"
+                                          ]
+                      },
+                      {
+                          "name":  "enableDefTax",
+                          "start_line":  2592,
+                          "end_line":  2596,
+                          "body_sha256":  "694d25f4fd8d93103a1593cf0eb6bf86276ab1f10262bf65ad9ab5b8f9a4917e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:itemApprovedYN:_1",
+                                              "frm0605:itemApprovedYN:_2"
+                                          ]
+                      },
+                      {
+                          "name":  "disableDefTax",
+                          "start_line":  2597,
+                          "end_line":  2603,
+                          "body_sha256":  "37a04ab02e93a9b15be341d4a08ce5184370a9b4caa39110dc93cdc34ea8f95b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0605:itemApprovedYN:_1",
+                                              "frm0605:itemApprovedYN:_2"
+                                          ]
+                      },
+                      {
+                          "name":  "showTaxTypeCodeDiv",
+                          "start_line":  3059,
+                          "end_line":  3072,
+                          "body_sha256":  "4d182fdda0820094821415a26df2e1f31222bebddb978955fff3544e88fd8288",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "TaxTypeCodeList",
+                          "start_line":  3073,
+                          "end_line":  3093,
+                          "body_sha256":  "fe0b384e4e35b50cab1c78eb538e2b75a840eb95de61ef50b9e9972ca7aec15a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getTaxTypeCode",
+                          "start_line":  3094,
+                          "end_line":  3118,
+                          "body_sha256":  "5ba5fb6e9f411decc1db0d677aae0b988653fca8c4957ee0f1ac2442d4812434",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getPopulateTaxTypeCode",
+                          "start_line":  3119,
+                          "end_line":  3138,
+                          "body_sha256":  "f6eb3c0a37f83568023cb4cdbc64d1944a194b1d5c9ca9dcada45dd41120fa0b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelTaxTypeCode",
+                          "start_line":  3139,
+                          "end_line":  3151,
+                          "body_sha256":  "254f2ca87c78d103c451d10065f2e48e5781997213af36fe4feede3619ffd44e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

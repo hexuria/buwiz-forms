@@ -1,0 +1,2965 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Save returns at its first narrow failure. Validate checks background fields in source order, then Schedule 1 and Schedule 2 in period/field order, and stops at the first active failure.",
+    "rules":  [
+                  {
+                      "rule_id":  "1604e-save-001",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Taxable year is blank.",
+                      "fields":  [
+                                     "frm1604e:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5464-L5471"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-save-002",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1604e:txtTIN1",
+                                     "frm1604e:txtTIN2",
+                                     "frm1604e:txtTIN3",
+                                     "frm1604e:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5472-L5483"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked.",
+                      "recommended_app_behavior":  "Permit drafts, but require exact shape and checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-save-003",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "RDO code is blank.",
+                      "fields":  [
+                                     "frm1604e:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5484-L5491"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-save-004",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Withholding agent name is blank.",
+                      "fields":  [
+                                     "frm1604e:txtWthhldngAgntsNme"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5492-L5500"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-save-005",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Other Validate requirements are absent.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5464-L5522"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save omits address, ZIP, contact, category, schedules, and format checks.",
+                      "recommended_app_behavior":  "Save drafts losslessly and report completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-001",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Taxable year is blank.",
+                      "fields":  [
+                                     "frm1604e:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4487-L4492"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-002",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1604e:txtTIN1",
+                                     "frm1604e:txtTIN2",
+                                     "frm1604e:txtTIN3",
+                                     "frm1604e:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4493-L4500"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "No length, digit, or checksum validation follows.",
+                      "recommended_app_behavior":  "Require exact shape and checksum before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-003",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "RDO code is blank.",
+                      "fields":  [
+                                     "frm1604e:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4501-L4506"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-004",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Withholding agent name is blank.",
+                      "fields":  [
+                                     "frm1604e:txtWthhldngAgntsNme"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4507-L4512"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-005",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Contact number is blank.",
+                      "fields":  [
+                                     "frm1604e:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4513-L4518"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-006",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1604e:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4519-L4524"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-007",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm1604e:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4525-L4530"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-008",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Neither withholding-agent category is selected.",
+                      "fields":  [
+                                     "frm1604e:WthldngAgntCtgry_1",
+                                     "frm1604e:WthldngAgntCtgry_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please select an option in Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4531-L4536"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-01-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  206,
+                      "condition":  "A partially populated 1st Quarter row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched1RemDate1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-01-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  207,
+                      "condition":  "A partially populated 1st Quarter row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched1BankCode1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-01-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  208,
+                      "condition":  "A partially populated 1st Quarter row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TRANo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-01-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  209,
+                      "condition":  "A partially populated 1st Quarter row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TaxWithheld1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-01-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  210,
+                      "condition":  "Penalties equal 0.00 in a populated 1st Quarter row.",
+                      "fields":  [
+                                     "frm1604e:txtSched1Penalties1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-02-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  211,
+                      "condition":  "A partially populated 2nd Quarter row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched1RemDate2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-02-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  212,
+                      "condition":  "A partially populated 2nd Quarter row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched1BankCode2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-02-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  213,
+                      "condition":  "A partially populated 2nd Quarter row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TRANo2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-02-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  214,
+                      "condition":  "A partially populated 2nd Quarter row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TaxWithheld2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-02-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  215,
+                      "condition":  "Penalties equal 0.00 in a populated 2nd Quarter row.",
+                      "fields":  [
+                                     "frm1604e:txtSched1Penalties2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-03-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  216,
+                      "condition":  "A partially populated 3rd Quarter row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched1RemDate3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-03-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  217,
+                      "condition":  "A partially populated 3rd Quarter row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched1BankCode3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-03-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  218,
+                      "condition":  "A partially populated 3rd Quarter row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TRANo3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-03-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  219,
+                      "condition":  "A partially populated 3rd Quarter row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TaxWithheld3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-03-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  220,
+                      "condition":  "Penalties equal 0.00 in a populated 3rd Quarter row.",
+                      "fields":  [
+                                     "frm1604e:txtSched1Penalties3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-04-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  221,
+                      "condition":  "A partially populated 4th Quarter row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched1RemDate4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-04-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  222,
+                      "condition":  "A partially populated 4th Quarter row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched1BankCode4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-04-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  223,
+                      "condition":  "A partially populated 4th Quarter row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TRANo4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-04-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  224,
+                      "condition":  "A partially populated 4th Quarter row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched1TaxWithheld4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched1-04-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  225,
+                      "condition":  "Penalties equal 0.00 in a populated 4th Quarter row.",
+                      "fields":  [
+                                     "frm1604e:txtSched1Penalties4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule1:L4554-L4677",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-01-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  306,
+                      "condition":  "A partially populated January row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the January. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-01-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  307,
+                      "condition":  "A partially populated January row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the January. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-01-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  308,
+                      "condition":  "A partially populated January row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the January. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-01-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  309,
+                      "condition":  "A partially populated January row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the January. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-01-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  310,
+                      "condition":  "Penalties equal 0.00 in a populated January row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties1"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the January. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-02-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  311,
+                      "condition":  "A partially populated February row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the February. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-02-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  312,
+                      "condition":  "A partially populated February row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the February. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-02-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  313,
+                      "condition":  "A partially populated February row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the February. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-02-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  314,
+                      "condition":  "A partially populated February row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the February. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-02-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  315,
+                      "condition":  "Penalties equal 0.00 in a populated February row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the February. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-03-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  316,
+                      "condition":  "A partially populated March row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the March. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-03-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  317,
+                      "condition":  "A partially populated March row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the March. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-03-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  318,
+                      "condition":  "A partially populated March row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the March. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-03-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  319,
+                      "condition":  "A partially populated March row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the March. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-03-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  320,
+                      "condition":  "Penalties equal 0.00 in a populated March row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the March. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-04-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  321,
+                      "condition":  "A partially populated April row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the April. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-04-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  322,
+                      "condition":  "A partially populated April row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the April. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-04-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  323,
+                      "condition":  "A partially populated April row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the April. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-04-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  324,
+                      "condition":  "A partially populated April row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the April. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-04-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  325,
+                      "condition":  "Penalties equal 0.00 in a populated April row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the April. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-05-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  326,
+                      "condition":  "A partially populated May row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the May. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-05-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  327,
+                      "condition":  "A partially populated May row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the May. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-05-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  328,
+                      "condition":  "A partially populated May row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the May. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-05-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  329,
+                      "condition":  "A partially populated May row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the May. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-05-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  330,
+                      "condition":  "Penalties equal 0.00 in a populated May row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties5"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the May. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-06-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  331,
+                      "condition":  "A partially populated June row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the June. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-06-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  332,
+                      "condition":  "A partially populated June row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the June. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-06-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  333,
+                      "condition":  "A partially populated June row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the June. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-06-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  334,
+                      "condition":  "A partially populated June row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the June. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-06-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  335,
+                      "condition":  "Penalties equal 0.00 in a populated June row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties6"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the June. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-07-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  336,
+                      "condition":  "A partially populated July row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the July. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-07-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  337,
+                      "condition":  "A partially populated July row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the July. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-07-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  338,
+                      "condition":  "A partially populated July row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the July. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-07-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  339,
+                      "condition":  "A partially populated July row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the July. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-07-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  340,
+                      "condition":  "Penalties equal 0.00 in a populated July row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties7"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the July. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-08-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  341,
+                      "condition":  "A partially populated August row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the August. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-08-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  342,
+                      "condition":  "A partially populated August row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the August. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-08-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  343,
+                      "condition":  "A partially populated August row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the August. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-08-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  344,
+                      "condition":  "A partially populated August row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the August. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-08-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  345,
+                      "condition":  "Penalties equal 0.00 in a populated August row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties8"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the August. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-09-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  346,
+                      "condition":  "A partially populated September row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate9"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the September. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-09-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  347,
+                      "condition":  "A partially populated September row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode9"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the September. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-09-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  348,
+                      "condition":  "A partially populated September row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo9"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the September. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-09-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  349,
+                      "condition":  "A partially populated September row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld9"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the September. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-09-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  350,
+                      "condition":  "Penalties equal 0.00 in a populated September row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties9"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the September. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-10-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  351,
+                      "condition":  "A partially populated October row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate10"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the October. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-10-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  352,
+                      "condition":  "A partially populated October row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode10"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the October. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-10-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  353,
+                      "condition":  "A partially populated October row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo10"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the October. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-10-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  354,
+                      "condition":  "A partially populated October row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld10"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the October. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-10-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  355,
+                      "condition":  "Penalties equal 0.00 in a populated October row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties10"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the October. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-11-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  356,
+                      "condition":  "A partially populated November row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate11"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the November. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-11-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  357,
+                      "condition":  "A partially populated November row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode11"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the November. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-11-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  358,
+                      "condition":  "A partially populated November row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo11"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the November. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-11-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  359,
+                      "condition":  "A partially populated November row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld11"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the November. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-11-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  360,
+                      "condition":  "Penalties equal 0.00 in a populated November row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties11"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the November. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-12-date",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  361,
+                      "condition":  "A partially populated December row has no date of remittance.",
+                      "fields":  [
+                                     "frm1604e:txtSched2RemDate12"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter Date of Remittance for the December. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-12-bank",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  362,
+                      "condition":  "A partially populated December row has no drawee bank/bank code/agency.",
+                      "fields":  [
+                                     "frm1604e:txtSched2BankCode12"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the December. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-12-tra",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  363,
+                      "condition":  "A partially populated December row has no TRA/eROR/eAR number.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TRANo12"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter any of the following details TRA / eROR / eAR Number for the December. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-12-tax",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  364,
+                      "condition":  "A partially populated December row has Taxes Withheld equal to 0.00.",
+                      "fields":  [
+                                     "frm1604e:txtSched2TaxWithheld12"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Taxes Withheld for the December. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-sched2-12-penalty-unreachable",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  365,
+                      "condition":  "Penalties equal 0.00 in a populated December row.",
+                      "fields":  [
+                                     "frm1604e:txtSched2Penalties12"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please enter the Penalties for the December. You may refer to your 1606 for the said month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSchedule2:L4678-L5041",
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "recommended_app_behavior":  "Treat penalties as optional unless the legal facts require them.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-validate-009",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "All active checks pass.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4537-L4553"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-input-year-pre2018",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Edited year is before 2018.",
+                      "fields":  [
+                                     "frm1604e:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Invalid data entry on item no. 1. \nEntry should be current or prior year but not be earlier than the effectivity date of January 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L6485-L6492"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-input-year-getyear-bug",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Any normal four-digit year is compared with Date.getYear().",
+                      "fields":  [
+                                     "frm1604e:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Invalid data entry on item no. 1. \nEntry should be current or prior year but not be earlier than the effectivity date of January 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L6485-L6499"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Date.getYear() returns current year minus 1900, so a normal year is replaced with a value such as 126 in 2026.",
+                      "recommended_app_behavior":  "Use getFullYear(), enforce 2018 through the current full year, and preserve the entered year on a failed edit.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-input-date-shape",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Date is not a valid MM/DD/YYYY calendar date.",
+                      "fields":  [
+                                     "schedule-remittance-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6412-L6484"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-input-date-future",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Date is later than the current date.",
+                      "fields":  [
+                                     "schedule-remittance-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6412-L6484"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-input-date-pre2018",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Date is before 2018.",
+                      "fields":  [
+                                     "schedule-remittance-date-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  "This date cannot be prior to 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L6412-L6484"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-schedule-empty-row",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Every field in a schedule row is blank or zero.",
+                      "fields":  [
+                                     "schedule-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateScheduleFields:L5042-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "A fully blank/zero row passes.",
+                      "recommended_app_behavior":  "Keep empty rows optional.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-schedule-penalty-fallthrough",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "A populated row has nonzero tax withheld and zero penalties.",
+                      "fields":  [
+                                     "schedule-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateScheduleFields:L5125-L5158"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The helper can fall through undefined, and callers ultimately accept the row.",
+                      "recommended_app_behavior":  "Represent penalties as optional and avoid undefined control flow.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-email-unvalidated",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "A nonblank malformed email is present.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4487-L4553",
+                                          "official-help#item10"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Email is optional and never format-checked.",
+                      "recommended_app_behavior":  "Allow blank; validate format when nonblank.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-top-agent-omitted",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Private category is selected but Item 8A is unanswered.",
+                      "fields":  [
+                                     "frm1604e:WthldngAgntCtgry_1",
+                                     "frm1604e:TpWthldngAgnt_1",
+                                     "frm1604e:TpWthldngAgnt_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L4487-L4553",
+                                          "official-help#item8a"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate ignores Item 8A.",
+                      "recommended_app_behavior":  "Require Item 8A when private category makes it applicable.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-schedule3-commented",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Commented Schedule 3 controls and computations are inspected.",
+                      "fields":  [
+                                     "commented-schedule3-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#commented-schedule3"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "Schedule 3 validation and computation are wholly commented out.",
+                      "recommended_app_behavior":  "Do not model commented controls as active behavior.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-final-001",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested after successful validation.",
+                      "fields":  [
+                                     "txtFinalFlag",
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveEncryptedProfile:L2414-L2589",
+                                          "official-hta-runtime#saveXML:L2590-L2932"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "The source couples encrypted output to profile/connectivity behavior; no target-revision encrypted artifact was produced.",
+                      "recommended_app_behavior":  "Keep deterministic local finalization separate from transport.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1604e-submit-001",
+                      "form_id":  "1604e-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online transport is invoked.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXMLsubmit:L2933-L3182",
+                                          "official-hta-runtime#sendEmail:L6114-L6216"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Transport exists but was not exercised.",
+                      "recommended_app_behavior":  "Keep local validation independently testable.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

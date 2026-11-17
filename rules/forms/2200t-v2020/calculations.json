@@ -1,0 +1,229 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200t-v2020",
+    "revision":  "2020-01-01",
+    "evaluation_order":  [
+                             "2200t-schedule-total",
+                             "2200t-item17-total",
+                             "2200t-item18-net",
+                             "2200t-item20-still-due",
+                             "2200t-item21-penalties",
+                             "2200t-item22-payable",
+                             "2200t-item23b-penalties",
+                             "2200t-item23-total",
+                             "2200t-item24-balance"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200t-schedule-total",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtSched1_TotalDue",
+                                             "frm2200Tv2020:txtExciseDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtSched1_*_Due"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum every input whose ID starts frm2200Tv2020:txtSched1_ and ends _Due; copy the formatted total to Item 16.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "Blur of any Schedule 1 Due cell.",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Sched1_TotalDue:L7061-L7076"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Compute each row due from its pinned rate and taxable base before summing; do not trust editable due cells.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item17-total",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtLess_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtLess_Balance",
+                                            "frm2200Tv2020:txtLess_Excise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17C = 17A + 17B.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7044-L7046"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item18-net",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtNetTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtExciseDue",
+                                            "frm2200Tv2020:txtLess_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18 = 16 - 17C.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200t-schedule-total",
+                                                "2200t-item17-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7046-L7047"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item20-still-due",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtStillDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtNetTaxDue",
+                                            "frm2200Tv2020:txtPrevReturn"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20 = 18 - 19.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200t-item18-net"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7047-L7048"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item21-penalties",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtPen_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtPen_Surcharge",
+                                            "frm2200Tv2020:txtPen_Interest",
+                                            "frm2200Tv2020:txtPen_Compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21D = 21A + 21B + 21C.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7049-L7054"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item22-payable",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtAmtPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtStillDue",
+                                            "frm2200Tv2020:txtPen_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "22 = 20 + 21D.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200t-item20-still-due",
+                                                "2200t-item21-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7055-L7055"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item23b-penalties",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtPay_Penalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtPen_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23B copies 21D unconditionally.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200t-item21-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7056-L7056"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item23-total",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtPay_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtPay_TaxPayment",
+                                            "frm2200Tv2020:txtPay_Penalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23C = 23A + 23B.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200t-item23b-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7057-L7057"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200t-item24-balance",
+                             "outputs":  [
+                                             "frm2200Tv2020:txtBalance"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Tv2020:txtAmtPayable",
+                                            "frm2200Tv2020:txtPay_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23C.",
+                             "rounding":  "amtFormat uses Number.toFixed(2) and inserts thousands separators.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200t-item22-payable",
+                                                "2200t-item23-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7058-L7058"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the source dependency order.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

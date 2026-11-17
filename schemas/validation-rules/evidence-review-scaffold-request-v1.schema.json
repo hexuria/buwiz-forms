@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "maxItems": 43,
+      "minItems": 43,
+      "type": "array"
+    },
+    "format": {
+      "const": "bir-evidence-review-scaffold-request-v1"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "entries",
+    "format"
+  ],
+  "title": "External candidate evidence-review scaffold request v1",
+  "type": "object",
+  "$defs": {
+    "entry": {
+      "additionalProperties": false,
+      "properties": {
+        "attestations": {
+          "items": false,
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "$ref": "evidence-packet-v1.schema.json#/$defs/derivedOnlyAttestation"
+            },
+            {
+              "$ref": "evidence-packet-v1.schema.json#/$defs/noTaxpayerValuesAttestation"
+            },
+            {
+              "$ref": "evidence-packet-v1.schema.json#/$defs/noCredentialsAttestation"
+            },
+            {
+              "$ref": "evidence-packet-v1.schema.json#/$defs/noOnlineSubmissionAttestation"
+            }
+          ],
+          "type": "array"
+        },
+        "capture_gaps": {
+          "items": {
+            "$ref": "evidence-review-ledger-v1.schema.json#/$defs/captureGap"
+          },
+          "type": "array"
+        },
+        "capture_provenance": {
+          "$ref": "evidence-packet-v1.schema.json#/$defs/captureProvenance"
+        },
+        "capture_session_id": {
+          "$ref": "evidence-review-ledger-v1.schema.json#/$defs/portableIdentifier"
+        },
+        "created_at_utc": {
+          "$ref": "evidence-packet-v1.schema.json#/$defs/utcTimestamp"
+        },
+        "form_id": {
+          "$ref": "evidence-review-ledger-v1.schema.json#/$defs/portableIdentifier"
+        },
+        "official_package_asset_id": {
+          "$ref": "evidence-review-ledger-v1.schema.json#/$defs/portableIdentifier"
+        },
+        "packet_id": {
+          "$ref": "evidence-review-ledger-v1.schema.json#/$defs/portableIdentifier"
+        },
+        "source_excerpts": {
+          "items": {
+            "$ref": "evidence-review-ledger-v1.schema.json#/$defs/sourceExcerpt"
+          },
+          "type": "array"
+        },
+        "source_map_sha256": {
+          "$ref": "evidence-review-ledger-v1.schema.json#/$defs/sha256"
+        },
+        "source_verification_sha256": {
+          "$ref": "evidence-review-ledger-v1.schema.json#/$defs/sha256"
+        }
+      },
+      "required": [
+        "attestations",
+        "capture_gaps",
+        "capture_provenance",
+        "capture_session_id",
+        "created_at_utc",
+        "form_id",
+        "official_package_asset_id",
+        "packet_id",
+        "source_excerpts",
+        "source_map_sha256",
+        "source_verification_sha256"
+      ],
+      "type": "object"
+    }
+  }
+}

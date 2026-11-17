@@ -1,0 +1,28 @@
+[package]
+name = "bir-print"
+version = "0.2.0"
+edition = "2021"
+license.workspace = true
+description = "eBIRForms print and frozen-HTML rendering."
+repository = "https://github.com/hexuria/buwiz-forms"
+
+[features]
+default = ["sqlcipher"]
+sqlcipher = ["bir-core/sqlcipher"]
+
+[[bin]]
+name = "verify_certification_pdf"
+path = "src/bin/verify_certification_pdf.rs"
+
+[dependencies]
+bir-core = { path = "../bir-core", version = "0.2.0", default-features = false }
+tempfile = "3.27.0"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+lopdf = "0.34"
+schemars = "1.0"
+sha2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

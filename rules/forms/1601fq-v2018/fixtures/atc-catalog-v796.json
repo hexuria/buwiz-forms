@@ -1,0 +1,813 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1601fq-v2018",
+    "package_version":  "7.9.6.0",
+    "source_sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+    "selection_semantics":  "AtcCodeN is the Nth entry after filtering this ordered catalog by Item 11 category; slot meanings differ between P and G.",
+    "private_slot_count":  41,
+    "government_slot_count":  39,
+    "unreachable_record_count":  0,
+    "entry_count":  80,
+    "entries":  [
+                    {
+                        "source_index":  899,
+                        "category":  "P",
+                        "runtime_slot":  1,
+                        "code":  "WI226",
+                        "description":  "SHARE OF NRAETB IN THE DISTRIBUTABLE NET INCOME AFTER TAX OF A PARTNERSHIP (EXCEPT GENERAL PROFESSIONAL PARTNERSHIP) OF WHICH HE IS A PARTNER, OR SHARE IN THE NET INCOME AFTER TAX OF AN ASSOCIATION, JOINT ACCOUNT OR A JOINT VENTURE TAXABLE AS A CORPORATION OF WHICH HE IS A MEMBER OR A CO-VENTURER",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  900,
+                        "category":  "P",
+                        "runtime_slot":  2,
+                        "code":  "WI240",
+                        "description":  "DISTRIBUTIVE SHARE OF INDIVIDUAL PARTNERS IN A TAXABLE PARTNERSHIP, ASSOCIATION, JOINT ACCOUNT OR JOINT VENTURE OR CONSORTIUM",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  901,
+                        "category":  "P",
+                        "runtime_slot":  3,
+                        "code":  "WI250",
+                        "description":  "ALL KINDS OF ROYALTY PAYMENTS TO CITIZENS, RESIDENTS ALIENS AND NRAETB (OTHER THAN WI380 AND WI341), DOMESTIC AND RESIDENT FOREIGN CORPORATIONS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  902,
+                        "category":  "P",
+                        "runtime_slot":  4,
+                        "code":  "WI260",
+                        "description":  "ON PRIZES EXCEEDING P10,000 AND OTHER WINNINGS PAID TO INDIVIDUALS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  903,
+                        "category":  "P",
+                        "runtime_slot":  5,
+                        "code":  "WI310",
+                        "description":  "ON PAYMENTS TO OIL EXPLORATION SERVICE CONTRACTORS/SUB-CONTRACTORS",
+                        "catalog_rate":  "8.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  904,
+                        "category":  "P",
+                        "runtime_slot":  6,
+                        "code":  "WI330",
+                        "description":  "PAYMENTS TO NON-RESIDENT ALIEN NOT ENGAGE IN TRADE OR BUSINESS WITHIN THE PHILIPPINES (NRANETB) EXCEPT ON SALE OF SHARES IN DOMESTIC CORPORATION AND REAL PROPERTY",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  905,
+                        "category":  "P",
+                        "runtime_slot":  7,
+                        "code":  "WI340",
+                        "description":  "ON PAYMENTS TO NON-RESIDENT INDIVIDUAL/FOREIGN CORPORATE CINEMATOGRAPHIC FILM OWNERS, LESSORS OR DISTRIBUTORS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  906,
+                        "category":  "P",
+                        "runtime_slot":  8,
+                        "code":  "WI341",
+                        "description":  "ROYALTIES PAID TO NRAETB ON CINEMATOGRAPHIC FILMS AND SIMILAR WORKS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  907,
+                        "category":  "P",
+                        "runtime_slot":  9,
+                        "code":  "WI350",
+                        "description":  "FINAL TAX ON INTEREST OR OTHER PAYMENTS UPON TAX-FREE COVENANT BONDS, MORTGAGES, DEEDS OF TRUST OR OTHER OBLIGATIONS UNDER SEC. 57C OF THE NATIONAL INTERNAL REVENUE CODE OF 1997, AS AMENDED",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  908,
+                        "category":  "P",
+                        "runtime_slot":  10,
+                        "code":  "WI380",
+                        "description":  "ROYALTIES PAID TO CITIZENS, RESIDENT ALIENS AND NRAETB ON BOOKS, OTHER LITERARY WORKS AND MUSICAL COMPOSITIONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  909,
+                        "category":  "P",
+                        "runtime_slot":  11,
+                        "code":  "WI410",
+                        "description":  "INFORMERS CASH REWARD TO INDIVIDUALS/JURIDICAL PERSONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  910,
+                        "category":  "P",
+                        "runtime_slot":  12,
+                        "code":  "WI700",
+                        "description":  "CASH OR PROPERTY DIVIDEND PAID BY A REAL ESTATE INVESTMENT TRUST (REIT)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  911,
+                        "category":  "P",
+                        "runtime_slot":  13,
+                        "code":  "WC180",
+                        "description":  "INTEREST ON FOREIGN LOANS PAYABLE TO NON-RESIDENT FOREIGN CORPORATIONS (NRFCS)",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  912,
+                        "category":  "P",
+                        "runtime_slot":  14,
+                        "code":  "WC190",
+                        "description":  "INTEREST AND OTHER INCOME PAYMENTS ON FOREIGN CURRENCY TRANSACTIONS/LOANS PAYABLE TO OFFSHORE BANKING UNITS (OBUS)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  913,
+                        "category":  "P",
+                        "runtime_slot":  15,
+                        "code":  "WC191",
+                        "description":  "INTEREST AND OTHER INCOME PAYMENTS ON FOREIGN CURRENCY TRANSACTIONS/LOANS PAYABLE TO FOREIGN CURRENCY DEPOSIT UNITS (FCDUS)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  914,
+                        "category":  "P",
+                        "runtime_slot":  16,
+                        "code":  "WC212",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  915,
+                        "category":  "P",
+                        "runtime_slot":  17,
+                        "code":  "WC213",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  916,
+                        "category":  "P",
+                        "runtime_slot":  18,
+                        "code":  "WC222",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NRFCS WHOSE COUNTRIES ALLOWED TAX DEEMED PAID CREDIT (SUBJECT TO TAX SPARING RULE)",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  917,
+                        "category":  "P",
+                        "runtime_slot":  19,
+                        "code":  "WC223",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NRFCS WHOSE COUNTRIES ALLOWED TAX DEEMED PAID CREDIT (SUBJECT TO TAX SPARING RULE)",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  918,
+                        "category":  "P",
+                        "runtime_slot":  20,
+                        "code":  "WC230",
+                        "description":  "ON OTHER PAYMENTS TO NRFCS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  919,
+                        "category":  "P",
+                        "runtime_slot":  21,
+                        "code":  "WC250",
+                        "description":  "ALL KINDS OF ROYALTY PAYMENTS TO CITIZENS, RESIDENTS ALIENS AND NRAETB (OTHER THAN WI380 AND WI341), DOMESTIC AND RESIDENT FOREIGN CORPORATIONS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  920,
+                        "category":  "P",
+                        "runtime_slot":  22,
+                        "code":  "WC280",
+                        "description":  "BRANCH PROFIT REMITTANCES BY ALL CORPORATIONS EXCEPT PEZA/SBMA/CDA REGISTERED",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  921,
+                        "category":  "P",
+                        "runtime_slot":  23,
+                        "code":  "WC290",
+                        "description":  "ON THE GROSS RENTALS, LEASE AND CHARTER FEES DERIVED BY NON-RESIDENT OWNER OR LESSOR OF FOREIGN VESSELS",
+                        "catalog_rate":  "4.5",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  922,
+                        "category":  "P",
+                        "runtime_slot":  24,
+                        "code":  "WC300",
+                        "description":  "ON THE GROSS RENTALS, CHARTERS AND OTHER FEES DERIVED BY NON-RESIDENT LESSOR OR AIRCRAFT, MACHINERIES AND EQUIPMENT",
+                        "catalog_rate":  "7.5",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  923,
+                        "category":  "P",
+                        "runtime_slot":  25,
+                        "code":  "WC310",
+                        "description":  "ON PAYMENTS TO OIL EXPLORATION SERVICE CONTRACTORS/SUB-CONTRACTORS",
+                        "catalog_rate":  "8.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  924,
+                        "category":  "P",
+                        "runtime_slot":  26,
+                        "code":  "WC340",
+                        "description":  "ON PAYMENTS TO NON-RESIDENT INDIVIDUAL/FOREIGN CORPORATE CINEMATOGRAPHIC FILM OWNERS, LESSORS OR DISTRIBUTORS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  925,
+                        "category":  "P",
+                        "runtime_slot":  27,
+                        "code":  "WC410",
+                        "description":  "INFORMERS CASH REWARD TO INDIVIDUALS/JURIDICAL PERSONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  926,
+                        "category":  "P",
+                        "runtime_slot":  28,
+                        "code":  "WC700",
+                        "description":  "CASH OR PROPERTY DIVIDEND PAID BY A REAL ESTATE INVESTMENT TRUST (REIT)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  927,
+                        "category":  "P",
+                        "runtime_slot":  29,
+                        "code":  "WI202",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  928,
+                        "category":  "G",
+                        "runtime_slot":  1,
+                        "code":  "WI203",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  929,
+                        "category":  "G",
+                        "runtime_slot":  2,
+                        "code":  "WI224",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NON-RESIDENT ALIEN ENGAGE IN TRADE OR BUSINESS WITHIN THE PHILIPPINES (NRAETB)",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  930,
+                        "category":  "G",
+                        "runtime_slot":  3,
+                        "code":  "WI225",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NRAETB",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  931,
+                        "category":  "G",
+                        "runtime_slot":  4,
+                        "code":  "WI226",
+                        "description":  "SHARE OF NRAETB IN THE DISTRIBUTABLE NET INCOME AFTER TAX OF A PARTNERSHIP (EXCEPT GENERAL PROFESSIONAL PARTNERSHIP) OF WHICH HE IS A PARTNER, OR SHARE IN THE NET INCOME AFTER TAX OF AN ASSOCIATION, JOINT ACCOUNT OR A JOINT VENTURE TAXABLE AS A CORPORATION OF WHICH HE IS A MEMBER OR A CO-VENTURER",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  932,
+                        "category":  "G",
+                        "runtime_slot":  5,
+                        "code":  "WI240",
+                        "description":  "DISTRIBUTIVE SHARE OF INDIVIDUAL PARTNERS IN A TAXABLE PARTNERSHIP, ASSOCIATION, JOINT ACCOUNT OR JOINT VENTURE OR CONSORTIUM",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  933,
+                        "category":  "G",
+                        "runtime_slot":  6,
+                        "code":  "WI250",
+                        "description":  "ALL KINDS OF ROYALTY PAYMENTS TO CITIZENS, RESIDENTS ALIENS AND NRAETB (OTHER THAN WI380 AND WI341), DOMESTIC AND RESIDENT FOREIGN CORPORATIONS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  934,
+                        "category":  "G",
+                        "runtime_slot":  7,
+                        "code":  "WI260",
+                        "description":  "ON PRIZES EXCEEDING P10,000 AND OTHER WINNINGS PAID TO INDIVIDUALS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  935,
+                        "category":  "G",
+                        "runtime_slot":  8,
+                        "code":  "WI310",
+                        "description":  "ON PAYMENTS TO OIL EXPLORATION SERVICE CONTRACTORS/SUB-CONTRACTORS",
+                        "catalog_rate":  "8.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  936,
+                        "category":  "G",
+                        "runtime_slot":  9,
+                        "code":  "WI330",
+                        "description":  "PAYMENTS TO NON-RESIDENT ALIEN NOT ENGAGE IN TRADE OR BUSINESS WITHIN THE PHILIPPINES (NRANETB) EXCEPT ON SALE OF SHARES IN DOMESTIC CORPORATION AND REAL PROPERTY",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  937,
+                        "category":  "G",
+                        "runtime_slot":  10,
+                        "code":  "WI340",
+                        "description":  "ON PAYMENTS TO NON-RESIDENT INDIVIDUAL/FOREIGN CORPORATE CINEMATOGRAPHIC FILM OWNERS, LESSORS OR DISTRIBUTORS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  938,
+                        "category":  "G",
+                        "runtime_slot":  11,
+                        "code":  "WI341",
+                        "description":  "ROYALTIES PAID TO NRAETB ON CINEMATOGRAPHIC FILMS AND SIMILAR WORKS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  939,
+                        "category":  "G",
+                        "runtime_slot":  12,
+                        "code":  "WI350",
+                        "description":  "FINAL TAX ON INTEREST OR OTHER PAYMENTS UPON TAX-FREE COVENANT BONDS, MORTGAGES, DEEDS OF TRUST OR OTHER OBLIGATIONS UNDER SEC. 57C OF THE NATIONAL INTERNAL REVENUE CODE OF 1997, AS AMENDED",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  940,
+                        "category":  "G",
+                        "runtime_slot":  13,
+                        "code":  "WI380",
+                        "description":  "ROYALTIES PAID TO CITIZENS, RESIDENT ALIENS AND NRAETB ON BOOKS, OTHER LITERARY WORKS AND MUSICAL COMPOSITIONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  941,
+                        "category":  "G",
+                        "runtime_slot":  14,
+                        "code":  "WI410",
+                        "description":  "INFORMERS CASH REWARD TO INDIVIDUALS/JURIDICAL PERSONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  942,
+                        "category":  "G",
+                        "runtime_slot":  15,
+                        "code":  "WI700",
+                        "description":  "CASH OR PROPERTY DIVIDEND PAID BY A REAL ESTATE INVESTMENT TRUST (REIT)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  943,
+                        "category":  "G",
+                        "runtime_slot":  16,
+                        "code":  "WC180",
+                        "description":  "INTEREST ON FOREIGN LOANS PAYABLE TO NON-RESIDENT FOREIGN CORPORATIONS (NRFCS)",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  944,
+                        "category":  "G",
+                        "runtime_slot":  17,
+                        "code":  "WC190",
+                        "description":  "INTEREST AND OTHER INCOME PAYMENTS ON FOREIGN CURRENCY TRANSACTIONS/LOANS PAYABLE TO OFFSHORE BANKING UNITS (OBUS)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  945,
+                        "category":  "G",
+                        "runtime_slot":  18,
+                        "code":  "WC191",
+                        "description":  "INTEREST AND OTHER INCOME PAYMENTS ON FOREIGN CURRENCY TRANSACTIONS/LOANS PAYABLE TO FOREIGN CURRENCY DEPOSIT UNITS (FCDUS)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  946,
+                        "category":  "G",
+                        "runtime_slot":  19,
+                        "code":  "WC212",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  947,
+                        "category":  "G",
+                        "runtime_slot":  20,
+                        "code":  "WC213",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  948,
+                        "category":  "G",
+                        "runtime_slot":  21,
+                        "code":  "WC222",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NRFCS WHOSE COUNTRIES ALLOWED TAX DEEMED PAID CREDIT (SUBJECT TO TAX SPARING RULE)",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  949,
+                        "category":  "G",
+                        "runtime_slot":  22,
+                        "code":  "WC223",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NRFCS WHOSE COUNTRIES ALLOWED TAX DEEMED PAID CREDIT (SUBJECT TO TAX SPARING RULE)",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  950,
+                        "category":  "G",
+                        "runtime_slot":  23,
+                        "code":  "WC230",
+                        "description":  "ON OTHER PAYMENTS TO NRFCS",
+                        "catalog_rate":  "30.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  951,
+                        "category":  "G",
+                        "runtime_slot":  24,
+                        "code":  "WC250",
+                        "description":  "ALL KINDS OF ROYALTY PAYMENTS TO CITIZENS, RESIDENTS ALIENS AND NRAETB (OTHER THAN WI380 AND WI341), DOMESTIC AND RESIDENT FOREIGN CORPORATIONS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  952,
+                        "category":  "G",
+                        "runtime_slot":  25,
+                        "code":  "WC280",
+                        "description":  "BRANCH PROFIT REMITTANCES BY ALL CORPORATIONS EXCEPT PEZA/SBMA/CDA REGISTERED",
+                        "catalog_rate":  "15.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  953,
+                        "category":  "G",
+                        "runtime_slot":  26,
+                        "code":  "WC290",
+                        "description":  "ON THE GROSS RENTALS, LEASE AND CHARTER FEES DERIVED BY NON-RESIDENT OWNER OR LESSOR OF FOREIGN VESSELS",
+                        "catalog_rate":  "4.5",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  954,
+                        "category":  "G",
+                        "runtime_slot":  27,
+                        "code":  "WC300",
+                        "description":  "ON THE GROSS RENTALS, CHARTERS AND OTHER FEES DERIVED BY NON-RESIDENT LESSOR OR AIRCRAFT, MACHINERIES AND EQUIPMENT",
+                        "catalog_rate":  "7.5",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  955,
+                        "category":  "G",
+                        "runtime_slot":  28,
+                        "code":  "WC310",
+                        "description":  "ON PAYMENTS TO OIL EXPLORATION SERVICE CONTRACTORS/SUB-CONTRACTORS",
+                        "catalog_rate":  "8.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  956,
+                        "category":  "G",
+                        "runtime_slot":  29,
+                        "code":  "WC340",
+                        "description":  "ON PAYMENTS TO NON-RESIDENT INDIVIDUAL/FOREIGN CORPORATE CINEMATOGRAPHIC FILM OWNERS, LESSORS OR DISTRIBUTORS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  957,
+                        "category":  "G",
+                        "runtime_slot":  30,
+                        "code":  "WC410",
+                        "description":  "INFORMERS CASH REWARD TO INDIVIDUALS/JURIDICAL PERSONS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  958,
+                        "category":  "G",
+                        "runtime_slot":  31,
+                        "code":  "WC700",
+                        "description":  "CASH OR PROPERTY DIVIDEND PAID BY A REAL ESTATE INVESTMENT TRUST (REIT)",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  982,
+                        "category":  "P",
+                        "runtime_slot":  30,
+                        "code":  "WC212",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  983,
+                        "category":  "P",
+                        "runtime_slot":  31,
+                        "code":  "WC213",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  984,
+                        "category":  "P",
+                        "runtime_slot":  32,
+                        "code":  "WC810",
+                        "description":  "FINAL TAX REPRESENTING FRANCHISE TAX ON PAYMENTS TO NRFC SUPPLIER OF PAGCOR RELATED TO ITS GAMING OPERATIONS",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  984,
+                        "category":  "P",
+                        "runtime_slot":  33,
+                        "code":  "WC230",
+                        "description":  "ON OTHER PAYMENTS TO NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  985,
+                        "category":  "G",
+                        "runtime_slot":  32,
+                        "code":  "WI240",
+                        "description":  "DISTRIBUTIVE SHARE OF INDIVIDUAL PARTNERS IN A TAXABLE PARTNERSHIP, ASSOCIATION, JOINT ACCOUNT OR JOINT VENTURE OR CONSORTIUM",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  986,
+                        "category":  "G",
+                        "runtime_slot":  33,
+                        "code":  "WI341",
+                        "description":  "ROYALTIES PAID TO NRAETB ON CINEMATOGRAPHIC FILMS AND SIMILAR WORKS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  987,
+                        "category":  "P",
+                        "runtime_slot":  34,
+                        "code":  "WI350",
+                        "description":  "FINAL TAX ON INTEREST OR OTHER PAYMENTS UPON TAX-FREE COVENANT BONDS, MORTGAGES, DEEDS OF TRUST OR OTHER OBLIGATIONS UNDER SEC. 57C OF THE NATIONAL INTERNAL REVENUE CODE OF 1997, AS AMENDED",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  988,
+                        "category":  "G",
+                        "runtime_slot":  34,
+                        "code":  "WC212",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  989,
+                        "category":  "G",
+                        "runtime_slot":  35,
+                        "code":  "WC213",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  990,
+                        "category":  "G",
+                        "runtime_slot":  36,
+                        "code":  "WC230",
+                        "description":  "ON OTHER PAYMENTS TO NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  991,
+                        "category":  "G",
+                        "runtime_slot":  37,
+                        "code":  "WI240",
+                        "description":  "DISTRIBUTIVE SHARE OF INDIVIDUAL PARTNERS IN A TAXABLE PARTNERSHIP, ASSOCIATION, JOINT ACCOUNT OR JOINT VENTURE OR CONSORTIUM",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  992,
+                        "category":  "G",
+                        "runtime_slot":  38,
+                        "code":  "WI341",
+                        "description":  "ROYALTIES PAID TO NRAETB ON CINEMATOGRAPHIC FILMS AND SIMILAR WORKS",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  993,
+                        "category":  "G",
+                        "runtime_slot":  39,
+                        "code":  "WI350",
+                        "description":  "FINAL TAX ON INTEREST OR OTHER PAYMENTS UPON TAX-FREE COVENANT BONDS, MORTGAGES, DEEDS OF TRUST OR OTHER OBLIGATIONS UNDER SEC. 57C OF THE NATIONAL INTERNAL REVENUE CODE OF 1997, AS AMENDED",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1064,
+                        "category":  "P",
+                        "runtime_slot":  35,
+                        "code":  "WI740",
+                        "description":  "FINAL WT ON FOREIGN NATIONALS EMPLOYED BY POGO ENTITIES",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1065,
+                        "category":  "P",
+                        "runtime_slot":  36,
+                        "code":  "WI750",
+                        "description":  "ON GROSS INCOME EARNED BY FOREIGN NATIONALS OR NON-FILIPINO CITIZENS, REGARDLESS OF THEIR RESIDENCY, WHO ARE EMPLOYED AND ASSIGNED IN THE PHILIPPINES BY OFFSHORE GAMING LICENSEE OR ITS ACCREDITED SERVICE PROVIDER.",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1070,
+                        "category":  "P",
+                        "runtime_slot":  37,
+                        "code":  "WC230",
+                        "description":  "ON OTHER PAYMENTS TO NRFCS",
+                        "catalog_rate":  "25.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1082,
+                        "category":  "P",
+                        "runtime_slot":  38,
+                        "code":  "WI202",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1083,
+                        "category":  "P",
+                        "runtime_slot":  39,
+                        "code":  "WI203",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO CITIZENS AND RESIDENT ALIENS/NRFCS",
+                        "catalog_rate":  "10.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1084,
+                        "category":  "P",
+                        "runtime_slot":  40,
+                        "code":  "WI224",
+                        "description":  "CASH DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NON-RESIDENT ALIEN ENGAGE IN TRADE OR BUSINESS WITHIN THE PHILIPPINES (NRAETB)",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1085,
+                        "category":  "P",
+                        "runtime_slot":  41,
+                        "code":  "WI225",
+                        "description":  "PROPERTY DIVIDEND PAYMENT BY DOMESTIC CORPORATION TO NRAETB",
+                        "catalog_rate":  "20.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    }
+                ]
+}

@@ -1,0 +1,106 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "form_code":  "1702MX",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018C",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702MXv2018C.hta",
+                                "sha256":  "34dbe79d6bf934718e86c73d8fdea4eb4a4e6a86c939ab0ecf231282d744acf7",
+                                "size":  1369887,
+                                "revision_binding":  "Exact formTyp and final-copy/transport identifiers bind 1702MXv2018C; printed January 2018."
+                            },
+                            {
+                                "asset_id":  "legacy-help-supporting-only",
+                                "kind":  "official-runtime-help-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1702MX.hta",
+                                "sha256":  "6a67074fe275a2584ada1d4a36a26e693bf3d17e824d5ce249e5edfb11b12f2d",
+                                "size":  50653,
+                                "revision_binding":  "June 2013 help; supporting only, not silently revision-matched."
+                            },
+                            {
+                                "asset_id":  "xml-editable-subset-v1",
+                                "kind":  "dummy-profile-editable-save",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1702MXv2018c\\00000000000000-1702MXv2018C-1225.xml",
+                                "sha256":  "ed96c5b56eecee68f1f73eef50dda00f69a42bd0dc5d0849e2cbe22c6b70b239",
+                                "size":  17293,
+                                "revision_binding":  "Reviewed 210-key editable subset; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-final-v1",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1702MXv2018c\\1702MXv2018C-final-copy-#email-redacted#.xml",
+                                "sha256":  "ab4896a21603c7853985b6589a918c3d0189872b1817a4a55453ebea063a47b4",
+                                "size":  4197,
+                                "revision_binding":  "Reviewed 588-key final-copy artifact; decrypted in memory; values excluded."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1702MXv2018c\\1702-MX Jan 2018 ENCS Final with OSDv2.pdf",
+                                "sha256":  "81c05fffadde6c0b4098aeba8547a9820a0806c6be9b0c6ceac5597cab4263d2",
+                                "size":  1080667,
+                                "revision_binding":  "January 2018 Form 1702-MX."
+                            },
+                            {
+                                "asset_id":  "official-attachment-pdf",
+                                "kind":  "official-mandatory-attachment-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1702MXv2018c\\1702-MX Attachment Jan 2018 ENCS Final4.pdf",
+                                "sha256":  "36c02d4c84919d2e5b94cd31b339490019be80afa622f5681ce252c8ec3dec26",
+                                "size":  938129,
+                                "revision_binding":  "January 2018 two-page mandatory attachment."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  588,
+                   "editable_subset_fields":  210,
+                   "final_copy_only_fields":  378,
+                   "runtime_field_families":  83,
+                   "fields_total":  671,
+                   "typed_fields":  671,
+                   "validation_rules":  106,
+                   "confirmed_official_bugs":  20,
+                   "calculations":  36,
+                   "negative_fixtures":  50,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "editable_subset_audit":  "fixtures/editable-subset-audit-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "repository_contract_diff":  "fixtures/repository-contract-diff.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer, typed model, migration, capability, or release metadata changed.",
+                        "No source values or email-bearing filenames are copied.",
+                        "The 588-key final-copy inventory is authoritative for concrete-field preservation; the 210-key plaintext save is an exact editable subset.",
+                        "The 83 active indexed families are source-derived capacity patterns and had no concrete instance in the reviewed final-copy snapshot.",
+                        "June 2013 help is explicitly supporting-only because no revision-matched January 2018 help file was found."
+                    ]
+}

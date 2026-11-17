@@ -1,0 +1,639 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1700-v2013",
+    "revision":  "2013-06-01",
+    "evaluation_order":  [
+                             "1700-qualified-dependent-count",
+                             "1700-item9-additional-exemption",
+                             "1700-employer-sums",
+                             "1700-item6-net-compensation",
+                             "1700-item10-total-exemptions",
+                             "1700-item11-net-taxable-compensation",
+                             "1700-item12-other-taxable-income",
+                             "1700-item13-total-taxable-income",
+                             "1700-tax-table",
+                             "1700-item15-withholding-copy",
+                             "1700-item19-total-credits",
+                             "1700-item20-net-tax",
+                             "1700-item21-total-net-tax",
+                             "1700-item23-net-after-installment",
+                             "1700-item27-total-penalties",
+                             "1700-item28-total-payable",
+                             "1700-page1-item25",
+                             "1700-page1-item28",
+                             "1700-page1-item31",
+                             "1700-page3-item6-modal",
+                             "1700-page3-item11-modal",
+                             "1700-page3-item17-modal",
+                             "1700-page3-item20-modal",
+                             "1700-page3-item21-total-withheld",
+                             "1700-page3-b-item10-total-income"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1700-qualified-dependent-count",
+                             "outputs":  [
+                                             "frm1700:txtPg1Pt1I15QualifyDependent",
+                                             "frm1700:txtPg1Pt1I22SpouseQualifiedDependentChildren"
+                                         ],
+                             "inputs":  [
+                                            "page-4-dependent-rows",
+                                            "claiming-party"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Count qualifying dependent rows and assign the count to the claiming party.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computeQualifiedDependent",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeQualifiedDependent:L8831-L8872"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item9-additional-exemption",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I9C1",
+                                             "frm1700:txtPg2Pt4I9C2"
+                                         ],
+                             "inputs":  [
+                                            "qualified-dependent-count",
+                                            "claiming-party"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 9 = 25,000 times qualified-dependent count for the claiming party; the other party is forced to zero.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I9C1/C2",
+                             "depends_on":  [
+                                                "1700-qualified-dependent-count"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I9C1/C2:L9212-L9241"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-employer-sums",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I4AC1",
+                                             "frm1700:txtPg2Pt4I4AC2",
+                                             "frm1700:txtPg2Pt4I4BC1",
+                                             "frm1700:txtPg2Pt4I4BC2"
+                                         ],
+                             "inputs":  [
+                                            "all-static-and-dynamic-employer-rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum compensation and withholding separately for taxpayer-selected and spouse-selected employer rows.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "sumTaxSpouseIterate",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#sumTaxSpouseIterate:L12761-L12833"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item6-net-compensation",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I6C1",
+                                             "frm1700:txtPg2Pt4I6C2"
+                                         ],
+                             "inputs":  [
+                                            "items4A/4B",
+                                            "item5"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 6 per party = gross compensation Item 4 minus non-taxable/exempt Item 5.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I6C1/C2",
+                             "depends_on":  [
+                                                "1700-employer-sums"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I6C1/C2:L9124-L9165"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item10-total-exemptions",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I10C1",
+                                             "frm1700:txtPg2Pt4I10C2"
+                                         ],
+                             "inputs":  [
+                                            "items7",
+                                            "items8",
+                                            "items9"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 10 per party = Items 7 + 8 + 9.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I10C1/C2",
+                             "depends_on":  [
+                                                "1700-item9-additional-exemption"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I10C1/C2:L9167-L9193"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item11-net-taxable-compensation",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I11C1",
+                                             "frm1700:txtPg2Pt4I11C2"
+                                         ],
+                             "inputs":  [
+                                            "items6",
+                                            "items10"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 11 per party = Item 6 - Item 10.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I11C1/C2",
+                             "depends_on":  [
+                                                "1700-item6-net-compensation",
+                                                "1700-item10-total-exemptions"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I11C1/C2:L9195-L9210"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item12-other-taxable-income",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I12C1",
+                                             "frm1700:txtPg2Pt4I12C2"
+                                         ],
+                             "inputs":  [
+                                            "frm1700:txtPg2Pt4I12TaxFiler_{N\u003e=1}C2",
+                                            "frm1700:txtPg2Pt4I12Spouse_{N\u003e=1}C3"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum modal amounts per party, then divide the combined temp/repository scan by two.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePage2I12",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePage2I12:L13253-L13258"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Avoid duplicate-container summation; sum the canonical row store exactly once.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item13-total-taxable-income",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I13C1",
+                                             "frm1700:txtPg2Pt4I13C2"
+                                         ],
+                             "inputs":  [
+                                            "items11",
+                                            "items12"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 13 per party = Item 11 + Item 12.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I13",
+                             "depends_on":  [
+                                                "1700-item11-net-taxable-compensation",
+                                                "1700-item12-other-taxable-income"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I13:L9369-L9385"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-tax-table",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I14C1",
+                                             "frm1700:txtPg2Pt4I14C2"
+                                         ],
+                             "inputs":  [
+                                            "frm1700:txtPg2Pt4I13C1",
+                                            "frm1700:txtPg2Pt4I13C2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Pre-TRAIN table: \u003c=0 0; \u003c10k 5%; \u003c30k 500+10% over 10k; \u003c70k 2,500+15% over 30k; \u003c140k 8,500+20% over 70k; \u003c250k 22,500+25% over 140k; \u003c500k 50,000+30% over 250k; \u003e=500k 125,000+32% over 500k.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I14",
+                             "depends_on":  [
+                                                "1700-item13-total-taxable-income"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I14:L9387-L9441",
+                                                 "official-help#tax-table:L655-L700"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item15-withholding-copy",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I15C1",
+                                             "frm1700:txtPg2Pt4I15C2"
+                                         ],
+                             "inputs":  [
+                                            "frm1700:txtPg2Pt4I4AC2",
+                                            "frm1700:txtPg2Pt4I4BC2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Copy total compensation tax withheld per party from employer aggregates.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I15C1/C2",
+                             "depends_on":  [
+                                                "1700-employer-sums"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I15C1/C2:L9445-L9452"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item19-total-credits",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I19C1",
+                                             "frm1700:txtPg2Pt4I19C2"
+                                         ],
+                             "inputs":  [
+                                            "items15-through-18"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 19 per party = Items 15 + 16 + 17 + 18.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I19",
+                             "depends_on":  [
+                                                "1700-item15-withholding-copy"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePt4I19:L9455-L9490"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item20-net-tax",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I20C1",
+                                             "frm1700:txtPg2Pt4I20C2"
+                                         ],
+                             "inputs":  [
+                                            "items14",
+                                            "items19"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20 per party = Item 14 - Item 19.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePt4I20/computeP2Pt4I20C1/C2",
+                             "depends_on":  [
+                                                "1700-tax-table",
+                                                "1700-item19-total-credits"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I20C1/C2:L9244-L9266",
+                                                 "official-hta-runtime#computePt4I20:L9492-L9509"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item21-total-net-tax",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I21"
+                                         ],
+                             "inputs":  [
+                                            "frm1700:txtPg2Pt4I20C1",
+                                            "frm1700:txtPg2Pt4I20C2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 21 = taxpayer Item 20 + spouse Item 20.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computeP2Pt4I21",
+                             "depends_on":  [
+                                                "1700-item20-net-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I21:L9268-L9280"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item23-net-after-installment",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I23"
+                                         ],
+                             "inputs":  [
+                                            "items21",
+                                            "item22"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23 = Item 21 - Item 22.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computeP2Pt4I23",
+                             "depends_on":  [
+                                                "1700-item21-total-net-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I23:L9313-L9325"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item27-total-penalties",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I27"
+                                         ],
+                             "inputs":  [
+                                            "items24",
+                                            "25",
+                                            "26"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 27 = surcharge + interest + compromise.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computeP2Pt4I27",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I27:L9327-L9341"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-item28-total-payable",
+                             "outputs":  [
+                                             "frm1700:txtPg2Pt4I28"
+                                         ],
+                             "inputs":  [
+                                            "items23",
+                                            "27"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 28 = Item 23 + Item 27.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computeP2Pt4I28",
+                             "depends_on":  [
+                                                "1700-item23-net-after-installment",
+                                                "1700-item27-total-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeP2Pt4I28:L9342-L9353"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page1-item25",
+                             "outputs":  [
+                                             "frm1700:txtPg1Pt2I25TotalIncomeTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1700:txtPg1Pt2I23FilerTaxDue",
+                                            "frm1700:txtPg1Pt2I24SpouseTaxDue"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Page 1 Item 25 = filer tax due + spouse tax due; Items 23/24 copy Part IV Item 14 columns.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "processPart1Item23/24,ComputePart1Item25",
+                             "depends_on":  [
+                                                "1700-tax-table"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#processPart1Item23-LComputePart1Item25:L8874-L8890"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page1-item28",
+                             "outputs":  [
+                                             "frm1700:txtPg1Pt2I28NetTaxPayable"
+                                         ],
+                             "inputs":  [
+                                            "page1-item25",
+                                            "page1-items26-27"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Page 1 Item 28 = total income tax due - filer credit - spouse credit; credits copy Part IV Item 19.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "processPart1Item26/27,ComputePart1Item28",
+                             "depends_on":  [
+                                                "1700-page1-item25",
+                                                "1700-item19-total-credits"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputePart1Item28:L8891-L8911"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page1-item31",
+                             "outputs":  [
+                                             "frm1700:txtPg1Pt2I31"
+                                         ],
+                             "inputs":  [
+                                            "page1-item28",
+                                            "page1-item29",
+                                            "page1-item30"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Normally Item 31 = Item 28 - Item 29 + Item 30; if Item 28 - Item 29 is negative and Item 30 positive, output Item 30 only.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "ComputePart1Item31",
+                             "depends_on":  [
+                                                "1700-page1-item28",
+                                                "1700-item27-total-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#ComputePart1Item31:L8921-L8942"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Review the special override against filing instructions before reproducing it as tax logic.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page3-item6-modal",
+                             "outputs":  [
+                                             "summationIterationPage3PItem6",
+                                             "frm1700:txtPg2Pt4I6SubtotalC1",
+                                             "frm1700:txtPg2Pt4I6SubtotalC2"
+                                         ],
+                             "inputs":  [
+                                            "frm1700:txtPg3Pt5I6AAFM_{N\u003e=1}C2",
+                                            "frm1700:txtPg3Pt5I6FinalTaxWithheld_{N\u003e=1}C3"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum modal columns, divide by two to compensate for scanning duplicate temp/repository DOM, and copy withheld subtotal to hidden summation key.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePage3I6",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePage3I6:L13206-L13218"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Canonicalize rows and never rely on duplicate-DOM division.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page3-item11-modal",
+                             "outputs":  [
+                                             "summationIterationPage3PItem11C1",
+                                             "summationIterationPage3PItem11C2"
+                                         ],
+                             "inputs":  [
+                                            "page3-item11-dynamic-columns"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Item 11 modal columns and divide by two to compensate for duplicate temp/repository DOM.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePage3I11",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePage3I-L13251"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Canonicalize rows and sum once.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page3-item17-modal",
+                             "outputs":  [
+                                             "summationIterationPage3PItem17C1",
+                                             "summationIterationPage3PItem17C2"
+                                         ],
+                             "inputs":  [
+                                            "page3-item17-dynamic-columns"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Item 17 modal columns and divide by two to compensate for duplicate temp/repository DOM.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePage3I17",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePage3I-L13251"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Canonicalize rows and sum once.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page3-item20-modal",
+                             "outputs":  [
+                                             "summationIterationPage3PItem20C1",
+                                             "summationIterationPage3PItem20C2"
+                                         ],
+                             "inputs":  [
+                                            "page3-item20-dynamic-columns"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum Item 20 modal columns and divide by two to compensate for duplicate temp/repository DOM.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computePage3I20",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePage3I-L13251"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Canonicalize rows and sum once.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page3-item21-total-withheld",
+                             "outputs":  [
+                                             "summationPage3Item21",
+                                             "summationIterationPage3Item21",
+                                             "frm1700:txtPg3Pt5I21TotTaxWithheldPaid"
+                                         ],
+                             "inputs":  [
+                                            "static-and-dynamic-final-tax-withheld"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum static/dynamic withheld fields, round, and copy to Item 21.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "computeSummationPage3Item21",
+                             "depends_on":  [
+                                                "1700-page3-item6-modal",
+                                                "1700-page3-item11-modal",
+                                                "1700-page3-item17-modal",
+                                                "1700-page3-item20-modal"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSummationPage3Item21:L13149-L13154"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use integer/decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1700-page3-b-item10-total-income",
+                             "outputs":  [
+                                             "frm1700:txtPg3Pt5BI10TotalIncome"
+                                         ],
+                             "inputs":  [
+                                            "page3-B-static-and-dynamic-income-fields"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum B Items 1,2,3,7,9 across static and dynamic containers, then divide by two for duplicate DOM copies.",
+                             "rounding":  "Official code predominantly parseInt-truncates inputs, Math.rounds tax/summation outputs, and formats whole pesos with NegativeValue/formatCurrencyWOC.",
+                             "trigger":  "summation+adjustSummation on blur/modal Save",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#page3-B-onblur:L3316-L3497",
+                                                 "official-hta-runtime#summation/adjustSummation:L13108-L13147"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Canonicalize rows and sum once.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

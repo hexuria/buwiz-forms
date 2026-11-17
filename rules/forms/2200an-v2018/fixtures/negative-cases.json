@@ -1,0 +1,347 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200an-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2200an-validate-001-future-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month is after current month and year is current or later."
+                                    },
+                      "expected_message":  "Date should not be later than the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-001-future-month"
+                  },
+                  {
+                      "case_id":  "case-02-2200an-validate-002-future-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day is after today within current month/year."
+                                    },
+                      "expected_message":  "Date should not be later than the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-002-future-day"
+                  },
+                  {
+                      "case_id":  "case-03-2200an-validate-003-future-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is after current year."
+                                    },
+                      "expected_message":  "Date should not be later than the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-003-future-year"
+                  },
+                  {
+                      "case_id":  "case-04-2200an-validate-004-production",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The corresponding production location selector has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select the place of production in item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-004-production"
+                  },
+                  {
+                      "case_id":  "case-05-2200an-validate-005-production",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The corresponding production location selector has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select the place of production in item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-005-production"
+                  },
+                  {
+                      "case_id":  "case-06-2200an-validate-006-production",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The corresponding production location selector has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select the place of production in item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-006-production"
+                  },
+                  {
+                      "case_id":  "case-07-2200an-validate-007-removal",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The corresponding removal location selector has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select the place of removal in item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-007-removal"
+                  },
+                  {
+                      "case_id":  "case-08-2200an-validate-008-removal",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The corresponding removal location selector has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select the place of removal in item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-008-removal"
+                  },
+                  {
+                      "case_id":  "case-09-2200an-validate-009-removal",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The corresponding removal location selector has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please select the place of removal in item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-009-removal"
+                  },
+                  {
+                      "case_id":  "case-10-2200an-validate-010-amended",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither amended-return radio is selected."
+                                    },
+                      "expected_message":  "Please select an option in item number 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-010-amended"
+                  },
+                  {
+                      "case_id":  "case-11-2200an-validate-011-special-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither special-tax/tax-relief radio is selected."
+                                    },
+                      "expected_message":  "Please select an option in item number 12.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-011-special-tax"
+                  },
+                  {
+                      "case_id":  "case-12-2200an-validate-012-relief-spec",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax relief Yes is selected and list value is blank."
+                                    },
+                      "expected_message":  "Please specify tax relief in item 12A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-012-relief-spec"
+                  },
+                  {
+                      "case_id":  "case-13-2200an-validate-013-payment",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No Item 13-15 manner of payment is selected."
+                                    },
+                      "expected_message":  "Please select from items 13, 14 and 15 the manner of payment.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-013-payment"
+                  },
+                  {
+                      "case_id":  "case-14-2200an-validate-014-other-payment",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other Similar Scheme is selected and specification is blank."
+                                    },
+                      "expected_message":  "Please specify the other similar schemes in item 15.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-014-other-payment"
+                  },
+                  {
+                      "case_id":  "case-15-2200an-validate-015-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-015-tin"
+                  },
+                  {
+                      "case_id":  "case-16-2200an-validate-016-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Runtime RDO selectedIndex is 0."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-016-rdo"
+                  },
+                  {
+                      "case_id":  "case-17-2200an-validate-017-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-017-name"
+                  },
+                  {
+                      "case_id":  "case-18-2200an-validate-018-phone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-018-phone"
+                  },
+                  {
+                      "case_id":  "case-19-2200an-validate-019-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-019-address"
+                  },
+                  {
+                      "case_id":  "case-20-2200an-validate-020-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-validate-020-zip"
+                  },
+                  {
+                      "case_id":  "case-21-2200an-defect-021-duplicate-special-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither special-tax radio is selected, after the identical Item 12 check already passed."
+                                    },
+                      "expected_message":  "Please select an option in item 13.",
+                      "expected_behavior":  "This branch is unreachable because rule 011 checks the same condition first and reports Item 12.",
+                      "rule_id":  "2200an-defect-021-duplicate-special-tax"
+                  },
+                  {
+                      "case_id":  "case-22-2200an-validate-022-special-tax-list",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax relief Yes is selected and list selectedIndex is 0."
+                                    },
+                      "expected_message":  "Please select an option in item 13A.",
+                      "expected_behavior":  "The message conflicts with the earlier Item 12A wording.",
+                      "rule_id":  "2200an-validate-022-special-tax-list"
+                  },
+                  {
+                      "case_id":  "case-23-2200an-input-023-ipa",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "IPA code is not blank and not one of the 13 hard-coded codes."
+                                    },
+                      "expected_message":  "Invalid IPA Code! Please refer to IPA Codes in Schedule 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-input-023-ipa"
+                  },
+                  {
+                      "case_id":  "case-24-2200an-input-024-atc",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "ATC code is not blank and not one of the 13 hard-coded codes."
+                                    },
+                      "expected_message":  "Invalid ATC Code! Please refer to the ATC Codes in Schedule 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-input-024-atc"
+                  },
+                  {
+                      "case_id":  "case-25-2200an-input-025-treaty-code",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty code is not blank and not one of the 40 hard-coded codes."
+                                    },
+                      "expected_message":  "Invalid Treaty Code! Please refer to the treaty code in schedule 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-input-025-treaty-code"
+                  },
+                  {
+                      "case_id":  "case-26-2200an-input-026-check-date",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A return-period component makes the date later than today."
+                                    },
+                      "expected_message":  "Date should not be later than the current date.",
+                      "expected_behavior":  "The alert neither clears nor blocks the value; Validate repeats the check.",
+                      "rule_id":  "2200an-input-026-check-date"
+                  },
+                  {
+                      "case_id":  "case-27-2200an-defect-029-line-business",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Line of business is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Line of Business/Occupation on Item 7.",
+                      "expected_behavior":  "The entire required branch is commented out.",
+                      "rule_id":  "2200an-defect-029-line-business"
+                  },
+                  {
+                      "case_id":  "case-28-2200an-defect-030-schedule2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 rows are incomplete."
+                                    },
+                      "expected_message":  "Please fill up Schedule 2 row {row} completely.",
+                      "expected_behavior":  "Every Schedule 2 check and the call from Validate are commented out.",
+                      "rule_id":  "2200an-defect-030-schedule2"
+                  },
+                  {
+                      "case_id":  "case-29-2200an-defect-031-schedule3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3 rows are incomplete."
+                                    },
+                      "expected_message":  "Please fill up Schedule 3 row {row} completely.",
+                      "expected_behavior":  "Every substantive Schedule 3 check and the call from Validate are commented out.",
+                      "rule_id":  "2200an-defect-031-schedule3"
+                  },
+                  {
+                      "case_id":  "case-30-2200an-defect-032-overremittance",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 24 is negative and no over-remittance disposition is selected."
+                                    },
+                      "expected_message":  "Please select an option for over-remittance below item 28.",
+                      "expected_behavior":  "The entire branch is commented out and its message references stale Item 28.",
+                      "rule_id":  "2200an-defect-032-overremittance"
+                  },
+                  {
+                      "case_id":  "case-31-2200an-save-034-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-save-034-tin"
+                  },
+                  {
+                      "case_id":  "case-32-2200an-save-035-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-save-035-rdo"
+                  },
+                  {
+                      "case_id":  "case-33-2200an-save-036-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer/withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200an-save-036-name"
+                  },
+                  {
+                      "case_id":  "case-34-2200an-defect-038-validate-year",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "validateYear is invoked."
+                                    },
+                      "expected_message":  "Invalid year. Year should not be later than the current year.",
+                      "expected_behavior":  "The only call site is in commented markup; it also uses deprecated getYear, yielding years since 1900.",
+                      "rule_id":  "2200an-defect-038-validate-year"
+                  }
+              ]
+}

@@ -1,0 +1,86 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1706-v2018",
+    "form_code":  "1706",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1706.hta",
+                                "sha256":  "f29a02e0a80fb4a72cc90046e2773d05ac631df2ec06845f4c885eabcabafca1",
+                                "size":  263298,
+                                "revision_binding":  "APPLICATIONNAME 1706; installed runtime used with January 2018 official PDF."
+                            },
+                            {
+                                "asset_id":  "official-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1706.hta",
+                                "sha256":  "ddeba297664de08d8862616d1161ad38eea563a62f8f088bb125e9054d472bbe",
+                                "size":  16978,
+                                "revision_binding":  "Content is Form 1706 guidance; HTA metadata is incorrectly labelled APPLICATIONNAME 0605."
+                            },
+                            {
+                                "asset_id":  "xml-final-v1",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1706\\1706-final-copy-#email-redacted#.xml",
+                                "sha256":  "4764678faecfca0c8830d7f5262604683372629707226b9221a54123712626ce",
+                                "size":  1129,
+                                "revision_binding":  "Reviewed 122-key final copy; decrypted in memory; values excluded."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1706v2018\\1706 Jan 2018 ENCS Final version.pdf",
+                                "sha256":  "5237ba69d5fae6a26dceffc8f39dfcab32fe7d57081bfba74dcf5c5550c1afa3",
+                                "size":  566978,
+                                "revision_binding":  "January 2018 Form 1706."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  122,
+                   "runtime_field_families":  0,
+                   "fields_total":  122,
+                   "typed_fields":  122,
+                   "validation_rules":  43,
+                   "confirmed_official_bugs":  17,
+                   "calculations":  12,
+                   "negative_fixtures":  36,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer, typed model, migration, capability, or release metadata changed.",
+                        "No source values or email-bearing filenames are copied.",
+                        "The 122-key encrypted final copy is the only reviewed save artifact; no matching plaintext editable save was available.",
+                        "The exact January 2018 revision is pinned by the official PDF and source directory; the installed HTA identifies form code 1706 but carries no visible revision string.",
+                        "The help content is 1706-specific, but its HTA APPLICATIONNAME is incorrectly copied as 0605."
+                    ]
+}

@@ -1,0 +1,29 @@
+{"$schema":"../../schema/workflow.schema.json","schema_version":"1.0.0","form_id":"1600vt-v2018","revision":"2018-01-01","phases":[
+{"phase":"edit","official_behavior":"Two-page return with dynamic Part II ATC rows and fixed five-row Schedule 1.","source_refs":["official-hta-runtime#enableAllControl:L6373-L6387"],"confidence":"high"},
+{"phase":"saved-draft","official_behavior":"Save uses only date, mirrored RDO, name, address, contact and category checks.","source_refs":["official-hta-runtime#saveXML:L5327-L5641"],"confidence":"high"},
+{"phase":"validated","official_behavior":"validateAll passes; controls disable and print/upload/final/eBIR/eFPS actions enable.","source_refs":["official-hta-runtime#validate:L5869-L5899"],"confidence":"high"},
+{"phase":"final-copy-confirmation","official_behavior":"Final Copy is coupled to submission confirmation.","source_refs":["official-hta-runtime#openAlertEmail:L6583-L6647"],"confidence":"high"},
+{"phase":"offline-final-copy","official_behavior":"No-network fallback sets flag 3 and creates encrypted copy.","source_refs":["official-hta-runtime#openAlertEmail:L6583-L6647","official-hta-runtime#saveEncryptedProfile:L5126-L5245"],"confidence":"high"},
+{"phase":"submission-pending","official_behavior":"Submission artifact is prepared before transport.","source_refs":["official-hta-runtime#sendEmail:L6444-L6554"],"confidence":"high"},
+{"phase":"submitted","official_behavior":"Transport success sets flag 1; BIR validation remains subsequent.","source_refs":["official-hta-runtime#sendEmail:L6444-L6554"],"confidence":"medium"},
+{"phase":"retry","official_behavior":"Transport failure sets flag 2.","source_refs":["official-hta-runtime#sendEmail:L6444-L6554"],"confidence":"high"}],
+"transitions":[
+{"from":"edit","action":"Save","to":"saved-draft","guard":"Narrow Save preflight passes.","side_effects":["Writes local XML."],"source_refs":["official-hta-runtime#saveXML:L5327-L5641"]},
+{"from":"edit","action":"Validate","to":"validated","guard":"All active validateAll rules pass.","side_effects":["Disables controls and enables final actions."],"source_refs":["official-hta-runtime#validate:L5869-L5899"]},
+{"from":"validated","action":"Final Copy","to":"final-copy-confirmation","guard":"User invokes Final Copy.","side_effects":["Shows submission confirmation."],"source_refs":["official-hta-runtime#openAlertEmail:L6583-L6647"]},
+{"from":"final-copy-confirmation","action":"Confirm without network","to":"offline-final-copy","guard":"Network check fails.","side_effects":["Sets txtFinalFlag=3.","Creates encrypted copy."],"source_refs":["official-hta-runtime#openAlertEmail:L6583-L6647"]},
+{"from":"final-copy-confirmation","action":"Confirm with network","to":"submission-pending","guard":"Network path proceeds.","side_effects":["Prepares encrypted submission."],"source_refs":["official-hta-runtime#sendEmail:L6444-L6554"]},
+{"from":"submission-pending","action":"Transport success","to":"submitted","guard":"Transport succeeds.","side_effects":["Sets txtFinalFlag=1."],"source_refs":["official-hta-runtime#sendEmail:L6444-L6554"]},
+{"from":"submission-pending","action":"Transport failure","to":"retry","guard":"Transport fails or throws.","side_effects":["Sets txtFinalFlag=2."],"source_refs":["official-hta-runtime#sendEmail:L6444-L6554"]}],
+"prerequisites":["January 2018 revision","Valid month/year","Complete background information","ATC rows when tax was withheld","Complete Schedule 1 rows when used"],
+"required_attachments":[
+{"attachment_id":"map","label":"Monthly Alphabetical List of Payees (MAP)","required_when":"Return has payees subject to withholding.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#p1:required-attachments"],"confidence":"high"},
+{"attachment_id":"map-receipt","label":"Acknowledgment Receipt/Validation Successful proof of MAP submission","required_when":"MAP is electronically submitted.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#p1:required-attachments"],"confidence":"high"},
+{"attachment_id":"authorization","label":"Authorization letter","required_when":"Filed by an authorized representative.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#p1:required-attachments"],"confidence":"high"},
+{"attachment_id":"treaty-relief","label":"Certificate of Tax Treaty Relief","required_when":"Applicable.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#p1:required-attachments"],"confidence":"high"},
+{"attachment_id":"amended-proof","label":"Proof of payment and previously filed return","required_when":"Amended return, if applicable.","official_ui_enforcement":"Not enforced by local Validate.","source_refs":["official-guide-2018#p1:required-attachments"],"confidence":"high"}],
+"filing_deadlines":[
+{"quarter":"Q1","due_date_rule":"Monthly return: on or before the 10th day of the following month; eFPS follows applicable issuances.","source_refs":["official-guide-2018#p1:when-and-where"],"confidence":"high"},
+{"quarter":"Q2","due_date_rule":"Monthly return: on or before the 10th day of the following month; eFPS follows applicable issuances.","source_refs":["official-guide-2018#p1:when-and-where"],"confidence":"high"},
+{"quarter":"Q3","due_date_rule":"Monthly return: on or before the 10th day of the following month; eFPS follows applicable issuances.","source_refs":["official-guide-2018#p1:when-and-where"],"confidence":"high"},
+{"quarter":"Q4","due_date_rule":"Monthly return: on or before the 10th day of the following month; eFPS follows applicable issuances.","source_refs":["official-guide-2018#p1:when-and-where"],"confidence":"high"}]}

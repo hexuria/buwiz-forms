@@ -1,0 +1,2285 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702q-v2018c",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "hta_path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1702Qv2018C.hta",
+    "hta_sha256":  "7184de87a76401da98da3df38dab9e29f848acf6150b425e36574f0a2443ab01",
+    "save_path":  "C:\\eBIRForms\\savefile\\00000000000000-1702Qv2018C-2025Q1.xml",
+    "save_sha256":  "d97b1e9ba64dab51ab43c56a1e7058a80468730aa0aa8c61ab0e3b7c8c2d71ce",
+    "runtime_serializable_element_count":  113,
+    "unique_serialized_key_count":  112,
+    "ordered_serialized_keys_sha256":  "a5e56fa2a7e6fb528e8f5dbe03735c0508fac57f4c724d92a63ea52f578334e4",
+    "representative_save_element_count":  113,
+    "representative_save_sequence_matches_source":  true,
+    "duplicate_serialized_keys":  [
+                                      {
+                                          "serialized_key":  "frm1702q:txtTelNum",
+                                          "occurrences":  2
+                                      }
+                                  ],
+    "controls":  [
+                     {
+                         "ordinal":  1,
+                         "serialized_key":  "frm1702q:rbForClndrFscl_1",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbForClndrFscl",
+                         "value_attribute":  "C",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  419,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbForClndrFscl_1"
+                     },
+                     {
+                         "ordinal":  2,
+                         "serialized_key":  "frm1702q:rbForClndrFscl_2",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbForClndrFscl",
+                         "value_attribute":  "F",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  426,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbForClndrFscl_2"
+                     },
+                     {
+                         "ordinal":  3,
+                         "serialized_key":  "frm1702q:rbYrEndMonth",
+                         "element":  "select",
+                         "control_type":  "select-one",
+                         "name":  "frm1702q:rbYrEndMonth",
+                         "value_attribute":  "true",
+                         "maxlength":  null,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  456,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbYrEndMonth"
+                     },
+                     {
+                         "ordinal":  4,
+                         "serialized_key":  "frm1702q:txtYrEndYear",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtYrEndYear",
+                         "value_attribute":  "true",
+                         "maxlength":  2,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  476,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtYrEndYear"
+                     },
+                     {
+                         "ordinal":  5,
+                         "serialized_key":  "frm1702q:rbQuarter_1",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbQuarter",
+                         "value_attribute":  "1",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  504,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbQuarter_1"
+                     },
+                     {
+                         "ordinal":  6,
+                         "serialized_key":  "frm1702q:rbQuarter_2",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbQuarter",
+                         "value_attribute":  "2",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  512,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbQuarter_2"
+                     },
+                     {
+                         "ordinal":  7,
+                         "serialized_key":  "frm1702q:rbQuarter_3",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbQuarter",
+                         "value_attribute":  "3",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  520,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbQuarter_3"
+                     },
+                     {
+                         "ordinal":  8,
+                         "serialized_key":  "frm1702q:rbAmendedRtn_1",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbAmendedRtn",
+                         "value_attribute":  "Y",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  548,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbAmendedRtn_1"
+                     },
+                     {
+                         "ordinal":  9,
+                         "serialized_key":  "frm1702q:rbAmendedRtn_2",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbAmendedRtn",
+                         "value_attribute":  "N",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  true,
+                         "source_line":  557,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbAmendedRtn_2"
+                     },
+                     {
+                         "ordinal":  10,
+                         "serialized_key":  "frm1702q:txtATC_1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "IC055-Minimum Corporate Income Tax (MCIT)",
+                         "maxlength":  3,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  587,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtATC_1"
+                     },
+                     {
+                         "ordinal":  11,
+                         "serialized_key":  "frm1702q:rbATC_1",
+                         "element":  "input",
+                         "control_type":  "checkbox",
+                         "name":  "frm1702q:rbATC_1",
+                         "value_attribute":  "IC055",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  593,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbATC_1"
+                     },
+                     {
+                         "ordinal":  12,
+                         "serialized_key":  "frm1702q:cbATC_2",
+                         "element":  "select",
+                         "control_type":  "select-one",
+                         "name":  null,
+                         "value_attribute":  "true",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  603,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:cbATC_2"
+                     },
+                     {
+                         "ordinal":  13,
+                         "serialized_key":  "frm1702q:rbATC_2",
+                         "element":  "input",
+                         "control_type":  "checkbox",
+                         "name":  "frm1702q:rbATC_2",
+                         "value_attribute":  "ATC_2",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  773,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbATC_2"
+                     },
+                     {
+                         "ordinal":  14,
+                         "serialized_key":  "frm1702q:txtTIN1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTIN1",
+                         "value_attribute":  "",
+                         "maxlength":  3,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  828,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTIN1"
+                     },
+                     {
+                         "ordinal":  15,
+                         "serialized_key":  "frm1702q:txtTIN2",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTIN2",
+                         "value_attribute":  "",
+                         "maxlength":  3,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  833,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTIN2"
+                     },
+                     {
+                         "ordinal":  16,
+                         "serialized_key":  "frm1702q:txtTIN3",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTIN3",
+                         "value_attribute":  "",
+                         "maxlength":  3,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  838,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTIN3"
+                     },
+                     {
+                         "ordinal":  17,
+                         "serialized_key":  "frm1702q:txtBranchCode",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtBranchCode",
+                         "value_attribute":  "",
+                         "maxlength":  5,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  843,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtBranchCode"
+                     },
+                     {
+                         "ordinal":  18,
+                         "serialized_key":  "frm1702q:txtRDOCode",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtRDOCode",
+                         "value_attribute":  "",
+                         "maxlength":  5,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  864,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtRDOCode"
+                     },
+                     {
+                         "ordinal":  19,
+                         "serialized_key":  "frm1702q:txtTaxpayerName1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTaxpayerName1",
+                         "value_attribute":  "",
+                         "maxlength":  100,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  912,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTaxpayerName1"
+                     },
+                     {
+                         "ordinal":  20,
+                         "serialized_key":  "frm1702q:txtAddress",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtAddress",
+                         "value_attribute":  "",
+                         "maxlength":  130,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  971,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtAddress"
+                     },
+                     {
+                         "ordinal":  21,
+                         "serialized_key":  "frm1702q:txtZipCode",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtZipCode",
+                         "value_attribute":  "",
+                         "maxlength":  12,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  997,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtZipCode"
+                     },
+                     {
+                         "ordinal":  22,
+                         "serialized_key":  "frm1702q:txtTelNum",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTelNum",
+                         "value_attribute":  "",
+                         "maxlength":  20,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1035,
+                         "occurrence":  1,
+                         "occurrence_count":  2,
+                         "field_key":  "frm1702q:txtTelNum#occurrence-1"
+                     },
+                     {
+                         "ordinal":  23,
+                         "serialized_key":  "txtEmail",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "txtEmail",
+                         "value_attribute":  "",
+                         "maxlength":  60,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1059,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "txtEmail"
+                     },
+                     {
+                         "ordinal":  24,
+                         "serialized_key":  "frm1702q:rbMthdOfDdctns_1",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbMthdOfDdctns",
+                         "value_attribute":  "Creditor",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1084,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbMthdOfDdctns_1"
+                     },
+                     {
+                         "ordinal":  25,
+                         "serialized_key":  "frm1702q:rbMthdOfDdctns_2",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbMthdOfDdctns",
+                         "value_attribute":  "Debtor",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1094,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbMthdOfDdctns_2"
+                     },
+                     {
+                         "ordinal":  26,
+                         "serialized_key":  "frm1702q:rbTxRlf_1",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbTxRlf",
+                         "value_attribute":  "Y",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1132,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbTxRlf_1"
+                     },
+                     {
+                         "ordinal":  27,
+                         "serialized_key":  "frm1702q:rbTxRlf_2",
+                         "element":  "input",
+                         "control_type":  "radio",
+                         "name":  "frm1702q:rbTxRlf",
+                         "value_attribute":  "N",
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  true,
+                         "source_line":  1140,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:rbTxRlf_2"
+                     },
+                     {
+                         "ordinal":  28,
+                         "serialized_key":  "frm1702q:txtTxRlfSpcfy",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTxRlfSpcfy",
+                         "value_attribute":  "",
+                         "maxlength":  100,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1164,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTxRlfSpcfy"
+                     },
+                     {
+                         "ordinal":  29,
+                         "serialized_key":  "frm1702q:txtTax14",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax14",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1241,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax14"
+                     },
+                     {
+                         "ordinal":  30,
+                         "serialized_key":  "frm1702q:txtTax15",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax15",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1272,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax15"
+                     },
+                     {
+                         "ordinal":  31,
+                         "serialized_key":  "frm1702q:txtTax16",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax16",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1300,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax16"
+                     },
+                     {
+                         "ordinal":  32,
+                         "serialized_key":  "frm1702q:txtTax17",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax17",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1327,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax17"
+                     },
+                     {
+                         "ordinal":  33,
+                         "serialized_key":  "frm1702q:txtTax18",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax18",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1349,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax18"
+                     },
+                     {
+                         "ordinal":  34,
+                         "serialized_key":  "frm1702q:txtTax19",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax19",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1376,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax19"
+                     },
+                     {
+                         "ordinal":  35,
+                         "serialized_key":  "frm1702q:txtTax20",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax20",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1399,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax20"
+                     },
+                     {
+                         "ordinal":  36,
+                         "serialized_key":  "frm1702q:txtTax21",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax21",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1423,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax21"
+                     },
+                     {
+                         "ordinal":  37,
+                         "serialized_key":  "frm1702q:txtTax22",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax22",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1449,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax22"
+                     },
+                     {
+                         "ordinal":  38,
+                         "serialized_key":  "frm1702q:txtTax23",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax23",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1475,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax23"
+                     },
+                     {
+                         "ordinal":  39,
+                         "serialized_key":  "frm1702q:txtTax24",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax24",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1499,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax24"
+                     },
+                     {
+                         "ordinal":  40,
+                         "serialized_key":  "frm1702q:txtTax25",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtTax25",
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1522,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtTax25"
+                     },
+                     {
+                         "ordinal":  41,
+                         "serialized_key":  "frm1702q:txtSheets",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtSheets",
+                         "value_attribute":  "0",
+                         "maxlength":  2,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  1575,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtSheets"
+                     },
+                     {
+                         "ordinal":  42,
+                         "serialized_key":  "frm1702q:txtPg2TIN1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtPg2TIN1",
+                         "value_attribute":  "",
+                         "maxlength":  3,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1798,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtPg2TIN1"
+                     },
+                     {
+                         "ordinal":  43,
+                         "serialized_key":  "frm1702q:txtPg2TIN2",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtPg2TIN2",
+                         "value_attribute":  "",
+                         "maxlength":  3,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1803,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtPg2TIN2"
+                     },
+                     {
+                         "ordinal":  44,
+                         "serialized_key":  "frm1702q:txtPg2TIN3",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtPg2TIN3",
+                         "value_attribute":  "",
+                         "maxlength":  3,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1808,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtPg2TIN3"
+                     },
+                     {
+                         "ordinal":  45,
+                         "serialized_key":  "frm1702q:txtPg2BranchCode",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtPg2BranchCode",
+                         "value_attribute":  "",
+                         "maxlength":  5,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1813,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtPg2BranchCode"
+                     },
+                     {
+                         "ordinal":  46,
+                         "serialized_key":  "frm1702q:txtPg2TaxpayerName",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtPg2TaxpayerName",
+                         "value_attribute":  "",
+                         "maxlength":  50,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1819,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtPg2TaxpayerName"
+                     },
+                     {
+                         "ordinal":  47,
+                         "serialized_key":  "frm1702q:Sched1:txtTax1A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1902,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax1A"
+                     },
+                     {
+                         "ordinal":  48,
+                         "serialized_key":  "frm1702q:Sched1:txtTax1B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1915,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax1B"
+                     },
+                     {
+                         "ordinal":  49,
+                         "serialized_key":  "frm1702q:Sched1:txtTax2A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1938,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax2A"
+                     },
+                     {
+                         "ordinal":  50,
+                         "serialized_key":  "frm1702q:Sched1:txtTax2B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1951,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax2B"
+                     },
+                     {
+                         "ordinal":  51,
+                         "serialized_key":  "frm1702q:Sched1:txtTax3A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1976,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax3A"
+                     },
+                     {
+                         "ordinal":  52,
+                         "serialized_key":  "frm1702q:Sched1:txtTax3B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  1989,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax3B"
+                     },
+                     {
+                         "ordinal":  53,
+                         "serialized_key":  "frm1702q:Sched1:txtTax4A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2013,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax4A"
+                     },
+                     {
+                         "ordinal":  54,
+                         "serialized_key":  "frm1702q:Sched1:txtTax4B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2026,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax4B"
+                     },
+                     {
+                         "ordinal":  55,
+                         "serialized_key":  "frm1702q:Sched1:txtTax5A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2051,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax5A"
+                     },
+                     {
+                         "ordinal":  56,
+                         "serialized_key":  "frm1702q:Sched1:txtTax5B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2064,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax5B"
+                     },
+                     {
+                         "ordinal":  57,
+                         "serialized_key":  "frm1702q:Sched1:txtTax6A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2088,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax6A"
+                     },
+                     {
+                         "ordinal":  58,
+                         "serialized_key":  "frm1702q:Sched1:txtTax6B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2101,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax6B"
+                     },
+                     {
+                         "ordinal":  59,
+                         "serialized_key":  "frm1702q:Sched1:txtTax7A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2126,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax7A"
+                     },
+                     {
+                         "ordinal":  60,
+                         "serialized_key":  "frm1702q:Sched1:txtTax7B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2139,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax7B"
+                     },
+                     {
+                         "ordinal":  61,
+                         "serialized_key":  "frm1702q:Sched1:txtTax8A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2163,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax8A"
+                     },
+                     {
+                         "ordinal":  62,
+                         "serialized_key":  "frm1702q:Sched1:txtTax8B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2176,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax8B"
+                     },
+                     {
+                         "ordinal":  63,
+                         "serialized_key":  "frm1702q:Sched1:txtTax9A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2201,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax9A"
+                     },
+                     {
+                         "ordinal":  64,
+                         "serialized_key":  "frm1702q:Sched1:txtTax9B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2214,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax9B"
+                     },
+                     {
+                         "ordinal":  65,
+                         "serialized_key":  "frm1702q:Sched1:txtTax10A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2239,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax10A"
+                     },
+                     {
+                         "ordinal":  66,
+                         "serialized_key":  "frm1702q:Sched1:txtTax10B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2252,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax10B"
+                     },
+                     {
+                         "ordinal":  67,
+                         "serialized_key":  "frm1702q:Sched1:txtTax11A",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2277,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax11A"
+                     },
+                     {
+                         "ordinal":  68,
+                         "serialized_key":  "frm1702q:Sched1:txtTax11B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2290,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax11B"
+                     },
+                     {
+                         "ordinal":  69,
+                         "serialized_key":  "frm1702q:Sched1:txtTax12B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2320,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax12B"
+                     },
+                     {
+                         "ordinal":  70,
+                         "serialized_key":  "frm1702q:Sched1:txtTax13B",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2350,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched1:txtTax13B"
+                     },
+                     {
+                         "ordinal":  71,
+                         "serialized_key":  "frm1702q:Sched2:txtTax1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2400,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax1"
+                     },
+                     {
+                         "ordinal":  72,
+                         "serialized_key":  "frm1702q:Sched2:txtTax2",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2428,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax2"
+                     },
+                     {
+                         "ordinal":  73,
+                         "serialized_key":  "frm1702q:Sched2:txtTax3",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2458,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax3"
+                     },
+                     {
+                         "ordinal":  74,
+                         "serialized_key":  "frm1702q:Sched2:txtTax4",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2487,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax4"
+                     },
+                     {
+                         "ordinal":  75,
+                         "serialized_key":  "frm1702q:Sched2:txtTax5",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2517,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax5"
+                     },
+                     {
+                         "ordinal":  76,
+                         "serialized_key":  "frm1702q:Sched2:txtTax6",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2546,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax6"
+                     },
+                     {
+                         "ordinal":  77,
+                         "serialized_key":  "frm1702q:Sched2:txtTax7",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2576,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax7"
+                     },
+                     {
+                         "ordinal":  78,
+                         "serialized_key":  "frm1702q:Sched2:txtTax8",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2605,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax8"
+                     },
+                     {
+                         "ordinal":  79,
+                         "serialized_key":  "frm1702q:Sched2:txtTax9",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2635,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax9"
+                     },
+                     {
+                         "ordinal":  80,
+                         "serialized_key":  "frm1702q:Sched2:txtTax10",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.0",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2665,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax10"
+                     },
+                     {
+                         "ordinal":  81,
+                         "serialized_key":  "frm1702q:Sched2:txtTax11",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2695,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax11"
+                     },
+                     {
+                         "ordinal":  82,
+                         "serialized_key":  "frm1702q:Sched2:txtTax12",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2725,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax12"
+                     },
+                     {
+                         "ordinal":  83,
+                         "serialized_key":  "frm1702q:Sched2:txtTax13",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2756,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched2:txtTax13"
+                     },
+                     {
+                         "ordinal":  84,
+                         "serialized_key":  "frm1702q:Sched3:txtTax1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2803,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched3:txtTax1"
+                     },
+                     {
+                         "ordinal":  85,
+                         "serialized_key":  "frm1702q:Sched3:txtTax2",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2832,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched3:txtTax2"
+                     },
+                     {
+                         "ordinal":  86,
+                         "serialized_key":  "frm1702q:Sched3:txtTax3",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2861,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched3:txtTax3"
+                     },
+                     {
+                         "ordinal":  87,
+                         "serialized_key":  "frm1702q:Sched3:txtTax4",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2891,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched3:txtTax4"
+                     },
+                     {
+                         "ordinal":  88,
+                         "serialized_key":  "frm1702q:Sched3:txtTax5",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.0000",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2919,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched3:txtTax5"
+                     },
+                     {
+                         "ordinal":  89,
+                         "serialized_key":  "frm1702q:Sched3:txtTax6",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2949,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched3:txtTax6"
+                     },
+                     {
+                         "ordinal":  90,
+                         "serialized_key":  "frm1702q:Sched4:txtTax1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  2997,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax1"
+                     },
+                     {
+                         "ordinal":  91,
+                         "serialized_key":  "frm1702q:Sched4:txtTax2",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3021,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax2"
+                     },
+                     {
+                         "ordinal":  92,
+                         "serialized_key":  "frm1702q:Sched4:txtTax3",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3046,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax3"
+                     },
+                     {
+                         "ordinal":  93,
+                         "serialized_key":  "frm1702q:Sched4:txtTax4",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3071,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax4"
+                     },
+                     {
+                         "ordinal":  94,
+                         "serialized_key":  "frm1702q:Sched4:txtTax5",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3096,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax5"
+                     },
+                     {
+                         "ordinal":  95,
+                         "serialized_key":  "frm1702q:Sched4:txtTax6",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3120,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax6"
+                     },
+                     {
+                         "ordinal":  96,
+                         "serialized_key":  "frm1702q:Sched4:chkOthrTxCrdts0",
+                         "element":  "input",
+                         "control_type":  "checkbox",
+                         "name":  null,
+                         "value_attribute":  null,
+                         "maxlength":  null,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3153,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:chkOthrTxCrdts0"
+                     },
+                     {
+                         "ordinal":  97,
+                         "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdts0",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3160,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtOthrTxCrdts0"
+                     },
+                     {
+                         "ordinal":  98,
+                         "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdtAmnt0",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3171,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtOthrTxCrdtAmnt0"
+                     },
+                     {
+                         "ordinal":  99,
+                         "serialized_key":  "frm1702q:Sched4:chkOthrTxCrdts1",
+                         "element":  "input",
+                         "control_type":  "checkbox",
+                         "name":  null,
+                         "value_attribute":  null,
+                         "maxlength":  null,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3182,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:chkOthrTxCrdts1"
+                     },
+                     {
+                         "ordinal":  100,
+                         "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdts1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3189,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtOthrTxCrdts1"
+                     },
+                     {
+                         "ordinal":  101,
+                         "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdtAmnt1",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3200,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtOthrTxCrdtAmnt1"
+                     },
+                     {
+                         "ordinal":  102,
+                         "serialized_key":  "frm1702q:Sched4:txtTax7",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  25,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  3236,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:Sched4:txtTax7"
+                     },
+                     {
+                         "ordinal":  103,
+                         "serialized_key":  "frm1702q:txtCurrentPage",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "frm1702q:txtCurrentPage",
+                         "value_attribute":  null,
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4470,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtCurrentPage"
+                     },
+                     {
+                         "ordinal":  104,
+                         "serialized_key":  "frm1702q:txtMaxPage",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "3",
+                         "maxlength":  null,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  4473,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtMaxPage"
+                     },
+                     {
+                         "ordinal":  105,
+                         "serialized_key":  "resultOtherSpecify",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "0.00",
+                         "maxlength":  null,
+                         "disabled_attribute":  true,
+                         "checked_attribute":  false,
+                         "source_line":  4548,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "resultOtherSpecify"
+                     },
+                     {
+                         "ordinal":  106,
+                         "serialized_key":  "txtFinalFlag",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "txtFinalFlag",
+                         "value_attribute":  "0",
+                         "maxlength":  60,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4604,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "txtFinalFlag"
+                     },
+                     {
+                         "ordinal":  107,
+                         "serialized_key":  "txtEnroll",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  "txtEnroll",
+                         "value_attribute":  "N",
+                         "maxlength":  60,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4606,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "txtEnroll"
+                     },
+                     {
+                         "ordinal":  108,
+                         "serialized_key":  "ebirOnlineConfirmUsername",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  null,
+                         "maxlength":  50,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4624,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "ebirOnlineConfirmUsername"
+                     },
+                     {
+                         "ordinal":  109,
+                         "serialized_key":  "ebirOnlineUsername",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  null,
+                         "maxlength":  50,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4721,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "ebirOnlineUsername"
+                     },
+                     {
+                         "ordinal":  110,
+                         "serialized_key":  "ebirOnlineSecret",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  null,
+                         "maxlength":  50,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4730,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "ebirOnlineSecret"
+                     },
+                     {
+                         "ordinal":  111,
+                         "serialized_key":  "frm1702q:txtLOB",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  "",
+                         "maxlength":  50,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4747,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "frm1702q:txtLOB"
+                     },
+                     {
+                         "ordinal":  112,
+                         "serialized_key":  "frm1702q:txtTelNum",
+                         "element":  "input",
+                         "control_type":  "text",
+                         "name":  null,
+                         "value_attribute":  null,
+                         "maxlength":  7,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4749,
+                         "occurrence":  2,
+                         "occurrence_count":  2,
+                         "field_key":  "frm1702q:txtTelNum#occurrence-2"
+                     },
+                     {
+                         "ordinal":  113,
+                         "serialized_key":  "driveSelectTPExport",
+                         "element":  "select",
+                         "control_type":  "select-one",
+                         "name":  "driveSelectTPExport",
+                         "value_attribute":  null,
+                         "maxlength":  null,
+                         "disabled_attribute":  false,
+                         "checked_attribute":  false,
+                         "source_line":  4783,
+                         "occurrence":  1,
+                         "occurrence_count":  1,
+                         "field_key":  "driveSelectTPExport"
+                     }
+                 ],
+    "representative_save":  [
+                                {
+                                    "ordinal":  1,
+                                    "serialized_key":  "frm1702q:rbForClndrFscl_1",
+                                    "serialized_value":  "true"
+                                },
+                                {
+                                    "ordinal":  2,
+                                    "serialized_key":  "frm1702q:rbForClndrFscl_2",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  3,
+                                    "serialized_key":  "frm1702q:rbYrEndMonth",
+                                    "serialized_value":  "12"
+                                },
+                                {
+                                    "ordinal":  4,
+                                    "serialized_key":  "frm1702q:txtYrEndYear",
+                                    "serialized_value":  "25"
+                                },
+                                {
+                                    "ordinal":  5,
+                                    "serialized_key":  "frm1702q:rbQuarter_1",
+                                    "serialized_value":  "true"
+                                },
+                                {
+                                    "ordinal":  6,
+                                    "serialized_key":  "frm1702q:rbQuarter_2",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  7,
+                                    "serialized_key":  "frm1702q:rbQuarter_3",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  8,
+                                    "serialized_key":  "frm1702q:rbAmendedRtn_1",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  9,
+                                    "serialized_key":  "frm1702q:rbAmendedRtn_2",
+                                    "serialized_value":  "true"
+                                },
+                                {
+                                    "ordinal":  10,
+                                    "serialized_key":  "frm1702q:txtATC_1",
+                                    "serialized_value":  "IC055-Minimum Corporate Income Tax (MCIT)"
+                                },
+                                {
+                                    "ordinal":  11,
+                                    "serialized_key":  "frm1702q:rbATC_1",
+                                    "serialized_value":  "true"
+                                },
+                                {
+                                    "ordinal":  12,
+                                    "serialized_key":  "frm1702q:cbATC_2",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  13,
+                                    "serialized_key":  "frm1702q:rbATC_2",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  14,
+                                    "serialized_key":  "frm1702q:txtTIN1",
+                                    "serialized_value":  "000"
+                                },
+                                {
+                                    "ordinal":  15,
+                                    "serialized_key":  "frm1702q:txtTIN2",
+                                    "serialized_value":  "000"
+                                },
+                                {
+                                    "ordinal":  16,
+                                    "serialized_key":  "frm1702q:txtTIN3",
+                                    "serialized_value":  "000"
+                                },
+                                {
+                                    "ordinal":  17,
+                                    "serialized_key":  "frm1702q:txtBranchCode",
+                                    "serialized_value":  "00000"
+                                },
+                                {
+                                    "ordinal":  18,
+                                    "serialized_key":  "frm1702q:txtRDOCode",
+                                    "serialized_value":  "018"
+                                },
+                                {
+                                    "ordinal":  19,
+                                    "serialized_key":  "frm1702q:txtTaxpayerName1",
+                                    "serialized_value":  "JUAN%20DELA%20CRUZ"
+                                },
+                                {
+                                    "ordinal":  20,
+                                    "serialized_key":  "frm1702q:txtAddress",
+                                    "serialized_value":  "OLONGAPO"
+                                },
+                                {
+                                    "ordinal":  21,
+                                    "serialized_key":  "frm1702q:txtZipCode",
+                                    "serialized_value":  "2200"
+                                },
+                                {
+                                    "ordinal":  22,
+                                    "serialized_key":  "frm1702q:txtTelNum",
+                                    "serialized_value":  "09123456789"
+                                },
+                                {
+                                    "ordinal":  23,
+                                    "serialized_key":  "txtEmail",
+                                    "serialized_value":  "codeitlikemiley@gmail.com"
+                                },
+                                {
+                                    "ordinal":  24,
+                                    "serialized_key":  "frm1702q:rbMthdOfDdctns_1",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  25,
+                                    "serialized_key":  "frm1702q:rbMthdOfDdctns_2",
+                                    "serialized_value":  "true"
+                                },
+                                {
+                                    "ordinal":  26,
+                                    "serialized_key":  "frm1702q:rbTxRlf_1",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  27,
+                                    "serialized_key":  "frm1702q:rbTxRlf_2",
+                                    "serialized_value":  "true"
+                                },
+                                {
+                                    "ordinal":  28,
+                                    "serialized_key":  "frm1702q:txtTxRlfSpcfy",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  29,
+                                    "serialized_key":  "frm1702q:txtTax14",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  30,
+                                    "serialized_key":  "frm1702q:txtTax15",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  31,
+                                    "serialized_key":  "frm1702q:txtTax16",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  32,
+                                    "serialized_key":  "frm1702q:txtTax17",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  33,
+                                    "serialized_key":  "frm1702q:txtTax18",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  34,
+                                    "serialized_key":  "frm1702q:txtTax19",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  35,
+                                    "serialized_key":  "frm1702q:txtTax20",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  36,
+                                    "serialized_key":  "frm1702q:txtTax21",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  37,
+                                    "serialized_key":  "frm1702q:txtTax22",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  38,
+                                    "serialized_key":  "frm1702q:txtTax23",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  39,
+                                    "serialized_key":  "frm1702q:txtTax24",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  40,
+                                    "serialized_key":  "frm1702q:txtTax25",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  41,
+                                    "serialized_key":  "frm1702q:txtSheets",
+                                    "serialized_value":  "0"
+                                },
+                                {
+                                    "ordinal":  42,
+                                    "serialized_key":  "frm1702q:txtPg2TIN1",
+                                    "serialized_value":  "000"
+                                },
+                                {
+                                    "ordinal":  43,
+                                    "serialized_key":  "frm1702q:txtPg2TIN2",
+                                    "serialized_value":  "000"
+                                },
+                                {
+                                    "ordinal":  44,
+                                    "serialized_key":  "frm1702q:txtPg2TIN3",
+                                    "serialized_value":  "000"
+                                },
+                                {
+                                    "ordinal":  45,
+                                    "serialized_key":  "frm1702q:txtPg2BranchCode",
+                                    "serialized_value":  "00000"
+                                },
+                                {
+                                    "ordinal":  46,
+                                    "serialized_key":  "frm1702q:txtPg2TaxpayerName",
+                                    "serialized_value":  "JUAN DELA CRUZ"
+                                },
+                                {
+                                    "ordinal":  47,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax1A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  48,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax1B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  49,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax2A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  50,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax2B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  51,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax3A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  52,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax3B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  53,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax4A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  54,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax4B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  55,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax5A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  56,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax5B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  57,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax6A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  58,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax6B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  59,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax7A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  60,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax7B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  61,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax8A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  62,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax8B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  63,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax9A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  64,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax9B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  65,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax10A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  66,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax10B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  67,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax11A",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  68,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax11B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  69,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax12B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  70,
+                                    "serialized_key":  "frm1702q:Sched1:txtTax13B",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  71,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax1",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  72,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax2",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  73,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax3",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  74,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax4",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  75,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax5",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  76,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax6",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  77,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax7",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  78,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax8",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  79,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax9",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  80,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax10",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  81,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax11",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  82,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax12",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  83,
+                                    "serialized_key":  "frm1702q:Sched2:txtTax13",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  84,
+                                    "serialized_key":  "frm1702q:Sched3:txtTax1",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  85,
+                                    "serialized_key":  "frm1702q:Sched3:txtTax2",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  86,
+                                    "serialized_key":  "frm1702q:Sched3:txtTax3",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  87,
+                                    "serialized_key":  "frm1702q:Sched3:txtTax4",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  88,
+                                    "serialized_key":  "frm1702q:Sched3:txtTax5",
+                                    "serialized_value":  "0.0000"
+                                },
+                                {
+                                    "ordinal":  89,
+                                    "serialized_key":  "frm1702q:Sched3:txtTax6",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  90,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax1",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  91,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax2",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  92,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax3",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  93,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax4",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  94,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax5",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  95,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax6",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  96,
+                                    "serialized_key":  "frm1702q:Sched4:chkOthrTxCrdts0",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  97,
+                                    "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdts0",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  98,
+                                    "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdtAmnt0",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  99,
+                                    "serialized_key":  "frm1702q:Sched4:chkOthrTxCrdts1",
+                                    "serialized_value":  "false"
+                                },
+                                {
+                                    "ordinal":  100,
+                                    "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdts1",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  101,
+                                    "serialized_key":  "frm1702q:Sched4:txtOthrTxCrdtAmnt1",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  102,
+                                    "serialized_key":  "frm1702q:Sched4:txtTax7",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  103,
+                                    "serialized_key":  "frm1702q:txtCurrentPage",
+                                    "serialized_value":  "1"
+                                },
+                                {
+                                    "ordinal":  104,
+                                    "serialized_key":  "frm1702q:txtMaxPage",
+                                    "serialized_value":  "3"
+                                },
+                                {
+                                    "ordinal":  105,
+                                    "serialized_key":  "resultOtherSpecify",
+                                    "serialized_value":  "0.00"
+                                },
+                                {
+                                    "ordinal":  106,
+                                    "serialized_key":  "txtFinalFlag",
+                                    "serialized_value":  "1"
+                                },
+                                {
+                                    "ordinal":  107,
+                                    "serialized_key":  "txtEnroll",
+                                    "serialized_value":  "Y"
+                                },
+                                {
+                                    "ordinal":  108,
+                                    "serialized_key":  "ebirOnlineConfirmUsername",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  109,
+                                    "serialized_key":  "ebirOnlineUsername",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  110,
+                                    "serialized_key":  "ebirOnlineSecret",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  111,
+                                    "serialized_key":  "frm1702q:txtLOB",
+                                    "serialized_value":  "SOFTWARE%2520DEVELOPMENT"
+                                },
+                                {
+                                    "ordinal":  112,
+                                    "serialized_key":  "frm1702q:txtTelNum",
+                                    "serialized_value":  ""
+                                },
+                                {
+                                    "ordinal":  113,
+                                    "serialized_key":  "driveSelectTPExport",
+                                    "serialized_value":  ""
+                                }
+                            ]
+}

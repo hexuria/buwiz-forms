@@ -1,0 +1,1069 @@
+{
+    "source_sha256":  "fbbaa75784bb054f3658ab0a357ad50b65807c59c437c2d010e69aa1ad64081a",
+    "function_count":  59,
+    "functions":  [
+                      {
+                          "name":  "saveXMLRowModalTable",
+                          "start_line":  4963,
+                          "end_line":  5101,
+                          "body_sha256":  "0987da8e4bb71635d1b52bf3f2912dbda0b8ab134e2382c680181208ee4bd3eb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I54",
+                                              "frm1702RT:txtPg3Sc2I4"
+                                          ]
+                      },
+                      {
+                          "name":  "checkFieldValue",
+                          "start_line":  5102,
+                          "end_line":  5111,
+                          "body_sha256":  "fe67ee2e5a8541d13cd351e7f6047c7e488cbe2cd6bf59fc0502f2341fa519e5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkFieldValuePg3Sc2I4",
+                          "start_line":  5112,
+                          "end_line":  5122,
+                          "body_sha256":  "574dd32372745b80fa623aa6921909ab2a80ca6b9b749bc6caa9d49949b5b5c0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg3Sc2I4C1",
+                                              "frm1702RT:txtPg3Sc2I4C2"
+                                          ]
+                      },
+                      {
+                          "name":  "checkFieldNumValue",
+                          "start_line":  5123,
+                          "end_line":  5143,
+                          "body_sha256":  "1fc70699158230a1a051a3b039940685e8a71079a7797c4aaac1c4bc03a3a8c0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc3AI7C1",
+                                              "frm1702RT:txtPg4Sc3AI7C2",
+                                              "frm1702RT:txtPg4Sc3AI7C3",
+                                              "frm1702RT:txtPg4Sc3AI7C4",
+                                              "frm1702RT:txtPg4Sc3AI7C5"
+                                          ]
+                      },
+                      {
+                          "name":  "saveModalTable",
+                          "start_line":  5444,
+                          "end_line":  5693,
+                          "body_sha256":  "ddd48fb4f595dd063b5d1c537ba0ca2e9ca0c0aa6d941c969dd2a013c0ab826f",
+                          "alerts":  [
+                                         "alertItemNum",
+                                         "alertItemNum",
+                                         "\u0027Data has been saved successfully!\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtCurrentPage",
+                                              "frm1702RT:txtPg2Pt4I54",
+                                              "frm1702RT:txtPg3Sc2I4"
+                                          ]
+                      },
+                      {
+                          "name":  "populateSavedModalTable",
+                          "start_line":  5962,
+                          "end_line":  6031,
+                          "body_sha256":  "2db87837299c9134c0ab3d9c3ed8c2ae1a3d341b9d2b177f831f57136c12f59f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I54",
+                                              "frm1702RT:txtPg3Sc2I4"
+                                          ]
+                      },
+                      {
+                          "name":  "AddrowChecking_ModalColumn",
+                          "start_line":  6032,
+                          "end_line":  6068,
+                          "body_sha256":  "588e589eb1c51eb9538beb530ea663cccf4b97327229549551a3bb56e03f63f7",
+                          "alerts":  [
+                                         "\"Kindly fill up the empty fields/zero amounts before you can add more items\"",
+                                         "\"Kindly fill up the empty fields/zero amounts before you can add more items\"",
+                                         "\"Kindly fill up the empty fields/zero amounts before you can add more items\"",
+                                         "\"Kindly fill up the empty fields/zero amounts before you can add more items\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "AddrowChecking_ModalColumnRT",
+                          "start_line":  6069,
+                          "end_line":  6316,
+                          "body_sha256":  "ee5ef2bdd70a4c009af6980fc6ddfdc4c34b3f1c59bd13bf146212c46a96facd",
+                          "alerts":  [
+                                         "\"Kindly fill up the empty \u0027Description of Property\u0027 field\"",
+                                         "\"Kindly fill up the empty \u0027OCT/TCT/CCT/Tax Declaration No.\u0027 field\"",
+                                         "\"Kindly fill up the empty \u0027Certificate Authorizing Registration(CAR) No.\u0027 field\"",
+                                         "\"Actual Amount/Fair Market Value/Net Capital Gains cannot be equal to zero\"",
+                                         "\"Final Tax Withheld/Paid cannot be zero\"",
+                                         "\"Kindly fill up the empty \u0027Kind (PS/CS) Stock Certificate Series No.\u0027 field\"",
+                                         "\"Kindly fill up the empty \u0027Certificate Authorizing Registration (CAR) No.\u0027 field\"",
+                                         "\"Number of Shares cannot be zero\"",
+                                         "\"Kindly fill up the empty \u0027Date of Issue (MM/DD/YYY)\u0027 field\"",
+                                         "\"Kindly fill up the empty \u0027Other Income Subject to Final Tax Under Sections 57\u0027 field\"",
+                                         "\"Kindly fill up the empty \u0027Mode of Transfer\u0027 field\"",
+                                         "\"Actual Amount/Fair Market Value cannot be zero\"",
+                                         "\"Kindly fill up the empty \u0027Other Exempt Income/Receipts Under Sections 32 (B) of the Tax Code\u0027 field\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enableOtherItem",
+                          "start_line":  6763,
+                          "end_line":  6800,
+                          "body_sha256":  "352aeeeed7e5ee45ef238c86d5ba76d42c9c92ddc9f408b702b652774e1b0528",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg3Sc1I17iC1"
+                                          ]
+                      },
+                      {
+                          "name":  "enableCompleteRows",
+                          "start_line":  6801,
+                          "end_line":  6851,
+                          "body_sha256":  "aec2dbd0e367a7b968871a0663fb8dfdd09c8cf3da068933b9a75369cda57407",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateEmail",
+                          "start_line":  6852,
+                          "end_line":  6862,
+                          "body_sha256":  "2f0fa4b0e5b91fde365209defcc75e79b86a3378993bc9f479db15842bd5b6bb",
+                          "alerts":  [
+                                         "\"You have entered an invalid email address format!\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1Pt1I12Email"
+                                          ]
+                      },
+                      {
+                          "name":  "disableField",
+                          "start_line":  6863,
+                          "end_line":  6869,
+                          "body_sha256":  "ae2bcbc4135224157989a2744269cfd0091c5821a2d71adeca6312524ac4040e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enableField",
+                          "start_line":  6870,
+                          "end_line":  6876,
+                          "body_sha256":  "381d1d1d9a7227024fe723609e288ff6fccb13a630d74957b02b18bfb0d69677",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkMandatory",
+                          "start_line":  6877,
+                          "end_line":  6887,
+                          "body_sha256":  "a6496d9246b2f39c88c9797581a3e27d6166a91a26a845941f9a9faee5f2d280",
+                          "alerts":  [
+                                         "msg"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "disableLinkIfEmptyControls",
+                          "start_line":  6975,
+                          "end_line":  6993,
+                          "body_sha256":  "240f4e7197c958a4d38571610dfea56645a921e51f26c128523deb2cc7dae7f7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  6994,
+                          "end_line":  7060,
+                          "body_sha256":  "48325520710fc56766c87ee935239423aafe6ab13a975c27f6457dabe3d388e7",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateFutureDate",
+                          "start_line":  7061,
+                          "end_line":  7122,
+                          "body_sha256":  "1a5272dbdc028bb26aa74037977c077019a478aa7453ba2d975aaa4030e2b361",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateNOLCO",
+                          "start_line":  7123,
+                          "end_line":  7133,
+                          "body_sha256":  "71b086532ff8f404c7a4694ecbe29972a53564cc40f0dc74e57acea62f4db4f2",
+                          "alerts":  [
+                                         "\"In Page 4 Schedule 3 Computation for NOLCO, Gross Income should not be greater than Ordinary Allowable Deductions.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc3I1GrossIncome",
+                                              "frm1702RT:txtPg4Sc3I2TotalDeductions"
+                                          ]
+                      },
+                      {
+                          "name":  "validate_nullDescription",
+                          "start_line":  7134,
+                          "end_line":  7166,
+                          "body_sha256":  "d06af3aeeedb4e01becd79ffa714a20a65b39c2f5ff0a2f92bf77e8f64d5c7dc",
+                          "alerts":  [
+                                         "\u0027Please provide data on \u0027 + paramAlert + \u0027.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validate_nullDescriptionColumns",
+                          "start_line":  7167,
+                          "end_line":  7190,
+                          "body_sha256":  "8630f6bdbca894077116899f0945edab1c1af54ea280b8d2c0c722bfd6b87cd9",
+                          "alerts":  [
+                                         "\u0027Please fill up empty/zero data on \u0027 + paramAlert + \u0027.\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateTIN",
+                          "start_line":  7191,
+                          "end_line":  7223,
+                          "body_sha256":  "16a864756e422f99c73589c9be38bcff6394851164b0edc264d7986990433e22",
+                          "alerts":  [
+                                         "\"Please provide a valid TIN (must have 3 numbers per box).\"",
+                                         "\"Please provide a valid TIN (must have 3 numbers per box).\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateIssueDateSchedule12",
+                          "start_line":  7293,
+                          "end_line":  7312,
+                          "body_sha256":  "1d54b1479da55d24901433f8af6dbc91288e506e16d0248e75cd37e0ffa9dfc4",
+                          "alerts":  [
+                                         "\"Valid Issue Date is from \" + validDateString + \" up to \" + filingDateString + \".\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:ddlPg1I2Month",
+                                              "frm1702RT:txtPg1I2Year"
+                                          ]
+                      },
+                      {
+                          "name":  "validateDateOfIssue",
+                          "start_line":  7313,
+                          "end_line":  7385,
+                          "body_sha256":  "dfb9db831437e9c3d3f1cb360e1bb2f3c00c9712b32dbf7907532a39bdd6c155",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date. (MM/DD/YYYY format)\u0027",
+                                         "\u0027This date cannot be a future date.\u0027",
+                                         "\u0027CTC year should be \u0027 + currentDate.getFullYear() + \u0027 only (Page 1 Item 23).\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1Pt2I22CTC",
+                                              "frm1702RT:txtPg1Pt2I23Date"
+                                          ]
+                      },
+                      {
+                          "name":  "validateMCITYear",
+                          "start_line":  7386,
+                          "end_line":  7446,
+                          "body_sha256":  "3d4a376a9450cb3ad9b22b0fd398ce374e33294b951e3b1313d0dd80af9c7d8f",
+                          "alerts":  [
+                                         "\"Year cannot have duplicates.\"",
+                                         "\"Please enter a value for the year between \" + (returnPeriodYear - 3) + \" and \" + (returnPeriodYear - 1) + \".\"",
+                                         "\"Year incurred cannot be lower than Year of Incorporation [\" + incorpYear + \"] (Page 1 Item 8).\"",
+                                         "\"Please provide Filing Year (Page 1 Item 2) before providing Year for MCIT.\"",
+                                         "\"Please provide Date of Incorporation (Page 1 Item 8) before providing Year Incurred for MCIT.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg1Pt1I10"
+                                          ]
+                      },
+                      {
+                          "name":  "enableFieldOnLoad",
+                          "start_line":  7447,
+                          "end_line":  7485,
+                          "body_sha256":  "2784ec610ce207a0056922a27a8ca0b61b993fb0c2531349378868f9c994c900",
+                          "alerts":  [
+                                         "\"You cannot tick Members Information if Partners is ticked.\\nTick Stockholders if you need to tick Members Information.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:chkPg7Sc11Members",
+                                              "frm1702RT:chkPg7Sc11Partners",
+                                              "frm1702RT:txtPg2Pt4I54C1",
+                                              "frm1702RT:txtPg2Pt4I54C2",
+                                              "frm1702RT:txtPg3Sc1I17eC1",
+                                              "frm1702RT:txtPg3Sc1I17eC2",
+                                              "frm1702RT:txtPg3Sc1I17fC1",
+                                              "frm1702RT:txtPg3Sc1I17fC2",
+                                              "frm1702RT:txtPg3Sc1I17gC1",
+                                              "frm1702RT:txtPg3Sc1I17gC2",
+                                              "frm1702RT:txtPg3Sc1I17hC1",
+                                              "frm1702RT:txtPg3Sc1I17hC2",
+                                              "frm1702RT:txtPg3Sc1I17iC1",
+                                              "frm1702RT:txtPg3Sc1I17iC2",
+                                              "frm1702RT:txtPg3Sc2I2C1",
+                                              "frm1702RT:txtPg3Sc2I2C2",
+                                              "frm1702RT:txtPg3Sc2I2C3",
+                                              "frm1702RT:txtPg3Sc2I3C1",
+                                              "frm1702RT:txtPg3Sc2I3C2",
+                                              "frm1702RT:txtPg3Sc2I3C3",
+                                              "frm1702RT:txtPg3Sc2I4C1",
+                                              "frm1702RT:txtPg3Sc2I4C2",
+                                              "frm1702RT:txtPg3Sc2I4C3",
+                                              "frm1702RT:txtPg4Sc3AI6C1",
+                                              "frm1702RT:txtPg4Sc3AI6C2",
+                                              "frm1702RT:txtPg4Sc3AI6C3",
+                                              "frm1702RT:txtPg4Sc3AI6C4",
+                                              "frm1702RT:txtPg4Sc3AI6C5",
+                                              "frm1702RT:txtPg4Sc3AI7C1",
+                                              "frm1702RT:txtPg4Sc3AI7C2",
+                                              "frm1702RT:txtPg4Sc3AI7C3",
+                                              "frm1702RT:txtPg4Sc3AI7C4",
+                                              "frm1702RT:txtPg4Sc3AI7C5",
+                                              "frm1702RT:txtPg4Sc5I3C1",
+                                              "frm1702RT:txtPg4Sc5I3C2",
+                                              "frm1702RT:txtPg4Sc5I6C1",
+                                              "frm1702RT:txtPg4Sc5I6C2",
+                                              "frm1702RT:txtPg4Sc5I8C1",
+                                              "frm1702RT:txtPg4Sc5I8C2"
+                                          ]
+                      },
+                      {
+                          "name":  "validateYearEnd",
+                          "start_line":  7517,
+                          "end_line":  7619,
+                          "body_sha256":  "610e26ea84052f5536a9bf79677bd82cad82e45d0c46d2fe6c199727fde8b28b",
+                          "alerts":  [
+                                         "\u0027Date (Page 1 Item 2) cannot be greater than current date when filing for Fiscal Year.\u0027",
+                                         "\u0027Date (Page 1 Item 2) Month cannot be equal to December.\u0027",
+                                         "\"Invalid Year. Year should not be earlier than 2018.\"",
+                                         "\u0027Year (Page 1 Item 2) cannot be greater than or equal to current year when filing for Calendar Year.\u0027",
+                                         "\u0027Year (Page 1 Item 2) cannot be greater than the current year when filing for Calendar Year.\u0027",
+                                         "\u0027Month (Page 1 Item 2) cannot be greater than current month date when filing for Calendar Year and Short Period Return.\u0027",
+                                         "\u0027Month (Page 1 Item 2) cannot be equal to december when filing for Calendar Year and Short Period Return.\u0027",
+                                         "\u0027(Page 1 Item 2)Month is invalid.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:ddlPg1I2Month",
+                                              "frm1702RT:Pg2Pt4I40IncomeTaxRate",
+                                              "frm1702RT:rdoPg1I1Calendar",
+                                              "frm1702RT:rdoPg1I1Fiscal",
+                                              "frm1702RT:rdoPg1I4ShortPeriodNo",
+                                              "frm1702RT:rdoPg1I4ShortPeriodYes",
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg2Pt4I41IncomeTaxDue",
+                                              "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+                                              "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+                                              "frm1702RT:txtPg4Sc3AI4C1",
+                                              "frm1702RT:txtPg4Sc3AI5C1",
+                                              "frm1702RT:txtPg4Sc3AI6C1",
+                                              "frm1702RT:txtPg4Sc3AI7C1",
+                                              "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "checkFilingYear",
+                          "start_line":  7620,
+                          "end_line":  7719,
+                          "body_sha256":  "e21a939dcedac6441c8f33f7a477f744776932fcc06a165ba437aef599a44350",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:ddlPg1I2Month",
+                                              "frm1702RT:rdoPg1I1Calendar",
+                                              "frm1702RT:rdoPg1I1Fiscal",
+                                              "frm1702RT:rdoPg1I3AmmendYes",
+                                              "frm1702RT:rdoPg1I4ShortPeriodYes",
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg2Pt4I51TaxPaidInReturn",
+                                              "frm1702RT:txtPg4Sc3AI4C1",
+                                              "frm1702RT:txtPg4Sc3AI5C1",
+                                              "frm1702RT:txtPg4Sc3AI6C1",
+                                              "frm1702RT:txtPg4Sc3AI7C1",
+                                              "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDateOfIncorporation",
+                          "start_line":  7736,
+                          "end_line":  7805,
+                          "body_sha256":  "6ee001100a524805d81452ea4641fe7af6785a2c8a01eff04e6c61a074d02c3c",
+                          "alerts":  [
+                                         "\"Date of Incorporation cannot be greater than Page 1 Item 2 Date.\"",
+                                         "\"The Year of Incorporation is \" + incorpYear + \", ATC - IC 055 of Page 1 Item will be marked.\"",
+                                         "\"Less than 4 years has passed since Date of Incorporation and the Filing Year, the mark in ATC - IC 055 of Page 1 Item 5 will be removed.\"",
+                                         "\"It has been 4 years or more since the Date of Incorporation and the Filing year, ATC - IC 055 of Page 1 Item will be marked.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:ddlPg1I2Month",
+                                              "frm1702RT:rdoPg1I5Atc",
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg1Pt1I10"
+                                          ]
+                      },
+                      {
+                          "name":  "enableMCITFields",
+                          "start_line":  7806,
+                          "end_line":  7870,
+                          "body_sha256":  "9fdf253f1379b076fe7ee2fcae3f5b063b57be07599dd8d51c740eb00237a8f6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1I5Atc",
+                                              "frm1702RT:txtPg2Pt4I42MinimumCorporate",
+                                              "frm1702RT:txtPg2Pt4I45IncomeTaxPaymentUnderMCIT",
+                                              "frm1702RT:txtPg2Pt4I47ExcessMCIT",
+                                              "frm1702RT:txtPg4Sc4I1C1",
+                                              "frm1702RT:txtPg4Sc4I1C2",
+                                              "frm1702RT:txtPg4Sc4I1C3",
+                                              "frm1702RT:txtPg4Sc4I1C4",
+                                              "frm1702RT:txtPg4Sc4I1C5",
+                                              "frm1702RT:txtPg4Sc4I1C6",
+                                              "frm1702RT:txtPg4Sc4I1C7",
+                                              "frm1702RT:txtPg4Sc4I1C8",
+                                              "frm1702RT:txtPg4Sc4I2C1",
+                                              "frm1702RT:txtPg4Sc4I2C2",
+                                              "frm1702RT:txtPg4Sc4I2C3",
+                                              "frm1702RT:txtPg4Sc4I2C4",
+                                              "frm1702RT:txtPg4Sc4I2C5",
+                                              "frm1702RT:txtPg4Sc4I2C6",
+                                              "frm1702RT:txtPg4Sc4I2C7",
+                                              "frm1702RT:txtPg4Sc4I2C8",
+                                              "frm1702RT:txtPg4Sc4I3C1",
+                                              "frm1702RT:txtPg4Sc4I3C2",
+                                              "frm1702RT:txtPg4Sc4I3C3",
+                                              "frm1702RT:txtPg4Sc4I3C4",
+                                              "frm1702RT:txtPg4Sc4I3C5",
+                                              "frm1702RT:txtPg4Sc4I3C6",
+                                              "frm1702RT:txtPg4Sc4I3C7",
+                                              "frm1702RT:txtPg4Sc4I3C8",
+                                              "frm1702RT:txtPg4Sc4I4TotalExcessMCIT"
+                                          ]
+                      },
+                      {
+                          "name":  "checkPg2Pt4I54",
+                          "start_line":  8107,
+                          "end_line":  8114,
+                          "body_sha256":  "c2da63a8552ed879e69232e063da23c3ff5237fb56d3611418e50d8d4bc1fefc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg2Pt4I53C1",
+                                              "frm1702RT:txtPg2Pt4I54C1",
+                                              "frm1702RT:txtPg2Pt4I54CtrModal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkPg3Sc1I17",
+                          "start_line":  8115,
+                          "end_line":  8121,
+                          "body_sha256":  "b5532bf138beb473aadaf175556b9be0ce43614c66a7cec4502a7d352f961660",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg3Sc1I17dC1",
+                                              "frm1702RT:txtPg3Sc1I17eC1",
+                                              "frm1702RT:txtPg3Sc1I17fC1",
+                                              "frm1702RT:txtPg3Sc1I17gC1",
+                                              "frm1702RT:txtPg3Sc1I17hC1",
+                                              "frm1702RT:txtPg3Sc1I17iC1",
+                                              "frm1702RT:txtPg3Sc1I17iCtrModal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkPg3Sc2I4",
+                          "start_line":  8122,
+                          "end_line":  8128,
+                          "body_sha256":  "d933908e771b150f384b7a473bafe06d79c121a8c8519467d545097c066b9088",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg3Sc2I1C1",
+                                              "frm1702RT:txtPg3Sc2I1C2",
+                                              "frm1702RT:txtPg3Sc2I2C1",
+                                              "frm1702RT:txtPg3Sc2I2C2",
+                                              "frm1702RT:txtPg3Sc2I3C1",
+                                              "frm1702RT:txtPg3Sc2I3C2",
+                                              "frm1702RT:txtPg3Sc2I4C1",
+                                              "frm1702RT:txtPg3Sc2I4C2",
+                                              "frm1702RT:txtPg3Sc2I4CtrModal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkPg4Sc3AI7",
+                          "start_line":  8129,
+                          "end_line":  8137,
+                          "body_sha256":  "4c2da369415ed58845fe9abfdc16996b8344acfe11474ce6a9583b6e340f0c79",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc3AI5C1",
+                                              "frm1702RT:txtPg4Sc3AI6C1",
+                                              "frm1702RT:txtPg4Sc3AI7C1",
+                                              "frm1702RT:txtPg4Sc3AI7CtrModal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkPg4Sc5I3",
+                          "start_line":  8138,
+                          "end_line":  8143,
+                          "body_sha256":  "d8bb1b32047883e64d66dabdd0fac3bc2da47a4d11114dfc04e8882ff349fef6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc5I2C1",
+                                              "frm1702RT:txtPg4Sc5I3C1",
+                                              "frm1702RT:txtPg4Sc5I3CtrModal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkPg4Sc5I6",
+                          "start_line":  8144,
+                          "end_line":  8150,
+                          "body_sha256":  "ec6d1dfab5e2cc4064f21e7d1afe74170ead8498f38ae66cd6f52867d1fcf5e9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg4Sc5I5C1",
+                                              "frm1702RT:txtPg4Sc5I6C1",
+                                              "frm1702RT:txtPg4Sc5I6CtrModal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkFormValidated",
+                          "start_line":  8151,
+                          "end_line":  8175,
+                          "body_sha256":  "7263b1b3bcda1fb8876dde4b2d15ca389ebc9cf9e35b268303d21d3c9b32aaec",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:cmdValidate",
+                                              "frm1702RT:txtPg2Pt4I54Subtotal",
+                                              "frm1702RT:txtPg3Sc1I17iSubtotal",
+                                              "frm1702RT:txtPg3Sc2I4Subtotal",
+                                              "frm1702RT:txtPg4Sc5I3Subtotal",
+                                              "frm1702RT:txtPg4Sc5I6Subtotal",
+                                              "frm1702RT:txtPg4Sc5I8Subtotal"
+                                          ]
+                      },
+                      {
+                          "name":  "checkP4Sc3I4NetOperatingLoss",
+                          "start_line":  8570,
+                          "end_line":  8587,
+                          "body_sha256":  "9f40ef2f22e529cebcca729a31d2fb4d4c72e7f420fe1f4c349663147069d20b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg4Sc3AI4C1",
+                                              "frm1702RT:txtPg4Sc3AI4C2",
+                                              "frm1702RT:txtPg4Sc3AI5C1",
+                                              "frm1702RT:txtPg4Sc3AI5C2",
+                                              "frm1702RT:txtPg4Sc3AI6C1",
+                                              "frm1702RT:txtPg4Sc3AI6C2",
+                                              "frm1702RT:txtPg4Sc3AI7C1",
+                                              "frm1702RT:txtPg4Sc3AI7C2",
+                                              "frm1702RT:txtPg4Sc3I3NetOperatingLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "checkYear",
+                          "start_line":  8588,
+                          "end_line":  8644,
+                          "body_sha256":  "1883f6be09f3a12abb94232bd73294efc0da92f3daaae0d15df145008a27fa6f",
+                          "alerts":  [
+                                         "\u0027Please provide a valid Year Ended on Page 1 Item 2\u0027",
+                                         "\u0027You must fill-up Page 1 Part 1 Item 10 (Date of Incorporation/Organization) before you can add Year Incurred.\u0027",
+                                         "\u0027Page 4 Schedule IIIA Item 5-7 Year Incurred cannot be equal to Page 1 Item 2 Year Ended.\u0027",
+                                         "\u0027Year Incurred per row must be unique.\u0027",
+                                         "\u0027Year Incurred cannot be less than year in Page 1 Part 1 Item 10 (Date of Incorporation/Organization)\u0027",
+                                         "\u0027Year Incurred cannot be more than Page 1 Part 1 Item 2 (Year Ended)\u0027",
+                                         "\u0027Year Incurred Cannot be less than 3 years in Page 1 Item 2 (Year Ended)\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:ddlPg1I2Month",
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg1Pt1I10",
+                                              "frm1702RT:txtPg4Sc3AI4C1",
+                                              "frm1702RT:txtPg4Sc3AI5C1",
+                                              "frm1702RT:txtPg4Sc3AI6C1",
+                                              "frm1702RT:txtPg4Sc3AI7C1"
+                                          ]
+                      },
+                      {
+                          "name":  "processPrev",
+                          "start_line":  8776,
+                          "end_line":  8805,
+                          "body_sha256":  "6aa03de7053bf526d538dbcf2d94ff11f6484d4bade27c507ff6f48fa609d7a7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:btnNext",
+                                              "frm1702RT:btnPrev",
+                                              "frm1702RT:txtCurrentPage",
+                                              "frm1702RT:txtMaxPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processNext",
+                          "start_line":  8832,
+                          "end_line":  8909,
+                          "body_sha256":  "e28988aba31c1477f3fd1c8f49c36ea9b352b11e5728a8f912e67da8828b85bc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:btnNext",
+                                              "frm1702RT:btnPrev",
+                                              "frm1702RT:txtCurrentPage",
+                                              "frm1702RT:txtMaxPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processSubmit",
+                          "start_line":  9166,
+                          "end_line":  9185,
+                          "body_sha256":  "55b1e68631e2212da0705a60d29680f9dfdf8968b105321eeeaef47273796d69",
+                          "alerts":  [
+                                         "\u0027eBIRForms Offline to eBIRForms Online is under construction\u0027",
+                                         "\u0027eBIRForms Offline to eFPS is under construction\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:SubmitToAIF",
+                                              "frm1702RT:SubmitToeFPS"
+                                          ]
+                      },
+                      {
+                          "name":  "processSubmit2",
+                          "start_line":  9186,
+                          "end_line":  9213,
+                          "body_sha256":  "7655d2969593cbe4b2ce8301c61d91fe69bde57daca35ba842d481e2d1372df1",
+                          "alerts":  [
+                                         "\" A \u0027Final copy\u0027 of your tax return has been generated.\"",
+                                         "\"Please click \u0027FINAL COPY\u0027 button to use an alternative mode of electronic submission.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkconnection",
+                          "start_line":  9387,
+                          "end_line":  9394,
+                          "body_sha256":  "f33842b3bce8cec421688f04da4d4573888f86619114214012ba58ffd7f08619",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "ShowSubmitPage",
+                          "start_line":  9395,
+                          "end_line":  9401,
+                          "body_sha256":  "1b92d9078a78e7f569b87d025e42fdce4a74ac834e3a8015a56c6f723a222925",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelSubmitPage",
+                          "start_line":  9402,
+                          "end_line":  9406,
+                          "body_sha256":  "9934feffd6f4f99981957711c25e30041dd8220392aeeed62b67fca92bf05c89",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  9931,
+                          "end_line":  10045,
+                          "body_sha256":  "732205a2194cf4e4769fd0833be09775502e2ea39c036629dde70254f4b3d64a",
+                          "alerts":  [
+                                         "\"File \u0027\" + xmlFileName + \"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:btnNext",
+                                              "frm1702RT:btnPrev",
+                                              "frm1702RT:txtCurrentPage",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg1Pt1I8Name2",
+                                              "frm1702RT:txtPg1Pt1I8Name3",
+                                              "frm1702RT:txtPg1Pt1I9Address1",
+                                              "frm1702RT:txtPg1Pt1I9Address2",
+                                              "frm1702RT:txtPg1Pt1I9Address3"
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  10063,
+                          "end_line":  10075,
+                          "body_sha256":  "280ba68dd9932d35eb3f1d8857a988a566ddc30121e5c43f7cdef40145eedd65",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  10125,
+                          "end_line":  10437,
+                          "body_sha256":  "3301993b6de76be64b2f4f61b39a6d9f92fec6eb3c56cdcd0e608ea38ce09b98",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027or\u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"p3GrossSales \u003e\u003e\u003e \" + elemValue + \" \\r\\n p3BasicTax \u003e\u003e\u003e \" + p3BasicTax",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1Pt1I11Contact",
+                                              "frm1702RT:txtPg1Pt1I12Email",
+                                              "frm1702RT:txtPg1Pt1I18Business",
+                                              "frm1702RT:txtPg1Pt1I6TIN1",
+                                              "frm1702RT:txtPg1Pt1I6TIN2",
+                                              "frm1702RT:txtPg1Pt1I6TIN3",
+                                              "frm1702RT:txtPg1Pt1I6TIN4",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg1Pt1I8Name2",
+                                              "frm1702RT:txtPg1Pt1I8Name3",
+                                              "frm1702RT:txtPg1Pt1I9Address1",
+                                              "frm1702RT:txtPg1Pt1I9Address2",
+                                              "frm1702RT:txtPg1Pt1I9Address3",
+                                              "frm1702RT:txtPg1Pt2I16NetTax",
+                                              "frm1702RT:txtPg1Pt2I17Surcharge",
+                                              "frm1702RT:txtPg1Pt2I18Interest",
+                                              "frm1702RT:txtPg1Pt2I19Compromise",
+                                              "frm1702RT:txtPg1Pt2I20TotalPenalties",
+                                              "frm1702RT:txtPg1Pt2I21TotalAmount",
+                                              "frm1702RT:txtPg2Pt4I29NetSales",
+                                              "frm1702RT:txtPg2TIN1",
+                                              "frm1702RT:txtPg2TIN2",
+                                              "frm1702RT:txtPg2TIN3",
+                                              "frm1702RT:txtPg2TIN4",
+                                              "frm1702RT:txtPg3TIN1",
+                                              "frm1702RT:txtPg3TIN2",
+                                              "frm1702RT:txtPg3TIN3",
+                                              "frm1702RT:txtPg3TIN4",
+                                              "frm1702RT:txtPg4TIN1",
+                                              "frm1702RT:txtPg4TIN2",
+                                              "frm1702RT:txtPg4TIN3",
+                                              "frm1702RT:txtPg4TIN4",
+                                              "frm1702RT:txtRDO",
+                                              "frm1702RT:txtZIP"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  10438,
+                          "end_line":  10656,
+                          "body_sha256":  "50cb8996c4568ce01751bd48cec20d61e0fbda75bb63b4947a0b52344c6ec262",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"p3GrossSales \u003e\u003e\u003e \" + elemValue + \" \\r\\n p3BasicTax \u003e\u003e\u003e \" + p3BasicTax",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1I3AmmendNo",
+                                              "frm1702RT:rdoPg1I3AmmendYes",
+                                              "frm1702RT:txtPg1Pt1I11Contact",
+                                              "frm1702RT:txtPg1Pt1I18Business",
+                                              "frm1702RT:txtPg1Pt1I6TIN1",
+                                              "frm1702RT:txtPg1Pt1I6TIN2",
+                                              "frm1702RT:txtPg1Pt1I6TIN3",
+                                              "frm1702RT:txtPg1Pt1I6TIN4",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg1Pt1I8Name2",
+                                              "frm1702RT:txtPg1Pt1I8Name3",
+                                              "frm1702RT:txtPg1Pt1I9Address1",
+                                              "frm1702RT:txtPg1Pt1I9Address2",
+                                              "frm1702RT:txtPg1Pt1I9Address3",
+                                              "frm1702RT:txtPg1Pt2I16NetTax",
+                                              "frm1702RT:txtPg1Pt2I17Surcharge",
+                                              "frm1702RT:txtPg1Pt2I18Interest",
+                                              "frm1702RT:txtPg1Pt2I19Compromise",
+                                              "frm1702RT:txtPg1Pt2I20TotalPenalties",
+                                              "frm1702RT:txtPg1Pt2I21TotalAmount",
+                                              "frm1702RT:txtPg2Pt4I29NetSales",
+                                              "frm1702RT:txtRDO",
+                                              "frm1702RT:txtZIP"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  10657,
+                          "end_line":  10968,
+                          "body_sha256":  "28a979ee2ecd4736f4201d0d14824587cc2334b86393235a560738740e6b656b",
+                          "alerts":  [
+                                         "\u0027Please select if you are filing for Calendar or Fiscal year on Page 1 Item 1\u0027",
+                                         "\u0027Please provide a valid Year Ended on Page 1 Item 2\u0027",
+                                         "\u0027Please select a RDO code on Page 1 Part 1 Item 7\u0027",
+                                         "\u0027Please provide a valid Date of Incorporation/Organization on Page 1 Part I Item 10\u0027",
+                                         "\u0027Please provide a Registered Name on Page 1 Part I Item 8\u0027",
+                                         "\u0027Please provide a Registered Address on Page 1 Part I Item 9\u0027",
+                                         "\u0027Please provide a valid Contact Number on Page 1 Part I Item 11\u0027",
+                                         "\u0027Please provide a valid Email Address on Page 1 Part I Item 12\u0027",
+                                         "\u0027Please select an option for Overpayment Radio Button on Page 1 Part II \u0027",
+                                         "\u0027Please select an option for Overpayment Radio Button on Page 1 Part\u0027",
+                                         "\u0027Sum of Amount fields in Details of Payment (Page 1 Part III) Segment must be equal to TOTAL AMOUNT PAYABLE\u0027",
+                                         "\u0027Please provide a value for this field (Part V Item 57)\u0027",
+                                         "\"Item Page 4 Schedule V Item 10 must be equal Item 39 on Page 2 Part IV\"",
+                                         "\u0027Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027",
+                                         "\u0027Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027",
+                                         "\u0027Page 4, Schedule IV: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:btnFinalCopy",
+                                              "frm1702RT:cmdEdit",
+                                              "frm1702RT:cmdValidate",
+                                              "frm1702RT:ddlPg1I2Month",
+                                              "frm1702RT:drpPg1Pt1I7RDOCode",
+                                              "frm1702RT:rdoPg1I1Calendar",
+                                              "frm1702RT:rdoPg1I1Fiscal",
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt2I21OverpaymentCarried",
+                                              "frm1702RT:rdoPg1Pt2I21OverpaymentIssued",
+                                              "frm1702RT:rdoPg1Pt2I21OverpaymentRefunded",
+                                              "frm1702RT:txtCurrentPage",
+                                              "frm1702RT:txtPg1I2Year",
+                                              "frm1702RT:txtPg1Pt1I10",
+                                              "frm1702RT:txtPg1Pt1I11Contact",
+                                              "frm1702RT:txtPg1Pt1I12Email",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg1Pt1I9Address1",
+                                              "frm1702RT:txtPg1Pt2I16NetTax",
+                                              "frm1702RT:txtPg1Pt2I21TotalAmount",
+                                              "frm1702RT:txtPg1Pt3I23DebitMemoC4Amount",
+                                              "frm1702RT:txtPg1Pt3I24CheckC4Amount",
+                                              "frm1702RT:txtPg1Pt3I25TaxDebitC4Amount",
+                                              "frm1702RT:txtPg1Pt3I26OthersC4Amount",
+                                              "frm1702RT:txtPg2Pt4I35SpecialAllowable",
+                                              "frm1702RT:txtPg2Pt4I39NetTaxable",
+                                              "frm1702RT:txtPg2Pt5I57SpecialAllowable",
+                                              "frm1702RT:txtPg4Sc4I1C8",
+                                              "frm1702RT:txtPg4Sc4I2C8",
+                                              "frm1702RT:txtPg4Sc4I3C8",
+                                              "frm1702RT:txtPg4Sc5I10NetTaxableIncome"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  10969,
+                          "end_line":  11046,
+                          "body_sha256":  "003064810a475cfc2ae49c16d13537093c98855ec21c89c6b37dd73211a8c37c",
+                          "alerts":  [
+                                         "errorList[0]"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:drpPg1Pt1I7RDOCode",
+                                              "frm1702RT:txtCurrentPage",
+                                              "frm1702RT:txtPg1Pt1I11Contact",
+                                              "frm1702RT:txtPg1Pt1I12Email",
+                                              "frm1702RT:txtPg1Pt1I14PSIC",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg1Pt1I9Address1"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  11068,
+                          "end_line":  11116,
+                          "body_sha256":  "9ccb298db3d34a27734426208b1ad596c67aa2ef91ceeeade6dc3c7d480063cf",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:txtPg1Pt1I11Contact",
+                                              "frm1702RT:txtPg1Pt1I12Email",
+                                              "frm1702RT:txtPg1Pt1I18Business",
+                                              "frm1702RT:txtPg1Pt1I6TIN1",
+                                              "frm1702RT:txtPg1Pt1I6TIN2",
+                                              "frm1702RT:txtPg1Pt1I6TIN3",
+                                              "frm1702RT:txtPg1Pt1I6TIN4",
+                                              "frm1702RT:txtPg1Pt1I8Name1",
+                                              "frm1702RT:txtPg1Pt1I8Name2",
+                                              "frm1702RT:txtPg1Pt1I8Name3",
+                                              "frm1702RT:txtPg1Pt1I9Address1",
+                                              "frm1702RT:txtPg1Pt1I9Address2",
+                                              "frm1702RT:txtPg1Pt1I9Address3",
+                                              "frm1702RT:txtRDO",
+                                              "frm1702RT:txtZIP"
+                                          ]
+                      },
+                      {
+                          "name":  "getDisabledText",
+                          "start_line":  11287,
+                          "end_line":  11299,
+                          "body_sha256":  "44ef5b48e6cbe30c41f316b9797d1ccc024643ec5c03d5aa27e99297f810369c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl",
+                          "start_line":  11300,
+                          "end_line":  11363,
+                          "body_sha256":  "23c14fceef08792a50eb8714b8d3310386e6e22c7f727fa25bc38af349d74804",
+                          "alerts":  [
+                                         "disabledIDs.length + \" || \"+loopCounter"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:btnFinalCopy",
+                                              "frm1702RT:btnNext",
+                                              "frm1702RT:btnPrev",
+                                              "frm1702RT:cmdEdit",
+                                              "frm1702RT:cmdValidate"
+                                          ]
+                      },
+                      {
+                          "name":  "enableAllControl",
+                          "start_line":  11364,
+                          "end_line":  11474,
+                          "body_sha256":  "0521954a6527bee4bb3791ef7c0d52692f48aa5025661587764e5cf3095373d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:btnFinalCopy",
+                                              "frm1702RT:btnNext",
+                                              "frm1702RT:btnPrev",
+                                              "frm1702RT:cmdEdit",
+                                              "frm1702RT:cmdValidate",
+                                              "frm1702RT:drpPg1I5AtcOther",
+                                              "frm1702RT:rdoPg1I5AtcOther"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  11585,
+                          "end_line":  11609,
+                          "body_sha256":  "08258115e1b150a2d5e03ca58764f7b07120ebf796f19dd930453ce0c9150cd6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  11616,
+                          "end_line":  11629,
+                          "body_sha256":  "5106b3dde432f503bc458e38819e4a701e52af4293c587c83531bd5b6d62ae1b",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "submitOnline",
+                          "start_line":  11867,
+                          "end_line":  11872,
+                          "body_sha256":  "e078f62fe183eff425182bff442f89aba6a410cb5813e2aa855bcd96dcea65ce",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "submitData",
+                          "start_line":  11873,
+                          "end_line":  12304,
+                          "body_sha256":  "c04c186914bdba1f9f89215fc4b3b04668b63e5fcb37b505dfdc38247c6690cc",
+                          "alerts":  [
+                                         "\"No internet connection detected. Submit the form again.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702RT:rdoPg1I1Calendar",
+                                              "frm1702RT:rdoPg1I3AmmendYes",
+                                              "frm1702RT:rdoPg1I4ShortPeriodYes",
+                                              "frm1702RT:rdoPg1I5Atc",
+                                              "frm1702RT:rdoPg1I5AtcOther",
+                                              "frm1702RT:rdoPg1Pt1I13ItemizedDeduction",
+                                              "frm1702RT:rdoPg1Pt1I13OptionalStandard",
+                                              "frm1702RT:rdoPg1Pt2I22CTC"
+                                          ]
+                      }
+                  ]
+}

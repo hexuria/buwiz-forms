@@ -1,0 +1,821 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "codex/**" ]
+  pull_request:
+    branches: [ "main", "gol/**", "codex/**", "feat/**" ]
+  # Nightly safety net: the full CI, validation audits included, on main.
+  # 18:00 UTC is 02:00 in Manila.
+  schedule:
+    - cron: "0 18 * * *"
+  # Run by hand from the Actions tab; tick the box to force the validation-rules
+  # corpus audits on any branch.
+  workflow_dispatch:
+    inputs:
+      validation:
+        description: "Also run the validation-rules corpus audits"
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Superseded runs were previously left to finish: pushing three times in fifteen
+# minutes ran three full ten-job matrices, and only the last one's result was ever
+# read. Cancel the older run on the same ref instead. `main` is included
+# deliberately - a push to main immediately followed by another means the first
+# commit's result is already stale.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Runs on the systems `changes` picked: all three for app code, Windows
+  # alone for Windows installer files, none for docs, other packaging, setup
+  # scripts or release workflows. Skipping a whole job is safe because the
+  # required status is `ci-ok`, not these per-OS names.
+  check:
+    needs: changes
+    if: needs.changes.outputs.check == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.check_matrix) }}
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check out formgen scripts from buwiz-forms-html
+      uses: actions/checkout@v4
+      with:
+        repository: hexuria/buwiz-forms-html
+        path: .ci-html
+        persist-credentials: false
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Test Python scripts
+      run: python -m unittest discover -s scripts/tests -v
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+        targets: ${{ matrix.target }}
+        components: clippy, rustfmt
+
+    # rust-cache keys per job name by default, so ten jobs held ten multi-GB
+    # entries against GitHub's 10 GB per-repo ceiling and were evicting each
+    # other. Every job here builds for the host, so all four share one entry
+    # per OS.
+    #
+    # This job is the SOLE WRITER of that entry, and that is load-bearing:
+    # rust-cache will not overwrite an exact-matching key, so whichever job
+    # saves first defines the cache and the rest can never contribute. When all
+    # four could save, the small validation-rules jobs won the race and `check`
+    # restored a cache missing almost everything it needs - rebuilding the whole
+    # workspace every run (34m on Windows) and then being unable to save it.
+    # `cargo test --workspace` below builds a superset of what the other three
+    # need, so writing only from here keeps the shared entry complete.
+    #
+    # The key is `workspace-<os>`, not the earlier `host-<os>`: rust-cache
+    # skips saving when the exact key already exists, so reusing the old name
+    # would have preserved the wrongly-populated entry forever. The stale
+    # host-* and check-* entries are no longer read by anything and age out.
+    # Saving only from main also stops pull requests churning it.
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: workspace-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    - name: Validate justfile
+      run: just --summary
+
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libx11-dev \
+          libxcb1-dev \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libxkbcommon-x11-dev \
+          libwayland-dev \
+          libwayland-client0 \
+          libasound2-dev \
+          libudev-dev \
+          libvulkan-dev \
+          libfontconfig1-dev \
+          libfreetype-dev \
+          libssl-dev \
+          libpolkit-gobject-1-dev \
+          libgtk-3-dev \
+          libwebkit2gtk-4.1-dev \
+          libayatana-appindicator3-1 \
+          libxdo-dev \
+          xvfb \
+          mesa-vulkan-drivers
+
+    # The GTK native-print tests call `gtk::init`, which needs a display server.
+    # Hosted runners are headless, so without this they fail with
+    # "Failed to initialize GTK". A virtual framebuffer lets them run for real
+    # rather than being skipped.
+    - name: Start virtual display
+      if: runner.os == 'Linux'
+      run: |
+        Xvfb :99 -screen 0 1280x1024x24 &
+        echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+    # `choco install openssl` pulls a 245 MB installer from slproweb.com on every
+    # run - about 88s, and a third-party download inside the build path. Cache the
+    # installed tree instead. Both candidate locations are cached because the
+    # package has used each at different versions.
+    #
+    # The env-var detection below still runs unconditionally: GITHUB_ENV does not
+    # persist between runs, so OPENSSL_DIR/OPENSSL_LIB_DIR must be re-exported
+    # even when the install itself was restored from cache.
+    - name: Cache OpenSSL
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
+        $openssl_dir = ""
+        if (Test-Path "C:\Program Files\OpenSSL\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL"
+        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+        } else {
+            [Console]::Error.WriteLine("OpenSSL include directory not found!")
+            exit 1
+        }
+        
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        
+        # Find the actual library directory
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+          Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+        }
+
+    - name: Format
+      run: cargo fmt --all -- --check
+
+    # No separate `cargo check` step: clippy performs the same analysis over the
+    # same target set and reports the same compile errors, so checking first only
+    # re-ran the workspace crates through a second, differently-fingerprinted
+    # pass. Dependencies were already shared between the two.
+    #
+    # No `--target` either. Every leg of this matrix names its own host triple
+    # (macos-15/aarch64-apple-darwin, ubuntu-22.04/x86_64-unknown-linux-gnu,
+    # windows-latest/x86_64-pc-windows-msvc) and no RUSTFLAGS are set anywhere,
+    # so passing it was semantically identical to a host build while costing
+    # real resources: it forced artifacts into target/<triple>/, rebuilt the
+    # proc-macro and build-script dependencies a second time for the host, and
+    # was the only reason this job could not share the host cache above.
+    # The matrix still pins the toolchain target, so platform coverage is
+    # unchanged. release.yml keeps its `--target` flags - those cross-compile
+    # both macOS architectures for the universal binary and are genuine.
+    - name: Clippy
+      run: cargo clippy --locked --workspace -- -D warnings
+
+    # One command per line: this job's default shell is pwsh on windows-latest,
+    # and bash `\` continuations are a parse error there.
+    - name: Frozen HTML inventory and TIN name stamps
+      run: |
+        python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+        python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
+        python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+
+    # bir-app-api (the host functions moved out of bir-shell, with their tests) is a member of this workspace, so its tests
+    # run here. They need what `just shell-check` gives bir-shell's: the debug-only account-gate bypass (release builds
+    # ignore both), the dry-run sender, and no keychain.
+    - name: Test
+      env:
+        EBIR_TEST_ENV: "1"
+        BIR_AUTH_BYPASS: "1"
+        BIR_SFTP_DRY_RUN: "1"
+        BUWIZ_NO_KEYCHAIN: "1"
+      run: cargo test --locked --workspace
+
+    # The production-filing boundary stays gating on every PR, whatever the
+    # validation-rules jobs below decide. It scans all of bir-core/src and
+    # bir-shell/src (transport, import, cron, the 2550Q guards), so almost any
+    # app change can open it; and it reuses this job's build, so it is cheap.
+    # A boundary failure is far more serious than an open validation slice.
+    - name: Check validation-rules production boundaries
+      run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
+
+    - name: Install Windows packaging tools
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        choco install innosetup -y --no-progress
+        $installExitCode = $LASTEXITCODE
+        if ($installExitCode -eq 3010) {
+          Write-Warning "Chocolatey reports a reboot is required (3010); continuing."
+        } elseif ($installExitCode -ne 0) {
+          [Console]::Error.WriteLine("Inno Setup installation failed (exit code $installExitCode).")
+          exit $installExitCode
+        }
+
+    - name: Build and audit unsigned Windows Setup
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        just exe
+        $buildExitCode = $LASTEXITCODE
+        if ($buildExitCode -ne 0) { exit $buildExitCode }
+        $installers = @(Get-ChildItem "target/release-artifacts/*-Setup.exe")
+        if ($installers.Count -ne 1) {
+          throw "Expected exactly one Setup.exe after just exe; found $($installers.Count)."
+        }
+        & pwsh -NoProfile -File scripts/audit_final_setup.ps1 -Installer $installers[0].FullName -Python python
+        $auditExitCode = $LASTEXITCODE
+        if ($auditExitCode -ne 0) { exit $auditExitCode }
+
+    # #96: the shipped bir.exe must carry the /STACK reserve from
+    # crates/bir-shell/build.rs. The shipped binary is the gpui-shell host
+    # (built by `just exe` above into the standalone workspace's target dir
+    # and aliased to bir.exe); checking the PE header here means reverting
+    # the linker policy fails CI instead of silently returning to 1 MiB.
+    - name: Verify shipped bir.exe PE stack reserve
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        python scripts/check_pe_stack_reserve.py crates/bir-shell/target/x86_64-pc-windows-msvc/release/bir.exe
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cargo build --locked --manifest-path crates/bir-shell/Cargo.toml --bin bir-shell
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        python scripts/check_pe_stack_reserve.py crates/bir-shell/target/debug/bir-shell.exe
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  # Decides what this run tests, from the files it changes:
+  #   - check / check_matrix: the systems `check` runs on. All three when any
+  #     app file changed - any path not in the classes below, which is the
+  #     safe default. Windows alone when the only other changes are Windows
+  #     installer files (that leg builds and audits the Setup.exe). None for
+  #     docs, macOS or Linux packaging, setup scripts, release workflows and
+  #     the Python tests themselves.
+  #   - app: app code changed.
+  #   - scripts: run the Python script tests on their own because `check`
+  #     does not (every `check` leg runs them otherwise).
+  #   - linux_pkg / windows_pkg / macos_pkg: that platform's packaging
+  #     changed. Reported in the run summary.
+  #   - validation: whether the validation-rules corpus audits run (below).
+  # Schedules, manual runs, empty and unknown change ranges test everything.
+  # A class may only list files that no crate, build script or Rust test
+  # reads: assets/linux/ is read by bir-shell's desktop-entry test, so it
+  # stays app code.
+  #
+  # The v1 corpus audit runs on every OS. It used to be a windows-latest-only
+  # PowerShell job, which is exactly why three separate Windows-path defects in
+  # rules/validate.ps1 went undetected: on macOS and Linux the v2 exclusions
+  # never matched, so the wrong file set was audited (and the script exited 1).
+  # Decides whether the validation-rules corpus audits run. They check the
+  # extracted official rule corpus (rules/, bir-rules*, form_rules), which is a
+  # separate objective from the per-form validation the app runs today, so they
+  # only run when that corpus can have changed:
+  #   - a branch named ebirforms-* (work synced from hexuria/buwiz-validation),
+  #   - a change under one of the paths below,
+  #   - a PR carrying the run-validation label,
+  #   - the nightly run on main,
+  #   - a manual run with the "validation" box ticked.
+  # The boundary check that guards production filing is NOT gated: it runs in
+  # `check` on every PR.
+  changes:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      validation: ${{ steps.decide.outputs.validation }}
+      check: ${{ steps.decide.outputs.check }}
+      check_matrix: ${{ steps.decide.outputs.check_matrix }}
+      app: ${{ steps.decide.outputs.app }}
+      scripts: ${{ steps.decide.outputs.scripts }}
+      linux_pkg: ${{ steps.decide.outputs.linux_pkg }}
+      windows_pkg: ${{ steps.decide.outputs.windows_pkg }}
+      macos_pkg: ${{ steps.decide.outputs.macos_pkg }}
+      shell: ${{ steps.decide.outputs.shell }}
+      shell_matrix: ${{ steps.decide.outputs.shell_matrix }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Decide
+      id: decide
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        BRANCH: ${{ github.head_ref || github.ref_name }}
+        FORCE: ${{ inputs.validation }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        PUSH_AFTER: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        range=""
+        changed=""
+        changed_known=false
+        if [[ "$EVENT" == pull_request && -n "$PR_BASE" && -n "$PR_HEAD" ]]; then
+          range="$PR_BASE...$PR_HEAD"
+        elif [[ "$EVENT" == push && -n "$PUSH_BEFORE" && ! "$PUSH_BEFORE" =~ ^0+$ && -n "$PUSH_AFTER" ]]; then
+          range="$PUSH_BEFORE..$PUSH_AFTER"
+        fi
+        if [[ -n "$range" ]] && changed=$(git diff --name-only "$range"); then
+          changed_known=true
+        fi
+
+        docs_re='^(docs/|[^/]+\.md$|crates/[^/]+/docs/|\.github/[^/]+\.md$)'
+        windows_pkg_re='^(installer\.(iss|wxs)$|assets/windows/|scripts/(audit_final_setup|package_msix|smoke_msix)\.ps1$|scripts/audit_installer_sources\.py$)'
+        macos_pkg_re='^(assets/macos/|scripts/(dev_bundle_macos|package_macos_release|setup_macos_release_secrets)\.sh$|[^/]*entitlements[^/]*\.plist$)'
+        linux_pkg_re='^packaging/linux/'
+        shell_re='^(crates/bir-shell/|app/)'
+        scripts_only_re='^(scripts/tests/|scripts/setup-(linux|macos)\.sh$|scripts/setup-windows\.ps1$|\.github/workflows/(release[^/]*|bir|html-candidate-certification)\.yml$)'
+
+        app=false; scripts=false; linux_pkg=false; windows_pkg=false; macos_pkg=false; shell=false
+        app_reason=""
+        if [[ "$EVENT" != pull_request && "$EVENT" != push ]]; then
+          app=true; app_reason="event $EVENT tests everything"
+        elif [[ "$changed_known" != true ]]; then
+          app=true; app_reason="change range unknown"
+        elif [[ -z "$changed" ]]; then
+          app=true; app_reason="no changed files"
+        else
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            if [[ "$path" =~ $docs_re ]]; then
+              :
+            elif [[ "$path" =~ $windows_pkg_re ]]; then
+              windows_pkg=true
+            elif [[ "$path" =~ $macos_pkg_re ]]; then
+              macos_pkg=true
+            elif [[ "$path" =~ $linux_pkg_re ]]; then
+              linux_pkg=true
+            elif [[ "$path" =~ $scripts_only_re ]]; then
+              scripts=true
+            elif [[ "$path" =~ $shell_re ]]; then
+              shell=true
+            elif [[ "$app" != true ]]; then
+              app=true; app_reason="app file changed: $path"
+            fi
+          done <<<"$changed"
+        fi
+
+        all_systems='{"include":[{"os":"macos-15","target":"aarch64-apple-darwin"},{"os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"},{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
+        windows_only='{"include":[{"os":"windows-latest","target":"x86_64-pc-windows-msvc"}]}'
+        if [[ "$app" == true ]]; then
+          check=true; check_matrix="$all_systems"; systems="macos-15, ubuntu-22.04, windows-latest"
+          check_reason="$app_reason"; scripts=false
+        elif [[ "$windows_pkg" == true ]]; then
+          check=true; check_matrix="$windows_only"; systems="windows-latest"
+          check_reason="Windows installer files changed"; scripts=false
+        else
+          check=false; check_matrix='{"include":[]}'; systems="none"
+          if [[ "$scripts" == true || "$linux_pkg" == true || "$macos_pkg" == true ]]; then
+            scripts=true; check_reason="no app code changed"
+          elif [[ "$shell" == true ]]; then
+            check_reason="shell workspace changed (covered by shell-check)"
+          else
+            check_reason="docs-only changes"
+          fi
+        fi
+
+        shell_matrix='{"include":[]}'
+        if [[ "$shell" == true ]]; then
+          shell_matrix="$all_systems"
+        fi
+
+        run=false
+        reason="no validation-rules path changed"
+        if [[ "$EVENT" == schedule ]]; then
+          run=true; reason="nightly run"
+        # Read the PR's labels now, not from the event payload, so adding the
+        # label and then clicking "Re-run all jobs" picks it up. (Triggering on
+        # `labeled` instead would restart the whole CI for any label.)
+        elif [[ "$EVENT" == pull_request ]] && gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep -qx run-validation; then
+          run=true; reason="run-validation label"
+        elif [[ "$EVENT" == workflow_dispatch ]]; then
+          if [[ "$FORCE" == true ]]; then run=true; reason="manual run"; else reason="manual run, box not ticked"; fi
+        elif [[ "$BRANCH" == ebirforms-* ]]; then
+          run=true; reason="branch $BRANCH"
+        else
+          if [[ "$changed_known" != true ]]; then
+            # Unknown range (new branch, force push): fail safe and run.
+            run=true; reason="change range unknown"
+          elif grep -qE '^(rules/|crates/bir-rules(-codegen|-platform)?/|crates/bir-core/src/form_rules/|crates/bir-core/src/validation_summary\.rs|evidence/validation-rules/|rust-toolchain|\.github/workflows/ci\.yml$)' <<<"$changed"; then
+            run=true; reason="validation-rules paths changed"
+          fi
+        fi
+        {
+          echo "validation=$run"
+          echo "check=$check"
+          echo "check_matrix=$check_matrix"
+          echo "app=$app"
+          echo "scripts=$scripts"
+          echo "linux_pkg=$linux_pkg"
+          echo "windows_pkg=$windows_pkg"
+          echo "macos_pkg=$macos_pkg"
+          echo "shell=$shell"
+          echo "shell_matrix=$shell_matrix"
+        } >> "$GITHUB_OUTPUT"
+        echo "validation-rules audits: $run ($reason)" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "app check on: $systems ($check_reason)" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "script tests on their own: $scripts" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "packaging changed: linux=$linux_pkg windows=$windows_pkg macos=$macos_pkg" | tee -a "$GITHUB_STEP_SUMMARY"
+        echo "gpui-shell workspace check: $shell" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # The Python script tests on their own, for changes `check` does not run for
+  # (packaging, setup scripts, release workflows, the tests themselves). When
+  # `check` runs, every leg already runs them.
+  scripts:
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Test Python scripts
+      run: python -m unittest discover -s scripts/tests -v
+
+  validation-rules-v1:
+    needs: changes
+    if: needs.changes.outputs.validation == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-22.04, macos-15, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    # Reader only. `check` is the sole writer of host-<os>; see the comment
+    # there. Saving from here too would let this job's much smaller target dir
+    # win the race and define the shared entry for everyone.
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
+
+    - name: Audit legacy v1 rules corpus
+      run: cargo run --locked -p bir-rules-codegen -- validate-v1
+
+  validation-rules-v2:
+    needs: changes
+    if: needs.changes.outputs.validation == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-15, ubuntu-22.04, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+
+    # Reader only - see the sole-writer comment in `check`.
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: workspace-${{ runner.os }}
+        save-if: false
+
+    # This filters one test by exact name, and a filter that matches nothing is
+    # not an error to libtest: it prints "0 passed" and exits 0. So if the test
+    # is ever renamed or moved to another crate, this step would go green while
+    # the immutable-corpus census lock silently stopped being checked. Assert the
+    # test actually ran rather than trusting the exit code.
+    - name: Lock immutable v1 corpus census
+      shell: bash
+      run: |
+        set -euo pipefail
+        output=$(cargo test --locked -p bir-rules-codegen \
+          corpus::tests::landed_v1_corpus_reconciles_its_published_counts -- --exact 2>&1)
+        echo "$output"
+        if ! grep -qE '^test result: ok\. 1 passed' <<<"$output"; then
+          echo "::error::the corpus census test did not run - the filter matched no test." >&2
+          echo "::error::Expected exactly 1 passed. Did the test move crates or get renamed?" >&2
+          exit 1
+        fi
+
+    # `audit` is a distinct subcommand from `check` and was never run in CI.
+    - name: Audit validation-rules v2 IR
+      run: cargo run --locked -p bir-rules-codegen -- audit
+
+    - name: Check generated validation rules
+      run: cargo run --locked -p bir-rules-codegen -- check
+
+    - name: Verify validation-rules digest roll
+      run: cargo run --locked -p bir-rules-codegen -- roll-pin --all --dry-run
+
+    - name: Report validation-rules operator census
+      run: cargo run --locked -p bir-rules-codegen -- operator-census --json
+
+    - name: Report validation-rules reconciliation
+      run: cargo run --locked -p bir-rules-codegen -- reconciliation --json
+
+    # Also gating on every PR from the `check` job; kept here so a validation
+    # run is complete on its own.
+    - name: Check validation-rules production boundaries
+      run: cargo run -q --locked -p bir-rules-codegen -- status --boundaries-only
+
+    - name: Check tracked validation evidence packet set
+      if: ${{ hashFiles('evidence/validation-rules/packets/v1/packet-set.json') != '' }}
+      run: cargo run --locked -p bir-rules-codegen -- check-evidence-packet-set --packet-root evidence/validation-rules/packets/v1
+
+    # Reported, not gating - and deliberately distinct from the
+    # `--boundaries-only` step above, which stays fail-closed and MUST keep
+    # passing. That step asserts production authority is still closed; this one
+    # asserts the active library objective is *finished*. Its open criteria are
+    # the remaining work, not a regression: only 2550Q has a v2 rule set (and it
+    # must never be promoted), so `v2-snapshot-coverage` reads 1/43 and
+    # `validations-represented` 27/2007 by construction. Gating on it would mean
+    # CI can only go green once the entire 43-form corpus is built.
+    #
+    # A boundary failure is far more serious than an open slice. Keeping this
+    # non-gating is what preserves that signal: a red validation-rules-v2 job
+    # now means a boundary broke.
+    - name: Report complete validation library status (non-gating)
+      continue-on-error: true
+      if: ${{ hashFiles('evidence/validation-rules/packets/v1/packet-set.json') != '' }}
+      run: cargo run -q --locked -p bir-rules-codegen -- status
+
+    # No `cargo test -p bir-rules -p bir-rules-codegen -p bir-rules-platform` here.
+    # The `check` job's `cargo test --locked --workspace` already runs exactly those
+    # tests, and on all three OSes - so cross-platform coverage is unchanged, which
+    # matters because a Windows-only job is what previously hid three path defects.
+    # Running them twice per OS meant six executions of bir-rules-codegen's
+    # generate::tests, each of which spawns a nested cargo build.
+    #
+    # The targeted steps above are NOT duplicates and stay: they are `cargo run`
+    # subcommands plus the exact-name corpus census, none of which `cargo test
+    # --workspace` performs.
+
+  # The one required status for the validation-rules audits. A skipped matrix
+  # job reports no per-OS check names, so requiring "validation-rules-v1
+  # (macos-15)" etc. would leave every PR that skips them waiting forever.
+  # Passes when the audits ran green or were skipped; fails if either one
+  # failed or was cancelled.
+  validation-rules:
+    needs: [ changes, validation-rules-v1, validation-rules-v2 ]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Result
+      shell: bash
+      env:
+        DECIDED: ${{ needs.changes.result }}
+        V1: ${{ needs.validation-rules-v1.result }}
+        V2: ${{ needs.validation-rules-v2.result }}
+      run: |
+        echo "changes=$DECIDED v1=$V1 v2=$V2"
+        [[ "$DECIDED" == success ]] || { echo "::error::could not decide whether to run the audits"; exit 1; }
+        for r in "$V1" "$V2"; do
+          [[ "$r" == success || "$r" == skipped ]] || { echo "::error::validation-rules audit $r"; exit 1; }
+        done
+
+  # Always-on guard: the painted desktop crate was retired in favour of
+  # crates/bir-shell, and nothing may reference it again (not even docs).
+  # No `needs` on purpose: a docs-only PR must still fail if it brings the
+  # old name back.
+  legacy-guard:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check for retired crate references
+      run: python3 -I scripts/check_no_legacy_desktop.py
+
+  # crates/bir-shell is a standalone workspace (its own lockfile), so the
+  # root-workspace `check` legs never compile it. Any change under
+  # crates/bir-shell/ or the JS app dir gets its own fmt/check/clippy run on
+  # all three OSs. Reader-only cache, like validation-rules: `check` stays the
+  # sole writer of the shared workspace-<os> entry, and the shell workspace
+  # gets its own shell-<os> entry so the two target dirs can't evict each
+  # other.
+  shell-check:
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changes.outputs.shell_matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: 1.99.0
+        components: clippy, rustfmt
+
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: crates/bir-shell
+        shared-key: shell-${{ runner.os }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libx11-dev \
+          libxcb1-dev \
+          libxcb-render0-dev \
+          libxcb-shape0-dev \
+          libxcb-xfixes0-dev \
+          libxkbcommon-dev \
+          libxkbcommon-x11-dev \
+          libwayland-dev \
+          libwayland-client0 \
+          libasound2-dev \
+          libudev-dev \
+          libvulkan-dev \
+          libfontconfig1-dev \
+          libfreetype-dev \
+          libssl-dev \
+          libdbus-1-dev \
+          libgtk-3-dev \
+          libwebkit2gtk-4.1-dev \
+          libayatana-appindicator3-1
+
+    # Same OpenSSL provisioning as `check`: bir-shell links bir-core, whose
+    # SFTP/reqwest deps need it on Windows.
+    - name: Cache OpenSSL
+      if: runner.os == 'Windows'
+      uses: actions/cache@v4
+      with:
+        path: |
+          C:\Program Files\OpenSSL
+          C:\Program Files\OpenSSL-Win64
+        key: openssl-${{ runner.os }}-choco-v1
+
+    - name: Install Windows Dependencies
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        if ((Test-Path "C:\Program Files\OpenSSL\include") -or
+            (Test-Path "C:\Program Files\OpenSSL-Win64\include")) {
+            Write-Host "OpenSSL restored from cache; skipping choco install"
+        } else {
+            choco install openssl -y
+        }
+        $openssl_dir = "C:\Program Files\OpenSSL"
+        if (Test-Path "C:\Program Files\OpenSSL\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL"
+        } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            $openssl_dir = "C:\Program Files\OpenSSL-Win64"
+        } else {
+            [Console]::Error.WriteLine("OpenSSL include directory not found!")
+            exit 1
+        }
+        echo "OPENSSL_DIR=$openssl_dir" >> $env:GITHUB_ENV
+        $lib_file = Get-ChildItem -Path $openssl_dir -Filter "*crypto*.lib" -Recurse | Select-Object -First 1
+        if ($lib_file) {
+            echo "OPENSSL_LIB_DIR=$($lib_file.DirectoryName)" >> $env:GITHUB_ENV
+            if ($lib_file.Name -ne "libcrypto.lib") {
+                Copy-Item $lib_file.FullName "$($lib_file.DirectoryName)\libcrypto.lib"
+            }
+        } else {
+          Write-Warning "Could not find *crypto*.lib inside $openssl_dir"
+        }
+
+    - name: Install just
+      run: cargo install just --version 1.45.0 --locked
+
+    - name: Check bir-shell workspace
+      env:
+        # Debug-only account-gate bypass. Release builds ignore both.
+        EBIR_TEST_ENV: "1"
+        BIR_AUTH_BYPASS: "1"
+      run: just shell-check
+
+  # A failed run on main - nightly, or the push a merge makes - opens (or
+  # comments on) one tracking issue. Pull requests no longer have to be up to
+  # date with main before merging, so two PRs that pass alone but break
+  # together show up here instead of going unread.
+
+  main-report:
+    needs: [ ci-ok ]
+    # `failure` only: a run cancelled by a newer push to main is not a break.
+    if: always() && needs.ci-ok.result == 'failure' && github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'push')
+    runs-on: ubuntu-22.04
+    permissions:
+      issues: write
+    steps:
+    - name: Open or update the main failure issue
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        EVENT: ${{ github.event_name }}
+        SHA: ${{ github.sha }}
+        RESULT: ${{ needs.ci-ok.result }}
+      run: |
+        set -euo pipefail
+        title="CI failed on main"
+        body="$EVENT run on ${SHA:0:8}: $RUN_URL"$'\n\n'"- ci-ok: $RESULT"
+        existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+        if [[ -n "$existing" ]]; then
+          gh issue comment "$existing" --body "$body"
+        else
+          gh issue create --title "$title" --body "$body"
+        fi
+
+  # The one required status check (ruleset "Main"). Jobs above are skipped on
+  # purpose, and a skipped matrix job reports no per-OS check names, so
+  # requiring those names would leave such PRs waiting forever. ci-ok passes
+  # only when `changes` decided, every job it asked for passed, the
+  # validation-rules summary passed, and legacy-guard passed. A job skipped
+  # because something it needs failed is a failure here, not a skip.
+  ci-ok:
+    needs: [ changes, check, shell-check, scripts, validation-rules, legacy-guard ]
+    if: always()
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Result
+      shell: bash
+      env:
+        CHANGES: ${{ needs.changes.result }}
+        CHECK: ${{ needs.check.result }}
+        WANT_CHECK: ${{ needs.changes.outputs.check }}
+        SCRIPTS: ${{ needs.scripts.result }}
+        WANT_SCRIPTS: ${{ needs.changes.outputs.scripts }}
+        SHELL_CHECK: ${{ needs.shell-check.result }}
+        WANT_SHELL: ${{ needs.changes.outputs.shell }}
+        VALIDATION: ${{ needs.validation-rules.result }}
+        LEGACY_GUARD: ${{ needs.legacy-guard.result }}
+      run: |
+        set -euo pipefail
+        echo "changes=$CHANGES check=$CHECK (wanted $WANT_CHECK) scripts=$SCRIPTS (wanted $WANT_SCRIPTS) shell-check=$SHELL_CHECK (wanted $WANT_SHELL) validation-rules=$VALIDATION legacy-guard=$LEGACY_GUARD"
+        fail() { echo "::error::$1"; exit 1; }
+        [[ "$CHANGES" == success ]] || fail "could not decide what to test (changes: $CHANGES)"
+        expect() {
+          if [[ "$3" == true ]]; then
+            [[ "$2" == success ]] || fail "$1 was needed and finished: $2"
+          else
+            [[ "$2" == skipped || "$2" == success ]] || fail "$1 was not needed but finished: $2"
+          fi
+        }
+        expect check "$CHECK" "$WANT_CHECK"
+        expect scripts "$SCRIPTS" "$WANT_SCRIPTS"
+        expect shell-check "$SHELL_CHECK" "$WANT_SHELL"
+        [[ "$VALIDATION" == success ]] || fail "validation-rules finished: $VALIDATION"
+        [[ "$LEGACY_GUARD" == success ]] || fail "legacy-guard finished: $LEGACY_GUARD"

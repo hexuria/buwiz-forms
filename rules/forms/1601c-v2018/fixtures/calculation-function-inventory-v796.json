@@ -1,0 +1,263 @@
+{
+    "source_sha256":  "3fb7b4185264e47c9d77b0def4301fa696e7b4424ad30b4e973c7c0b1f759879",
+    "function_count":  16,
+    "functions":  [
+                      {
+                          "name":  "Schedule1",
+                          "start_line":  1813,
+                          "end_line":  1832,
+                          "body_sha256":  "5d71cebba5d19acbba17d9dc6a78e57b927e1d06afa5ebf49064efe40c20b98f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "setInputTextControl_NumberFormatter",
+                          "start_line":  2762,
+                          "end_line":  2766,
+                          "body_sha256":  "206ca349f0bf9f5088fa17c6d910b5d20929e2f39ba907341f1fbb64fbaff176",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadSchedule",
+                          "start_line":  3297,
+                          "end_line":  3348,
+                          "body_sha256":  "95b7e9c5ed9419ed7fd865b3c6d70a67f2826ed21d96be90607dd0c2d12f54b0",
+                          "alerts":  [
+                                         "scheduleResponse"
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:sched1:txtAdjustments",
+                                              "frm1601c:sched1:txtBankCode",
+                                              "frm1601c:sched1:txtDatePaid",
+                                              "frm1601c:sched1:txtMonthYear",
+                                              "frm1601c:sched1:txtNumber",
+                                              "frm1601c:sched1:txtShouldTaxDue",
+                                              "frm1601c:sched1:txtTaxPaid"
+                                          ]
+                      },
+                      {
+                          "name":  "addSchedule",
+                          "start_line":  3349,
+                          "end_line":  3386,
+                          "body_sha256":  "60a606a1b4d9ec50af781dab79889d098e31ba5e17e2e0da6a4a4dd6d3ebb6ba",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:sched1:txtAdjustments",
+                                              "frm1601c:sched1:txtBankCode",
+                                              "frm1601c:sched1:txtDatePaid",
+                                              "frm1601c:sched1:txtMonthYear",
+                                              "frm1601c:sched1:txtNumber",
+                                              "frm1601c:sched1:txtShouldTaxDue",
+                                              "frm1601c:sched1:txtTaxPaid"
+                                          ]
+                      },
+                      {
+                          "name":  "deleteSchedule",
+                          "start_line":  3387,
+                          "end_line":  3441,
+                          "body_sha256":  "5dfe1395076bac15d84a0f5e944f5fff99d199441280ee78b1e3715654db3fa5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:sched1:txtAdjustments",
+                                              "frm1601c:sched1:txtBankCode",
+                                              "frm1601c:sched1:txtDatePaid",
+                                              "frm1601c:sched1:txtMonthYear",
+                                              "frm1601c:sched1:txtNumber",
+                                              "frm1601c:sched1:txtShouldTaxDue",
+                                              "frm1601c:sched1:txtTaxPaid"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt21",
+                          "start_line":  3505,
+                          "end_line":  3511,
+                          "body_sha256":  "0461bce12037d5fff4dabacee8344355aae5f26b6b91fba2f391a30eed9f89e4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax15",
+                                              "frm1601c:txtTax16",
+                                              "frm1601c:txtTax17",
+                                              "frm1601c:txtTax18",
+                                              "frm1601c:txtTax19",
+                                              "frm1601c:txtTax20",
+                                              "frm1601c:txtTax21"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt22",
+                          "start_line":  3512,
+                          "end_line":  3517,
+                          "body_sha256":  "8ee9a9fcb8cf7a19b12ed1aae0a5023f6caf06cda7927c49240c2b66950e16fa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax14",
+                                              "frm1601c:txtTax21",
+                                              "frm1601c:txtTax22"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt24",
+                          "start_line":  3518,
+                          "end_line":  3522,
+                          "body_sha256":  "8a86e3bb50c5802706c6babf2120121a4b14a904dfe597e854c7413571121d01",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax22",
+                                              "frm1601c:txtTax23",
+                                              "frm1601c:txtTax24"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt27",
+                          "start_line":  3523,
+                          "end_line":  3528,
+                          "body_sha256":  "ff73d6510233e9e0a3f0f36ed4dd19a05be732b738f1ee5dd47e5cee211747a8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax25",
+                                              "frm1601c:txtTax26",
+                                              "frm1601c:txtTax27"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt30",
+                          "start_line":  3529,
+                          "end_line":  3534,
+                          "body_sha256":  "e6125d4d6f88c0fc0f3317206f611b10c6ea3344675103538aec8fd6fb61a907",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax28",
+                                              "frm1601c:txtTax29",
+                                              "frm1601c:txtTax30"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTxt31",
+                          "start_line":  3535,
+                          "end_line":  3540,
+                          "body_sha256":  "6c450f8dfcad1af8f71506e4da9c8131fba0a24603baf4937c5cbdc9d0d81adb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax27",
+                                              "frm1601c:txtTax30",
+                                              "frm1601c:txtTax31"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  3541,
+                          "end_line":  3548,
+                          "body_sha256":  "343c3479593b4201ca4fc56dda609df5ddb10a86aee6ba55824dfaeb437f2378",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax32",
+                                              "frm1601c:txtTax33",
+                                              "frm1601c:txtTax34",
+                                              "frm1601c:txtTax35"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSchedule1",
+                          "start_line":  3549,
+                          "end_line":  3565,
+                          "body_sha256":  "a006d0049025b9acc6077cadc8473c8799b4485f27eda445b2b5da6d550f9097",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:sched1:txtAdjustments",
+                                              "frm1601c:sched1:txtShouldTaxDue",
+                                              "frm1601c:sched1:txtTaxPaid",
+                                              "frm1601c:sched1:txtTotal1",
+                                              "frm1601c:txtTax26"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxAmountStillDue",
+                          "start_line":  3566,
+                          "end_line":  3572,
+                          "body_sha256":  "178f04572b198700c42c2167837387a6b826ea1f7eeaf4d3a4f79c181bf6ac5a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax31",
+                                              "frm1601c:txtTax35",
+                                              "frm1601c:txtTax36"
+                                          ]
+                      },
+                      {
+                          "name":  "cancelAllCompute",
+                          "start_line":  3573,
+                          "end_line":  3635,
+                          "body_sha256":  "62c735afa608d2f75c012c0cd8027dff550becddc6b0db35cfb3ed68b9136f67",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:sched1:txtBankCode",
+                                              "frm1601c:sched1:txtDatePaid",
+                                              "frm1601c:sched1:txtMonthYear",
+                                              "frm1601c:sched1:txtNumber",
+                                              "frm1601c:sched1:txtShouldTaxDue",
+                                              "frm1601c:sched1:txtTaxPaid",
+                                              "frm1601c:TaxWithheld_1",
+                                              "frm1601c:txtTax14",
+                                              "frm1601c:txtTax15",
+                                              "frm1601c:txtTax16",
+                                              "frm1601c:txtTax17",
+                                              "frm1601c:txtTax18",
+                                              "frm1601c:txtTax19",
+                                              "frm1601c:txtTax20",
+                                              "frm1601c:txtTax23",
+                                              "frm1601c:txtTax25",
+                                              "frm1601c:txtTax26",
+                                              "frm1601c:txtTax28",
+                                              "frm1601c:txtTax29",
+                                              "frm1601c:txtTax32",
+                                              "frm1601c:txtTax33",
+                                              "frm1601c:txtTax34"
+                                          ]
+                      },
+                      {
+                          "name":  "disableTaxdue",
+                          "start_line":  3636,
+                          "end_line":  3647,
+                          "body_sha256":  "071655e034e02b71395a9feed31c056acc49d164894a7c816774072b397c0cfa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1601c:txtTax25",
+                                              "frm1601c:txtTax27"
+                                          ]
+                      }
+                  ]
+}

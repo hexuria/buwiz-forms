@@ -1,0 +1,131 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1604e-schedule1-row-total",
+                             "1604e-schedule1-column-totals",
+                             "1604e-schedule2-row-total",
+                             "1604e-schedule2-column-totals",
+                             "1604e-schedule3-obsolete"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1604e-schedule1-row-total",
+                             "outputs":  [
+                                             "frm1604e:txtSched1TotRemAmt1..4"
+                                         ],
+                             "inputs":  [
+                                            "corresponding Schedule 1 TaxesWithheld",
+                                            "corresponding Schedule 1 Penalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Total Amount Remitted = Taxes Withheld + Penalties.",
+                             "rounding":  "Inputs are parsed after comma removal; outputs use formatCurrency.",
+                             "trigger":  "computeSched1(row)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1:L6500-L6511"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604e-schedule1-column-totals",
+                             "outputs":  [
+                                             "frm1604e:txtSched1TaxWithheldTtl",
+                                             "frm1604e:txtSched1PenaltiesTtl",
+                                             "frm1604e:txtSched1TotRemAmtTtl"
+                                         ],
+                             "inputs":  [
+                                            "four Schedule 1 rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Independently sum the four quarterly Taxes Withheld, Penalties, and Total Amount Remitted columns.",
+                             "rounding":  "Inputs are parsed after comma removal; outputs use formatCurrency.",
+                             "trigger":  "computeSched1Total",
+                             "depends_on":  [
+                                                "1604e-schedule1-row-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1Total:L6512-L6534"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604e-schedule2-row-total",
+                             "outputs":  [
+                                             "frm1604e:txtSched2TotRemAmt1..12"
+                                         ],
+                             "inputs":  [
+                                            "corresponding Schedule 2 TaxesWithheld",
+                                            "corresponding Schedule 2 Penalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Total Amount Remitted = Taxes Withheld + Penalties.",
+                             "rounding":  "Inputs are parsed after comma removal; outputs use formatCurrency.",
+                             "trigger":  "computeSched2(row)",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched2:L6535-L6546"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604e-schedule2-column-totals",
+                             "outputs":  [
+                                             "frm1604e:txtSched2TaxWithheldTtl",
+                                             "frm1604e:txtSched2PenaltiesTtl",
+                                             "frm1604e:txtSched2TotRemAmtTtl"
+                                         ],
+                             "inputs":  [
+                                            "twelve Schedule 2 rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Independently sum the twelve monthly Taxes Withheld, Penalties, and Total Amount Remitted columns.",
+                             "rounding":  "Inputs are parsed after comma removal; outputs use formatCurrency.",
+                             "trigger":  "computeSched2Total",
+                             "depends_on":  [
+                                                "1604e-schedule2-row-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched2Total:L6547-L6619"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1604e-schedule3-obsolete",
+                             "outputs":  [
+                                             "commented Schedule 3 outputs"
+                                         ],
+                             "inputs":  [
+                                            "commented Schedule 3 inputs"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Commented-out computation only; it does not execute.",
+                             "rounding":  "Inputs are parsed after comma removal; outputs use formatCurrency.",
+                             "trigger":  "none",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#commented-computeSched3"
+                                             ],
+                             "assessment":  "obsolete",
+                             "recommended_app_behavior":  "Do not implement as active behavior.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

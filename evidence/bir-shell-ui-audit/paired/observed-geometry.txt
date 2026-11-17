@@ -1,0 +1,45 @@
+Audit 2026-11-01; native desktop 2560x1920; previews are downscaled.
+Matched default PNGs: 1440x900 app content, light theme.
+Shell native outer allocation1480x940 minus20px shadow on each edge.
+Reference Weston kiosk surface1440x900 (compositor chrome excluded).
+Narrow shell/ref PNGs800x900.
+
+Observed on native screenshot backgrounds/rectangles:
+Left sidebar248px both; inner control232px,8px horizontal inset both.
+Taxpayer panel320px both.
+Shell selected branch control296px: body padding12px each side.
+Reference selected branch control288px: body padding16px each side.
+Reference apparent right background328px includes8px exterior gutter.
+Group-label glyphs have extra nested inset; not the panel padding boundary.
+Divider attempt did not resize either panel; reference held-gesture PNG retained.
+At800px shell uses dismissible320px overlay; ref stays docked/clips Calendar.
+Reference Ctrl+B manual collapse improves remaining central space.
+
+Source declarations, not independent runtime observations:
+Shell ui.js106-137 width248/320;1228-1275 panel body12.
+Shell main.js257-287 resize settling200ms, narrow860.
+Reference app.tsx1493-1503 sidebar248/padding8;1724-1725 panel320/body16.
+Exact breakpoint boundary not exercised.
+
+Matched-size supplement reused original synthetic stores, not fresh:
+shell-06-library-all.png,07-library-filtered.png,08-period-chooser.png,
+09-taxpayer-profile.png,10-taxpayer-forms.png,11-filings-empty.png:
+each PNG1440x900 content, cropped20px shadow/frame from1480x940 allocation.
+Period chooser Cancel dismissed without a new saved period.
+Recent uses existing shell-01-form-default.png1440x900.
+ref-24-form-wide.png: genuine2560x1856 X11 client content at x0/y0,
+full client visible on unchanged2560x1920 desktop; decoration excluded.
+Both wide apps fixed left248/right320. Row1400 background:
+shell12 x0-247 left,2240-2559 right; ref24 x0-247 left,
+2232-2559 right-colored region328px=320px panel+8px exterior gutter.
+Reference initially Opening official form; Validate rendered incomplete-data errors.
+Wide form section/column/validation state differs; not a field-fidelity benchmark.
+
+PNG vs content correction for retained original shell captures:
+01,23-33 PNG1480x940 includes20px shadow/frame each edge ->1440x900 content.
+13,19-21 PNG1520x980 ->1480x940 content.
+14 PNG840x940 ->800x900 content.
+22 PNG1440x900 ->1400x860 content, not a matched default.
+02-12,15-18 PNG2560x1856 maximized content.
+All originals retained unchanged; no content scaling/reconstruction.
+Fresh setup/onboarding remains wide and unmatched vs1440x900 reference.

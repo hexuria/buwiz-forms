@@ -1,0 +1,32 @@
+[package]
+name = "bir-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Draft-only MCP (stdio or loopback Streamable HTTP) adapter that drives a running BIR app through gpui-agent."
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "bir-mcp"
+path = "src/main.rs"
+
+[features]
+default = ["sqlcipher"]
+sqlcipher = ["bir-core/sqlcipher"]
+
+[dependencies]
+serde_json = { workspace = true }
+# Workspace pin shared with bir-shell's `agent` feature.
+gpui-agent = { workspace = true }
+# Blocking client for the buwiz-server license check. rustls, no OpenSSL.
+reqwest = { workspace = true }
+# `--http`: a small blocking HTTP/1.1 server; no TLS (loopback only).
+tiny_http = { version = "0.12", default-features = false }
+# Desktop device flow and the account store shared with the Buwiz app.
+bir-core = { path = "../bir-core", default-features = false }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,177 @@
+name: NSH app
+
+# The NSH (TSX) app in nsh/ (docs/platforms/nsh.md, nsh/AGENTS.md): type check, build, Rust tests and the headless TSX
+# tests on macOS, plus the plain-SQLite tests of the two crates the app is built on.
+#
+# The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
+# this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged: c346e920e, the tip of the
+# `buwiz` branch since hexuria/nsh#12. NOTHING HERE HAS EVER RUN: it was written without a runner, and its steps are the
+# ones that pass on the owner's Mac (nsh/AGENTS.md "Commands").
+#
+# Secret to create: NSH_REPO_TOKEN, a token that can read hexuria/nsh (a fine-grained personal access token with
+# "Contents: read" on that one repository). If hexuria/nsh is public it is not needed (the step falls back to the
+# job's own token); if it is private, the step fails without it. Pull requests from forks never get the secret.
+
+on:
+  pull_request:
+    paths:
+      - "nsh/**"
+      - "crates/bir-app-api/**"
+      - "crates/bir-core/**"
+      - "crates/bir-host-shim/**"
+      # What those crates are built on, and this file.
+      - "crates/bir-print/**"
+      - "crates/bir-rules/**"
+      - ".github/workflows/nsh.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
+  # c346e920ee4ba12f6dc5804842e60814d2c02480 = hexuria/nsh, branch buwiz: "Merge upstream v0.5.1 into the buwiz line"
+  # (hexuria/nsh#12).
+  NSH_PINNED_REF: c346e920ee4ba12f6dc5804842e60814d2c02480
+  NSH_REPOSITORY: hexuria/nsh
+  # The four safety variables: nothing reaches the keychain, a real database or the BIR.
+  BUWIZ_NO_KEYCHAIN: "1"
+  EBIR_TEST_ENV: "1"
+  BIR_AUTH_BYPASS: "1"
+  BIR_SFTP_DRY_RUN: "1"
+
+jobs:
+  nsh-macos:
+    name: NSH app (macOS)
+    runs-on: macos-15
+    # Cold: the nsh command line alone is 10 minutes on an M-series Mac, and every test file opens a headless runner.
+    timeout-minutes: 120
+    env:
+      # One compiler for everything, whatever rust-toolchain.toml file cargo meets (this repository's says 1.99.0, the
+      # NSH checkout's says "stable" plus mobile targets). Keep it equal to this repository's rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      # The layout the app's Cargo.toml expects: <workspace>/buwiz-forms and <workspace>/nsh side by side, because
+      # buwiz-forms/nsh/Cargo.toml names the NSH crates as ../../nsh/crates/...
+      - name: Check out buwiz-forms
+        uses: actions/checkout@v4
+        with:
+          path: buwiz-forms
+
+      - name: Check out NSH (the pinned commit, beside buwiz-forms)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NSH_REPOSITORY }}
+          ref: ${{ env.NSH_PINNED_REF }}
+          token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+          path: nsh
+          persist-credentials: false
+
+      - name: Check the two checkouts line up
+        run: |
+          test -f nsh/crates/nsh-core/Cargo.toml
+          test -f buwiz-forms/nsh/Cargo.toml
+          git -C nsh log -1 --format='NSH at %H %s'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: clippy, rustfmt
+
+      - name: Install just
+        run: cargo install just --version 1.45.0 --locked
+
+      # huacnlee/cargo, as NSH's own CI and the owner's Mac use it: the NSH checkout's action installs the release it
+      # pins in place of rustup's cargo and restores the dependency builds (main saves them, pull requests restore).
+      - name: Install huacnlee/cargo
+        uses: ./nsh/.github/actions/cargo
+        with:
+          cache: buwiz-nsh-app
+          lockfiles: buwiz-forms/nsh/Cargo.lock
+
+      # The command line the just recipes call (~/BuwizNsh/tools/bin/nsh), built from the same checkout the app builds
+      # against, so the two always agree. Cached by the pin: a new pin builds it again.
+      - name: Cache the nsh command line
+        id: nsh-cli
+        uses: actions/cache@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_PINNED_REF }}
+
+      - name: Build the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        working-directory: nsh
+        run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+
+      - name: Put the nsh command line on the path
+        run: |
+          echo "$HOME/BuwizNsh/tools/bin" >> "$GITHUB_PATH"
+          "$HOME/BuwizNsh/tools/bin/nsh" -V
+
+      - name: nsh check (the crate, then the TSX types)
+        working-directory: buwiz-forms
+        run: just nsh-check -v
+
+      - name: nsh build (every warning is a finding)
+        working-directory: buwiz-forms
+        run: just nsh-build
+
+      - name: Rust tests of the app's crate
+        working-directory: buwiz-forms
+        run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
+
+      # Every *.test.ts and *.test.tsx, one headless run per file, as `just nsh-test` does (nsh/verify holds real-window
+      # verifiers that need the owner's data copy, so it is left out). `just nsh-test <file>` sets the four safety
+      # variables again and never sets BIR_DATABASE_PATH.
+      - name: Headless TSX tests, file by file
+        working-directory: buwiz-forms/nsh
+        run: |
+          failed=()
+          while IFS= read -r file; do
+            just test "$file" || failed+=("$file")
+          done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | sort)
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "failed in:"
+            printf '  %s\n' "${failed[@]}"
+            exit 1
+          fi
+
+  # bir-core and bir-app-api with --no-default-features: the plain-SQLite build the NSH app ships (no sqlcipher).
+  # `just core-plain-test` sets the four safety variables itself. Linux, because it is the cheapest runner; the
+  # system packages are a guess from the existing CI job's list and the dbus crate the keychain code pulls in.
+  core-plain-test:
+    name: bir-core and bir-app-api, plain SQLite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: clippy, rustfmt
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core-plain-${{ runner.os }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install just
+        run: cargo install just --version 1.45.0 --locked
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev libssl-dev
+
+      - name: Plain-SQLite tests
+        run: just core-plain-test

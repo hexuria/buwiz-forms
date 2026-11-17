@@ -1,0 +1,287 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200t-v2020",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2200t-input-004-date-format",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "validateDate receives malformed MM/DD/YYYY input."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-input-004-date-format"
+                  },
+                  {
+                      "case_id":  "case-02-2200t-input-005-date-future",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "validateDate receives a future date."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-input-005-date-future"
+                  },
+                  {
+                      "case_id":  "case-03-2200t-input-006-date-floor",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "validateDate receives a date before 2018."
+                                    },
+                      "expected_message":  "This date cannot be prior to 2018.",
+                      "expected_behavior":  "The generic helper enforces 2018, while Validate enforces only 1904 and the printed form is January 2020.",
+                      "rule_id":  "2200t-input-006-date-floor"
+                  },
+                  {
+                      "case_id":  "case-04-2200t-save-007-return-date",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "All three return-date components are blank."
+                                    },
+                      "expected_message":  "Please enter a valid Return Date",
+                      "expected_behavior":  "Save rejects only when all three components are blank; a partially populated or malformed date passes this guard.",
+                      "rule_id":  "2200t-save-007-return-date"
+                  },
+                  {
+                      "case_id":  "case-05-2200t-save-008-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-save-008-tin"
+                  },
+                  {
+                      "case_id":  "case-06-2200t-save-009-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-save-009-rdo"
+                  },
+                  {
+                      "case_id":  "case-07-2200t-save-010-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "The correct field is checked, but the message says Item 7 even though registered name is Item 6.",
+                      "rule_id":  "2200t-save-010-name"
+                  },
+                  {
+                      "case_id":  "case-08-2200t-save-011-amended-version",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "A finalized/versioned return exists and Amended Return is not Yes."
+                                    },
+                      "expected_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-save-011-amended-version"
+                  },
+                  {
+                      "case_id":  "case-09-2200t-validate-012-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Parsed month is blank, below 1, above 12, or NaN/zero."
+                                    },
+                      "expected_message":  "Please enter a valid month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-012-month"
+                  },
+                  {
+                      "case_id":  "case-10-2200t-validate-013-february",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The day exceeds 28 in a non-leap February."
+                                    },
+                      "expected_message":  "Please enter a valid date on Item 1. Filing year is not a leap year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-013-february"
+                  },
+                  {
+                      "case_id":  "case-11-2200t-validate-014-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Parsed day is blank, below 1, above the computed month maximum, or NaN/zero."
+                                    },
+                      "expected_message":  "Please enter a valid day on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-014-day"
+                  },
+                  {
+                      "case_id":  "case-12-2200t-validate-015-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is the empty string."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-015-year-required"
+                  },
+                  {
+                      "case_id":  "case-13-2200t-validate-016-year-floor",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year coerces below 1904."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 1. Entry should not be lower than 1904.",
+                      "expected_behavior":  "The January 2020 form accepts years back to 1904; the separate validateDate helper uses 2018.",
+                      "rule_id":  "2200t-validate-016-year-floor"
+                  },
+                  {
+                      "case_id":  "case-14-2200t-validate-018-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The composed return date is after the current local date."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 1. Date cannot be after the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-018-future"
+                  },
+                  {
+                      "case_id":  "case-15-2200t-validate-019-tin-presence",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-019-tin-presence"
+                  },
+                  {
+                      "case_id":  "case-16-2200t-validate-021-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-021-rdo"
+                  },
+                  {
+                      "case_id":  "case-17-2200t-validate-022-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is exactly empty."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-022-name"
+                  },
+                  {
+                      "case_id":  "case-18-2200t-validate-023-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is exactly empty."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-023-address"
+                  },
+                  {
+                      "case_id":  "case-19-2200t-validate-024-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is exactly empty."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-024-zip"
+                  },
+                  {
+                      "case_id":  "case-20-2200t-validate-025-phone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is exactly empty."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-025-phone"
+                  },
+                  {
+                      "case_id":  "case-21-2200t-validate-026-production-city",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Place-of-production city selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid Place of Production on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-026-production-city"
+                  },
+                  {
+                      "case_id":  "case-22-2200t-validate-027-removal-city",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Place-of-removal city selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid Place of Removal on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-027-removal-city"
+                  },
+                  {
+                      "case_id":  "case-23-2200t-validate-028-relief-specification",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax relief Yes is checked and the specification is empty."
+                                    },
+                      "expected_message":  "Please specify a Tax Relief on Item 12A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-028-relief-specification"
+                  },
+                  {
+                      "case_id":  "case-24-2200t-validate-030-payment-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "None of the three manner-of-payment radios is checked."
+                                    },
+                      "expected_message":  "Please enter a Manner of Payment on Part II.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-030-payment-choice"
+                  },
+                  {
+                      "case_id":  "case-25-2200t-validate-031-payment-other",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other manner of payment is checked and its description is empty."
+                                    },
+                      "expected_message":  "Please specify a Scheme on Item 15.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200t-validate-031-payment-other"
+                  },
+                  {
+                      "case_id":  "case-26-2200t-validate-036-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All preceding Validate branches pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "Validate disables itself, enables Print/Edit/Final Copy, and disables editable controls.",
+                      "rule_id":  "2200t-validate-036-success"
+                  },
+                  {
+                      "case_id":  "case-27-2200t-final-038-confirmation",
+                      "phase":  "final-copy",
+                      "mutations":  {
+                                        "synthetic_condition":  "The user declines the submission/final-copy confirmation."
+                                    },
+                      "expected_message":  "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?",
+                      "expected_behavior":  "The confirm dialog cancels when the user does not affirm.",
+                      "rule_id":  "2200t-final-038-confirmation"
+                  },
+                  {
+                      "case_id":  "case-28-2200t-final-039-offline",
+                      "phase":  "final-copy",
+                      "mutations":  {
+                                        "synthetic_condition":  "The connection check fails."
+                                    },
+                      "expected_message":  "The system detected that you have no internet connection.\nPlease contact your internet service provider.",
+                      "expected_behavior":  "The source sets final flag 3 and still saves an encrypted profile for offline handling.",
+                      "rule_id":  "2200t-final-039-offline"
+                  }
+              ]
+}

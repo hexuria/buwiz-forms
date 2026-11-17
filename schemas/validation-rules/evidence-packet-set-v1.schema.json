@@ -1,0 +1,88 @@
+{
+  "$id": "urn:dev.goldcoders.bir:schema:evidence-packet-set:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "format": {
+      "const": "bir-evidence-packet-set-v1"
+    },
+    "packet_count": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "packet_set_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "packets": {
+      "items": {
+        "$ref": "#/$defs/packet"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "rules_index_order_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "rules_index_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "format",
+    "packet_count",
+    "packet_set_digest_sha256",
+    "packets",
+    "rules_index_order_sha256",
+    "rules_index_sha256"
+  ],
+  "title": "Validation-rule evidence packet set v1",
+  "type": "object",
+  "$defs": {
+    "packet": {
+      "additionalProperties": false,
+      "properties": {
+        "form_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "ordinal": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "packet_digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "packet_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "path": {
+          "$ref": "#/$defs/portableIdentifier"
+        }
+      },
+      "required": [
+        "form_id",
+        "manifest_sha256",
+        "ordinal",
+        "packet_digest_sha256",
+        "packet_id",
+        "path"
+      ],
+      "type": "object"
+    },
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}

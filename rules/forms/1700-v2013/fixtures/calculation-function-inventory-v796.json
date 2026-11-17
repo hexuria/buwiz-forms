@@ -1,0 +1,650 @@
+{
+    "source_sha256":  "d025bb0743123dc0dfdf8251da18c42cc7827c5c571f5b06ff8f39a62f8437ba",
+    "function_count":  43,
+    "functions":  [
+                      {
+                          "name":  "computeQualifiedDependent",
+                          "start_line":  8831,
+                          "end_line":  8873,
+                          "body_sha256":  "da37ad0f79e288addff506bbf42214a84164164015a17d1e044da46fa6ddf456",
+                          "alerts":  [
+                                         "\u0027computeQualifiedDependent\u0027",
+                                         "d.getElementById(\"frm1700:txtPg3Pt5I9C1\").value"
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:rdoPg1Pt1I14NoInd",
+                                              "frm1700:rdoPg1Pt1I14YesInd",
+                                              "frm1700:rdoPg1Pt1I21SpouseClaimAdditionalExemptionNo",
+                                              "frm1700:rdoPg1Pt1I21SpouseClaimAdditionalExemptionYes",
+                                              "frm1700:txtPg1Pt1I15QualifyDependent",
+                                              "frm1700:txtPg1Pt1I22SpouseQualifiedDependentChildren",
+                                              "frm1700:txtPg3Pt5I9C1",
+                                              "frm1700:txtPg3Pt5I9C2",
+                                              "frm1700:txtPg4T2DependentDOB",
+                                              "frm1700:txtPg4T2FirstName",
+                                              "frm1700:txtPg4T2FirstName1",
+                                              "frm1700:txtPg4T2FirstName2",
+                                              "frm1700:txtPg4T2FirstName3",
+                                              "frm1700:txtPg4T2FirstName4",
+                                              "frm1700:txtPg4T2LastName",
+                                              "frm1700:txtPg4T2LastName1",
+                                              "frm1700:txtPg4T2LastName2",
+                                              "frm1700:txtPg4T2LastName3",
+                                              "frm1700:txtPg4T2LastName4"
+                                          ]
+                      },
+                      {
+                          "name":  "processPart1Item23",
+                          "start_line":  8874,
+                          "end_line":  8877,
+                          "body_sha256":  "5aefe87261622f09f4772087a11d1bc0d431298121d794d10899f11464fbaddb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I23FilerTaxDue",
+                                              "frm1700:txtPg2Pt4I14C1"
+                                          ]
+                      },
+                      {
+                          "name":  "processPart1Item24",
+                          "start_line":  8878,
+                          "end_line":  8881,
+                          "body_sha256":  "b643583a1d3e3b6b5b87f79f3478f91dbc4847ad7d5a364b611fe88d22756943",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I24SpouseTaxDue",
+                                              "frm1700:txtPg2Pt4I14C2"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputePart1Item25",
+                          "start_line":  8882,
+                          "end_line":  8890,
+                          "body_sha256":  "37757576169007fb79b50ac7835da133d0b27434dda67b5340e68409cbb3fc6e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I23FilerTaxDue",
+                                              "frm1700:txtPg1Pt2I24SpouseTaxDue",
+                                              "frm1700:txtPg1Pt2I25TotalIncomeTaxDue"
+                                          ]
+                      },
+                      {
+                          "name":  "processPart1Item26",
+                          "start_line":  8891,
+                          "end_line":  8894,
+                          "body_sha256":  "812c3ad28bb843f618808ff2f1c61dd04195996b26e6428a9b29986b77c1af79",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I26TaxFilersTaxCredit",
+                                              "frm1700:txtPg2Pt4I19C1"
+                                          ]
+                      },
+                      {
+                          "name":  "processPart1Item27",
+                          "start_line":  8895,
+                          "end_line":  8899,
+                          "body_sha256":  "ceeb8b9aaa8cac77ae49b88ff30e5f7eeabf5ed2871ad3f5718357cdf7f2a42f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I27SpouseTaxCredit",
+                                              "frm1700:txtPg2Pt4I19C2"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputePart1Item28",
+                          "start_line":  8900,
+                          "end_line":  8911,
+                          "body_sha256":  "aa9c8cb1efe03a36df6e56a4fb8843b39ecdd6ef34f70c787a31dbe43e2f81dd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I25TotalIncomeTaxDue",
+                                              "frm1700:txtPg1Pt2I26TaxFilersTaxCredit",
+                                              "frm1700:txtPg1Pt2I27SpouseTaxCredit",
+                                              "frm1700:txtPg1Pt2I28NetTaxPayable"
+                                          ]
+                      },
+                      {
+                          "name":  "processPart1Item29",
+                          "start_line":  8912,
+                          "end_line":  8915,
+                          "body_sha256":  "70a3038004da25939cac0ec4145c979f2d8d2693537bee509e95f8b3e4fb9ac1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I29",
+                                              "frm1700:txtPg2Pt4I22"
+                                          ]
+                      },
+                      {
+                          "name":  "processPart1Item30",
+                          "start_line":  8916,
+                          "end_line":  8920,
+                          "body_sha256":  "b3c215eb0db460219362b96e7d2f2dffde3b3cab942d7687396d74232c534cda",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I30",
+                                              "frm1700:txtPg2Pt4I27"
+                                          ]
+                      },
+                      {
+                          "name":  "ComputePart1Item31",
+                          "start_line":  8921,
+                          "end_line":  8943,
+                          "body_sha256":  "a65e8b268c6639c5f4bb41842aaf95b1f08363437a60ae7ceedc640d1a3d1d60",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg1Pt2I28NetTaxPayable",
+                                              "frm1700:txtPg1Pt2I29",
+                                              "frm1700:txtPg1Pt2I30",
+                                              "frm1700:txtPg1Pt2I31"
+                                          ]
+                      },
+                      {
+                          "name":  "processTaxReturn1",
+                          "start_line":  9102,
+                          "end_line":  9112,
+                          "body_sha256":  "22e9f4a6f4951f045409447a605cb52d444ddb5e875f50684ffa3ecd5d504f72",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processTaxReturn2",
+                          "start_line":  9113,
+                          "end_line":  9123,
+                          "body_sha256":  "ef11400d2868e9e7ee230b2e3d4b0fa09c9433a75ad9134fe379c20c963fc53b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I6C1",
+                          "start_line":  9124,
+                          "end_line":  9144,
+                          "body_sha256":  "9b228703cceeb1f1ffbd4b720c00a6a86f6fb4eeb66f75cf7ab5518e84f40f82",
+                          "alerts":  [
+                                         "\u0027Here\u0027",
+                                         "parseInt(NumWithComma(d.getElementById(\u0027frm1700:txtPg2Pt4I6C1\u0027).value))"
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I4AC1",
+                                              "frm1700:txtPg2Pt4I5C1",
+                                              "frm1700:txtPg2Pt4I6C1",
+                                              "frm1700:txtPg2Pt4I7C1"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I6C2",
+                          "start_line":  9145,
+                          "end_line":  9166,
+                          "body_sha256":  "4110d9e963f46343673737e1c0adf8c0750010f403590cac356dbb99c00ed3fc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:rdoPg1Pt1I13MarriedInd",
+                                              "frm1700:rdoPg1Pt1I3JointFilingYes",
+                                              "frm1700:txtPg2Pt4I4BC1",
+                                              "frm1700:txtPg2Pt4I5C2",
+                                              "frm1700:txtPg2Pt4I6C2",
+                                              "frm1700:txtPg2Pt4I7C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I10C1",
+                          "start_line":  9167,
+                          "end_line":  9183,
+                          "body_sha256":  "531fd32c9d5ef24587fc45bc4ea5872bff455deb92cc7d4c1decc4597f35bb36",
+                          "alerts":  [
+                                         "Pt4I7C1",
+                                         "Pt4I8C1",
+                                         "formatCurrencyWOC(((isNaN(Pt4I7C1) ? 0 : Pt4I7C1) // + (isNaN(Pt4I8C1) ? 0 : Pt4I8C1) + (isNaN(Pt4I9C1) ? 0 : Pt4I9C1)))"
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I10C1",
+                                              "frm1700:txtPg2Pt4I7C1",
+                                              "frm1700:txtPg2Pt4I8C1",
+                                              "frm1700:txtPg2Pt4I9C1"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I10C2",
+                          "start_line":  9184,
+                          "end_line":  9194,
+                          "body_sha256":  "876e166a09efad8e694d821ea6a25010d2b5dc8c961b93b8471941b9a321bd01",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I10C2",
+                                              "frm1700:txtPg2Pt4I7C2",
+                                              "frm1700:txtPg2Pt4I8C2",
+                                              "frm1700:txtPg2Pt4I9C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I11C1",
+                          "start_line":  9195,
+                          "end_line":  9203,
+                          "body_sha256":  "1498335c2212c92676a00890a5b2953d1083ba20cc09ef22d229f86410a17735",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I10C1",
+                                              "frm1700:txtPg2Pt4I11C1",
+                                              "frm1700:txtPg2Pt4I6C1"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I11C2",
+                          "start_line":  9204,
+                          "end_line":  9211,
+                          "body_sha256":  "5b93c7c94b7d60c9d5bfe3d7aed5a67626fe3c88cde6750053a562f0d0478cc8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I10C2",
+                                              "frm1700:txtPg2Pt4I11C2",
+                                              "frm1700:txtPg2Pt4I6C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I9C1",
+                          "start_line":  9212,
+                          "end_line":  9224,
+                          "body_sha256":  "c389109deab4880b7022a1ab99c61003434a579c1532ce3785c532342453ac5c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:rdoPg1Pt1I14YesInd",
+                                              "frm1700:txtPg1Pt1I15QualifyDependent",
+                                              "frm1700:txtPg2Pt4I9C1",
+                                              "frm1700:txtPg2Pt4I9C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I9C2",
+                          "start_line":  9225,
+                          "end_line":  9243,
+                          "body_sha256":  "0b363c166cba41ddd5c91588701aeabc9de1bc8d16518d9dc8e3be59758dce0b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:rdoPg1Pt1I21SpouseClaimAdditionalExemptionYes",
+                                              "frm1700:rdoPg1Pt1I3JointFilingNo",
+                                              "frm1700:rdoPg1Pt1I3JointFilingYes",
+                                              "frm1700:txtPg1Pt1I22SpouseQualifiedDependentChildren",
+                                              "frm1700:txtPg2Pt4I9C1",
+                                              "frm1700:txtPg2Pt4I9C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I20C1",
+                          "start_line":  9244,
+                          "end_line":  9255,
+                          "body_sha256":  "850cd045cd6ef040f1dc018cf2756ed9dfbd794261517a360649e66c77336b94",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I14C1",
+                                              "frm1700:txtPg2Pt4I19C1",
+                                              "frm1700:txtPg2Pt4I20C1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I20C2",
+                          "start_line":  9256,
+                          "end_line":  9267,
+                          "body_sha256":  "c7c586076cb520e3d0df1692ca87fa7e6477b42d5fdd8e91742e5e6b695186c2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I14C2",
+                                              "frm1700:txtPg2Pt4I19C2",
+                                              "frm1700:txtPg2Pt4I20C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I21",
+                          "start_line":  9268,
+                          "end_line":  9280,
+                          "body_sha256":  "5a6e800a309c1964a622e966b0bbb22a7d15b03cedf5848be46b3fb3190e8242",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I20C1",
+                                              "frm1700:txtPg2Pt4I20C2",
+                                              "frm1700:txtPg2Pt4I21"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I22",
+                          "start_line":  9281,
+                          "end_line":  9312,
+                          "body_sha256":  "17695acb23978b97bff626a500a2ce37f997d4e789f0b041d8666a7f517677ba",
+                          "alerts":  [
+                                         "result",
+                                         "\u0027Part IV Item 22 should not more than 50% of the sum of Item 14A and 14B\u0027",
+                                         "\u0027Part IV Item 22 should not be more than the Item 21\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I14C1",
+                                              "frm1700:txtPg2Pt4I14C2",
+                                              "frm1700:txtPg2Pt4I21",
+                                              "frm1700:txtPg2Pt4I22"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I23",
+                          "start_line":  9313,
+                          "end_line":  9326,
+                          "body_sha256":  "cf41cc2015af4f50081f3d9fc2b7616cf5b3380dfd4cba3c50bda484a87cc427",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I21",
+                                              "frm1700:txtPg2Pt4I22",
+                                              "frm1700:txtPg2Pt4I23"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I27",
+                          "start_line":  9327,
+                          "end_line":  9341,
+                          "body_sha256":  "5248a26672e4b6777a7c0a53220af6c6f268fa698be79ee1fca688fd41e7333a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I24",
+                                              "frm1700:txtPg2Pt4I25",
+                                              "frm1700:txtPg2Pt4I26",
+                                              "frm1700:txtPg2Pt4I27"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2Pt4I28",
+                          "start_line":  9342,
+                          "end_line":  9358,
+                          "body_sha256":  "44892431cf310b0c00adb634d9107640616bda51684b26cbe820fd02a9526641",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I23",
+                                              "frm1700:txtPg2Pt4I27",
+                                              "frm1700:txtPg2Pt4I28"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I13",
+                          "start_line":  9369,
+                          "end_line":  9386,
+                          "body_sha256":  "0a379f877f2f0f8ef1b7c226fdf3ed30e41ee27deee4901fb2632287369de1e2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I11C1",
+                                              "frm1700:txtPg2Pt4I11C2",
+                                              "frm1700:txtPg2Pt4I12C1",
+                                              "frm1700:txtPg2Pt4I12C2",
+                                              "frm1700:txtPg2Pt4I13C1",
+                                              "frm1700:txtPg2Pt4I13C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I14",
+                          "start_line":  9387,
+                          "end_line":  9444,
+                          "body_sha256":  "8dfaa18fe818ade1780b6cee1f5181b197e0fec85f6dabbc75599585aac1bce1",
+                          "alerts":  [
+                                         "\u0027here\u0027",
+                                         "total",
+                                         "total"
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I13C1",
+                                              "frm1700:txtPg2Pt4I13C2",
+                                              "frm1700:txtPg2Pt4I14C1",
+                                              "frm1700:txtPg2Pt4I14C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I15C1",
+                          "start_line":  9445,
+                          "end_line":  9449,
+                          "body_sha256":  "8ed52a3627da3805f4aadf922c112e0436d49c96c1fb0068b47e2c8495f9be0e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I15C1",
+                                              "frm1700:txtPg2Pt4I4AC2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I15C2",
+                          "start_line":  9450,
+                          "end_line":  9454,
+                          "body_sha256":  "3fbfe4a602aa068537d3ba72b26a43908cc935637b680bc355058484e900f201",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I15C2",
+                                              "frm1700:txtPg2Pt4I4BC2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I19",
+                          "start_line":  9455,
+                          "end_line":  9491,
+                          "body_sha256":  "375ad2fbc3be2de3e4a8bc2799a6780266e0376d606d26a6683453415d03dc12",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I15C1",
+                                              "frm1700:txtPg2Pt4I15C2",
+                                              "frm1700:txtPg2Pt4I16C1",
+                                              "frm1700:txtPg2Pt4I16C2",
+                                              "frm1700:txtPg2Pt4I17C1",
+                                              "frm1700:txtPg2Pt4I17C2",
+                                              "frm1700:txtPg2Pt4I18C1",
+                                              "frm1700:txtPg2Pt4I18C2",
+                                              "frm1700:txtPg2Pt4I19C1",
+                                              "frm1700:txtPg2Pt4I19C2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePt4I20",
+                          "start_line":  9492,
+                          "end_line":  9510,
+                          "body_sha256":  "df540cb2c97eb88a1e6b44421c6cce5aef43115aa25cf199e25d383e8612d435",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I14C1",
+                                              "frm1700:txtPg2Pt4I14C2",
+                                              "frm1700:txtPg2Pt4I19C1",
+                                              "frm1700:txtPg2Pt4I19C2",
+                                              "frm1700:txtPg2Pt4I20C1",
+                                              "frm1700:txtPg2Pt4I20C2"
+                                          ]
+                      },
+                      {
+                          "name":  "sumTaxSpouseIterate",
+                          "start_line":  12761,
+                          "end_line":  12833,
+                          "body_sha256":  "96fa97555f4e7167268aae5686787e8de399cf6cdae264e4bf4c94030f36c29c",
+                          "alerts":  [
+                                         "\u0027totalTaxPayer = \u0027 + totalTaxPayer"
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:rdoPg2Pt4I",
+                                              "frm1700:txtPg2Pt4I",
+                                              "frm1700:txtPg2Pt4I3ComIncomeC1",
+                                              "frm1700:txtPg2Pt4I3NameofEmployer",
+                                              "frm1700:txtPg2Pt4I3TaxWithholdC2",
+                                              "frm1700:txtPg2Pt4I4AC1",
+                                              "frm1700:txtPg2Pt4I4AC2",
+                                              "frm1700:txtPg2Pt4I4BC1",
+                                              "frm1700:txtPg2Pt4I4BC2"
+                                          ]
+                      },
+                      {
+                          "name":  "sumIterateOnlyPg2Pt4",
+                          "start_line":  12834,
+                          "end_line":  12862,
+                          "body_sha256":  "f68ffc53e49cf58ece4660dac1d9db48e1d35334fb7bba974c26e0d8d48aec97",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I",
+                                              "frm1700:txtPg2Pt4I3ComIncomeC1",
+                                              "frm1700:txtPg2Pt4I3TaxWithholdC2",
+                                              "frm1700:txtPg2Pt4I4SubtotalC1",
+                                              "frm1700:txtPg2Pt4I4SubtotalC2"
+                                          ]
+                      },
+                      {
+                          "name":  "summation",
+                          "start_line":  13108,
+                          "end_line":  13143,
+                          "body_sha256":  "bddc0f01efd80c5c15dcb04fa4856b9156f2b6651e507aa33aa171b0ec4c1bfd",
+                          "alerts":  [
+                                         "fromIDs[b]"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "adjustSummation",
+                          "start_line":  13144,
+                          "end_line":  13148,
+                          "body_sha256":  "ebd8ff1734b004d8570c4ef75c4504cb13fc2b5ca34641dbee6632f6eb835d39",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeSummationPage3Item21",
+                          "start_line":  13149,
+                          "end_line":  13155,
+                          "body_sha256":  "9f1ce9ee27743afac1d151fcdc30a7fdc1dee3df458304443d3a0c3429c2ca4a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg3Pt5I11C",
+                                              "frm1700:txtPg3Pt5I17C",
+                                              "frm1700:txtPg3Pt5I20C",
+                                              "frm1700:txtPg3Pt5I21TotTaxWithheldPaid"
+                                          ]
+                      },
+                      {
+                          "name":  "computePage3I6",
+                          "start_line":  13206,
+                          "end_line":  13219,
+                          "body_sha256":  "b4e0b5c6ce378f2216ae33d4299f50aea4fac4b65de197cecb78c60fc2fbd6e2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I6SubtotalC1",
+                                              "frm1700:txtPg2Pt4I6SubtotalC2",
+                                              "frm1700:txtPg3Pt5I6AAFM",
+                                              "frm1700:txtPg3Pt5I6FinalTaxWithheld"
+                                          ]
+                      },
+                      {
+                          "name":  "computePage3I11",
+                          "start_line":  13220,
+                          "end_line":  13230,
+                          "body_sha256":  "d02e5b61df4d6dd52934992c4d37f5f6668934b14545e273d6b561c127b026de",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I11SubtotalC1",
+                                              "frm1700:txtPg2Pt4I11SubtotalC2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePage3I17",
+                          "start_line":  13231,
+                          "end_line":  13241,
+                          "body_sha256":  "eed9c9ff5a1dd7f46788b4c325dd3ca3c5ae6798234430a8666a862379b91a1b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I17SubtotalC1",
+                                              "frm1700:txtPg2Pt4I17SubtotalC2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePage3I20",
+                          "start_line":  13242,
+                          "end_line":  13252,
+                          "body_sha256":  "7818fe2d4e238857e4a279b376cb5222473153827d060729aea17b3c804b4f86",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I20SubtotalC1",
+                                              "frm1700:txtPg2Pt4I20SubtotalC2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePage2I12",
+                          "start_line":  13253,
+                          "end_line":  13261,
+                          "body_sha256":  "2280b587b80438d57e5f48f12f6f93d002f2063f2967ee5a5bd22ad0b3e02213",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1700:txtPg2Pt4I12C1",
+                                              "frm1700:txtPg2Pt4I12C2"
+                                          ]
+                      }
+                  ]
+}

@@ -1,0 +1,331 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200c-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2200c-partv-excise",
+                             "2200c-partv-vat",
+                             "2200c-partv-bill",
+                             "2200c-excise-total",
+                             "2200c-item16",
+                             "2200c-item17c",
+                             "2200c-item18",
+                             "2200c-item20",
+                             "2200c-item21d",
+                             "2200c-item22",
+                             "2200c-item23b",
+                             "2200c-item23c",
+                             "2200c-item24"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200c-partv-excise",
+                             "outputs":  [
+                                             "frm2200C:ACexcise{1..10}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:GRexciseNet{1..10}",
+                                            "frm2200C:GRexciseExmpt{1..10}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "H[row] = (E[row] + F[row]) x 0.05.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partFiveComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partFiveComputation:L3782-L3790"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-partv-vat",
+                             "outputs":  [
+                                             "frm2200C:ACvat{1..10}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:GRnetVat{1..10}",
+                                            "frm2200C:GRexciseNet{1..10}",
+                                            "frm2200C:GRnonexcise{1..10}",
+                                            "frm2200C:ACexcise{1..10}",
+                                            "vatColumnI"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "I[row] = (D + E + G + H) x runtime vatColumnI.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partFiveComputation",
+                             "depends_on":  [
+                                                "2200c-partv-excise"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partFiveComputation:L3792-L3801"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-partv-bill",
+                             "outputs":  [
+                                             "frm2200C:ACtotAmountBill{1..10}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:GRnetVat{1..10}",
+                                            "frm2200C:GRexciseNet{1..10}",
+                                            "frm2200C:GRexciseExmpt{1..10}",
+                                            "frm2200C:GRnonexcise{1..10}",
+                                            "frm2200C:ACexcise{1..10}",
+                                            "frm2200C:ACvat{1..10}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "J[row] = D + E + F + G + H + I.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partFiveComputation",
+                             "depends_on":  [
+                                                "2200c-partv-excise",
+                                                "2200c-partv-vat"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partFiveComputation:L3803-L3810"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-excise-total",
+                             "outputs":  [
+                                             "frm2200C:ACexciseTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:ACexcise{1..10}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Excise total = sum of Part V Column H rows 1..10.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "totalExciseTax",
+                             "depends_on":  [
+                                                "2200c-partv-excise"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totalExciseTax:L3748-L3758"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item16",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I16ExciseTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:ACexciseTotal"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 16 = ACexciseTotal.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-excise-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3676-L3680"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item17c",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I17CTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I17ABalCarriedOver",
+                                            "frm2200C:txtPg1P3I17BCredExciseTax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17C = 17A + 17B.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3682-L3686"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item18",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I18NetTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I16ExciseTaxDue",
+                                            "frm2200C:txtPg1P3I17CTotal"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 18 = Item 16 - Item 17C.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-item16",
+                                                "2200c-item17c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3688-L3692"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item20",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I20TaxStillDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I18NetTaxDue",
+                                            "frm2200C:txtPg1P3I19PmntOnRtrnPrevFiled"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20 = Item 18 - Item 19.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3694-L3698"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item21d",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I21DTotPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I21ASurcharge",
+                                            "frm2200C:txtPg1P3I21BInterest",
+                                            "frm2200C:txtPg1P3I21CCompromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 21D = 21A + 21B + 21C.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3700-L3705"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item22",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I22AmountPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I20TaxStillDue",
+                                            "frm2200C:txtPg1P3I21DTotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 22 = Item 20 + Item 21D.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-item20",
+                                                "2200c-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3707-L3711"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item23b",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I23BPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I21DTotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23B = Item 21D.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3728-L3731"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item23c",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I23CTotPmntMade"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I23ATaxPmntDposit",
+                                            "frm2200C:txtPg1P3I23BPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23C = Item 23A + Item 23B.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-item23b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3733-L3737"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200c-item24",
+                             "outputs":  [
+                                             "frm2200C:txtPg1P3I24BalToCarryOver"
+                                         ],
+                             "inputs":  [
+                                            "frm2200C:txtPg1P3I22AmountPayable",
+                                            "frm2200C:txtPg1P3I23CTotPmntMade"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 24 = Item 22 - Item 23C.",
+                             "rounding":  "Source applies toFixed(0), then formatCurrency; whole-peso rounding is defect-compatible.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200c-item22",
+                                                "2200c-item23c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L3739-L3744"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals and preserve two decimal places; retain the source dependency order.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

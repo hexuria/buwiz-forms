@@ -1,0 +1,264 @@
+{
+ "themes": [
+  {
+   "rule": "R2",
+   "what": "Profile boxes are locked with no Edit on the return, and a blank profile value arrives locked too. One change in the shell fixes every form.",
+   "forms": [
+    "0605",
+    "0619E",
+    "0619F",
+    "1600PT",
+    "1600VT",
+    "1600WP",
+    "1601C",
+    "1601EQ",
+    "1601FQ",
+    "1602Q",
+    "1603Q",
+    "1604C",
+    "1604E",
+    "1604F",
+    "1606",
+    "1700",
+    "1701",
+    "1701A",
+    "1701MS",
+    "1701Q",
+    "1702EX",
+    "1702MX",
+    "1702Q",
+    "1702RT",
+    "1706",
+    "1707",
+    "1707A",
+    "1800",
+    "1801",
+    "2000",
+    "2000OT",
+    "2200A",
+    "2200AN",
+    "2200C",
+    "2200M",
+    "2200P",
+    "2200S",
+    "2200T",
+    "2550M",
+    "2550Q",
+    "2551Q",
+    "2552",
+    "2553"
+   ]
+  },
+  {
+   "rule": "R1",
+   "what": "Opened from the Form library, the year, month, quarter or date arrive filled. One change in the shell fixes every form.",
+   "forms": [
+    "0605",
+    "0619E",
+    "0619F",
+    "1600PT",
+    "1600VT",
+    "1600WP",
+    "1601C",
+    "1601EQ",
+    "1601FQ",
+    "1602Q",
+    "1603Q",
+    "1604C",
+    "1604E",
+    "1604F",
+    "1606",
+    "1700",
+    "1701",
+    "1701A",
+    "1701MS",
+    "1701Q",
+    "1702EX",
+    "1702MX",
+    "1702Q",
+    "1702RT",
+    "1706",
+    "1707",
+    "1707A",
+    "2000",
+    "2200A",
+    "2200AN",
+    "2200C",
+    "2200M",
+    "2200P",
+    "2200S",
+    "2200T",
+    "2550M",
+    "2550Q",
+    "2551Q",
+    "2552",
+    "2553"
+   ]
+  },
+  {
+   "rule": "R3",
+   "what": "Schedules and tables sit inside the wrong part or are drawn as a single loose item ('Item Schedule 1', 'Part II row 1 ATC code').",
+   "forms": [
+    "1600PT",
+    "1600VT",
+    "1600WP",
+    "1601C",
+    "1601FQ",
+    "1604E",
+    "1604F",
+    "1701",
+    "1702Q",
+    "1800",
+    "1801",
+    "2000",
+    "2200A",
+    "2200C",
+    "2200M",
+    "2200P",
+    "2200T",
+    "2550Q"
+   ]
+  },
+  {
+   "rule": "R3",
+   "what": "The Details of Payment part (cash/bank debit memo, check, tax debit memo, others) has no part on the page, or its rows are all locked.",
+   "forms": [
+    "1601C",
+    "1702EX",
+    "1707",
+    "2200AN",
+    "2200C",
+    "2200M",
+    "2200P",
+    "2200S",
+    "2550M",
+    "2550Q",
+    "2551Q",
+    "2552",
+    "2553"
+   ]
+  },
+  {
+   "rule": "R3",
+   "what": "The page-2 header (TIN and name copied from Part I) is drawn as an item for the filer.",
+   "forms": [
+    "1600PT",
+    "1600VT",
+    "1601FQ",
+    "1602Q",
+    "1603Q",
+    "1702MX",
+    "1702Q",
+    "1707A",
+    "2000OT",
+    "2200AN",
+    "2200S",
+    "2550Q"
+   ]
+  },
+  {
+   "rule": "R3",
+   "what": "Printed items or schedule rows are hidden in a collapsed 'Additional details - N more fields not yet placed' group.",
+   "forms": [
+    "1600WP",
+    "1707",
+    "1800",
+    "2000",
+    "2000OT",
+    "2200M",
+    "2200P",
+    "2551Q",
+    "2552"
+   ]
+  },
+  {
+   "rule": "R3",
+   "what": "Labels are box keys or developer text ('Tax relief yes', 'MOP payment actual', 'Pg1I6Seller Addr', 'Special rate yn').",
+   "forms": [
+    "1600VT",
+    "1600WP",
+    "1604F",
+    "1701MS",
+    "1707",
+    "1801",
+    "2000OT",
+    "2200C",
+    "2550Q",
+    "2552"
+   ]
+  },
+  {
+   "rule": "R3",
+   "what": "RDO Code missing from the page even though the print fills it from the profile, or drawn as two boxes.",
+   "forms": [
+    "1604C",
+    "1701A",
+    "1702EX",
+    "1707",
+    "1707A",
+    "2000",
+    "1600PT",
+    "1600VT",
+    "2552",
+    "2200C",
+    "2200M",
+    "2200P"
+   ]
+  },
+  {
+   "rule": "R7",
+   "what": "Names, phone numbers, counts or rates drawn as peso amounts (e.g. contact number '280,000,000.00').",
+   "forms": [
+    "0605",
+    "1701",
+    "1701A",
+    "1702EX",
+    "1702MX",
+    "1702RT",
+    "1707",
+    "1801",
+    "2000OT",
+    "2200A",
+    "2200C",
+    "2200T",
+    "2550Q",
+    "2552"
+   ]
+  },
+  {
+   "rule": "R8",
+   "what": "Penalties locked with no override, or a new return arriving with a penalty already filled (2551-Q: Compromise 1,000.00).",
+   "forms": [
+    "1601FQ",
+    "2200S",
+    "2551Q"
+   ]
+  },
+  {
+   "rule": "R6",
+   "what": "Civil status is not shown, so the married-only lines cannot be drawn as conditional.",
+   "forms": [
+    "1700",
+    "1701",
+    "1701A"
+   ]
+  },
+  {
+   "rule": "preview",
+   "what": "In the worst-case print, page 1's TIN segments stay blank (only the branch code prints); 2550-M also repeats the whole RDO and ZIP in each box.",
+   "forms": [
+    "2550M",
+    "2550Q",
+    "2551Q"
+   ]
+  },
+  {
+   "rule": "preview",
+   "what": "To check: the page shows 'Yes' and a treaty choice for the tax-relief item while the exported draft holds No and none.",
+   "forms": [
+    "2200S",
+    "2550M"
+   ]
+  }
+ ]
+}

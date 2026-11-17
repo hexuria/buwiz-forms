@@ -1,0 +1,274 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200m-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2200m-schedule-description-copy",
+                             "2200m-schedule-total",
+                             "2200m-item16",
+                             "2200m-item17c",
+                             "2200m-item18",
+                             "2200m-item20",
+                             "2200m-item21d",
+                             "2200m-item22",
+                             "2200m-item23b",
+                             "2200m-item23c",
+                             "2200m-item24"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200m-schedule-description-copy",
+                             "outputs":  [
+                                             "frm2200M:txtSched1_descriptionCont{n}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtSched1_description{n}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Continuation description = primary description.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "populateTable2Desc",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#populateTable2Desc:L4119-L4125"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-schedule-total",
+                             "outputs":  [
+                                             "frm2200M:TotalExciseTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtSched1_LocallyExtractedTaxDueF{1..getTotalRow()}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum locally extracted Tax Due F for rows 1 through the off-by-one getTotalRow result.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "computeTotalTaxDue",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTotalTaxDue:L4914-L4933"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item16",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I16ExciseTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:TotalExciseTaxDue"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 16 = TotalExciseTaxDue, or 0.00 when blank.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-schedule-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4847-L4852"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item17c",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I17CTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I17ABalCarriedOver",
+                                            "frm2200M:txtPg1P3I17BCredExciseTax"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17C = 17A + 17B.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4854-L4858"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item18",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I18NetTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I16ExciseTaxDue",
+                                            "frm2200M:txtPg1P3I17CTotal"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 18 = Item 16 - Item 17C.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-item16",
+                                                "2200m-item17c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4860-L4864"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item20",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I20TaxStillDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I18NetTaxDue",
+                                            "frm2200M:txtPg1P3I19PmntOnRtrnPrevFiled"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20 = Item 18 - Item 19.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4866-L4870"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item21d",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I21DTotPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I21ASurcharge",
+                                            "frm2200M:txtPg1P3I21BInterest",
+                                            "frm2200M:txtPg1P3I21CCompromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 21D = 21A + 21B + 21C.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4872-L4877"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item22",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I22AmountPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I20TaxStillDue",
+                                            "frm2200M:txtPg1P3I21DTotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 22 = Item 20 + Item 21D.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-item20",
+                                                "2200m-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4879-L4882"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item23b",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I23BPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I21DTotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23B copies Item 21D.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4884-L4885"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item23c",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I23CTotPmntMade"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I23ATaxPmntDposit",
+                                            "frm2200M:txtPg1P3I23BPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23C = 23A + 23B.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-item23b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4887-L4890"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200m-item24",
+                             "outputs":  [
+                                             "frm2200M:txtPg1P3I24BalToCarryOver"
+                                         ],
+                             "inputs":  [
+                                            "frm2200M:txtPg1P3I22AmountPayable",
+                                            "frm2200M:txtPg1P3I23CTotPmntMade"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 24 = Item 22 - Item 23C.",
+                             "rounding":  "toFixed(2), then formatCurrency where arithmetic occurs.",
+                             "trigger":  "partThreeComputation",
+                             "depends_on":  [
+                                                "2200m-item22",
+                                                "2200m-item23c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#partThreeComputation:L4892-L4896"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals with two-decimal display and preserve source dependency order except where the official behavior is defective.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

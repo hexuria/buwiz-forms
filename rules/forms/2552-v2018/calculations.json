@@ -1,0 +1,260 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2552-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2552-popup-row-tax",
+                             "2552-popup-subtotals",
+                             "2552-fixed-row-tax",
+                             "2552-schedule-totals",
+                             "2552-page1-schedule-copies",
+                             "2552-item16-total-tax",
+                             "2552-item19-credits",
+                             "2552-item20-balance",
+                             "2552-item24-penalties",
+                             "2552-item25-payable"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2552-popup-row-tax",
+                             "outputs":  [
+                                             "frm2552:txtPg2Pt5Sch{1..3}_{N\u003e=1}Col8"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg2Pt5Sch{1..3}_{N\u003e=1}Col6",
+                                            "frm2552:txtPg2Pt5Sch{1..3}_{N\u003e=1}Col7"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax due = tax base Ã— rate / 100; Schedule 1 rate is fixed at 0.6%.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "Sum_Pg2Pt5AddMore",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg2Pt5AddMore:L3890-L3912"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-popup-subtotals",
+                             "outputs":  [
+                                             "Pg2Pt5Sch1SubTotal",
+                                             "Pg2Pt5Sch2SubTotal",
+                                             "Pg2Pt5Sch3SubTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg2Pt5Sch{1..3}_{N\u003e=1}Col8"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum add-more tax-due rows per schedule.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "Sum_Pg2Pt5AddMore",
+                             "depends_on":  [
+                                                "2552-popup-row-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#Sum_Pg2Pt5AddMore:L3890-L3915"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-fixed-row-tax",
+                             "outputs":  [
+                                             "frm2552:txtPg2Pt5Sch{1..3}TaxDue{1..5}"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg2Pt5Sch{1..3}TaxBase{1..5}",
+                                            "frm2552:txtPg2Pt5Sch{2..3}TaxRate{1..5}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax due = tax base Ã— rate / 100; Schedule 1 uses 0.6%.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageTwoComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageTwoComputation:L5023-L5038"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-schedule-totals",
+                             "outputs":  [
+                                             "frm2552:txtPg2Pt5Sch1TaxDueTot",
+                                             "frm2552:txtPg2Pt5Sch2TaxDueTot",
+                                             "frm2552:txtPg2Pt5Sch3TaxDueTot"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg2Pt5Sch{1..3}TaxDue{1..5}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum five displayed tax-due rows per schedule; row 5 carries popup subtotal when used.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "totTaxDueComp",
+                             "depends_on":  [
+                                                "2552-popup-subtotals",
+                                                "2552-fixed-row-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#totTaxDueComp:L5012-L5021"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-page1-schedule-copies",
+                             "outputs":  [
+                                             "frm2552:txtPg1P2I13TaxDue",
+                                             "frm2552:txtPg1P2I14TaxDue",
+                                             "frm2552:txtPg1P2I15TaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg2Pt5Sch1TaxDueTot",
+                                            "frm2552:txtPg2Pt5Sch2TaxDueTot",
+                                            "frm2552:txtPg2Pt5Sch3TaxDueTot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Copy Schedule 1/2/3 totals to Items 13/14/15.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageTwoSchedTotalToPageOne",
+                             "depends_on":  [
+                                                "2552-schedule-totals"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageTwoSchedTotalToPageOne:L5040-L5055"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-item16-total-tax",
+                             "outputs":  [
+                                             "frm2552:txtPg1P2I16TotTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg1P2I13TaxDue",
+                                            "frm2552:txtPg1P2I14TaxDue",
+                                            "frm2552:txtPg1P2I15TaxDue"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 16 = Items 13 + 14 + 15.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "2552-page1-schedule-copies"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4969-L4975"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-item19-credits",
+                             "outputs":  [
+                                             "frm2552:txtPg1P2I19TotTaxCredPmnt"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg1P2I17TaxPaidInPrevRtrn",
+                                            "frm2552:txtPg1P2I18CredTaxWthhld"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 19 = Items 17 + 18.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4977-L4982"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-item20-balance",
+                             "outputs":  [
+                                             "frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg1P2I16TotTaxDue",
+                                            "frm2552:txtPg1P2I19TotTaxCredPmnt"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20 = Item 16 - Item 19.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "2552-item16-total-tax",
+                                                "2552-item19-credits"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4984-L4989"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-item24-penalties",
+                             "outputs":  [
+                                             "frm2552:txtPg1P2I24TotPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg1P2I21Surcharge",
+                                            "frm2552:txtPg1P2I22Interest",
+                                            "frm2552:txtPg1P2I23Compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 24 = surcharge + interest + compromise.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4991-L4997"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official whole-peso rounding order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2552-item25-payable",
+                             "outputs":  [
+                                             "frm2552:txtPg1P2I25TotAmntPyable"
+                                         ],
+                             "inputs":  [
+                                            "frm2552:txtPg1P2I20TotTaxStllDueOvrPmnt",
+                                            "frm2552:txtPg1P2I24TotPenalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If balance is negative and penalties positive, Item 25 = penalties; otherwise balance + penalties.",
+                             "rounding":  "toFixed(0), then formatCurrency.",
+                             "trigger":  "pageOneComputation",
+                             "depends_on":  [
+                                                "2552-item20-balance",
+                                                "2552-item24-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#pageOneComputation:L4999-L5011"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "A negative balance with zero penalties produces a negative amount payable; represent overpayment separately and payable as zero.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

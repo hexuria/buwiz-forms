@@ -1,0 +1,329 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200an-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "2200an-sched3-row",
+                             "2200an-sched2-row",
+                             "2200an-basic-auto-total",
+                             "2200an-basic-goods-total",
+                             "2200an-item16",
+                             "2200an-item17c",
+                             "2200an-item18",
+                             "2200an-item20",
+                             "2200an-item21d",
+                             "2200an-item22-double-penalty",
+                             "2200an-item23c",
+                             "2200an-item24",
+                             "2200an-obsolete-sched1-total"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200an-sched3-row",
+                             "outputs":  [
+                                             "frm2200ANv2018:txtSched3TaxWithheld{1..2}"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txtSched3TotInterest{1..2}",
+                                            "frm2200ANv2018:txtSched3TaxRate{1..2}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax withheld = total interest x rate / 100.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "computeSched3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched3:L8774-L8784"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-sched2-row",
+                             "outputs":  [
+                                             "frm2200ANv2018:txtSched2TaxesWithheld{1..2}"
+                                         ],
+                             "inputs":  [
+                                            "Schedule-2-amounts",
+                                            "frm2200ANv2018:txtSched2TaxRate{1..2}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax withheld = amount x rate / 100.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "computeSched2",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched2:L8796-L8806"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-basic-auto-total",
+                             "outputs":  [
+                                             "frm2200ANv2018:txtBasicExciseTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "22 fixed automatic-products Tax Due fields"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the 22 enumerated XG Tax Due fields.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "computeBasicExciseAuto",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeBasicExciseAuto:L9263-L9287"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-basic-goods-total",
+                             "outputs":  [
+                                             "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods"
+                                         ],
+                             "inputs":  [
+                                            "5 non-essential-goods Tax Due fields"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum XG100, XG110, XG120, and two Others Tax Due fields.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "computeBasicExciseGoods",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeBasicExciseGoods:L9289-L9296"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item16",
+                             "outputs":  [
+                                             "frm2200ANv2018:txtSchedule1C",
+                                             "frm2200ANv2018:txt16"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txtBasicExciseTaxDue",
+                                            "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Schedule 1C = automatic-products total + non-essential-goods total; copy to Item 16.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "computeSchedule1C",
+                             "depends_on":  [
+                                                "2200an-basic-auto-total",
+                                                "2200an-basic-goods-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSchedule1C:L9298-L9303"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item17c",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt17C"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt17A",
+                                            "frm2200ANv2018:txt17B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17C = Item 17A + Item 17B.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute17C",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute17C:L9216-L9220"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item18",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt18"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt16",
+                                            "frm2200ANv2018:txt17C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 18 = Item 16 - Item 17C.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute18",
+                             "depends_on":  [
+                                                "2200an-item16",
+                                                "2200an-item17c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute18:L9222-L9226"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item20",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt20"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt18",
+                                            "frm2200ANv2018:txt19"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20 = Item 18 - Item 19.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute20",
+                             "depends_on":  [
+                                                "2200an-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute20:L9228-L9232"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item21d",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt21D",
+                                             "frm2200ANv2018:txt23B"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt21A",
+                                            "frm2200ANv2018:txt21B",
+                                            "frm2200ANv2018:txt21C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 21D = 21A + 21B + 21C; copy to Item 23B.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute21D",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute21D:L9234-L9241"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item22-double-penalty",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt22"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt20",
+                                            "frm2200ANv2018:txt21A",
+                                            "frm2200ANv2018:txt21B",
+                                            "frm2200ANv2018:txt21C",
+                                            "frm2200ANv2018:txt21D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 22 = Item 20 + Items 21A + 21B + 21C + Item 21D, double-counting penalties.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute22",
+                             "depends_on":  [
+                                                "2200an-item20",
+                                                "2200an-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute22:L9243-L9250"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Item 22 should add Item 20 and Item 21D once.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item23c",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt23C"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt23A",
+                                            "frm2200ANv2018:txt23B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23C = Item 23A + Item 23B.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute23C",
+                             "depends_on":  [
+                                                "2200an-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute23C:L9252-L9256"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-item24",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt24"
+                                         ],
+                             "inputs":  [
+                                            "frm2200ANv2018:txt22",
+                                            "frm2200ANv2018:txt23C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 24 = Item 22 - Item 23C.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "compute24",
+                             "depends_on":  [
+                                                "2200an-item22-double-penalty",
+                                                "2200an-item23c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#compute24:L9258-L9261"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and the official two-decimal display order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200an-obsolete-sched1-total",
+                             "outputs":  [
+                                             "frm2200ANv2018:txt16"
+                                         ],
+                             "inputs":  [
+                                            "obsolete Schedule 1 Tax fields"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Due to commented operands, total is initialized through an assignment that formats its own undefined value.",
+                             "rounding":  "formatCurrency after source arithmetic.",
+                             "trigger":  "computeSched1Total",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1Total:L8877-L8889"
+                                             ],
+                             "assessment":  "obsolete",
+                             "recommended_app_behavior":  "Do not use; the current active total path is computeBasicExciseAuto/Goods -\u003e computeSchedule1C.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

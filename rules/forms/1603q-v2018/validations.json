@@ -1,0 +1,857 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1603q-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Validate and Save stop at the first ordered rejection; blur/change handlers may mutate values first.",
+    "rules":  [
+                  {
+                      "rule_id":  "1603q-input-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "A money field loses focus with blank, malformed, or negative text.",
+                      "fields":  [
+                                     "money-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "parseFloat/toFixed silently replaces NaN with 0.00 and accepts negative values.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletter:L2796-L2804"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "parseFloat/toFixed silently replaces NaN with 0.00 and accepts negative values.",
+                      "recommended_app_behavior":  "Reject malformed or disallowed negative values and use decimals.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-input-002",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "A whole-number field loses focus with malformed text.",
+                      "fields":  [
+                                     "whole-number-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Malformed input is silently cleared; numeric input is rounded to an integer.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#blockletterWithout2Decimal:L2806-L2815"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Malformed input is silently cleared; numeric input is rounded to an integer.",
+                      "recommended_app_behavior":  "Validate complete values explicitly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-change-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "validateYear runs for any normal four-digit current year.",
+                      "fields":  [
+                                     "frm1603Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Uses Date.getYear() (years since 1900), so a four-digit year exceeds it and is reset to values such as 126.",
+                      "exact_message":  "Invalid year. Year should not be later than the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L2817-L2828"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Uses Date.getYear() (years since 1900), so a four-digit year exceeds it and is reset to values such as 126.",
+                      "recommended_app_behavior":  "Compare with getFullYear and never replace with a two/three-digit offset.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-change-002",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "validateYear receives a year earlier than 2018.",
+                      "fields":  [
+                                     "frm1603Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "First resets to 2018, then the getYear defect immediately treats 2018 as future and resets again.",
+                      "exact_message":  "Please file using the old version of the form.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateYear:L2817-L2824"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "First resets to 2018, then the getYear defect immediately treats 2018 as future and resets again.",
+                      "recommended_app_behavior":  "Stop after a single revision-bound error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-change-003",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 4 changes and the user confirms.",
+                      "fields":  [
+                                     "frm1603Q:TaxWithheld_1",
+                                     "frm1603Q:TaxWithheld_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Clears all computed data; No disables Schedule 1 and Yes enables it.",
+                      "exact_message":  "Changing Item #4 will clear all computed data.\nDo you want to continue?",
+                      "source_refs":  [
+                                          "official-hta-runtime#changeTaxWitheld:L3107-L3124"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Clears all computed data; No disables Schedule 1 and Yes enables it.",
+                      "recommended_app_behavior":  "Use a reversible confirmation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-change-004",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Return year changes and user confirms.",
+                      "fields":  [
+                                     "frm1603Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Confirmation clears computation but cancellation writes the passed yearValue back, whose caller semantics require UI testing.",
+                      "exact_message":  "Changing the return period will clear all computed data.\nDo you want to continue?",
+                      "source_refs":  [
+                                          "official-hta-runtime#clearYearData:L3206-L3214"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Confirmation clears computation but cancellation writes the passed yearValue back, whose caller semantics require UI testing.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-change-005",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Special Tax No is selected.",
+                      "fields":  [
+                                     "frm1603Q:SpecialTax_2",
+                                     "frm1603Q:selTreaty"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Treaty select is disabled and reset to index zero.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#disableSelTreaty:L3025-L3029"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Treaty select is disabled and reset to index zero.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-page-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Page input is outside 1..2.",
+                      "fields":  [
+                                     "frm1603Q:txtCurrentPage"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Invalid page",
+                      "source_refs":  [
+                                          "official-hta-runtime#goToPage:L3044-L3063"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Item 1 year is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2830-L2838"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-002",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Item 1 is later than current year.",
+                      "fields":  [
+                                     "frm1603Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Invalid date entry on Item no.1. Entry should not be later than Current Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2839-L2844"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-003",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Item 1 is earlier than 2018.",
+                      "fields":  [
+                                     "frm1603Q:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Invalid date entry on Item no.1. Entry should not be lower than 2018.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2845-L2849"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-004",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "No quarter is selected.",
+                      "fields":  [
+                                     "frm1603Q:optQuarter1",
+                                     "frm1603Q:optQuarter2",
+                                     "frm1603Q:optQuarter3",
+                                     "frm1603Q:optQuarter4"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select quarter on Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2850-L2855"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-005",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Neither Item 4 option is selected.",
+                      "fields":  [
+                                     "frm1603Q:TaxWithheld_1",
+                                     "frm1603Q:TaxWithheld_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select an option for Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2856-L2860"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-006",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Any TIN segment or branch is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtTIN1",
+                                     "frm1603Q:txtTIN2",
+                                     "frm1603Q:txtTIN3",
+                                     "frm1603Q:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Only nonblankness is tested; short segments and invalid checksum pass.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2862-L2866"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is tested; short segments and invalid checksum pass.",
+                      "recommended_app_behavior":  "Require exact segment shape and checksum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-007",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "RDO select is at index zero.",
+                      "fields":  [
+                                     "frm1603Q:rdoCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2867-L2872"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-008",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Item 8 name is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2877-L2881"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-009",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Item 10 telephone is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Only nonblankness is tested and the message contains a double space.",
+                      "exact_message":  "Please enter a valid Telephone Number  on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2882-L2886"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "Only nonblankness is tested and the message contains a double space.",
+                      "recommended_app_behavior":  "Confirm requiredness and validate a complete number.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-010",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Item 9 address is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2887-L2891"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-011",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Item 9A ZIP is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 9A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2892-L2896"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-012",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Neither Item 11 category is selected.",
+                      "fields":  [
+                                     "frm1603Q:CatAgent_P",
+                                     "frm1603Q:CatAgent_G"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select an option for Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2898-L2902"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-013",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Any Taxes Withheld is Yes and Item 14 loosely equals zero.",
+                      "fields":  [
+                                     "frm1603Q:TaxWithheld_1",
+                                     "frm1603Q:txtTax14"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "The Schedule total defect forces Item 14 to 0.00, so the Yes path cannot validate through normal Schedule 1 computation.",
+                      "exact_message":  "Please fill up Schedule 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2903-L2909"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The Schedule total defect forces Item 14 to 0.00, so the Yes path cannot validate through normal Schedule 1 computation.",
+                      "recommended_app_behavior":  "Fix the total formula and require a positive Schedule 1 total.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-validate-014",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "All previous rules pass.",
+                      "fields":  [
+                                     "frm1603Q:cmdValidate"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Disables controls and enables Edit, Print, upload and Final Copy.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateForm:L2911-L2920"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Disables controls and enables Edit, Print, upload and Final Copy.",
+                      "recommended_app_behavior":  "Use an explicit validated state invalidated by edits.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-save-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "No quarter is selected.",
+                      "fields":  [
+                                     "quarter-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please select quarter on Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3185-L3191"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-save-002",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Any TIN segment or branch is blank.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Only nonblankness is tested.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3192-L3196"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is tested.",
+                      "recommended_app_behavior":  "Use complete TIN validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-save-003",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm1603Q:rdoCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3197-L3201"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-save-004",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Item 8 name is blank.",
+                      "fields":  [
+                                     "frm1603Q:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Stops or mutates as described.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3202-L3205"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Stops or mutates as described.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-save-005",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Quarter, TIN, RDO and name pass while other Validate rules fail.",
+                      "fields":  [
+                                     "other-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Draft Save can persist otherwise invalid data.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3185-L3205"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Draft Save can persist otherwise invalid data.",
+                      "recommended_app_behavior":  "Clearly mark drafts unvalidated.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-final-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Validated Final Copy is confirmed.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Final Copy is submission-first.",
+                      "exact_message":  "Please ensure that you have INTERNET access and a VALID email address is indicated in your tax return.\n\nAre you sure you want to submit?",
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L3805-L3874"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final Copy is submission-first.",
+                      "recommended_app_behavior":  "Separate local final copy from online submission.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-final-002",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  2,
+                      "condition":  "No network is detected.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Sets final flag 3 and produces encrypted offline copy.",
+                      "exact_message":  "The system detected that you have no internet connection.\nPlease contact your internet service provider.",
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L3805-L3874"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Sets final flag 3 and produces encrypted offline copy.",
+                      "recommended_app_behavior":  "Apply the rule explicitly and deterministically.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-submit-001",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Transport succeeds.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Sets final flag 1 and persists final state.",
+                      "exact_message":  "Submit Successful. Subject to validation by BIR.",
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L3876-L3978"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Sets final flag 1 and persists final state.",
+                      "recommended_app_behavior":  "Require authenticated receipt evidence.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+                                                   "Online submission intentionally not performed."
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1603q-submit-002",
+                      "form_id":  "1603q-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  2,
+                      "condition":  "Transport fails or throws.",
+                      "fields":  [
+                                     "txtFinalFlag"
+                                 ],
+                      "accepted_behavior":  "Condition is false and processing continues.",
+                      "rejected_behavior":  "Sets final flag 2 for retry.",
+                      "exact_message":  "Your Tax Return was not submitted online due to any of the following reasons that may interrupt the submission process:",
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L3876-L3978"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Sets final flag 2 for retry.",
+                      "recommended_app_behavior":  "Retain the actual safe error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+                                                   "Online submission intentionally not performed."
+                                               ]
+                  }
+              ]
+}

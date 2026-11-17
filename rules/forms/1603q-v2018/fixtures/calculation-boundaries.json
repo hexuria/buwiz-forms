@@ -1,0 +1,11 @@
+{"schema_version":"1.0.0","form_id":"1603q-v2018","cases":[
+{"case_id":"base1","calculation_id":"1603q-s1-base1","inputs":{"value":65,"divisor":"65%"},"official_output":"100.00"},
+{"case_id":"base2","calculation_id":"1603q-s1-base2","inputs":{"value":75,"divisor":"75%"},"official_output":"100.00"},
+{"case_id":"withheld1","calculation_id":"1603q-s1-withheld1","inputs":{"base":100,"rate":"35%"},"official_output":"35.00"},
+{"case_id":"withheld2","calculation_id":"1603q-s1-withheld2","inputs":{"base":100,"rate":"25%"},"official_output":"25.00"},
+{"case_id":"schedule-total-literal-id-bug","calculation_id":"1603q-s1-total","inputs":{"withheld1":"35.00","withheld2":"25.00"},"official_output":"0.00","recommended_output":"60.00"},
+{"case_id":"item17","calculation_id":"1603q-item17","inputs":{"item15":1,"item16":2},"official_output":"3.00"},
+{"case_id":"item18-upstream-bug","calculation_id":"1603q-item18","inputs":{"item14":0,"item17":3},"official_output":"-3.00"},
+{"case_id":"item22","calculation_id":"1603q-item22","inputs":{"item19":1,"item20":2,"item21":3},"official_output":"6.00"},
+{"case_id":"item23","calculation_id":"1603q-item23","inputs":{"item18":-3,"item22":6},"official_output":"3.00"}
+]}

@@ -1,0 +1,181 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707-v2021",
+    "revision":  "2021-04-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-help-runtime"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "April 2021 capital-gains return for shares not traded through the local stock exchange."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L6593-L6607",
+                                           "official-hta-runtime#saveXML:L6003-L6318"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save invokes the full validation graph before serializing static and popup controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateAll:L3625-L3689",
+                                           "official-hta-runtime#validate"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate stops at the first invoked error and then disables the form for printing/final-copy actions."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML:L6003-L6318"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "The runtime defines encrypted final-copy creation, but no revision-matched April 2021 final copy is available."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#submitOnline",
+                                           "official-hta-runtime#submitToEFPS"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online/EFPS transports exist but were not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Serializes runtime popup rows."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L6003-L6318"
+                                            ],
+                            "guard":  "validateAll and the redundant RDO check pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables print/final-copy actions."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate"
+                                            ],
+                            "guard":  "All invoked validateAll checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls subject to transaction-type conditions."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts and compresses the final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L6003-L6318"
+                                            ],
+                            "guard":  "Finalization/version flow succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Online/EFPS attempt; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#submitOnline",
+                                                "official-hta-runtime#submitToEFPS"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Transaction date after March 31, 2021",
+                          "ATC and corporate classification when applicable",
+                          "RDO and taxpayer identity",
+                          "Seller and buyer information",
+                          "Transaction description",
+                          "Complete applicable schedules"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "ecar-mandatory-documents",
+                                     "label":  "Mandatory documents for securing the Electronic Certificate Authorizing Registration, with additional photocopies.",
+                                     "source_refs":  [
+                                                         "official-help-runtime#L318-L342"
+                                                     ],
+                                     "required_when":  "For eCAR processing.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "ecar-additional-documents",
+                                     "label":  "Additional eCAR requirements when applicable.",
+                                     "source_refs":  [
+                                                         "official-help-runtime#L343-L363"
+                                                     ],
+                                     "required_when":  "The corresponding transaction circumstance applies.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L177-L194"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Transaction-based, not quarterly: file and pay within thirty (30) days after each disposition; for installment sales, within thirty (30) days after the first down payment and each subsequent installment receipt."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L177-L194"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Transaction-based, not quarterly: file and pay within thirty (30) days after each disposition; for installment sales, within thirty (30) days after the first down payment and each subsequent installment receipt."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L177-L194"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Transaction-based, not quarterly: file and pay within thirty (30) days after each disposition; for installment sales, within thirty (30) days after the first down payment and each subsequent installment receipt."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L177-L194"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Transaction-based, not quarterly: file and pay within thirty (30) days after each disposition; for installment sales, within thirty (30) days after the first down payment and each subsequent installment receipt."
+                             }
+                         ]
+}

@@ -1,0 +1,222 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "cases":  [
+                  {
+                      "case_id":  "2550q-schedule1-row-source-boundary",
+                      "calculation_id":  "2550q-schedule1-row",
+                      "inputs":  {
+                                     "source_formula":  "allowed input tax = input tax / recognized life * 3; balance = input tax - allowed input tax."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-schedule1-totals-source-boundary",
+                      "calculation_id":  "2550q-schedule1-totals",
+                      "inputs":  {
+                                     "source_formula":  "Sum purchase amount, input tax, allowed input tax, and balance columns."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-schedule3-totals-source-boundary",
+                      "calculation_id":  "2550q-schedule3-totals",
+                      "inputs":  {
+                                     "source_formula":  "Sum Schedule 3 columns and transfer total tax withheld to creditable VAT."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-schedule4-totals-source-boundary",
+                      "calculation_id":  "2550q-schedule4-totals",
+                      "inputs":  {
+                                     "source_formula":  "Sum Schedule 4 amounts and transfer to advance VAT payment."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item15-source-boundary",
+                      "calculation_id":  "2550q-item15",
+                      "inputs":  {
+                                     "source_formula":  "15 = net VAT payable."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item16-source-boundary",
+                      "calculation_id":  "2550q-item16",
+                      "inputs":  {
+                                     "source_formula":  "16 = Schedule 3 tax withheld total."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item17-source-boundary",
+                      "calculation_id":  "2550q-item17",
+                      "inputs":  {
+                                     "source_formula":  "17 = Schedule 4 amount paid total."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item20-source-boundary",
+                      "calculation_id":  "2550q-item20",
+                      "inputs":  {
+                                     "source_formula":  "20 = 16 + 17 + 18 + 19."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item21-source-boundary",
+                      "calculation_id":  "2550q-item21",
+                      "inputs":  {
+                                     "source_formula":  "21 = 15 - 20."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item25-source-boundary",
+                      "calculation_id":  "2550q-item25",
+                      "inputs":  {
+                                     "source_formula":  "25 = surcharge + interest + compromise."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item26-source-boundary",
+                      "calculation_id":  "2550q-item26",
+                      "inputs":  {
+                                     "source_formula":  "If Item 21 is negative and penalties are positive, 26 = penalties; otherwise 26 = 21 + 25."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item31-source-boundary",
+                      "calculation_id":  "2550q-item31",
+                      "inputs":  {
+                                     "source_formula":  "31A = vatable sales * 12%; 31B copies 31A."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item34-source-boundary",
+                      "calculation_id":  "2550q-item34",
+                      "inputs":  {
+                                     "source_formula":  "34 = vatable + zero-rated + exempt sales."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item37-source-boundary",
+                      "calculation_id":  "2550q-item37",
+                      "inputs":  {
+                                     "source_formula":  "37 = output tax due - less output VAT + additional output VAT."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item39-source-boundary",
+                      "calculation_id":  "2550q-item39",
+                      "inputs":  {
+                                     "source_formula":  "39 = Schedule 1 carried input-tax balance."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item43-source-boundary",
+                      "calculation_id":  "2550q-item43",
+                      "inputs":  {
+                                     "source_formula":  "43 = 38 + 39 + 40 + 41 + 42 plus materialized additional Item 42 rows."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-items44-46-source-boundary",
+                      "calculation_id":  "2550q-items44-46",
+                      "inputs":  {
+                                     "source_formula":  "Each input-tax amount = corresponding purchase amount * 12%."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item47-source-boundary",
+                      "calculation_id":  "2550q-item47",
+                      "inputs":  {
+                                     "source_formula":  "47B = 47A * 12%."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item50-source-boundary",
+                      "calculation_id":  "2550q-item50",
+                      "inputs":  {
+                                     "source_formula":  "50 totals current purchases and their input taxes, including additional Item 47 rows."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item51-source-boundary",
+                      "calculation_id":  "2550q-item51",
+                      "inputs":  {
+                                     "source_formula":  "51 = 43 + 50B."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item52-source-boundary",
+                      "calculation_id":  "2550q-item52",
+                      "inputs":  {
+                                     "source_formula":  "52 = Schedule 1 carried balance."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item53-source-boundary",
+                      "calculation_id":  "2550q-item53",
+                      "inputs":  {
+                                     "source_formula":  "53 = Schedule 2 total attributable input tax."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-schedule2-allocation-source-boundary",
+                      "calculation_id":  "2550q-schedule2-allocation",
+                      "inputs":  {
+                                     "source_formula":  "ratable = exempt sales / total sales * non-direct input tax; attributable = direct + ratable."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item57-source-boundary",
+                      "calculation_id":  "2550q-item57",
+                      "inputs":  {
+                                     "source_formula":  "57 = 52 + 53 + 54 + 55 + 56 plus additional Item 56 rows."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item59-source-boundary",
+                      "calculation_id":  "2550q-item59",
+                      "inputs":  {
+                                     "source_formula":  "59 = 57 + 58."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item60-source-boundary",
+                      "calculation_id":  "2550q-item60",
+                      "inputs":  {
+                                     "source_formula":  "60 = 51 - 59."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  },
+                  {
+                      "case_id":  "2550q-item61-source-boundary",
+                      "calculation_id":  "2550q-item61",
+                      "inputs":  {
+                                     "source_formula":  "61 = 37 - 60, then the result is copied back to Item 15/excess input tax."
+                                 },
+                      "official_output":  "Derived by the pinned source formula; no taxpayer values are stored."
+                  }
+              ]
+}

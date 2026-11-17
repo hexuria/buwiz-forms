@@ -1,0 +1,35 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1707a-v2021",
+    "cases":  [
+                  {
+                      "case_id":  "gain",
+                      "selling_price":  1000,
+                      "calculation_id":  "1707a-s1-row-gain",
+                      "official_output":  300,
+                      "cost":  700
+                  },
+                  {
+                      "case_id":  "loss",
+                      "selling_price":  700,
+                      "calculation_id":  "1707a-s2-row-loss",
+                      "official_output":  300,
+                      "cost":  1000
+                  },
+                  {
+                      "case_id":  "tax-15-percent",
+                      "net_gain":  1000,
+                      "official_output":  150,
+                      "calculation_id":  "1707a-item15-tax",
+                      "rate":  15
+                  },
+                  {
+                      "penalties":  0,
+                      "tax_still_payable":  -100,
+                      "calculation_id":  "1707a-item19-payable",
+                      "case_id":  "negative-payable-defect",
+                      "official_output":  -100,
+                      "recommended_output":  0
+                  }
+              ]
+}

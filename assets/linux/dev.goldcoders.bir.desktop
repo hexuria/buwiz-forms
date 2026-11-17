@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=eBIRForms
+GenericName=Tax Return Filing
+Comment=Prepare, validate and file Philippine BIR tax returns
+Exec=ebirforms
+Icon=dev.goldcoders.bir
+Terminal=false
+Categories=Office;Finance;
+Keywords=BIR;tax;eBIRForms;2551Q;1601C;
+StartupWMClass=dev.goldcoders.bir
+StartupNotify=true

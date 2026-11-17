@@ -1,0 +1,184 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2552-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "official-guide-pdf"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 stock-transaction tax return with Part V LSE/primary/secondary schedules."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L7155-L7167",
+                                           "official-hta-runtime#saveXML"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save runs a narrow date/identity graph before serializing static, RDO, and popup controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateAll:L4356-L4399"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks identity, transaction kind, overpayment disposition, and Parts IVâ€“VI."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Encryption exists, but no January 2018 final copy is available."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#submitOnline",
+                                           "official-hta-runtime#submitToEFPS"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online/EFPS transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Serializes runtime rows."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables final-copy actions."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate"
+                                            ],
+                            "guard":  "All validateAll checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls conditionally."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts/compresses the copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#submitOnline"
+                                            ],
+                            "guard":  "Connectivity and acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Transaction date",
+                          "RDO and identity",
+                          "Tax-relief specification when applicable",
+                          "Transaction kind and share counts",
+                          "Complete Parts IVâ€“VI",
+                          "Overpayment disposition when applicable"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "bir-2307",
+                                     "label":  "Certificate of Creditable Tax Withheld at Source (BIR Form 2307), if applicable.",
+                                     "source_refs":  [
+                                                         "packaged-help#L231-L239"
+                                                     ],
+                                     "required_when":  "Creditable withholding applies.",
+                                     "official_ui_enforcement":  "Not enforced.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "supporting-documents",
+                                     "label":  "Proof of exemption, approved Tax Debit Memo, and amended-return payment/return when applicable.",
+                                     "source_refs":  [
+                                                         "packaged-help#L231-L239"
+                                                     ],
+                                     "required_when":  "Corresponding condition applies.",
+                                     "official_ui_enforcement":  "Not enforced.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L183-L190",
+                                                     "official-guide-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "LSE and secondary offerings: within five banking days from collection; primary offering: within thirty days from listing."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L183-L190",
+                                                     "official-guide-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "LSE and secondary offerings: within five banking days from collection; primary offering: within thirty days from listing."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L183-L190",
+                                                     "official-guide-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "LSE and secondary offerings: within five banking days from collection; primary offering: within thirty days from listing."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help#L183-L190",
+                                                     "official-guide-pdf"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "LSE and secondary offerings: within five banking days from collection; primary offering: within thirty days from listing."
+                             }
+                         ]
+}

@@ -1,0 +1,162 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "revision":  "2003-09-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-atc-catalog",
+                                           "official-tax-type-catalog"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "September 2003 payment form with runtime-loaded RDO, ATC, and tax-type catalogs."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3180-L3205",
+                                           "official-hta-runtime#saveXML:L1968-L2164"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save requires only complete return period, TIN segments, RDO, and taxpayer name; it serializes 235 controls including 179 lookup payload controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L2621-L2948"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs the ordered active branches in validate(); the quarter branch is commented out."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#openAlertEmail:L3667-L3706",
+                                           "official-hta-runtime#saveEncryptedProfile:L1899-L1967"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy is enabled after Validate and writes an encrypted/compressed copy."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L3707-L3803"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML control state."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L1968-L2164"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables editable controls.",
+                                                 "Enables Edit and Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L2621-L2948"
+                                            ],
+                            "guard":  "The ordered active Validate branches pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables editable controls.",
+                                                 "Disables Final Copy."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L2484-L2552"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Writes encrypted/compressed copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L3667-L3706"
+                                            ],
+                            "guard":  "Final-copy confirmation and save succeed."
+                        },
+                        {
+                            "action":  "Online transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L3707-L3803"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Filing basis and year ended",
+                          "Due date",
+                          "ATC and return period",
+                          "Tax type",
+                          "TIN, RDO, and taxpayer identity",
+                          "Manner and type of payment",
+                          "Positive Item 19 tax amount"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Payment timing depends on the selected tax type and ATC; use the obligation-specific rule rather than inferring a universal quarterly deadline from Form 0605."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Payment timing depends on the selected tax type and ATC; use the obligation-specific rule rather than inferring a universal quarterly deadline from Form 0605."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Payment timing depends on the selected tax type and ATC; use the obligation-specific rule rather than inferring a universal quarterly deadline from Form 0605."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "packaged-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Payment timing depends on the selected tax type and ATC; use the obligation-specific rule rather than inferring a universal quarterly deadline from Form 0605."
+                             }
+                         ]
+}

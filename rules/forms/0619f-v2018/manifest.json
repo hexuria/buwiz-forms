@@ -1,0 +1,92 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0619f-v2018",
+    "form_code":  "0619F",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form0619F.hta",
+                                "sha256":  "994818ea7b5691656d302d32025a39c6895a032d417871a6080803373436ecca",
+                                "size":  201051,
+                                "revision_binding":  "January 2018 runtime."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help0619F.hta",
+                                "sha256":  "290ec441060ad3bfdd54f0673b704ce05cf4a7b68510efc5a16518bff94cb54e",
+                                "size":  16501,
+                                "revision_binding":  "Packaged January 2018 instructions."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0619F\\0619-F Jan 2018 rev final.pdf",
+                                "sha256":  "edd7357390b1f0d95f2a38c9bb76252341c15b54b82bffd338bd540452ff15e1",
+                                "size":  641020,
+                                "revision_binding":  "January 2018 official form."
+                            },
+                            {
+                                "asset_id":  "xml-encrypted",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0619F\\0619F-final-copy-#email-redacted#.xml",
+                                "sha256":  "d561ce34a44a732e52047552c6d4c0b975b3c45042dc0aba4907abfda89b53fb",
+                                "size":  698,
+                                "revision_binding":  "Revision-matched 60-key dummy final copy; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-plaintext",
+                                "kind":  "dummy-profile-plaintext-save",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0619F\\0619F-save-#email-redacted#.xml",
+                                "sha256":  "f7a1f2481104b8c23b22f92aef263ae02f768227ec6961cb10e4daf0817f8a18",
+                                "size":  3634,
+                                "revision_binding":  "Revision-matched 59-key dummy save; values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  60,
+                   "runtime_field_families":  0,
+                   "fields_total":  60,
+                   "typed_fields":  60,
+                   "validation_rules":  40,
+                   "confirmed_official_bugs":  11,
+                   "calculations":  5,
+                   "negative_fixtures":  26,
+                   "unverified_gaps":  1
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "plaintext_field_audit":  "fixtures/plaintext-field-audit-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "The 60-key final-copy inventory is lossless; the paired plaintext save omits txtAddress2.",
+                        "Save has copied Item 7/8/9 messages for fields printed as Items 6/7/8."
+                    ]
+}

@@ -1,0 +1,196 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#checkFieldsAfterXMLLoad:L8799-L8820",
+                                           "official-hta-runtime#addAttachment:L13594-L13668"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Four-page annual return plus cloneable exempt/special attachment worksheets; change handlers enable, reset, calculate, and validate dependent controls."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L7918-L7932",
+                                           "official-hta-runtime#saveXML:L8095-L8221"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save runs only TIN nonblank, RDO != 000, and taxpayer-name checks, then serializes every non-hidden text/select/radio/checkbox in frmMain."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L9135-L9325",
+                                           "official-hta-runtime#disableAllControl:L9330-L9351"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Ordered main validation and conditional helpers run; success disables controls and shows the success alert."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#openAlertEmail:L13116-L13181",
+                                           "official-hta-runtime#saveEncryptedProfile:L13256-L13351"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy is coupled to confirmation, local encryption, and connectivity checks."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L13182-L13255"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "The HTA has an online send path, but this research did not submit."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML save.",
+                                                 "Persists a background profile."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L7918-L7932",
+                                                "official-hta-runtime#saveXML:L7934-L8247"
+                                            ],
+                            "guard":  "TIN components nonblank, RDO value not 000, and taxpayer name nonblank."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Shows validation-success alert."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L9135-L9325"
+                                            ],
+                            "guard":  "All active ordered rules and helper checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls and recomputes conditional state."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L9352-L9419"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted copy.",
+                                                 "Updates final-copy/read-only state."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L13116-L13181"
+                                            ],
+                            "guard":  "User confirms the coupled workflow and connectivity/encryption path permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online send; not exercised."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L13182-L13255"
+                                            ],
+                            "guard":  "Connectivity and transport succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018 ENCS revision",
+                          "Return year 2018 or later for this HTA",
+                          "Applicable taxpayer and spouse identity/ATC selections",
+                          "Applicable income schedules and tax-rate election"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "exempt-income-worksheet",
+                                     "label":  "Form 1701 exempt tax regime attachment",
+                                     "source_refs":  [
+                                                         "official-attachment-pdf#all-pages",
+                                                         "official-hta-runtime#addAttachment:L13594-L13668",
+                                                         "official-hta-runtime#checkPart10TPSchedA:L8972-L9003"
+                                                     ],
+                                     "required_when":  "Taxpayer or spouse reports exempt income and the corresponding attachment option is selected.",
+                                     "official_ui_enforcement":  "The HTA creates EXn worksheets and checks selected Schedule A cells, but does not prove documentary attachments.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "special-rate-worksheet",
+                                     "label":  "Form 1701 special/preferential rate attachment",
+                                     "source_refs":  [
+                                                         "official-attachment-pdf#all-pages",
+                                                         "official-hta-runtime#addAttachment:L13594-L13668",
+                                                         "official-hta-runtime#checkPart10SPSchedA:L9005-L9034"
+                                                     ],
+                                     "required_when":  "Taxpayer or spouse reports special-rate income and the corresponding attachment option is selected.",
+                                     "official_ui_enforcement":  "The HTA creates SPn worksheets and validates selected Schedule A cells.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "foreign-tax-credit-proof",
+                                     "label":  "Proof supporting foreign tax credit",
+                                     "source_refs":  [
+                                                         "official-form-pdf#instructions",
+                                                         "official-hta-runtime#validate:L9203-L9210",
+                                                         "official-hta-runtime#validateSpouseFields:L9095-L9105"
+                                                     ],
+                                     "required_when":  "Taxpayer or spouse claims foreign tax credits.",
+                                     "official_ui_enforcement":  "Local Validate requires a foreign tax number but does not enforce an external document.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#filing-instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return; file on or before April 15 following the taxable year, subject to applicable law and calendar adjustments."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#filing-instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not a quarterly return; same annual-return deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#filing-instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not a quarterly return; same annual-return deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#filing-instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not a quarterly return; same annual-return deadline applies."
+                             }
+                         ]
+}

@@ -1,0 +1,23 @@
+{
+  "// why": [
+    "checkJs + JSDoc types give the JS layer real type-checking with no build",
+    "step — editing a file still changes the window with no compile, which is",
+    "the argument for a script layer in the first place. gpui-kit.d.ts is",
+    "written by the runtime on launch (set_editor_files), so the declarations",
+    "always match the running engine.",
+    "strictNullChecks is off: a view assigns state in `init`, which TypeScript",
+    "cannot see as definite assignment, so every field would read as",
+    "possibly-undefined and every use would want a meaningless `?`."
+  ],
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "checkJs": true,
+    "strict": true,
+    "strictNullChecks": false,
+    "noEmit": true
+  },
+  "include": ["*.js", "**/*.js", "*.d.ts"]
+}

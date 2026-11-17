@@ -1,0 +1,24 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "official_hta_sha256":  "dc5c19710400e9bd15ceccd1bbeafc5290074b17b2d460af5f8921c6a7f93186",
+    "active_calculation_count":  8,
+    "active_ids":  [
+                       "2551q-atc-row-tax",
+                       "2551q-schedule1-total",
+                       "2551q-item18",
+                       "2551q-item19",
+                       "2551q-item23",
+                       "2551q-item24",
+                       "2551q-eight-percent-zeroing",
+                       "2551q-overpayment-state"
+                   ],
+    "dead_commented_functions":  [
+                                     "computeTaxDue",
+                                     "computeTotalTaxDue",
+                                     "computeTotalTaxCreditForm2551Qv2018",
+                                     "computeTaxPayable",
+                                     "computePenalties",
+                                     "computeTotalAmountPayable"
+                                 ]
+}

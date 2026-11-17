@@ -1,0 +1,59 @@
+{
+  "name": "eBIRForms",
+  "id": "dev.goldcoders.bir.nsh",
+  "version": "0.2.0",
+  "build": 1,
+  "rust": ".",
+  "appearance": "system",
+  "theme": "theme/theme.json",
+  "window": {
+    "title": "eBIRForms",
+    "defaultSize": {
+      "width": 1440,
+      "height": 900
+    },
+    "minSize": {
+      "width": 420,
+      "height": 480
+    },
+    "titleBar": {
+      "style": "hidden",
+      "height": 40
+    },
+    "restoreBounds": true
+  },
+  "tailwind": {
+    "fontSize": {
+      "page": [
+        20,
+        1.4
+      ],
+      "title": [
+        16,
+        1.4
+      ],
+      "emph": [
+        14,
+        1.45
+      ],
+      "body": [
+        13,
+        1.5
+      ],
+      "meta": [
+        12,
+        1.5
+      ],
+      "cap": [
+        11,
+        1.45
+      ]
+    },
+    "breakpoints": {
+      "wide": 600,
+      "content": 640,
+      "partnav": 760,
+      "docked": 860
+    }
+  }
+}

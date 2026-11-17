@@ -1,0 +1,9 @@
+{
+  "name": "official-xml",
+  "private": true,
+  "description": "Runs the official eBIRForms saveXMLsubmit loop in jsdom to derive and check exact submit plaintext layouts.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "jsdom": "24.1.3"
+  }
+}

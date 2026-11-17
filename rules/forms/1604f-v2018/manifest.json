@@ -1,0 +1,93 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604f-v2018",
+    "form_code":  "1604F",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1604F.hta",
+                                "sha256":  "e6bf54d0fdffac4a459ceb4ff66f7afdaec10eec15f9b0e53501f66142758741",
+                                "size":  346527,
+                                "revision_binding":  "APPLICATIONNAME 1604F and printed January 2018."
+                            },
+                            {
+                                "asset_id":  "official-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1604F.hta",
+                                "sha256":  "9bb5163298d12a41ea26cb9d5159a9b084d51d65200091679bdf841e97a0c3c6",
+                                "size":  16313,
+                                "revision_binding":  "Revision-matched January 2018 instructions."
+                            },
+                            {
+                                "asset_id":  "xml-editable-v1",
+                                "kind":  "dummy-profile-editable-save",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-1604F-2025.xml",
+                                "sha256":  "bcc3829950b783e95e200db6bd4bd7b470f9f923a58c7c37335fe33c0f7e3d80",
+                                "size":  8154,
+                                "revision_binding":  "Reviewed 105-key target-revision save; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-encrypted-v1",
+                                "kind":  "dummy-profile-encrypted-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1604Fv2018\\00000000000000-1604F-2025#email-redacted#.xml",
+                                "sha256":  "44f1e38d94b923ff52136b7369cdd1d329e61efb4d2ce77894178c0a4aab6be2",
+                                "size":  1006,
+                                "revision_binding":  "Reviewed encrypted companion; decrypted 105-key shape matches plaintext; values excluded."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1604Fv2018\\1604-F Jan 2018 Final 2.pdf",
+                                "sha256":  "fc34de40dc7e6bc5f7a8cbc3feb5b170cca4bce4f0abd5b7b0dece4e9dd75c4d",
+                                "size":  1060649,
+                                "revision_binding":  "January 2018 Form 1604-F."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  105,
+                   "runtime_field_families":  0,
+                   "fields_total":  105,
+                   "typed_fields":  105,
+                   "validation_rules":  82,
+                   "confirmed_official_bugs":  36,
+                   "calculations":  5,
+                   "negative_fixtures":  40,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release changes.",
+                        "No source values or email-bearing filenames are copied.",
+                        "Plaintext and decrypted encrypted saves contain the same 105-key inventory; there are no active runtime field families.",
+                        "Seven static controls absent from the reviewed save are retained in the control fixture and classified where relevant."
+                    ]
+}

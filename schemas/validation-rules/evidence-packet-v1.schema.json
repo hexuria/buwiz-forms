@@ -1,0 +1,683 @@
+{
+  "$id": "urn:dev.goldcoders.bir:schema:evidence-packet:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attestations": {
+      "items": false,
+      "maxItems": 4,
+      "minItems": 4,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/derivedOnlyAttestation"
+        },
+        {
+          "$ref": "#/$defs/noTaxpayerValuesAttestation"
+        },
+        {
+          "$ref": "#/$defs/noCredentialsAttestation"
+        },
+        {
+          "$ref": "#/$defs/noOnlineSubmissionAttestation"
+        }
+      ],
+      "type": "array"
+    },
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "capture_provenance": {
+      "$ref": "#/$defs/captureProvenance"
+    },
+    "created_at_utc": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "derived_evidence": {
+      "items": {
+        "$ref": "#/$defs/derivedEvidence"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "form_code": {
+      "$ref": "#/$defs/exactIdentity"
+    },
+    "form_id": {
+      "$ref": "#/$defs/portableIdentifier"
+    },
+    "form_revision": {
+      "$ref": "#/$defs/exactIdentity"
+    },
+    "format": {
+      "const": "bir-evidence-packet-v1"
+    },
+    "official_package_evidence_id": {
+      "$ref": "#/$defs/portableIdentifier"
+    },
+    "official_package_version": {
+      "$ref": "#/$defs/exactIdentity"
+    },
+    "packet_digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "packet_id": {
+      "$ref": "#/$defs/portableIdentifier"
+    },
+    "review": {
+      "$ref": "#/$defs/review"
+    },
+    "rule_set_id": {
+      "$ref": "#/$defs/portableIdentifier"
+    },
+    "rule_set_source_state": {
+      "$ref": "#/$defs/ruleSetSourceState"
+    },
+    "source_map_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "source_verification_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "tracked_v1_source_set_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "upstream_evidence": {
+      "items": {
+        "$ref": "#/$defs/upstreamEvidence"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "attestations",
+    "canonicalization",
+    "capture_provenance",
+    "created_at_utc",
+    "derived_evidence",
+    "form_code",
+    "form_id",
+    "form_revision",
+    "format",
+    "official_package_evidence_id",
+    "official_package_version",
+    "packet_digest_sha256",
+    "packet_id",
+    "review",
+    "rule_set_id",
+    "rule_set_source_state",
+    "source_map_sha256",
+    "source_verification_sha256",
+    "tracked_v1_source_set_sha256",
+    "upstream_evidence"
+  ],
+  "title": "Portable validation-rule evidence packet v1",
+  "type": "object",
+  "$defs": {
+    "attestationBase": {
+      "additionalProperties": false,
+      "properties": {
+        "attested": {
+          "const": true
+        },
+        "attested_at_utc": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "attested_by": {
+          "$ref": "#/$defs/humanText"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "statement": {
+          "$ref": "#/$defs/humanText"
+        }
+      },
+      "required": [
+        "attested",
+        "attested_at_utc",
+        "attested_by",
+        "kind",
+        "statement"
+      ],
+      "type": "object"
+    },
+    "candidateReview": {
+      "additionalProperties": false,
+      "properties": {
+        "reviewed_at_utc": {
+          "type": "null"
+        },
+        "reviewed_by": {
+          "type": "null"
+        },
+        "status": {
+          "const": "candidate"
+        }
+      },
+      "required": [
+        "reviewed_at_utc",
+        "reviewed_by",
+        "status"
+      ],
+      "type": "object"
+    },
+    "captureProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "capture_tool_version": {
+          "$ref": "#/$defs/exactIdentity"
+        },
+        "command_argv": {
+          "items": false,
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "const": "bir-rules-codegen"
+            },
+            {
+              "const": "verify-evidence-vault-source-map"
+            },
+            {
+              "const": "--source-map"
+            },
+            {
+              "maxLength": 4096,
+              "pattern": "^(?:\\.\\./)+(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\\.json$",
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        "finished_at_utc": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "official_app_version": {
+          "$ref": "#/$defs/exactIdentity"
+        },
+        "operating_system": {
+          "const": "windows"
+        },
+        "started_at_utc": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "tool_commit": {
+          "$ref": "#/$defs/gitCommit"
+        },
+        "windows_version": {
+          "$ref": "#/$defs/exactIdentity"
+        }
+      },
+      "required": [
+        "capture_tool_version",
+        "command_argv",
+        "finished_at_utc",
+        "official_app_version",
+        "operating_system",
+        "started_at_utc",
+        "tool_commit",
+        "windows_version"
+      ],
+      "type": "object"
+    },
+    "commandArgument": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*$",
+      "type": "string"
+    },
+    "decidedReview": {
+      "additionalProperties": false,
+      "properties": {
+        "reviewed_at_utc": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "reviewed_by": {
+          "$ref": "#/$defs/humanText"
+        },
+        "status": {
+          "enum": [
+            "reviewed",
+            "rejected"
+          ]
+        }
+      },
+      "required": [
+        "reviewed_at_utc",
+        "reviewed_by",
+        "status"
+      ],
+      "type": "object"
+    },
+    "derivedEvidenceKind": {
+      "enum": [
+        "source-excerpt",
+        "structured-dom-inventory",
+        "xml-inventory",
+        "runtime-exact-errors",
+        "runtime-validation-order",
+        "runtime-save-reopen",
+        "record-census",
+        "gap-report"
+      ],
+      "type": "string"
+    },
+    "evidenceObservation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/observedEvidence"
+        },
+        {
+          "$ref": "#/$defs/notObservedEvidence"
+        },
+        {
+          "$ref": "#/$defs/gapEvidence"
+        }
+      ]
+    },
+    "exactIdentity": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^\\S(?:.*\\S)?$",
+      "type": "string"
+    },
+    "gapEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/humanText"
+        },
+        "status": {
+          "const": "gap"
+        }
+      },
+      "required": [
+        "reason",
+        "status"
+      ],
+      "type": "object"
+    },
+    "gitCommit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "derivedEvidence": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "source-excerpt"
+              },
+              "observation": {
+                "properties": {
+                  "status": {
+                    "const": "observed"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "observation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_excerpt": {
+                "$ref": "#/$defs/sourceExcerptLocator"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "source-excerpt"
+              },
+              "observation": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "not-observed",
+                      "gap"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "observation"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_excerpt": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "not": {
+                  "const": "source-excerpt"
+                }
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_excerpt": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "classification": {
+          "const": "non-taxpayer-derived"
+        },
+        "kind": {
+          "$ref": "#/$defs/derivedEvidenceKind"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "observation": {
+          "$ref": "#/$defs/evidenceObservation"
+        },
+        "path": {
+          "pattern": "^derived/(?!.*(?:^|/)\\.\\.?/)[a-zA-Z0-9._-]+(?:/[a-zA-Z0-9._-]+)*\\.json$",
+          "type": "string"
+        },
+        "review_status": {
+          "$ref": "#/$defs/reviewStatus"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "$ref": "#/$defs/portableIdentifier"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_excerpt": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sourceExcerptLocator"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "classification",
+        "kind",
+        "media_type",
+        "observation",
+        "path",
+        "review_status",
+        "sha256",
+        "size_bytes",
+        "source_evidence_ids",
+        "source_excerpt"
+      ],
+      "type": "object"
+    },
+    "derivedOnlyAttestation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/attestationBase"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "derived-only"
+            }
+          }
+        }
+      ]
+    },
+    "humanText": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^\\S(?:.*\\S)?$",
+      "type": "string"
+    },
+    "noCredentialsAttestation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/attestationBase"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "no-credentials"
+            }
+          }
+        }
+      ]
+    },
+    "noOnlineSubmissionAttestation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/attestationBase"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "no-online-submission"
+            }
+          }
+        }
+      ]
+    },
+    "noTaxpayerValuesAttestation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/attestationBase"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "no-taxpayer-values"
+            }
+          }
+        }
+      ]
+    },
+    "notObservedEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/humanText"
+        },
+        "status": {
+          "const": "not-observed"
+        }
+      },
+      "required": [
+        "reason",
+        "status"
+      ],
+      "type": "object"
+    },
+    "observedEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "observed"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "type": "object"
+    },
+    "pinnedRuleSetSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "const": "pinned"
+        }
+      },
+      "required": [
+        "source_set_sha256",
+        "status"
+      ],
+      "type": "object"
+    },
+    "plannedRuleSetSource": {
+      "additionalProperties": false,
+      "properties": {
+        "source_set_sha256": {
+          "type": "null"
+        },
+        "status": {
+          "const": "planned"
+        }
+      },
+      "required": [
+        "source_set_sha256",
+        "status"
+      ],
+      "type": "object"
+    },
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    },
+    "review": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/candidateReview"
+        },
+        {
+          "$ref": "#/$defs/decidedReview"
+        }
+      ]
+    },
+    "reviewStatus": {
+      "enum": [
+        "candidate",
+        "reviewed",
+        "rejected"
+      ],
+      "type": "string"
+    },
+    "ruleSetSourceState": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plannedRuleSetSource"
+        },
+        {
+          "$ref": "#/$defs/pinnedRuleSetSource"
+        }
+      ]
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceExcerptLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt_end_byte": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "excerpt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "excerpt_start_byte": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "full_file_path": {
+          "pattern": "^upstream/(?!.*(?:^|/)\\.\\.?/)[a-zA-Z0-9._-]+(?:/[a-zA-Z0-9._-]+)*$",
+          "type": "string"
+        },
+        "full_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "full_file_size_bytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "upstream_evidence_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        }
+      },
+      "required": [
+        "excerpt_end_byte",
+        "excerpt_sha256",
+        "excerpt_start_byte",
+        "full_file_path",
+        "full_file_sha256",
+        "full_file_size_bytes",
+        "upstream_evidence_id"
+      ],
+      "type": "object"
+    },
+    "upstreamEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "path": {
+          "pattern": "^upstream/(?!.*(?:^|/)\\.\\.?/)[a-zA-Z0-9._-]+(?:/[a-zA-Z0-9._-]+)*$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "path",
+        "sha256",
+        "size_bytes"
+      ],
+      "type": "object"
+    },
+    "utcTimestamp": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "type": "string"
+    }
+  }
+}

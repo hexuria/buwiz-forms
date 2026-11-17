@@ -1,0 +1,256 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1606-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1606-fmv-pair-max",
+                             "1606-taxable-base-cash",
+                             "1606-taxable-base-foreclosure",
+                             "1606-taxable-base-installment",
+                             "1606-taxable-base-exempt-other",
+                             "1606-tax-required",
+                             "1606-tax-still-due",
+                             "1606-penalties",
+                             "1606-total-amount",
+                             "1606-overpayment-controls"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1606-fmv-pair-max",
+                             "outputs":  [
+                                             "frm1606:txtFMVLI"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtFMVLand",
+                                            "frm1606:txtFMVImprovements",
+                                            "frm1606:txtFMVZonal",
+                                            "frm1606:txtFMVBIR"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 28B = max(Item 27A + 27B, Item 27C + 27D); ties take the C+D branch. The two cross-pair sums printed in the UI note are commented out in code.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeFMVLI -\u003e compareFMVLI",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeFMVLI:L3393-L3400",
+                                                 "official-hta-runtime#compareFMVLI:L3401-L3438"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Implement legally supported valuation combinations and make the printed-instruction discrepancy explicit.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-taxable-base-cash",
+                             "outputs":  [
+                                             "frm1606:txtTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtGross",
+                                            "frm1606:txtFMVLI"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Base Item 30 = max(Item 28A Gross, Item 28B FMVLI); equality ends as FMVLI because the second independent \u003e= branch overwrites the first.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTaxableBase",
+                             "depends_on":  [
+                                                "1606-fmv-pair-max"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxableBase:L3443-L3459"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Use an explicit maximum and preserve source provenance.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-taxable-base-foreclosure",
+                             "outputs":  [
+                                             "frm1606:txtTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtFMVLI",
+                                            "frm1606:txtBid"
+                                        ],
+                             "condition":  "Item 20 Foreclosure Sale.",
+                             "official_formula":  "When Item 20 Foreclosure is selected, Item 30 is overwritten with max(Item 28B FMVLI, Item 28C Bid), ignoring Gross even if it is larger.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTaxableBase",
+                             "depends_on":  [
+                                                "1606-fmv-pair-max"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxableBase:L3460-L3465"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use the legally authoritative foreclosure-base inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-taxable-base-installment",
+                             "outputs":  [
+                                             "frm1606:txtTax",
+                                             "frm1606:txtSelling"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtInstallment",
+                                            "frm1606:txtGross"
+                                        ],
+                             "condition":  "Item 20 Installment Sale.",
+                             "official_formula":  "When Item 20 Installment Sale is selected, Item 21 first copies Item 28A Gross and Item 30 then copies Item 28D Installment.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTaxableBase",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxableBase:L3443-L3446",
+                                                 "official-hta-runtime#computeTaxableBase:L3466-L3468"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Copy authoritative typed amounts without unrelated side effects.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-taxable-base-exempt-other",
+                             "outputs":  [
+                                             "frm1606:txtTax"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtOthers28E"
+                                        ],
+                             "condition":  "Item 20 Exempt or Others.",
+                             "official_formula":  "When Item 20 Exempt or Others is selected, Item 30 copies the numeric Item 28E amount regardless of which Item 28 radio is selected.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTaxableBase",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxableBase:L3469-L3471"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Require compatible transaction and base selections.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-tax-required",
+                             "outputs":  [
+                                             "frm1606:txtTaxR"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtTax",
+                                            "frm1606:txtTaxRate"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 32 = Item 30 taxable base multiplied by the user-selected Item 31 percentage and divided by 100.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeOfTaxRequired",
+                             "depends_on":  [
+                                                "1606-taxable-base-cash"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOfTaxRequired:L3156-L3161"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-tax-still-due",
+                             "outputs":  [
+                                             "frm1606:txtTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtTaxR",
+                                            "frm1606:txtLess"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 34 = Item 32 - Item 33.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeTaxDue",
+                             "depends_on":  [
+                                                "1606-tax-required"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxDue:L3162-L3167"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-penalties",
+                             "outputs":  [
+                                             "frm1606:txtTotalPenalties"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtSurcharge",
+                                            "frm1606:txtInterest",
+                                            "frm1606:txtCompromise"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 35D = 35A + 35B + 35C.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L3169-L3175"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-total-amount",
+                             "outputs":  [
+                                             "frm1606:txtTotal"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtTaxDue",
+                                            "frm1606:txtTotalPenalties"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Item 36 = Item 34 + Item 35D.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeOfTotalAmtDue",
+                             "depends_on":  [
+                                                "1606-tax-still-due",
+                                                "1606-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOfTotalAmtDue:L3176-L3191"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1606-overpayment-controls",
+                             "outputs":  [
+                                             "frm1606:opt37:_1",
+                                             "frm1606:opt37:_2"
+                                         ],
+                             "inputs":  [
+                                            "frm1606:txtTotal"
+                                        ],
+                             "condition":  "",
+                             "official_formula":  "Enable Item 37 choices only when Item 36 \u003c 0; otherwise disable and uncheck both.",
+                             "rounding":  "Entry handlers call round(...,2); computed values use formatCurrency after NumWithComma parsing.",
+                             "trigger":  "computeOfTotalAmtDue",
+                             "depends_on":  [
+                                                "1606-total-amount"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOfTotalAmtDue:L3180-L3189"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

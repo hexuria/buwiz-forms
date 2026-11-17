@@ -1,0 +1,407 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604f-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1604f-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Only nonblankness is checked.",
+                      "rule_id":  "1604f-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1604f-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code equals literal 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604f-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1604f-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "The message cites Item 7, while the printed name is Item 6.",
+                      "rule_id":  "1604f-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1604f-validate-001-year-alert-only",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is 2017 or earlier, or later than the current full year."
+                                    },
+                      "expected_message":  "Invalid data entry on item no. 1. Entry should be current or prior year but not be earlier than the effectivity date of January 2018.",
+                      "expected_behavior":  "checkYear alerts but returns no failure signal; Validate continues after dismissal.",
+                      "rule_id":  "1604f-validate-001-year-alert-only"
+                  },
+                  {
+                      "case_id":  "case-05-1604f-validate-002-year-blank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year is blank after the non-blocking checkYear alert."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "Blank year produces two consecutive alerts: effectivity first, then blank.",
+                      "rule_id":  "1604f-validate-002-year-blank"
+                  },
+                  {
+                      "case_id":  "case-06-1604f-validate-003-tax-relief-detail",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 11 Yes is selected and Item 11A relief detail is blank."
+                                    },
+                      "expected_message":  "Please specify the Special Treaty or International Law the payee is availing in item 11A.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-003-tax-relief-detail"
+                  },
+                  {
+                      "case_id":  "case-07-1604f-validate-004-year-below1900",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year coerces below 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "expected_behavior":  "The earlier effectivity alert did not stop; this second alert finally stops only values below 1900.",
+                      "rule_id":  "1604f-validate-004-year-below1900"
+                  },
+                  {
+                      "case_id":  "case-08-1604f-validate-005-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "No segment length, digit, or checksum check follows.",
+                      "rule_id":  "1604f-validate-005-tin"
+                  },
+                  {
+                      "case_id":  "case-09-1604f-validate-006-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-006-rdo"
+                  },
+                  {
+                      "case_id":  "case-10-1604f-validate-007-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 7.",
+                      "expected_behavior":  "The message cites Item 7; the printed name is Item 6.",
+                      "rule_id":  "1604f-validate-007-name"
+                  },
+                  {
+                      "case_id":  "case-11-1604f-validate-008-phone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 8.",
+                      "expected_behavior":  "The message cites Item 8; contact number is Item 9.",
+                      "rule_id":  "1604f-validate-008-phone"
+                  },
+                  {
+                      "case_id":  "case-12-1604f-validate-009-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "expected_behavior":  "The message cites Item 9; registered address is Item 7.",
+                      "rule_id":  "1604f-validate-009-address"
+                  },
+                  {
+                      "case_id":  "case-13-1604f-validate-010-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10.",
+                      "expected_behavior":  "The message cites Item 10; ZIP code is Item 7A.",
+                      "rule_id":  "1604f-validate-010-zip"
+                  },
+                  {
+                      "case_id":  "case-14-1604f-validate-011-category",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither private nor government category is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 8.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-011-category"
+                  },
+                  {
+                      "case_id":  "case-15-1604f-validate-sched1-row1-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 1st Quarter is started but Date of Remittance is blank."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row1-date"
+                  },
+                  {
+                      "case_id":  "case-16-1604f-validate-sched1-row1-tra-placeholder",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 1st Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "expected_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "rule_id":  "1604f-validate-sched1-row1-tra-placeholder"
+                  },
+                  {
+                      "case_id":  "case-17-1604f-validate-sched1-row1-tra-specific",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 1st Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank."
+                                    },
+                      "expected_message":  "Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row1-tra-specific"
+                  },
+                  {
+                      "case_id":  "case-18-1604f-validate-sched1-row1-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 1st Quarter has a date and Taxes Withheld compares equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row1-tax"
+                  },
+                  {
+                      "case_id":  "case-19-1604f-validate-sched1-row1-date-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 1st Quarter Date of Remittance fails validateMonthDayYearDate."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "Malformed dates reuse the missing-date message.",
+                      "rule_id":  "1604f-validate-sched1-row1-date-format"
+                  },
+                  {
+                      "case_id":  "case-20-1604f-validate-sched1-row2-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 2nd Quarter is started but Date of Remittance is blank."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row2-date"
+                  },
+                  {
+                      "case_id":  "case-21-1604f-validate-sched1-row2-tra-placeholder",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 2nd Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "expected_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "rule_id":  "1604f-validate-sched1-row2-tra-placeholder"
+                  },
+                  {
+                      "case_id":  "case-22-1604f-validate-sched1-row2-tra-specific",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 2nd Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank."
+                                    },
+                      "expected_message":  "Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row2-tra-specific"
+                  },
+                  {
+                      "case_id":  "case-23-1604f-validate-sched1-row2-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 2nd Quarter has a date and Taxes Withheld compares equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row2-tax"
+                  },
+                  {
+                      "case_id":  "case-24-1604f-validate-sched1-row2-date-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 2nd Quarter Date of Remittance fails validateMonthDayYearDate."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "Malformed dates reuse the missing-date message.",
+                      "rule_id":  "1604f-validate-sched1-row2-date-format"
+                  },
+                  {
+                      "case_id":  "case-25-1604f-validate-sched1-row3-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 3rd Quarter is started but Date of Remittance is blank."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row3-date"
+                  },
+                  {
+                      "case_id":  "case-26-1604f-validate-sched1-row3-tra-placeholder",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 3rd Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "expected_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "rule_id":  "1604f-validate-sched1-row3-tra-placeholder"
+                  },
+                  {
+                      "case_id":  "case-27-1604f-validate-sched1-row3-tra-specific",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 3rd Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank."
+                                    },
+                      "expected_message":  "Please enter the following details TRA/eROR/eAR Number for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row3-tra-specific"
+                  },
+                  {
+                      "case_id":  "case-28-1604f-validate-sched1-row3-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 3rd Quarter has a date and Taxes Withheld compares equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row3-tax"
+                  },
+                  {
+                      "case_id":  "case-29-1604f-validate-sched1-row3-date-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 3rd Quarter Date of Remittance fails validateMonthDayYearDate."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 3rd Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "Malformed dates reuse the missing-date message.",
+                      "rule_id":  "1604f-validate-sched1-row3-date-format"
+                  },
+                  {
+                      "case_id":  "case-30-1604f-validate-sched1-row4-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 4th Quarter is started but Date of Remittance is blank."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row4-date"
+                  },
+                  {
+                      "case_id":  "case-31-1604f-validate-sched1-row4-tra-placeholder",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 4th Quarter has a positive tax/penalty amount and TRA/eROR/eAR is blank."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA/eROR/eAR Number for the \u003cmonth\u003e. You may refer to your 1601-FQ for the said Quarter.",
+                      "expected_behavior":  "The active message contains a literal \u003cmonth\u003e placeholder even though rows are quarters.",
+                      "rule_id":  "1604f-validate-sched1-row4-tra-placeholder"
+                  },
+                  {
+                      "case_id":  "case-32-1604f-validate-sched1-row4-tra-specific",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 4th Quarter has Date or TRA populated, no positive amount branch has already returned, and TRA is blank."
+                                    },
+                      "expected_message":  "Please enter the following details TRA/eROR/eAR Number for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row4-tra-specific"
+                  },
+                  {
+                      "case_id":  "case-33-1604f-validate-sched1-row4-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 4th Quarter has a date and Taxes Withheld compares equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched1-row4-tax"
+                  },
+                  {
+                      "case_id":  "case-34-1604f-validate-sched1-row4-date-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 1 4th Quarter Date of Remittance fails validateMonthDayYearDate."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 4th Quarter. You may refer to your 1601-FQ for the said quarter.",
+                      "expected_behavior":  "Malformed dates reuse the missing-date message.",
+                      "rule_id":  "1604f-validate-sched1-row4-date-format"
+                  },
+                  {
+                      "case_id":  "case-35-1604f-validate-sched2-row1-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 1st Quarter is started but Date of Remittance is blank."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched2-row1-date"
+                  },
+                  {
+                      "case_id":  "case-36-1604f-validate-sched2-row1-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 1st Quarter is started but TRA/eROR/eAR is blank."
+                                    },
+                      "expected_message":  "Please enter the following details TRA/eROR/eAR Number for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched2-row1-tra"
+                  },
+                  {
+                      "case_id":  "case-37-1604f-validate-sched2-row1-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 1st Quarter has a date and Taxes Withheld compares equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched2-row1-tax"
+                  },
+                  {
+                      "case_id":  "case-38-1604f-validate-sched2-row1-date-format",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 1st Quarter Date of Remittance fails validateMonthDayYearDate."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 1st Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "expected_behavior":  "Malformed dates reuse the missing-date message.",
+                      "rule_id":  "1604f-validate-sched2-row1-date-format"
+                  },
+                  {
+                      "case_id":  "case-39-1604f-validate-sched2-row2-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 2nd Quarter is started but Date of Remittance is blank."
+                                    },
+                      "expected_message":  "Please enter the Date of Remittance for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched2-row2-date"
+                  },
+                  {
+                      "case_id":  "case-40-1604f-validate-sched2-row2-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 2nd Quarter is started but TRA/eROR/eAR is blank."
+                                    },
+                      "expected_message":  "Please enter the following details TRA/eROR/eAR Number for the 2nd Quarter. You may refer to your 1602-Q for the said quarter.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604f-validate-sched2-row2-tra"
+                  }
+              ]
+}

@@ -1,0 +1,307 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2552-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2552-validate-001-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month equals 00."
+                                    },
+                      "expected_message":  "Month field on Page 1 Item 1 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-001-month"
+                  },
+                  {
+                      "case_id":  "case-02-2552-validate-002-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day is blank."
+                                    },
+                      "expected_message":  "Day field on Page 1 Item 1 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-002-day"
+                  },
+                  {
+                      "case_id":  "case-03-2552-validate-003-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Year field on Page 1 Item 1 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-003-year"
+                  },
+                  {
+                      "case_id":  "case-04-2552-validate-004-date-shape",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Transaction date is not a valid MM/DD/YYYY date."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format) in Page 1 Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-004-date-shape"
+                  },
+                  {
+                      "case_id":  "case-05-2552-validate-005-date-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Transaction date is after today."
+                                    },
+                      "expected_message":  "Page 1 Item 1 Date cannot be a future date ",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-005-date-future"
+                  },
+                  {
+                      "case_id":  "case-06-2552-validate-006-year-range",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is before 2018 or after current year."
+                                    },
+                      "expected_message":  "Year shall not be greater than the present year and not earlier than 2018.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-006-year-range"
+                  },
+                  {
+                      "case_id":  "case-07-2552-validate-007-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Visible RDO mirror is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Page 1 Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-007-rdo"
+                  },
+                  {
+                      "case_id":  "case-08-2552-validate-008-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Name is blank."
+                                    },
+                      "expected_message":  "Name field on Page 1 Item 6 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-008-name"
+                  },
+                  {
+                      "case_id":  "case-09-2552-validate-009-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Registered Address field on Page 1 Item 7 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-009-address"
+                  },
+                  {
+                      "case_id":  "case-10-2552-validate-010-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Zip is blank."
+                                    },
+                      "expected_message":  "Zip Code field on Page 1 Item 7A is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-010-zip"
+                  },
+                  {
+                      "case_id":  "case-11-2552-validate-011-contact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact is blank."
+                                    },
+                      "expected_message":  "Contact Number field on Page 1 Item 8 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-011-contact"
+                  },
+                  {
+                      "case_id":  "case-12-2552-validate-012-email-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank."
+                                    },
+                      "expected_message":  "E-mail address on page 1 item 9 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-012-email-required"
+                  },
+                  {
+                      "case_id":  "case-13-2552-validate-013-tax-relief-spec",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax Relief Yes is selected and specification is blank."
+                                    },
+                      "expected_message":  "Specify Tax Relief field on Page 1 Item 10A is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-013-tax-relief-spec"
+                  },
+                  {
+                      "case_id":  "case-14-2552-validate-014-transaction-kind",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No transaction kind is selected."
+                                    },
+                      "expected_message":  "Select an option for Page 1 Item 11 Kind of Transaction.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-014-transaction-kind"
+                  },
+                  {
+                      "case_id":  "case-15-2552-validate-015-share-counts",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Primary or secondary offering is selected and Item 12A or 12B is blank."
+                                    },
+                      "expected_message":  "Page 1 Item 12A and 12B cannot not be empty.",
+                      "expected_behavior":  "The official message contains the double negative â€œcannot notâ€.",
+                      "rule_id":  "2552-validate-015-share-counts"
+                  },
+                  {
+                      "case_id":  "case-16-2552-validate-016-overpayment",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 20 is negative and neither overpayment option is selected."
+                                    },
+                      "expected_message":  "Select an Overpayment option in Page 1 after Item 25.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-016-overpayment"
+                  },
+                  {
+                      "case_id":  "case-17-2552-validate-017-part4",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Part IV row has transaction class without amount or amount without class."
+                                    },
+                      "expected_message":  "Please complete Item #{row} in Part IV Page 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-017-part4"
+                  },
+                  {
+                      "case_id":  "case-18-2552-validate-018-part5-sch1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 1 row incompletely mixes date/seller/buyer/corporation with shares or tax base."
+                                    },
+                      "expected_message":  "Please complete Item #{row} in Page 2 Part V Schedule 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-018-part5-sch1"
+                  },
+                  {
+                      "case_id":  "case-19-2552-validate-019-part5-sch2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 2 row incompletely mixes identity fields with shares, tax base, or rate."
+                                    },
+                      "expected_message":  "Please complete Item #{row} in Page 2 Part V Schedule 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-019-part5-sch2"
+                  },
+                  {
+                      "case_id":  "case-20-2552-validate-020-part5-sch3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 3 row incompletely mixes identity fields with shares, tax base, or rate."
+                                    },
+                      "expected_message":  "Please complete Item #{row} in Page 2 Part V Schedule 3.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-020-part5-sch3"
+                  },
+                  {
+                      "case_id":  "case-21-2552-validate-021-part6",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Part VI row incompletely mixes identity fields with number of shares."
+                                    },
+                      "expected_message":  "Please complete Item #{row} in Page 2 Part VI.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-validate-021-part6"
+                  },
+                  {
+                      "case_id":  "case-22-2552-popup-022-complete",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "On popup Save/Add, any Part V add-more row lacks date, seller, buyer, corporation, positive shares, tax base, or rate."
+                                    },
+                      "expected_message":  "Cannot {method}. You have an empty data in 5.{row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-popup-022-complete"
+                  },
+                  {
+                      "case_id":  "case-23-2552-email-023-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email fails the source regex."
+                                    },
+                      "expected_message":  "Please enter a valid e-mail address on page 1 item 10",
+                      "expected_behavior":  "validateEmail is defined but never called by Validate.",
+                      "rule_id":  "2552-email-023-unreachable"
+                  },
+                  {
+                      "case_id":  "case-24-2552-date-024-invalid",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A date field is invalid."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-date-024-invalid"
+                  },
+                  {
+                      "case_id":  "case-25-2552-date-025-future-return",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A valid date is after today."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The field clears but the function returns true.",
+                      "rule_id":  "2552-date-025-future-return"
+                  },
+                  {
+                      "case_id":  "case-26-2552-rate-026-upper",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A rate is at least 100."
+                                    },
+                      "expected_message":  "Tax rate should be below 100.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2552-rate-026-upper"
+                  },
+                  {
+                      "case_id":  "case-27-2552-save-028-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Runtime RDO selector is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "Save labels RDO as Item 7 while the printed/Validate item is 5.",
+                      "rule_id":  "2552-save-028-rdo"
+                  },
+                  {
+                      "case_id":  "case-28-2552-save-029-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid name on Page 1 Item 8",
+                      "expected_behavior":  "Save labels the printed Item 6 field as Item 8.",
+                      "rule_id":  "2552-save-029-name"
+                  },
+                  {
+                      "case_id":  "case-29-2552-save-030-address",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Address is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Page 1 Item 9.",
+                      "expected_behavior":  "Save labels the printed Item 7 field as Item 9.",
+                      "rule_id":  "2552-save-030-address"
+                  },
+                  {
+                      "case_id":  "case-30-2552-save-031-contact",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Page 1 Item 11",
+                      "expected_behavior":  "Save labels the printed Item 8 field as Item 11.",
+                      "rule_id":  "2552-save-031-contact"
+                  }
+              ]
+}

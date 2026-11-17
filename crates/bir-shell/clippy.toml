@@ -1,0 +1,14 @@
+# A host function runs inside a GPUI `App` update with the `AppCell`
+# borrowed. A blocking rfd dialog spins a nested modal run loop on the main
+# thread; that loop resumes GPUI foreground tasks, the first to borrow the
+# `AppCell` panics (`panic_already_borrowed`) and the app aborts. That is how
+# Settings > Export once crashed. Use GPUI's `prompt_for_paths` /
+# `prompt_for_new_path` from an async host function instead.
+disallowed-methods = [
+    { path = "rfd::FileDialog::pick_file", reason = "nested modal run loop re-enters GPUI and aborts on a borrowed AppCell; use App::prompt_for_paths" },
+    { path = "rfd::FileDialog::pick_files", reason = "nested modal run loop re-enters GPUI and aborts on a borrowed AppCell; use App::prompt_for_paths" },
+    { path = "rfd::FileDialog::pick_folder", reason = "nested modal run loop re-enters GPUI and aborts on a borrowed AppCell; use App::prompt_for_paths" },
+    { path = "rfd::FileDialog::pick_folders", reason = "nested modal run loop re-enters GPUI and aborts on a borrowed AppCell; use App::prompt_for_paths" },
+    { path = "rfd::FileDialog::save_file", reason = "nested modal run loop re-enters GPUI and aborts on a borrowed AppCell; use App::prompt_for_new_path" },
+    { path = "rfd::MessageDialog::show", reason = "a blocking dialog opened inside a GPUI update can spin a nested run loop that aborts on a borrowed AppCell; draw the message in-window" },
+]

@@ -1,0 +1,108 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707-v2021",
+    "form_code":  "1707",
+    "revision":  "2021-04-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707v2021.hta",
+                                "sha256":  "a645463cf3bc7a80f0ec96a08796adde33c76ae65c617b3fefdb478e61496cd4",
+                                "size":  421881,
+                                "revision_binding":  "APPLICATIONNAME 1707v2021; April 2021 ENCS."
+                            },
+                            {
+                                "asset_id":  "predecessor-2018-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707v2018.hta",
+                                "sha256":  "2d995beea0061dfdef2ee74558f2dbf6cedd30c91fc7ac3e18668515dafab158",
+                                "size":  378719,
+                                "revision_binding":  "January 2018 predecessor; excluded from April 2021 rules."
+                            },
+                            {
+                                "asset_id":  "legacy-1999-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1707.hta",
+                                "sha256":  "66f34ac0ff6ab7f07794bdffa10d4f3074b7b235f712a1f6f1718d950a5c06c7",
+                                "size":  256302,
+                                "revision_binding":  "July 1999 predecessor; excluded from April 2021 rules."
+                            },
+                            {
+                                "asset_id":  "official-help-runtime",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1707v2021.hta",
+                                "sha256":  "fe3f17dc77d7b4139d2d037cae37e24813b44446420b8b7de10bc5bf0583e4e0",
+                                "size":  25305,
+                                "revision_binding":  "Revision-matched April 2021 filing, rate, penalty, and attachment guidance."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1707v2021\\1707 April 2021 ENCS.pdf",
+                                "sha256":  "b6bc016f240a8d6233db6fb0065b72b31e75cb665affc2b96bcd2066e7ad257e",
+                                "size":  872509,
+                                "revision_binding":  "April 2021 ENCS form."
+                            },
+                            {
+                                "asset_id":  "official-guide-pdf",
+                                "kind":  "official-guidelines-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1707v2021\\1707 April 2021 ENCS Guidelines and Instructions.pdf",
+                                "sha256":  "dbb8142e6e67fde5e46dc8b137dab6123153b35c1dae9c95b1603a163b5778f3",
+                                "size":  144606,
+                                "revision_binding":  "April 2021 ENCS guidelines and instructions."
+                            },
+                            {
+                                "asset_id":  "legacy-encrypted-sample-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1707\\1707-final-copy-#email-redacted#.xml",
+                                "sha256":  "05b1fda3bd618e577439f9c8fe5ee6e52a2fe57d9256a827ce75da9c2b1e4fab",
+                                "size":  851,
+                                "revision_binding":  "Excluded: 65 of 70 keys overlap the July 1999 runtime, while only 6 overlap April 2021."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  142,
+                   "runtime_field_families":  6,
+                   "fields_total":  148,
+                   "typed_fields":  148,
+                   "validation_rules":  33,
+                   "confirmed_official_bugs":  8,
+                   "calculations":  14,
+                   "negative_fixtures":  31,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "excluded_legacy_encrypted_keys":  "fixtures/excluded-legacy-encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames are emitted.",
+                        "The available encrypted sample is proven legacy and excluded.",
+                        "142 source-serializable controls plus 6 source-unbounded popup families are preserved."
+                    ]
+}

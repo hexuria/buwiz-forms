@@ -1,0 +1,217 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1800-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1800-save-001-future-date",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Donation date compares later than the current date."
+                                    },
+                      "expected_message":  "Date of donation should not be later than the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1800-save-001-future-date"
+                  },
+                  {
+                      "case_id":  "case-02-1800-save-002-date-required",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month or day is 00, or year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid date on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1800-save-002-date-required"
+                  },
+                  {
+                      "case_id":  "case-03-1800-save-003-year-width",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year value has fewer than four characters."
+                                    },
+                      "expected_message":  "Please enter a valid Year(YYYY)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1800-save-003-year-width"
+                  },
+                  {
+                      "case_id":  "case-04-1800-save-004-redundant-return-date",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "All three date values equal the empty string."
+                                    },
+                      "expected_message":  "Please enter a valid Return Date",
+                      "expected_behavior":  "checkDate1 runs first and the select defaults are 00, so this branch is not the operative missing-date check.",
+                      "rule_id":  "1800-save-004-redundant-return-date"
+                  },
+                  {
+                      "case_id":  "case-05-1800-save-005-broken-year-property",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "The code compares the DOM element length property, not txtYear.value.length, with 4."
+                                    },
+                      "expected_message":  "Please enter a valid Year(YYYY)",
+                      "expected_behavior":  "The element length is undefined, making this duplicate branch ineffective.",
+                      "rule_id":  "1800-save-005-broken-year-property"
+                  },
+                  {
+                      "case_id":  "case-06-1800-save-006-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any donor TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1800-save-006-tin"
+                  },
+                  {
+                      "case_id":  "case-07-1800-save-007-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is literal 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1800-save-007-rdo"
+                  },
+                  {
+                      "case_id":  "case-08-1800-save-008-donor-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Donor name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 8.",
+                      "expected_behavior":  "The message cites Item 8, but the donor name is printed Item 7.",
+                      "rule_id":  "1800-save-008-donor-name"
+                  },
+                  {
+                      "case_id":  "case-09-1800-save-009-version-guard",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "A finalized non-amended version already exists but Amended Return is not Yes."
+                                    },
+                      "expected_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "expected_behavior":  "Version/file-state logic blocks overwrite and may create a V-suffixed amended file.",
+                      "rule_id":  "1800-save-009-version-guard"
+                  },
+                  {
+                      "case_id":  "case-10-1800-validate-001-treaty-description",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 13 Yes is checked and Item 13A is blank."
+                                    },
+                      "expected_message":  "Please specify the Special Treaty or International Law the payee is availing in item 11A.",
+                      "expected_behavior":  "The check is active, but the message says payee and Item 11A instead of donor and Item 13A.",
+                      "rule_id":  "1800-validate-001-treaty-description"
+                  },
+                  {
+                      "case_id":  "case-11-1800-validate-002-donor-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any donor TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The message cites Item 4; donor TIN is Item 5, and only blankness is checked.",
+                      "rule_id":  "1800-validate-002-donor-tin"
+                  },
+                  {
+                      "case_id":  "case-12-1800-validate-003-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO selectedIndex is zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The message cites Item 5; RDO is Item 6.",
+                      "rule_id":  "1800-validate-003-rdo"
+                  },
+                  {
+                      "case_id":  "case-13-1800-validate-004-future-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Donation date compares later than the current date."
+                                    },
+                      "expected_message":  "Date of donation should not be later than the current date.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1800-validate-004-future-date"
+                  },
+                  {
+                      "case_id":  "case-14-1800-validate-005-date-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month or day is 00, or year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid date on Item 1.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1800-validate-005-date-required"
+                  },
+                  {
+                      "case_id":  "case-15-1800-validate-006-year-width",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year has fewer than four characters."
+                                    },
+                      "expected_message":  "Please enter a valid Year(YYYY)",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1800-validate-006-year-width"
+                  },
+                  {
+                      "case_id":  "case-16-1800-validate-007-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All active checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1800-validate-007-success"
+                  },
+                  {
+                      "case_id":  "case-17-1800-validate-009-year-lower-bound-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Donation year is before 2018."
+                                    },
+                      "expected_message":  "Please file using the old version of the form.",
+                      "expected_behavior":  "The entire revision-year gate is commented out.",
+                      "rule_id":  "1800-validate-009-year-lower-bound-commented"
+                  },
+                  {
+                      "case_id":  "case-18-1800-validate-011-line-business-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Line of business/occupation is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Line of Business/Occupation on Item 7.",
+                      "expected_behavior":  "The branch is commented out and Item 7 is donor name in this revision.",
+                      "rule_id":  "1800-validate-011-line-business-commented"
+                  },
+                  {
+                      "case_id":  "case-19-1800-validate-012-other-party-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No removed Other Party option is selected."
+                                    },
+                      "expected_message":  "Please select an option in Item 10.",
+                      "expected_behavior":  "The controls and validation are commented out.",
+                      "rule_id":  "1800-validate-012-other-party-commented"
+                  },
+                  {
+                      "case_id":  "case-20-1800-validate-013-donee-tin-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A removed Other Party branch is selected and donee TIN is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN in Item 12.",
+                      "expected_behavior":  "The branch is commented out.",
+                      "rule_id":  "1800-validate-013-donee-tin-commented"
+                  },
+                  {
+                      "case_id":  "case-21-1800-validate-014-mode-affixture-commented",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No removed affixture mode is selected."
+                                    },
+                      "expected_message":  "Please select an option in Item 13.",
+                      "expected_behavior":  "The controls and all related validation are commented out.",
+                      "rule_id":  "1800-validate-014-mode-affixture-commented"
+                  }
+              ]
+}

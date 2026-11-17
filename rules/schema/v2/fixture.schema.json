@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/fixture.schema.json",
+  "title": "eBIRForms executable rules IR v2 concrete fixtures",
+  "$defs": {
+    "evaluation_input": {
+      "$ref": "evaluation-result.schema.json#/$defs/evaluation_request"
+    },
+    "evaluation_fixture": {
+      "type": "object",
+      "required": [
+        "$schema",
+        "schema_version",
+        "fixture_id",
+        "kind",
+        "description",
+        "source_refs",
+        "input",
+        "expected"
+      ],
+      "properties": {
+        "$schema": {
+          "const": "../../../../schema/v2/fixture.schema.json"
+        },
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/schema_version"
+        },
+        "fixture_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "kind": {
+          "const": "evaluation"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        },
+        "input": {
+          "$ref": "#/$defs/evaluation_input"
+        },
+        "expected": {
+          "$ref": "evaluation-result.schema.json#/$defs/evaluation_result"
+        },
+        "workflow_transition": {
+          "$ref": "workflow-transition-result.schema.json#/$defs/workflow_transition_invocation"
+        }
+      },
+      "additionalProperties": false
+    },
+    "compile_error": {
+      "type": "object",
+      "required": [
+        "code",
+        "json_path"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "unreviewed-snapshot",
+            "unresolved-profile",
+            "missing-reference",
+            "dependency-cycle",
+            "evaluation-order-mismatch",
+            "index-directory-mismatch",
+            "source-hash-mismatch"
+          ]
+        },
+        "json_path": {
+          "type": "string",
+          "pattern": "^\\$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "compile_rejection_input": {
+      "type": "object",
+      "required": [
+        "rule_set_path"
+      ],
+      "properties": {
+        "rule_set_path": {
+          "$ref": "common.schema.json#/$defs/rules_relative_path"
+        }
+      },
+      "additionalProperties": false
+    },
+    "compile_rejection_expected": {
+      "type": "object",
+      "required": [
+        "accepted",
+        "errors"
+      ],
+      "properties": {
+        "accepted": {
+          "const": false
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/compile_error"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "compile_rejection_fixture": {
+      "type": "object",
+      "required": [
+        "$schema",
+        "schema_version",
+        "fixture_id",
+        "kind",
+        "description",
+        "source_refs",
+        "input",
+        "expected"
+      ],
+      "properties": {
+        "$schema": {
+          "const": "../../../../schema/v2/fixture.schema.json"
+        },
+        "schema_version": {
+          "$ref": "common.schema.json#/$defs/schema_version"
+        },
+        "fixture_id": {
+          "$ref": "common.schema.json#/$defs/identifier"
+        },
+        "kind": {
+          "const": "compile-rejection"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_refs": {
+          "$ref": "common.schema.json#/$defs/source_refs"
+        },
+        "input": {
+          "$ref": "#/$defs/compile_rejection_input"
+        },
+        "expected": {
+          "$ref": "#/$defs/compile_rejection_expected"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fixture": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/evaluation_fixture"
+        },
+        {
+          "$ref": "#/$defs/compile_rejection_fixture"
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/fixture"
+}

@@ -1,0 +1,70 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "cases":  [
+                  {
+                      "case_id":  "part21-positive",
+                      "inputs":  {
+                                     "item20":  5,
+                                     "item16":  100
+                                 },
+                      "calculation_id":  "1702mx-part2-item21-nonnegative",
+                      "official_output":  105
+                  },
+                  {
+                      "case_id":  "part21-overpayment-with-penalty",
+                      "inputs":  {
+                                     "item20":  5,
+                                     "item16":  -100
+                                 },
+                      "calculation_id":  "1702mx-part2-item21-negative-with-penalty",
+                      "official_output":  5,
+                      "repository_model_output":  -95
+                  },
+                  {
+                      "case_id":  "part21-overpayment-no-penalty",
+                      "inputs":  {
+                                     "item20":  0,
+                                     "item16":  -100
+                                 },
+                      "calculation_id":  "1702mx-part2-item21-negative-no-penalty",
+                      "official_output":  -100
+                  },
+                  {
+                      "case_id":  "osd-column-c",
+                      "inputs":  {
+                                     "item7C":  700000
+                                 },
+                      "official_output_item12C":  280000,
+                      "calculation_id":  "1702mx-schedule2-item12-osd"
+                  },
+                  {
+                      "case_id":  "mcit-not-auto-computed",
+                      "inputs":  {
+                                     "item7C":  700000,
+                                     "item18C":  0
+                                 },
+                      "repository_model_output_item18C":  14000,
+                      "calculation_id":  "1702mx-schedule2-item18-mcit",
+                      "official_output_item18C":  0
+                  },
+                  {
+                      "case_id":  "schedule4-column-a",
+                      "inputs":  {
+                                     "item4A":  30,
+                                     "item3A":  100
+                                 },
+                      "calculation_id":  "1702mx-schedule4-item5",
+                      "official_output_item5A":  100,
+                      "repository_model_output_item5A":  70
+                  },
+                  {
+                      "case_id":  "nolco-switch-fallthrough",
+                      "inputs":  {
+                                     "call_type":  "B"
+                                 },
+                      "calculation_id":  "1702mx-nolco-switch-fallthrough",
+                      "official_behavior":  "B branch then C branch"
+                  }
+              ]
+}

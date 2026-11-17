@@ -1,0 +1,130 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2550q-v2024",
+    "form_code":  "2550Q",
+    "revision":  "2024-04-01",
+    "revision_label":  "April 2024 ENCS",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package used for extraction."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2550Qv2024.hta",
+                                "sha256":  "3a5a4d3b2b342a4dfc55a05c69b560fb9be47af6451d8c651d19e1d33406ec70",
+                                "size":  629633,
+                                "revision_binding":  "APPLICATIONNAME 2550Qv2024 and printed April 2024 ENCS."
+                            },
+                            {
+                                "asset_id":  "official-string-util-runtime",
+                                "kind":  "runtime-extracted-javascript",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\string-util.js",
+                                "sha256":  "bc7f86f70bf993389a3a0135dcbd76c3e370c49d2eb95e2fc66ff318a2ebe43c",
+                                "size":  54582,
+                                "revision_binding":  "Shared package runtime loaded by the pinned 2550Q HTA; defines arithmetic, connection, enrollment, retry, final-flag, and Final Copy control helpers."
+                            },
+                            {
+                                "asset_id":  "official-ebir-tools-runtime",
+                                "kind":  "runtime-extracted-vbscript",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\js\\eBIRTools.vbs",
+                                "sha256":  "7d0ceb5aad2c0eb90aeca189d6104ff05163ecd1820379f456125634ff7460f7",
+                                "size":  7557,
+                                "revision_binding":  "VBScript loaded by the pinned 2550Q HTA; synchronously launches the external encryption and transport helpers."
+                            },
+                            {
+                                "asset_id":  "official-encrypt-helper",
+                                "kind":  "official-package-helper-executable",
+                                "path":  "C:\\eBIRForms\\Encrypt.exe",
+                                "sha256":  "429337f44f84b93cd1095df48c8f3265e5ede7c646d1b48d9b80f4f92de74d2c",
+                                "size":  489452,
+                                "revision_binding":  "External helper invoked by eBIRTools.vbs EncryptFile; identity pin does not establish its internal algorithm."
+                            },
+                            {
+                                "asset_id":  "official-cftp-send-helper",
+                                "kind":  "official-package-helper-executable",
+                                "path":  "C:\\eBIRForms\\cFTPSend.exe",
+                                "sha256":  "5d3dbda56e3ffffefb23f2fd46a5af0c0decc389d70921c453c3f813bb806262",
+                                "size":  335360,
+                                "revision_binding":  "External online transport helper reached by the pinned source; identity pin is not transport verification or authorization."
+                            },
+                            {
+                                "asset_id":  "official-installed-help",
+                                "kind":  "runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2550Qv2024.hta",
+                                "sha256":  "5c81fb5028c25d1104702ed54ff284d69bba0437131ac7891f4782f89342144f",
+                                "size":  26157,
+                                "revision_binding":  "April 2024 instructions; packaged APPLICATIONNAME is incorrectly 0605."
+                            },
+                            {
+                                "asset_id":  "official-pdf-2024",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2550Qv2024\\2550Q  April 2024 ENCS_Final.pdf",
+                                "sha256":  "18eb16925010fdda820cef958221ba2c0d073066efa93a898113e39b31135a25",
+                                "size":  732639,
+                                "revision_binding":  "April 2024 ENCS official form."
+                            },
+                            {
+                                "asset_id":  "official-guidelines-pdf",
+                                "kind":  "official-guidelines-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2550Qv2024\\2550Q guidelines April 2024_final.pdf",
+                                "sha256":  "b6ee4f090cb48963a44b1ef58fd6cdb4b5865ba4674963c3661c7f164895b120",
+                                "size":  281154,
+                                "revision_binding":  "April 2024 final guidelines."
+                            },
+                            {
+                                "asset_id":  "xml-finalized-save-v1",
+                                "kind":  "dummy-profile-finalized-save",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2550Qv2024\\2550Q-save-#email-redacted#.xml",
+                                "sha256":  "43577fdd70b8959b16dbada9ff7d8418a1fdc5d18e61302c8cbfc8e9bbab4520",
+                                "size":  10910,
+                                "revision_binding":  "Dummy plaintext finalized save: the source marker ends in 2012.0 and isItAFinalCopy classifies it as final; serialized txtFinalFlag is independently 1. Values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-final-copy-v1",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2550Qv2024\\2550Q-final-copy-#email-redacted#.xml",
+                                "sha256":  "57ccf9d8132c490d54bceaf5c55fc2b4bec01b780951a63600402c61a595cdbe",
+                                "size":  1897,
+                                "revision_binding":  "Dummy encrypted final copy; values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "unbounded_families":  28,
+                   "negative_fixtures":  38,
+                   "calculations":  27,
+                   "unverified_gaps":  0,
+                   "concrete_union_fields":  160,
+                   "validation_rules":  38,
+                   "typed_fields":  188,
+                   "confirmed_official_bugs":  13
+               },
+    "artifacts":  {
+                      "audit":  "audit.md",
+                      "validations":  "validations.json",
+                      "workflow":  "workflow.json",
+                      "schedule_family_fixture":  "fixtures/schedule-family-inventory-v796.json",
+                      "evidence":  "evidence.md",
+                      "gaps":  "gaps.md",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "fields":  "fields.json",
+                      "calculations":  "calculations.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research artifacts only; no renderer, migration, release, or capability changes.",
+                        "No real taxpayer values or email-bearing filenames are stored.",
+                        "No online submission or mutation of official artifacts was performed.",
+                        "The 188 entries are the 160-key plaintext/encrypted union plus 28 explicit unbounded family descriptors.",
+                        "dateFiled is present as the last pseudo-div in the pinned plaintext finalized save and as standalone metadata in the encrypted final copy; collapsing the two shapes would lose its artifact-specific placement."
+                    ]
+}

@@ -1,0 +1,412 @@
+{
+    "source_sha256":  "5737ddbd86d467457b613cc1f016c51d1add7fa91b396f6af88d213bccc48202",
+    "function_count":  20,
+    "functions":  [
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  5533,
+                          "end_line":  5577,
+                          "body_sha256":  "7160f7c387b8ef59d9c5ccb389767a1333e45b1abcac23ee7167e7a5e5588407",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 6.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtPg1BranchCode",
+                                              "frm1701MS:txtPg1TIN1",
+                                              "frm1701MS:txtPg1TIN2",
+                                              "frm1701MS:txtPg1TIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  7629,
+                          "end_line":  8037,
+                          "body_sha256":  "49cd5ecc5207ff4431ff220a23fa7243932f98a53d5186a351853daf1500b508",
+                          "alerts":  [
+                                         "\"Future filing is not allowed. Please input correct year on Item 1\"",
+                                         "\"Future filing is not allowed. Please input correct year on Item 1\"",
+                                         "\"Item 5 is required if Item 4 is marked as Married.\"",
+                                         "\"Please enter a valid TIN number on Item 6 for Spouse\"",
+                                         "\"Please enter a valid RDO code for Spouse on Item 7\"",
+                                         "\"Please enter a valid Name for Spouse on Item 8\"",
+                                         "\"Please enter a valid Email Address for Spouse on Item 9\"",
+                                         "\"Please enter a valid Contact Number for Spouse on Item 10\"",
+                                         "\"Please select an option on Item 11 for Taxpayer\"",
+                                         "\"Please select an option on Item 11 for Spouse\"",
+                                         "\"Item 12 is required if Item 5 is marked as Jointly.\"",
+                                         "\"Item 17 is mandatory if Item 11 is Income from Business, Mixed Income and Income from Profession and Item 12 is Graduated Income Tax Rates.\"",
+                                         "\"Item 31 is mandatory because Item 30 is has negative value.\"",
+                                         "\"The total amount in Item 31 must equal the sum of Item 27A and Item 27B (\" + formatCurrencyWithComma(item27Total) + \").\"",
+                                         "\"Part V - Item 7 Foreign Tax Credits is mandatory if the amount column has value.\"",
+                                         "\"Part V - Item 7B Foreign Tax Amount is mandatory if Foreign Tax Credits field has value.\"",
+                                         "\"Part V - Item 9 Other Credits/Payments is mandatory if the Amount column has value.\"",
+                                         "\"Part V - Item 9B Amount is mandatory if the Other Credits/Payments field has value.\"",
+                                         "\"Part V - Item 7 Foreign Tax Credits is mandatory if the amount column has value.\"",
+                                         "\"Part V - Item 7 Foreign Tax Amount is mandatory if Foreign Tax Credits field has value.\"",
+                                         "\"Part V - Item 9 Other Credits/Payments is mandatory if the Amount column has value.\"",
+                                         "\"Part V - Item 9 Amount is mandatory if the Other Credits/Payments field has value.\"",
+                                         "\"Item 12 is required if Item 5 is marked as Jointly.\"",
+                                         "\"Please enter a valid year and month.\"",
+                                         "\"Future filing is not allowed. Please enter a valid year.\"",
+                                         "\"Future filing is not allowed. Please enter a valid month.\"",
+                                         "\"Please enter a valid TIN number on Item 6\"",
+                                         "\"Item 1 is a required field.\") return; } // Check RDO Code if (document.getElementById(\u0027frm1701MS:txtRDOCodea\u0027).value == \"\") { alert(\"Please enter a valid RDO code on Item 7\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 8\"",
+                                         "\"Please enter a valid Email Address on Item 9\"",
+                                         "\"Please enter a valid Contact Number on Item 10\"",
+                                         "\"Taxpayer Item 12 is a required field \"",
+                                         "\"Please make sure to enter details on Item 13 to 16 on Taxpayer\"",
+                                         "\"Please make sure to enter details on Item 13 to 16 on Spouse\"",
+                                         "\"Item 17 is mandatory if Item 11 is Income from Business, Mixed Income and Income from Profession and Item 12 is Graduated Income Tax Rates.\"",
+                                         "\"You need to agree to the Perjury Clause.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:addForeignTaxCredits",
+                                              "frm1701MS:addOtherCreditsPayments",
+                                              "frm1701MS:civilStatus",
+                                              "frm1701MS:perjuryClause",
+                                              "frm1701MS:txtAggregateAmountPayable30a",
+                                              "frm1701MS:txtAmountPayableNo27a",
+                                              "frm1701MS:txtAmountPayableNo27b",
+                                              "frm1701MS:txtEmaila",
+                                              "frm1701MS:txtEmailb",
+                                              "frm1701MS:txtForeignTaxCreditsNo7a",
+                                              "frm1701MS:txtForeignTaxCreditsNo7b",
+                                              "frm1701MS:txtIfMarriedJointlyNo5",
+                                              "frm1701MS:txtIfMarriedNotApplicableNo5",
+                                              "frm1701MS:txtIfMarriedSeparatelyNo5",
+                                              "frm1701MS:txtMonthNo1",
+                                              "frm1701MS:txtOtherCreditsPaymentsNo9a",
+                                              "frm1701MS:txtOtherCreditsPaymentsNo9b",
+                                              "frm1701MS:txtPg2BranchCode",
+                                              "frm1701MS:txtPg2BranchCodeSpouse",
+                                              "frm1701MS:txtPg2TIN1",
+                                              "frm1701MS:txtPg2TIN1Spouse",
+                                              "frm1701MS:txtPg2TIN2",
+                                              "frm1701MS:txtPg2TIN2Spouse",
+                                              "frm1701MS:txtPg2TIN3",
+                                              "frm1701MS:txtPg2TIN3Spouse",
+                                              "frm1701MS:txtRDOCodea",
+                                              "frm1701MS:txtRDOCodeb",
+                                              "frm1701MS:txtReturnPeriodYesNo3",
+                                              "frm1701MS:txtSpouseNo17a",
+                                              "frm1701MS:txtSpouseNo17b",
+                                              "frm1701MS:txtTaxpayerNo11a",
+                                              "frm1701MS:txtTaxpayerNo11a1",
+                                              "frm1701MS:txtTaxpayerNo11b",
+                                              "frm1701MS:txtTaxpayerNo11b1",
+                                              "frm1701MS:txtTaxpayerNo11c",
+                                              "frm1701MS:txtTaxpayerNo11c1",
+                                              "frm1701MS:txtTaxpayerNo11d1",
+                                              "frm1701MS:txtTaxpayerNo12b",
+                                              "frm1701MS:txtTaxpayerNo12b1",
+                                              "frm1701MS:txtTaxpayerNo12c",
+                                              "frm1701MS:txtTaxpayerNo12c1",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxpayerNo13a",
+                                              "frm1701MS:txtTaxpayerNo13b",
+                                              "frm1701MS:txtTaxpayerNo14a",
+                                              "frm1701MS:txtTaxpayerNo14b",
+                                              "frm1701MS:txtTaxpayerNo15a",
+                                              "frm1701MS:txtTaxpayerNo15b",
+                                              "frm1701MS:txtTaxpayerNo16a",
+                                              "frm1701MS:txtTaxpayerNo16a1",
+                                              "frm1701MS:txtTaxpayerNo16b",
+                                              "frm1701MS:txtTaxpayerNo16b1",
+                                              "frm1701MS:txtTaxpayerNo17a",
+                                              "frm1701MS:txtTaxpayerNo17b",
+                                              "frm1701MS:txtTaxpayerNo8a",
+                                              "frm1701MS:txtTaxpayerNo8b",
+                                              "frm1701MS:txtTelNum10a",
+                                              "frm1701MS:txtTelNum10b",
+                                              "frm1701MS:txtToBeCarried",
+                                              "frm1701MS:txtToBeCarried1",
+                                              "frm1701MS:txtToBeIssued",
+                                              "frm1701MS:txtToBeIssued1",
+                                              "frm1701MS:txtToBeRefunded",
+                                              "frm1701MS:txtToBeRefunded1",
+                                              "frm1701MS:txtYearNo1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateAmendedReturn",
+                          "start_line":  9636,
+                          "end_line":  9676,
+                          "body_sha256":  "b419f244a0942c6c37b7fb8e8a6fbc19c56c6bf63908f6545209b054ec5a78a2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAmendedNoNo2",
+                                              "frm1701MS:txtAmendedYesNo2",
+                                              "frm1701MS:txtIfMarriedJointlyNo5",
+                                              "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+                                              "frm1701MS:txtTaxPaidPreviouslyFiledNo6b"
+                                          ]
+                      },
+                      {
+                          "name":  "validateCurrentYear",
+                          "start_line":  9692,
+                          "end_line":  9729,
+                          "body_sha256":  "1de64d5a13e74a140f7679903ba00785bbe5c036717315a9923cd62b4ba537ce",
+                          "alerts":  [
+                                         "\"Future filing is not allowed. Please enter a valid year.\"",
+                                         "\"Future filing is not allowed. Please enter a valid month.\"",
+                                         "\"Please enter a valid month and year for Item 1.\"",
+                                         "\"For short period return, the month should be the current month and the year should be the current year.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtMonthNo1",
+                                              "frm1701MS:txtReturnPeriodYesNo3",
+                                              "frm1701MS:txtYearNo1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateEffectivityDateTaxpayer16",
+                          "start_line":  10666,
+                          "end_line":  10707,
+                          "body_sha256":  "3a3c7620584be73144b79822fbf5f4ea0cf17e9295d36633a718bec5ad0c7cc0",
+                          "alerts":  [
+                                         "\"Invalid date. Taxpayer Item 16 From date must be earlier than \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \".\"",
+                                         "\"Invalid date. Taxpayer Item 16 To date must be \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \" and onwards.\"",
+                                         "\"Invalid date. Taxpayer Item 16 From date must be earlier than \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \".\"",
+                                         "\"Invalid date. Taxpayer Item 16 To date must be \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \" and onwards.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtMonthNo1",
+                                              "frm1701MS:txtReturnPeriodYesNo3",
+                                              "frm1701MS:txtTaxpayerNo16a",
+                                              "frm1701MS:txtTaxpayerNo16a1",
+                                              "frm1701MS:txtYearNo1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateEffectivityDateSpouse16",
+                          "start_line":  10708,
+                          "end_line":  10749,
+                          "body_sha256":  "1b156db2abb63a424b11da3abf3adc4a10e2a3d20ebc90a9ae962566790345b4",
+                          "alerts":  [
+                                         "\"Invalid date. Spouse Item 16 From date must be earlier than \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \".\"",
+                                         "\"Invalid date. Spouse Item 16 To date must be \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \" and onwards.\"",
+                                         "\"Invalid date. Spouse Item 16 From date must be earlier than \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \".\"",
+                                         "\"Invalid date. Spouse Item 16 To date must be \" + monthFiled + \"/\" + lastDayOfMonth.getDate() + \"/\" + yearFiled + \" and onwards.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtMonthNo1",
+                                              "frm1701MS:txtReturnPeriodYesNo3",
+                                              "frm1701MS:txtTaxpayerNo16b",
+                                              "frm1701MS:txtTaxpayerNo16b1",
+                                              "frm1701MS:txtYearNo1"
+                                          ]
+                      },
+                      {
+                          "name":  "enforceSelectionRules",
+                          "start_line":  10918,
+                          "end_line":  10981,
+                          "body_sha256":  "2c0d4bb1c5e53f0c1f0429af734d8f6be5dea2878a31f87c302c72a5d40c2842",
+                          "alerts":  [
+                                         "\"You cannot select BOTH \u0027To be refunded\u0027 and \u0027To be issued a Tax Credit Certificate\u0027.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAggregateAmountPayable30a",
+                                              "frm1701MS:txtToBeCarried",
+                                              "frm1701MS:txtToBeCarried1",
+                                              "frm1701MS:txtToBeIssued",
+                                              "frm1701MS:txtToBeIssued1",
+                                              "frm1701MS:txtToBeRefunded",
+                                              "frm1701MS:txtToBeRefunded1"
+                                          ]
+                      },
+                      {
+                          "name":  "checkButtons",
+                          "start_line":  11042,
+                          "end_line":  11120,
+                          "body_sha256":  "675901cc27486fceaeac53543d7d0f735a6b4c3e8096468fd57ff26f3b3e3a7f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxpayerNo11a",
+                                              "frm1701MS:txtTaxpayerNo11b",
+                                              "frm1701MS:txtTaxpayerNo11c",
+                                              "frm1701MS:txtTaxpayerNo12b",
+                                              "frm1701MS:txtTaxpayerNo12c",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e"
+                                          ]
+                      },
+                      {
+                          "name":  "checkButtonsSP",
+                          "start_line":  11121,
+                          "end_line":  11202,
+                          "body_sha256":  "a051292fa0f332dbf4759c3a7d6771512c09a50dd574e1b49c1092168763c781",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxpayerNo11a1",
+                                              "frm1701MS:txtTaxpayerNo11b1",
+                                              "frm1701MS:txtTaxpayerNo11c1",
+                                              "frm1701MS:txtTaxpayerNo11d1",
+                                              "frm1701MS:txtTaxpayerNo12b1",
+                                              "frm1701MS:txtTaxpayerNo12c1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateInput26a",
+                          "start_line":  11420,
+                          "end_line":  11460,
+                          "body_sha256":  "45c4590a31f0711bd7cf8cd87565ee6c665cb686a9773effdcb4771be1c47b35",
+                          "alerts":  [
+                                         "\"The amount exceeds the allowed input based on the requirements\"",
+                                         "\"The amount exceeds the allowed input based on the requirements\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxDueAllowedNo26a",
+                                              "frm1701MS:txtTaxPayableNo25a",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23a"
+                                          ]
+                      },
+                      {
+                          "name":  "validateInput26b",
+                          "start_line":  11461,
+                          "end_line":  11502,
+                          "body_sha256":  "d65abd50b129db83affd56dee93d6abddaf58c8916504dd299f9abf095a1164d",
+                          "alerts":  [
+                                         "\"The amount exceeds the allowed input based on the requirements\"",
+                                         "\"The amount exceeds the allowed input based on the requirements\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxDueAllowedNo26b",
+                                              "frm1701MS:txtTaxPayableNo25b",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23b"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecify10A",
+                          "start_line":  13229,
+                          "end_line":  13245,
+                          "body_sha256":  "9e5bade8275004d27ed178050726a2a1950aa194eeb6d1cb920d747035f9dec6",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched410A:Amount",
+                                              "frm1701MS:sched410A:Description"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecify10B",
+                          "start_line":  13557,
+                          "end_line":  13572,
+                          "body_sha256":  "0232701a33f217b4cdeb66c41dc2099d5af1e8f74fd4029956aad4aba78afb93",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched410aSpouse:Amount",
+                                              "frm1701MS:sched410aSpouse:Description"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecify10BTaxpayer",
+                          "start_line":  13902,
+                          "end_line":  13917,
+                          "body_sha256":  "ba7e36993f9b9146e8265f01ac601889b026c89cdc9203f107a1a62efdddc40e",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched410A1:Amount",
+                                              "frm1701MS:sched410A1:Description",
+                                              "frm1701MS:sched410A1:LegalBasis"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecify10BSpouse",
+                          "start_line":  14257,
+                          "end_line":  14273,
+                          "body_sha256":  "adf8262e7a91bb936c6c7c90ff37816d0fd2cc00f675514cd0e7e49f60fcc1c3",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched410A2:Amount",
+                                              "frm1701MS:sched410A2:Description",
+                                              "frm1701MS:sched410A2:LegalBasis"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecifyNonOperatingTaxpayer",
+                          "start_line":  14576,
+                          "end_line":  14592,
+                          "body_sha256":  "7afaf92cdef576bc476d2ce30aff3267fbeac3e2ae347dba771d19ee2168cb41",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched413A:Amount",
+                                              "frm1701MS:sched413A:Description"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecify",
+                          "start_line":  14619,
+                          "end_line":  14635,
+                          "body_sha256":  "c5ea0586531667994fbc90841b5b93bf1bc9eb240859a6375fa5deda71628b92",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched5No9:Amount",
+                                              "frm1701MS:sched5No9:Description",
+                                              "frm1701MS:sched5No9:Spouse"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecifyNonOperatingSpouse",
+                          "start_line":  14682,
+                          "end_line":  14694,
+                          "body_sha256":  "fd9bf8c0fe3b7357743d1721a2a9c93f657d459ed75189e4c53740c7f1327b33",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:Sched413B:Amount",
+                                              "frm1701MS:Sched413B:Description"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecifyNonOperatingTaxpayer20",
+                          "start_line":  15290,
+                          "end_line":  15304,
+                          "body_sha256":  "dab28b47d1075c237a4968c5bd14e00102ea89aa03bd36ca1774372f89d93166",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched420A:Amount",
+                                              "frm1701MS:sched420A:Description"
+                                          ]
+                      },
+                      {
+                          "name":  "validationSpecifyNonOperatingSpouse20",
+                          "start_line":  15603,
+                          "end_line":  15620,
+                          "body_sha256":  "1198fa31a1342c88a9e5322abcad315ea5f339cc8e0ec83e8495638425516d79",
+                          "alerts":  [
+                                         "\"Empty fields are not allowed\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched420B:Amount",
+                                              "frm1701MS:sched42OB:Description"
+                                          ]
+                      }
+                  ]
+}

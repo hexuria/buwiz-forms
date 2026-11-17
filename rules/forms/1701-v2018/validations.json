@@ -1,0 +1,1972 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "validate() runs in source order and stops at the first active main/helper failure; blur/change handlers may alert and mutate fields before Validate. Save runs only three narrow preflight branches.",
+    "rules":  [
+                  {
+                      "rule_id":  "1701-save-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any taxpayer TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg1I4TIN1",
+                                     "frm1701:txtPg1I4TIN2",
+                                     "frm1701:txtPg1I4TIN3",
+                                     "frm1701:txtPg1I4BranchCode"
+                                 ],
+                      "accepted_behavior":  "All four strings are nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7918-L7922"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only nonblankness is checked during Save.",
+                      "recommended_app_behavior":  "Allow lossless draft save, but run shape/checksum validation before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-save-002",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Taxpayer RDO select value equals literal 000.",
+                      "fields":  [
+                                     "frm1701:txtPg1I5RDOCode"
+                                 ],
+                      "accepted_behavior":  "Any value other than 000, including blank, passes this branch.",
+                      "rejected_behavior":  "Save is blocked only for 000.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7923-L7926"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Blank RDO can pass because the check is equality to 000 rather than required/non-placeholder validation.",
+                      "recommended_app_behavior":  "Require a valid catalog RDO code before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-save-003",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg1I8TaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Nonblank name passes.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7927-L7931"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-save-004",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any other return field is missing, malformed, contradictory, or incomplete.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Save proceeds after the three narrow preflight checks.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L7918-L7932",
+                                          "official-hta-runtime#saveXML:L8095-L8221"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Save is deliberately much weaker than Validate.",
+                      "recommended_app_behavior":  "Preserve incomplete drafts losslessly and report completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Short-period return is Yes and month value loosely equals 00.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I3ShortPeriodYes",
+                                     "frm1701:txtPg1I1Month"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please choose a month on page 1 Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9135-L9142"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-002",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Return year is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please enter a valid year on page 1 Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9143-L9149"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-003",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Return year is greater than the current system year.",
+                      "fields":  [
+                                     "frm1701:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Invalid date entry on page 1 Item 1. Entry should not be later than Current Date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9150-L9155"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-004",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Return year is below 1900.",
+                      "fields":  [
+                                     "frm1701:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Invalid date entry on page 1 Item 1. Entry should not be lower than 1900.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9156-L9161"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "This branch is shadowed for years below 2018 by the later revision check only when reached; it still emits its own message first.",
+                      "recommended_app_behavior":  "Validate the revision boundary directly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-005",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Return year is below 2018.",
+                      "fields":  [
+                                     "frm1701:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please file using the old version of the form.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9162-L9167"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-006",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "No taxpayer type radio is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I6TaxpayerTypeS",
+                                     "frm1701:rdoPg1I6TaxpayerTypeP",
+                                     "frm1701:rdoPg1I6TaxpayerTypeE",
+                                     "frm1701:rdoPg1I6TaxpayerTypeT",
+                                     "frm1701:rdoPg1I6TaxpayerTypeC"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9168-L9173"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-007",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "No taxpayer ATC II011 through II017 is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I7ATC_II011",
+                                     "frm1701:rdoPg1I7ATC_II012",
+                                     "frm1701:rdoPg1I7ATC_II013",
+                                     "frm1701:rdoPg1I7ATC_II014",
+                                     "frm1701:rdoPg1I7ATC_II015",
+                                     "frm1701:rdoPg1I7ATC_II016",
+                                     "frm1701:rdoPg1I7ATC_II017"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9174-L9179"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-008",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Birth date is nonblank and validateMonthDayYearDate returns true.",
+                      "fields":  [
+                                     "frm1701:txtPg1I10BirthDate"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Invalid birth date on page 1 item 10.  Please check date format.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9180-L9186"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The helper permits month 00 and uses a defective isNaN expression.",
+                      "recommended_app_behavior":  "Use strict calendar-date parsing and retain the exact official message only for compatibility.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-009",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Birth date is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg1I10BirthDate"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please indicate birth date on page 1 item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9187-L9192"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-010",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Parsed birth year is later than current system year.",
+                      "fields":  [
+                                     "frm1701:txtPg1I10BirthDate"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Birth year on page 1 Item 10 should not be later than current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9193-L9196"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only the year component is compared; future dates within the current year pass.",
+                      "recommended_app_behavior":  "Reject any birth date later than today.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-011",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Citizenship is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg1I12Citizenship"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please fill up citizenship on page 1 Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9197-L9202"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-012",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Foreign-tax-credit Yes is selected and foreign tax number is blank.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I13ForeignTaxCreditsYes",
+                                     "frm1701:txtPg1I14ForeignTaxNumber"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please fill up foreign tax number on page 1 Item 14.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9203-L9210"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-013",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "No civil status radio is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I16CivilStatusS",
+                                     "frm1701:rdoPg1I16CivilStatusM",
+                                     "frm1701:rdoPg1I16CivilStatusLS",
+                                     "frm1701:rdoPg1I16CivilStatusW"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 16.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9211-L9216"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-014",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Civil status is Married and neither spouse-income choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I16CivilStatusM",
+                                     "frm1701:rdoPg1I17SpouseIncomeYes",
+                                     "frm1701:rdoPg1I17SpouseIncomeNo"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 17.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9217-L9224"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-015",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Spouse-income Yes is selected and neither filing-status choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I17SpouseIncomeYes",
+                                     "frm1701:rdoPg1I18FilingStatusJ",
+                                     "frm1701:rdoPg1I18FilingStatusS"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 18.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9225-L9232"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-016",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Neither taxpayer exempt-income choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I19IncomeExemptYes",
+                                     "frm1701:rdoPg1I19IncomeExemptNo"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 19.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9233-L9238"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-017",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Neither taxpayer special-rate-income choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I20IncomeSpecialYes",
+                                     "frm1701:rdoPg1I20IncomeSpecialNo"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 20.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9239-L9244"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-018",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "No taxpayer tax-rate choice is selected and taxpayer is not compensation-income-only.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I21TaxRateG",
+                                     "frm1701:rdoPg1I21TaxRateP"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 21.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9245-L9251"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-019",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Taxpayer graduated rate is selected, taxpayer is not compensation-only, and neither deduction method is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I21TaxRateG",
+                                     "frm1701:rdoPg1I21AMethodDeductionI",
+                                     "frm1701:rdoPg1I21AMethodDeductionO"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an option for page 1 Item 21A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9252-L9259"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-020",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Taxpayer Item 25A exceeds 50% of taxpayer Item 22 tax due.",
+                      "fields":  [
+                                     "frm1701:txtPg1I25A",
+                                     "frm1701:txtPg1I22ATaxDue"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Amount in page 1 Item 25A cannot be more than 50% of Item 22.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9260-L9265"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-021",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Spouse Item 25B exceeds 50% of spouse Item 22 tax due.",
+                      "fields":  [
+                                     "frm1701:txtPg1I25B",
+                                     "frm1701:txtPg1I22BTaxDue"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Amount in page 1 Item 25B cannot be more than 50% of Item 22.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9266-L9271"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-022",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Any Schedule 5 item 1, 2, 4, or 5 has amount without description/legal basis, or description/legal basis without a nonzero amount.",
+                      "fields":  [
+                                     "frm1701:txtPg3IShed5_1Amt",
+                                     "frm1701:txtPg3IShed5_1Desc",
+                                     "frm1701:txtPg3IShed5_1Legal",
+                                     "frm1701:txtPg3IShed5_2Amt",
+                                     "frm1701:txtPg3IShed5_2Desc",
+                                     "frm1701:txtPg3IShed5_2Legal",
+                                     "frm1701:txtPg3IShed5_4Amt",
+                                     "frm1701:txtPg3IShed5_4Desc",
+                                     "frm1701:txtPg3IShed5_4Legal",
+                                     "frm1701:txtPg3IShed5_5Amt",
+                                     "frm1701:txtPg3IShed5_5Desc",
+                                     "frm1701:txtPg3IShed5_5Legal"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please complete details in Page 3 Schedule 5 Item #\u003ci\u003e.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9273-L9278"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The helper compares formatted amount strings directly to numeric zero.",
+                      "recommended_app_behavior":  "Parse amounts numerically and require description/legal basis together.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-023",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Aggregate Item 32 is negative and no overpayment disposition is selected.",
+                      "fields":  [
+                                     "frm1701:txtPg1I32AggregateAmtPyble",
+                                     "frm1701:rdoPg1OverpaymentRefund",
+                                     "frm1701:rdoPg1OverpaymentTCC",
+                                     "frm1701:rdoPg1OverpaymentCarryOver"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  "Please select an Overpayment option on Page 1 Part II.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9280-L9288"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-024",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Cross-schedule taxable income comparison fails for taxpayer or spouse.",
+                      "fields":  [
+                                     "frm1701:txtPg4IPart9_11A",
+                                     "frm1701:txtPg4IPart9_11B",
+                                     "frm1701:txtPg2IShed3_23A",
+                                     "frm1701:txtPg2IShed3_23B",
+                                     "frm1701:txtPg3IShed3_30A",
+                                     "frm1701:txtPg3IShed3_30B"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9290-L9292"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "A helper emits one of four exact cross-schedule messages and returns true.",
+                      "recommended_app_behavior":  "Retain four distinct field errors; see helper rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-025",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Applicable taxpayer Part X Schedule A completeness helper returns true.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I19IncomeExemptYes",
+                                     "frm1701:rdoPg1I20IncomeSpecialYes",
+                                     "frm1701:rdoPg1mOption1"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9294-L9303"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-026",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Applicable spouse Part X Schedule A completeness helper returns true.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I10IncomeExemptYes",
+                                     "frm1701:rdoPg2I11IncomeSpecialYes",
+                                     "frm1701:rdoPg1mOption1"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9305-L9313"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-027",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Joint filing is selected and validateSpouseFields returns true.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I18FilingStatusJ"
+                                 ],
+                      "accepted_behavior":  "The condition is false and ordered validation continues.",
+                      "rejected_behavior":  "Validation stops at this branch.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9315-L9321"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "recommended_app_behavior":  "Retain the rule with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-validate-success",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "All active ordered validation branches pass.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "All controls are disabled and a success alert is shown.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L9323-L9325",
+                                          "official-hta-runtime#disableAllControl:L9330-L9351"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Any spouse TIN segment or branch code length is at most 2.",
+                      "fields":  [
+                                     "frm1701:txtPg2I1TIN1",
+                                     "frm1701:txtPg2I1TIN2",
+                                     "frm1701:txtPg2I1TIN3",
+                                     "frm1701:txtPg2I1BranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "You have entered an invalid TIN format for Spouse.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9041-L9045"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-002",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Spouse TIN checksum helper returns nonzero.",
+                      "fields":  [
+                                     "frm1701:txtPg2I1TIN1",
+                                     "frm1701:txtPg2I1TIN2",
+                                     "frm1701:txtPg2I1TIN3"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "dynamic: getChkTinErrDesc(tinChkCode) + \" on Page 2 Part IV Item 1.\"",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9047-L9051"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-003",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Spouse RDO select has selectedIndex 0.",
+                      "fields":  [
+                                     "frm1701:txtPg2I2SpouseRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please enter a valid RDO Code on Page 2 Part IV Item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9053-L9056"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-004",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "No spouse filer type is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I3SpouseTypeS",
+                                     "frm1701:rdoPg2I3SpouseTypeP",
+                                     "frm1701:rdoPg2I3SpouseTypeC"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select a Filer type for Spouse on Page 2 Part IV Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9058-L9063"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-005",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "No spouse ATC II011 through II017 is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I4ATC_II011",
+                                     "frm1701:rdoPg2I4ATC_II012",
+                                     "frm1701:rdoPg2I4ATC_II013",
+                                     "frm1701:rdoPg2I4ATC_II014",
+                                     "frm1701:rdoPg2I4ATC_II015",
+                                     "frm1701:rdoPg2I4ATC_II016",
+                                     "frm1701:rdoPg2I4ATC_II017"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select an ATC code for Spouse on Page 2 Part IV Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9065-L9074"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-006",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Spouse name is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg2I5SpouseName"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please enter a name for Spouse on Page 2 Part IV Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9076-L9079"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-007",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Spouse contact number is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg2I6TelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please enter a contact number for Spouse on Page 2 Part IV Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9081-L9084"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-008",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Spouse contact number length is 1 through 5.",
+                      "fields":  [
+                                     "frm1701:txtPg2I6TelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please enter a valid contact number for Spouse on Page 2 Part IV Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9085-L9088"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-009",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Spouse citizenship is blank.",
+                      "fields":  [
+                                     "frm1701:txtPg2I7Citizenship"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please enter a citizenship for Spouse on Page 2 Part IV Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9090-L9093"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-010",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Neither spouse foreign-tax-credit choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I8ForeignTaxCreditsYes",
+                                     "frm1701:rdoPg2I8ForeignTaxCreditsNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select a Foreign Tax Credit for Spouse on Page 2 Part IV Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9095-L9099"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-011",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Spouse foreign-tax-credit Yes is selected and foreign tax number is blank.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I8ForeignTaxCreditsYes",
+                                     "frm1701:txtPg2I9ForeignTaxNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select a Foreign Tax Number for Spouse on Page 2 Part IV Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9101-L9105"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-012",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Neither spouse exempt-income choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I10IncomeExemptYes",
+                                     "frm1701:rdoPg2I10IncomeExemptNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select an option for Spouse on Page 2 Part IV Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9107-L9111"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-013",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Neither spouse special-rate-income choice is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I11IncomeSpecialYes",
+                                     "frm1701:rdoPg2I11IncomeSpecialNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select an option for Spouse on Page 2 Part IV Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9113-L9117"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-014",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "No spouse tax rate is selected and spouse is not compensation-income-only.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I12TaxRateG",
+                                     "frm1701:rdoPg2I12TaxRateP"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select a Tax Rate option for Spouse on Page 2 Part IV Item 12.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9119-L9124"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-spouse-015",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Spouse graduated rate is selected, spouse is not compensation-only, and neither deduction method is selected.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I12AMethodDeductionI",
+                                     "frm1701:rdoPg2I12AMethodDeductionO"
+                                 ],
+                      "accepted_behavior":  "Condition is false.",
+                      "rejected_behavior":  "Joint-return validation stops.",
+                      "exact_message":  "Please select a Method of Deduction for Spouse on Page 2 Part IV Item 12A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateSpouseFields:L9126-L9132"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "This helper runs only when joint filing is selected.",
+                      "recommended_app_behavior":  "Validate the spouse field semantically and preserve official ordering.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-cross-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Taxpayer uses graduated/itemized and Part IX Item 11A differs from Schedule 3.A Item 23A.",
+                      "fields":  [
+                                     "frm1701:txtPg4IPart9_11A",
+                                     "frm1701:txtPg2IShed3_23A"
+                                 ],
+                      "accepted_behavior":  "Values compare equal after NumWithComma.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4 Part IX Item 11 must be equal to Item 23 on Page 2 Part V Schedule 3.A (Taxpayer is under Graduated Rates)",
+                      "source_refs":  [
+                                          "official-hta-runtime#compareTaxableIncForTP:L8922-L8931"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-cross-002",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Taxpayer uses 8% rate and Part IX Item 11A differs from Schedule 3.B Item 30A.",
+                      "fields":  [
+                                     "frm1701:txtPg4IPart9_11A",
+                                     "frm1701:txtPg3IShed3_30A"
+                                 ],
+                      "accepted_behavior":  "Values compare equal after NumWithComma.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4 Part IX Item 11 must be equal to Item 30 on Page 3 Part V Schedule 3.B (Taxpayer is under 8% IT Rate)",
+                      "source_refs":  [
+                                          "official-hta-runtime#compareTaxableIncForTP:L8933-L8941"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-cross-003",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Spouse uses graduated/itemized and Part IX Item 11B differs from Schedule 3.A Item 23B.",
+                      "fields":  [
+                                     "frm1701:txtPg4IPart9_11B",
+                                     "frm1701:txtPg2IShed3_23B"
+                                 ],
+                      "accepted_behavior":  "Values compare equal after NumWithComma.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4 Part IX Item 11 must be equal to Item 23 on Page 2 Part V Schedule 3.A (Spouse is under Graduated Rates)",
+                      "source_refs":  [
+                                          "official-hta-runtime#compareTaxableIncForSP:L8947-L8956"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-cross-004",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Spouse uses 8% rate and Part IX Item 11B differs from Schedule 3.B Item 30B.",
+                      "fields":  [
+                                     "frm1701:txtPg4IPart9_11B",
+                                     "frm1701:txtPg3IShed3_30B"
+                                 ],
+                      "accepted_behavior":  "Values compare equal after NumWithComma.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Page 4 Part IX Item 11 must be equal to Item 30 on Page 3 Part V Schedule 3.B (Spouse is under 8% IT Rate)",
+                      "source_refs":  [
+                                          "official-hta-runtime#compareTaxableIncForSP:L8958-L8966"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-part10-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Taxpayer exempt attachment option 1 applies and any required Schedule A item 1,2,3,5,6 is blank.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I19IncomeExemptYes",
+                                     "frm1701:rdoPg1mOption1"
+                                 ],
+                      "accepted_behavior":  "All required cells are nonblank.",
+                      "rejected_behavior":  "First missing numbered cell stops validation.",
+                      "exact_message":  "dynamic: Please populate Taxpayer\u0027s Part 10 Schedule A Item \u003cx\u003e Exempt.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPart10TPSchedA:L8972-L8983"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-part10-002",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Taxpayer special attachment option 1 applies and any Schedule A item 1 through 6 is blank.",
+                      "fields":  [
+                                     "frm1701:rdoPg1I20IncomeSpecialYes",
+                                     "frm1701:rdoPg1mOption1"
+                                 ],
+                      "accepted_behavior":  "All six cells are nonblank.",
+                      "rejected_behavior":  "First missing numbered cell stops validation.",
+                      "exact_message":  "dynamic: Please populate Taxpayer\u0027s Part 10 Schedule A Item \u003cx\u003e Special.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPart10TPSchedA:L8985-L8993"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-part10-003",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Taxpayer regular Schedule A items 1,2,3 are all nonblank and either date string length is at most 9.",
+                      "fields":  [
+                                     "frm1701:txtPg1mI1CSchdA",
+                                     "frm1701:txtPg1mI2CSchdA",
+                                     "frm1701:txtPg1mI3CSchdA",
+                                     "frm1701:txtPg1mI5CSchdA",
+                                     "frm1701:txtPg1mI6CSchdA"
+                                 ],
+                      "accepted_behavior":  "Both date strings have at least 10 characters.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please complete Date of Tax Relief in Taxpayer\u0027s Part 10 Schedule A Regular Fields since you have an input in IPA/Legal Basis/Registered Activity.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPart10TPSchedA:L8995-L9002"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only length is checked; invalid dates of length 10 pass.",
+                      "recommended_app_behavior":  "Parse both dates strictly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-part10-004",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Spouse exempt-income Yes applies and any required Schedule A item 1,2,3,5,6 is blank.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I10IncomeExemptYes"
+                                 ],
+                      "accepted_behavior":  "All required cells are nonblank.",
+                      "rejected_behavior":  "First missing numbered cell stops validation.",
+                      "exact_message":  "dynamic: Please populate Spouse Part 10 Schedule A Item \u003cx\u003e Exempt.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPart10SPSchedA:L9005-L9015"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-part10-005",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Spouse special-rate-income Yes applies and any Schedule A item 1 through 6 is blank.",
+                      "fields":  [
+                                     "frm1701:rdoPg2I11IncomeSpecialYes"
+                                 ],
+                      "accepted_behavior":  "All six cells are nonblank.",
+                      "rejected_behavior":  "First missing numbered cell stops validation.",
+                      "exact_message":  "dynamic: Please populate Spouse Part 10 Schedule A Item \u003cx\u003e Special.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPart10SPSchedA:L9017-L9024"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-part10-006",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Spouse regular Schedule A items 1,2,3 are all nonblank and either date string length is at most 9.",
+                      "fields":  [
+                                     "frm1701:txtPg1mI1FSchdA",
+                                     "frm1701:txtPg1mI2FSchdA",
+                                     "frm1701:txtPg1mI3FSchdA",
+                                     "frm1701:txtPg1mI5FSchdA",
+                                     "frm1701:txtPg1mI6FSchdA"
+                                 ],
+                      "accepted_behavior":  "Both date strings have at least 10 characters.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please complete Date of Tax Relief in Spouse Part 10 Schedule A Regular Fields since you have an input in IPA/Legal Basis/Registered Activity.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPart10SPSchedA:L9026-L9033"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only length is checked.",
+                      "recommended_app_behavior":  "Parse both dates strictly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A date is malformed or year is below 1800.",
+                      "fields":  [
+                                     "date-field"
+                                 ],
+                      "accepted_behavior":  "Strict-looking component tests pass.",
+                      "rejected_behavior":  "The field is cleared and focused.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L8822-L8886"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The future-date rejection branch is commented out and month 00 can pass.",
+                      "recommended_app_behavior":  "Use strict date parsing and enforce field-specific date ranges.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-002",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Taxpayer or spouse Item 25 exceeds 50% of Item 22 during computation.",
+                      "fields":  [
+                                     "frm1701:txtPg1I25A",
+                                     "frm1701:txtPg1I25B",
+                                     "frm1701:txtPg1I22ATaxDue",
+                                     "frm1701:txtPg1I22BTaxDue"
+                                 ],
+                      "accepted_behavior":  "Amount is within the cap.",
+                      "rejected_behavior":  "Item 25 is reset to 0.00.",
+                      "exact_message":  "dynamic: Amount in page 1 Item 25A/25B cannot be more than 50% of Item 22.",
+                      "source_refs":  [
+                                          "official-hta-runtime#computeTxtPg1I26:L11604-L11619"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-003",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "8% deduction Item 29 exceeds 250,000.",
+                      "fields":  [
+                                     "frm1701:txtPg3IShed3_29A",
+                                     "frm1701:txtPg3IShed3_29B"
+                                 ],
+                      "accepted_behavior":  "Amount is at most 250,000.",
+                      "rejected_behavior":  "The field is reset to 0.00.",
+                      "exact_message":  "Amount cannot be more than 250,000.",
+                      "source_refs":  [
+                                          "official-hta-runtime#computeTxtPg3Sc3I30:L11683-L11700"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-004",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Schedule 6 deduction amount is less than gross income when field marker is item2.",
+                      "fields":  [
+                                     "frm1701:txtPg3IShed6_1A",
+                                     "frm1701:txtPg3IShed6_2A",
+                                     "frm1701:txtPg3IShed6_1B",
+                                     "frm1701:txtPg3IShed6_2B"
+                                 ],
+                      "accepted_behavior":  "Deduction is not less than gross income.",
+                      "rejected_behavior":  "Deduction is reset to 0.00.",
+                      "exact_message":  "Deduction amount should be greater than the gross income amount.",
+                      "source_refs":  [
+                                          "official-hta-runtime#computePg3Sc6I3:L11766-L11795"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The comparison and message contradict each other: it rejects deduction \u003c gross while saying deduction should be greater.",
+                      "recommended_app_behavior":  "Re-derive the intended NOLCO calculation from the official instructions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-005",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "NOLCO year is earlier than return year minus 3, later than return year, or equal to return year.",
+                      "fields":  [
+                                     "nolco-year",
+                                     "frm1701:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Year falls in the prior three-year window.",
+                      "rejected_behavior":  "Year is cleared.",
+                      "exact_message":  "dynamic: Year incurred cannot be more than 3 years of current year. / Year incurred in this field cannot be a future year. / Year incurred in this field cannot be the same as current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkValidNOLCOYear:L11797-L11813"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "String coercion and the phrase current year actually refer to the return year.",
+                      "recommended_app_behavior":  "Parse integer years and describe the return-year window precisely.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-006",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Sum of NOLCO columns B, C, and D exceeds column A.",
+                      "fields":  [
+                                     "nolco-row"
+                                 ],
+                      "accepted_behavior":  "Sum does not exceed source amount.",
+                      "rejected_behavior":  "Columns B, C, and D are all reset to zero.",
+                      "exact_message":  "Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column E (Net Operating Loss)",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkNOLCOoperLoss:L11841-L11857"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The message calls the source amount Column E although the code compares against suffix A.",
+                      "recommended_app_behavior":  "Use printed-column labels from the January 2018 form and identify the reset fields accurately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-007",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Schedule 5 description or legal basis is blank when its amount handler runs.",
+                      "fields":  [
+                                     "schedule-5-row"
+                                 ],
+                      "accepted_behavior":  "Both strings are nonblank.",
+                      "rejected_behavior":  "Amount is reset to 0.00 and description focused.",
+                      "exact_message":  "dynamic: Description and Legal Basis should both have values for item #\u003citem\u003e.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkSched5Fields:L11859-L11865"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-008",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "8% gross sales/receipts plus other non-operating income exceeds 3,000,000.",
+                      "fields":  [
+                                     "frm1701:txtPg3IShed3_26A",
+                                     "frm1701:txtPg3IShed3_26B"
+                                 ],
+                      "accepted_behavior":  "Amount is at most 3,000,000.",
+                      "rejected_behavior":  "The triggering field is reset to 0.00.",
+                      "exact_message":  "Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose a graduated rate ATC and fill in Page 2 Schedule 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#check8percGross:L11867-L11880"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "The threshold is hard-coded at P3M for this revision.",
+                      "recommended_app_behavior":  "Apply the threshold legally effective for the filing period while retaining revision compatibility.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-009",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "A percentage is negative or greater than or equal to 100.",
+                      "fields":  [
+                                     "percentage-field"
+                                 ],
+                      "accepted_behavior":  "0 \u003c= value \u003c 100.",
+                      "rejected_behavior":  "Value is reset to 0.0 and blur is re-entered.",
+                      "exact_message":  "Percentage cannot be greater than or equal to 100%",
+                      "source_refs":  [
+                                          "official-hta-runtime#setPercentage:L12795-L12817"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The message omits the negative-value rejection and recursively invokes onblur.",
+                      "recommended_app_behavior":  "Reject negative and \u003e=100 with a non-recursive structured error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-change-010",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Part X or XI rate exceeds 100%.",
+                      "fields":  [
+                                     "attachment-rate-field"
+                                 ],
+                      "accepted_behavior":  "Rate is at most 100%.",
+                      "rejected_behavior":  "Handler alerts; downstream reset depends on caller.",
+                      "exact_message":  "Rate cannot exceed 100%",
+                      "source_refs":  [
+                                          "official-hta-runtime#p10rateChk:L11179-L11186",
+                                          "official-hta-runtime#p11rateChk:L11187-L11194"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active failing branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-final-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested after validation.",
+                      "fields":  [
+                                     "txtFinalFlag",
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Confirmation/encryption/connectivity path proceeds.",
+                      "rejected_behavior":  "Offline or connectivity branches can stop the coupled workflow.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L13116-L13181",
+                                          "official-hta-runtime#saveEncryptedProfile:L13256-L13351"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final copy is coupled to connectivity and encrypted transport preparation.",
+                      "recommended_app_behavior":  "Create deterministic offline finalization independently of submission.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701-submit-001",
+                      "form_id":  "1701-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online send path is invoked.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Encrypted payload is prepared and transport is attempted.",
+                      "rejected_behavior":  "No online submission was exercised in this research.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L13182-L13255",
+                                          "official-hta-runtime#saveXMLsubmit:L8249-L8473"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Source-derived only; no live submission was performed.",
+                      "recommended_app_behavior":  "Keep online transport outside local validation tests.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

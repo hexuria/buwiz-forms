@@ -1,0 +1,821 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1701-tax-table-2018",
+                             "1701-part2-item22",
+                             "1701-part2-item24",
+                             "1701-part2-item26",
+                             "1701-part2-item30",
+                             "1701-part2-item31",
+                             "1701-part2-item32",
+                             "1701-schedule2-item4",
+                             "1701-schedule2-item6",
+                             "1701-schedule2-item7",
+                             "1701-schedule3a-item10",
+                             "1701-schedule3a-item12",
+                             "1701-schedule3a-item16",
+                             "1701-schedule3a-item17",
+                             "1701-schedule3a-item23",
+                             "1701-schedule3a-item24",
+                             "1701-schedule3a-item25",
+                             "1701-schedule3b-item28",
+                             "1701-schedule3b-item30",
+                             "1701-schedule3b-item31",
+                             "1701-schedule3b-item32",
+                             "1701-schedule4-item18",
+                             "1701-schedule5-totals",
+                             "1701-schedule6-item3",
+                             "1701-nolco-row-balances",
+                             "1701-total-allowable-deductions",
+                             "1701-schedule6-summary",
+                             "1701-part7-item10",
+                             "1701-part8-running-totals",
+                             "1701-part9-totals",
+                             "1701-part10-attachment-schedules",
+                             "1701-attachment-collected-value"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1701-tax-table-2018",
+                             "outputs":  [
+                                             "graduated-income-tax"
+                                         ],
+                             "inputs":  [
+                                            "taxable-income"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Up to 250,000: 0; 250,000-400,000: 20% of excess over 250,000; 400,000-800,000: 30,000 + 25% over 400,000; 800,000-2,000,000: 130,000 + 30% over 800,000; 2,000,000-8,000,000: 490,000 + 32% over 2,000,000; over 8,000,000: 2,410,000 + 35% over 8,000,000.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "calcTaxAmt",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calcTaxAmt:L11427-L11485",
+                                                 "official-form-pdf#page-2-tax-table"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part2-item22",
+                             "outputs":  [
+                                             "frm1701:txtPg1I22ATaxDue",
+                                             "frm1701:txtPg1I22BTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm1701:txtPg2I25A",
+                                            "frm1701:txtPg2I25B",
+                                            "frm1701:txtPg3IShed3_32A",
+                                            "frm1701:txtPg3IShed3_32B",
+                                            "tax-rate"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Copies the applicable total income tax due from graduated or 8% schedules into Part II Item 22 by taxpayer/spouse.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I22 and rate handlers",
+                             "depends_on":  [
+                                                "1701-tax-table-2018"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I22:L11530-L11540",
+                                                 "official-hta-runtime#taxRateEnableDisableFields:L11195-L11223"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part2-item24",
+                             "outputs":  [
+                                             "frm1701:txtPg1I24ATaxPayable",
+                                             "frm1701:txtPg1I24BTaxPayable"
+                                         ],
+                             "inputs":  [
+                                            "item22",
+                                            "item23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg1I24",
+                             "depends_on":  [
+                                                "1701-part2-item22"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg1I24:L11578-L11587"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part2-item26",
+                             "outputs":  [
+                                             "frm1701:txtPg1I26A",
+                                             "frm1701:txtPg1I26B"
+                                         ],
+                             "inputs":  [
+                                            "item24",
+                                            "item25"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "26 = 24 - 25 after enforcing Item 25 \u003c= 50% of Item 22.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg1I26",
+                             "depends_on":  [
+                                                "1701-part2-item24"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg1I26:L11604-L11619"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part2-item30",
+                             "outputs":  [
+                                             "frm1701:txtPg1I30A",
+                                             "frm1701:txtPg1I30B"
+                                         ],
+                             "inputs":  [
+                                            "item27",
+                                            "item28",
+                                            "item29"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "30 = surcharge + interest + compromise.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg1I30",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg1I30:L11621-L11628"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part2-item31",
+                             "outputs":  [
+                                             "frm1701:txtPg1I31ATotalAmtPyble",
+                                             "frm1701:txtPg1I31BTotalAmtPyble"
+                                         ],
+                             "inputs":  [
+                                            "item26",
+                                            "item30"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Normally 31 = 26 + 30; if Item 26 is negative and penalties are positive, Item 31 is penalties only.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg1I31",
+                             "depends_on":  [
+                                                "1701-part2-item26",
+                                                "1701-part2-item30"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg1I31:L11630-L11649"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Verify whether overpayment should offset penalties; preserve official behavior separately.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part2-item32",
+                             "outputs":  [
+                                             "frm1701:txtPg1I32AggregateAmtPyble"
+                                         ],
+                             "inputs":  [
+                                            "item31A",
+                                            "item31B"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "32 = Item 31A + Item 31B.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg1I32",
+                             "depends_on":  [
+                                                "1701-part2-item31"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg1I32:L11651-L11655"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule2-item4",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed2_4A",
+                                             "frm1701:txtPg2IShed2_4B"
+                                         ],
+                             "inputs":  [
+                                            "schedule2-items-1-through-3"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 4 is the sum of taxable compensation components in Schedule 2.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2Sc2I4CI",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2Sc2I4CI:L11380-L11391"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule2-item6",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed2_6A",
+                                             "frm1701:txtPg2IShed2_6B"
+                                         ],
+                             "inputs":  [
+                                            "schedule2-item4",
+                                            "schedule2-item5"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "6 = 4 - 5.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I6",
+                             "depends_on":  [
+                                                "1701-schedule2-item4"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I6:L11392-L11403"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule2-item7",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed2_7A",
+                                             "frm1701:txtPg2IShed2_7B"
+                                         ],
+                             "inputs":  [
+                                            "schedule2-item6"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "7 = graduated tax table(Item 6).",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg1I7",
+                             "depends_on":  [
+                                                "1701-tax-table-2018",
+                                                "1701-schedule2-item6"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg1I7:L11404-L11426"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item10",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_10A",
+                                             "frm1701:txtPg2IShed3_10B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3a-items-8-and-9"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "10 = 8 - 9.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I10",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I10:L11486-L11496"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item12",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_12A",
+                                             "frm1701:txtPg2IShed3_12B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3a-items-10-and-11"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "12 = 10 - 11.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I12",
+                             "depends_on":  [
+                                                "1701-schedule3a-item10"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I12:L11497-L11507"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item16",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_16A",
+                                             "frm1701:txtPg2IShed3_16B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3a-item12",
+                                            "schedule3a-items-13-through-15"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "16 = Item 12 less the applicable deduction aggregate.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I16",
+                             "depends_on":  [
+                                                "1701-schedule3a-item12"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I16:L11508-L11520"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item17",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_17A",
+                                             "frm1701:txtPg2IShed3_17B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3a-item16"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "17 = graduated tax table(Item 16).",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I17",
+                             "depends_on":  [
+                                                "1701-tax-table-2018",
+                                                "1701-schedule3a-item16"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I17:L11521-L11529"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item23",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_23A",
+                                             "frm1701:txtPg2IShed3_23B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3a-items-17-through-22"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "23 is the computed taxable income total used by the Part IX cross-check.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I23",
+                             "depends_on":  [
+                                                "1701-schedule3a-item17"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I23:L11541-L11551"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item24",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_24A",
+                                             "frm1701:txtPg2IShed3_24B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3a-item23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = graduated tax table(Item 23).",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I24",
+                             "depends_on":  [
+                                                "1701-tax-table-2018",
+                                                "1701-schedule3a-item23"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I24:L11552-L11562"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3a-item25",
+                             "outputs":  [
+                                             "frm1701:txtPg2IShed3_25A",
+                                             "frm1701:txtPg2IShed3_25B"
+                                         ],
+                             "inputs":  [
+                                            "schedule2-item7",
+                                            "schedule3a-item24"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "25 combines compensation tax and business/profession tax according to filer type.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg2I25",
+                             "depends_on":  [
+                                                "1701-schedule2-item7",
+                                                "1701-schedule3a-item24"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg2I25:L11563-L11577"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3b-item28",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed3_28A",
+                                             "frm1701:txtPg3IShed3_28B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3b-items-26-and-27"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "28 = 26 + 27.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg3Sc3I28",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg3Sc3I28:L11672-L11681"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3b-item30",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed3_30A",
+                                             "frm1701:txtPg3IShed3_30B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3b-item28",
+                                            "schedule3b-item29"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "30 = 28 - 29; Item 29 is capped at 250,000.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg3Sc3I30",
+                             "depends_on":  [
+                                                "1701-schedule3b-item28"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg3Sc3I30:L11683-L11700"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3b-item31",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed3_31A",
+                                             "frm1701:txtPg3IShed3_31B"
+                                         ],
+                             "inputs":  [
+                                            "schedule3b-item30"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "If Item 30 \u003e 0, Item 31 = Item 30 * 8%; if Item 30 \u003c 0, Item 31 = 0.00.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg3Sc3I31",
+                             "depends_on":  [
+                                                "1701-schedule3b-item30"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg3Sc3I31:L11702-L11723"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule3b-item32",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed3_32A",
+                                             "frm1701:txtPg3IShed3_32B"
+                                         ],
+                             "inputs":  [
+                                            "schedule2-item7",
+                                            "schedule3b-item31"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "32 = compensation tax from Schedule 2 Item 7 + 8% business tax Item 31.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg3Sc3I32",
+                             "depends_on":  [
+                                                "1701-schedule2-item7",
+                                                "1701-schedule3b-item31"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg3Sc3I32:L11725-L11736"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule4-item18",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed4_18A",
+                                             "frm1701:txtPg3IShed4_18B"
+                                         ],
+                             "inputs":  [
+                                            "schedule4-items-1-through-17d"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "18 = sum of Schedule 4 Items 1 through 17d by taxpayer/spouse.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computePg3Sc4I18",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc4I18:L11738-L11749"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule5-totals",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed5_3",
+                                             "frm1701:txtPg3IShed5_6"
+                                         ],
+                             "inputs":  [
+                                            "schedule5-items-1,2,4,5"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 3 = Items 1 + 2; Item 6 = Items 4 + 5.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computePg3Sc5I3/computePg3Sc5I6",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc5I3:L11751-L11757",
+                                                 "official-hta-runtime#computePg3Sc5I6:L11759-L11764"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule6-item3",
+                             "outputs":  [
+                                             "frm1701:txtPg3IShed6_3A",
+                                             "frm1701:txtPg3IShed6_3B"
+                                         ],
+                             "inputs":  [
+                                            "schedule6-items-1-and-2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "3 = 1 - 2; a contradictory guard resets Item 2 when Item 2 \u003c Item 1.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computePg3Sc6I3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc6I3:L11766-L11795"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Re-derive the intended gross-income/deduction relationship.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-nolco-row-balances",
+                             "outputs":  [
+                                             "schedule6-row-E"
+                                         ],
+                             "inputs":  [
+                                            "schedule6-row-A",
+                                            "schedule6-row-B",
+                                            "schedule6-row-C",
+                                            "schedule6-row-D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "E = A - (B + C + D), with a guard that zeroes B/C/D when their sum exceeds A.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computePg3Sc6I4E through computePg4Sc6I12E",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg3Sc6I4E:L11815-L11838",
+                                                 "official-hta-runtime#computePg3Sc6I8D:L11921-L11928",
+                                                 "official-hta-runtime#computePg4Sc6I9E:L11929-L11953"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-total-allowable-deductions",
+                             "outputs":  [
+                                             "schedule3a-allowable-deduction-total"
+                                         ],
+                             "inputs":  [
+                                            "schedule4-item18",
+                                            "schedule5-total",
+                                            "schedule6-total",
+                                            "deduction-method"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Populates the applicable itemized/OSD deduction total and propagates it into Schedule 3.A.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "populateTotalAllowDeduc/computePg2TotAllowDeduc",
+                             "depends_on":  [
+                                                "1701-schedule4-item18",
+                                                "1701-schedule5-totals",
+                                                "1701-nolco-row-balances"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#populateTotalAllowDeduc:L11962-L11976",
+                                                 "official-hta-runtime#computePg2TotAllowDeduc:L11977-L11985"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-schedule6-summary",
+                             "outputs":  [
+                                             "frm1701:txtPg4ISc6_4A",
+                                             "frm1701:txtPg4ISc6_4B",
+                                             "frm1701:txtPg4ISc6_5A",
+                                             "frm1701:txtPg4ISc6_5B"
+                                         ],
+                             "inputs":  [
+                                            "schedule6-prior-year-rows"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Aggregates available NOLCO by party and copies the result to the total-allowable-deduction path.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computePg4Sc6I4/computeTxtPg4Sc6I5",
+                             "depends_on":  [
+                                                "1701-nolco-row-balances"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePg4Sc6I4:L11986-L11996",
+                                                 "official-hta-runtime#computeTxtPg4Sc6I5:L11997-L12007"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part7-item10",
+                             "outputs":  [
+                                             "frm1701:txtPg4IPart7_10A",
+                                             "frm1701:txtPg4IPart7_10B"
+                                         ],
+                             "inputs":  [
+                                            "part7-items-1-through-9"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "10 = sum of Part VII tax credits/payments by taxpayer/spouse.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg4Pt7I10",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg4Pt7I10:L12008-L12020"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part8-running-totals",
+                             "outputs":  [
+                                             "part8-items-3,5,7,10"
+                                         ],
+                             "inputs":  [
+                                            "part8-preceding-items"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Computes Part VIII running sums/differences for tax relief and creditable tax.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg4Pt8I3/I5/I7/I10",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg4Pt8I3:L12068-L12077",
+                                                 "official-hta-runtime#computeTxtPg4Pt8I5:L12078-L12087",
+                                                 "official-hta-runtime#computeTxtPg4Pt8I7:L12088-L12097",
+                                                 "official-hta-runtime#computeTxtPg4Pt8I10:L12098-L12106"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part9-totals",
+                             "outputs":  [
+                                             "part9-items-5,10,11"
+                                         ],
+                             "inputs":  [
+                                            "part9-preceding-items"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Computes Part IX income and taxable-income totals used by the Schedule 3 cross-check.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeTxtPg4Pt9I5/I10/I11",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxtPg4Pt9I5:L12107-L12117",
+                                                 "official-hta-runtime#computeTxtPg4Pt9I10:L12118-L12127",
+                                                 "official-hta-runtime#computeTxtPg4Pt9I11:L12128-L12137"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-part10-attachment-schedules",
+                             "outputs":  [
+                                             "Part X Schedules B,C,D totals"
+                                         ],
+                             "inputs":  [
+                                            "Part X attachment Schedule A-D fields"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Computes per-attachment EXn/SPn Schedule B, C, and D amounts, then consolidates them into main Part X totals.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computePage1mScheduleB through computeConsolSchedD",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePage1mScheduleB:L12217-L12414",
+                                                 "official-hta-runtime#computePage2mScheduleC:L12415-L12431",
+                                                 "official-hta-runtime#computePage2mScheduleD:L12432-L12442",
+                                                 "official-hta-runtime#computePage3mScheduleB:L12443-L12509",
+                                                 "official-hta-runtime#computePage4mScheduleC:L12510-L12565",
+                                                 "official-hta-runtime#computePage4mScheduleD:L12566-L12590",
+                                                 "official-hta-runtime#computeConsolSchedBAmt:L12595-L12622",
+                                                 "official-hta-runtime#computeConsolSchedC:L12623-L12650",
+                                                 "official-hta-runtime#computeConsolSchedD:L12651-L12682"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1701-attachment-collected-value",
+                             "outputs":  [
+                                             "consolidated-attachment-cell"
+                                         ],
+                             "inputs":  [
+                                            "all matching EXn/SPn attachment cells"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sums the selected field across materialized attachment instances.",
+                             "rounding":  "NumWithComma parses formatted strings and formatCurrency emits two-decimal display strings unless the called helper specifies otherwise.",
+                             "trigger":  "computeCollectedValue",
+                             "depends_on":  [
+                                                "1701-part10-attachment-schedules"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeCollectedValue:L12683-L12699"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use decimal arithmetic and recompute from authoritative inputs.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

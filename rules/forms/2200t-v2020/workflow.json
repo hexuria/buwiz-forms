@@ -1,0 +1,160 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200t-v2020",
+    "revision":  "2020-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2020 three-page tobacco excise return with a fully static Schedule 1."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L5795-L5814",
+                                           "official-hta-runtime#saveXML:L4896-L5158"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only all-date-components-blank, TIN segment presence, RDO, and registered name before serializing the flat control state."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L5507-L5632"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs the ordered 17-branch main-form check but performs no Schedule 1 validation or row calculation."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#openAlertEmail:L6351-L6412",
+                                           "official-hta-runtime#saveEncryptedProfile:L4733-L4817"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "After Validate, Final Copy prompts for internet/email readiness and can save an encrypted offline copy when connectivity fails."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L6419-L6526"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport code exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes a flat pseudo-XML serialization of control state."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L4896-L5158"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables editable controls.",
+                                                 "Enables Print, Edit, and Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm:L5507-L5632"
+                                            ],
+                            "guard":  "The ordered Validate branches pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables editable controls.",
+                                                 "Disables Final Copy."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm:L5694-L5708"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Submit / Final Copy",
+                            "side_effects":  [
+                                                 "Updates final flag.",
+                                                 "Writes encrypted/compressed copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L6351-L6412"
+                                            ],
+                            "guard":  "The user confirms; an online or offline final-copy path completes."
+                        },
+                        {
+                            "action":  "Online transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L6419-L6526"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return date",
+                          "TIN and RDO",
+                          "Registered identity and address",
+                          "Production/removal locations",
+                          "Tax-relief and payment choices",
+                          "Schedule 1 and Part III amounts"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "predecessor-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "For any covered removal in this quarter, the predecessor packaged help says tax is paid before removal from the place of production; no revision-matched January 2020 guide is locally pinned."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "predecessor-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "For any covered removal in this quarter, the predecessor packaged help says tax is paid before removal from the place of production; no revision-matched January 2020 guide is locally pinned."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "predecessor-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "For any covered removal in this quarter, the predecessor packaged help says tax is paid before removal from the place of production; no revision-matched January 2020 guide is locally pinned."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "predecessor-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "For any covered removal in this quarter, the predecessor packaged help says tax is paid before removal from the place of production; no revision-matched January 2020 guide is locally pinned."
+                             }
+                         ]
+}

@@ -1,0 +1,146 @@
+{
+ "1701Q": {
+  "R3.0": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_items_follow_the_printed_sheet (item 2's boxes read First, Second, Third, the text after '2 Quarter: ' in their html-frozen/1701q-2018/writer-cells.json captions)",
+   "status": "fixed"
+  },
+  "R3.1": {
+   "reason": "The official program disables Part IV for direct entry: rules/forms/1701q-v2018/fields.json gives each of the sixteen payment-detail boxes of items 32-35 (frm1701q:txtAgency32, txtNumber32, txtDate32, txtAmount32, txtAgency33, txtNumber33, txtDate33, txtAmount33, txtNumber34, txtDate34, txtAmount34, txtParticular35, txtAgency35, txtNumber35, txtDate35, txtAmount35; item 34 has no drawee bank box; the finding lists twelve) the enabled_when 'Statically disabled payment-detail field; no form state transition enables this control for direct entry.' The details of payment are written on the sheet by hand or by the bank. The page leaves them out (schema-overrides.json kind hidden, as at pr0b-push) and a new return prints them blank; a stored draft that holds payment details keeps printing them (Form1701QPaymentDetails, html-frozen/1701q-2018/writer-cells.json joins items 32-35), and the upload is unchanged. screen_form_module::tests::income_q::form_1701q_part_iv_is_left_out_as_the_official_program_disables_it checks the corpus text, the hidden boxes and the blank print.",
+   "reviewer": "Agree (PR 5 review): all 16 payment-detail rows of items 32-35 in rules/forms/1701q-v2018/fields.json carry enabled_when \"Statically disabled payment-detail field; no form state transition enables this control for direct entry.\"; the same 16 keys were already hidden at pr0b-push in schema-overrides.json, and a blank draft prints blank.",
+   "status": "not_a_bug"
+  },
+  "R6.0": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_spouse_part_opens_from_civil_status_married (maintainer decision 11: items 17-24 are off with 'Needs Civil Status = Married' and a write is refused in the filer's words until Civil Status is Married, then typed values file and print; an estate's return says 'Needs item 7 = Single Proprietor or Professional'); screen_form_module::tests::income_q::form_1701q_leaving_married_asks_first_and_clears_the_spouse_part; screen_form_module::tests::income_q::form_1701q_stored_drafts_open_unchanged; screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form; screen_form_module::tests::a_box_comes_alive_when_its_answer_holds; screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; bir-core forms::form_1701q::tests::civil_status_married_opens_part_ii_and_another_answer_clears_it; screen_form_module::tests::income_q::form_1701q_leaving_married_counts_the_spouse_answers; screen_form_module::tests::income_q::form_1701q_closed_boxes_refuse_a_direct_write_in_the_filer_words (the Part II radio groups are refused while Part II is closed); tools/test_form_q3_income_tax.mjs (the question, Continue, Undo, and a save that retires the Undo); screen_form_module::tests::income_q::form_1701q_leaving_married_counts_a_typed_spouse_penalty",
+   "status": "fixed"
+  },
+  "R6.1": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (36B-44B follow item 25 Graduated Rates, 37B and 39B item 25A Itemized Deduction; the A boxes follow item 16); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers (1701Q spouse states); bir-core sample_payloads::agent_forms::agent_forms_are_derived_from_the_samples (the second 1701Q probe sample binds 36B-44B)",
+   "status": "fixed"
+  },
+  "R6.2": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (55B and 64B say 'Needs item 20 other than II011 Compensation Income' for a compensation earner only, and every column B box 'Needs Civil Status = Married' with no spouse); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::income_q::form_1701q_closed_boxes_refuse_a_direct_write_in_the_filer_words (64B-66B for a compensation earner only: no Edit, faded, refused)",
+   "status": "fixed"
+  },
+  "R6.3": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (a compensation earner only at item 19 leaves only II011: the other item 20 boxes say 'Needs item 19 = Single Proprietor or Professional'); screen_form_module::tests::income_q::form_1701q_spouse_part_opens_from_civil_status_married",
+   "status": "fixed"
+  },
+  "R6.4": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (47B, 48B and 50B say 'Needs item 25 = 8%' on graduated rates and open on 8%); screen_form_module::tests::income_q::form_1701q_page_and_print_agree_on_the_boxes_called_constants (47A, 48A, 50A take what is typed on 8%); bir-core sample_payloads::agent_forms::agent_forms_are_derived_from_the_samples",
+   "status": "fixed"
+  },
+  "R6.5": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (item 25's boxes say 'Needs item 20 other than II011 Compensation Income' for a compensation earner only); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers",
+   "status": "fixed"
+  },
+  "R6.6": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (item 25A says 'Needs item 25 = Graduated Rates' on 8%); screen_form_module::tests::income_q::form_1701q_page_and_print_agree_on_the_boxes_called_constants (25A is bound to the spouse's method and prints as shown)",
+   "status": "fixed"
+  },
+  "R6.7": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_spouse_part_opens_from_civil_status_married (item 23 opens with the rest of Part II on Married and closes on an estate's or trust's return); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form",
+   "status": "fixed"
+  },
+  "R6.8": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (item 43's '(specify)' box says 'Needs the graduated income tax rate' while no party files Schedule I; the compute keeps the text, so the host refuses a write there, rows_income_q.rs Cell::Specify); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::income_q::form_1701q_closed_boxes_refuse_a_direct_write_in_the_filer_words (item 43 refused in the filer's words, then taken on graduated rates)",
+   "status": "fixed"
+  },
+  "R6.9": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (item 48's '(specify)' box is open on 8% and says 'Needs the 8% income tax rate' otherwise); screen_form_module::tests::the_off_check_agrees_with_each_box_alone_across_answers; screen_form_module::tests::income_q::form_1701q_closed_boxes_refuse_a_direct_write_in_the_filer_words (item 48 refused in the filer's words)",
+   "status": "fixed"
+  },
+  "R6.10": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (52A says 'Needs the 8% income tax rate and an ATC other than II016' on II016); bir-core sample_payloads::agent_forms::agent_forms_are_derived_from_the_samples (52A binds to /amounts/item_52/taxpayer); bir-core sample_payloads::form_1701q::form_1701q_item_52a_round_trips_through_the_editable_save (52A, typeable now, survives export and import)",
+   "status": "fixed"
+  },
+  "R6.11": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (52B opens on the spouse's 8% rate and says 'Needs item 25 = 8% and item 20 other than II016' on II016); bir-core sample_payloads::form_1701q::form_1701q_import_keeps_its_penalties (52B restored by the import)",
+   "status": "fixed"
+  },
+  "R6.12": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (59A opens on Amended Return Yes); screen_form_module::tests::income_q::form_1701q_an_answer_that_clears_typed_amounts_asks_first (Amended Return No asks before it clears 59A); screen_form_module::tests::a_box_another_answer_turns_off_says_why_on_every_form",
+   "status": "fixed"
+  },
+  "R6.13": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_conditional_boxes_say_what_turns_them_on (59B says 'Needs Amended Return = Yes' for a married filer and opens on Yes; with no spouse it says 'Needs Civil Status = Married')",
+   "status": "fixed"
+  },
+  "R8.0": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_penalties_are_computed_and_a_typed_one_overrides (items 64-66 show the shared model's amounts from item 63, surcharge 25% and interest 12% a year from the calendar's 15 May deadline, locked until Edit penalties; a typed one files and items 67, 29 and 31 follow); screen_form_module::tests::penalties_are_computed_and_one_edit_overrides_all_three_on_every_form (1701Q's two groups); bir-core sample_payloads::form_1701q::form_1701q_penalty_items_follow_the_shared_model (a column stored before the model, penalty_model_version 0, files its typed amounts, a zero too, until one is typed, then joins the model); bir-core sample_payloads::form_1701q::form_1701q_import_keeps_its_penalties; bir-core sample_payloads::form_1701q::form_1701q_a_draft_stored_with_the_old_q3_deadline_is_not_late_when_queued; bir-core calendar_rules::tests::form_1701q_quarters_are_due_may_15_august_15_and_november_15; screen_form_module::tests::income_q::form_1701q_stored_drafts_open_unchanged (a draft stored with no penalty keys opens as stored and saves back without them); screen_form_module::tests::income_q::form_1701q_a_base_era_row_saves_back_byte_identically (a row stored with both keys at their default saves back with them, byte for byte); screen_form_module::tests::income_q::form_1701q_penalties_kept_as_entered_say_so_and_go_computed_in_one_step (such a column is locked as 'kept as entered before penalties were computed', and Use the computed amounts gives the computed amounts)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_items_follow_the_printed_sheet (the page counter txtCurrentPage is not drawn; Line of Business and the contact number, which the sheet does not print, are in Not on the printed sheet)",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_items_follow_the_printed_sheet (item 49 'Total Income for the quarter (Sum of Items 47 and 48)' sits in Schedule II between 48 and 50, and no item is headed by the centavos note; the page shows printed item 49, which the finding called item 43)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_items_follow_the_printed_sheet (item 25A offers 'Itemized Deduction' and 'Optional Standard Deduction (OSD)', from its writer-cells captions)",
+   "status": "fixed"
+  },
+  "manual-3": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_item_11_is_one_date_stored_as_three_boxes (item 11 is marked one_date and its three boxes file and print as before); tools/test_form_q3_income_tax.mjs (the page shows one box reading 'May 17, 1980', typed or picked, and sends MM, DD and YYYY together) (just shell-ui-test)",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1701q_page_and_print_agree_on_the_boxes_called_constants (the quarter boxes follow the draft's quarter on page and print for each quarter; 36B-44B, 47A-52A and item 25A, which the probe never saw written, are bound now and the print fills what the page shows); bir-core sample_payloads::agent_forms::agent_forms_are_derived_from_the_samples",
+   "status": "fixed"
+  }
+ },
+ "1702Q": {
+  "R3.1": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1702q_items_follow_the_printed_sheet (item 13 reads Yes and No, its writer-cells captions '13 Tax relief? Yes' and '13 Tax relief? No')",
+   "status": "fixed"
+  },
+  "R3.2": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1702q_items_follow_the_printed_sheet (the other-credits rows are Schedule 4 items 6a and 6b with Specify and Amount; their row checkboxes, 'not on the paper form' in writer-cells not_joined, are not drawn); screen_form_module::tests::income_q::form_1702q_schedules_take_their_entries_once_item_5_has_an_atc (the rows take what is typed and print it)",
+   "status": "fixed"
+  },
+  "manual-0": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1702q_items_follow_the_printed_sheet (Schedules 1-4 are parts of their own, each item numbered and captioned as its writer-cells caption 'Schedule N Item M ...', badges at most three characters); screen_form_module::tests::income_q::form_1702q_schedules_take_their_entries_once_item_5_has_an_atc (their entries, locked before, are typed once item 5 has an ATC and say so until then); screen_form_module::tests::income_q::form_1702q_a_gated_box_refuses_a_write_with_what_it_needs; screen_form_module::tests::income_q::form_1702q_osd_asks_before_it_replaces_typed_deductions; screen_form_module::tests::income_q::form_1702q_a_batch_that_opens_item_15_takes_it",
+   "status": "fixed"
+  },
+  "manual-1": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1702q_items_follow_the_printed_sheet (the page 2 header copy and the page counter are not drawn; Schedule 4 ends with its own total, item 7. The 'various-details total' resultOtherSpecify is not a box of the sheet or of the official page, rules/forms/1702q-v2018c/fields.json page null, and the upload carries its default 0.00, so it is not drawn either)",
+   "status": "fixed"
+  },
+  "manual-2": {
+   "pr": "PR 5",
+   "proof": "screen_form_module::tests::income_q::form_1702q_items_follow_the_printed_sheet (item 2 reads 'Year Ended (MM/20YY)'; item 5 'Alphanumeric Tax Code (ATC)' offers 'IC 055 Minimum Corporate Income Tax (MCIT)' and 'Other ATC' with its list)",
+   "status": "fixed"
+  },
+  "preview.0": {
+   "reason": "The quarter boxes are the return's own period (the draft's quarter, the return's identity): form_1702q.rs to_bir_field_map writes rbQuarter_1..3 from self.quarter, which the page and the print both read, for every quarter (screen_form_module::tests::income_q::form_1702q_quarter_boxes_agree_with_the_print). Nothing is a constant. The probe's unmapped note for rbQuarter_1 ('written by the app without a draft field') stays because no sample draft is a first-quarter return; with the second- and third-quarter samples rbQuarter_2 and rbQuarter_3 read as derived from /quarter.",
+   "reviewer": "Agree (PR 5 review): form_1702q.rs derives rbQuarter_1..3 from self.quarter for page and print, and form_1702q_quarter_boxes_agree_with_the_print asserts page and printed values for Q1-Q3.",
+   "status": "not_a_bug"
+  }
+ }
+}

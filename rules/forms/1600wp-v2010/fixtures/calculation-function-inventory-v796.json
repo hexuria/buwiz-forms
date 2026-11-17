@@ -1,0 +1,286 @@
+{
+    "source_sha256":  "e33af59157e1083432cdfc360f648e06602caab75167a27fbb89a08853cb9420",
+    "function_count":  21,
+    "functions":  [
+                      {
+                          "name":  "atcPropertyJS",
+                          "start_line":  2006,
+                          "end_line":  2026,
+                          "body_sha256":  "b1a05f147461282d9b961a8e60c7cd44f9f57041317f2efc4a9ac5a7a873a71b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadXMLATC",
+                          "start_line":  2027,
+                          "end_line":  2047,
+                          "body_sha256":  "95e244428d2e02077be1bd47fb61832bd3bda0b847d2e0d1f445c9d2ee712598",
+                          "alerts":  [
+                                         "responseATC.innerHTML"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadATC",
+                          "start_line":  2048,
+                          "end_line":  2094,
+                          "body_sha256":  "15404176c9d085d400da752adb6f72d85b531e2969ca05eed38c7af78174e740",
+                          "alerts":  [
+                                         "\u00271600WP successfully created array #\u0027+i",
+                                         "\u00271600WP not found in array #\u0027+i"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadDataATCRow",
+                          "start_line":  2176,
+                          "end_line":  2194,
+                          "body_sha256":  "1bed8059eaba0376ef57d41ef9bd1087d7e0b686d0a6a17aed3ab79f9125a603",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtAddress",
+                                              "frm1600WP:txtTaxpayerName"
+                                          ]
+                      },
+                      {
+                          "name":  "disableallShedIIATC",
+                          "start_line":  3135,
+                          "end_line":  3148,
+                          "body_sha256":  "80375c0234e46704a4242258934f99b8ef893acf2535503c5ea88db7a0d2e3db",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:amount",
+                                              "frm1600WP:dtSched:btnATCcode",
+                                              "frm1600WP:dtSched:drpAtcCode",
+                                              "frm1600WP:dtSched:naturePayment",
+                                              "frm1600WP:dtSched:taxWithheld",
+                                              "frm1600WP:dtSched:txtFullname",
+                                              "frm1600WP:dtSched:txtRatePercent",
+                                              "frm1600WP:dtSched:txtTin"
+                                          ]
+                      },
+                      {
+                          "name":  "enableallShedIIATC",
+                          "start_line":  3149,
+                          "end_line":  3156,
+                          "body_sha256":  "f8933e3f85bf399d364566242a6a724aab25af2cf9e7e29503442753ee8636da",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:btnATCcode"
+                                          ]
+                      },
+                      {
+                          "name":  "getPrivateWithholdingAgentATC",
+                          "start_line":  3399,
+                          "end_line":  3420,
+                          "body_sha256":  "0de612b3da85b05feb706590adb4155943a842a138ae82556763247f51d7a84a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getGovernmentWithholdingAgentATC",
+                          "start_line":  3421,
+                          "end_line":  3444,
+                          "body_sha256":  "d7bdd41d800505adea3377ac75dfb553a3a66c88353fc9028fc1792430f40d86",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getRequiredWithheld",
+                          "start_line":  3445,
+                          "end_line":  3449,
+                          "body_sha256":  "dbe585a4ca68f47e0f1594249d3dd57e328385a0ab1391e1c07389812341a7a9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtTaxBase",
+                                              "frm1600WP:txtTaxbeWithHeld",
+                                              "frm1600WP:txtTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "cancelAllCompute",
+                          "start_line":  3450,
+                          "end_line":  3468,
+                          "body_sha256":  "6c2a8119f6a2300f47a1c39b26583bc826890a206ebc814be5f19cebad806d60",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:AnyTaxHeld_1"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  3485,
+                          "end_line":  3492,
+                          "body_sha256":  "6fea4938511f9c59129b01295dc401f47da0b38b1949e5a215c43a5f04d67860",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtTax15A",
+                                              "frm1600WP:txtTax15B",
+                                              "frm1600WP:txtTax15C",
+                                              "frm1600WP:txtTax15D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOfTotalAmtDue",
+                          "start_line":  3493,
+                          "end_line":  3500,
+                          "body_sha256":  "e9c2c4edce012340cd3ea7d6fba3810a6eb83e6ccba319bfb01454da56e7caf2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtTax14",
+                                              "frm1600WP:txtTax15D",
+                                              "frm1600WP:txtTax16"
+                                          ]
+                      },
+                      {
+                          "name":  "computeofTotalWithheldTax",
+                          "start_line":  3501,
+                          "end_line":  3516,
+                          "body_sha256":  "20c1f4a72fddd5c21e5fa1a32cfce3b51087b6ab7274db4c08e1dee4a0b82c91",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtTax12",
+                                              "frm1600WP:txtTax13",
+                                              "frm1600WP:txtTax14",
+                                              "frm1600WP:txtTaxbeWithHeld"
+                                          ]
+                      },
+                      {
+                          "name":  "computeDtShedTaxWithheld",
+                          "start_line":  3517,
+                          "end_line":  3528,
+                          "body_sha256":  "578a53b0f29f5d5a38798b12ba0f023a4a1cd7b941b42ec832ded888a9584eae",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:amount",
+                                              "frm1600WP:dtSched:taxWithheld",
+                                              "frm1600WP:dtSched:TotaltaxWithheld",
+                                              "frm1600WP:dtSched:txtRatePercent"
+                                          ]
+                      },
+                      {
+                          "name":  "changedrpATCList",
+                          "start_line":  3529,
+                          "end_line":  3557,
+                          "body_sha256":  "d6bfb1ac1dbf1e65fe30076a74dbe77a6d4205cec38779c52ff81cfb99e04435",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "showPartIIATC",
+                          "start_line":  3591,
+                          "end_line":  3618,
+                          "body_sha256":  "8b436448de57e1f6ec9440962267f9c292d607efa2b5924ebaeff45463716136",
+                          "alerts":  [
+                                         "checkiftaxwheldisYes()"
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtAtcCode",
+                                              "frm1600WP:txtTaxBase"
+                                          ]
+                      },
+                      {
+                          "name":  "showSchedIIATC",
+                          "start_line":  3619,
+                          "end_line":  3637,
+                          "body_sha256":  "d9901608a7877920e380ef9236f2f885feb1b49ed05cf37c0c0a53144c26f386",
+                          "alerts":  [
+                                         "checkiftaxwheldisYes()"
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:btnATCcode1"
+                                          ]
+                      },
+                      {
+                          "name":  "cancelPartIIATC",
+                          "start_line":  3638,
+                          "end_line":  3657,
+                          "body_sha256":  "fff0bd1d153c3d74ddbd78e9ddd260720f4a112f0d89408b87e26cd383f6d532",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelSchedIIATC",
+                          "start_line":  3658,
+                          "end_line":  3668,
+                          "body_sha256":  "3ad54fe96edd994e95ba642264a9a7747e215e16ab4ec43c1af85a6d703499c0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getSchedIIATCCode",
+                          "start_line":  3669,
+                          "end_line":  3688,
+                          "body_sha256":  "31517991269bf30d6955d43d222836bf61674458ff18e442070a3dac6eb7548e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:dtSched:drpAtcCode",
+                                              "frm1600WP:dtSched:naturePayment",
+                                              "frm1600WP:dtSched:txtRatePercent"
+                                          ]
+                      },
+                      {
+                          "name":  "getATCCode",
+                          "start_line":  3689,
+                          "end_line":  3739,
+                          "body_sha256":  "919f7ab35afb1af8999a2da9179f766c31e31c964cd957667f3bf62ee872e55a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1600WP:txtAtcCode",
+                                              "frm1600WP:txtTaxBase",
+                                              "frm1600WP:txtTaxbeWithHeld",
+                                              "frm1600WP:txtTaxRate"
+                                          ]
+                      }
+                  ]
+}

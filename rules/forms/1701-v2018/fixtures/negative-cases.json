@@ -1,0 +1,407 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1701-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Only nonblankness is checked during Save.",
+                      "rule_id":  "1701-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1701-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer RDO select value equals literal 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "Blank RDO can pass because the check is equality to 000 rather than required/non-placeholder validation.",
+                      "rule_id":  "1701-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1701-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The first active failing branch alerts and returns.",
+                      "rule_id":  "1701-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1701-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Short-period return is Yes and month value loosely equals 00."
+                                    },
+                      "expected_message":  "Please choose a month on page 1 Item 1.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-001"
+                  },
+                  {
+                      "case_id":  "case-05-1701-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on page 1 Item 1.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-002"
+                  },
+                  {
+                      "case_id":  "case-06-1701-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is greater than the current system year."
+                                    },
+                      "expected_message":  "Invalid date entry on page 1 Item 1. Entry should not be later than Current Date.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-003"
+                  },
+                  {
+                      "case_id":  "case-07-1701-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is below 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on page 1 Item 1. Entry should not be lower than 1900.",
+                      "expected_behavior":  "This branch is shadowed for years below 2018 by the later revision check only when reached; it still emits its own message first.",
+                      "rule_id":  "1701-validate-004"
+                  },
+                  {
+                      "case_id":  "case-08-1701-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return year is below 2018."
+                                    },
+                      "expected_message":  "Please file using the old version of the form.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-005"
+                  },
+                  {
+                      "case_id":  "case-09-1701-validate-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer type radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 6.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-006"
+                  },
+                  {
+                      "case_id":  "case-10-1701-validate-007",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer ATC II011 through II017 is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 7.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-007"
+                  },
+                  {
+                      "case_id":  "case-11-1701-validate-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Birth date is nonblank and validateMonthDayYearDate returns true."
+                                    },
+                      "expected_message":  "Invalid birth date on page 1 item 10.  Please check date format.",
+                      "expected_behavior":  "The helper permits month 00 and uses a defective isNaN expression.",
+                      "rule_id":  "1701-validate-008"
+                  },
+                  {
+                      "case_id":  "case-12-1701-validate-009",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Birth date is blank."
+                                    },
+                      "expected_message":  "Please indicate birth date on page 1 item 10.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-009"
+                  },
+                  {
+                      "case_id":  "case-13-1701-validate-010",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Parsed birth year is later than current system year."
+                                    },
+                      "expected_message":  "Birth year on page 1 Item 10 should not be later than current year.",
+                      "expected_behavior":  "Only the year component is compared; future dates within the current year pass.",
+                      "rule_id":  "1701-validate-010"
+                  },
+                  {
+                      "case_id":  "case-14-1701-validate-011",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Citizenship is blank."
+                                    },
+                      "expected_message":  "Please fill up citizenship on page 1 Item 12.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-011"
+                  },
+                  {
+                      "case_id":  "case-15-1701-validate-012",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Foreign-tax-credit Yes is selected and foreign tax number is blank."
+                                    },
+                      "expected_message":  "Please fill up foreign tax number on page 1 Item 14.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-012"
+                  },
+                  {
+                      "case_id":  "case-16-1701-validate-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No civil status radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 16.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-013"
+                  },
+                  {
+                      "case_id":  "case-17-1701-validate-014",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Civil status is Married and neither spouse-income choice is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 17.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-014"
+                  },
+                  {
+                      "case_id":  "case-18-1701-validate-015",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse-income Yes is selected and neither filing-status choice is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 18.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-015"
+                  },
+                  {
+                      "case_id":  "case-19-1701-validate-016",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither taxpayer exempt-income choice is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 19.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-016"
+                  },
+                  {
+                      "case_id":  "case-20-1701-validate-017",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither taxpayer special-rate-income choice is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 20.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-017"
+                  },
+                  {
+                      "case_id":  "case-21-1701-validate-018",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No taxpayer tax-rate choice is selected and taxpayer is not compensation-income-only."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 21.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-018"
+                  },
+                  {
+                      "case_id":  "case-22-1701-validate-019",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer graduated rate is selected, taxpayer is not compensation-only, and neither deduction method is selected."
+                                    },
+                      "expected_message":  "Please select an option for page 1 Item 21A.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-019"
+                  },
+                  {
+                      "case_id":  "case-23-1701-validate-020",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer Item 25A exceeds 50% of taxpayer Item 22 tax due."
+                                    },
+                      "expected_message":  "Amount in page 1 Item 25A cannot be more than 50% of Item 22.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-020"
+                  },
+                  {
+                      "case_id":  "case-24-1701-validate-021",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse Item 25B exceeds 50% of spouse Item 22 tax due."
+                                    },
+                      "expected_message":  "Amount in page 1 Item 25B cannot be more than 50% of Item 22.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-021"
+                  },
+                  {
+                      "case_id":  "case-25-1701-validate-022",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any Schedule 5 item 1, 2, 4, or 5 has amount without description/legal basis, or description/legal basis without a nonzero amount."
+                                    },
+                      "expected_message":  "Please complete details in Page 3 Schedule 5 Item #\u003ci\u003e.",
+                      "expected_behavior":  "The helper compares formatted amount strings directly to numeric zero.",
+                      "rule_id":  "1701-validate-022"
+                  },
+                  {
+                      "case_id":  "case-26-1701-validate-023",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Aggregate Item 32 is negative and no overpayment disposition is selected."
+                                    },
+                      "expected_message":  "Please select an Overpayment option on Page 1 Part II.",
+                      "expected_behavior":  "The branch alerts, navigates where coded, and stops validation.",
+                      "rule_id":  "1701-validate-023"
+                  },
+                  {
+                      "case_id":  "case-27-1701-validate-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All active ordered validation branches pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "The first active failing branch alerts and returns.",
+                      "rule_id":  "1701-validate-success"
+                  },
+                  {
+                      "case_id":  "case-28-1701-spouse-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any spouse TIN segment or branch code length is at most 2."
+                                    },
+                      "expected_message":  "You have entered an invalid TIN format for Spouse.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-001"
+                  },
+                  {
+                      "case_id":  "case-29-1701-spouse-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse TIN checksum helper returns nonzero."
+                                    },
+                      "expected_message":  "dynamic: getChkTinErrDesc(tinChkCode) + \" on Page 2 Part IV Item 1.\"",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-002"
+                  },
+                  {
+                      "case_id":  "case-30-1701-spouse-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse RDO select has selectedIndex 0."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Page 2 Part IV Item 2.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-003"
+                  },
+                  {
+                      "case_id":  "case-31-1701-spouse-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No spouse filer type is selected."
+                                    },
+                      "expected_message":  "Please select a Filer type for Spouse on Page 2 Part IV Item 3.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-004"
+                  },
+                  {
+                      "case_id":  "case-32-1701-spouse-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No spouse ATC II011 through II017 is selected."
+                                    },
+                      "expected_message":  "Please select an ATC code for Spouse on Page 2 Part IV Item 4.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-005"
+                  },
+                  {
+                      "case_id":  "case-33-1701-spouse-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse name is blank."
+                                    },
+                      "expected_message":  "Please enter a name for Spouse on Page 2 Part IV Item 5.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-006"
+                  },
+                  {
+                      "case_id":  "case-34-1701-spouse-007",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a contact number for Spouse on Page 2 Part IV Item 6.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-007"
+                  },
+                  {
+                      "case_id":  "case-35-1701-spouse-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse contact number length is 1 through 5."
+                                    },
+                      "expected_message":  "Please enter a valid contact number for Spouse on Page 2 Part IV Item 6.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-008"
+                  },
+                  {
+                      "case_id":  "case-36-1701-spouse-009",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse citizenship is blank."
+                                    },
+                      "expected_message":  "Please enter a citizenship for Spouse on Page 2 Part IV Item 7.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-009"
+                  },
+                  {
+                      "case_id":  "case-37-1701-spouse-010",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither spouse foreign-tax-credit choice is selected."
+                                    },
+                      "expected_message":  "Please select a Foreign Tax Credit for Spouse on Page 2 Part IV Item 8.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-010"
+                  },
+                  {
+                      "case_id":  "case-38-1701-spouse-011",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse foreign-tax-credit Yes is selected and foreign tax number is blank."
+                                    },
+                      "expected_message":  "Please select a Foreign Tax Number for Spouse on Page 2 Part IV Item 9.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-011"
+                  },
+                  {
+                      "case_id":  "case-39-1701-spouse-012",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither spouse exempt-income choice is selected."
+                                    },
+                      "expected_message":  "Please select an option for Spouse on Page 2 Part IV Item 10.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-012"
+                  },
+                  {
+                      "case_id":  "case-40-1701-spouse-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither spouse special-rate-income choice is selected."
+                                    },
+                      "expected_message":  "Please select an option for Spouse on Page 2 Part IV Item 11.",
+                      "expected_behavior":  "This helper runs only when joint filing is selected.",
+                      "rule_id":  "1701-spouse-013"
+                  }
+              ]
+}

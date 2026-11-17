@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "form_id": "1702q-v2018c",
+  "cases": [
+    {"case_id":"s1-subtraction","calculation_id":"1702q-s1-item3","inputs":{"1A":100,"2A":25,"1B":50,"2B":10},"official_output":{"3A":75,"3B":40}},
+    {"case_id":"s1-item11-negative-a-bug","calculation_id":"1702q-s1-item11","inputs":{"9A":-100,"10A":30,"9B":-100,"10B":30},"official_output":{"11A":-30,"11B":0},"recommended_output":{"11A":0,"11B":0}},
+    {"case_id":"s1-item13-negative-event-order","calculation_id":"1702q-s1-item13b","inputs":{"11A":10,"11B":5,"12B":20},"official_output":{"13B":-5,"part2_item17":-5},"note":"A later netIncome event can clamp the same values to zero; output depends on event order."},
+    {"case_id":"s2-osd-rounding","calculation_id":"1702q-s2-item6-osd","inputs":{"item5":101},"official_output":40},
+    {"case_id":"s2-tax-floor","calculation_id":"1702q-s2-item11","inputs":{"item9":-1,"item10":30},"official_output":0},
+    {"case_id":"s2-greater-tax","calculation_id":"1702q-s2-item13","inputs":{"item11":20,"item12":30},"official_output":30},
+    {"case_id":"s4-other-total","calculation_id":"1702q-s4-other-total","inputs":{"amounts":[1.25,2.75]},"official_output":4},
+    {"case_id":"part2-item24","calculation_id":"1702q-part2-item24","inputs":{"item21":1,"item22":2,"item23":3},"official_output":6},
+    {"case_id":"part2-item25-normal","calculation_id":"1702q-part2-item25","inputs":{"item20":10,"item24":5},"official_output":15},
+    {"case_id":"part2-item25-overpayment-bug","calculation_id":"1702q-part2-item25","inputs":{"item20":-10,"item24":5},"official_output":5,"recommended_output":-5,"note":"Official branch discards the Item 20 overpayment whenever Item 24 is positive."},
+    {"case_id":"jscript-locale","calculation_id":"runtime-formatting","inputs":{"expression":"(1234.5).toLocaleString('en-US',{style:'currency',currency:'PHP'});"},"official_output":"1,234.50","evidence":"Executed under Windows Script Host JScript; modern options are ignored and no currency symbol is emitted."}
+  ]
+}

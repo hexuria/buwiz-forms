@@ -1,0 +1,454 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/ebirforms/schema/windows-candidate-certification-attestation-v1.schema.json",
+  "title": "External Windows candidate certification attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "scope", "promotion_eligible", "trusted_producer",
+    "operator_only", "attestation_id", "form", "candidate", "collector", "host",
+    "ui_automation", "webview2", "dependencies", "runtime", "preview", "toolbar_export", "native_print",
+    "pdf_validation", "package_security", "integrity", "rollback",
+    "strict_verifier_gaps"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scope": { "const": "external_windows_candidate_certification_attestation" },
+    "promotion_eligible": { "const": false },
+    "trusted_producer": { "const": false },
+    "operator_only": { "const": true },
+    "attestation_id": { "type": "string", "format": "uuid" },
+    "form": { "const": { "code": "2551Q", "revision": "2018" } },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_manifest_sha256", "candidate_archive_sha256",
+        "source_revision", "package_tree_sha256", "binary_sha256",
+        "renderer_bundle_sha256"
+      ],
+      "properties": {
+        "candidate_manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "candidate_archive_sha256": { "$ref": "#/$defs/sha256" },
+        "source_revision": { "$ref": "#/$defs/gitRevision" },
+        "package_tree_sha256": { "$ref": "#/$defs/sha256" },
+        "binary_sha256": { "$ref": "#/$defs/sha256" },
+        "renderer_bundle_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "version", "invocation_id", "started_at_utc",
+        "completed_at_utc", "executable_sha256", "host_identifier_sha256"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "invocation_id": { "type": "string", "minLength": 1 },
+        "started_at_utc": { "type": "string", "format": "date-time" },
+        "completed_at_utc": { "type": "string", "format": "date-time" },
+        "executable_sha256": { "$ref": "#/$defs/sha256" },
+        "host_identifier_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windows_edition", "windows_build", "os_architecture",
+        "process_architecture", "session_id", "elevated",
+        "process_integrity_level", "artifact"
+      ],
+      "properties": {
+        "windows_edition": { "type": "string", "minLength": 1 },
+        "windows_build": { "type": "string", "minLength": 1 },
+        "os_architecture": { "const": "x86_64" },
+        "process_architecture": { "const": "x86_64" },
+        "session_id": { "type": "integer", "minimum": 0 },
+        "elevated": { "const": true },
+        "process_integrity_level": { "const": "High" },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "ui_automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available", "automation_identity", "process_architecture", "artifact"],
+      "properties": {
+        "available": { "const": true },
+        "automation_identity": { "type": "string", "minLength": 1 },
+        "process_architecture": { "const": "x86_64" },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "webview2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_version", "channel", "architecture", "install_scope",
+        "core_webview2_7_available", "core_webview2_16_available",
+        "executable", "artifact"
+      ],
+      "properties": {
+        "runtime_version": { "type": "string", "minLength": 1 },
+        "channel": { "enum": ["stable", "beta", "dev", "canary", "fixed"] },
+        "architecture": { "const": "x86_64" },
+        "install_scope": { "enum": ["per_machine", "per_user", "fixed"] },
+        "core_webview2_7_available": { "const": true },
+        "core_webview2_16_available": { "const": true },
+        "executable": { "$ref": "#/$defs/fileRecord" },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["msvc_runtime_loaded", "webview2_loader_bound", "artifact"],
+      "properties": {
+        "msvc_runtime_loaded": { "const": true },
+        "webview2_loader_bound": { "const": true },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "non_dev_build", "dev_tools_enabled", "launch_argv", "pid",
+        "network_denial", "artifact"
+      ],
+      "properties": {
+        "non_dev_build": { "const": true },
+        "dev_tools_enabled": { "const": false },
+        "launch_argv": {
+          "type": "array", "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "pid": { "type": "integer", "minimum": 1 },
+        "network_denial": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mechanism", "exercised", "enforced_for_launch", "passed",
+            "binary_sha256", "webview2_executable_sha256", "rule_names",
+            "cleanup_verified", "artifact"
+          ],
+          "properties": {
+            "mechanism": {
+              "type": "string",
+              "allOf": [
+                { "pattern": "Windows Defender Firewall.*outbound block" },
+                { "pattern": "bir\\.exe" },
+                { "pattern": "msedgewebview2\\.exe" }
+              ]
+            },
+            "exercised": { "const": true },
+            "enforced_for_launch": { "const": true },
+            "passed": { "const": true },
+            "binary_sha256": { "$ref": "#/$defs/sha256" },
+            "webview2_executable_sha256": { "$ref": "#/$defs/sha256" },
+            "rule_names": {
+              "type": "array", "minItems": 2, "maxItems": 2,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "cleanup_verified": { "const": true },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercised", "passed", "window_title", "document_run_id",
+        "envelope_sha256", "nonce", "page_count", "geometry_measurements",
+        "artifact"
+      ],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "window_title": { "type": "string", "pattern": "2551Q HTML Form Preview" },
+        "document_run_id": { "type": "string", "minLength": 1 },
+        "envelope_sha256": { "$ref": "#/$defs/sha256" },
+        "nonce": { "type": "integer", "minimum": 1 },
+        "page_count": { "const": 2 },
+        "geometry_measurements": {
+          "type": "array", "minItems": 2, "maxItems": 2,
+          "items": { "$ref": "#/$defs/geometryMeasurement" }
+        },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "toolbar_export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercised", "passed", "control", "save_chooser_exercised",
+        "destination_path", "nonce", "print_to_pdf_hresult",
+        "print_to_pdf_result", "artifact"
+      ],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "control": { "const": "Export PDF" },
+        "save_chooser_exercised": { "const": true },
+        "destination_path": { "type": "string", "minLength": 1 },
+        "nonce": { "type": "integer", "minimum": 1 },
+        "print_to_pdf_hresult": { "const": "S_OK" },
+        "print_to_pdf_result": { "const": true },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "native_print": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercised", "passed", "completed", "printer_name", "job_id",
+        "event_record_id", "document_name", "submitted_at_utc",
+        "completed_at_utc", "total_pages", "completion_status",
+        "output_sha256", "webview2_print_hresult", "webview2_print_status",
+        "artifact"
+      ],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "completed": { "const": true },
+        "printer_name": { "type": "string", "minLength": 1 },
+        "job_id": { "type": "string", "minLength": 1 },
+        "event_record_id": { "type": "integer", "minimum": 1 },
+        "document_name": { "type": "string", "minLength": 1 },
+        "submitted_at_utc": { "type": "string", "format": "date-time" },
+        "completed_at_utc": { "type": "string", "format": "date-time" },
+        "total_pages": { "const": 2 },
+        "completion_status": { "const": "Completed" },
+        "output_sha256": {
+          "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+        },
+        "webview2_print_hresult": { "const": "S_OK" },
+        "webview2_print_status": { "const": "Succeeded" },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "pdf_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exercised", "passed", "output", "expected_page_count",
+        "actual_page_count", "pages", "content_nonempty", "validated_by",
+        "verifier_executable_sha256", "artifact"
+      ],
+      "properties": {
+        "exercised": { "const": true },
+        "passed": { "const": true },
+        "output": { "$ref": "#/$defs/fileRecord" },
+        "expected_page_count": { "const": 2 },
+        "actual_page_count": { "const": 2 },
+        "pages": {
+          "type": "array", "minItems": 2, "maxItems": 2,
+          "items": { "$ref": "#/$defs/pdfPage" }
+        },
+        "content_nonempty": { "const": true },
+        "validated_by": { "const": "bir-print::html_output::validate_pdf_file" },
+        "verifier_executable_sha256": { "$ref": "#/$defs/sha256" },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "package_security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authenticode", "distribution_policy"],
+      "properties": {
+        "authenticode": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "passed", "status", "binary_sha256", "signer_subject",
+            "signer_issuer", "signer_serial_number", "signer_thumbprint",
+            "code_signing_eku", "file_digest_algorithm",
+            "timestamp_signature_present", "timestamp_subject",
+            "timestamp_thumbprint", "timestamp_time_utc",
+            "timestamp_digest_algorithm", "chain_trusted",
+            "signtool_policy", "artifact"
+          ],
+          "properties": {
+            "passed": { "const": true },
+            "status": { "const": "Valid" },
+            "binary_sha256": { "$ref": "#/$defs/sha256" },
+            "signer_subject": { "type": "string", "minLength": 1 },
+            "signer_issuer": { "type": "string", "minLength": 1 },
+            "signer_serial_number": { "type": "string", "minLength": 1 },
+            "signer_thumbprint": { "$ref": "#/$defs/certificateThumbprint" },
+            "code_signing_eku": { "const": true },
+            "file_digest_algorithm": { "const": "SHA256" },
+            "timestamp_signature_present": { "const": true },
+            "timestamp_subject": { "type": "string", "minLength": 1 },
+            "timestamp_thumbprint": { "$ref": "#/$defs/certificateThumbprint" },
+            "timestamp_time_utc": { "type": "string", "format": "date-time" },
+            "timestamp_digest_algorithm": { "const": "SHA256" },
+            "chain_trusted": { "const": true },
+            "signtool_policy": { "const": "/pa /all /v" },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        },
+        "distribution_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidate_format", "distribution_track", "candidate_contains_installer",
+            "public_release_formats", "public_release_allows_msix",
+            "store_msix_policy", "msix_certification_claimed",
+            "public_installer_certification_claimed",
+            "installed_payload_certification_claimed", "artifact"
+          ],
+          "properties": {
+            "candidate_format": { "const": "portable_zip" },
+            "distribution_track": { "const": "portable_candidate" },
+            "candidate_contains_installer": { "const": false },
+            "public_release_formats": {
+              "const": ["signed_inno_setup_exe", "signed_msi"]
+            },
+            "public_release_allows_msix": { "const": false },
+            "store_msix_policy": { "const": "separate_store_only_certification_blocked" },
+            "msix_certification_claimed": { "const": false },
+            "public_installer_certification_claimed": { "const": false },
+            "installed_payload_certification_claimed": { "const": false },
+            "artifact": { "$ref": "#/$defs/fileRecord" }
+          }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package_tree_sha256_before", "package_tree_sha256_after",
+        "destination_before", "destination_after", "draft_before", "draft_after",
+        "temporary_files_manifest"
+      ],
+      "properties": {
+        "package_tree_sha256_before": { "$ref": "#/$defs/sha256" },
+        "package_tree_sha256_after": { "$ref": "#/$defs/sha256" },
+        "destination_before": { "$ref": "#/$defs/fileRecord" },
+        "destination_after": { "$ref": "#/$defs/fileRecord" },
+        "draft_before": { "$ref": "#/$defs/fileRecord" },
+        "draft_after": { "$ref": "#/$defs/fileRecord" },
+        "temporary_files_manifest": { "$ref": "#/$defs/fileRecord" }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cases", "destination_preserved", "temporary_files_remaining",
+        "draft_unchanged"
+      ],
+      "properties": {
+        "cases": {
+          "type": "array", "minItems": 24, "maxItems": 24,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/rollbackCase" }
+        },
+        "destination_preserved": { "const": true },
+        "temporary_files_remaining": { "const": 0 },
+        "draft_unchanged": { "const": true }
+      }
+    },
+    "strict_verifier_gaps": {
+      "type": "array", "minItems": 2,
+      "items": { "type": "string", "minLength": 1 },
+      "allOf": [
+        { "contains": { "const": "collector producer is not registered as trusted" } },
+        { "contains": { "const": "public EXE/MSI and installed-tree certification remain separate and incomplete" } }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitRevision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "certificateThumbprint": { "type": "string", "pattern": "^[0-9A-F]{40}$" },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byte_count", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byte_count": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "geometryMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurement_index", "page_width_pt", "page_height_pt", "pages",
+        "clipping_count", "overflow_count"
+      ],
+      "properties": {
+        "measurement_index": { "type": "integer", "minimum": 1, "maximum": 2 },
+        "page_width_pt": { "const": 612 },
+        "page_height_pt": { "const": 936 },
+        "pages": {
+          "type": "array", "minItems": 2, "maxItems": 2,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["page", "x", "y", "width_pt", "height_pt"],
+            "properties": {
+              "page": { "type": "integer", "minimum": 1, "maximum": 2 },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "width_pt": { "const": 612 },
+              "height_pt": { "const": 936 }
+            }
+          }
+        },
+        "clipping_count": { "const": 0 },
+        "overflow_count": { "const": 0 }
+      }
+    },
+    "pdfPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page", "media_width_pt", "media_height_pt", "crop_width_pt",
+        "crop_height_pt", "rotation", "content_byte_count"
+      ],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1, "maximum": 2 },
+        "media_width_pt": { "const": 612 },
+        "media_height_pt": { "const": 936 },
+        "crop_width_pt": { "const": 612 },
+        "crop_height_pt": { "const": 936 },
+        "rotation": { "const": 0 },
+        "content_byte_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "rollbackCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "passed", "artifact"],
+      "properties": {
+        "name": {
+          "enum": [
+            "release_ready_false", "kill_switch", "missing_assets", "renderer_error",
+            "late_renderer_error", "readiness_timeout", "invalid_geometry",
+            "rejected_pdf", "destination_preserved", "no_temp_leaks", "draft_unchanged",
+            "missing_webview2_runtime", "old_webview2_runtime",
+            "missing_core_webview2_7", "missing_core_webview2_16",
+            "print_hresult_failure", "print_status_failure",
+            "print_to_pdf_hresult_failure", "print_to_pdf_result_failure",
+            "printer_unavailable", "invalid_authenticode",
+            "missing_authenticode_timestamp", "package_tree_mismatch",
+            "firewall_cleanup"
+          ]
+        },
+        "passed": { "const": true },
+        "artifact": { "$ref": "#/$defs/fileRecord" }
+      }
+    }
+  }
+}

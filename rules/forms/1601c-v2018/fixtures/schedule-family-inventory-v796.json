@@ -1,0 +1,98 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "observed_indices":  [
+                             0,
+                             1,
+                             2
+                         ],
+    "source_unbounded":  true,
+    "family_count":  8,
+    "families":  [
+                     {
+                         "label":  "Schedule I row N delete selector",
+                         "key":  "chkScheduleDelete{N\u003e=0}",
+                         "default":  "false",
+                         "source":  "official-hta-runtime#addSchedule:L3369-L3384",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  null,
+                         "logical":  "boolean"
+                     },
+                     {
+                         "label":  "Schedule I row N applicable month/year",
+                         "key":  "frm1601c:sched1:txtMonthYear{N\u003e=0}",
+                         "default":  "",
+                         "source":  "official-hta-runtime#addSchedule:L3372",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  7,
+                         "logical":  "month-year"
+                     },
+                     {
+                         "label":  "Schedule I row N date paid",
+                         "key":  "frm1601c:sched1:txtDatePaid{N\u003e=0}",
+                         "default":  "",
+                         "source":  "official-hta-runtime#addSchedule:L3373",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  10,
+                         "logical":  "date"
+                     },
+                     {
+                         "label":  "Schedule I row N bank code",
+                         "key":  "frm1601c:sched1:txtBankCode{N\u003e=0}",
+                         "default":  "",
+                         "source":  "official-hta-runtime#addSchedule:L3374",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  20,
+                         "logical":  "code"
+                     },
+                     {
+                         "label":  "Schedule I row N payment number",
+                         "key":  "frm1601c:sched1:txtNumber{N\u003e=0}",
+                         "default":  "",
+                         "source":  "official-hta-runtime#addSchedule:L3375",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  20,
+                         "logical":  "string"
+                     },
+                     {
+                         "label":  "Schedule I row N tax paid",
+                         "key":  "frm1601c:sched1:txtTaxPaid{N\u003e=0}",
+                         "default":  "0.00",
+                         "source":  "official-hta-runtime#addSchedule:L3376",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  25,
+                         "logical":  "decimal-amount"
+                     },
+                     {
+                         "label":  "Schedule I row N tax that should have been paid",
+                         "key":  "frm1601c:sched1:txtShouldTaxDue{N\u003e=0}",
+                         "default":  "0.00",
+                         "source":  "official-hta-runtime#addSchedule:L3381",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  false,
+                         "max":  25,
+                         "logical":  "decimal-amount"
+                     },
+                     {
+                         "label":  "Schedule I row N adjustment",
+                         "key":  "frm1601c:sched1:txtAdjustments{N\u003e=0}",
+                         "default":  "0.00",
+                         "source":  "official-hta-runtime#addSchedule:L3382",
+                         "kind":  "runtime-indexed-family",
+                         "computed":  true,
+                         "max":  25,
+                         "logical":  "decimal-amount"
+                     }
+                 ],
+    "source_refs":  [
+                        "official-hta-runtime#loadSchedule:L3297-L3347",
+                        "official-hta-runtime#addSchedule:L3349-L3385",
+                        "official-hta-runtime#deleteSchedule:L3387-L3439"
+                    ]
+}

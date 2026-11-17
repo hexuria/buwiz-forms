@@ -1,0 +1,21 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "cases":  [
+                  {
+                      "compromise":  30.25,
+                      "surcharge":  10.25,
+                      "calculation_id":  "0605-item20d-penalties",
+                      "case_id":  "penalty-sum",
+                      "official_output":  60.75,
+                      "interest":  20.25
+                  },
+                  {
+                      "case_id":  "total-payment",
+                      "penalties":  60.75,
+                      "calculation_id":  "0605-item21-total",
+                      "official_output":  1060.75,
+                      "basic_tax":  1000
+                  }
+              ]
+}

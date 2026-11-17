@@ -1,0 +1,45 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604f-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "row-basic",
+                      "inputs":  {
+                                     "penalties":  5,
+                                     "withheld":  100
+                                 },
+                      "calculation_id":  "1604f-row-total-amount",
+                      "official_output":  "105.00"
+                  },
+                  {
+                      "case_id":  "four-quarter-withheld",
+                      "inputs":  {
+                                     "rows":  [
+                                                  10,
+                                                  20,
+                                                  30,
+                                                  40
+                                              ]
+                                 },
+                      "calculation_id":  "1604f-total-withheld",
+                      "official_output":  "100.00"
+                  },
+                  {
+                      "case_id":  "schedule-total",
+                      "inputs":  {
+                                     "penalty_total":  5,
+                                     "withheld_total":  100
+                                 },
+                      "calculation_id":  "1604f-schedule-total",
+                      "official_output":  "105.00"
+                  },
+                  {
+                      "case_id":  "negative-normalized",
+                      "inputs":  {
+                                     "withheld_entry":  -1
+                                 },
+                      "calculation_id":  "1604f-row-total-amount",
+                      "official_entry_after_blur":  "0.00"
+                  }
+              ]
+}

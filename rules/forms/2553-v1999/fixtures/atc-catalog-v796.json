@@ -1,0 +1,33 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2553-v1999",
+    "source_sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+    "entry_count":  4,
+    "entries":  [
+                    {
+                        "code":  "OT010",
+                        "description":  "PAGCOR",
+                        "catalog_rate":  "5.0",
+                        "runtime_rate":  "5.0"
+                    },
+                    {
+                        "code":  "OT012",
+                        "description":  "OTHERS",
+                        "catalog_rate":  "5.0",
+                        "runtime_rate":  "0.0",
+                        "rate_editable":  true
+                    },
+                    {
+                        "code":  "OT011",
+                        "description":  "CLARK DEVELOPMENT CORPORATIONS",
+                        "catalog_rate":  "5.0",
+                        "runtime_rate":  "5.0"
+                    },
+                    {
+                        "code":  "OT011",
+                        "description":  "SPECIAL/REGULAR/ECONOMIC FREE PORT ZONE ENTERPRISES",
+                        "catalog_rate":  "5.0",
+                        "runtime_rate":  "5.0"
+                    }
+                ]
+}

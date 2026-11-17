@@ -1,0 +1,91 @@
+{
+    "source_sha256":  "426205a6692a9d11a2a91447446d66b947865257261e4260f91ccb242097d87e",
+    "function_count":  6,
+    "functions":  [
+                      {
+                          "name":  "checkiftaxwheldisYes",
+                          "start_line":  2203,
+                          "end_line":  2214,
+                          "body_sha256":  "771c2f2c7426ec87eb961be586a35dacdf4bfbd507f42278c5e696f33c00423e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619E:optcategory:G",
+                                              "frm0619E:optCategory:P",
+                                              "frm0619E:optWithheld:N",
+                                              "frm0619E:optWithheld:Y"
+                                          ]
+                      },
+                      {
+                          "name":  "setInputTextControl_NumberFormatter",
+                          "start_line":  2221,
+                          "end_line":  2227,
+                          "body_sha256":  "780d0ec1ecbbc6738d22ed8a53ab4e71a433dd5ccf324c92f89a64ec8e37af80",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeNetAmtRem",
+                          "start_line":  2228,
+                          "end_line":  2233,
+                          "body_sha256":  "3fe0bef5ca69580d299002fa53726ae18bb040bc61fc397da8c1a12bd31163f5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619E:txtTax14",
+                                              "frm0619E:txtTax15",
+                                              "frm0619E:txtTax16"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  2234,
+                          "end_line":  2240,
+                          "body_sha256":  "5876cea870e10ccc7425ea9dc9b2cb7117bd2a8affc071d3fd300d0c07c0d257",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619E:txtTax17A",
+                                              "frm0619E:txtTax17B",
+                                              "frm0619E:txtTax17C",
+                                              "frm0619E:txtTax17D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAmtRem",
+                          "start_line":  2241,
+                          "end_line":  2245,
+                          "body_sha256":  "f86a40b1f981cb5cf4892950be805f6967bda1f66f699d0518103a164d435e8b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619E:txtTax16",
+                                              "frm0619E:txtTax17D",
+                                              "frm0619E:txtTax18"
+                                          ]
+                      },
+                      {
+                          "name":  "computeDueDate",
+                          "start_line":  2246,
+                          "end_line":  2268,
+                          "body_sha256":  "ab06df4c0cf686fed925c01c5c49bf3fd58b78504e34c478612e34e7bf9b3574",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619E:txtDueMonth",
+                                              "frm0619E:txtDueYear",
+                                              "frm0619E:txtMonth",
+                                              "frm0619E:txtYear"
+                                          ]
+                      }
+                  ]
+}

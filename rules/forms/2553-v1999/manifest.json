@@ -1,0 +1,93 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2553-v1999",
+    "form_code":  "2553",
+    "revision":  "1999-07-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2553.hta",
+                                "sha256":  "67f3bb050668791c87060c0e7f2c20f3215434082ed443f5309bcb3f8e79c2df",
+                                "size":  205713,
+                                "revision_binding":  "July 1999 ENCS runtime."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2553.hta",
+                                "sha256":  "58d0372fdd015518076278ca2445df208053714d499a015d8957730dd00ccf0c",
+                                "size":  14508,
+                                "revision_binding":  "Packaged Form 2553 instructions."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2553v1999\\42792553.pdf",
+                                "sha256":  "e52f96fe48aba2890078f889930744a4e13a4defe1284aa9c5292e2c702a20e5",
+                                "size":  74065,
+                                "revision_binding":  "Local official July 1999 form PDF."
+                            },
+                            {
+                                "asset_id":  "official-atc-catalog",
+                                "kind":  "official-runtime-data",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+                                "size":  153753,
+                                "revision_binding":  "Package ATC catalog filtered by runtime formType 2553."
+                            },
+                            {
+                                "asset_id":  "revision-matched-final-copy",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2553\\2553-final-copy-#email-redacted#.xml",
+                                "sha256":  "424578f78773ec1ae84d8e7b3bace1dfb4e0a02291985eae2fc79804e5f8d09d",
+                                "size":  731,
+                                "revision_binding":  "July 1999 final copy; all 68 source-derived keys match."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  68,
+                   "runtime_field_families":  0,
+                   "fields_total":  68,
+                   "typed_fields":  68,
+                   "validation_rules":  28,
+                   "confirmed_official_bugs":  6,
+                   "calculations":  7,
+                   "negative_fixtures":  23,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "encrypted_keys":  "fixtures/encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "atc_catalog":  "fixtures/atc-catalog-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer, release evidence, migration status, or capability metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "The revision-matched final copy proves 67 static serialized controls plus one runtime RDO selector.",
+                        "No unbounded serialized field families exist in this form."
+                    ]
+}

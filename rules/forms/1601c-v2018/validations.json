@@ -1,0 +1,1496 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Save and Validate alert the first matching active branch and return; blur validators clear invalid dates.",
+    "rules":  [
+                  {
+                      "rule_id":  "1601c-input-001-january-default-bug",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  1,
+                      "condition":  "The form initializes during January.",
+                      "fields":  [
+                                     "frm1601c:txtMonth",
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#init:L2767-L2778"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source compares a Date object to zero, so the intended December/previous-year branch is unreachable.",
+                      "recommended_app_behavior":  "Default to the most recently completed month and year.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-002-month-year-format",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "A nonblank Schedule I month/year is not exactly MM/YYYY with numeric month 01..12 and four-digit year.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date. (MM/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateMonthYear:L2810-L2845"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-003-month-year-future",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "A valid Schedule I MM/YYYY value is after the current date.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateMonthYear:L2846-L2850"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-004-date-format",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  4,
+                      "condition":  "A nonblank Schedule I payment date is not a real MM/DD/YYYY date.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L2855-L2912"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-005-date-future",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  5,
+                      "condition":  "A valid Schedule I payment date is after the current date.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "This date cannot be a future date.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L2913-L2917"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-006-return-period-floor",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  6,
+                      "condition":  "Return-period year is before 2018.",
+                      "fields":  [
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please file using the old version of the form.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateRtnPeriod:L2922-L2929"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-007-return-period-month-future",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  7,
+                      "condition":  "Return month is later than current month in current year.",
+                      "fields":  [
+                                     "frm1601c:txtMonth",
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid month. Month should not be later than the current month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateRtnPeriod:L2930-L2934"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-008-return-period-year-future",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  8,
+                      "condition":  "Return year exceeds current year.",
+                      "fields":  [
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid year. Year should not be later than the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateRtnPeriod:L2935-L2939"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-009-special-tax-yes",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  9,
+                      "condition":  "Special tax rate Yes is selected.",
+                      "fields":  [
+                                     "frm1601c:SpecialTax_1",
+                                     "frm1601c:selTreaty"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#enableSelTreaty:L3660-L3664"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The treaty select is enabled and reset to its first option.",
+                      "recommended_app_behavior":  "Preserve the conditional treaty selection.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-010-special-tax-no",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  10,
+                      "condition":  "Special tax rate No is selected.",
+                      "fields":  [
+                                     "frm1601c:SpecialTax_2",
+                                     "frm1601c:selTreaty"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#disableSelTreaty:L3666-L3670"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The treaty select is disabled and reset to its first option.",
+                      "recommended_app_behavior":  "Preserve the reset and conditional disablement.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-011-amended-item28",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  11,
+                      "condition":  "Amended Return changes.",
+                      "fields":  [
+                                     "frm1601c:AmendedRtn_1",
+                                     "frm1601c:AmendedRtn_2",
+                                     "frm1601c:txtTax28"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#changeAmended:L3648-L3656"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Yes enables Item 28; otherwise Item 28 is disabled, reset to 0.00, and totals recompute.",
+                      "recommended_app_behavior":  "Preserve the branch and recomputation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-input-012-withheld-no-reset",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  12,
+                      "condition":  "Taxes withheld/remitted changes to No while tax inputs or Schedule I adjustments are nonzero.",
+                      "fields":  [
+                                     "frm1601c:TaxWithheld_1",
+                                     "frm1601c:TaxWithheld_2",
+                                     "tax-computation-fields",
+                                     "schedule-i-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "You are about to change the value to \u0027No\u0027. Doing this will clear all computation field. Do you wish to proceed? ",
+                      "source_refs":  [
+                                          "official-hta-runtime#cancelAllCompute:L3573-L3634"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Confirmation clears tax inputs and Schedule I values, then recomputes; cancellation restores Yes.",
+                      "recommended_app_behavior":  "Make destructive reset explicit and transactional.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-013-month",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  13,
+                      "condition":  "Return month is blank.",
+                      "fields":  [
+                                     "frm1601c:txtMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Month on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3672-L3678"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-014-year",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  14,
+                      "condition":  "Return year is blank.",
+                      "fields":  [
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3679-L3682"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-015-tin",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  15,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3683-L3687"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-016-rdo",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  16,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm1601c:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3688-L3691"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-017-name",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  17,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm1601c:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3692-L3696"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-018-sparse",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  18,
+                      "condition":  "Any field outside period/TIN/RDO/name is invalid.",
+                      "fields":  [
+                                     "all-other-form-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3672-L3698"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save ignores all other header, tax, schedule, and workflow rules.",
+                      "recommended_app_behavior":  "Allow incomplete drafts explicitly, but never equate Save checks with validity.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-save-019-amended-version",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  19,
+                      "condition":  "A finalized/versioned return exists and Amended Return is not Yes.",
+                      "fields":  [
+                                     "frm1601c:AmendedRtn_1",
+                                     "frm1601c:AmendedRtn_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.",
+                      "source_refs":  [
+                                          "official-hta-runtime#saveXML:L2201-L2493"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-020-year-required",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Return year is blank.",
+                      "fields":  [
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2942-L2948"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-021-month-required",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Return month is blank.",
+                      "fields":  [
+                                     "frm1601c:txtMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid month on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2949-L2952"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-022-year-future",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Return year exceeds current year.",
+                      "fields":  [
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid year. Year should not be later than the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2963-L2969"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-023-month-future",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Return month is later than current month in current year.",
+                      "fields":  [
+                                     "frm1601c:txtMonth",
+                                     "frm1601c:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid month. Month should not be later than the current month.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2970-L2976"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-024-withheld-choice",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Neither taxes-withheld Yes nor No is selected.",
+                      "fields":  [
+                                     "frm1601c:TaxWithheld_1",
+                                     "frm1601c:TaxWithheld_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 3.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2977-L2981"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-025-tin",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Any TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2983-L2987"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-026-tin-checksum-omitted",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "TIN segments are nonblank but fail shared checksum/branch semantics.",
+                      "fields":  [
+                                     "TIN-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2983-L2987"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source tests presence only.",
+                      "recommended_app_behavior":  "Apply the shared evidence-backed TIN validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-027-rdo",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm1601c:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2988-L2993"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-028-name-typo",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm1601c:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Witholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2999-L3003"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The exact message misspells Withholding as Witholding.",
+                      "recommended_app_behavior":  "Use correctly spelled UI text while retaining the official message for diagnostics.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-029-telephone",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Telephone number is blank.",
+                      "fields":  [
+                                     "frm1601c:txtTelNum"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Telephone Number on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3004-L3008"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-030-address",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Primary registered-address line is blank.",
+                      "fields":  [
+                                     "frm1601c:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3009-L3013"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-031-zip",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  31,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm1601c:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 9A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3014-L3018"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-032-category",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  32,
+                      "condition":  "Neither private nor government category is selected.",
+                      "fields":  [
+                                     "frm1601c:CatAgent_P",
+                                     "frm1601c:CatAgent_G"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 11.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3019-L3022"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-033-item14-positive",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  33,
+                      "condition":  "Taxes withheld Yes is selected and Item 14 equals zero.",
+                      "fields":  [
+                                     "frm1601c:TaxWithheld_1",
+                                     "frm1601c:txtTax14"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid amount in Item no.14. Value must be greater than zero(0).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3023-L3028"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-034-item25-positive",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  34,
+                      "condition":  "Taxes withheld Yes is selected and Item 25 equals zero.",
+                      "fields":  [
+                                     "frm1601c:TaxWithheld_1",
+                                     "frm1601c:txtTax25"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid amount in Item no.25. Value must be greater than zero(0).",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3029-L3033"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-035-schedule-month-shape",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  35,
+                      "condition":  "A nonblank Schedule I month/year does not contain exactly two slash-delimited parts.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3034-L3070"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-036-schedule-month-numeric",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  36,
+                      "condition":  "Schedule I month part is nonnumeric.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3040-L3046"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-037-schedule-month-range-zero-bug",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  37,
+                      "condition":  "Schedule I month is above 12 or below 0.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3047-L3052"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The comparison is month \u003c 0, so month 00 passes Validate.",
+                      "recommended_app_behavior":  "Require month 01 through 12.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-038-schedule-year-numeric",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  38,
+                      "condition":  "Schedule I year part is nonnumeric.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 1 Record {N}.Format is mm/yyyy",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3054-L3058"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-039-schedule-year-range-omitted",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  39,
+                      "condition":  "Schedule I year is numeric but implausible or in the future.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtMonthYear{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3059-L3065"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The year-range/future check is commented out.",
+                      "recommended_app_behavior":  "Apply the revision-supported period range and reject future dates.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-040-schedule-date-shape",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  40,
+                      "condition":  "A nonblank Schedule I payment date does not contain exactly three slash-delimited parts.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3072-L3109"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-041-schedule-date-month-numeric",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  41,
+                      "condition":  "Schedule I payment-date month is nonnumeric.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3074-L3080"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-042-schedule-date-month-zero-bug",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  42,
+                      "condition":  "Schedule I payment-date month is above 12 or below 0.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3081-L3086"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The comparison is month \u003c 0, so month 00 passes Validate.",
+                      "recommended_app_behavior":  "Require month 01 through 12.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-043-schedule-date-day-numeric",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  43,
+                      "condition":  "Schedule I payment-date day is nonnumeric.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3088-L3092"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-044-schedule-date-day-range",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  44,
+                      "condition":  "Schedule I payment-date day is outside 1..31.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3093-L3098"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-045-schedule-date-year-numeric",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  45,
+                      "condition":  "Schedule I payment-date year is nonnumeric.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Section A, column 2 Record {N}.Format is mm/dd/yyyy.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3100-L3104"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-046-schedule-calendar-omitted",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  46,
+                      "condition":  "Schedule I payment date has valid numeric components but is not a real calendar date.",
+                      "fields":  [
+                                     "frm1601c:sched1:txtDatePaid{N\u003e=0}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3072-L3110",
+                                          "official-hta-runtime#validateDate:L2855-L2920"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate accepts dates such as 02/31/yyyy if blur validation was bypassed.",
+                      "recommended_app_behavior":  "Use one real-calendar-date validator in every phase.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-047-schedule-partial-row",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  47,
+                      "condition":  "A Schedule I row has bank/number/amount data but blank month/year or date paid.",
+                      "fields":  [
+                                     "schedule-i-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3034-L3111"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The source validates each date only when that date field is nonblank and never requires row completeness.",
+                      "recommended_app_behavior":  "When any row value is supplied, require the revision-supported row columns.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-048-amended-choice-omitted",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  48,
+                      "condition":  "Neither Amended Return Yes nor No is selected.",
+                      "fields":  [
+                                     "frm1601c:AmendedRtn_1",
+                                     "frm1601c:AmendedRtn_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2942-L3142"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate never inspects the amended-return choice.",
+                      "recommended_app_behavior":  "Require an explicit Yes/No state.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-049-special-tax-omitted",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  49,
+                      "condition":  "Neither Special Tax Rate Yes nor No is selected, or Yes has no treaty selection.",
+                      "fields":  [
+                                     "frm1601c:SpecialTax_1",
+                                     "frm1601c:SpecialTax_2",
+                                     "frm1601c:selTreaty"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2942-L3142",
+                                          "official-hta-runtime#enableSelTreaty:L3660-L3670"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate does not inspect the choice or treaty.",
+                      "recommended_app_behavior":  "Require an explicit choice and treaty only when revision-matched instructions require it.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-050-email-omitted",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  50,
+                      "condition":  "Email is blank or malformed.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L2942-L3142"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Validate never inspects email.",
+                      "recommended_app_behavior":  "Apply the shared evidence-backed email rule when the filing workflow requires email.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-051-address2-save-loss",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  51,
+                      "condition":  "Second registered-address line exists in the final copy.",
+                      "fields":  [
+                                     "frm1601c:txtAddress2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "xml-encrypted",
+                                          "xml-plaintext",
+                                          "official-hta-runtime#saveXML:L2201-L2493"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The encrypted final copy retains the field, while the paired plaintext save omits it.",
+                      "recommended_app_behavior":  "Preserve the field losslessly across every save/final-copy transition.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-052-help-application-name",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  52,
+                      "condition":  "Packaged help is opened or identified by HTA metadata.",
+                      "fields":  [
+                                     "packaged-help"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "packaged-help#APPLICATIONNAME:L7",
+                                          "packaged-help#revision-heading:L84-L85"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The 1601C January 2018 help content declares APPLICATIONNAME 0605.",
+                      "recommended_app_behavior":  "Bind help by the pinned file and revision heading, not its defective APPLICATIONNAME.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-053-negative-derived-values",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  53,
+                      "condition":  "Items 21 or 23 exceed their minuends, or remittances exceed withholding, producing negative derived values.",
+                      "fields":  [
+                                     "frm1601c:txtTax22",
+                                     "frm1601c:txtTax24",
+                                     "frm1601c:txtTax31",
+                                     "frm1601c:txtTax36"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#computeTxt22:L3512-L3516",
+                                          "official-hta-runtime#computeTxt24:L3518-L3521",
+                                          "official-hta-runtime#computeTxt31:L3535-L3539"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "ambiguous",
+                      "official_behavior":  "The source computes signed results and Validate imposes no cross-field bounds.",
+                      "recommended_app_behavior":  "Preserve over-remittance where legal; reject impossible negative compensation values.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1601c-validate-054-success",
+                      "form_id":  "1601c-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  54,
+                      "condition":  "All active Validate branches pass.",
+                      "fields":  [
+                                     "frm1601c:btnValidate",
+                                     "frm1601c:btnEdit"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3138-L3141"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Validate disables controls and enables Edit, Print, Final Copy, and upload.",
+                      "recommended_app_behavior":  "Tie validated state to the exact field snapshot.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

@@ -1,0 +1,125 @@
+[package]
+name = "bir-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared eBIRForms models, database, and form XML."
+repository = "https://github.com/hexuria/buwiz-forms"
+build = "build.rs"
+
+[lints.rust]
+unexpected_cfgs = "allow"
+
+# The worker shares the UI thread's database lock: never hold it across an await.
+[lints.clippy]
+await_holding_lock = "deny"
+await_holding_invalid_type = "deny"
+
+[features]
+# SQLCipher encryption of the local database (default on). Off = plain SQLite:
+# no PRAGMA key, no master-key lookup, and a file that is not plain SQLite is an
+# error that is never renamed. The old shell keeps it on; the NSH app turns it off.
+default = ["sqlcipher"]
+sqlcipher = ["rusqlite/bundled-sqlcipher"]
+# Mac App Store build, enabled by `bir-shell/mas_build`. Compiles out the
+# `sh -c` runner for user cron jobs (arbitrary code execution is rejected by
+# App Review 2.5.2 and cannot run under the App Sandbox); such jobs are marked
+# unavailable instead of executed.
+mas_build = []
+# Test fixtures of other crates (bir-shell's host tests): raw SQL on the
+# connection, to stage a filed return or force a failing write. Never on in
+# a build that ships.
+test-support = []
+# The local mock BIR SFTP server (`mock_bir` binary, `just mock-bir`). Never
+# on in a build that ships: the app does not enable it, so no listening code
+# is linked into it.
+mock-bir = []
+
+[[bin]]
+name = "mock_bir"
+path = "src/bin/mock_bir.rs"
+required-features = ["mock-bir"]
+
+[dependencies]
+bir-rules = { path = "../bir-rules", version = "0.2.0" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+urlencoding = { workspace = true }
+chrono = { workspace = true }
+aes = { workspace = true }
+cbc = { workspace = true }
+sha2 = { workspace = true }
+flate2 = { workspace = true }
+libz-sys = { workspace = true }
+zeroize = { workspace = true }
+aes-gcm = { workspace = true }
+pbkdf2 = { workspace = true }
+sha1 = { workspace = true }
+russh = { workspace = true }
+russh-sftp = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+rss = { workspace = true }
+rusqlite = { workspace = true, features = ["bundled"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+openssl = { version = "0.10", features = ["vendored"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = "0.2.3"
+dotenvy = { workspace = true }
+rand = "0.10.1"
+hex = "0.4.3"
+imap = "2.4.1"
+native-tls = "0.2.18"
+data-encoding = "2.11.0"
+open = "5.3.4"
+directories = "6.0.0"
+notify-rust = "4.16.0"
+cron = "0.16.0"
+mail-parser = "0.11"
+ammonia = "4.1.2"
+html2text = "0.17"
+html-escape = "0.2"
+zip = { version = "2", default-features = false, features = ["deflate", "time"] }
+totp-rs = { version = "5.7.1", features = ["gen_secret", "qr"] }
+uuid = { version = "1.23.1", features = ["v4"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"] }
+# Native keychain access for the SQLCipher master key and Google Calendar
+# credentials (see src/keychain.rs). Already in the graph via keyring.
+security-framework = "3"
+# Native desktop notifications (UNUserNotificationCenter) for processes that
+# run from an app bundle; see src/notification.rs. All already in the graph
+# through gpui-pre-macos.
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSBundle", "NSError", "NSString"] }
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "UNNotificationContent", "UNNotificationRequest", "UNNotificationTrigger", "UNUserNotificationCenter"] }
+
+# windows-native is required: keyring 3.x has no default credential store, so
+# a featureless build silently falls back to an in-memory mock. The SQLCipher
+# master key then never persists and every relaunch regenerates it, which
+# makes the existing database unreadable and gets it quarantined.
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { workspace = true, features = ["windows-native"] }
+
+# sync-secret-service is required for the same reason as windows-native above:
+# without a backend feature keyring 3.x uses its in-memory mock and the master
+# key is lost on every relaunch. crypto-rust avoids an OpenSSL dependency; the
+# libdbus it links against ships with every desktop distro. On a headless box
+# with no Secret Service, get_password returns PlatformFailure and
+# db::get_or_create_master_key_keyring falls back to bir_key.txt.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] }
+
+[dev-dependencies]
+insta = "1"
+tempfile = "3"
+temp-env = { version = "0.3", features = ["async_closure"] }
+tokio = { workspace = true, features = ["test-util"] }

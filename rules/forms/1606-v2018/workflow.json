@@ -1,0 +1,226 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1606-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-form-pdf",
+                                           "official-help#scope:L84-L98"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 monthly withholding-tax remittance return for onerous transfer of real property other than a capital asset, including taxable and exempt transfers."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3535-L3553"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only buyer TIN nonblankness, buyer RDO not 000, buyer name, and TCT/OCT/CCT number."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L2911-L3136"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs its source-ordered date, identity, ATC, agent, classification, property, and treaty checks, then disables controls; it omits Items 18, 20, 28, 29, tax-rate compatibility, and overremittance disposition."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The reviewed encrypted artifact decrypts in memory to 99 unique flat keys; no plaintext editable save was available."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXMLsubmit:L2419-L2632"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML in the official save directory."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L3535-L3553",
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Four narrow Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Edit and finalization actions through surrounding workflow."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L2911-L3136"
+                                            ],
+                            "guard":  "All active source-ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls, while identity/period fields may remain locked when reopening a saved file."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L2753-L2889"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted/compressed final copy; reviewed example has 99 keys."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "encrypted-field-audit-v796"
+                                            ],
+                            "guard":  "Official finalization flow permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "One monthly remittance return for applicable onerous transfers of real property other than capital assets",
+                          "Transaction date and amended-return selection",
+                          "Seller/buyer TIN, RDO, name, and registered-address information",
+                          "Property location, classification, title number, transaction description, and taxable-base method",
+                          "Overpayment disposition when Item 36 is negative"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "notarized-deed",
+                                     "label":  "Notarized deed of sale or transfer.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Every applicable filing.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "title-copy",
+                                     "label":  "Owner copy for presentation with photocopy, or certified true copy, of TCT/CCT/OCT.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Every applicable filing.",
+                                     "official_ui_enforcement":  "Only the title number is locally required.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-declaration",
+                                     "label":  "Latest tax declaration.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Every applicable filing.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "lot-only-certification",
+                                     "label":  "Assessor certification when only a lot is transferred.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Lot only.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "bir-ruling",
+                                     "label":  "BIR ruling supporting exemption.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Exemption is claimed.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "housing-agency-proof",
+                                     "label":  "HLURB/HUDCC proof.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Applicable housing transaction.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "amended-proof",
+                                     "label":  "Proof of payment and previously filed return.",
+                                     "source_refs":  [
+                                                         "official-help#attachments:L177-L199"
+                                                     ],
+                                     "required_when":  "Amended return.",
+                                     "official_ui_enforcement":  "Item 33 is enabled, but attachment presence is not checked.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L99-L116"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Monthly: on or before the 10th day following the end of the transaction month; large taxpayers use the 25th day of the following month."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L99-L116"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Monthly: the same 10th-day rule, or 25th for large taxpayers."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L99-L116"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Monthly: the same 10th-day rule, or 25th for large taxpayers."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help#deadline:L99-L116"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Monthly; December withholding is due January 25, and large taxpayers use the 25th-day rule."
+                             }
+                         ]
+}

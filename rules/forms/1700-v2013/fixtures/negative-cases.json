@@ -1,0 +1,407 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1700-v2013",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1700-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Page 1 Part 1 Item 5.",
+                      "expected_behavior":  "Only nonblankness is checked; branch code and checksum are ignored.",
+                      "rule_id":  "1700-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1700-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer last name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Page 1 Part 1 Item 8.",
+                      "expected_behavior":  "The first active branch alerts and returns false.",
+                      "rule_id":  "1700-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1700-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address line 1 is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Page1 Part 1 Item 9.",
+                      "expected_behavior":  "Save differs from Validate, which accepts any of the three address lines.",
+                      "rule_id":  "1700-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1700-save-004",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Page 1 Part 1 Item 12.",
+                      "expected_behavior":  "The first active branch alerts and returns false.",
+                      "rule_id":  "1700-save-004"
+                  },
+                  {
+                      "case_id":  "case-05-1700-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Two-digit tax year is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please enter a valid Year End on Page 1 Item 1",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-001"
+                  },
+                  {
+                      "case_id":  "case-06-1700-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax year is nonnumeric, 00, below 13, negative, or greater than current year minus 2000 minus one."
+                                    },
+                      "expected_message":  "Page 1 Item 1: \\nInvalid input. The Year should not be greater than {previous full year} .",
+                      "expected_behavior":  "The control accepts a two-digit year despite maxlength 4; years below 13 use a second message.",
+                      "rule_id":  "1700-validate-002"
+                  },
+                  {
+                      "case_id":  "case-07-1700-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax year numeric value is below 13."
+                                    },
+                      "expected_message":  "Page 1 Item 1: \\nInvalid input. The Year should not be earlier than September 2013",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-003"
+                  },
+                  {
+                      "case_id":  "case-08-1700-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Source of Income radio is selected."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please select a Source of Income on Page 1 Item 4",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-004"
+                  },
+                  {
+                      "case_id":  "case-09-1700-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Joint Filing radio is selected."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please select a if it is joint filing on Page 1 Item 3",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-005"
+                  },
+                  {
+                      "case_id":  "case-10-1700-validate-006-TIN1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer TIN1 is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-006-TIN1"
+                  },
+                  {
+                      "case_id":  "case-11-1700-validate-006-TIN2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer TIN2 is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-006-TIN2"
+                  },
+                  {
+                      "case_id":  "case-12-1700-validate-006-TIN3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer TIN3 is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-006-TIN3"
+                  },
+                  {
+                      "case_id":  "case-13-1700-validate-006-BranchCode",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer BranchCode is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid TIN number on Page 1 Item 5",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-006-BranchCode"
+                  },
+                  {
+                      "case_id":  "case-14-1700-validate-010",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid RDO Code on Page 1 Item 6",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-010"
+                  },
+                  {
+                      "case_id":  "case-15-1700-validate-011",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "PSOC is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid PSOC on Page 1 Item 7",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-011"
+                  },
+                  {
+                      "case_id":  "case-16-1700-validate-012",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax filer last name is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid Tax Filer\u0027s Name on Page 1 Item 8",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-012"
+                  },
+                  {
+                      "case_id":  "case-17-1700-validate-013",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All three registered-address lines are blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid Registered Address on Page 1 Item 9",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-013"
+                  },
+                  {
+                      "case_id":  "case-18-1700-validate-014",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax filer DOB is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid Date of Birth (MM/DD/YYYY ) on Page 1 Item 10",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-014"
+                  },
+                  {
+                      "case_id":  "case-19-1700-validate-015",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax filer DOB is malformed or future."
+                                    },
+                      "expected_message":  "Page 1 Item 10:\\nPlease provide a valid date for Date of Birth (MM/DD/YYYY )",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-015"
+                  },
+                  {
+                      "case_id":  "case-20-1700-validate-016",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax filer email is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid Email Address on Page 1 Item 11",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-016"
+                  },
+                  {
+                      "case_id":  "case-21-1700-validate-017",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax filer contact number is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please enter a valid Contact Number on Page 1 Item 12",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-017"
+                  },
+                  {
+                      "case_id":  "case-22-1700-validate-018",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No civil-status radio is selected."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please select a Civil Status on Page 1 Item 13",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-018"
+                  },
+                  {
+                      "case_id":  "case-23-1700-validate-019",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither taxpayer additional-exemption Yes nor No is selected."
+                                    },
+                      "expected_message":  "It is a mandatory field.  Please select either \u0027Yes or No; Claiming Additional Exemptions\u0027 on Page 1 Item 14",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-019"
+                  },
+                  {
+                      "case_id":  "case-24-1700-validate-020-LastName",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All spouse name controls are enabled and spouse LastName is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Name on Page 1 Item 16",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-020-LastName"
+                  },
+                  {
+                      "case_id":  "case-25-1700-validate-020-FirstName",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All spouse name controls are enabled and spouse FirstName is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Name on Page 1 Item 16",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-020-FirstName"
+                  },
+                  {
+                      "case_id":  "case-26-1700-validate-020-MiddleName",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All spouse name controls are enabled and spouse MiddleName is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Name on Page 1 Item 16",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-020-MiddleName"
+                  },
+                  {
+                      "case_id":  "case-27-1700-validate-023-TIN1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint Filing Yes is selected and spouse TIN1 is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Page 1 Item 17",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-023-TIN1"
+                  },
+                  {
+                      "case_id":  "case-28-1700-validate-023-TIN2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint Filing Yes is selected and spouse TIN2 is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Page 1 Item 17",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-023-TIN2"
+                  },
+                  {
+                      "case_id":  "case-29-1700-validate-023-TIN3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint Filing Yes is selected and spouse TIN3 is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Page 1 Item 17",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-023-TIN3"
+                  },
+                  {
+                      "case_id":  "case-30-1700-validate-023-BranchCode",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint Filing Yes is selected and spouse BranchCode is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 17",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-023-BranchCode"
+                  },
+                  {
+                      "case_id":  "case-31-1700-validate-027",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse TIN checksum helper returns nonzero whenever spouse-name controls are enabled."
+                                    },
+                      "expected_message":  "{shared checksum description} on Page 1 Item 17.",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-027"
+                  },
+                  {
+                      "case_id":  "case-32-1700-validate-028",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse name controls are enabled and spouse DOB is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please enter a valid Date of Birth (MM/DD/YYYY ) on Page 1 Item 19",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-028"
+                  },
+                  {
+                      "case_id":  "case-33-1700-validate-029",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Spouse DOB is malformed or future."
+                                    },
+                      "expected_message":  "Page 1 Item 19:\\nPlease provide a valid date for Date of Birth (MM/DD/YYYY )",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-029"
+                  },
+                  {
+                      "case_id":  "case-34-1700-validate-030",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Joint Filing Yes is selected and spouse email is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Email Address on Page 1 Item 20",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-030"
+                  },
+                  {
+                      "case_id":  "case-35-1700-validate-031",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Gov ID nor CTC selector is checked."
+                                    },
+                      "expected_message":  "Please select Gov ID or CTC on Page 1 Item 32",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-031"
+                  },
+                  {
+                      "case_id":  "case-36-1700-validate-032",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Gov ID/CTC number field is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please enter a valid Gov ID on Page 1 Item 32",
+                      "expected_behavior":  "The same field is required with Gov ID wording for either selection.",
+                      "rule_id":  "1700-validate-032"
+                  },
+                  {
+                      "case_id":  "case-37-1700-validate-033",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date of issue is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please enter a valid Date on Page 1 Item 33",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-033"
+                  },
+                  {
+                      "case_id":  "case-38-1700-validate-034",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "CTC/Gov ID issue date violates the official date window."
+                                    },
+                      "expected_message":  "This date cannot be a past date. / This date cannot be a future date. / CTC year should not be less than {current year - 50} for Page 1 Item 33",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-034"
+                  },
+                  {
+                      "case_id":  "case-39-1700-validate-035",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "CTC/Gov ID amount is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please enter a valid amount on Page 1 Item 34",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-035"
+                  },
+                  {
+                      "case_id":  "case-40-1700-validate-036",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Place of issue is blank."
+                                    },
+                      "expected_message":  "It is a mandatory field. Please enter a Place of Issue on Page 1 Item 35",
+                      "expected_behavior":  "The ordered branch stops validation.",
+                      "rule_id":  "1700-validate-036"
+                  }
+              ]
+}

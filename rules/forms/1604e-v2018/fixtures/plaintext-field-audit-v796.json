@@ -1,0 +1,12 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "file_name":  "1604Ev2018-dummy-save.xml",
+    "sha256":  "78a460fc5953fb66d95e8327ba9389e2113a192472d62f860872f78b0dbab50b",
+    "field_count":  134,
+    "unique_field_count":  134,
+    "field_inventory_sha256":  "2a96b8edd8a35a7436fce6300869811f21a825078f9de57ad9bd05aa69fd4215",
+    "contains_target_revision_keys":  true,
+    "contains_legacy_agent_key":  false,
+    "values_emitted":  false
+}

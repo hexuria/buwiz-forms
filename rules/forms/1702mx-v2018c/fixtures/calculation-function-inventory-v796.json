@@ -1,0 +1,2916 @@
+{
+    "source_sha256":  "34dbe79d6bf934718e86c73d8fdea4eb4a4e6a86c939ab0ecf231282d744acf7",
+    "function_count":  213,
+    "functions":  [
+                      {
+                          "name":  "computeCollectedValue",
+                          "start_line":  8560,
+                          "end_line":  8573,
+                          "body_sha256":  "557dfedc9b661c055cafc807fdb92758589208229eb198e316eb85ab51c34b48",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalDivPg9Sc13I",
+                          "start_line":  8839,
+                          "end_line":  8858,
+                          "body_sha256":  "4cc8d0a48b3368591d9b7703652c1bebd0fe19f12f36eeaa0217fffd5babe728",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc13I_SubTotal"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg5Sc4I3",
+                          "start_line":  10009,
+                          "end_line":  10045,
+                          "body_sha256":  "1ba52a16fe74d0146e949fd280d7aea33fa65180833075a1fe0b597bf6f9cf76",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg5Sc4I3_SubTotalCA",
+                                              "frm1702MX:txtPg5Sc4I3_SubTotalCB",
+                                              "frm1702MX:txtPg5Sc4I3_SubTotalCC",
+                                              "frm1702MX:txtPg5Sc4I3_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg5Sc5I4",
+                          "start_line":  10199,
+                          "end_line":  10232,
+                          "body_sha256":  "3d21fb355e1d7122c4cba7c5b523e2d19e08d040804fd461b65a4521b68db9b1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg5Sc5I4_SubTotalCA",
+                                              "frm1702MX:txtPg5Sc5I4_SubTotalCB",
+                                              "frm1702MX:txtPg5Sc5I4_SubTotalCC",
+                                              "frm1702MX:txtPg5Sc5I4_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg6Sc5I39",
+                          "start_line":  10398,
+                          "end_line":  10436,
+                          "body_sha256":  "9ed5c1618f0dc03bf6c79286a27c4bacdd5f1d84353c79d54e7253f00b112a76",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg6Sc5I39_SubTotalCA",
+                                              "frm1702MX:txtPg6Sc5I39_SubTotalCB",
+                                              "frm1702MX:txtPg6Sc5I39_SubTotalCC",
+                                              "frm1702MX:txtPg6Sc5I39_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg3MScF",
+                          "start_line":  10617,
+                          "end_line":  10639,
+                          "body_sha256":  "e2653842caab439eddb63dd1980e6a7467f8b4f17606aab8ecdb4af2f0e35c99",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg4MScGI39",
+                          "start_line":  10814,
+                          "end_line":  10858,
+                          "body_sha256":  "70c4c310fd1963f95aed50d160242bc14251269a5e69c41d7214736f53dbfdf1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1Pt2I17",
+                          "start_line":  10898,
+                          "end_line":  10901,
+                          "body_sha256":  "9d7ce69efcb241dbf469a8e10702ca881fe143d36b9d2fef522e5c040f87529e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1Pt2I18",
+                          "start_line":  10902,
+                          "end_line":  10907,
+                          "body_sha256":  "9c85843163aba6e898906937d0cb860cc9153782d48db0b8cd7549fd673c167d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1Pt2It14",
+                          "start_line":  10908,
+                          "end_line":  10913,
+                          "body_sha256":  "b7f84ced7500735171d0cf236440703fc3a67f871775f285d377ff576f706209",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1Pt2It15",
+                          "start_line":  10914,
+                          "end_line":  10920,
+                          "body_sha256":  "9888c4d2f9e5c597cf83a40cd40feb23afa8bc65fc01abab355439cbec155b69",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enableMCITFields",
+                          "start_line":  10921,
+                          "end_line":  10985,
+                          "body_sha256":  "358a84e456b8fe174b9c299c0d6a0b8e833351db35c171d6db2fa15e1643897e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:chkPg1I5ATCR1",
+                                              "frm1702MX:txtPg2Sc2It18C",
+                                              "frm1702MX:txtPg2Sc2It18D",
+                                              "frm1702MX:txtPg7Sc9I1",
+                                              "frm1702MX:txtPg7Sc9I1CA",
+                                              "frm1702MX:txtPg7Sc9I1CB",
+                                              "frm1702MX:txtPg7Sc9I1CC",
+                                              "frm1702MX:txtPg7Sc9I1CD",
+                                              "frm1702MX:txtPg7Sc9I1CE",
+                                              "frm1702MX:txtPg7Sc9I1CF",
+                                              "frm1702MX:txtPg7Sc9I2",
+                                              "frm1702MX:txtPg7Sc9I2CA",
+                                              "frm1702MX:txtPg7Sc9I2CB",
+                                              "frm1702MX:txtPg7Sc9I2CC",
+                                              "frm1702MX:txtPg7Sc9I2CD",
+                                              "frm1702MX:txtPg7Sc9I2CE",
+                                              "frm1702MX:txtPg7Sc9I2CF",
+                                              "frm1702MX:txtPg7Sc9I3",
+                                              "frm1702MX:txtPg7Sc9I3CA",
+                                              "frm1702MX:txtPg7Sc9I3CB",
+                                              "frm1702MX:txtPg7Sc9I3CC",
+                                              "frm1702MX:txtPg7Sc9I3CD",
+                                              "frm1702MX:txtPg7Sc9I3CE",
+                                              "frm1702MX:txtPg7Sc9I3CF"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Pt5I37",
+                          "start_line":  11000,
+                          "end_line":  11003,
+                          "body_sha256":  "b280ad67d1f26c22fb5ddc8289d30283bb96b528c66729dcef4c0d41d8e814d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Pt5I39",
+                          "start_line":  11004,
+                          "end_line":  11011,
+                          "body_sha256":  "0bd93d663b3f50e1dbedbde43d8366716ce0ff7dbc6392eabb8f48294321402f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1Pt2I20",
+                          "start_line":  11012,
+                          "end_line":  11020,
+                          "body_sha256":  "f82e3c9693bd4dd4cf6846e0a576bf4bd079a39f3f6672eb064e32c3e36c213d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1Pt2I21",
+                          "start_line":  11021,
+                          "end_line":  11053,
+                          "body_sha256":  "58827189a59dfac2742837bea9a6b2b50ac3665e4cb32fa4a49578a101863c02",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:rdoPg1Pt2I21CarriedOver",
+                                              "frm1702MX:rdoPg1Pt2I21IssueTCC",
+                                              "frm1702MX:rdoPg1Pt2I21Refund",
+                                              "frm1702MX:txtPg1Pt2I16NetTaxPayable",
+                                              "frm1702MX:txtPg1Pt2I20TotalPenalties",
+                                              "frm1702MX:txtPg1Pt2I21TotalAmount"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP1mPt5ScBIt3",
+                          "start_line":  11054,
+                          "end_line":  11061,
+                          "body_sha256":  "1ed6ad36dfd25ebffe25865f5bbede86f734ccd440cb20e4eb02614c94a089d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Schd5ColD",
+                          "start_line":  11062,
+                          "end_line":  11094,
+                          "body_sha256":  "adda2e8017000175a66eb6a5dc69ca3a01019f271d7099c7c70931d7785e8eb2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc3ColumnD",
+                          "start_line":  11095,
+                          "end_line":  11114,
+                          "body_sha256":  "38dbe506889fb67e20fc238c0af667650e9293c5e2fa10a3cf3e0c988eb60834",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc3It33",
+                          "start_line":  11115,
+                          "end_line":  11126,
+                          "body_sha256":  "4358a51595714334b745fbaeec26385578d9c144891a75274ff9fd15a8148eb1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc4It29",
+                          "start_line":  11127,
+                          "end_line":  11138,
+                          "body_sha256":  "9ed68d337f223153c40856427aaf5f38b171424ed9f85916a89d80fb641951c7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10ColumnD",
+                          "start_line":  11139,
+                          "end_line":  11152,
+                          "body_sha256":  "8341a83ba0e0d7c6ba28107f9af44c39509b41eeb96b4d3e8b0372bcfc94a706",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm4A",
+                          "start_line":  11153,
+                          "end_line":  11157,
+                          "body_sha256":  "7c6d775d3b0608819186ed852e8ff90ba5356c052301c19cd9fae584baa401ad",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm4B",
+                          "start_line":  11158,
+                          "end_line":  11162,
+                          "body_sha256":  "582a1a5c4c5805ff02e139707319b99c8ac15136c5cfd330a34f168afba5d9ce",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm4C",
+                          "start_line":  11163,
+                          "end_line":  11168,
+                          "body_sha256":  "2cda1a89bfea2ffbe44c488b83d2d1f39c5dc7209e342fa55b6ef2138488a9e7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm9A",
+                          "start_line":  11169,
+                          "end_line":  11173,
+                          "body_sha256":  "2c7d9cd4521a7ea523162fffd1b2b44e45118dc746e684957c27a9631b0f88d7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm9B",
+                          "start_line":  11174,
+                          "end_line":  11178,
+                          "body_sha256":  "653f75d548d632122c8d933630431dcfb5f0aaf99e36c1248cacbd84f8f07806",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm9C",
+                          "start_line":  11179,
+                          "end_line":  11183,
+                          "body_sha256":  "1dd7f0e4f714f42b1f5ba0dcddca030d1d225d18b7d7cbbd9d789e46234546a5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm9D",
+                          "start_line":  11184,
+                          "end_line":  11189,
+                          "body_sha256":  "6e9f14cbc1806d28982ba946aca9d0c0424df742817c66d5093ff44b70ce8ce1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10Itm10",
+                          "start_line":  11190,
+                          "end_line":  11199,
+                          "body_sha256":  "fabf7840960d7420e70cdd181c03fac175d5cc18c2797e0dd5aa0e29acb20b2c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Schd3It32",
+                          "start_line":  11200,
+                          "end_line":  11206,
+                          "body_sha256":  "a6e4f2113e64c061f30521d2dd07064a69c279561712a20f20c16e9897e57ad0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Schd3It32A",
+                          "start_line":  11207,
+                          "end_line":  11211,
+                          "body_sha256":  "c87454dd0fd6bbd87a7ea71555f336b0bed76b03d223a2f1eed1df8c2e6a94b2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Schd3It32B",
+                          "start_line":  11212,
+                          "end_line":  11216,
+                          "body_sha256":  "3f4acbcd4c4c3886f5ea636b36ab7e167fa8c79d2b43141b0bd3d67b5ee6d3e9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Schd3It32C",
+                          "start_line":  11217,
+                          "end_line":  11221,
+                          "body_sha256":  "5e14c54de57446367202bc30ea881e549f45db84189d08b90b46c3261d1a9e17",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Schd3It32D",
+                          "start_line":  11222,
+                          "end_line":  11225,
+                          "body_sha256":  "626eecf227460e7c3994e15c339a4a15156e2c44c537267d062f4241d61e7371",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Schd5It18",
+                          "start_line":  11226,
+                          "end_line":  11233,
+                          "body_sha256":  "a88c01e7634753fb17341b148469ba913e60648147e72eb5f5a01c06320d848c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Schd5It18A",
+                          "start_line":  11234,
+                          "end_line":  11239,
+                          "body_sha256":  "e77fab39a2900ad30d110d422a16f08681c051c74a5edab53ab45fccbfcdb1b6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Schd5It18B",
+                          "start_line":  11240,
+                          "end_line":  11245,
+                          "body_sha256":  "f1162f7e38834aeae1c7ac85176cc15e6212034fd31141aa944358bb36c2e188",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Schd5It18C",
+                          "start_line":  11246,
+                          "end_line":  11253,
+                          "body_sha256":  "860281029ccf44cc8444e00f6dee1164d83c622515275407d03c80d0d99da5ac",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Schd5It18D",
+                          "start_line":  11254,
+                          "end_line":  11260,
+                          "body_sha256":  "e7df1d85effe73ecee38fd5258124f6ec19fccd1d56605de47e9787ec1b9ba34",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Pt5ITAP",
+                          "start_line":  11261,
+                          "end_line":  11265,
+                          "body_sha256":  "7ed6c621464cb3e28d2baf0a0f4358253b74e30fde7e383064f618b31ebf26fb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Pt5I44",
+                          "start_line":  11266,
+                          "end_line":  11283,
+                          "body_sha256":  "0975793af5dde78041e7d1e5707200bd98c99f6c90270a0e669d36582c73f9fd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Pt5I39CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I1",
+                          "start_line":  11381,
+                          "end_line":  11406,
+                          "body_sha256":  "b1497843fb9ad8b61246316e38b600c0244fd0441dcfb69050ed47a71f7701d4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtAttachScBI1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeToMain",
+                          "start_line":  11407,
+                          "end_line":  11689,
+                          "body_sha256":  "a2741f039af90f261177fff17aaefefb4a9df17118f70735cc4f814cf7b740ca",
+                          "alerts":  [
+                                         "NegativeValue(formatCurrencyWOC(totalAmt))"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg2Sc2It10B",
+                                              "frm1702MX:txtPg2Sc2It11B",
+                                              "frm1702MX:txtPg2Sc2Itm1A",
+                                              "frm1702MX:txtPg2Sc2Itm1B",
+                                              "frm1702MX:txtPg2Sc2Itm2A",
+                                              "frm1702MX:txtPg2Sc2Itm2B",
+                                              "frm1702MX:txtPg2Sc2Itm4A",
+                                              "frm1702MX:txtPg2Sc2Itm4B",
+                                              "frm1702MX:txtPg2Sc2Itm6A",
+                                              "frm1702MX:txtPg2Sc2Itm6B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeToMainScD",
+                          "start_line":  11698,
+                          "end_line":  13005,
+                          "body_sha256":  "e35ab06051469e73838f3c908486d4254ed409346de7d77999c8432d0040705b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg2",
+                                              "frm1702MX:txtPg3Sc5It17d",
+                                              "frm1702MX:txtPg3Sc5It17e",
+                                              "frm1702MX:txtPg3Sc5It17f",
+                                              "frm1702MX:txtPg3Sc5It17g",
+                                              "frm1702MX:txtPg3Sc5It17h",
+                                              "frm1702MX:txtPg3Sc5It17i",
+                                              "frm1702MX:txtPg3Sc5Itm10A",
+                                              "frm1702MX:txtPg3Sc5Itm10B",
+                                              "frm1702MX:txtPg3Sc5Itm11A",
+                                              "frm1702MX:txtPg3Sc5Itm11B",
+                                              "frm1702MX:txtPg3Sc5Itm12A",
+                                              "frm1702MX:txtPg3Sc5Itm12B",
+                                              "frm1702MX:txtPg3Sc5Itm13A",
+                                              "frm1702MX:txtPg3Sc5Itm13B",
+                                              "frm1702MX:txtPg3Sc5Itm14A",
+                                              "frm1702MX:txtPg3Sc5Itm14B",
+                                              "frm1702MX:txtPg3Sc5Itm15A",
+                                              "frm1702MX:txtPg3Sc5Itm15B",
+                                              "frm1702MX:txtPg3Sc5Itm16A",
+                                              "frm1702MX:txtPg3Sc5Itm16B",
+                                              "frm1702MX:txtPg3Sc5Itm17aA",
+                                              "frm1702MX:txtPg3Sc5Itm17aB",
+                                              "frm1702MX:txtPg3Sc5Itm17bA",
+                                              "frm1702MX:txtPg3Sc5Itm17bB",
+                                              "frm1702MX:txtPg3Sc5Itm17cA",
+                                              "frm1702MX:txtPg3Sc5Itm17cB",
+                                              "frm1702MX:txtPg3Sc5Itm17dA",
+                                              "frm1702MX:txtPg3Sc5Itm17dB",
+                                              "frm1702MX:txtPg3Sc5Itm17eA",
+                                              "frm1702MX:txtPg3Sc5Itm17eB",
+                                              "frm1702MX:txtPg3Sc5Itm17fA",
+                                              "frm1702MX:txtPg3Sc5Itm17fB",
+                                              "frm1702MX:txtPg3Sc5Itm17gA",
+                                              "frm1702MX:txtPg3Sc5Itm17gB",
+                                              "frm1702MX:txtPg3Sc5Itm17hA",
+                                              "frm1702MX:txtPg3Sc5Itm17hB",
+                                              "frm1702MX:txtPg3Sc5Itm17iA",
+                                              "frm1702MX:txtPg3Sc5Itm17iB",
+                                              "frm1702MX:txtPg3Sc5Itm1A",
+                                              "frm1702MX:txtPg3Sc5Itm1B",
+                                              "frm1702MX:txtPg3Sc5Itm2A",
+                                              "frm1702MX:txtPg3Sc5Itm2B",
+                                              "frm1702MX:txtPg3Sc5Itm3A",
+                                              "frm1702MX:txtPg3Sc5Itm3B",
+                                              "frm1702MX:txtPg3Sc5Itm4A",
+                                              "frm1702MX:txtPg3Sc5Itm4B",
+                                              "frm1702MX:txtPg3Sc5Itm5A",
+                                              "frm1702MX:txtPg3Sc5Itm5B",
+                                              "frm1702MX:txtPg3Sc5Itm6A",
+                                              "frm1702MX:txtPg3Sc5Itm6B",
+                                              "frm1702MX:txtPg3Sc5Itm7A",
+                                              "frm1702MX:txtPg3Sc5Itm7B",
+                                              "frm1702MX:txtPg3Sc5Itm8A",
+                                              "frm1702MX:txtPg3Sc5Itm8B",
+                                              "frm1702MX:txtPg3Sc5Itm9A",
+                                              "frm1702MX:txtPg3Sc5Itm9B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2mAttachScDI18",
+                          "start_line":  13006,
+                          "end_line":  13076,
+                          "body_sha256":  "b0a559d925ea6189d23d7baa47cd28bf11ce0f3955365b05231d39d7abe08cee",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:rdoPg1",
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg1I2YearEnd",
+                                              "frm1702MX:txtPg2",
+                                              "frm1702MX:txtPg4",
+                                              "frm1702MX:txtPg4IShed8_7Year"
+                                          ]
+                      },
+                      {
+                          "name":  "computeToMainScE",
+                          "start_line":  13077,
+                          "end_line":  13415,
+                          "body_sha256":  "3f0a40b5476154a0d3661ed84f502f1c9cee39d309553daae95d3282462ee57b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3Sc6I1CB",
+                                              "frm1702MX:txtPg3Sc6I2CB",
+                                              "frm1702MX:txtPg3Sc6I4CA",
+                                              "frm1702MX:txtPg3Sc6I4CB",
+                                              "frm1702MX:txtPg3Sc6I4description",
+                                              "frm1702MX:txtPg3Sc6I4legal",
+                                              "frm1702MX:txtPg4",
+                                              "frm1702MX:txtPg4Sc6I3CB",
+                                              "frm1702MX:txtPg6Sc6I1CA",
+                                              "frm1702MX:txtPg6Sc6I1description",
+                                              "frm1702MX:txtPg6Sc6I1legal",
+                                              "frm1702MX:txtPg6Sc6I2CA",
+                                              "frm1702MX:txtPg6Sc6I2description",
+                                              "frm1702MX:txtPg6Sc6I2legal",
+                                              "frm1702MX:txtPg6Sc6I3CA",
+                                              "frm1702MX:txtPg6Sc6I3description",
+                                              "frm1702MX:txtPg6Sc6I3legal"
+                                          ]
+                      },
+                      {
+                          "name":  "computeToMainScF",
+                          "start_line":  13426,
+                          "end_line":  13506,
+                          "body_sha256":  "9469a5e244a92181f2bd00de962276f47590637507bb424dd4a3a94005728be1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4",
+                                              "frm1702MX:txtPg4Sc8It1",
+                                              "frm1702MX:txtPg4Sc8It2",
+                                              "frm1702MX:txtPg4Sc8It3"
+                                          ]
+                      },
+                      {
+                          "name":  "computeToMainScF1",
+                          "start_line":  13507,
+                          "end_line":  14002,
+                          "body_sha256":  "3227489fa023e96a049586ddad220be1382dface0c83f15328b32e7dc619dd82",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2",
+                                              "frm1702MX:txtPg3IShed8_4Year",
+                                              "frm1702MX:txtPg3IShed8_5Year",
+                                              "frm1702MX:txtPg3IShed8_6C",
+                                              "frm1702MX:txtPg3IShed8_6Year",
+                                              "frm1702MX:txtPg3IShed88D",
+                                              "frm1702MX:txtPg4IShed8_4A",
+                                              "frm1702MX:txtPg4IShed8_4B",
+                                              "frm1702MX:txtPg4IShed8_4C",
+                                              "frm1702MX:txtPg4IShed8_4D",
+                                              "frm1702MX:txtPg4IShed8_4E",
+                                              "frm1702MX:txtPg4IShed8_5A",
+                                              "frm1702MX:txtPg4IShed8_5B",
+                                              "frm1702MX:txtPg4IShed8_5C",
+                                              "frm1702MX:txtPg4IShed8_5D",
+                                              "frm1702MX:txtPg4IShed8_5E",
+                                              "frm1702MX:txtPg4IShed8_6A",
+                                              "frm1702MX:txtPg4IShed8_6B",
+                                              "frm1702MX:txtPg4IShed8_6D",
+                                              "frm1702MX:txtPg4IShed8_6E",
+                                              "frm1702MX:txtPg4IShed8_7A",
+                                              "frm1702MX:txtPg4IShed8_7B",
+                                              "frm1702MX:txtPg4IShed8_7C",
+                                              "frm1702MX:txtPg4IShed8_7D",
+                                              "frm1702MX:txtPg4IShed8_7E",
+                                              "frm1702MX:txtPg4IShed8_7Year"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I2",
+                          "start_line":  14003,
+                          "end_line":  14033,
+                          "body_sha256":  "e8b4d6777a3c3f1728b486f8c490ab8e14c3f9bc390b8916f9c130856a0bb81d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtAttachScBI2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I4",
+                          "start_line":  14034,
+                          "end_line":  14063,
+                          "body_sha256":  "fdf4d52cace1f12fb65461916f1e6d7faf1ce13df035d8d5e5b4781b8f181d4c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtAttachScBI4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I5",
+                          "start_line":  14064,
+                          "end_line":  14067,
+                          "body_sha256":  "08efe26cab8395b9a58741e81404c147d662f9176a0e38818aad7475dd3cfaea",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I6",
+                          "start_line":  14068,
+                          "end_line":  14098,
+                          "body_sha256":  "fd8bb43543fb68d963e73bca72ca563f7985a4398db780881d86d67cdac73334",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtAttachScBI6"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I7",
+                          "start_line":  14099,
+                          "end_line":  14134,
+                          "body_sha256":  "33ae01d92b3709adffc59bd706ae9bec3f0adfcec4cc626aa8c3270c12806702",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtAttachScBI7"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I8",
+                          "start_line":  14135,
+                          "end_line":  14169,
+                          "body_sha256":  "ccbaff52bdb1eadfab75bff0238f32ea2a55a27103c22fecc65fb3f6d23cbfb7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtAttachScBI8"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I9",
+                          "start_line":  14170,
+                          "end_line":  14177,
+                          "body_sha256":  "8c8d272f2805cf702e8476fa7bc4bc941ddb82c288eb5e94e1e2e088ffede8c8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I10",
+                          "start_line":  14178,
+                          "end_line":  14181,
+                          "body_sha256":  "73ce7cab9c9b2772ea01f10e1d1bd54a4fdbe0d10aa80631e3da21d492920e09",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I12",
+                          "start_line":  14182,
+                          "end_line":  14222,
+                          "body_sha256":  "725babeb193217a978df06f3fb3e950ef094e13423ec96885875ae52af7fedce",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:drpPg1I5ATCR2",
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg2Pt4I32CB"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I13",
+                          "start_line":  14223,
+                          "end_line":  14228,
+                          "body_sha256":  "f1a445f0fed3ba5d1faff5133990a61c3db088224d67941a57e308c7ad373cf9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I14",
+                          "start_line":  14229,
+                          "end_line":  14235,
+                          "body_sha256":  "e508994f5b0dd7009158410f2cbd93d8be3c9045a5c2ccb34bca410294cdd5d4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc1I16",
+                          "start_line":  14236,
+                          "end_line":  14241,
+                          "body_sha256":  "050aaa4fe7bc124c520f0ebf0564026fff9579e7d68a92bf64ae600cb1300b18",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2Itm1B",
+                          "start_line":  14242,
+                          "end_line":  14245,
+                          "body_sha256":  "69239848ef14cb367fd7dffb11229bfed8aa4c506c455e88351378fbef31c10c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg2Sc2Itm1B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc2I1",
+                          "start_line":  14246,
+                          "end_line":  14260,
+                          "body_sha256":  "acc07e99a3ee138f63eae83aa7505d5eb0958953505e9782cdefaf82f2d84c54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:chkPg1I5ATCR1",
+                                              "frm1702MX:hidden"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc2I2",
+                          "start_line":  14261,
+                          "end_line":  14268,
+                          "body_sha256":  "3a447c5c974b6b271d4fa9fbd45f6bc27aa09f55c4150fe549df6c05b0a963ee",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc2I3",
+                          "start_line":  14269,
+                          "end_line":  14273,
+                          "body_sha256":  "d39600cd9c1dfde079686ad174d4fdeb4cba50858b1ac89f315fd0c1060987d8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc2I4",
+                          "start_line":  14274,
+                          "end_line":  14278,
+                          "body_sha256":  "21d996b98c4bbbe62ced3b4ae43e68484592776747e0295a7574408f900ed7eb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc2I5",
+                          "start_line":  14279,
+                          "end_line":  14284,
+                          "body_sha256":  "8429aa2082ccc8233f9e37123cc5c79edd24c3bfb524111e462f1855f9499390",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc2I6",
+                          "start_line":  14285,
+                          "end_line":  14294,
+                          "body_sha256":  "5098f42ce50ec34d3fa5cb369bf422e74b9d741c735f62761ec8528930e3d4d6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3I4",
+                          "start_line":  14295,
+                          "end_line":  14302,
+                          "body_sha256":  "e163cb40979fe189152ecdd4347a9df1fe36a6d0094839375f23ce9578c1bac3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3I6",
+                          "start_line":  14303,
+                          "end_line":  14310,
+                          "body_sha256":  "cc606c5f53d4a18329e2317dd365cb96ffce80ba7d72be940ca452c2dc68a113",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3AI3",
+                          "start_line":  14311,
+                          "end_line":  14313,
+                          "body_sha256":  "58f4b63f2943acb15d0f41edf59a6027fe8a4047fa62c0513cf29630e0f8b76b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3AI5",
+                          "start_line":  14314,
+                          "end_line":  14321,
+                          "body_sha256":  "6aae46ebaf9ffafc8b71317871f46877e163d8bb5eaa51a825b071aa8005846e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3BI8",
+                          "start_line":  14322,
+                          "end_line":  14329,
+                          "body_sha256":  "1f48437487aab9d0d5a82e1f9e9c5289cb6dc6beeda2177883238ea94c50304d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3BI10",
+                          "start_line":  14330,
+                          "end_line":  14337,
+                          "body_sha256":  "9d95a9bc34472e72a4939efb75457e5152fd7c79374dd26b1d31f8d0917e7ba4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3BI13",
+                          "start_line":  14338,
+                          "end_line":  14345,
+                          "body_sha256":  "a45a5c821df6ea27d9f5a0fd6d5470589b03b64d28a535f9f73a77ee5710b719",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3BI16",
+                          "start_line":  14346,
+                          "end_line":  14353,
+                          "body_sha256":  "39c413fc2465cd2351f7c9eaffaf89306d4767f27e0cb44d2328d009d393fb4d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3BI19",
+                          "start_line":  14354,
+                          "end_line":  14361,
+                          "body_sha256":  "8af1b770a35e8748c38951493aadd251d518c7ee99af7f27c534d148ceb30cbc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3CI26",
+                          "start_line":  14362,
+                          "end_line":  14369,
+                          "body_sha256":  "1cce483849dcc6379bc5697956b2c900d0cbfc3d5b6a0baba97664588985cb72",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc3CI27",
+                          "start_line":  14370,
+                          "end_line":  14379,
+                          "body_sha256":  "ed941c426bb3ab021c11c6e5cab40b44c2fa8714b825599c3386beee57fe03b9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg5Sc4I4",
+                          "start_line":  14380,
+                          "end_line":  14389,
+                          "body_sha256":  "2b79289f05c96350d2e0df16acfa7136cb3630d96b45967f8da886cc65a130b1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc5I40",
+                          "start_line":  14390,
+                          "end_line":  14394,
+                          "body_sha256":  "05e3f3216d9ad3598dd657514149969f6c10a01abd182918fcdd0c42f9f3f106",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc6I5",
+                          "start_line":  14395,
+                          "end_line":  14413,
+                          "body_sha256":  "7e3171ef686296f63c75de5909c5b3578b7ba662c45f0429153853798657f2fa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc7I3",
+                          "start_line":  14414,
+                          "end_line":  14429,
+                          "body_sha256":  "27ab49805e89a6c56d96338ca0cde1b140050e7e7ac18c6802c8c3ac1c113e67",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computetxtPg3IShed7_7A",
+                          "start_line":  14445,
+                          "end_line":  14448,
+                          "body_sha256":  "defa0e47ea4454fa8e2320a8baaf6166687cb0819e75517c083b80a8078fa8de",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc8It3",
+                          "start_line":  14469,
+                          "end_line":  14480,
+                          "body_sha256":  "f4cbfcc49c7f47bd2c322150b313c0499f6cc45dd92edaaf1018867041d6e67f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computetxtPg4IShed8_7A",
+                          "start_line":  14494,
+                          "end_line":  14497,
+                          "body_sha256":  "166c9696b258c95eddc4367395d782a73e3dc0a5d87bcb8fbda77f454c3a7862",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeNolco",
+                          "start_line":  14522,
+                          "end_line":  14556,
+                          "body_sha256":  "d3fb0fc052f6fc38cdf8bc3031aa5ec08327f4dca09a84a401f8cc1af49a9702",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2Itm7B",
+                                              "frm1702MX:txtPg2Sc2Itm7C",
+                                              "frm1702MX:txtPg3Sc5Itm18B",
+                                              "frm1702MX:txtPg3Sc5Itm18C",
+                                              "frm1702MX:txtPg4Sc8It1",
+                                              "frm1702MX:txtPg4Sc8It2",
+                                              "frm1702MX:txtPg6Sc7I1",
+                                              "frm1702MX:txtPg6Sc7I2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc7AI4CE",
+                          "start_line":  14557,
+                          "end_line":  14571,
+                          "body_sha256":  "8cf4fe75533b609e80b3491c0151ba29a28f909000b95e68528a09bff75e9785",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg6Sc7AI4CA",
+                                              "frm1702MX:txtPg6Sc7AI4CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc7AI5CE",
+                          "start_line":  14572,
+                          "end_line":  14598,
+                          "body_sha256":  "c18b617bd5a2cbf3edf25599205ca22b584a2920ecbe35482bf176385b6fc998",
+                          "alerts":  [
+                                         "\"Value of Column B + C + D cannot be greater than value of Column A. (Values for Columns B, C and D will be set back to 0)\"",
+                                         "\"Value of Column D cannot be greater than value of Column A.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg6Sc7AI5CA",
+                                              "frm1702MX:txtPg6Sc7AI5CB",
+                                              "frm1702MX:txtPg6Sc7AI5CC",
+                                              "frm1702MX:txtPg6Sc7AI5CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc7AI6CE",
+                          "start_line":  14599,
+                          "end_line":  14625,
+                          "body_sha256":  "b1ee44d61006cc1954d2a2b6a72bdb99924fd337d41210cf467a23f04cc9eabd",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\"",
+                                         "\"Value of Column B + C + D cannot be greater than value of Column A. (Values for Columns B, C and D will be set back to 0)\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg6Sc7AI6CA",
+                                              "frm1702MX:txtPg6Sc7AI6CB",
+                                              "frm1702MX:txtPg6Sc7AI6CC",
+                                              "frm1702MX:txtPg6Sc7AI6CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc7AI7CE",
+                          "start_line":  14626,
+                          "end_line":  14652,
+                          "body_sha256":  "e3b7bab846ef22cf0257151b8ff422818d83aad8f29b0ae3b081391efada3b74",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\"",
+                                         "\"Value of Column B + C + D cannot be greater than value of Column A. (Values for Columns B, C and D will be set back to 0)\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg6Sc7AI7CA",
+                                              "frm1702MX:txtPg6Sc7AI7CB",
+                                              "frm1702MX:txtPg6Sc7AI7CC",
+                                              "frm1702MX:txtPg6Sc7AI7CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc7AI8",
+                          "start_line":  14653,
+                          "end_line":  14659,
+                          "body_sha256":  "adaea196be66340d6bc1ea7f1a350609c0ee0ef08728481199d8debe9ff3ffd3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg6Sc8I4CD",
+                          "start_line":  14660,
+                          "end_line":  14663,
+                          "body_sha256":  "e49e60b99446fb464609c63a1d69b0d614a23db7ef786e59db60fe1457907caa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc8I13",
+                          "start_line":  14664,
+                          "end_line":  14668,
+                          "body_sha256":  "3f67b2da9059a6e43bbf329b8da7726bfa577391ce49763648dfef530ad4e0b0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I1CC",
+                          "start_line":  14669,
+                          "end_line":  14678,
+                          "body_sha256":  "e3e200b0669529c779409ded19601a6b064a66beaa89e5712feef86ecec599f7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg7Sc9I1CC"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I2CC",
+                          "start_line":  14679,
+                          "end_line":  14688,
+                          "body_sha256":  "648759e8079323c91cc7acbfc17b20873cc03dfa2e8cff0ae1cce7eaf671bcb0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg7Sc9I2CC"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I3CC",
+                          "start_line":  14689,
+                          "end_line":  14698,
+                          "body_sha256":  "8d6f1b16f380701af7d9333b1c1d18d5a8a23ab6ddec3534e7aea00e3b24991e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg7Sc9I3CC"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I1CG",
+                          "start_line":  14699,
+                          "end_line":  14710,
+                          "body_sha256":  "5b42c60eee97af3178f5ebe1af26e1894178becab4d1f062e113aa26c87b7b29",
+                          "alerts":  [
+                                         "\u0027Page 4, Schedule 9: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg7Sc9I1CD",
+                                              "frm1702MX:txtPg7Sc9I1CE",
+                                              "frm1702MX:txtPg7Sc9I1CF",
+                                              "frm1702MX:txtPg7Sc9I1CG"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I2CG",
+                          "start_line":  14711,
+                          "end_line":  14723,
+                          "body_sha256":  "90d47703ce4db02325a92477a8b940dc671cc5edf30c1d6b50142a723d05b234",
+                          "alerts":  [
+                                         "\u0027Page 4, Schedule 9: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg7Sc9I2CD",
+                                              "frm1702MX:txtPg7Sc9I2CE",
+                                              "frm1702MX:txtPg7Sc9I2CF",
+                                              "frm1702MX:txtPg7Sc9I2CG"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I3CG",
+                          "start_line":  14724,
+                          "end_line":  14735,
+                          "body_sha256":  "5c81617ea928f5213fc1eecbcc1332598aeebc93bb4389f5b6b4b611c144ffc3",
+                          "alerts":  [
+                                         "\u0027Page 4, Schedule 9: The sum of Columns D,E \u0026 F should not be greater than the amount in Column C. Please re-enter the correct values.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg7Sc9I3CD",
+                                              "frm1702MX:txtPg7Sc9I3CE",
+                                              "frm1702MX:txtPg7Sc9I3CF",
+                                              "frm1702MX:txtPg7Sc9I3CG"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg7Sc9I4",
+                          "start_line":  14736,
+                          "end_line":  14742,
+                          "body_sha256":  "41574d79e74ba12a228bc50b8275ed559bf0a6118ee36034b97391fc6a55a6d9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc3It23C",
+                          "start_line":  14743,
+                          "end_line":  14750,
+                          "body_sha256":  "b0e8d1d0922eb862bfc44ebc3d8fd66e8523fa310a00fefa593d2278984cc429",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2ColumnD",
+                          "start_line":  14751,
+                          "end_line":  14794,
+                          "body_sha256":  "b1f4c9648bdaaf940a718e41ff2c263d0231a7416f0224aa625895aaad6e7fd8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc5It11D",
+                          "start_line":  14795,
+                          "end_line":  14799,
+                          "body_sha256":  "c4dd47947bb82f9c05fd1edb91a521ea5c494ae3a5bfa4cda2ce0f390747a89b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2Itm3",
+                          "start_line":  14800,
+                          "end_line":  14815,
+                          "body_sha256":  "db97ad42efe626ae18f183c18c4f22a180f5d433a7019d2a9a6991a88383c166",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2Itm5",
+                          "start_line":  14816,
+                          "end_line":  14828,
+                          "body_sha256":  "3f83963a35bde4c6117fedbce5a01dc162c0bafcf5c0f32dbd46b731e3993670",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2Itm7",
+                          "start_line":  14829,
+                          "end_line":  14845,
+                          "body_sha256":  "8457f81aa37eb7587585f36ad6f42904e241b0e4bd6104e924dd58d47644baf5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2Itm8",
+                          "start_line":  14846,
+                          "end_line":  14866,
+                          "body_sha256":  "437baffc9837fd016adc15974d2c2810049ea2e8468542dd2ec86b6b17810aca",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2Itm8A",
+                                              "frm1702MX:txtPg2Sc2Itm8B",
+                                              "frm1702MX:txtPg2Sc2Itm8C",
+                                              "frm1702MX:txtPg2Sc2Itm8D",
+                                              "frm1702MX:txtPg3Sc5Itm18A",
+                                              "frm1702MX:txtPg3Sc5Itm18B",
+                                              "frm1702MX:txtPg3Sc5Itm18C",
+                                              "frm1702MX:txtPg3Sc5Itm18D"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2Itm9",
+                          "start_line":  14867,
+                          "end_line":  14893,
+                          "body_sha256":  "c4958d88b0af37885e1afff943bc8dca83d90fcbe1c5d1d2bb0203ab538ec074",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:InstAPg2Part4",
+                                              "frm1702MX:txtPg2Sc2It10B",
+                                              "frm1702MX:txtPg2Sc2It10C",
+                                              "frm1702MX:txtPg2Sc2Itm9A",
+                                              "frm1702MX:txtPg2Sc2Itm9B",
+                                              "frm1702MX:txtPg2Sc2Itm9C",
+                                              "frm1702MX:txtPg2Sc2Itm9D",
+                                              "frm1702MX:txtPg3IShed78D",
+                                              "frm1702MX:txtPg3IShed88D",
+                                              "frm1702MX:txtPg6Sc6I5CA",
+                                              "frm1702MX:txtPg6Sc6I5CB",
+                                              "frm1702MX:txtPg6Sc6I5CC",
+                                              "frm1702MX:txtPg6Sc6I5CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It10",
+                          "start_line":  14894,
+                          "end_line":  14901,
+                          "body_sha256":  "59b7edbff20a72a6830c7bdf0ab1a9a674ff08a35923c2e8edc70f47513d807e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It10B",
+                                              "frm1702MX:txtPg2Sc2It10C",
+                                              "frm1702MX:txtPg3IShed78D",
+                                              "frm1702MX:txtPg3IShed88D"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It10D",
+                          "start_line":  14902,
+                          "end_line":  14907,
+                          "body_sha256":  "bec3ff2c32e19dc083f40032acff8ef92bb7af5c6f1c59c5eecaff24a44cae17",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It11",
+                          "start_line":  14908,
+                          "end_line":  14952,
+                          "body_sha256":  "90cdb4ef19ef426d069035dae5376874c12113f1b4a676d9211b19bd8ce1c82a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:rdoPg1Pt1I13MethodOfDeducItemized",
+                                              "frm1702MX:txtPg2Sc2It10B",
+                                              "frm1702MX:txtPg2Sc2It10C",
+                                              "frm1702MX:txtPg2Sc2It12C",
+                                              "frm1702MX:txtPg2Sc2It12D",
+                                              "frm1702MX:txtPg2Sc2Itm8A",
+                                              "frm1702MX:txtPg2Sc2Itm8B",
+                                              "frm1702MX:txtPg2Sc2Itm8C",
+                                              "frm1702MX:txtPg2Sc2Itm8D",
+                                              "frm1702MX:txtPg2Sc2Itm9A",
+                                              "frm1702MX:txtPg2Sc2Itm9B",
+                                              "frm1702MX:txtPg2Sc2Itm9C",
+                                              "frm1702MX:txtPg2Sc2Itm9D",
+                                              "frm1702MX:txtPg3IShed78D",
+                                              "frm1702MX:txtPg3IShed88D",
+                                              "frm1702MX:txtPg3Sc5Itm18A",
+                                              "frm1702MX:txtPg3Sc5Itm18B",
+                                              "frm1702MX:txtPg3Sc5Itm18C",
+                                              "frm1702MX:txtPg3Sc5Itm18D",
+                                              "frm1702MX:txtPg4Sc8It2",
+                                              "frm1702MX:txtPg6Sc6I5CA",
+                                              "frm1702MX:txtPg6Sc6I5CB",
+                                              "frm1702MX:txtPg6Sc6I5CC",
+                                              "frm1702MX:txtPg6Sc6I5CD"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sch2Items",
+                          "start_line":  14953,
+                          "end_line":  14960,
+                          "body_sha256":  "3e7b3f581e876a162b3c658d770a3b9946461a8ae142ec28fcaadeadf9cab212",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It8to10",
+                          "start_line":  14961,
+                          "end_line":  14968,
+                          "body_sha256":  "17b0f0ffc6dc8dcc24e89e55399a413e96fe16ddbb9abf58e179144378ed8ba5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It12",
+                          "start_line":  14969,
+                          "end_line":  14984,
+                          "body_sha256":  "b8426a756ce2af32bc989aedb2dc5c9bd68a2ab73c17314d88ba6b4fcb142912",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:rdoPg1Pt1I13MethodOfDeducOptional",
+                                              "frm1702MX:txtPg2Sc2It11C",
+                                              "frm1702MX:txtPg2Sc2It11D"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It15",
+                          "start_line":  14985,
+                          "end_line":  15010,
+                          "body_sha256":  "02684ca0a390619b61343a7d5ccdc0658f958c6c0c43d531bfb3776eaf5cf097",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It14B",
+                                              "frm1702MX:txtPg2Sc2It15B",
+                                              "frm1702MX:txtPg2Sc2Itm3B",
+                                              "frm1702MX:txtPg2Sc2Itm7B",
+                                              "frm1702MX:txtPg2Sc4Itm4B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It14C",
+                          "start_line":  15011,
+                          "end_line":  15014,
+                          "body_sha256":  "7ece69944878afd7595b5023daa27320ae88b350659dec3c396108ba39978091",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It15B",
+                          "start_line":  15015,
+                          "end_line":  15020,
+                          "body_sha256":  "e77711e10baca605acc1bc3b3c256892e0ab2ed268e738e262c45ec42d313511",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It15C",
+                          "start_line":  15021,
+                          "end_line":  15028,
+                          "body_sha256":  "0315e13f05914126b8b7fa974decdaa0a00641f075be015d60234142672ae987",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It15C",
+                                              "frm1702MX:txtPg2Sc2It17C"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It17B",
+                          "start_line":  15029,
+                          "end_line":  15035,
+                          "body_sha256":  "1fb4a122003d616bd72cdce4e71ec87e01839e840b40ced8e86ac163d08af937",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It17B",
+                                              "frm1702MX:txtPg2Sc2It19B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It18C",
+                          "start_line":  15036,
+                          "end_line":  15041,
+                          "body_sha256":  "81f833ab1df408ce7f22536ed838b31444a16bcb0bc72c9a875c82cb13375588",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2Sc2It19C",
+                          "start_line":  15042,
+                          "end_line":  15059,
+                          "body_sha256":  "66279a0c05f07e91b2d1c3351ebc3e8a8f301160d58d94923aba2cd003d6fa04",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It10B",
+                                              "frm1702MX:txtPg2Sc2It15C",
+                                              "frm1702MX:txtPg2Sc2It18C",
+                                              "frm1702MX:txtPg3IShed88D"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3IShed7_8D",
+                          "start_line":  15060,
+                          "end_line":  15070,
+                          "body_sha256":  "32e99e4511aaf379bc10ae883c8e70dad2dc0f6f561ce7bb6eeb32232c9c063e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computetxtPg4Shed71ColE",
+                          "start_line":  15071,
+                          "end_line":  15080,
+                          "body_sha256":  "814a98bd2f0fe3f533f5f5e05049ad976780bb66fc053bad7a810a1df066c3d3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc7AI4E",
+                          "start_line":  15081,
+                          "end_line":  15089,
+                          "body_sha256":  "38f2c521644db8fbcfbc35b6adecd46a429ebc78d07a78febb35318cde8abf44",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3IShed7_4A",
+                                              "frm1702MX:txtPg3IShed7_4B",
+                                              "frm1702MX:txtPg3IShed7_4C",
+                                              "frm1702MX:txtPg3IShed7_4D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc7AI5E",
+                          "start_line":  15090,
+                          "end_line":  15100,
+                          "body_sha256":  "258b27fc25cd364352cb97f06085b2ee58ea2d8ce87b0032a02dba799cca9a23",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3IShed7_5A",
+                                              "frm1702MX:txtPg3IShed7_5B",
+                                              "frm1702MX:txtPg3IShed7_5C",
+                                              "frm1702MX:txtPg3IShed7_5D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc7AI6E",
+                          "start_line":  15101,
+                          "end_line":  15108,
+                          "body_sha256":  "994c85d56f0fa6f20b87f96f0a3618a91ef53dd767d2a96d31a3eeccd1e086f8",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3IShed7_6A",
+                                              "frm1702MX:txtPg3IShed7_6B",
+                                              "frm1702MX:txtPg3IShed7_6C",
+                                              "frm1702MX:txtPg3IShed7_6D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc7AI7E",
+                          "start_line":  15109,
+                          "end_line":  15125,
+                          "body_sha256":  "fb1a3abe25c8838faf46832386f64b16804b94b7a03a4f4892a7c3ff3afb6543",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3IShed7_7A",
+                                              "frm1702MX:txtPg3IShed7_7B",
+                                              "frm1702MX:txtPg3IShed7_7C",
+                                              "frm1702MX:txtPg3IShed7_7D"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4IShed88D",
+                          "start_line":  15126,
+                          "end_line":  15148,
+                          "body_sha256":  "5a0062e64e8c92cfc36fcca5d10e4cce65a4b8a0481572fdad64d40b9af7c282",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computetxtPg4Shed81ColE",
+                          "start_line":  15149,
+                          "end_line":  15159,
+                          "body_sha256":  "0c5a3ef87742e360a7592361bf7a7be875f0eba135e4df4fdc712c9194876c7a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc8AI4E",
+                          "start_line":  15160,
+                          "end_line":  15169,
+                          "body_sha256":  "cc97b5305efe2afa053bd46e417343d7617757da82f8bb1e6c87013aecce2910",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4IShed8_4A",
+                                              "frm1702MX:txtPg4IShed8_4B",
+                                              "frm1702MX:txtPg4IShed8_4C",
+                                              "frm1702MX:txtPg4IShed8_4D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc8AI5E",
+                          "start_line":  15170,
+                          "end_line":  15180,
+                          "body_sha256":  "6cd7fd95c55543e8431e074a93290ce8befa60b18daae457dd617437897b8014",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4IShed8_5A",
+                                              "frm1702MX:txtPg4IShed8_5B",
+                                              "frm1702MX:txtPg4IShed8_5C",
+                                              "frm1702MX:txtPg4IShed8_5D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc8AI6E",
+                          "start_line":  15181,
+                          "end_line":  15191,
+                          "body_sha256":  "c794cd76e84609e1c99bf1f3c1c3fe0722e1309563888232b4c9c3b93c8f2bc0",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3IShed8_6C",
+                                              "frm1702MX:txtPg4IShed8_6A",
+                                              "frm1702MX:txtPg4IShed8_6B",
+                                              "frm1702MX:txtPg4IShed8_6D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP4Sc8AI7E",
+                          "start_line":  15192,
+                          "end_line":  15204,
+                          "body_sha256":  "bb2ab442d853c67d40ca4488096f54e57fbb4d81784aac0d4b815a9cf8644a26",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4IShed8_7A",
+                                              "frm1702MX:txtPg4IShed8_7B",
+                                              "frm1702MX:txtPg4IShed8_7C",
+                                              "frm1702MX:txtPg4IShed8_7D"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc4Itm1",
+                          "start_line":  15205,
+                          "end_line":  15224,
+                          "body_sha256":  "91f41045e37881069495d1b1c5d32c5ed777fe5ab5f1f54c292ba6f5b0720274",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It13A",
+                                              "frm1702MX:txtPg2Sc2It13B",
+                                              "frm1702MX:txtPg2Sc2It14C",
+                                              "frm1702MX:txtPg3Sc4Itm1A",
+                                              "frm1702MX:txtPg3Sc4Itm1B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc4Itm2",
+                          "start_line":  15225,
+                          "end_line":  15237,
+                          "body_sha256":  "7d3836a7e81eed4aa9cca56c31d004a27af34c7fa3b16af63d6f8022f9363ee0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc2It14C",
+                                              "frm1702MX:txtPg2Sc2Itm9A",
+                                              "frm1702MX:txtPg2Sc2Itm9B",
+                                              "frm1702MX:txtPg2Sc2Itm9C",
+                                              "frm1702MX:txtPg2Sc4Itm2A",
+                                              "frm1702MX:txtPg2Sc4Itm2B",
+                                              "frm1702MX:txtPg2Sc4Itm2C"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc4Itm3",
+                          "start_line":  15238,
+                          "end_line":  15250,
+                          "body_sha256":  "804dcc2de8b6df4793bae53fee07d2745cf88d1adf3916eccc23c913194121e0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc4Itm5",
+                          "start_line":  15251,
+                          "end_line":  15258,
+                          "body_sha256":  "3e609a7e52e305b1d040cb23a4d8bb91f651fb5976b0b2bce23a1f17c292ea1e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3Sc4Itm7",
+                          "start_line":  15259,
+                          "end_line":  15270,
+                          "body_sha256":  "74325517f9d3ad5f510c4c2e9ce0aeca933e319415e201bbb2745dabaafc8b87",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10I4",
+                          "start_line":  15271,
+                          "end_line":  15279,
+                          "body_sha256":  "baffb35ddb6c0dda8295f2ff0a76fe6c2c7cf5b38528ac30a0e1af3968c55799",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10I9",
+                          "start_line":  15280,
+                          "end_line":  15286,
+                          "body_sha256":  "c10aa7bae8a5f312f5d6acdd1524a0e9d07f28136fd9cb99807c22cfab2a037b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4Sc10I10",
+                          "start_line":  15287,
+                          "end_line":  15295,
+                          "body_sha256":  "caf946ed76f9d51b619bf66a93a65fb959f5353ab789b9bc510635a00922ec23",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg8Sc11I7",
+                          "start_line":  15296,
+                          "end_line":  15299,
+                          "body_sha256":  "a390d8aecc15a9e7e8bec0ed7f5099ade61033a55d454861c40494183a807467",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg8Sc11I12",
+                          "start_line":  15300,
+                          "end_line":  15304,
+                          "body_sha256":  "2f81f9b8163e093895924d032ba051990966ba380b3e21755e421d6f98c9c196",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg8Sc11I16",
+                          "start_line":  15305,
+                          "end_line":  15309,
+                          "body_sha256":  "30774ebf9d93527c47e8e01c9e236951e8d5357e2f70b07b3d1f2cacbe204381",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg8Sc11I17",
+                          "start_line":  15310,
+                          "end_line":  15315,
+                          "body_sha256":  "60b56a9399a9217e89bbe1b1e37f34d6252dfe9860ddaf0cf61dba27469d1635",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc13I19I",
+                          "start_line":  15316,
+                          "end_line":  15325,
+                          "body_sha256":  "0701d2c219fcc2d88d8a8dfaa9a4fbd254d17ffaedc482a43f70734ccfc14867",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc13",
+                                              "frm1702MX:txtPg9Sc13I19name"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc13I19II",
+                          "start_line":  15326,
+                          "end_line":  15335,
+                          "body_sha256":  "523764150e713d3969ff8b60a84ceac7f8e7dfbe25296cc57badee684493ce8e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc13",
+                                              "frm1702MX:txtPg9Sc13I19name"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc13I19III",
+                          "start_line":  15336,
+                          "end_line":  15345,
+                          "body_sha256":  "38365e73533b05688243894c20538d2f3c193711503ba75e40a732795b1665ae",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc13",
+                                              "frm1702MX:txtPg9Sc13I19name"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc13I19IV",
+                          "start_line":  15346,
+                          "end_line":  15355,
+                          "body_sha256":  "f7ad81666ff4559a08c067c9f73638e0ed9d6f0536f664012dafaaefebf80698",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc13",
+                                              "frm1702MX:txtPg9Sc13I19name"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc13I19",
+                          "start_line":  15356,
+                          "end_line":  15381,
+                          "body_sha256":  "ff62dfcc89cbf08e8cd16ab5b345d2c821410bc47a984720be677e334b261937",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc13",
+                                              "frm1702MX:txtPg9Sc13I15CA",
+                                              "frm1702MX:txtPg9Sc13I15CB",
+                                              "frm1702MX:txtPg9Sc13I18CA",
+                                              "frm1702MX:txtPg9Sc13I18CB",
+                                              "frm1702MX:txtPg9Sc13I19",
+                                              "frm1702MX:txtPg9Sc13I9CA",
+                                              "frm1702MX:txtPg9Sc13I9CB"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc14I8I",
+                          "start_line":  15382,
+                          "end_line":  15390,
+                          "body_sha256":  "f1f04431e10e6d024a60eb5f2bb782d8ecbf3bd6cec0158e79f8f05c2f0a0882",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc14",
+                                              "frm1702MX:txtPg9Sc14I8name"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc14I8II",
+                          "start_line":  15391,
+                          "end_line":  15401,
+                          "body_sha256":  "978cabc91aa4186c1da72f83316866af75410c19b59da44a24dca7c6c89eaf92",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc14",
+                                              "frm1702MX:txtPg9Sc14I8name"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg9Sc14I8",
+                          "start_line":  15402,
+                          "end_line":  15419,
+                          "body_sha256":  "45efa4f0fafecb65e545593c5003d517a16ae48288ce862ec222d3ae72cdd86a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg9Sc14",
+                                              "frm1702MX:txtPg9Sc14I1",
+                                              "frm1702MX:txtPg9Sc14I5CA",
+                                              "frm1702MX:txtPg9Sc14I5CB",
+                                              "frm1702MX:txtPg9Sc14I7CA",
+                                              "frm1702MX:txtPg9Sc14I7CB",
+                                              "frm1702MX:txtPg9Sc14I8"
+                                          ]
+                      },
+                      {
+                          "name":  "getSum",
+                          "start_line":  15580,
+                          "end_line":  15594,
+                          "body_sha256":  "c621ac6e006702dae2e138d8f687ef3cc57ab27d3ad41858e3539c023b96ed9d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getDifference",
+                          "start_line":  15595,
+                          "end_line":  15613,
+                          "body_sha256":  "a1c434f312c658712a7dff1d1ea401e6870815f50aa99199502b77a8226a67f3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "summation",
+                          "start_line":  15614,
+                          "end_line":  15628,
+                          "body_sha256":  "8c6b95ce64cda3b4fc7b7a726d36f8d2dcccea6c61b5823665700f2f77d0e546",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "summationThenDifference",
+                          "start_line":  15629,
+                          "end_line":  15651,
+                          "body_sha256":  "823300871d809f7e94089f7d8a5af3b9422a6da3bfa7c8e52bcb3e00fbfee03e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "summationThenDifferenceM",
+                          "start_line":  15652,
+                          "end_line":  15672,
+                          "body_sha256":  "33032f1ad1449ae1bfe59270369652861626d9be19c134211c21036a0553c129",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "product",
+                          "start_line":  15673,
+                          "end_line":  15686,
+                          "body_sha256":  "5d4a0562984344fa1a96edd1e737ff593ea55b3d97f65835986d0cc2e08bee8d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "product1",
+                          "start_line":  15687,
+                          "end_line":  15700,
+                          "body_sha256":  "7b23867d9e6de13f1780773d8aa475c82e26228b81773ed296f17726742860ee",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "product2",
+                          "start_line":  15701,
+                          "end_line":  15714,
+                          "body_sha256":  "1740f191e4fbea6a02c9678ddcbc673b03c3656b3a81c79403704e3d29faab76",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI3",
+                          "start_line":  15769,
+                          "end_line":  15777,
+                          "body_sha256":  "8f09da3befe7f33dbbd800e857243634c0bab34bb803cd822fd073ae184ddd13",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI5",
+                          "start_line":  15778,
+                          "end_line":  15791,
+                          "body_sha256":  "eba3816ffc225cfacb33ff5c4babf32652eef631eb51d455c122bccee7b246d8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI7",
+                          "start_line":  15792,
+                          "end_line":  15812,
+                          "body_sha256":  "6641169c769fdb07542dd17ebcc1eae2d9e09a74d9ab7a6ddf3756c76464c00b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI11",
+                          "start_line":  15813,
+                          "end_line":  15822,
+                          "body_sha256":  "ed17b4fdb02cd96062dc2009ab5b6c5ae149385ce4d22802bd647d721e7998a9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI12",
+                          "start_line":  15823,
+                          "end_line":  15831,
+                          "body_sha256":  "3f88215d82faa62ee4feca9968933f8bb25844c673ddb2bdaf892f2a029e0d89",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI14",
+                          "start_line":  15832,
+                          "end_line":  15864,
+                          "body_sha256":  "11be3ad83ab35b013e7b203c823893c1e9ee698dddafb902e53a3a4879ececee",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeToMainI14",
+                          "start_line":  15865,
+                          "end_line":  15886,
+                          "body_sha256":  "1023e5f84d0b95b8299758e48857ebe8f538787a56fd2aff0469e0954fb292f9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg2Sc2It15B",
+                                              "frm1702MX:txtPg2Sc4Itm4B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCItm1",
+                          "start_line":  15887,
+                          "end_line":  15895,
+                          "body_sha256":  "462182ead5f6530448234304ee3a459f1d9cded4c1b6e2c09c91b64890a51835",
+                          "alerts":  [
+                                         "attachNum.substring(0,2)"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCItm2",
+                          "start_line":  15896,
+                          "end_line":  15902,
+                          "body_sha256":  "177c576e763467569deba724a20ba8905fef7f61b54339b7ad285a8ecb9ab539",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCItm3",
+                          "start_line":  15903,
+                          "end_line":  15907,
+                          "body_sha256":  "d8e1773ef9a596a86a9bafab6c7e7ea26b83d3891db917f6600af8783b1743f8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCItm4",
+                          "start_line":  15908,
+                          "end_line":  15914,
+                          "body_sha256":  "d12d49d79f6d5ce9af3daf10072d594bfaf89ea708964d55e467c8658d7c7092",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCItm5",
+                          "start_line":  15915,
+                          "end_line":  15925,
+                          "body_sha256":  "951dac8503d1403d6ed9ebab98d413e130d431370d9f9ab1867c4cdd37bd63e4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg2Sc3It29B"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCItm7",
+                          "start_line":  15926,
+                          "end_line":  15931,
+                          "body_sha256":  "926d7bf6246c22fbad5cb9d78f1c9ddd5db71c31b6abb306ae1a55c7828956bd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI10",
+                          "start_line":  15932,
+                          "end_line":  15941,
+                          "body_sha256":  "d73f9c9c0f0c1b81e9a12d45f117440c8aa08be2b42b98a9b9f444597eb19034",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScFI3",
+                          "start_line":  16060,
+                          "end_line":  16099,
+                          "body_sha256":  "bac7c362cf3c64863ed2908c82eb6706758e9099c122ceb63ec221da9b43e9d3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:rdoPg1",
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg1I2YearEnd",
+                                              "frm1702MX:txtPg2",
+                                              "frm1702MX:txtPg4",
+                                              "frm1702MX:txtPg4IShed8_7Year"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScFI7A",
+                          "start_line":  16100,
+                          "end_line":  16147,
+                          "body_sha256":  "f98d45e29b5982d0d6d4e9cfda3afe7ea7365c51c94e9c9b089d2548dd6635ac",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1",
+                                              "frm1702MX:txtPg1I2YearEnd",
+                                              "frm1702MX:txtPg2",
+                                              "frm1702MX:txtPg4IShed8_7Year"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCI3",
+                          "start_line":  16148,
+                          "end_line":  16156,
+                          "body_sha256":  "fc5d68c634de5c95f3385506d8f64ff1d265b72926ff41e7276dc8086045ea9f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScCI7",
+                          "start_line":  16174,
+                          "end_line":  16178,
+                          "body_sha256":  "a9e124e33900b343dece98c0ea06b1122fbfea714769e81e5c12457741220451",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScDI6",
+                          "start_line":  16179,
+                          "end_line":  16195,
+                          "body_sha256":  "20fcf345b1cb483c2753ca6ac91113a5c8e345f6f6fa876ccd5a5c6942bd7eac",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScE1I5",
+                          "start_line":  16196,
+                          "end_line":  16202,
+                          "body_sha256":  "d0d7fd4dbe99f3d36f829a44b186a29ce223f3dbd3e05712c1e4e3711692d810",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScE2I19",
+                          "start_line":  16203,
+                          "end_line":  16220,
+                          "body_sha256":  "faed9dada651886dd0623b785e04b5eb849164ac0c64e0d6aa84c1be5fabf23e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScE3I26",
+                          "start_line":  16221,
+                          "end_line":  16227,
+                          "body_sha256":  "cbfbe005e38dcb76e4a0761da31e98723b3fb5ad0cccf2884e489647ba981f6e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScE3I27",
+                          "start_line":  16228,
+                          "end_line":  16245,
+                          "body_sha256":  "5c4d5f6a983c94b7fd7583dfdc0606bfd51582610720b3ecc120a6f10da79cf9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg3AttachScFI4",
+                          "start_line":  16246,
+                          "end_line":  16260,
+                          "body_sha256":  "01d010d3919025d04253708f755c967d8c17bde968b41ad648620fb315824bff",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScHI5",
+                          "start_line":  16261,
+                          "end_line":  16279,
+                          "body_sha256":  "c720e46b4a142793c3d800a6e713956ff427288070c94fff90cf09fa326046a4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScF1I8D",
+                          "start_line":  16280,
+                          "end_line":  16286,
+                          "body_sha256":  "d5cd42f9c6eaa39505487db24dafe2b0fb3e35d979eb92f5ab5946e20dfe4706",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScF1I4E",
+                          "start_line":  16287,
+                          "end_line":  16302,
+                          "body_sha256":  "363f4ffdbe3f16eaabca51f78a7ee5e5ef48b0476cc1bcf934a50eebbb578d7a",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScF1I5E",
+                          "start_line":  16303,
+                          "end_line":  16315,
+                          "body_sha256":  "be056cdf7faa6403fbc31f4145d47918d31966ee1d25b7860cf5ae03d077d43c",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScF1I6E",
+                          "start_line":  16316,
+                          "end_line":  16328,
+                          "body_sha256":  "efad97b2a4bc1ec718fcd0861e9db2f9b63eb54662f3f5d5ef4830fc2f429184",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg2AttachScF1I7E",
+                          "start_line":  16329,
+                          "end_line":  16350,
+                          "body_sha256":  "3e15e804e502b9d793bf78baa17becfd6cb9a92085caa543a266849e276017a9",
+                          "alerts":  [
+                                         "\u0027Amount is invalid. Sum of Column B, C and D shall not be greater than the amount in Column A\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScIAI4",
+                          "start_line":  16351,
+                          "end_line":  16368,
+                          "body_sha256":  "aa28e953d88e8321324eeec72ae4f3de72b1086fc7017f6d5098e653aba1f2f6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1I2YearEnd",
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScII3",
+                          "start_line":  16369,
+                          "end_line":  16377,
+                          "body_sha256":  "d95edf6a7f69940452f2025d8d46ec0c6b15997d47369deb41b8e990eb2bdf34",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScIAI4CE",
+                          "start_line":  16378,
+                          "end_line":  16394,
+                          "body_sha256":  "8eee3f06ffec65760dca60b4f4edb82883f546269fe79b2f8b99aacdff1debec",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScIAI5CE",
+                          "start_line":  16395,
+                          "end_line":  16423,
+                          "body_sha256":  "56935702b1122c1d666a89c1f29266a9d8a0eafd0c48f823bef197b331003a65",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\"",
+                                         "\"Value of Column B + C + D cannot be greater than value of Column A.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScIAI6CE",
+                          "start_line":  16424,
+                          "end_line":  16452,
+                          "body_sha256":  "62f479945610170848342a7b27cb9be2eefe07d87d5865c978c7c64b6af7c86b",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\"",
+                                         "\"Value of Column B + C + D cannot be greater than value of Column A.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScIAI7CE",
+                          "start_line":  16453,
+                          "end_line":  16481,
+                          "body_sha256":  "374637b40ff3e41fef33f5c3fe3623b38460d87b4314aa7b31989656a70e408e",
+                          "alerts":  [
+                                         "\"Value of Column D cannot be greater than value of Column A.\"",
+                                         "\"Value of Column B + C + D cannot be greater than value of Column A.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:hidden",
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      },
+                      {
+                          "name":  "computePg4AttachScIAI8",
+                          "start_line":  16482,
+                          "end_line":  16511,
+                          "body_sha256":  "b8feba37559558824b0e5e9e193077856a41b6e9483af2cf30538894dda20f9e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computePg1AttachScBI9",
+                          "start_line":  16512,
+                          "end_line":  16532,
+                          "body_sha256":  "c05044cca61b851c9363d0860da050b3a3b86c3b3c5316c4636b9440b4387687",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "displayTotalAttachments",
+                          "start_line":  17397,
+                          "end_line":  17411,
+                          "body_sha256":  "13fc6fd4243c474e9868176bf7ac5cb7d7285ca40fe55723c05f0ee1412c963c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:totalEXAttach",
+                                              "frm1702MX:totalSPAttach"
+                                          ]
+                      },
+                      {
+                          "name":  "recomputeSchedule1",
+                          "start_line":  17718,
+                          "end_line":  17730,
+                          "body_sha256":  "1c4699ad47d787a708b93c8541065c55add24fdd6d5b9807e50d04a5ae67e096",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateNOLCOYear",
+                          "start_line":  18721,
+                          "end_line":  18817,
+                          "body_sha256":  "b706ee727dffbf675ac3732b727f3960821a972625e539ddcd34e5f4124f90fc",
+                          "alerts":  [
+                                         "\"Year Incurred cannot have duplicates.\"",
+                                         "\"The NOLCO of RE developers can only be carried over as a deduction from gross income for the next seven (7) consecutive taxable years immediately following the year of such loss pursuant to Sec.15(d) of the Renewable Energy Act of 2008 (RA 9513).\"",
+                                         "\"Please enter a value for the year between \" + (filingYear - 3) + \" and \" + (filingYear - 1) + \".\"",
+                                         "\"Year incurred cannot be lower than Year of Incorporation [\" + incorpYear + \"] (Page 1 Item 8).\"",
+                                         "\"Year incurred cannot be greater than or equal to Filing Year [\" + filingYear + \"] (Page 1 Item 2).\"",
+                                         "\"Please provide Filing Year (Page 1 Item 2) before providing Year Incurred for NOLCO.\"",
+                                         "\"Please provide Date of Incorporation (Page 1 Item 8) before providing Year Incurred for NOLCO.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1I2YearEnd",
+                                              "frm1702MX:txtPg1Pt1I8",
+                                              "frm1702MX:txtPg1SP"
+                                          ]
+                      },
+                      {
+                          "name":  "validateMCITYear",
+                          "start_line":  18818,
+                          "end_line":  18880,
+                          "body_sha256":  "2b058f48feafa0e95e0dd60d5d2cd35d46a8d67f65d16b5f0c6c13f67c513260",
+                          "alerts":  [
+                                         "\"Year cannot have duplicates.\"",
+                                         "\"Please enter a value for the year between \" + (returnPeriodYear - 3) + \" and \" + (returnPeriodYear -1) + \".\"",
+                                         "\"Year incurred cannot be lower than Year of Incorporation [\" + incorpYear + \"] (Page 1 Item 8).\"",
+                                         "\"Please provide Filing Year (Page 1 Item 2) before providing Year for MCIT.\"",
+                                         "\"Please provide Date of Incorporation (Page 1 Item 10) before providing Year Incurred for MCIT.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg1I2YearEnd",
+                                              "frm1702MX:txtPg1Pt1I8"
+                                          ]
+                      },
+                      {
+                          "name":  "validateNOLCOAttachments",
+                          "start_line":  19068,
+                          "end_line":  19115,
+                          "body_sha256":  "89b20d21ce151cc50186dd64319578f47c7856b55ec708da45fe19d9bf768a5b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg3Sc5I17i",
+                          "start_line":  23789,
+                          "end_line":  23823,
+                          "body_sha256":  "add1d0ffcf2d174e195d671ee431301e96f2b748d83e2e480f7e35983ab62d21",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg3Sc5Itm17iD_SubTotalA",
+                                              "frm1702MX:txtPg3Sc5Itm17iD_SubTotalB",
+                                              "frm1702MX:txtPg3Sc5Itm17iD_SubTotalC",
+                                              "frm1702MX:txtPg3Sc5Itm17iD_SubTotalD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg2Sc3",
+                          "start_line":  24020,
+                          "end_line":  24055,
+                          "body_sha256":  "9a7ab9b7bc70d2781651afeb123730c50d86dae7df04993030fb56b706cd78e9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2Sc3_SubTotalCA",
+                                              "frm1702MX:txtPg2Sc3_SubTotalCB",
+                                              "frm1702MX:txtPg2Sc3_SubTotalCC",
+                                              "frm1702MX:txtPg2Sc3_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg3Sc6",
+                          "start_line":  24276,
+                          "end_line":  24310,
+                          "body_sha256":  "3258133d4001d718216c35206d44400947d905601ff3fb71cf3c6e8f9e4f5fb1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg6Sc6_SubTotalCA",
+                                              "frm1702MX:txtPg6Sc6_SubTotalCB",
+                                              "frm1702MX:txtPg6Sc6_SubTotalCC",
+                                              "frm1702MX:txtPg6Sc6_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg4Sc10I3",
+                          "start_line":  24507,
+                          "end_line":  24540,
+                          "body_sha256":  "16a78e27ae47deb338fe5bdcf09a00ae10905a1ef0bcea2d78522cc20d5f38cc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4Sc10Itm3_SubTotalCA",
+                                              "frm1702MX:txtPg4Sc10Itm3_SubTotalCB",
+                                              "frm1702MX:txtPg4Sc10Itm3_SubTotalCC",
+                                              "frm1702MX:txtPg4Sc10Itm3_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg4Sc10I6",
+                          "start_line":  24737,
+                          "end_line":  24771,
+                          "body_sha256":  "c5382013d72fde047e876570a530c88e3054fbcb178f3868b163d0aa93b35683",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4Sc10Itm6_SubTotalCA",
+                                              "frm1702MX:txtPg4Sc10Itm6_SubTotalCB",
+                                              "frm1702MX:txtPg4Sc10Itm6_SubTotalCC",
+                                              "frm1702MX:txtPg4Sc10Itm6_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg4Sc10I8",
+                          "start_line":  24968,
+                          "end_line":  25004,
+                          "body_sha256":  "ccee212c54aac300e3daaef80d9826e584f5eb7253e9f1f621738eb0870b08b9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4Sc10Itm8_SubTotalCA",
+                                              "frm1702MX:txtPg4Sc10Itm8_SubTotalCB",
+                                              "frm1702MX:txtPg4Sc10Itm8_SubTotalCC",
+                                              "frm1702MX:txtPg4Sc10Itm8_SubTotalCD"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg2MScDI17i",
+                          "start_line":  25186,
+                          "end_line":  25210,
+                          "body_sha256":  "9e34dd0791e1054d6c761528037f3b51299587733abcc105ce73b000bb1294a6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg2"
+                                          ]
+                      },
+                      {
+                          "name":  "summationmodalTablePg4MScHI4",
+                          "start_line":  25407,
+                          "end_line":  25419,
+                          "body_sha256":  "7484c86c02c9a4353d429c0e18991e70529027a18ae5007e2ec12b0634664756",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1702MX:txtPg4"
+                                          ]
+                      }
+                  ]
+}

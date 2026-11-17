@@ -1,0 +1,28 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2552-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "lse-rate",
+                      "tax_base":  100000,
+                      "official_output":  600,
+                      "calculation_id":  "2552-fixed-row-tax",
+                      "rate":  0.6
+                  },
+                  {
+                      "case_id":  "ipo-rate",
+                      "tax_base":  100000,
+                      "official_output":  4000,
+                      "calculation_id":  "2552-fixed-row-tax",
+                      "rate":  4
+                  },
+                  {
+                      "penalties":  0,
+                      "recommended_output":  0,
+                      "calculation_id":  "2552-item25-payable",
+                      "case_id":  "negative-payable",
+                      "official_output":  -100,
+                      "balance":  -100
+                  }
+              ]
+}

@@ -1,0 +1,277 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200c-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2200c-validate-001-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month is 00."
+                                    },
+                      "expected_message":  "Month field on Page 1 Item 1 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-001-month"
+                  },
+                  {
+                      "case_id":  "case-02-2200c-validate-002-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day is blank."
+                                    },
+                      "expected_message":  "Day field on Page 1 Item 1 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-002-day"
+                  },
+                  {
+                      "case_id":  "case-03-2200c-validate-003-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Year field on Page 1 Item 1 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-003-year"
+                  },
+                  {
+                      "case_id":  "case-04-2200c-validate-004-date-shape",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return date fails source calendar and length checks."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format) in Page 1 Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-004-date-shape"
+                  },
+                  {
+                      "case_id":  "case-05-2200c-validate-005-future-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return date is after the current date."
+                                    },
+                      "expected_message":  "Page 1 Item 1 Date cannot be a future date ",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-005-future-date"
+                  },
+                  {
+                      "case_id":  "case-06-2200c-validate-006-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Hidden RDO code is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Page 1 Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-006-rdo"
+                  },
+                  {
+                      "case_id":  "case-07-2200c-validate-007-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank after trim."
+                                    },
+                      "expected_message":  "Name field on Page 1 Item 7 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-007-name"
+                  },
+                  {
+                      "case_id":  "case-08-2200c-validate-008-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address line 1 is blank after trim."
+                                    },
+                      "expected_message":  "Registered Address field on Page 1 Item 8 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-008-address"
+                  },
+                  {
+                      "case_id":  "case-09-2200c-validate-009-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank after trim."
+                                    },
+                      "expected_message":  "Zip Code field on Page 1 Item 8A is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-009-zip"
+                  },
+                  {
+                      "case_id":  "case-10-2200c-validate-010-contact",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank after trim."
+                                    },
+                      "expected_message":  "Contact Number field on Page 1 Item 9 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-010-contact"
+                  },
+                  {
+                      "case_id":  "case-11-2200c-validate-011-email-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Email is blank after trim."
+                                    },
+                      "expected_message":  "E-mail address on page 1 item 10 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-011-email-required"
+                  },
+                  {
+                      "case_id":  "case-12-2200c-validate-012-region",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Region value is 00."
+                                    },
+                      "expected_message":  "Region field on Page 1 Item 11 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-012-region"
+                  },
+                  {
+                      "case_id":  "case-13-2200c-validate-013-province",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Province value is 00."
+                                    },
+                      "expected_message":  "Province field on Page 1 Item 11 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-013-province"
+                  },
+                  {
+                      "case_id":  "case-14-2200c-validate-014-city",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "City value is 00."
+                                    },
+                      "expected_message":  "City field on Page 1 Item 11 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-014-city"
+                  },
+                  {
+                      "case_id":  "case-15-2200c-validate-015-relief-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither tax-relief radio is selected."
+                                    },
+                      "expected_message":  "Availing of Tax Relief field on Page 1 Item 12 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-015-relief-choice"
+                  },
+                  {
+                      "case_id":  "case-16-2200c-validate-016-relief-specify",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax-relief Yes is selected and specification is blank."
+                                    },
+                      "expected_message":  "Specify Tax Relief field on Page 1 Item 12A is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-016-relief-specify"
+                  },
+                  {
+                      "case_id":  "case-17-2200c-validate-017-payment-choice",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No manner-of-payment radio is selected."
+                                    },
+                      "expected_message":  "Manner of Payment on Page 1 Part II is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-017-payment-choice"
+                  },
+                  {
+                      "case_id":  "case-18-2200c-validate-018-payment-other",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other manner of payment is selected and description is blank."
+                                    },
+                      "expected_message":  "Specfy Manner of Payment field on Page 1 Part II Item 15 is required.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-018-payment-other"
+                  },
+                  {
+                      "case_id":  "case-19-2200c-validate-019-part-v-row",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "For a row 1..10, any CPP input is zero while computed bill is nonzero, or any CPP input is nonzero while bill is zero."
+                                    },
+                      "expected_message":  "Please complete row #{row} in Page 2 Part V.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-validate-019-part-v-row"
+                  },
+                  {
+                      "case_id":  "case-20-2200c-input-020-email-format",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Nonblank email does not contain a source-regex address with a 2-4 letter final label."
+                                    },
+                      "expected_message":  "Please enter a valid e-mail address on page 1 item 10",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-input-020-email-format"
+                  },
+                  {
+                      "case_id":  "case-21-2200c-input-021-year-range",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Nonblank year is earlier than 2018 or later than current year."
+                                    },
+                      "expected_message":  "Year shall not be greater than the present year and not earlier than 2018.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-input-021-year-range"
+                  },
+                  {
+                      "case_id":  "case-22-2200c-save-022-date-required",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month/day/year is blank, or month/day is 00."
+                                    },
+                      "expected_message":  "Please enter correct date on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-save-022-date-required"
+                  },
+                  {
+                      "case_id":  "case-23-2200c-save-023-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Runtime RDO selector value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-save-023-rdo"
+                  },
+                  {
+                      "case_id":  "case-24-2200c-save-024-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid name on Page 1 Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-save-024-name"
+                  },
+                  {
+                      "case_id":  "case-25-2200c-save-025-address",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address line 1 is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Registered Address on Page 1 Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-save-025-address"
+                  },
+                  {
+                      "case_id":  "case-26-2200c-save-026-contact",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Contact Number on Page 1 Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200c-save-026-contact"
+                  },
+                  {
+                      "case_id":  "case-27-2200c-defect-031-part-v-zero",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A legitimate populated Part V row contains zero in any of the three CPP columns while computed bill is nonzero."
+                                    },
+                      "expected_message":  "Please complete row #{row} in Page 2 Part V.",
+                      "expected_behavior":  "The completeness predicate treats numeric zero as missing, so legitimate zero-valued columns cannot coexist with a nonzero row.",
+                      "rule_id":  "2200c-defect-031-part-v-zero"
+                  }
+              ]
+}

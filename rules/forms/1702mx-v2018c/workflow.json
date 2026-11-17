@@ -1,0 +1,192 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-form-pdf",
+                                           "official-attachment-pdf",
+                                           "official-hta-runtime#frmMain"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 1702-MX four-page annual return with a separate two-page mandatory attachment and runtime add-more/modal field families."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L21427-L21470",
+                                           "xml-editable-subset-v1"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks only RDO, registered name/address, contact number, and email, shows the first failure, and the reviewed plaintext artifact contains a 210-key editable subset."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L21103-L21425"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate uses the source order recorded in validations.json; most branches stop at first error, while mandatory-attachment validation can alert repeatedly before returning false. Success disables form controls and enables Edit, Upload, and Final Copy."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "The reviewed encrypted companion decrypts in memory to 588 concrete keys: the 210 editable keys plus 378 final-copy-only keys. Values are never emitted."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXMLsubmit-and-sendEmail",
+                                           "repository-model#transition_to_queued:L728-L732"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online return/mandatory-attachment transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes a plaintext pseudo-XML editable save."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L21427-L21470"
+                                            ],
+                            "guard":  "Five narrow profile checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Edit, Upload, Final Copy, Previous, and Next."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L21103-L21417"
+                                            ],
+                            "guard":  "All active source-ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#edit-workflow"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates an encrypted/compressed artifact with 588 concrete keys in the reviewed example."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "encrypted-field-audit-v796"
+                                            ],
+                            "guard":  "Official finalization/profile flow permits progress."
+                        },
+                        {
+                            "action":  "Transport return and mandatory attachment",
+                            "side_effects":  [
+                                                 "Attempts online transport; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXMLsubmit-and-sendEmail"
+                                            ],
+                            "guard":  "Connectivity, attachment, and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018C revision and applicable annual filing period",
+                          "Taxpayer profile fields required by initialValidateBeforeSave",
+                          "At least one applicable ATC",
+                          "Date of incorporation / organization",
+                          "Method of deduction",
+                          "Complete applicable schedules and mandatory-attachment rows",
+                          "Overpayment disposition when Item 16 or Item 21 is negative"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "1702mx-mandatory-attachment",
+                                     "label":  "Separate two-page 1702-MX mandatory attachment for multiple exempt and/or special-rate activities.",
+                                     "source_refs":  [
+                                                         "official-attachment-pdf",
+                                                         "official-hta-runtime#validateAttachments:L18881-L19065"
+                                                     ],
+                                     "required_when":  "Instruction B / multiple exempt or special activities applies.",
+                                     "official_ui_enforcement":  "Runtime modal rows are locally checked by validateAttachments, but transport was not exercised.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "audited-financial-statements",
+                                     "label":  "Audited Financial Statements and related schedules/reconciliation when required.",
+                                     "source_refs":  [
+                                                         "legacy-help-supporting-only#attachments:L674-L693"
+                                                     ],
+                                     "required_when":  "Applicable under the official filing instructions.",
+                                     "official_ui_enforcement":  "Presence is not verified by the local Validate code reviewed.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "tax-credit-proof",
+                                     "label":  "Proof of tax credits/payments claimed in Schedule 3.",
+                                     "source_refs":  [
+                                                         "official-form-pdf#Schedule-3",
+                                                         "legacy-help-supporting-only#attachments:L674-L693"
+                                                     ],
+                                     "required_when":  "A credit/payment line is claimed.",
+                                     "official_ui_enforcement":  "Local row calculations and completeness checks do not verify external proof files.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-supporting-only#deadline:L177-L197"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return: legacy June 2013 runtime help states the 15th day of the fourth month following close of the taxable year; exact January 2018 revision-matched instruction remains unverified."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-supporting-only#deadline:L177-L197"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not quarterly; same annual deadline caveat applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-supporting-only#deadline:L177-L197"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not quarterly; same annual deadline caveat applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "legacy-help-supporting-only#deadline:L177-L197"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not quarterly; same annual deadline caveat applies."
+                             }
+                         ]
+}

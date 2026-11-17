@@ -1,0 +1,28 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0619e-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "december-rollover",
+                      "filing_year":  2025,
+                      "calculation_id":  "0619e-due-date",
+                      "official_output":  "01/10/2026",
+                      "filing_month":  12
+                  },
+                  {
+                      "item15":  125,
+                      "item14":  100,
+                      "calculation_id":  "0619e-item16-net",
+                      "case_id":  "negative-net",
+                      "official_output":  -25,
+                      "recommended_behavior":  "reject or apply the legally correct adjustment rule"
+                  },
+                  {
+                      "case_id":  "total-remittance",
+                      "calculation_id":  "0619e-item18-total",
+                      "official_output":  1060,
+                      "item17d":  60,
+                      "item16":  1000
+                  }
+              ]
+}

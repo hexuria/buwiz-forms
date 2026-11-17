@@ -1,0 +1,557 @@
+{
+    "source_sha256":  "2ccf624c87c8a951443630a0803e5f1f4bd7800bceb850ff14e8160f5f6b59fd",
+    "function_count":  32,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  5791,
+                          "end_line":  5875,
+                          "body_sha256":  "dc280763fd851c4688301520ad757367455e68f38f50e6edba6a298961672630",
+                          "alerts":  [
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:btnPrintPreview",
+                                              "frm2200S:btnSchedule1",
+                                              "frm2200S:chkPymntManner_1"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  5908,
+                          "end_line":  6120,
+                          "body_sha256":  "49c0df61b7859ecd2eaf882377602103fdb5a5af52c41a37202786f61c4d5a28",
+                          "alerts":  [
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:amendedRtn_1",
+                                              "frm2200S:amendedRtn_2",
+                                              "frm2200S:taxpayerName",
+                                              "frm2200S:txtAddress",
+                                              "frm2200S:txtBranchCode",
+                                              "frm2200S:txtDate",
+                                              "frm2200S:txtForYr",
+                                              "frm2200S:txtLineBus",
+                                              "frm2200S:txtMonth1",
+                                              "frm2200S:txtRDOCode",
+                                              "frm2200S:txtTax20",
+                                              "frm2200S:txtTax21A",
+                                              "frm2200S:txtTax21B",
+                                              "frm2200S:txtTax21C",
+                                              "frm2200S:txtTax21D",
+                                              "frm2200S:txtTax23C",
+                                              "frm2200S:txtTelNum",
+                                              "frm2200S:txtTIN1",
+                                              "frm2200S:txtTIN2",
+                                              "frm2200S:txtTIN3",
+                                              "frm2200S:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  6121,
+                          "end_line":  6265,
+                          "body_sha256":  "90b3d72bea1ec28e34d8d8775b2c0e57f3aac140e37b4060029db5be359cfeb1",
+                          "alerts":  [
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:amendedRtn_1",
+                                              "frm2200S:amendedRtn_2",
+                                              "frm2200S:taxpayerName",
+                                              "frm2200S:txtAddress",
+                                              "frm2200S:txtBranchCode",
+                                              "frm2200S:txtDate",
+                                              "frm2200S:txtForYr",
+                                              "frm2200S:txtLineBus",
+                                              "frm2200S:txtMonth1",
+                                              "frm2200S:txtRDOCode",
+                                              "frm2200S:txtTax20",
+                                              "frm2200S:txtTax21A",
+                                              "frm2200S:txtTax21B",
+                                              "frm2200S:txtTax21C",
+                                              "frm2200S:txtTax21D",
+                                              "frm2200S:txtTax23C",
+                                              "frm2200S:txtTelNum",
+                                              "frm2200S:txtTIN1",
+                                              "frm2200S:txtTIN2",
+                                              "frm2200S:txtTIN3",
+                                              "frm2200S:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "dateMonthYear",
+                          "start_line":  6688,
+                          "end_line":  6743,
+                          "body_sha256":  "996797b4b96cc31369e0da22fed89e3e04bcf376fa4e54eea5a4450e718ef257",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:chkPymntManner_2",
+                                              "frm2200S:txtDate",
+                                              "frm2200S:txtForYr",
+                                              "frm2200S:txtMonth1",
+                                              "frm2200S:txtTax21A",
+                                              "frm2200S:txtTax21B",
+                                              "frm2200S:txtTax21C"
+                                          ]
+                      },
+                      {
+                          "name":  "isValidDataOnSched1",
+                          "start_line":  7135,
+                          "end_line":  7261,
+                          "body_sha256":  "996db0d6203e60ba41e9db3441d00fde5389fd42833f1398483fb25df732043f",
+                          "alerts":  [
+                                         "\"Please enter a valid ATC at Row \" + (index + 1) + \".\"",
+                                         "\"The supplied ATC code at Row \" + (index + 1) + \" should start with \u0027XB\u0027.\"",
+                                         "\"Please enter a valid ATC code at Row \" + (index + 1) + \".\\n\\nAdded ATC code should be differ from table.\"",
+                                         "\"Please enter a Description at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a Tax Bracket at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a valid Applicable rate at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a value on Volume Removals column at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a unique Applicable rate at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a valid ATC in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\"",
+                                         "\"The supplied ATC code in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \" should start with \u0027XB\u0027.\"",
+                                         "\"Please enter a valid ATC code in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\\n\\nAdded ATC code should be differ from table.\"",
+                                         "\"Please enter a Description in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a Tax Bracket in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a valid Applicable rate in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a value on Volume Removals column in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\"",
+                                         "\"Please enter a unique Applicable rate in \" + \u0027\"\u0027 + \"Others\" + \u0027\"\u0027 + \" at Row \" + (index + 1) + \".\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtsched1AppTaxRate",
+                                              "frm2200S:txtsched1Atc",
+                                              "frm2200S:txtsched1Desc",
+                                              "frm2200S:txtsched1TaxBracket",
+                                              "frm2200S:txtsched1VolumeRemovals"
+                                          ]
+                      },
+                      {
+                          "name":  "validateForm",
+                          "start_line":  7673,
+                          "end_line":  7856,
+                          "body_sha256":  "95e4e5e6899e1481fd069443ddb725261ea46c87252e6451892e1681257b6021",
+                          "alerts":  [
+                                         "\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Invalid date entry on item 1.\"",
+                                         "\"Please enter valid day on item 1.\"",
+                                         "\"Please enter valid year on item 1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be lower than 1900.\") return; } if(d.getElementById(\u0027frm2200S:txtDate\u0027).value == \"\") { alert(\"Please indicate a valid Day.\") return; } if(d.getElementById(\u0027frm2200S:txtDate\u0027).value.length == 1) { alert(\"Please enter a valid day on item 1. Format should be MM/DD/YYYY.\") return; } if(d.getElementById(\u0027frm2200S:txtDate\u0027).value \u003c 1){ alert(\"Please enter a valid day in Item 1.\"",
+                                         "\"Invalid date entry on Item no.1.\"",
+                                         "\"Invalid date entry on Item no.1.\"",
+                                         "\"Date on Item 1 cannot be a future date.\"",
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 6.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 7.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 7A.\"",
+                                         "\"Please enter Contact Number on Item 8.\"",
+                                         "\"Please enter a valid Main Line of Business on Item 9.\"",
+                                         "\"Please enter a valid PSIC on Item 10.\"",
+                                         "\"Please enter Email Address on Item 11.\"",
+                                         "\"Please enter values on item no. 12. All entries must not be empty.\") return; } if(d.getElementById(\u0027frm2200SoptRegion1\u0027).selectedIndex \u003c 1 || d.getElementById(\u0027frm2200SoptProvince1\u0027).selectedIndex \u003c 1 || d.getElementById(\u0027frm2200SoptCity1\u0027).selectedIndex \u003c 1) //|| d.getElementById(\u0027frm2200S:txtPlaceofRem\u0027).value == \"\" { alert(\"Please enter values on item no. 13. All entries must not be empty.\") return; } //Added as of 04/29/2014 based on SRS if (d.getElementById(\u0027frm2200S:optTreaty_1\u0027).checked \u0026\u0026 d.getElementById(\u0027frm2200S:lstTaxTreaty\u0027).value == 0) { alert(\"Please select If yes, please specify on Item 14A.\"",
+                                         "\"Please select an option on Part II Manner of Payment\"",
+                                         "\"Please enter a value on Item 17.\"",
+                                         "\"Please enter Tax Payment / Deposit on Item 25A.\") return; } //Added as of 05/12/2014 based on SRS new requirement var tax24total = parseFloat(\"\" + d.getElementById(\u0027frm2200S:txtTax24\u0027).value",
+                                         "\"Balance to be carried over to Next return must not be positive.\\nPlease adjust Tax Payment/Deposit accordingly.\"",
+                                         "\"Payment not sufficient to cover amount payable. Please check amount in Item 25C.\"",
+                                         "\"Payment not sufficient to cover amount payable. Please check amount in Item 26.\"",
+                                         "\"Validation successful. Click on Edit if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:amendedRtn_1",
+                                              "frm2200S:amendedRtn_2",
+                                              "frm2200S:btnSchedule1",
+                                              "frm2200S:chkPymntManner_1",
+                                              "frm2200S:chkPymntManner_2",
+                                              "frm2200S:chkPymntManner_3",
+                                              "frm2200S:lstTaxTreaty",
+                                              "frm2200S:optTreaty_1",
+                                              "frm2200S:taxpayerName",
+                                              "frm2200S:txtAddress",
+                                              "frm2200S:txtBranchCode",
+                                              "frm2200S:txtDate",
+                                              "frm2200S:txtForYr",
+                                              "frm2200S:txtLineBus",
+                                              "frm2200S:txtMonth1",
+                                              "frm2200S:txtOthMannerofPymnt",
+                                              "frm2200S:txtPlaceofProd",
+                                              "frm2200S:txtPlaceofRem",
+                                              "frm2200S:txtPSIC",
+                                              "frm2200S:txtRDOCode",
+                                              "frm2200S:txtTax19",
+                                              "frm2200S:txtTax22",
+                                              "frm2200S:txtTax23A",
+                                              "frm2200S:txtTax24",
+                                              "frm2200S:txtTelNum",
+                                              "frm2200S:txtTIN1",
+                                              "frm2200S:txtTIN2",
+                                              "frm2200S:txtTIN3",
+                                              "frm2200S:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  8022,
+                          "end_line":  8129,
+                          "body_sha256":  "17148636267c25cb665b9e293acb091f44bd3741f133452bab6f920a183a1c90",
+                          "alerts":  [
+                                         "\"Filing year is not a leap year.\"",
+                                         "\"Invalid date entry.\"",
+                                         "\"Please enter valid day on item 1.\"",
+                                         "\"Please enter valid year on item 1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be lower than 1900.\") return; } if(d.getElementById(\u0027frm2200S:txtDate\u0027).value*1 \u003e 31 || d.getElementById(\u0027frm2200S:txtDate\u0027).value == \"\") { alert(\"Please indicate a valid Day.\") return; } if( (d.getElementById(\u0027frm2200S:txtTIN1\u0027).value == \"\" || d.getElementById(\u0027frm2200S:txtTIN2\u0027).value == \"\" || d.getElementById(\u0027frm2200S:txtTIN3\u0027).value == \"\" || d.getElementById(\u0027frm2200S:txtBranchCode\u0027).value == \"\") ) { alert(\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 6.\"",
+                                         "\"Please enter a valid Registered Address on Item 7.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 7A.\"",
+                                         "\"Please enter a valid Contact Number on Item 8.\"",
+                                         "\"Please enter a valid Main Line of Business on Item 9.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:taxpayerName",
+                                              "frm2200S:txtAddress",
+                                              "frm2200S:txtBranchCode",
+                                              "frm2200S:txtDate",
+                                              "frm2200S:txtForYr",
+                                              "frm2200S:txtLineBus",
+                                              "frm2200S:txtMonth1",
+                                              "frm2200S:txtRDOCode",
+                                              "frm2200S:txtTelNum",
+                                              "frm2200S:txtTIN1",
+                                              "frm2200S:txtTIN2",
+                                              "frm2200S:txtTIN3",
+                                              "frm2200S:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  8254,
+                          "end_line":  8293,
+                          "body_sha256":  "07432ac2a19b5606126c3a983cdf36f08cbd1c2e3f414be56c8273c0961b1ab3",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:taxpayerName",
+                                              "frm2200S:txtAddress",
+                                              "frm2200S:txtBranchCode",
+                                              "frm2200S:txtLineBus",
+                                              "frm2200S:txtRDOCode",
+                                              "frm2200S:txtTelNum",
+                                              "frm2200S:txtTIN1",
+                                              "frm2200S:txtTIN2",
+                                              "frm2200S:txtTIN3",
+                                              "frm2200S:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  9002,
+                          "end_line":  9022,
+                          "body_sha256":  "29dd50b784e2a2b9c051e357e2d1a8891e342faa67040898ce09fb1c90e75094",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  9191,
+                          "end_line":  9204,
+                          "body_sha256":  "b2de3d87b1305516855a2c21157d501b0ba75cb503b0603dff5bcce26578e3ac",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "atcPropertyJS",
+                          "start_line":  9490,
+                          "end_line":  9495,
+                          "body_sha256":  "8b9c0959a4fc619414ef8b52379d6db5cee525ce23bc8bd9cab7b30a6f84a056",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "filteredATCPropertyJS",
+                          "start_line":  9496,
+                          "end_line":  9502,
+                          "body_sha256":  "ffac493b138e96e4b370b68c20d13d6daa11a99f71f65914337da45e68a50d59",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadXMLATC",
+                          "start_line":  9503,
+                          "end_line":  9521,
+                          "body_sha256":  "68d69320ec6265899692cc343376c6270fdf8e92960f5e26e1856221625fba89",
+                          "alerts":  [
+                                         "responseATC.innerHTML"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "loadATC",
+                          "start_line":  9522,
+                          "end_line":  9551,
+                          "body_sha256":  "25e02f226a8071f40f0f07b224e35ddce12a9638c62f9ffab9c5b366b1133ffa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "setATCSchedule1",
+                          "start_line":  9552,
+                          "end_line":  9573,
+                          "body_sha256":  "70872abba058ec5274fa26a2dbd931588132b4f222dc5baf5d046592e4ff0ba2",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateDate",
+                          "start_line":  9574,
+                          "end_line":  9649,
+                          "body_sha256":  "9d51a861a65622fde98cc82501a6d3436b0fec0d946d5ea6a197d3306e4da61a",
+                          "alerts":  [
+                                         "\u0027Please provide a valid date (MM/DD/YYYY).\u0027",
+                                         "\u0027This date cannot be a future date.\u0027",
+                                         "\u0027The year cannot be less than 2013.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtDate",
+                                              "frm2200S:txtForYr",
+                                              "frm2200S:txtMonth1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateEmail",
+                          "start_line":  9650,
+                          "end_line":  9658,
+                          "body_sha256":  "bcded4bbfc18dfb1da1e2e9e7e44d94e809ce422758a1bd249f44becaf835d14",
+                          "alerts":  [
+                                         "\"Please enter a valid Email Address on Item 11.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveModalRowCount",
+                          "start_line":  9886,
+                          "end_line":  9892,
+                          "body_sha256":  "752cb48ab6c71963ca282a6b80bd86f097813fd016b9261123eb1130d2b322ed",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtCtr"
+                                          ]
+                      },
+                      {
+                          "name":  "selectAllCheckbox",
+                          "start_line":  9915,
+                          "end_line":  9924,
+                          "body_sha256":  "ede32edb818632352e950ee9f17dd578ca4fe0298b4d1a4082f67805b7737f37",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkIfValidValues",
+                          "start_line":  10050,
+                          "end_line":  10064,
+                          "body_sha256":  "1c8185ef7059a95129a5b1b8cd70f4ad312b4ed28ee6880357684bcf23105770",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkTaxRate",
+                          "start_line":  10065,
+                          "end_line":  10103,
+                          "body_sha256":  "2141db6776eda4ec520a9e8c57f653b7897f878f710fe47543985ec5467d123b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "addBlurEventSchedule1",
+                          "start_line":  10104,
+                          "end_line":  10162,
+                          "body_sha256":  "7f6fa28588f7903ac3be3f09813e3937449f7462931e110b07113a4478f6763b",
+                          "alerts":  [
+                                         "elem",
+                                         "this"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtsched1AppTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "validateModal",
+                          "start_line":  10163,
+                          "end_line":  10194,
+                          "body_sha256":  "d1384d790677a4976917c8f59ec25b91774d5d2db823187fec12c62c7a6f5159",
+                          "alerts":  [
+                                         "\"Please enter a valid \" + label + \" at Row \" + (r + 1) + \".\"",
+                                         "label + \" at Row \" + (r + 1) + \" should be greater than zero.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "otherRateCheck",
+                          "start_line":  10336,
+                          "end_line":  10440,
+                          "body_sha256":  "bab1e6ae089717dbf9f67af45a79468aff685c4c6c33825a5b20c9d8d154afca",
+                          "alerts":  [
+                                         "atc + \" == \" + atcArray[x]+\" and \" +rate + \" == \" + rateArray[x]",
+                                         "\u0027Rate should be unique per ATC.\u0027",
+                                         "\u0027Rate should be unique per ATC.\u0027"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtForYr"
+                                          ]
+                      },
+                      {
+                          "name":  "clearSchedule1",
+                          "start_line":  10441,
+                          "end_line":  10459,
+                          "body_sha256":  "71d77fd3e46c9fdd555cddb1057d438818a9b6523dec4d0892d912a54e5cbae8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "cancelSchedule1",
+                          "start_line":  10460,
+                          "end_line":  10470,
+                          "body_sha256":  "7856c704305ef2a06ccf706a96c2db81d26d58c719ebe11fabfd654ab7b150b9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "checkTextboxValues",
+                          "start_line":  10471,
+                          "end_line":  10484,
+                          "body_sha256":  "763abb3334837aedb7afc4c4ef0e2b8892c1dc1d15a30084f1a06f3f84a2b708",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateSchedule1",
+                          "start_line":  10485,
+                          "end_line":  10534,
+                          "body_sha256":  "78c4e56653a4dbc621877289704678a9c7a4f79893ec1198344e5d89b918523d",
+                          "alerts":  [
+                                         "\"Please fill up Schedule 1.\"",
+                                         "\"Please fill up Schedule 1.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:chkPymntManner",
+                                              "frm2200S:chkPymntManner_1",
+                                              "frm2200S:txtSalesValue",
+                                              "frm2200S:txtsched1AppTaxRate0",
+                                              "frm2200S:txtsched1SalesValue0",
+                                              "frm2200S:txtsched1VolumeRemovals0",
+                                              "frm2200S:txtVolumeRemovals"
+                                          ]
+                      },
+                      {
+                          "name":  "checkATCValue",
+                          "start_line":  10535,
+                          "end_line":  10556,
+                          "body_sha256":  "0771861f764d4e10099b2606576594c1ead9ca6c2d4ce931970088495ac52acf",
+                          "alerts":  [
+                                         "\"Invalid ATC.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200S:txtsched1AppTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "checkconnection",
+                          "start_line":  10616,
+                          "end_line":  10624,
+                          "body_sha256":  "75268b4c3e2c8e8db4f783f94342af0393331ba4db888543558b3b23534a8a75",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "radioCheckYesNo",
+                          "start_line":  10656,
+                          "end_line":  10668,
+                          "body_sha256":  "0d3d6dad3ff7458dfa10821d1c332b8e6a6665478592684277923c4c46cb52e9",
+                          "alerts":  [
+                                         "element + \"===\" + status"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "getFormattedDate",
+                          "start_line":  10708,
+                          "end_line":  10721,
+                          "body_sha256":  "0efb7bac31aa8817ff03d893a56344655dfca284411887701f9bcda62438b492",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

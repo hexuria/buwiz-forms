@@ -1,0 +1,111 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1800-v2018",
+    "form_code":  "1800",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018 ENCS",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1800v2018.hta",
+                                "sha256":  "58b1ff5157f6d66f1ed1252c696d13ab9afe090bae0c1793faf42ef104159d37",
+                                "size":  388254,
+                                "revision_binding":  "APPLICATIONNAME/formTyp 1800v2018 and printed January 2018 ENCS."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1800v2018\\1800 Jan 2018 ENCS rev final.pdf",
+                                "sha256":  "e2e837852680196d0e9aa9a513f55c7a6e4924493b5440548e46217166cc085e",
+                                "size":  825577,
+                                "revision_binding":  "January 2018 Form 1800."
+                            },
+                            {
+                                "asset_id":  "official-guidelines-pdf",
+                                "kind":  "official-guidelines-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1800v2018\\1800 Guidelines.pdf",
+                                "sha256":  "b8fa70696bea4a50aae94b9009b4281121112e9928b49eb156f8953949ae7cb8",
+                                "size":  261044,
+                                "revision_binding":  "Local guidelines distributed with the January 2018 form assets."
+                            },
+                            {
+                                "asset_id":  "legacy-help-supporting-only",
+                                "kind":  "official-runtime-help-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1800.hta",
+                                "sha256":  "1ef140b7d7584043163c6d37020dc34266ebbd293cff6f9adb341263cb70f9ea",
+                                "size":  15835,
+                                "revision_binding":  "APPLICATIONNAME 1800; pre-2018 schedular/30% rate text contradicts the 2018 flat-rate form and is supporting only."
+                            },
+                            {
+                                "asset_id":  "legacy-hta-excluded",
+                                "kind":  "runtime-extracted-hta-legacy",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1800.hta",
+                                "sha256":  "0b69656574f35c1b13c0cca56fc59670ace3525453ae3d765c2a0991197a81ed",
+                                "size":  257866,
+                                "revision_binding":  "Legacy APPLICATIONNAME 1800; excluded from the 1800v2018 rule contract."
+                            },
+                            {
+                                "asset_id":  "legacy-editable-save-excluded",
+                                "kind":  "dummy-profile-editable-save-legacy",
+                                "path":  "C:\\eBIRForms\\savefile\\00000000000000-1800-07222026.xml",
+                                "sha256":  "3a1aca0a1ca402fa408299f000f9672e6bcf48aba65856fedc421a51af0892a5",
+                                "size":  6092,
+                                "revision_binding":  "89 frm1800-prefixed keys; revision mismatch; values excluded."
+                            },
+                            {
+                                "asset_id":  "legacy-final-copy-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy-legacy",
+                                "path":  "C:\\eBIRForms\\IAF_RDO_Copy\\1800-final-copy-#email-redacted#.xml",
+                                "sha256":  "ef2d1e1854334ce08e034db74eea80292f99d330c53adfb4a59f38340b78e922",
+                                "size":  939,
+                                "revision_binding":  "Legacy 1800 final copy; revision mismatch; values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  166,
+                   "runtime_field_families":  11,
+                   "fields_total":  177,
+                   "typed_fields":  177,
+                   "validation_rules":  38,
+                   "confirmed_official_bugs":  28,
+                   "calculations":  13,
+                   "negative_fixtures":  21,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "legacy_artifact_exclusion":  "fixtures/legacy-artifact-exclusion.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer, typed model, migration, capability, or release metadata changed.",
+                        "No source values or email-bearing filenames are copied.",
+                        "The concrete inventory is source-derived from the exact Save serializer: 167 live static controls plus one injected RDO, minus two collapsed address continuation controls, for 166 baseline entries.",
+                        "Eleven indexed families cover unbounded Schedule A, B1, and B2 rows; initial concrete indices 0 through 4 are already included in the baseline.",
+                        "The available 89-key plaintext save and encrypted final copy are legacy frm1800 artifacts and are explicitly excluded from 1800v2018 evidence.",
+                        "Installed Help1800 is supporting-only because its pre-2018 rate text contradicts the pinned January 2018 form."
+                    ]
+}

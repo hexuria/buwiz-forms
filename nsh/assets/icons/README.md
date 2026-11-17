@@ -1,0 +1,61 @@
+# Icons
+
+The 55 SVGs from app/icons, copied byte for byte (checked with cmp). Most are Lucide icons. Two are brand artwork and not Lucide: bagong-pilipinas and e_logo. Use one by its name without .svg, for example "check".
+
+Names:
+
+- archive
+- arrow-left
+- arrow-right
+- bagong-pilipinas
+- bell
+- building
+- calendar
+- check
+- chevron-down
+- chevron-left
+- chevron-right
+- chevrons-down-up
+- chevrons-up-down
+- circle-check
+- copy
+- e_logo
+- eye-off
+- eye
+- file-text
+- git-branch
+- hard-drive
+- hash
+- history
+- house
+- info
+- key-round
+- laptop
+- layout-template
+- list
+- loader
+- lock
+- log-out
+- map-pin
+- minus
+- monitor
+- moon
+- panel-left
+- panel-right
+- pencil
+- plus
+- power
+- printer
+- save
+- search
+- send
+- settings
+- square-terminal
+- square
+- sun
+- trash
+- triangle-alert
+- upload
+- user
+- users
+- x

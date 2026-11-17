@@ -1,0 +1,69 @@
+path	png_width	png_height	content_width	content_height	capture_note
+01-auth-fresh-default.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+02-setup-fresh.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+03-taxpayer-empty.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+04-taxpayer-forms-empty.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+05-home-empty.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+06-filings-empty.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+07-calendar-empty.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+08-library-filtered-empty.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+09-library-all-gallery.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+10-form-1601c-sample.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+11-period-save-modal.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+12-form-panel-wide.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+13-form-panel-default.png	1520	980	1480	940	original includes20px shadow/frame each edge; retained unchanged
+14-form-panel-narrow-overlay.png	840	940	800	900	original includes20px shadow/frame each edge; retained unchanged
+15-settings-general.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+16-settings-dark.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+17-account-security-dark.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+18-setup-change-options.png	2560	1856	2560	1856	original maximized app content; retained unchanged
+19-gallery-default-top.png	1520	980	1480	940	original includes20px shadow/frame each edge; retained unchanged
+20-gallery-default-bottom.png	1520	980	1480	940	original includes20px shadow/frame each edge; retained unchanged
+21-recent-reopened-default.png	1520	980	1480	940	original includes20px shadow/frame each edge; retained unchanged
+22-form-panel-actual-default.png	1440	900	1400	860	original includes20px shadow/frame each edge; retained unchanged
+23-form-panel-manifest-default.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+24-taxpayer-profile-default.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+25-taxpayer-profile-scroll.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+26-security-empty-pin-validation.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+27-home-default-panel.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+28-filings-default-panel.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+29-calendar-default-panel.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+30-taxpayer-form-set.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+31-home-populated-default.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+32-calendar-populated-default.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+33-notifications-empty-default.png	1480	940	1440	900	original includes20px shadow/frame each edge; retained unchanged
+paired/ref-01-fresh-home.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-02-calendar-empty.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-03-filings-empty.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-04-no-taxpayer-panel.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-05-first-onboarding-validation.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-06-taxpayer-profile.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-07-library-filter-selected.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-08-home-panel-populated.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-09-period-modal.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-10-unsupported-catalog-form.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-11-form-validation.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-12-form-scroll.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-13-calendar-populated.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-14-settings-light.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-15-settings-dark.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-16-calendar-narrow-clipped.png	800	900	800	900	content-only; native capture/crop; no scaling
+paired/ref-17-narrow-manual-collapse.png	800	900	800	900	content-only; native capture/crop; no scaling
+paired/ref-18-divider-drag-held.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-19-notifications-populated.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-20-form-default.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-21-profile-security-placeholder.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-22-settings-dry-run.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-23-draft-saved.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/ref-24-form-wide.png	2560	1856	2560	1856	content-only; native capture/crop; no scaling
+paired/shell-01-form-default.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-02-home-panel.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-03-calendar.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-04-calendar-narrow-overlay.png	800	900	800	900	content-only; native capture/crop; no scaling
+paired/shell-05-settings-general.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-06-library-all.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-07-library-filtered.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-08-period-chooser.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-09-taxpayer-profile.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-10-taxpayer-forms.png	1440	900	1440	900	content-only; native capture/crop; no scaling
+paired/shell-11-filings-empty.png	1440	900	1440	900	content-only; native capture/crop; no scaling

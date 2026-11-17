@@ -1,0 +1,100 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2552-v2018",
+    "form_code":  "2552",
+    "revision":  "2018-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2552v2018.hta",
+                                "sha256":  "a608d954cff716ea0240a5648ae01bdff42e50dc0244dafe32c2747eb59114a4",
+                                "size":  431564,
+                                "revision_binding":  "January 2018 ENCS runtime."
+                            },
+                            {
+                                "asset_id":  "legacy-1999-excluded",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form2552.hta",
+                                "sha256":  "3692c9ca93e09e982db28197323de56982a958da2c714f92c6749dbe856dd32e",
+                                "size":  245410,
+                                "revision_binding":  "July 1999 predecessor, excluded."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help2552.hta",
+                                "sha256":  "81bfb72ab829ac7ff9774ed940eacb1f3ced347d710393e90b2f9dffd0e7f19e",
+                                "size":  19046,
+                                "revision_binding":  "Unversioned packaged help; deadlines/attachments used, legacy rate text not used for January 2018 calculations."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2552v2018\\2552 2018ENCS Final.pdf",
+                                "sha256":  "c0a9d7cd44cf931fb939a010a265d05655b9a1d55d21841ecf0b590594b1742a",
+                                "size":  895615,
+                                "revision_binding":  "January 2018 ENCS form."
+                            },
+                            {
+                                "asset_id":  "official-guide-pdf",
+                                "kind":  "official-guidelines-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2552v2018\\2552 Guidelines and Instructions.pdf",
+                                "sha256":  "667888b776a01174bc6a7faf7e7ba8836eefeaae8cbaebe0dd67ef8cda144e05",
+                                "size":  143834,
+                                "revision_binding":  "January 2018 guidelines."
+                            },
+                            {
+                                "asset_id":  "legacy-encrypted-sample-excluded",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\2552\\2552-final-copy-#email-redacted#.xml",
+                                "sha256":  "c9eb4ca9bcf5b9a90a2b438ce627facf3f5385cc22bb47c8ceef7320537abfae",
+                                "size":  731,
+                                "revision_binding":  "Excluded: all 61 keys match July 1999; only 6 match January 2018."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  238,
+                   "runtime_field_families":  24,
+                   "fields_total":  262,
+                   "typed_fields":  262,
+                   "validation_rules":  32,
+                   "confirmed_official_bugs":  9,
+                   "calculations":  10,
+                   "negative_fixtures":  30,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "excluded_legacy_encrypted_keys":  "fixtures/excluded-legacy-encrypted-field-keys-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "resources":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release metadata changed.",
+                        "No decrypted values or email-bearing filenames emitted.",
+                        "Legacy sample excluded.",
+                        "237 static controls + runtime RDO selector + 24 unbounded schedule families preserved."
+                    ]
+}

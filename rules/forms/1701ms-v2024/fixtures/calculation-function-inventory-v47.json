@@ -1,0 +1,1099 @@
+{
+    "source_sha256":  "5737ddbd86d467457b613cc1f016c51d1add7fa91b396f6af88d213bccc48202",
+    "function_count":  71,
+    "functions":  [
+                      {
+                          "name":  "computeIncomeTaxDueNo19a",
+                          "start_line":  11203,
+                          "end_line":  11223,
+                          "body_sha256":  "bff9fe743fe88c091e4dc453b18b3748a4e6e3f2682702360584c2930a12e9d6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationATP",
+                                              "frm1701MS:txtIncomeTaxDueNo19a",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e"
+                                          ]
+                      },
+                      {
+                          "name":  "computeIncomeTaxDueNo19b",
+                          "start_line":  11239,
+                          "end_line":  11260,
+                          "body_sha256":  "6abf1fe33b22376c07e51601562420040ae7f7b7690bf4c9ffa616758dd71288",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationASP",
+                                              "frm1701MS:txtIncomeTaxDueNo19b",
+                                              "frm1701MS:txtTaxDueSpecialb",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateSpecialRateNo21a",
+                          "start_line":  11276,
+                          "end_line":  11286,
+                          "body_sha256":  "ce9d254004c6330b1c95403ff14b855b33ee2da32184ea00e3b7fca7999eb493",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtIncomeTaxDueNo19a",
+                                              "frm1701MS:txtNetSpecialRateNo21a",
+                                              "frm1701MS:txtShareOfOtherNo20a"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateSpecialRateNo21b",
+                          "start_line":  11287,
+                          "end_line":  11299,
+                          "body_sha256":  "ec423848125777850a79b953e4c872e7cdced120d76595d052cec33b465649d6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtIncomeTaxDueNo19b",
+                                              "frm1701MS:txtNetSpecialRateNo21b",
+                                              "frm1701MS:txtShareOfOtherNo20b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No22TP",
+                          "start_line":  11300,
+                          "end_line":  11321,
+                          "body_sha256":  "db4647d3a553b6cdb7c75d56817d4966a782e58137e1bcf6cc1659b4f297cf46",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationBTP",
+                                              "frm1701MS:txtIncomeTaxRegularNo22a",
+                                              "frm1701MS:txtTaxpayerNo12b",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e",
+                                              "frm1701MS:txtTaxpayerNo4a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No22SP",
+                          "start_line":  11322,
+                          "end_line":  11352,
+                          "body_sha256":  "8c6625766c24fde52a2e0b142b48d2a7159fdfa24058114b0ec4ea8420231d40",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationBSP",
+                                              "frm1701MS:txtIncomeTaxRegularNo22b",
+                                              "frm1701MS:txtTaxableCompensationIncomeb",
+                                              "frm1701MS:txtTaxpayerNo11d1",
+                                              "frm1701MS:txtTaxpayerNo12b1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxpayerNo4b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No23TP",
+                          "start_line":  11353,
+                          "end_line":  11359,
+                          "body_sha256":  "5284b65c7ada27a891531504ed80186252ae50749da57a97e03d7290cac180b3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtIncomeTaxRegularNo22a",
+                                              "frm1701MS:txtNetSpecialRateNo21a",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23a",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23a123"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No23SP",
+                          "start_line":  11360,
+                          "end_line":  11366,
+                          "body_sha256":  "3e81d02cc95c90a3bf8f922f1687afd21ffae1655461f6412578f183b3b81bce",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtIncomeTaxRegularNo22b",
+                                              "frm1701MS:txtNetSpecialRateNo21b",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No24TP",
+                          "start_line":  11367,
+                          "end_line":  11370,
+                          "body_sha256":  "c3b1e5ff4fa8abf003126dea5912fda9d7f85988eaaa08a45dac93c09b3033be",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTotalTaxCreditsPartIINo24a",
+                                              "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No24SP",
+                          "start_line":  11371,
+                          "end_line":  11375,
+                          "body_sha256":  "e5151e39b029a1933c09b2b6f9c3ad47ad145f25c48a26558adee4e869cd6ffc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTotalTaxCreditsPartIINo24b",
+                                              "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No25TP",
+                          "start_line":  11376,
+                          "end_line":  11384,
+                          "body_sha256":  "86d23c8d7d6e4b64bd73bb8fa68b2c513fe9a8f8b18c94ea3a1a7b4fe28e5a8d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxPayableNo25a",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23a",
+                                              "frm1701MS:txtTotalTaxCreditsPartIINo24a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeP2No25SP",
+                          "start_line":  11397,
+                          "end_line":  11404,
+                          "body_sha256":  "20b8c04330bfe854d9b2bef120cebe99e4d595b3e3a3f6a24b52dfce85973c50",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxPayableNo25b",
+                                              "frm1701MS:txtTotalIncomeTaxDueNo23b",
+                                              "frm1701MS:txtTotalTaxCreditsPartIINo24b"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateP2No27TP",
+                          "start_line":  11503,
+                          "end_line":  11508,
+                          "body_sha256":  "eda7465261da6c79250eb84258667c630671c7ad7eb07916ad2f048e4f0b063f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAmountPayableNo27a",
+                                              "frm1701MS:txtTaxDueAllowedNo26a",
+                                              "frm1701MS:txtTaxPayableNo25a"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateP2No27SP",
+                          "start_line":  11509,
+                          "end_line":  11515,
+                          "body_sha256":  "304dfe491039827b2bc551120ac01385d3278158d08dc105afbc8da4435b4fe5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAmountPayableNo27b",
+                                              "frm1701MS:txtTaxDueAllowedNo26b",
+                                              "frm1701MS:txtTaxPayableNo25b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalPenaltiesNo28a",
+                          "start_line":  11516,
+                          "end_line":  11520,
+                          "body_sha256":  "1a9508ef03be92324447bebef73053b7ab7f812767ca39e829cf42207b45581c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCompromise28a",
+                                              "frm1701MS:txtInterestNo28a",
+                                              "frm1701MS:txtSurchangeNo28a",
+                                              "frm1701MS:txtTotalPenaltiesNo28a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalPenaltiesNo28b",
+                          "start_line":  11521,
+                          "end_line":  11526,
+                          "body_sha256":  "c88b4f63223f93b7d288fa39a99d3b078612b9ab2d12bd3f72b36496e9a34655",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCompromise28b",
+                                              "frm1701MS:txtInterestNo28b",
+                                              "frm1701MS:txtSurchangeNo28b",
+                                              "frm1701MS:txtTotalPenaltiesNo28b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAmountPayableNo29a",
+                          "start_line":  11527,
+                          "end_line":  11543,
+                          "body_sha256":  "d1147d126200b815bd50abaa1fc0169adf8e8389b6efa718af25b5c4be8e7ca6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAmountPayableNo27a",
+                                              "frm1701MS:txtTotalAmountPayableNo29a",
+                                              "frm1701MS:txtTotalPenaltiesNo28a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAmountPayableNo29b",
+                          "start_line":  11544,
+                          "end_line":  11560,
+                          "body_sha256":  "6814939a1e647f1340044a8dfea534b3fdf6905173079cd6f4ab9bfdecf4be56",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAmountPayableNo27b",
+                                              "frm1701MS:txtTotalAmountPayableNo29b",
+                                              "frm1701MS:txtTotalPenaltiesNo28b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeAggregateAmountNo30",
+                          "start_line":  11561,
+                          "end_line":  11624,
+                          "body_sha256":  "1338c6c406da7d642ad5b7dc29ff806e74e1a18f06914f1137fde4f7a26d38a4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAggregateAmountPayable30a",
+                                              "frm1701MS:txtToBeCarried",
+                                              "frm1701MS:txtToBeCarried1",
+                                              "frm1701MS:txtToBeIssued",
+                                              "frm1701MS:txtToBeIssued1",
+                                              "frm1701MS:txtToBeRefunded",
+                                              "frm1701MS:txtToBeRefunded1",
+                                              "frm1701MS:txtTotalAmountPayableNo29a",
+                                              "frm1701MS:txtTotalAmountPayableNo29b"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateNo3TP",
+                          "start_line":  11647,
+                          "end_line":  11689,
+                          "body_sha256":  "ffef3f733f355ef4b61289760195974adecae465ffeade9e5a0c76cf421a2603",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtGrossa",
+                                              "frm1701MS:txtIncomeTaxRegularNo22a",
+                                              "frm1701MS:txtLessNonTaxablea",
+                                              "frm1701MS:txtTaxableCompensationIncomea",
+                                              "frm1701MS:txtTaxpayerNo11b",
+                                              "frm1701MS:txtTaxpayerNo12b",
+                                              "frm1701MS:txtTaxpayerNo12c",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e",
+                                              "frm1701MS:txtTaxpayerNo4a"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateNo3SP",
+                          "start_line":  11690,
+                          "end_line":  11740,
+                          "body_sha256":  "00b4f02f3349bf5b997d8cf8502906c39461d74ec3f86b822b1612920f02125e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtGrossb",
+                                              "frm1701MS:txtIncomeTaxRegularNo22b",
+                                              "frm1701MS:txtLessNonTaxableb",
+                                              "frm1701MS:txtTaxableCompensationIncomeb",
+                                              "frm1701MS:txtTaxpayerNo11b1",
+                                              "frm1701MS:txtTaxpayerNo11d1",
+                                              "frm1701MS:txtTaxpayerNo12b1",
+                                              "frm1701MS:txtTaxpayerNo12c1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxpayerNo4b"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateNo7a",
+                          "start_line":  11741,
+                          "end_line":  11749,
+                          "body_sha256":  "070c0dab2d825d7742c596f71c6650ef118825166218dedc15e5b903af40b03c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtSalesReturnsNo6a",
+                                              "frm1701MS:txtSalesRevenueNo5a",
+                                              "frm1701MS:txtTaxableCompensationIncomeNo7a"
+                                          ]
+                      },
+                      {
+                          "name":  "calculateNo7b",
+                          "start_line":  11750,
+                          "end_line":  11759,
+                          "body_sha256":  "6b66e639963e02623ea92218c5d2ae8afa504386b8e4569a44ff0ff496a1948f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtSalesReturnsNo6b",
+                                              "frm1701MS:txtSalesRevenueNo5b",
+                                              "frm1701MS:txtTaxableCompensationIncomeNo7b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeNo9",
+                          "start_line":  11760,
+                          "end_line":  11770,
+                          "body_sha256":  "8e89c609b7eba7de42fdb5c32ef9665fffd8b9f1c65ab07fc0c1077ab7066128",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCostofSalesNo8a",
+                                              "frm1701MS:txtGrossIncomeNo9a",
+                                              "frm1701MS:txtTaxableCompensationIncomeNo7a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeNo9b",
+                          "start_line":  11771,
+                          "end_line":  11782,
+                          "body_sha256":  "a055608d82d024eb7f9b9ea06a64956c0a577c6798448b3d1af99949c4f540e0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCostofSalesNo8b",
+                                              "frm1701MS:txtGrossIncomeNo9b",
+                                              "frm1701MS:txtTaxableCompensationIncomeNo7b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAllowableDeductionsNo10a",
+                          "start_line":  11783,
+                          "end_line":  11789,
+                          "body_sha256":  "398bb9351bd5098437023a6bb3a8e5f22f32068f8b13d66da3c3b7c6e2c40c4c",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAllowableItemizedDeductionsNo10a",
+                                              "frm1701MS:txtNetOperatingLossNo10a",
+                                              "frm1701MS:txtSpecialAllowableNo10a",
+                                              "frm1701MS:txtTotalAllowableItemixedDeductionsNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAllowableDeductionsNo10b",
+                          "start_line":  11790,
+                          "end_line":  11797,
+                          "body_sha256":  "6446f801ca2fce1ee5f625f8633914545b56cafeb606551dc3c006dd6ac539d6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAllowableItemizedDeductionsNo10aSpouse",
+                                              "frm1701MS:txtNetOperatingLossNo10b",
+                                              "frm1701MS:txtSpecialAllowableNo10b",
+                                              "frm1701MS:txtTotalAllowableItemixedDeductionsNo10b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOptionalDeductionNo11a",
+                          "start_line":  11798,
+                          "end_line":  11807,
+                          "body_sha256":  "3f323488f3eaa8175df9c0835d05edc6c7185edace2b6f9ac983ae3b25fcc59a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtOptionalDeductionNo11a",
+                                              "frm1701MS:txtTaxableCompensationIncomeNo7a",
+                                              "frm1701MS:txtTaxpayerNo17b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOptionalDeductionNo11b",
+                          "start_line":  11808,
+                          "end_line":  11818,
+                          "body_sha256":  "528aeaae378a371dbaf3048a28101f88630a993ea960cb150584767c16940be8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtOptionalDeductionNo11b",
+                                              "frm1701MS:txtSpouseNo17b",
+                                              "frm1701MS:txtTaxableCompensationIncomeNo7b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeNetIncomeLossNo12TP",
+                          "start_line":  11819,
+                          "end_line":  11840,
+                          "body_sha256":  "cd1697eeaf4abbb146bbd51060823d0f50aa4d8b819a0494b29d27924e4e1cd5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtGrossIncomeNo9a",
+                                              "frm1701MS:txtNetIncomeLossNo12a",
+                                              "frm1701MS:txtOptionalDeductionNo11a",
+                                              "frm1701MS:txtTaxpayerNo17a",
+                                              "frm1701MS:txtTaxpayerNo17b",
+                                              "frm1701MS:txtTotalAllowableItemixedDeductionsNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeNetIncomeLossNo12SP",
+                          "start_line":  11841,
+                          "end_line":  11860,
+                          "body_sha256":  "038b244b263af5c933d4d8daf739ef69abf0abfeea5e544ce5e532a25c92fb21",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtGrossIncomeNo9b",
+                                              "frm1701MS:txtNetIncomeLossNo12b",
+                                              "frm1701MS:txtOptionalDeductionNo11b",
+                                              "frm1701MS:txtSpouseNo17a",
+                                              "frm1701MS:txtSpouseNo17b",
+                                              "frm1701MS:txtTotalAllowableItemixedDeductionsNo10b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalIncomeBusinessNo14TP",
+                          "start_line":  11861,
+                          "end_line":  11877,
+                          "body_sha256":  "827aeabd2db2b0085c146873cb85aaad21a451f8541064fc2f2490ff5c7f87e5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtNetIncomeLossNo12a",
+                                              "frm1701MS:txtNonOperatingIncomeNo13a",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalIncomeBusinessNo14SP",
+                          "start_line":  11878,
+                          "end_line":  11893,
+                          "body_sha256":  "0c49b2e0f1f172290d41a8ef5d2bc007cdec9d0a0c855be92895f20a79d19c1a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtNetIncomeLossNo12b",
+                                              "frm1701MS:txtNonOperatingIncomeNo13b",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxableIncome15TP",
+                          "start_line":  11894,
+                          "end_line":  11932,
+                          "body_sha256":  "be96c2a6ffcf00ca785b71f589095809b119dc67d3893683b85878db047d6521",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCompensationBusinessNo15a",
+                                              "frm1701MS:txtTaxableCompensationIncomea",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14a",
+                                              "frm1701MS:txtTaxpayerNo11b",
+                                              "frm1701MS:txtTaxpayerNo12b",
+                                              "frm1701MS:txtTaxpayerNo12c",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxableIncome15SP",
+                          "start_line":  11933,
+                          "end_line":  11979,
+                          "body_sha256":  "ad319324cceb52dc8b718ec04bb04d8d6281b6b85967b43dd1aee0ba5eaa50a6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCompensationBusinessNo15b",
+                                              "frm1701MS:txtTaxableCompensationIncomeb",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14b",
+                                              "frm1701MS:txtTaxpayerNo11b1",
+                                              "frm1701MS:txtTaxpayerNo11d1",
+                                              "frm1701MS:txtTaxpayerNo12b1",
+                                              "frm1701MS:txtTaxpayerNo12c1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxDueNo17TP",
+                          "start_line":  11980,
+                          "end_line":  12019,
+                          "body_sha256":  "c381e5dc4ad12f5bb990726945a15bbb86758e2f452c1525361206616bbb9022",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtGrossIncomeNo9a",
+                                              "frm1701MS:txtIncomeTaxDueNo19a",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14a",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxpayerNo11b",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e",
+                                              "frm1701MS:txtTaxRatea"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxDueNo17SP",
+                          "start_line":  12020,
+                          "end_line":  12095,
+                          "body_sha256":  "8814b0eade7197bf86787c4dc9058038fbfd3212540f14f5bd7fc12116d813d4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtGrossIncomeNo9b",
+                                              "frm1701MS:txtIncomeTaxDueNo19b",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14b",
+                                              "frm1701MS:txtTaxDueSpecialb",
+                                              "frm1701MS:txtTaxpayerNo11b1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxRateb"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDue18ATP",
+                          "start_line":  12096,
+                          "end_line":  12113,
+                          "body_sha256":  "5c30820f494275578d16b528a01fc20ff2871e3dfb3ed58008189427d92f503b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationATP",
+                                              "frm1701MS:txtIncomeTaxDueNo19a",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxpayerNo11b",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e",
+                                              "frm1701MS:txtTaxpayerNo4a"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDue18ASP",
+                          "start_line":  12114,
+                          "end_line":  12134,
+                          "body_sha256":  "538ea7f215e6f2543588993c0b527aa33aedff3735d47fc3ae813cdd6b46089b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationASP",
+                                              "frm1701MS:txtIncomeTaxDueNo19b",
+                                              "frm1701MS:txtTaxDueSpecialb",
+                                              "frm1701MS:txtTaxpayerNo11b1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxpayerNo4b"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDue18BTP",
+                          "start_line":  12135,
+                          "end_line":  12161,
+                          "body_sha256":  "8002d88f1ebae35337e0505ee2751618d561151715472410e049eeb83b31c17c",
+                          "alerts":  [
+                                         "\"totalTaxDue18BTP lumagpas sa computeP2No22TP\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationBTP",
+                                              "frm1701MS:txtCompensationBusinessNo15a",
+                                              "frm1701MS:txtTaxpayerNo12b"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDue18BSP",
+                          "start_line":  12162,
+                          "end_line":  12189,
+                          "body_sha256":  "2e8f6b5736b07fdeebfe23c3897b11b4430ca16b53b40bedb5ebc7112dedd15e",
+                          "alerts":  [
+                                         "\"totalTaxDue18BSP lumagpas sa computeP2No22TP\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationBSP",
+                                              "frm1701MS:txtCompensationBusinessNo15b",
+                                              "frm1701MS:txtTaxpayerNo12b1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalIncomeNo21a",
+                          "start_line":  12190,
+                          "end_line":  12196,
+                          "body_sha256":  "25fa70622ea1b2f632d3822a321e39dde0c6783dc9899538663bc49f05fe57ee",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtOtherNonOperatingIncomeNo20a",
+                                              "frm1701MS:txtSalesRevenuesFeesANo19a",
+                                              "frm1701MS:txtTotalIncomeNo21a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalIncomeNo21b",
+                          "start_line":  12197,
+                          "end_line":  12204,
+                          "body_sha256":  "67047d875c3b0d2272de6bdd2ddce8bdf047a3927d66670fc277f69f4732f52d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtOtherNonOperatingIncomeNo20b",
+                                              "frm1701MS:txtSalesRevenuesFeesNo19b",
+                                              "frm1701MS:txtTotalIncomeNo21b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeIncomeLoss",
+                          "start_line":  12205,
+                          "end_line":  12211,
+                          "body_sha256":  "98bb668b91f2c906191e80a83a778a1054d290de764c943316a3eb5a4e40aaa4",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtLess22A",
+                                              "frm1701MS:txtTaxableIncomeLoss23A",
+                                              "frm1701MS:txtTotalIncomeNo21a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeIncomeLossb",
+                          "start_line":  12212,
+                          "end_line":  12218,
+                          "body_sha256":  "18817566e6b85d0f4c38f82fecdb08b28ad7c084640352696684dab992285031",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtLess22B",
+                                              "frm1701MS:txtTaxableIncomeLoss23B",
+                                              "frm1701MS:txtTotalIncomeNo21b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeBusinessIncome",
+                          "start_line":  12219,
+                          "end_line":  12233,
+                          "body_sha256":  "94c33be88a86c25a505d8473c49a83c3983a78ff2d3abaa11f9903599c44ba7e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxableIncomeLoss23A",
+                                              "frm1701MS:txtTaxDueBusinessIncome24A"
+                                          ]
+                      },
+                      {
+                          "name":  "computeBusinessIncomeb",
+                          "start_line":  12234,
+                          "end_line":  12249,
+                          "body_sha256":  "8002b9f06152fa993e8976d54aadc60b1eb764f57b832523ac5a45b6e34e97b0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxableIncomeLoss23B",
+                                              "frm1701MS:txtTaxDueBusinessIncome24B"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDueCompensationAndBusinessIncome25TP",
+                          "start_line":  12250,
+                          "end_line":  12263,
+                          "body_sha256":  "c2ee0d4f2d5214ee7c5d4d16a4ae336c23b370f599db8dfc8a3471dda1d3eb69",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCompensationBusinessNo25a",
+                                              "frm1701MS:txtIncomeTaxRegularNo22a",
+                                              "frm1701MS:txtTaxDueBusinessIncome24A",
+                                              "frm1701MS:txtTaxpayerNo12c",
+                                              "frm1701MS:txtTaxpayerNo4a"
+                                          ]
+                      },
+                      {
+                          "name":  "totalTaxDueCompensationAndBusinessIncome25SP",
+                          "start_line":  12264,
+                          "end_line":  12277,
+                          "body_sha256":  "fe898029d184ffc7e2357f9fc7519380b7b094afbb0d0b5cf4fa583062987ddc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCompensationBusinessNo25b",
+                                              "frm1701MS:txtIncomeTaxRegularNo22b",
+                                              "frm1701MS:txtTaxDueBusinessIncome24B",
+                                              "frm1701MS:txtTaxpayerNo12c1",
+                                              "frm1701MS:txtTaxpayerNo4b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxAvailmentTP",
+                          "start_line":  12278,
+                          "end_line":  12301,
+                          "body_sha256":  "e76f89f76955574f4ed5e4cfca806b909abffdfb251dffe6951c90f374585ede",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:totalTaxReliefAvailmentA",
+                                              "frm1701MS:txtSpecialAllowableNo10a",
+                                              "frm1701MS:txtSpecialTaxCreditsNo8a",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14a",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTaxAvailmentSP",
+                          "start_line":  12302,
+                          "end_line":  12326,
+                          "body_sha256":  "a25de39709142e351e839e777582b5352db88ec10d537f8e63e07dc08754b2a1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:totalTaxReliefAvailmentB",
+                                              "frm1701MS:txtSpecialAllowableNo10b",
+                                              "frm1701MS:txtSpecialTaxCreditsNo8b",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14b",
+                                              "frm1701MS:txtTaxDueSpecialb",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeCreditsPaymentsPartVNo10a",
+                          "start_line":  12742,
+                          "end_line":  12753,
+                          "body_sha256":  "7991da750206fd1dc920a65187d34da6b5bc7bcef3dc3b08a0d89b0269f6be81",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCreditableForm2316No5a",
+                                              "frm1701MS:txtCreditableFourthQuarterNo4a",
+                                              "frm1701MS:txtCreditableTaxNo3a",
+                                              "frm1701MS:txtForeignTaxCreditsNo7a",
+                                              "frm1701MS:txtOtherCreditsPaymentsNo9a",
+                                              "frm1701MS:txtPriorYearsNo1a",
+                                              "frm1701MS:txtSpecialTaxCreditsNo8a",
+                                              "frm1701MS:txtTaxPaidPreviouslyFiledNo6a",
+                                              "frm1701MS:txtTaxPaymentsNo2a",
+                                              "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeCreditsPaymentsPartVNo10b",
+                          "start_line":  12754,
+                          "end_line":  12765,
+                          "body_sha256":  "b40bc5bd92da2c0a60daec7bc5c61e3fc9473ff2e256c7c45b56de7d62e19222",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCreditableForm2316No5b",
+                                              "frm1701MS:txtCreditableFourthQuarterNo4b",
+                                              "frm1701MS:txtCreditableTaxNo3b",
+                                              "frm1701MS:txtForeignTaxCreditsNo7b",
+                                              "frm1701MS:txtOtherCreditsPaymentsNo9b",
+                                              "frm1701MS:txtPriorYearsNo1b",
+                                              "frm1701MS:txtSpecialTaxCreditsNo8b",
+                                              "frm1701MS:txtTaxPaidPreviouslyFiledNo6b",
+                                              "frm1701MS:txtTaxPaymentsNo2b",
+                                              "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10b"
+                                          ]
+                      },
+                      {
+                          "name":  "creditableTaxWithheldForm2316",
+                          "start_line":  12766,
+                          "end_line":  12817,
+                          "body_sha256":  "30546ae36c47b1bf6ac31de96df5dd8413fe82f49aab4ba897a1eac325265c70",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCreditableForm2316No5a",
+                                              "frm1701MS:txtLess22A"
+                                          ]
+                      },
+                      {
+                          "name":  "CreditableTaxWithheldForm2316Spouse",
+                          "start_line":  12818,
+                          "end_line":  12869,
+                          "body_sha256":  "110cb0cfe09bb91da1d1055550d3231127fdde02fb390741997815c7cca9e99b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtCreditableForm2316No5b",
+                                              "frm1701MS:txtLess22B"
+                                          ]
+                      },
+                      {
+                          "name":  "computeRegularIncomeTax",
+                          "start_line":  12870,
+                          "end_line":  12928,
+                          "body_sha256":  "dd3a8feb10e71f0369a2ef475ddc29d4b87ef8ac897870d14589ae125d3b1bbc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:totalTaxReliefAvailmentA",
+                                              "frm1701MS:totalTaxReliefAvailmentB",
+                                              "frm1701MS:txtSpecialAllowableNo10a",
+                                              "frm1701MS:txtSpecialAllowableNo10b",
+                                              "frm1701MS:txtSpecialTaxCreditsNo8a",
+                                              "frm1701MS:txtSpecialTaxCreditsNo8b",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14a",
+                                              "frm1701MS:txtTaxableIncomeBusinesNo14b",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxDueSpecialb"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSched410A",
+                          "start_line":  13157,
+                          "end_line":  13173,
+                          "body_sha256":  "543ba38108792e37a419ecd58fca0dde2e5b727024d3f63b26774464f6933e53",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAllowableItemizedDeductionsNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSched410aSpouse",
+                          "start_line":  13317,
+                          "end_line":  13345,
+                          "body_sha256":  "61030cb017cafb1637ea47465206225bded241685acba086bbdaedf15bd931c7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtAllowableItemizedDeductionsNo10aSpouse"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOthersched410A1",
+                          "start_line":  13818,
+                          "end_line":  13842,
+                          "body_sha256":  "82e5fc66d75dcd205dcf6b48884f4ba52aaeac728d4172286e7d7f6b355e5341",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtSpecialAllowableNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOthersched410A2",
+                          "start_line":  14164,
+                          "end_line":  14198,
+                          "body_sha256":  "0c73dbf417745940dd11e7c9d78d7ffde1acfc5752a79e090ec17fbd89ce60bb",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtSpecialAllowableNo10b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSched413A",
+                          "start_line":  14496,
+                          "end_line":  14523,
+                          "body_sha256":  "7adce8ee61e1213ff5d82f521e56289030a81627d5f4cd992e4ee8f026842124",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtNonOperatingIncomeNo13a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSched413B",
+                          "start_line":  14904,
+                          "end_line":  14961,
+                          "body_sha256":  "6561c6394c966d8e474ddfec07eb74e9851e6dcc891a31e309820d84c8ca13fe",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtNonOperatingIncomeNo13b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSched420A",
+                          "start_line":  15199,
+                          "end_line":  15236,
+                          "body_sha256":  "88b695c1a256748833824fe70243513783acb4e85bddb4a50eb568c963fb362b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtOtherNonOperatingIncomeNo20a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSched420B",
+                          "start_line":  15514,
+                          "end_line":  15549,
+                          "body_sha256":  "228cc920ab11e55f23370b36466c40765ae959684f6f9ad0c841cd6cbcd09728",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtOtherNonOperatingIncomeNo20b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSpecify",
+                          "start_line":  15692,
+                          "end_line":  15706,
+                          "body_sha256":  "89217847c511cc7b3cf36ceb21d52e311f5f6ee714e5e8d8315cec91d623355b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched5No9:Amount",
+                                              "frm1701MS:txtOtherCreditsPaymentsNo9a",
+                                              "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10a"
+                                          ]
+                      },
+                      {
+                          "name":  "computeOtherSpecifySpouse",
+                          "start_line":  15707,
+                          "end_line":  15718,
+                          "body_sha256":  "fb9e40e915e786714fffb44925f9166e19c3073f11d99b9c0b3229645a547138",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:sched5No9:Spouse",
+                                              "frm1701MS:txtOtherCreditsPaymentsNo9b",
+                                              "frm1701MS:txtTotalTaxCreditsPaymentsPartVNo10b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalTaxDue",
+                          "start_line":  15995,
+                          "end_line":  16017,
+                          "body_sha256":  "87fe9a262605e73e693d09a658844b0c44ed91213fda38073e1332fa51b44eaf",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationATP",
+                                              "frm1701MS:TotalTaxDueCompensationBTP",
+                                              "frm1701MS:txtIncomeTaxRegularNo22a",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxDueSpecialb",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxpayerNo12e",
+                                              "frm1701MS:txtTaxpayerNo4a",
+                                              "frm1701MS:txtTaxpayerNo4b"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalTaxDueSpouse",
+                          "start_line":  16018,
+                          "end_line":  16042,
+                          "body_sha256":  "1c532104446b5bfdf8fab701d2b1227d7394ea703c620652e6013116c451442d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:TotalTaxDueCompensationASP",
+                                              "frm1701MS:TotalTaxDueCompensationBSP",
+                                              "frm1701MS:txtIncomeTaxRegularNo22b",
+                                              "frm1701MS:txtTaxDueSpeciala",
+                                              "frm1701MS:txtTaxDueSpecialb",
+                                              "frm1701MS:txtTaxpayerNo11d1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxpayerNo4a",
+                                              "frm1701MS:txtTaxpayerNo4b"
+                                          ]
+                      },
+                      {
+                          "name":  "taxRateTP",
+                          "start_line":  16306,
+                          "end_line":  16313,
+                          "body_sha256":  "f5ecc6644e34510d27dd1f24ebc4a7a8ef8ee5c93c915ca805d0ade5910c7da9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxpayerNo12b",
+                                              "frm1701MS:txtTaxpayerNo12c",
+                                              "frm1701MS:txtTaxpayerNo12d",
+                                              "frm1701MS:txtTaxRatea"
+                                          ]
+                      },
+                      {
+                          "name":  "taxRateSP",
+                          "start_line":  16314,
+                          "end_line":  16321,
+                          "body_sha256":  "b45856749cbdb5a28103f717df5864c7d9d83789e8833e9f80f3767ce7cb3867",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtTaxpayerNo12b1",
+                                              "frm1701MS:txtTaxpayerNo12d1",
+                                              "frm1701MS:txtTaxpayerNo12e1",
+                                              "frm1701MS:txtTaxRateb"
+                                          ]
+                      },
+                      {
+                          "name":  "toBeCarried",
+                          "start_line":  16322,
+                          "end_line":  16364,
+                          "body_sha256":  "647c797734a5d9ffdb8c921f958ad7bb7fd6373b956b4b0eda6fd6f8b430e851",
+                          "alerts":  [
+                                         "\"The value of \u0027To Be Carried\u0027 cannot be higher than the maximum of \u0027Prior Years No 1a\u0027 and \u0027Prior Years No 1b\u0027.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1701MS:txtPriorYearsNo1a",
+                                              "frm1701MS:txtPriorYearsNo1b",
+                                              "frm1701MS:txtToBeCarried1"
+                                          ]
+                      }
+                  ]
+}

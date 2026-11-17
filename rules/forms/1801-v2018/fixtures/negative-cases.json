@@ -1,0 +1,337 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1801-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1801-validate-001-date-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any return-date component is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Return Date",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-001-date-required"
+                  },
+                  {
+                      "case_id":  "case-02-1801-validate-002-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Parsed month is below 1, above 12, or NaN."
+                                    },
+                      "expected_message":  "Please enter a valid month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-002-month"
+                  },
+                  {
+                      "case_id":  "case-03-1801-validate-003-nonleap-february",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Non-leap February day exceeds 28."
+                                    },
+                      "expected_message":  "Please enter a valid date on Item 1. Filing year is not a leap year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-003-nonleap-february"
+                  },
+                  {
+                      "case_id":  "case-04-1801-validate-004-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day is below 1 or exceeds the computed month maximum."
+                                    },
+                      "expected_message":  "Please enter a valid day on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-004-day"
+                  },
+                  {
+                      "case_id":  "case-05-1801-validate-005-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-005-year"
+                  },
+                  {
+                      "case_id":  "case-06-1801-validate-006-min-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is below 1904."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 1. Entry should not be lower than 1904.",
+                      "expected_behavior":  "The active Validate path accepts death dates from 1904 through 2017 even though payment-date validation and the January 2018 revision require 2018 or later.",
+                      "rule_id":  "1801-validate-006-min-year"
+                  },
+                  {
+                      "case_id":  "case-07-1801-validate-007-future-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Constructed return date is after today."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 1. Date cannot be after the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-007-future-date"
+                  },
+                  {
+                      "case_id":  "case-08-1801-validate-008-tin-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any Item 5 TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked; checksum and format validity are not checked here.",
+                      "rule_id":  "1801-validate-008-tin-required"
+                  },
+                  {
+                      "case_id":  "case-09-1801-validate-009-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO select remains at index zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-009-rdo"
+                  },
+                  {
+                      "case_id":  "case-10-1801-validate-010-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer/decedent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-010-name"
+                  },
+                  {
+                      "case_id":  "case-11-1801-validate-011-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer/decedent residence is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Resident of Decedent on Item 8.",
+                      "expected_behavior":  "The source uses the grammatically incorrect phrase Resident of Decedent.",
+                      "rule_id":  "1801-validate-011-address"
+                  },
+                  {
+                      "case_id":  "case-12-1801-validate-012-residency",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither non-resident status radio is checked."
+                                    },
+                      "expected_message":  "Please select an option for Item 9.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-012-residency"
+                  },
+                  {
+                      "case_id":  "case-13-1801-validate-013-telephone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 12.",
+                      "expected_behavior":  "Only blankness is checked; syntactic validity is not checked.",
+                      "rule_id":  "1801-validate-013-telephone"
+                  },
+                  {
+                      "case_id":  "case-14-1801-validate-014-installment-frequency",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Installment is granted but no payment frequency is selected."
+                                    },
+                      "expected_message":  "Please select a frequency of payment on Item 15D.",
+                      "expected_behavior":  "The message cites Item 15D, but frequency is subordinate to installment permission and the printed subitem association is ambiguous.",
+                      "rule_id":  "1801-validate-014-installment-frequency"
+                  },
+                  {
+                      "case_id":  "case-15-1801-validate-015-other-frequency",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Installment is granted, Others is selected, and its description is blank."
+                                    },
+                      "expected_message":  "Please specify a frequency of payment on Item 15D - Others.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-015-other-frequency"
+                  },
+                  {
+                      "case_id":  "case-16-1801-validate-016-standard-ded-nonresident",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 9 Yes and standard deduction exceeds PHP 500,000."
+                                    },
+                      "expected_message":  "If Yes is selected on Item 9, value should not exceed Php500 Thousand on Item 37A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-016-standard-ded-nonresident"
+                  },
+                  {
+                      "case_id":  "case-17-1801-validate-017-standard-ded-resident",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 9 No and standard deduction exceeds PHP 5,000,000."
+                                    },
+                      "expected_message":  "If No is selected on Item 9, value should not exceed Php5 Million on Item 37A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-017-standard-ded-resident"
+                  },
+                  {
+                      "case_id":  "case-18-1801-validate-018-family-home",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Family-home deduction exceeds PHP 10,000,000."
+                                    },
+                      "expected_message":  "Value should not exceed Php10 Million on Item 37B.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-validate-018-family-home"
+                  },
+                  {
+                      "case_id":  "case-19-1801-validate-019-schedule-1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Within a row, non-zero cells mix blank and populated values in Schedule 1."
+                                    },
+                      "expected_message":  "Incomplete values on Schedule 1, Row {row}.",
+                      "expected_behavior":  "The source treats 0.00 as absent and requires all other cells to be uniformly blank or populated; for Schedule 1 the state is shared across its continuation table.",
+                      "rule_id":  "1801-validate-019-schedule-1"
+                  },
+                  {
+                      "case_id":  "case-20-1801-validate-020-schedule-1a",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Within a row, non-zero cells mix blank and populated values in Schedule 1A."
+                                    },
+                      "expected_message":  "Incomplete values on Schedule 1A, Row {row}.",
+                      "expected_behavior":  "The source treats 0.00 as absent and requires all other cells to be uniformly blank or populated; for Schedule 1 the state is shared across its continuation table.",
+                      "rule_id":  "1801-validate-020-schedule-1a"
+                  },
+                  {
+                      "case_id":  "case-21-1801-validate-021-schedule-2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Within a row, non-zero cells mix blank and populated values in Schedule 2."
+                                    },
+                      "expected_message":  "Incomplete values on Schedule 2, Row {row}.",
+                      "expected_behavior":  "The source treats 0.00 as absent and requires all other cells to be uniformly blank or populated; for Schedule 1 the state is shared across its continuation table.",
+                      "rule_id":  "1801-validate-021-schedule-2"
+                  },
+                  {
+                      "case_id":  "case-22-1801-validate-022-schedule-2a",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Within a row, non-zero cells mix blank and populated values in Schedule 2A."
+                                    },
+                      "expected_message":  "Incomplete values on Schedule 2A, Row {row}.",
+                      "expected_behavior":  "The source treats 0.00 as absent and requires all other cells to be uniformly blank or populated; for Schedule 1 the state is shared across its continuation table.",
+                      "rule_id":  "1801-validate-022-schedule-2a"
+                  },
+                  {
+                      "case_id":  "case-23-1801-validate-023-schedule-3",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Within a row, non-zero cells mix blank and populated values in Schedule 3."
+                                    },
+                      "expected_message":  "Incomplete values on Schedule 3, Row {row}.",
+                      "expected_behavior":  "The source treats 0.00 as absent and requires all other cells to be uniformly blank or populated; for Schedule 1 the state is shared across its continuation table.",
+                      "rule_id":  "1801-validate-023-schedule-3"
+                  },
+                  {
+                      "case_id":  "case-24-1801-validate-024-schedule-4",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Within a row, non-zero cells mix blank and populated values in Schedule 4."
+                                    },
+                      "expected_message":  "Incomplete values on Schedule 4, Row {row}.",
+                      "expected_behavior":  "The source treats 0.00 as absent and requires all other cells to be uniformly blank or populated; for Schedule 1 the state is shared across its continuation table.",
+                      "rule_id":  "1801-validate-024-schedule-4"
+                  },
+                  {
+                      "case_id":  "case-25-1801-validate-025-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All preceding source-ordered checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "expected_behavior":  "Controls are disabled, Print/Edit/Upload are enabled, and success is alerted.",
+                      "rule_id":  "1801-validate-025-success"
+                  },
+                  {
+                      "case_id":  "case-26-1801-save-001-date-all-blank",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "All three return-date components are blank."
+                                    },
+                      "expected_message":  "Please enter a valid Return Date",
+                      "expected_behavior":  "Save uses AND, so a partially populated date bypasses this guard; it performs no calendar/future-date checks.",
+                      "rule_id":  "1801-save-001-date-all-blank"
+                  },
+                  {
+                      "case_id":  "case-27-1801-save-002-tin-required",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any Item 5 TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1801-save-002-tin-required"
+                  },
+                  {
+                      "case_id":  "case-28-1801-save-003-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000 or blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-save-003-rdo"
+                  },
+                  {
+                      "case_id":  "case-29-1801-save-004-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer/decedent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "Save omits the apostrophe-s used by Validate\u0027s otherwise equivalent message.",
+                      "rule_id":  "1801-save-004-name"
+                  },
+                  {
+                      "case_id":  "case-30-1801-date-001-debug-alert",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any enabled payment-date field loses focus and calls validateDate."
+                                    },
+                      "expected_message":  "in",
+                      "expected_behavior":  "An unconditional debugging alert appears before validation.",
+                      "rule_id":  "1801-date-001-debug-alert"
+                  },
+                  {
+                      "case_id":  "case-31-1801-date-002-format",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Payment date is not a real MM/DD/YYYY date."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1801-date-002-format"
+                  },
+                  {
+                      "case_id":  "case-32-1801-date-003-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Payment date is after today."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The field is cleared, but isValid remains true and the function returns true.",
+                      "rule_id":  "1801-date-003-future"
+                  },
+                  {
+                      "case_id":  "case-33-1801-date-004-pre2018",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Payment date year is before 2018."
+                                    },
+                      "expected_message":  "This date cannot be prior to 2018.",
+                      "expected_behavior":  "The field is cleared, but isValid remains true and the function returns true.",
+                      "rule_id":  "1801-date-004-pre2018"
+                  }
+              ]
+}

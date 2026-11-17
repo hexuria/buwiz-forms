@@ -1,0 +1,43 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1602q-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "sched1-simple",
+                      "official_output":  100,
+                      "calculation_id":  "1602q-sched1-standard-rows",
+                      "rate":  10,
+                      "amount":  1000
+                  },
+                  {
+                      "amount":  1000,
+                      "calculation_id":  "1602q-sched1-fx-rows",
+                      "bsp_rate":  50,
+                      "case_id":  "sched1-fx",
+                      "rate":  15,
+                      "official_output":  7500
+                  },
+                  {
+                      "item23":  -100,
+                      "calculation_id":  "1602q-item28",
+                      "enables_overremittance":  true,
+                      "case_id":  "overremittance",
+                      "official_output":  -75,
+                      "item27":  25
+                  },
+                  {
+                      "case_id":  "2025-q2",
+                      "official_rate":  15,
+                      "calculation_id":  "1602q-2025-rate-switch",
+                      "quarter":  "Q2",
+                      "year":  2025
+                  },
+                  {
+                      "case_id":  "2025-q3",
+                      "official_rate":  20,
+                      "calculation_id":  "1602q-2025-rate-switch",
+                      "quarter":  "Q3",
+                      "year":  2025
+                  }
+              ]
+}

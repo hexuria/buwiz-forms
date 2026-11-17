@@ -1,0 +1,80 @@
+{
+  "$id": "urn:dev.goldcoders.bir:schema:evidence-vault-catalog:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "format": {
+      "const": "bir-evidence-vault-catalog-v1"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "entries",
+    "format"
+  ],
+  "title": "External content-addressed evidence vault catalog v1",
+  "type": "object",
+  "$defs": {
+    "entry": {
+      "additionalProperties": false,
+      "properties": {
+        "capture_provenance": {
+          "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/captureProvenance"
+        },
+        "capture_session_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "content_path": {
+          "pattern": "^upstream/sha256/[0-9a-f]{2}/[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "evidence_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "source_map_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_verification_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "capture_provenance",
+        "capture_session_id",
+        "content_path",
+        "evidence_id",
+        "sha256",
+        "size_bytes",
+        "source_map_sha256",
+        "source_verification_sha256"
+      ],
+      "type": "object"
+    },
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  }
+}

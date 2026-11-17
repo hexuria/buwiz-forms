@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "package_version": "7.9.6.0",
+  "status": "researching",
+  "rules": [
+    {
+      "rule_id": "shared-final-001",
+      "official_behavior": "The inspected 1701Q final-copy path calls saveXML(true), writes an IAF_RDO_Copy plaintext staging file, invokes external EncryptFile, and then disables editing. Online sending uses RenameAndSendFile.",
+      "source_refs": [
+        "official-hta-runtime#L2432-L2522",
+        "official-hta-runtime#L5278-L5439",
+        "ebirtools-runtime#functions:EncryptFile,RenameAndSendFile"
+      ],
+      "assessment": "unverified",
+      "recommended_app_behavior": "Keep final-copy and online submission disabled until encryption, transport, state flags, and failure recovery are independently reproduced with dummy data.",
+      "confidence": "high"
+    },
+    {
+      "rule_id": "shared-final-002",
+      "official_behavior": "In the package 7.9.6.0 shared string-util.js loaded by 2550Q April 2024, checkNetConnection returns true immediately and the real network probe is commented out. The 2550Q source-present no-connection local Final Copy branch is therefore unreachable.",
+      "source_refs": [
+        "official-string-util-runtime#checkNetConnection:L910-L933",
+        "2550q-v2024/official-hta-runtime#openAlertEmail:L9679-L9758",
+        "2550q-v2024/v2-candidate-final-copy-submit-workflow-review#source-static-official-defects"
+      ],
+      "assessment": "incorrect-official-behavior",
+      "recommended_app_behavior": "Do not infer connectivity, local-final-copy availability, artifact success, or submission authorization from this helper. Model Final Copy and Submit as separate fail-closed operations with explicit checked prerequisites and outcomes.",
+      "confidence": "high"
+    }
+  ],
+  "safety": "Online submission is outside discovery scope and was not invoked."
+}

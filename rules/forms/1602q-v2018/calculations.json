@@ -1,0 +1,351 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1602q-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1602q-sched1-standard-rows",
+                             "1602q-sched1-fx-rows",
+                             "1602q-sched1-total",
+                             "1602q-sched2-rows",
+                             "1602q-sched2-total",
+                             "1602q-sched3-rows",
+                             "1602q-sched3-total",
+                             "1602q-item17",
+                             "1602q-item22",
+                             "1602q-item23",
+                             "1602q-item27",
+                             "1602q-item28",
+                             "1602q-2025-rate-switch"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1602q-sched1-standard-rows",
+                             "outputs":  [
+                                             "frm1602Q:txtSched1Tax1..12",
+                                             "frm1602Q:txtSched1Tax15"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched1Amount1..12",
+                                            "frm1602Q:txtSched1Amount15",
+                                            "fixed row rates"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Each output equals amount multiplied by the row tax rate divided by 100.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched1",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1:L5324-L5332",
+                                                 "official-hta-runtime#controls:L1404-L1869"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-sched1-fx-rows",
+                             "outputs":  [
+                                             "frm1602Q:txtSched1Tax13",
+                                             "frm1602Q:txtSched1Tax14"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched1Amount13",
+                                            "frm1602Q:txtSched1TaxRate13",
+                                            "frm1602Q:txtSched1Rate13",
+                                            "frm1602Q:txtSched1Amount14",
+                                            "frm1602Q:txtSched1TaxRate14",
+                                            "frm1602Q:txtSched1Rate14"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax withheld = amount Ã— (tax rate / 100) Ã— BSP rate.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched1BspRate",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1BspRate:L5334-L5345"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-sched1-total",
+                             "outputs":  [
+                                             "frm1602Q:txtSched1Total",
+                                             "frm1602Q:txt14"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched1Tax1..15"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum all 15 Schedule 1 tax outputs and copy to Item 14.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched1Total",
+                             "depends_on":  [
+                                                "1602q-sched1-standard-rows",
+                                                "1602q-sched1-fx-rows"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched1Total:L5347-L5368"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-sched2-rows",
+                             "outputs":  [
+                                             "frm1602Q:txtSched2TaxesWithheld1",
+                                             "frm1602Q:txtSched2TaxesWithheld2"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched2Interest1",
+                                            "frm1602Q:txtSched2TaxRate1",
+                                            "frm1602Q:txtSched2Interest2",
+                                            "frm1602Q:txtSched2TaxRate2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each row, taxes withheld = interest Ã— (tax rate / 100).",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched2",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched2:L5264-L5274"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-sched2-total",
+                             "outputs":  [
+                                             "frm1602Q:txtSched2Total",
+                                             "frm1602Q:txt15"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched2TaxesWithheld1",
+                                            "frm1602Q:txtSched2TaxesWithheld2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the two Schedule 2 outputs and copy to Item 15.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched2Total",
+                             "depends_on":  [
+                                                "1602q-sched2-rows"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched2Total:L5276-L5284"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-sched3-rows",
+                             "outputs":  [
+                                             "frm1602Q:txtSched3TaxWithheld1",
+                                             "frm1602Q:txtSched3TaxWithheld2"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched3TotInterest1",
+                                            "frm1602Q:txtSched3TaxRate1",
+                                            "frm1602Q:txtSched3TotInterest2",
+                                            "frm1602Q:txtSched3TaxRate2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each row, taxes withheld = total interest Ã— (tax rate / 100).",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched3:L5242-L5252"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-sched3-total",
+                             "outputs":  [
+                                             "frm1602Q:txtSched3Total",
+                                             "frm1602Q:txt16"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtSched3TaxWithheld1",
+                                            "frm1602Q:txtSched3TaxWithheld2"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the two Schedule 3 outputs and copy to Item 16.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeSched3Total",
+                             "depends_on":  [
+                                                "1602q-sched3-rows"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSched3Total:L5254-L5262"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-item17",
+                             "outputs":  [
+                                             "frm1602Q:txt17"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txt14",
+                                            "frm1602Q:txt15",
+                                            "frm1602Q:txt16"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17 = Item 14 + Item 15 + Item 16.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeItem17",
+                             "depends_on":  [
+                                                "1602q-sched1-total",
+                                                "1602q-sched2-total",
+                                                "1602q-sched3-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem17:L5216-L5222"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-item22",
+                             "outputs":  [
+                                             "frm1602Q:txt22"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txt18",
+                                            "frm1602Q:txt19",
+                                            "frm1602Q:txt20",
+                                            "frm1602Q:txt21"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 22 = Items 18 + 19 + 20 + 21.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeItem22",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem22:L5208-L5214"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-item23",
+                             "outputs":  [
+                                             "frm1602Q:txt23"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txt17",
+                                            "frm1602Q:txt22"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23 = Item 17 - Item 22.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeItem23",
+                             "depends_on":  [
+                                                "1602q-item17",
+                                                "1602q-item22"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem23:L5201-L5206"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-item27",
+                             "outputs":  [
+                                             "frm1602Q:txt27"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txt24",
+                                            "frm1602Q:txt25",
+                                            "frm1602Q:txt26"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 27 = Items 24 + 25 + 26.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeItem27",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem27:L5193-L5199"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-item28",
+                             "outputs":  [
+                                             "frm1602Q:txt28"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txt23",
+                                            "frm1602Q:txt27"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 28 = Item 23 + Item 27; a negative result enables over-remittance choices.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "computeItem28",
+                             "depends_on":  [
+                                                "1602q-item23",
+                                                "1602q-item27"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeItem28:L5160-L5173"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1602q-2025-rate-switch",
+                             "outputs":  [
+                                             "frm1602Q:txtSched1TaxRate13",
+                                             "frm1602Q:txtSched1TaxRate14"
+                                         ],
+                             "inputs":  [
+                                            "frm1602Q:txtYear",
+                                            "frm1602Q:qtr_1",
+                                            "frm1602Q:qtr_2",
+                                            "frm1602Q:qtr_3",
+                                            "frm1602Q:qtr_4"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Rows 13 and 14 show 15% before 2025 and for 2025 Q1/Q2, then 20% for 2025 Q3/Q4 and later years.",
+                             "rounding":  "formatCurrency applies two decimal places; input blur handlers call round(...,2).",
+                             "trigger":  "updateTaxRate",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#updateTaxRate:L5741-L5784"
+                                             ],
+                             "assessment":  "unverified",
+                             "recommended_app_behavior":  "Confirm the statutory transition against a revision-matched issuance before implementing the post-2018 update.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

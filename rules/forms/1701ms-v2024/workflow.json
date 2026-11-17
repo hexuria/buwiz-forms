@@ -1,0 +1,195 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "revision":  "2024-08-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#setFieldTPSPEnabled:L8628-L8867",
+                                           "official-hta-runtime#dynamic-schedules:L12929-L15966"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Multi-part taxpayer/spouse annual return with conditional schedules and nine unbounded modal row groups."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L5533-L5539",
+                                           "official-hta-runtime#saveXML:L6776-L7060"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save requires only four nonblank taxpayer TIN components and serializes flat DOM state."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L7629-L8034",
+                                           "official-hta-runtime#disabledAllFields:L9117-L9130"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Ordered validate branches run and then all fields disable on success."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#openAlertEmail:L6479-L6573",
+                                           "official-hta-runtime#saveEncryptedProfile:L6684-L6775"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy is coupled to confirmation, encryption, and connectivity state."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L6574-L6659",
+                                           "official-hta-runtime#saveXMLsubmit:L7494-L7628"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online payload path exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext local save."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L5533-L5539"
+                                            ],
+                            "guard":  "Four first-page taxpayer TIN components are nonblank."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables fields.",
+                                                 "Shows success alert."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L7629-L8034"
+                                            ],
+                            "guard":  "All active ordered main rules pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L9131-L9629"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted artifact.",
+                                                 "Updates final-copy state."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L6479-L6573"
+                                            ],
+                            "guard":  "User confirms coupled workflow."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Sends encrypted payload; not exercised here."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L6574-L6659"
+                                            ],
+                            "guard":  "Connectivity and transport succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "August 2024 revision",
+                          "Applicable taxpayer/spouse identity and income-source selections",
+                          "Applicable schedules and tax-regime details",
+                          "Perjury clause consent"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "bir-2316",
+                                     "label":  "BIR Form No. 2316",
+                                     "source_refs":  [
+                                                         "official-guide-2024#attachments",
+                                                         "official-hta-runtime#creditableTaxWithheldForm2316:L12766-L12815"
+                                                     ],
+                                     "required_when":  "Creditable tax withheld from compensation is claimed.",
+                                     "official_ui_enforcement":  "ATC selection enables the corresponding Part V field; attachment itself is not locally enforced.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "foreign-tax-proof",
+                                     "label":  "Proof of foreign tax credits",
+                                     "source_refs":  [
+                                                         "official-guide-2024#attachments",
+                                                         "official-hta-runtime#validate:L7852-L7874"
+                                                     ],
+                                     "required_when":  "Part V Item 7 foreign tax credit is claimed.",
+                                     "official_ui_enforcement":  "Local Validate checks reference/amount pairing, not attachment presence.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "authorization",
+                                     "label":  "Authorization letter",
+                                     "source_refs":  [
+                                                         "official-guide-2024#attachments"
+                                                     ],
+                                     "required_when":  "Filed by an authorized representative.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-guide-2024#filing-deadline",
+                                                     "official-hta-runtime#validateCurrentYear:L9692-L9727"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return deadline and short-period rules are defined by the August 2024 official guide; the runtime itself hard-codes non-short-period filing to December of the prior calendar year and short-period filing to the current month/year."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-guide-2024#filing-deadline",
+                                                     "official-hta-runtime#validateCurrentYear:L9692-L9727"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Annual return deadline and short-period rules are defined by the August 2024 official guide; the runtime itself hard-codes non-short-period filing to December of the prior calendar year and short-period filing to the current month/year."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-guide-2024#filing-deadline",
+                                                     "official-hta-runtime#validateCurrentYear:L9692-L9727"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Annual return deadline and short-period rules are defined by the August 2024 official guide; the runtime itself hard-codes non-short-period filing to December of the prior calendar year and short-period filing to the current month/year."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-guide-2024#filing-deadline",
+                                                     "official-hta-runtime#validateCurrentYear:L9692-L9727"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Annual return deadline and short-period rules are defined by the August 2024 official guide; the runtime itself hard-codes non-short-period filing to December of the prior calendar year and short-period filing to the current month/year."
+                             }
+                         ]
+}

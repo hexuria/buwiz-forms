@@ -1,0 +1,279 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1601c-v2018",
+    "revision":  "2018-01-01",
+    "evaluation_order":  [
+                             "1601c-item21-nontaxable-total",
+                             "1601c-item22-taxable-compensation",
+                             "1601c-item24-net-taxable-compensation",
+                             "1601c-schedule-row-adjustment",
+                             "1601c-schedule-total",
+                             "1601c-item26-schedule-transfer",
+                             "1601c-item27-remittance",
+                             "1601c-item30-remittances-made",
+                             "1601c-item31-tax-still-due",
+                             "1601c-item35-penalties",
+                             "1601c-item36-total-still-due"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1601c-item21-nontaxable-total",
+                             "outputs":  [
+                                             "frm1601c:txtTax21"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax15",
+                                            "frm1601c:txtTax16",
+                                            "frm1601c:txtTax17",
+                                            "frm1601c:txtTax18",
+                                            "frm1601c:txtTax19",
+                                            "frm1601c:txtTax20"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21 = 15 + 16 + 17 + 18 + 19 + 20.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTxt21",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt21:L3505-L3510"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item22-taxable-compensation",
+                             "outputs":  [
+                                             "frm1601c:txtTax22"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax14",
+                                            "frm1601c:txtTax21"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "22 = 14 - 21.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTxt22",
+                             "depends_on":  [
+                                                "1601c-item21-nontaxable-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt22:L3512-L3516"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item24-net-taxable-compensation",
+                             "outputs":  [
+                                             "frm1601c:txtTax24"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax22",
+                                            "frm1601c:txtTax23"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "24 = 22 - 23.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTxt24",
+                             "depends_on":  [
+                                                "1601c-item22-taxable-compensation"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt24:L3518-L3521"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-schedule-row-adjustment",
+                             "outputs":  [
+                                             "frm1601c:sched1:txtAdjustments{N\u003e=0}"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:sched1:txtShouldTaxDue{N\u003e=0}",
+                                            "frm1601c:sched1:txtTaxPaid{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Adjustment[N] = tax that should have been paid[N] - tax paid[N].",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeSchedule1",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSchedule1:L3549-L3554"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-schedule-total",
+                             "outputs":  [
+                                             "frm1601c:sched1:txtTotal1"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:sched1:txtAdjustments{N\u003e=0}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Schedule total = sum of every existing row adjustment.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeSchedule1",
+                             "depends_on":  [
+                                                "1601c-schedule-row-adjustment"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSchedule1:L3556-L3560"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item26-schedule-transfer",
+                             "outputs":  [
+                                             "frm1601c:txtTax26"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:sched1:txtTotal1"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "26 = Schedule I total adjustment.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeSchedule1",
+                             "depends_on":  [
+                                                "1601c-schedule-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeSchedule1:L3561-L3563"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item27-remittance",
+                             "outputs":  [
+                                             "frm1601c:txtTax27"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax25",
+                                            "frm1601c:txtTax26"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "27 = 25 + 26.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTxt27",
+                             "depends_on":  [
+                                                "1601c-item26-schedule-transfer"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt27:L3523-L3527"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item30-remittances-made",
+                             "outputs":  [
+                                             "frm1601c:txtTax30"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax28",
+                                            "frm1601c:txtTax29"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "30 = 28 + 29.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTxt30",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt30:L3529-L3533"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item31-tax-still-due",
+                             "outputs":  [
+                                             "frm1601c:txtTax31"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax27",
+                                            "frm1601c:txtTax30"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "31 = 27 - 30.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTxt31",
+                             "depends_on":  [
+                                                "1601c-item27-remittance",
+                                                "1601c-item30-remittances-made"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTxt31:L3535-L3539"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item35-penalties",
+                             "outputs":  [
+                                             "frm1601c:txtTax35"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax32",
+                                            "frm1601c:txtTax33",
+                                            "frm1601c:txtTax34"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "35 = 32 + 33 + 34.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L3541-L3547"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1601c-item36-total-still-due",
+                             "outputs":  [
+                                             "frm1601c:txtTax36"
+                                         ],
+                             "inputs":  [
+                                            "frm1601c:txtTax31",
+                                            "frm1601c:txtTax35"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "36 = 31 + 35.",
+                             "rounding":  "NumWithComma inputs, arithmetic, toFixed(2), then formatCurrency.",
+                             "trigger":  "computeTaxAmountStillDue",
+                             "depends_on":  [
+                                                "1601c-item31-tax-still-due",
+                                                "1601c-item35-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeTaxAmountStillDue:L3566-L3571"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals and preserve the explicit source dependency order.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

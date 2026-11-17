@@ -1,0 +1,15 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1600wp-v2010",
+    "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\1600WP\\1600WP-final-copy-#email-redacted#.xml",
+    "ciphertext_sha256":  "716e33e9ecaf808ec7d52729268c218ae4392cb9e6f6836e89ec5433d75d995a",
+    "zlib_header":  "78da",
+    "decrypted_byte_count":  9457,
+    "decrypted_sha256":  "6d67e080d1ee4c5033351895da3ddf1f64419bd02a439aafb9d2436b252af445",
+    "field_count":  115,
+    "unique_field_count":  115,
+    "field_inventory_sha256":  "a3c9d11faec93a1f7fd54c6b79a61647fa28cb10f146949b7dfdc1cec20968f8",
+    "encrypted_only_field":  "frm1600WP:DateWithholdingMonth",
+    "xml_version":  null,
+    "values_emitted":  false
+}

@@ -1,0 +1,18 @@
+{
+  "name": "ebirforms-web",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "audit:no-legacy": "node scripts/run_python.mjs scripts/audit_no_legacy.py",
+    "capabilities:rust": "cargo run -q --locked -p bir-print --bin generate_form_capabilities",
+    "rules:audit": "cargo run --locked -p bir-rules-codegen -- audit",
+    "rules:validate-v1": "cargo run --locked -p bir-rules-codegen -- validate-v1",
+    "rules:status": "cargo run --locked -p bir-rules-codegen -- status",
+    "rules:generate": "cargo run --locked -p bir-rules-codegen -- generate",
+    "rules:check": "cargo run --locked -p bir-rules-codegen -- check",
+    "rules:build-2550q-bindings": "cargo run --locked -p bir-rules-codegen -- build-2550q-bindings",
+    "rules:project-2550q": "cargo run --locked -p bir-rules-codegen -- project-2550q",
+    "rules:test": "cargo test --locked -p bir-rules -p bir-rules-codegen",
+    "rules:ci": "npm run rules:check && npm run rules:test"
+  }
+}

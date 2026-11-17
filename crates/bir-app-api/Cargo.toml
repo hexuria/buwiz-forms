@@ -1,0 +1,53 @@
+[package]
+name = "bir-app-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "UI-free host functions (the `bir` module) shared by the gpui shell and the NSH app"
+
+[features]
+default = ["sqlcipher"]
+# SQLCipher database encryption, passed through to bir-core and bir-print.
+# bir-shell keeps it on; the NSH app turns it off.
+sqlcipher = ["bir-core/sqlcipher", "bir-print/sqlcipher"]
+# Device filings, the agent's send path and the gpui-agent session both hosts share (`agent/`); enabled by
+# `bir-shell/agent` and `nsh-app-ebirforms/agent`.
+agent = ["dep:reqwest", "dep:gpui-agent"]
+# `bir-headless`: the same session in a daemon with no window (clap CLI, pid file, detach). Needs `agent`.
+headless = ["agent", "dep:clap", "dep:dotenvy", "dep:libc", "dep:socket2"]
+mas_build = ["bir-core/mas_build"]
+# Test helpers (`account_gate::force_locked`) for a host's own tests.
+test-support = []
+
+[dependencies]
+# The UI-free stand-in, under the name the moved code was written against.
+gpui_shell = { package = "bir-host-shim", path = "../bir-host-shim" }
+bir-core = { path = "../bir-core", default-features = false }
+bir-print = { path = "../bir-print", default-features = false }
+
+anyhow = "1"
+chrono = "0.4"
+futures = "0.3"
+# One rev for bir-shell, bir-mcp and the NSH app: they speak one protocol and one discovery format.
+gpui-agent = { workspace = true, optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+dotenvy = { workspace = true, optional = true }
+libc = { version = "0.2", optional = true }
+socket2 = { version = "0.6", optional = true }
+reqwest = { version = "0.12", features = ["rustls-tls", "blocking"], default-features = false, optional = true }
+serde = { version = "1", features = ["derive"] }
+# Object keys keep insertion order, as in the gpui shell (gpui turns it on
+# there): a fill applies a batch of edits in the order the page sent them.
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+tracing = "0.1"
+zip = { version = "2", default-features = false, features = ["deflate", "time"] }
+
+[dev-dependencies]
+# Tests produce a current authenticator code for a generated secret.
+totp-rs = "5.7.1"
+temp-env = "0.3"
+# Host tests stage filed returns and failing writes with raw SQL.
+bir-core = { path = "../bir-core", default-features = false, features = ["test-support"] }
+tempfile = "3"

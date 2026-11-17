@@ -1,0 +1,128 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "form_code":  "0605",
+    "revision":  "2003-09-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form0605.hta",
+                                "sha256":  "6200b57ef2a3d9d296dc79cbdb9d2f7a605fb92d1dfcdcc4883f08de7c7fa324",
+                                "size":  220336,
+                                "revision_binding":  "September 2003 Offline runtime; authoritative for this package."
+                            },
+                            {
+                                "asset_id":  "packaged-help",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help0605.hta",
+                                "sha256":  "b820994a937a73f3299a352f6b2a69759d4cbc0b18e583221a1bff5013dc40a2",
+                                "size":  11861,
+                                "revision_binding":  "Packaged 0605 help."
+                            },
+                            {
+                                "asset_id":  "official-atc-catalog",
+                                "kind":  "runtime-lookup-catalog",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\atcCodes.xml",
+                                "sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+                                "size":  153753,
+                                "revision_binding":  "Hash-pinned runtime ATC catalog; 142 entries bind to Form 0605."
+                            },
+                            {
+                                "asset_id":  "official-tax-type-catalog",
+                                "kind":  "runtime-lookup-catalog",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\xml\\taxTypeCodes.xml",
+                                "sha256":  "496fd8e64b8854f1012a314b3d8576518fafd081b4e4726f2ea2f05ea6e3a72b",
+                                "size":  3111,
+                                "revision_binding":  "Hash-pinned runtime tax-type catalog; 39 entries bind to Form 0605 physically, but the declared count exposes only 37."
+                            },
+                            {
+                                "asset_id":  "earlier-form-pdf",
+                                "kind":  "official-form-pdf-earlier-revision",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605version1999_09.02.2022_copy.pdf",
+                                "sha256":  "de04419766c59bf27fdeb854c0f7c3f98601900caa20630442e671e2313e536f",
+                                "size":  228607,
+                                "revision_binding":  "September 1999 PDF; recorded as a revision boundary and not merged into September 2003 rules."
+                            },
+                            {
+                                "asset_id":  "xml-encrypted-a",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605-final-copy-a-#email-redacted#.xml",
+                                "sha256":  "09cd3626efd6a7490b5922c9dbb6fad98b0b066ffb5de87c3ea6a6677210620f",
+                                "size":  1737,
+                                "revision_binding":  "Revision-matched 235-key dummy final copy A; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-encrypted-b",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605-final-copy-b-#email-redacted#.xml",
+                                "sha256":  "c53a196dcfe1fb585fefc7b48c2a4f2abe9ec9114d55541e44a40e4399c39928",
+                                "size":  1789,
+                                "revision_binding":  "Revision-matched 235-key dummy final copy B; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-plaintext-a",
+                                "kind":  "dummy-profile-plaintext-save",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605-save-a-#email-redacted#.xml",
+                                "sha256":  "01992fcdaef50493e756b89728af8d107ec1a0cafa94e677edbac1e2f08dc499",
+                                "size":  13751,
+                                "revision_binding":  "Revision-matched 235-key dummy plaintext save A; values excluded."
+                            },
+                            {
+                                "asset_id":  "xml-plaintext-b",
+                                "kind":  "dummy-profile-plaintext-save",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605-save-b-#email-redacted#.xml",
+                                "sha256":  "f8659d2011d2914073725ccef1fc4f2e74d4f315bf333d5ec3084a1fdff524f7",
+                                "size":  13815,
+                                "revision_binding":  "Revision-matched 235-key dummy plaintext save B; values excluded."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  235,
+                   "runtime_field_families":  0,
+                   "fields_total":  235,
+                   "typed_fields":  235,
+                   "validation_rules":  56,
+                   "confirmed_official_bugs":  11,
+                   "calculations":  2,
+                   "negative_fixtures":  46,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "encrypted_field_audit_a":  "fixtures/encrypted-field-audit-a-v796.json",
+                      "encrypted_field_audit_b":  "fixtures/encrypted-field-audit-b-v796.json",
+                      "plaintext_field_audits":  "fixtures/plaintext-field-audits-v796.json",
+                      "runtime_controls":  "fixtures/runtime-control-inventory-v796.json",
+                      "atc_catalog":  "fixtures/atc-catalog-v796.json",
+                      "tax_type_catalog":  "fixtures/tax-type-catalog-v796.json",
+                      "validation_functions":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_functions":  "fixtures/calculation-function-inventory-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release metadata changed.",
+                        "No decrypted values or email-bearing filenames are emitted.",
+                        "All 235 keys are accounted for: 55 static controls, one runtime RDO, 142 ATC lookup controls, and 37 reachable tax-type lookup controls.",
+                        "The tax-type catalog physically contains 39 Form 0605 entries but declares 37, leaving entries 38 and 39 unreachable.",
+                        "The September 1999 PDF is an earlier revision boundary and is not merged into the September 2003 runtime rules."
+                    ]
+}

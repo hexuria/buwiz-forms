@@ -1,0 +1,176 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701a-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime#processTaxpayerType:L3382-L3427",
+                                           "official-hta-runtime#addRow:L4307-L4364"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Two-page annual return with taxpayer/spouse columns and two unbounded modal other-income schedules."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L5599-L5613",
+                                           "official-hta-runtime#saveXML:L5027-L5368"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save requires only nonblank TIN components, RDO value other than 000, and taxpayer name, then serializes flat frmMain state."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validate:L5700-L5822"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Ordered Validate branches run, then controls disable on success."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#openAlertEmail:L6382-L6447"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Final Copy is coupled to encryption and connectivity workflow."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail:L6448-L6523"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes plaintext pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L5599-L5613"
+                                            ],
+                            "guard":  "Three narrow preflight checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Shows success alert."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validate:L5700-L5822"
+                                            ],
+                            "guard":  "All active ordered checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables applicable controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl:L5947-L6090"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted artifact."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#openAlertEmail:L6382-L6447"
+                                            ],
+                            "guard":  "Confirmation/connectivity path permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail:L6448-L6523"
+                                            ],
+                            "guard":  "Connectivity and send succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "January 2018 ENCS revision",
+                          "Return year 2018 or later",
+                          "Applicable taxpayer/spouse identity and ATC choices",
+                          "Applicable Part IV.A or IV.B schedules"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "supporting-income-schedules",
+                                     "label":  "Supporting statements for other taxable income",
+                                     "source_refs":  [
+                                                         "official-form-pdf#instructions",
+                                                         "official-hta-runtime#validateModal:L3882-L3935"
+                                                     ],
+                                     "required_when":  "Part IV.A or IV.B modal rows are used.",
+                                     "official_ui_enforcement":  "Modal requires description and applicable positive amount; external document presence is not checked.",
+                                     "confidence":  "medium"
+                                 },
+                                 {
+                                     "attachment_id":  "foreign-tax-credit-proof",
+                                     "label":  "Proof supporting foreign tax credits",
+                                     "source_refs":  [
+                                                         "official-hta-runtime#processFTC:L3428-L3450"
+                                                     ],
+                                     "required_when":  "Foreign tax credit is claimed.",
+                                     "official_ui_enforcement":  "The UI enables the foreign tax number/credit amount but Validate does not require the taxpayer foreign tax number.",
+                                     "confidence":  "medium"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Annual return due on or before April 15 following the taxable year, subject to applicable law/calendar adjustments."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-form-pdf#instructions"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not a quarterly return; annual deadline applies."
+                             }
+                         ]
+}

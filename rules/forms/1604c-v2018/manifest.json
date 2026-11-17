@@ -1,0 +1,53 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1604c-v2018",
+    "form_code":  "1604C",
+    "revision":  "2018-01-01",
+    "revision_label":  "January 2018",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0. Asset"
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  119,
+                   "runtime_field_families":  0,
+                   "fields_total":  119,
+                   "typed_fields":  119,
+                   "validation_rules":  33,
+                   "confirmed_official_bugs":  16,
+                   "calculations":  5,
+                   "negative_fixtures":  23,
+                   "unverified_gaps":  2
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit-v796.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer/release changes.",
+                        "No source values or email address are copied.",
+                        "Plaintext and decrypted encrypted saves contain the same 119-key inventory; there are no active runtime field families.",
+                        "1604CF assets are a different form and are excluded."
+                    ]
+}

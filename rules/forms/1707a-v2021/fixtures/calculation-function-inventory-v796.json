@@ -1,0 +1,290 @@
+{
+    "source_sha256":  "cd1112c6c14bc338cdd81b19f405bdd788866e0c0164591b968c630feb1b07f1",
+    "function_count":  20,
+    "functions":  [
+                      {
+                          "name":  "elemModalSched1Compute",
+                          "start_line":  3044,
+                          "end_line":  3087,
+                          "body_sha256":  "6231c69bdb482cc377a28662847486b472671ff9996c4a9dad7b23263beae4de",
+                          "alerts":  [
+                                         "\"Total \" + msgItem + \" should not exceed billion\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS1C3SellingPrice_",
+                                              "frm1707Av2021:txtS1C4Cost_",
+                                              "frm1707Av2021:txtS1C5CapitalGains_"
+                                          ]
+                      },
+                      {
+                          "name":  "elemModalSched2Compute",
+                          "start_line":  3323,
+                          "end_line":  3368,
+                          "body_sha256":  "d3a086472e4d44f31b7148a51321e902ea661ee8a5963acc6a2f17dbaabea9d8",
+                          "alerts":  [
+                                         "\"Total \" + msgItem + \" should not exceed billion\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS2C3SellingPrice_",
+                                              "frm1707Av2021:txtS2C4Cost_",
+                                              "frm1707Av2021:txtS2C5CapitalLoss_"
+                                          ]
+                      },
+                      {
+                          "name":  "modalAmountNeg",
+                          "start_line":  3718,
+                          "end_line":  3724,
+                          "body_sha256":  "f17296466449109b16b3317a84899e478eae8645e049b10dca4cdd8d098d420d",
+                          "alerts":  [
+                                         "\u0027This should not be a negative value\u0027"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isValidAmount",
+                          "start_line":  4238,
+                          "end_line":  4259,
+                          "body_sha256":  "7faded916fc3301c8615ae535ef8f0449ef1a8238f8ecb45756309a04547b73e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "roundAmount",
+                          "start_line":  4271,
+                          "end_line":  4304,
+                          "body_sha256":  "83ac83e8f14938f965e9b8769990565696acadcc3f4bd0618e27face772da66a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "valForCompute",
+                          "start_line":  4305,
+                          "end_line":  4308,
+                          "body_sha256":  "14f3895d15fb98611b5aefb9a37270aa136bb51a145df5de4e83e2454af59312",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "preciseCompute",
+                          "start_line":  4309,
+                          "end_line":  4379,
+                          "body_sha256":  "2d57eacd778d0b39647f07c3c2043f9f91b78b020ba8a97b3319616a1e9aa219",
+                          "alerts":  [
+                                         "\"Total selling price should not exceed billion\"",
+                                         "\"Total cost should not exceed billion\"",
+                                         "\"Total capital gains should not exceed billion\"",
+                                         "\"Total tax paid should not exceed billion\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS1C3SellingPriceI",
+                                              "frm1707Av2021:txtS1C4CostI",
+                                              "frm1707Av2021:txtS1C5CapitalGainsI",
+                                              "frm1707Av2021:txtS1I20TotalCapitalGains",
+                                              "frm1707Av2021:txtS1I20TotalCost",
+                                              "frm1707Av2021:txtS1I20TotalSellingPrice",
+                                              "frm1707Av2021:txtS1I20TotalTaxPaid"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1SellingPrice",
+                          "start_line":  4380,
+                          "end_line":  4389,
+                          "body_sha256":  "ceafb9b1e8fb3a0cb44126d89864023343371c6646074b753f391c644af01d6b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS1C3SellingPriceI",
+                                              "frm1707Av2021:txtS1I20TotalSellingPrice"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1Cost",
+                          "start_line":  4390,
+                          "end_line":  4398,
+                          "body_sha256":  "26adf3bfd4657232f54c13bef003fd04680238eb3c06c74c8ede14bd27646a9f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS1C4CostI",
+                                              "frm1707Av2021:txtS1I20TotalCost"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1CapitalGains",
+                          "start_line":  4399,
+                          "end_line":  4410,
+                          "body_sha256":  "5e9609dcccc6f0bd9178182b43e377e7bff810a754cdb8e29c29b474e8c1d912",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI12TotalCapitalGains",
+                                              "frm1707Av2021:txtS1C5CapitalGainsI",
+                                              "frm1707Av2021:txtS1I20TotalCapitalGains"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1TaxPaid",
+                          "start_line":  4411,
+                          "end_line":  4478,
+                          "body_sha256":  "980db219da392cc8f056426048723dcee942b639f1458656fcf5b23c8890713a",
+                          "alerts":  [
+                                         "\"Total selling price should not exceed billion\"",
+                                         "\"Total cost should not exceed billion\"",
+                                         "\"Total capital loss should not exceed billion\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI16ATotalTaxPaid",
+                                              "frm1707Av2021:txtS1C6TaxPaidI",
+                                              "frm1707Av2021:txtS1I20TotalTaxPaid",
+                                              "frm1707Av2021:txtS2C3SellingPriceI",
+                                              "frm1707Av2021:txtS2C4CostI",
+                                              "frm1707Av2021:txtS2C5CapitalLossI",
+                                              "frm1707Av2021:txtS2I21TotalCapitalLoss",
+                                              "frm1707Av2021:txtS2I21TotalCost",
+                                              "frm1707Av2021:txtS2I21TotalSellingPrice"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched2SellingPrice",
+                          "start_line":  4479,
+                          "end_line":  4487,
+                          "body_sha256":  "3e84dc16edf536678d7121ebeb1bd42c021b66335280331e8470307f68a90cc6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS2C3SellingPriceI",
+                                              "frm1707Av2021:txtS2I21TotalSellingPrice"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched2Cost",
+                          "start_line":  4488,
+                          "end_line":  4496,
+                          "body_sha256":  "c892290b419dfbde6bc96f37cd660e867d5b7f47149536c411698c1be60cd206",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtS2C4CostI",
+                                              "frm1707Av2021:txtS2I21TotalCost"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched2CapitalLoss",
+                          "start_line":  4497,
+                          "end_line":  4510,
+                          "body_sha256":  "3b5595b373b64fcdd0eda3df4ba7cb16200ecde86abd5b67359c63a455d763f1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI13TotalCapitalLoss",
+                                              "frm1707Av2021:txtS2C5CapitalLossI",
+                                              "frm1707Av2021:txtS2I21TotalCapitalLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "computePart2Item14GainLoss",
+                          "start_line":  4511,
+                          "end_line":  4521,
+                          "body_sha256":  "a561c7f7aedee5bce4120e150530d79f2daebf2603b4abfd725df55c895e654e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI12TotalCapitalGains",
+                                              "frm1707Av2021:txtI13TotalCapitalLoss",
+                                              "frm1707Av2021:txtI14NetCapitalGainLoss"
+                                          ]
+                      },
+                      {
+                          "name":  "computePart2Item15TaxDue",
+                          "start_line":  4522,
+                          "end_line":  4535,
+                          "body_sha256":  "7207c09f84ad975538c6a33ddcc824ff8150080d4a7a99431fd96bc4a14af71a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI14NetCapitalGainLoss",
+                                              "frm1707Av2021:txtI15TaxDue",
+                                              "frm1707Av2021:txtI16ApplicableTaxRate"
+                                          ]
+                      },
+                      {
+                          "name":  "computePart2Item16CTaxPaid",
+                          "start_line":  4536,
+                          "end_line":  4546,
+                          "body_sha256":  "c74f3d064c6db79fa0713a988ce4047ef592f54d8760e074ea7a9b31a9f88099",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI16ATotalTaxPaid",
+                                              "frm1707Av2021:txtI16BTotalTaxPaid",
+                                              "frm1707Av2021:txtI16CTotalTaxPaid"
+                                          ]
+                      },
+                      {
+                          "name":  "computePart2Item17TaxPayable",
+                          "start_line":  4547,
+                          "end_line":  4570,
+                          "body_sha256":  "4576b356b4eb8dfb2b9b3e192254f65cede89a921de4fb4739f89b02ad48f938",
+                          "alerts":  [
+                                         "taxPayable"
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI15TaxDue",
+                                              "frm1707Av2021:txtI16CTotalTaxPaid",
+                                              "frm1707Av2021:txtI17TaxStillPayable"
+                                          ]
+                      },
+                      {
+                          "name":  "computePart2Item18DPenalties",
+                          "start_line":  4571,
+                          "end_line":  4582,
+                          "body_sha256":  "05dfa0b756b664341d2cd14c421846f72997c04a2f9fe46c8c4cf09028f6cd65",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI18ASurcharge",
+                                              "frm1707Av2021:txtI18BInterest",
+                                              "frm1707Av2021:txtI18CCompromise",
+                                              "frm1707Av2021:txtI18DPenalties"
+                                          ]
+                      },
+                      {
+                          "name":  "computePart2Item19TotalPayable",
+                          "start_line":  4583,
+                          "end_line":  4602,
+                          "body_sha256":  "ffe2bb27b63bf34cfc3c037b48a5b0e40db50d5e44c65a02793b99ca76589482",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1707Av2021:txtI17TaxStillPayable",
+                                              "frm1707Av2021:txtI18DPenalties",
+                                              "frm1707Av2021:txtI19TotalAmountPayable"
+                                          ]
+                      }
+                  ]
+}

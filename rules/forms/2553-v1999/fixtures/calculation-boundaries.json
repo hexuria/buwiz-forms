@@ -1,0 +1,27 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2553-v1999",
+    "cases":  [
+                  {
+                      "case_id":  "five-percent-row",
+                      "taxable_amount":  100000,
+                      "official_output":  5000,
+                      "calculation_id":  "2553-row-tax",
+                      "rate":  5
+                  },
+                  {
+                      "case_id":  "manual-ot012-rate",
+                      "taxable_amount":  100000,
+                      "official_output":  2500,
+                      "calculation_id":  "2553-row-tax",
+                      "rate":  2.5
+                  },
+                  {
+                      "case_id":  "overpayment-with-penalty",
+                      "penalties":  250,
+                      "calculation_id":  "2553-item23-total-payable",
+                      "tax_payable":  -1000,
+                      "official_output":  -750
+                  }
+              ]
+}

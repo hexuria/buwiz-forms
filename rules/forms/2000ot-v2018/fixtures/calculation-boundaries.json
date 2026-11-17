@@ -1,0 +1,40 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "do102-exact-block",
+                      "recommended_output":  1.5,
+                      "calculation_id":  "2000ot-do102-tax",
+                      "official_output":  1.5,
+                      "base":  200
+                  },
+                  {
+                      "case_id":  "do102-fraction",
+                      "recommended_output":  3,
+                      "calculation_id":  "2000ot-do102-tax",
+                      "official_output":  1.5,
+                      "base":  201
+                  },
+                  {
+                      "case_id":  "do122-below-half",
+                      "recommended_output":  30,
+                      "calculation_id":  "2000ot-do122-tax",
+                      "official_output":  15,
+                      "base":  1001
+                  },
+                  {
+                      "case_id":  "do125-half",
+                      "calculation_id":  "2000ot-do125-tax",
+                      "official_output":  50,
+                      "base":  100
+                  },
+                  {
+                      "case_id":  "overpayment-plus-penalty",
+                      "penalties":  25,
+                      "calculation_id":  "2000ot-total-payable",
+                      "official_output":  25,
+                      "tax_still_due":  -100
+                  }
+              ]
+}

@@ -1,0 +1,306 @@
+{
+    "source_sha256":  "49b5603bed5a87f94c6d9bfeb46da7399f1bbbe7ffd429cd81dc41bc46404fee",
+    "function_count":  25,
+    "functions":  [
+                      {
+                          "name":  "populateTaxpayer",
+                          "start_line":  48,
+                          "end_line":  97,
+                          "body_sha256":  "e39e5320cc561fb72104b73686419f44a6a304ca08937d178e53063ed4a7f4e1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerSpouse",
+                          "start_line":  98,
+                          "end_line":  119,
+                          "body_sha256":  "dcaf44f0308864850d09f0e9fc1b2d3f4fcfd55b133fa2776fc3f6c17d141300",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerDependent",
+                          "start_line":  120,
+                          "end_line":  135,
+                          "body_sha256":  "6415e340cbe4968aa537aa86673e20d93dc3974984fe41b25c4b0295b59a78cc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerAddress",
+                          "start_line":  136,
+                          "end_line":  158,
+                          "body_sha256":  "51129c4c52dcfe7dea306f17360f92c45c24d8a6c6c4c3bacb9b1df385dca20b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerEmployers",
+                          "start_line":  159,
+                          "end_line":  176,
+                          "body_sha256":  "7a50cd5ff1da37ff081951a2d3fd58402cff0e5567341ad7bfc3368678dcca3d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerSpouseEmployers",
+                          "start_line":  177,
+                          "end_line":  192,
+                          "body_sha256":  "25ed2aacde5eea32141fd2586402b446904e25c36331c6f0135a9c1e6d3cb1da",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerEmployerCompensation",
+                          "start_line":  193,
+                          "end_line":  202,
+                          "body_sha256":  "a8eca84064e6b59ac43f8237691f5c0d3b0787902a1ca48f3f153e14ade9ee25",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerSpouseEmployerCompensation",
+                          "start_line":  203,
+                          "end_line":  212,
+                          "body_sha256":  "b431dca0a32740e751a2d53a9456b8cd05b6797f6eaba89f65d613efb920300e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerGrossIncome",
+                          "start_line":  213,
+                          "end_line":  238,
+                          "body_sha256":  "63704f1050bac7c8898ac0697736cf6d415586864b75a0e18f17066bb6183ddd",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerCompensationSubject",
+                          "start_line":  239,
+                          "end_line":  250,
+                          "body_sha256":  "777da53b86b76eed0c2865d49378c0d4d347e2b7c8120387f7615d806b600ced",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerRealPropertySales",
+                          "start_line":  251,
+                          "end_line":  264,
+                          "body_sha256":  "989786ff700c3adb334f69f3f4552493f2ed8a78fc5eb7f31ab6d274b0087dc0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerStockShares",
+                          "start_line":  265,
+                          "end_line":  279,
+                          "body_sha256":  "9740c06f5bb846dbff8216ecc31cd5aae742dba14ac1119412b29e409fd752b5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerOtherIncome",
+                          "start_line":  280,
+                          "end_line":  291,
+                          "body_sha256":  "38b807982b8e5cbcd658e781821cae60711a99a6c9c519bb85992c13b5470d27",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerGrossIncomeExempt",
+                          "start_line":  292,
+                          "end_line":  306,
+                          "body_sha256":  "a17923a2cc47c7945918afa9ea32c74871bcbe8d86b57250ff1913cd43babc15",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerPersonalPropertyReceived",
+                          "start_line":  307,
+                          "end_line":  321,
+                          "body_sha256":  "67e7fe05b3ac45474ec49447c029db5c25c87f7d86b8c82c2480dbb363696fdf",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerOtherExemptIncome",
+                          "start_line":  322,
+                          "end_line":  332,
+                          "body_sha256":  "03047d9bb720904d88c49a421774191bd96a8509bd68e98f80b8742a4a9e5c67",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerGrossTaxableCompensation",
+                          "start_line":  333,
+                          "end_line":  351,
+                          "body_sha256":  "5104af4739d1974a9c96a078cec91daf84e37f111623d2be8448c0e058610a52",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerSpouseGrossTaxableCompensation",
+                          "start_line":  352,
+                          "end_line":  370,
+                          "body_sha256":  "35ce8ae6f9e9a36e01ac21e5197d33083bfa78a4ce928dd7177d3906c6c0d299",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateOtherTaxableIncomeList",
+                          "start_line":  371,
+                          "end_line":  382,
+                          "body_sha256":  "59c5993b046c89c5881ed3d130d8a0406ff7f24fabe34ea3003827428aebc3c8",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerTaxCredit",
+                          "start_line":  383,
+                          "end_line":  399,
+                          "body_sha256":  "a60ad2a45240b6f45086a6142fc9234cf75894825caf5d2bc23502ea0ac5b17e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerSpouseTaxCredit",
+                          "start_line":  400,
+                          "end_line":  416,
+                          "body_sha256":  "005821311b156dd4c5f7267fe19367eb9116eac0bd928cf198d546cfc09f4280",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxpayerPenalty",
+                          "start_line":  417,
+                          "end_line":  429,
+                          "body_sha256":  "a89aab18444d72e515f8c8938bad83cab9535762b8f6b37a1d47690badc96d3e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "populateTaxPayable",
+                          "start_line":  430,
+                          "end_line":  460,
+                          "body_sha256":  "a176100f9db45be705f752986ee4c36a30994e8336bd5907c89741a2f8f0375e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processSuccess",
+                          "start_line":  475,
+                          "end_line":  483,
+                          "body_sha256":  "dd9d3ac73a6353bbd8fb8414943f3d2f34c0fc261b756f28aa2634b5a650f474",
+                          "alerts":  [
+                                         "data.text"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processError",
+                          "start_line":  484,
+                          "end_line":  489,
+                          "body_sha256":  "fbad4b6076eb80b211df2e6f852485eaa2e8ec49d6ea8eb3524353ed215b3f3d",
+                          "alerts":  [
+                                         "typeof data.text == \"undefined\" ? \"Failed to connect to efps online.\" : data.text"
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

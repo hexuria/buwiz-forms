@@ -1,0 +1,212 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1801-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-form-pdf",
+                                           "official-help-v2018",
+                                           "official-hta-runtime#sleeptime:L2226-L2270"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 estate-tax return with two-page estate and deduction schedules; new forms initialize two rows in each expandable schedule."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L3800-L3820",
+                                           "official-hta-runtime#saveXML:L2647-L2908"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save runs only date-all-blank, TIN blankness, RDO, and name checks, then generically serializes every non-hidden form element."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L3281-L3622"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate performs source-ordered date, identity, residency, installment, deduction-cap, and schedule-row checks before disabling editable controls."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML:L2647-L2908",
+                                           "legacy-artifact-exclusion"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Final-copy paths reuse the generic serializer and encrypt/compress the copy; no revision-matched saved artifact was available for black-box comparison."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXMLsubmit:L2910-L3090",
+                                           "official-hta-runtime#sendEmail:L4444-L4558"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Serializes malformed tax-debit ID literally.",
+                                                 "Includes two initial rows per dynamic schedule."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L2647-L2908"
+                                            ],
+                            "guard":  "Narrow initialValidateBeforeSave checks and version-file guards pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables editable controls.",
+                                                 "Enables Print/Edit/Upload.",
+                                                 "Shows success alert."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm:L3281-L3622"
+                                            ],
+                            "guard":  "All source-ordered Validate checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls, then restores treaty/installment/amended conditional state."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm:L3633-L3640",
+                                                "official-hta-runtime#enabledDisabledControls:L3644-L3784"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Creates encrypted/compressed final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML",
+                                                "official-hta-runtime#openAlertEmail"
+                                            ],
+                            "guard":  "File-version and finalization flow permits progress."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Attempts online submission; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and remote acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Date of death",
+                          "Decedent TIN, RDO, identity, residence and residency status",
+                          "Estate schedules, deductions, credits and installment information as applicable"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "death-certificate",
+                                     "label":  "Certified true copy of the death certificate.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#mandatory-requirements"
+                                                     ],
+                                     "required_when":  "All filings.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "estate-settlement",
+                                     "label":  "Affidavit of self-adjudication, deed of extrajudicial settlement, or court order/schedule of partition, as applicable.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#mandatory-requirements"
+                                                     ],
+                                     "required_when":  "According to the mode of estate settlement.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "real-property-documents",
+                                     "label":  "Titles, tax declarations, and assessor certifications for real property.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#real-properties"
+                                                     ],
+                                     "required_when":  "Estate includes real property.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "personal-property-documents",
+                                     "label":  "Ownership and valuation evidence for shares, deposits, vehicles, and other personal property.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#personal-properties"
+                                                     ],
+                                     "required_when":  "Estate includes applicable personal property.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 },
+                                 {
+                                     "attachment_id":  "deduction-support",
+                                     "label":  "Invoices, statements, judicial/administrative evidence, and other documents supporting claimed deductions.",
+                                     "source_refs":  [
+                                                         "official-help-v2018#mandatory-requirements"
+                                                     ],
+                                     "required_when":  "Applicable deductions are claimed.",
+                                     "official_ui_enforcement":  "Not checked by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#filing-deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Event-based: within one year from death; approved meritorious extension may not exceed 30 days."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#filing-deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Not quarterly; the same death-relative deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#filing-deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Not quarterly; the same death-relative deadline applies."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-v2018#filing-deadline"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Not quarterly; the same death-relative deadline applies."
+                             }
+                         ]
+}

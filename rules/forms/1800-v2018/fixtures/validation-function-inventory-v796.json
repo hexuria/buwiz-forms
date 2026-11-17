@@ -1,0 +1,634 @@
+{
+    "source_sha256":  "58b1ff5157f6d66f1ed1252c696d13ab9afe090bae0c1793faf42ef104159d37",
+    "function_count":  25,
+    "functions":  [
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  2920,
+                          "end_line":  2932,
+                          "body_sha256":  "280ba68dd9932d35eb3f1d8857a988a566ddc30121e5c43f7cdef40145eedd65",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  3020,
+                          "end_line":  3112,
+                          "body_sha256":  "325d2f95674ab881132a50bc5ee78f419d7242084819e4b4e0207bc936430d19",
+                          "alerts":  [
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnNextPage",
+                                              "frm1800v2018:btnPrevPage",
+                                              "frm1800v2018:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  3113,
+                          "end_line":  3448,
+                          "body_sha256":  "ae503e861af9ed50d780d032c6904494a326d596c4571748133d514b30baf316",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027or\u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:AmendedRtn_1",
+                                              "frm1800v2018:AmendedRtn_2",
+                                              "frm1800v2018:Compromise",
+                                              "frm1800v2018:Interest",
+                                              "frm1800v2018:Surcharge",
+                                              "frm1800v2018:TotalAmountPayable",
+                                              "frm1800v2018:TotalPenalties",
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtContact",
+                                              "frm1800v2018:txtCurrentPage",
+                                              "frm1800v2018:txtDoneeNameA",
+                                              "frm1800v2018:txtDoneeNameE",
+                                              "frm1800v2018:txtDonorName",
+                                              "frm1800v2018:txtLineBus",
+                                              "frm1800v2018:txtRDOCode",
+                                              "frm1800v2018:txtRegAddress",
+                                              "frm1800v2018:txtRegAddress2",
+                                              "frm1800v2018:txtResAddress",
+                                              "frm1800v2018:txtResAddress2",
+                                              "frm1800v2018:txtTax19",
+                                              "frm1800v2018:txtTaxPayable",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtTIN3",
+                                              "frm1800v2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  3449,
+                          "end_line":  3638,
+                          "body_sha256":  "a211d1e510bfb7688c816f4a394f7d4a308aae9463c83c07379c7fc6096f09ff",
+                          "alerts":  [
+                                         "\u0027BIR Form saved successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:AmendedRtn_1",
+                                              "frm1800v2018:AmendedRtn_2",
+                                              "frm1800v2018:Compromise",
+                                              "frm1800v2018:Interest",
+                                              "frm1800v2018:Surcharge",
+                                              "frm1800v2018:TotalAmountPayable",
+                                              "frm1800v2018:TotalPenalties",
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtContact",
+                                              "frm1800v2018:txtCurrentPage",
+                                              "frm1800v2018:txtDoneeNameA",
+                                              "frm1800v2018:txtDoneeNameE",
+                                              "frm1800v2018:txtDonorName",
+                                              "frm1800v2018:txtLineBus",
+                                              "frm1800v2018:txtRDOCode",
+                                              "frm1800v2018:txtRegAddress",
+                                              "frm1800v2018:txtRegAddress2",
+                                              "frm1800v2018:txtResAddress",
+                                              "frm1800v2018:txtResAddress2",
+                                              "frm1800v2018:txtTax19",
+                                              "frm1800v2018:txtTaxPayable",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtTIN3",
+                                              "frm1800v2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "setInputTextControl_HorizontalAlignment",
+                          "start_line":  3696,
+                          "end_line":  3701,
+                          "body_sha256":  "17a5e836f5cfdbe5526a0f1356c1c3e43ae4ef35ff99573408e5173ff6aad0e9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "setInputTextControl_NumberFormatter",
+                          "start_line":  3702,
+                          "end_line":  3708,
+                          "body_sha256":  "ed6a6ce41e3c68c6a676f998bd79891747c85c1532db7a04e61e9df9466a4dd3",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "clearCheck",
+                          "start_line":  3794,
+                          "end_line":  3803,
+                          "body_sha256":  "d5b334d1a99e2a4528744f1616e38eff5e6f577900771dd9c6fe212f87529486",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "enablescheduleA",
+                          "start_line":  3886,
+                          "end_line":  3896,
+                          "body_sha256":  "b77bbf883e7774b42056c783e243d4a24b754517c797d825253e87723fd56e79",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched3Add",
+                                              "frm1800v2018:btnSched3Delete",
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "disablescheduleA",
+                          "start_line":  3897,
+                          "end_line":  3911,
+                          "body_sha256":  "97400b2158adcb85f717b9ad6064ec128c5e7d2b55ab8062c8b7b9cc5a0d2e54",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched3Add",
+                                              "frm1800v2018:btnSched3Delete",
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars"
+                                          ]
+                      },
+                      {
+                          "name":  "enableScheduleB2",
+                          "start_line":  4010,
+                          "end_line":  4024,
+                          "body_sha256":  "3416a94ca170de1c55ba788fd66bb961ac7c1704b8619015c52823da88545e95",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched4Add",
+                                              "frm1800v2018:btnSched4Delete",
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "disableScheduleB2",
+                          "start_line":  4025,
+                          "end_line":  4045,
+                          "body_sha256":  "b2f76d7b71c95a2c27d0a42ed0b00fc86b77de70e908ccc2b3401c6e1d5595d0",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:btnSched4Add",
+                                              "frm1800v2018:btnSched4Delete",
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDateSched2",
+                          "start_line":  4464,
+                          "end_line":  4511,
+                          "body_sha256":  "54461773ac716ac8e8a5c6adab1d1ff9918579540ceb746ed6fb7cd9f2e0480d",
+                          "alerts":  [
+                                         "\"Invalid date entry in Schedule 2, column 1 row \"+i+\".Format should be MM/DD/YYYY\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 2, column 1 row \"+i+\".\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched2:txtPaymentDate"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDateSched3",
+                          "start_line":  4512,
+                          "end_line":  4557,
+                          "body_sha256":  "6f4fd30d49efdf8558169a43c2057b5e4bc656033a3698686a517a60d41f6334",
+                          "alerts":  [
+                                         "\"Invalid date entry in Schedule 3, column 1 row \"+i+\".Format should be MM/DD/YYYY\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 3, column 1 row \"+i+\".\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:sched3:txtPaymentDate"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDateSched4",
+                          "start_line":  4558,
+                          "end_line":  4603,
+                          "body_sha256":  "d7ea4ecd7ea1573a921e062be36025d98e25964b0d0a54e60c49a70957b7e088",
+                          "alerts":  [
+                                         "\"Invalid date entry in Schedule 4, column 2 row \"+i+\".Format should be MM/DD/YYYY\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\"",
+                                         "\"Please enter a valid date in Schedule 4, column 2 row \"+i+\".\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:schedB2:txtFMVperTD"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDate",
+                          "start_line":  4604,
+                          "end_line":  4619,
+                          "body_sha256":  "83f6b60cca7cc3c39d13021150721d9a0be30efa8feba9801c6c97af99a08d9b",
+                          "alerts":  [
+                                         "\"Date of donation should not be later than the current date.\"",
+                                         "\"Date of donation should not be later than the current date.\"",
+                                         "\"Date of donation should not be later than the current date.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDate1",
+                          "start_line":  4620,
+                          "end_line":  4649,
+                          "body_sha256":  "6a9d76b2e4ad2fb37c65bb45aa54dc573a7bc06955abf77ee6400262f0205a35",
+                          "alerts":  [
+                                         "\"Date of donation should not be later than the current date.\"",
+                                         "\"Date of donation should not be later than the current date.\"",
+                                         "\"Date of donation should not be later than the current date.\"",
+                                         "\"Please enter a valid date on Item 1.\"",
+                                         "\"Please enter a valid Year(YYYY)\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  4650,
+                          "end_line":  4739,
+                          "body_sha256":  "19063176f94039ee2ce20d52e3532f2a6a3032b23d79387b750c68161e3c4925",
+                          "alerts":  [
+                                         "\"Please select a valid month in Item 1.\"",
+                                         "\"Please enter a valid year in Item 1.\"",
+                                         "\"Please file using the old version of the form.\"",
+                                         "\"Year (Item 1) cannot be greater than or equal to current year.\"",
+                                         "\"Please specify the Special Treaty or International Law the payee is availing in item 11A.\"",
+                                         "\"Please enter a valid TIN number on Item 4.\"",
+                                         "\"Please enter a valid RDO Code on Item 5.\"",
+                                         "\"Please enter a valid Line of Business/Occupation on Item 7.\"",
+                                         "\"Please select an option in Item 10.\"",
+                                         "\"Please enter a valid TIN in Item 12.\"",
+                                         "\"Please select an option in Item 13.\"",
+                                         "\"Zero payment shall not be allowed in Item 18 if eDST System and Loose Stamp are selected.\"",
+                                         "\"Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:optMode_1",
+                                              "frm1800v2018:optMode_2",
+                                              "frm1800v2018:optMode_3",
+                                              "frm1800v2018:TaxTreaty",
+                                              "frm1800v2018:TaxTreatyYN_Y",
+                                              "frm1800v2018:TotalAmountPayable",
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtDoneeTINA",
+                                              "frm1800v2018:txtLineBus",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtRDOCode",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtTIN3",
+                                              "frm1800v2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl2",
+                          "start_line":  4740,
+                          "end_line":  4741,
+                          "body_sha256":  "d0e47d5b6709a33137b44666888440da173bed024d802319ce093a64cd9de886",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "disableAllControl",
+                          "start_line":  4742,
+                          "end_line":  4869,
+                          "body_sha256":  "59f1b7615489f338e29658400f0e67c385f3daacd93eb8ce9bb26efee0df1e74",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:AmendedRtn_1",
+                                              "frm1800v2018:AmendedRtn_2",
+                                              "frm1800v2018:btnFinalCopy",
+                                              "frm1800v2018:btnSched3Add",
+                                              "frm1800v2018:btnSched3Delete",
+                                              "frm1800v2018:btnSched4Add",
+                                              "frm1800v2018:btnSched4Delete",
+                                              "frm1800v2018:btnSchedB1Add",
+                                              "frm1800v2018:btnSchedB1Delete",
+                                              "frm1800v2018:cmdEdit",
+                                              "frm1800v2018:cmdValidate",
+                                              "frm1800v2018:Compromise",
+                                              "frm1800v2018:DeductionAmt1",
+                                              "frm1800v2018:DeductionAmt2",
+                                              "frm1800v2018:DeductionAmt3",
+                                              "frm1800v2018:DeductionAmt4",
+                                              "frm1800v2018:DeductionAmt5",
+                                              "frm1800v2018:DeductionTitle1",
+                                              "frm1800v2018:DeductionTitle2",
+                                              "frm1800v2018:DeductionTitle3",
+                                              "frm1800v2018:DeductionTitle4",
+                                              "frm1800v2018:DeductionTitle5",
+                                              "frm1800v2018:DonorTaxDue",
+                                              "frm1800v2018:Interest",
+                                              "frm1800v2018:PersonalProperties",
+                                              "frm1800v2018:RealProperties",
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars",
+                                              "frm1800v2018:schedB1:txtClassification",
+                                              "frm1800v2018:schedB1:txtLocation",
+                                              "frm1800v2018:schedB1:txtLotImprovement",
+                                              "frm1800v2018:schedB1:txtOCT",
+                                              "frm1800v2018:schedB1:txtTaxDecNo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD",
+                                              "frm1800v2018:Surcharge",
+                                              "frm1800v2018:TaxCredit17A",
+                                              "frm1800v2018:TaxCredit17B",
+                                              "frm1800v2018:TaxCredit17C",
+                                              "frm1800v2018:TaxCredit17D",
+                                              "frm1800v2018:TaxTreaty",
+                                              "frm1800v2018:TaxTreatyYN_N",
+                                              "frm1800v2018:TaxTreatyYN_Y",
+                                              "frm1800v2018:TotalAmountPayable",
+                                              "frm1800v2018:TotalDeductionsAllowed",
+                                              "frm1800v2018:TotalGifts",
+                                              "frm1800v2018:TotalNetGifts",
+                                              "frm1800v2018:TotalNetGifts36",
+                                              "frm1800v2018:TotalNetGiftsSubjectToTax",
+                                              "frm1800v2018:TotalPenalties",
+                                              "frm1800v2018:TotalPriorNetGifts",
+                                              "frm1800v2018:TotalReturnNetGifts",
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtContact",
+                                              "frm1800v2018:txtCurrentPage",
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtDoneeNameA",
+                                              "frm1800v2018:txtDoneeNameB",
+                                              "frm1800v2018:txtDoneeNameC",
+                                              "frm1800v2018:txtDoneeNameD",
+                                              "frm1800v2018:txtDoneeNameE",
+                                              "frm1800v2018:txtDoneeTINA",
+                                              "frm1800v2018:txtDoneeTINB",
+                                              "frm1800v2018:txtDoneeTINC",
+                                              "frm1800v2018:txtDoneeTIND",
+                                              "frm1800v2018:txtDoneeTINE",
+                                              "frm1800v2018:txtDonorName",
+                                              "frm1800v2018:txtLineBus",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtRDOCode",
+                                              "frm1800v2018:txtRegAddress",
+                                              "frm1800v2018:txtResAddress",
+                                              "frm1800v2018:txtResAddress2",
+                                              "frm1800v2018:txtSheets",
+                                              "frm1800v2018:txtTax15A",
+                                              "frm1800v2018:txtTaxPayable",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtTIN3",
+                                              "frm1800v2018:txtYear",
+                                              "frm1800v2018:txtZipCode",
+                                              "frm1800v2018:txtZipCode2"
+                                          ]
+                      },
+                      {
+                          "name":  "enableAllControl",
+                          "start_line":  4870,
+                          "end_line":  4993,
+                          "body_sha256":  "8871499c158347f754ea8d8c2716af1a7e6475c96ad85152ff4c22c0a4b3780a",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:AmendedRtn_1",
+                                              "frm1800v2018:AmendedRtn_2",
+                                              "frm1800v2018:btnFinalCopy",
+                                              "frm1800v2018:btnSched3Add",
+                                              "frm1800v2018:btnSched3Delete",
+                                              "frm1800v2018:btnSched4Add",
+                                              "frm1800v2018:btnSched4Delete",
+                                              "frm1800v2018:btnSchedB1Add",
+                                              "frm1800v2018:btnSchedB1Delete",
+                                              "frm1800v2018:cmdEdit",
+                                              "frm1800v2018:cmdValidate",
+                                              "frm1800v2018:Compromise",
+                                              "frm1800v2018:DeductionAmt1",
+                                              "frm1800v2018:DeductionAmt2",
+                                              "frm1800v2018:DeductionAmt3",
+                                              "frm1800v2018:DeductionAmt4",
+                                              "frm1800v2018:DeductionAmt5",
+                                              "frm1800v2018:DeductionTitle1",
+                                              "frm1800v2018:DeductionTitle2",
+                                              "frm1800v2018:DeductionTitle3",
+                                              "frm1800v2018:DeductionTitle4",
+                                              "frm1800v2018:DeductionTitle5",
+                                              "frm1800v2018:DonorTaxDue",
+                                              "frm1800v2018:Interest",
+                                              "frm1800v2018:PersonalProperties",
+                                              "frm1800v2018:RealProperties",
+                                              "frm1800v2018:sched3:txtPaymentDate",
+                                              "frm1800v2018:sched4:txtNumberFrom",
+                                              "frm1800v2018:sched4:txtNumberTo",
+                                              "frm1800v2018:schedA:txtFairMarketValue",
+                                              "frm1800v2018:schedA:txtParticulars",
+                                              "frm1800v2018:schedB1:txtClassification",
+                                              "frm1800v2018:schedB1:txtLocation",
+                                              "frm1800v2018:schedB1:txtLotImprovement",
+                                              "frm1800v2018:schedB1:txtOCT",
+                                              "frm1800v2018:schedB1:txtTaxDecNo",
+                                              "frm1800v2018:schedB2:txtArea",
+                                              "frm1800v2018:schedB2:txtFairMarketValue",
+                                              "frm1800v2018:schedB2:txtFMVperTDperBIRZonalValue",
+                                              "frm1800v2018:schedB2:txtFTD",
+                                              "frm1800v2018:Surcharge",
+                                              "frm1800v2018:TaxCredit17A",
+                                              "frm1800v2018:TaxCredit17B",
+                                              "frm1800v2018:TaxCredit17C",
+                                              "frm1800v2018:TaxCredit17D",
+                                              "frm1800v2018:TaxTreaty",
+                                              "frm1800v2018:TaxTreatyYN_N",
+                                              "frm1800v2018:TaxTreatyYN_Y",
+                                              "frm1800v2018:TotalAmountPayable",
+                                              "frm1800v2018:TotalDeductionsAllowed",
+                                              "frm1800v2018:TotalGifts",
+                                              "frm1800v2018:TotalNetGifts",
+                                              "frm1800v2018:TotalNetGifts36",
+                                              "frm1800v2018:TotalNetGiftsSubjectToTax",
+                                              "frm1800v2018:TotalPenalties",
+                                              "frm1800v2018:TotalPriorNetGifts",
+                                              "frm1800v2018:TotalReturnNetGifts",
+                                              "frm1800v2018:txtCurrentPage",
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtDoneeNameA",
+                                              "frm1800v2018:txtDoneeNameB",
+                                              "frm1800v2018:txtDoneeNameC",
+                                              "frm1800v2018:txtDoneeNameD",
+                                              "frm1800v2018:txtDoneeNameE",
+                                              "frm1800v2018:txtDoneeTINA",
+                                              "frm1800v2018:txtDoneeTINB",
+                                              "frm1800v2018:txtDoneeTINC",
+                                              "frm1800v2018:txtDoneeTIND",
+                                              "frm1800v2018:txtDoneeTINE",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtResAddress",
+                                              "frm1800v2018:txtResAddress2",
+                                              "frm1800v2018:txtSheets",
+                                              "frm1800v2018:txtTax15A",
+                                              "frm1800v2018:txtTaxPayable",
+                                              "frm1800v2018:txtYear",
+                                              "frm1800v2018:txtZipCode2"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  5072,
+                          "end_line":  5132,
+                          "body_sha256":  "07564ef0f3a30aac9523165a76f68189beaa9c9b239214a9efe8912faa3f71d3",
+                          "alerts":  [
+                                         "\"Please enter a valid Return Date\"",
+                                         "\"Please enter a valid Year(YYYY)\"",
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Taxpayer\u0027s Name on Item 8.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtDonorName",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtRDOCode",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtTIN3",
+                                              "frm1800v2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "enableSaveButton",
+                          "start_line":  5153,
+                          "end_line":  5173,
+                          "body_sha256":  "6e400124c57bc9e747e510a5bab072572287f41939bec65c13e2fba897b72a15",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtDate",
+                                              "frm1800v2018:txtMonth",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  5386,
+                          "end_line":  5425,
+                          "body_sha256":  "ea36c8f656bdbaf30c4ca322f9c9103cda7ad5bdc17697d317843a43b9020373",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027+xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm1800v2018:txtBranchCode",
+                                              "frm1800v2018:txtContact",
+                                              "frm1800v2018:txtDonorName",
+                                              "frm1800v2018:txtEmail",
+                                              "frm1800v2018:txtLineBus",
+                                              "frm1800v2018:txtRDOCode",
+                                              "frm1800v2018:txtRegAddress",
+                                              "frm1800v2018:txtRegAddress2",
+                                              "frm1800v2018:txtResAddress",
+                                              "frm1800v2018:txtResAddress2",
+                                              "frm1800v2018:txtTIN1",
+                                              "frm1800v2018:txtTIN2",
+                                              "frm1800v2018:txtTIN3",
+                                              "frm1800v2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  5757,
+                          "end_line":  5771,
+                          "body_sha256":  "14f76e35de9e7d84047b843194fa84956361d0f4d2c14640eb1b4fb49e0c10df",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  5927,
+                          "end_line":  5940,
+                          "body_sha256":  "f1160b3ff6683a273b2251e3f895bbad4afebce645bb0470f8c9869ba91f86df",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

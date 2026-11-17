@@ -1,0 +1,35 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701ms-v2024",
+    "source":  "Hard-coded dropdowns; shared atcCodes.xml contains no 1701MS record.",
+    "entries":  [
+                    {
+                        "code":  "II011",
+                        "description":  "Compensation Income"
+                    },
+                    {
+                        "code":  "II012",
+                        "description":  "Business Income - Graduated IT Rates"
+                    },
+                    {
+                        "code":  "II013",
+                        "description":  "Mixed Income - Graduated IT Rates"
+                    },
+                    {
+                        "code":  "II014",
+                        "description":  "Income from Profession - Graduated IT Rates"
+                    },
+                    {
+                        "code":  "II015",
+                        "description":  "Business Income - 8% IT Rate"
+                    },
+                    {
+                        "code":  "II016",
+                        "description":  "Mixed Income - 8% IT Rate"
+                    },
+                    {
+                        "code":  "II017",
+                        "description":  "Income from Profession - 8% IT Rate"
+                    }
+                ]
+}

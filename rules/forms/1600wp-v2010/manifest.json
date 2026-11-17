@@ -1,0 +1,92 @@
+{
+    "$schema":  "../../schema/form-manifest.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1600wp-v2010",
+    "form_code":  "1600WP",
+    "revision":  "2010-01-01",
+    "package_version":  "7.9.6.0",
+    "status":  "complete",
+    "official_assets":  [
+                            {
+                                "asset_id":  "package-7.9.6",
+                                "kind":  "official-package-executable",
+                                "path":  "C:\\eBIRForms\\BIRForms.exe",
+                                "sha256":  "de8ef0815509d65189e6794e1f8135a5ecf5f2800005d1fc5c87043efd96dbca",
+                                "size":  57506304,
+                                "revision_binding":  "Installed Offline eBIRForms package 7.9.6.0."
+                            },
+                            {
+                                "asset_id":  "official-hta-runtime",
+                                "kind":  "runtime-extracted-hta",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\forms\\BIR-Form1600WP.hta",
+                                "sha256":  "e33af59157e1083432cdfc360f648e06602caab75167a27fbb89a08853cb9420",
+                                "size":  201012,
+                                "revision_binding":  "APPLICATIONNAME 1600WP; printed January 2010 ENCS."
+                            },
+                            {
+                                "asset_id":  "official-help-runtime",
+                                "kind":  "official-runtime-help",
+                                "path":  "C:\\Users\\uriah\\AppData\\Local\\Temp\\{68379049-6E6C-4478-A2C5-EF7B77ED7E38}\\helpfile\\Help1600WP.hta",
+                                "sha256":  "6f42c395e3892e00af4178031b483dea1e2f92edc53ad611254c3a3c3131884f",
+                                "size":  12955,
+                                "revision_binding":  "Form-specific who-must-file and attachment guidance."
+                            },
+                            {
+                                "asset_id":  "official-form-pdf",
+                                "kind":  "official-form-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1600WPv2010\\1600WP p1ENCS.pdf",
+                                "sha256":  "6ea2ef0f6c84a68ef1c50ad63f4ff0e95a68258f52b62b98f305c861c8b75d55",
+                                "size":  159208,
+                                "revision_binding":  "January 2010 ENCS blank form."
+                            },
+                            {
+                                "asset_id":  "official-guide-pdf",
+                                "kind":  "official-guide-pdf",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1600WPv2010\\1600WP Guide.pdf",
+                                "sha256":  "3742f9553251ddd86396a565e156490b5e210487a66c5dfacd83cfc14cbba2f7",
+                                "size":  237095,
+                                "revision_binding":  "Local official 1600WP guide."
+                            },
+                            {
+                                "asset_id":  "revision-matched-encrypted-sample",
+                                "kind":  "dummy-profile-encrypted-final-copy",
+                                "path":  "C:\\Mac\\Home\\Downloads\\forms\\1600WP\\1600WP-final-copy-#email-redacted#.xml",
+                                "sha256":  "716e33e9ecaf808ec7d52729268c218ae4392cb9e6f6836e89ec5433d75d995a",
+                                "size":  1059,
+                                "revision_binding":  "115-key concrete inventory exactly matches runtime controls; no selected Part II rows."
+                            }
+                        ],
+    "counts":  {
+                   "concrete_fields":  115,
+                   "runtime_field_families":  4,
+                   "fields_total":  119,
+                   "typed_fields":  119,
+                   "validation_rules":  37,
+                   "confirmed_official_bugs":  11,
+                   "calculations":  8,
+                   "negative_fixtures":  30,
+                   "unverified_gaps":  3
+               },
+    "artifacts":  {
+                      "fields":  "fields.json",
+                      "validations":  "validations.json",
+                      "calculations":  "calculations.json",
+                      "workflow":  "workflow.json",
+                      "evidence":  "evidence.md",
+                      "audit":  "audit.md",
+                      "gaps":  "gaps.md",
+                      "runtime_control_fixture":  "fixtures/runtime-control-inventory-v796.json",
+                      "encrypted_field_audit":  "fixtures/encrypted-field-audit.json",
+                      "validation_function_fixture":  "fixtures/validation-function-inventory-v796.json",
+                      "calculation_function_fixture":  "fixtures/calculation-function-inventory-v796.json",
+                      "resource_hash_fixture":  "fixtures/official-resource-hashes-v796.json",
+                      "negative_fixtures":  "fixtures/negative-cases.json",
+                      "calculation_fixtures":  "fixtures/calculation-boundaries.json"
+                  },
+    "scope_notes":  [
+                        "Research only; no renderer or release metadata changed.",
+                        "No decrypted values or email-bearing filenames are emitted.",
+                        "The 115 concrete runtime keys exactly reproduce the encrypted sample inventory hash.",
+                        "Four selected-ATC Part II families preserve conditional controls absent from the zero-selected-ATC sample."
+                    ]
+}

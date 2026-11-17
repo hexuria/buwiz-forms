@@ -1,0 +1,1166 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1701a-v2018",
+    "revision":  "2018-01-01",
+    "first_error_behavior":  "Save stops at the first of three narrow checks. Validate runs in source order and returns at the first active failure; modal/change handlers can alert and mutate fields earlier.",
+    "rules":  [
+                  {
+                      "rule_id":  "1701a-save-001",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any taxpayer TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1701A:txtTIN1",
+                                     "frm1701A:txtTIN2",
+                                     "frm1701A:txtTIN3",
+                                     "frm1701A:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "All strings are nonblank.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5599-L5603"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save checks nonblankness only.",
+                      "recommended_app_behavior":  "Permit lossless drafts; require shape/checksum for finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-save-002",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Taxpayer RDO value equals literal 000.",
+                      "fields":  [
+                                     "frm1701A:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Any other value, including blank, passes.",
+                      "rejected_behavior":  "Save is blocked only for 000.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5604-L5607"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Blank can pass this equality-only check.",
+                      "recommended_app_behavior":  "Require a valid catalog RDO before finalization.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-save-003",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm1701A:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Nonblank name passes.",
+                      "rejected_behavior":  "Save is blocked.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5608-L5612"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-save-004",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any other field is invalid or incomplete.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Save proceeds after three narrow checks.",
+                      "rejected_behavior":  "No rejection occurs.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L5599-L5613",
+                                          "official-hta-runtime#saveXML:L5027-L5368"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Draft validation is intentionally incomplete.",
+                      "recommended_app_behavior":  "Preserve drafts losslessly and show completeness separately.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-001",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Return year is blank.",
+                      "fields":  [
+                                     "frm1701A:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid year in Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5700-L5704"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-002",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Short-period Yes and return year exceeds current system year.",
+                      "fields":  [
+                                     "frm1701A:optShortPeriod_1",
+                                     "frm1701A:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Invalid date entry on Item #1. Since Short Return Period is Yes, valid year entry is only until current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5706-L5713"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-003",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Not short-period and return year exceeds current system year.",
+                      "fields":  [
+                                     "frm1701A:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Invalid date entry on Item #1. Year entry cannot be greater than to the current year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5714-L5718"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-004",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Return year is below 2018.",
+                      "fields":  [
+                                     "frm1701A:txtYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please file using the old version of the form.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5720-L5723"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-005",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Any taxpayer TIN component or branch is blank.",
+                      "fields":  [
+                                     "frm1701A:txtTIN1",
+                                     "frm1701A:txtTIN2",
+                                     "frm1701A:txtTIN3",
+                                     "frm1701A:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5729-L5733"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "No taxpayer checksum is called by Validate.",
+                      "recommended_app_behavior":  "Validate taxpayer TIN checksum as well as shape.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-006",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "A taxpayer TIN segment length is not 3 or branch length is below 3.",
+                      "fields":  [
+                                     "frm1701A:txtTIN1",
+                                     "frm1701A:txtTIN2",
+                                     "frm1701A:txtTIN3",
+                                     "frm1701A:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid TIN number on Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5735-L5738"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Branch has a minimum but no maximum in this branch.",
+                      "recommended_app_behavior":  "Require the exact branch-code shape.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-007",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Taxpayer RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm1701A:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5739-L5742"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-008",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Taxpayer name is blank.",
+                      "fields":  [
+                                     "frm1701A:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5743-L5746"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-009",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1701A:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5747-L5750"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-010",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Birth date is blank.",
+                      "fields":  [
+                                     "frm1701A:txtBirthDate"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please indicate Birth Date of Taxpayer on item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5751-L5754"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Returns true rather than a consistent bare return; caller behavior still stops.",
+                      "recommended_app_behavior":  "Return a structured error consistently.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-011",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Birth date helper rejects the nonblank value.",
+                      "fields":  [
+                                     "frm1701A:txtBirthDate"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5755-L5759"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Helper emits one of two message forms.",
+                      "recommended_app_behavior":  "Use strict calendar-date parsing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-012",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "ZIP code is blank.",
+                      "fields":  [
+                                     "frm1701A:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter Zip Code on Item 9A.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5760-L5763"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-013",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Joint filing is selected and any spouse TIN segment is blank.",
+                      "fields":  [
+                                     "frm1701A:optFilingStatus_1",
+                                     "frm1701A:txtSpouseTIN1",
+                                     "frm1701A:txtSpouseTIN2",
+                                     "frm1701A:txtSpouseTIN3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid TIN number on Item 66.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5765-L5770"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Branch code is not required here.",
+                      "recommended_app_behavior":  "Require the complete spouse TIN shape for joint filing.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-014",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Any spouse TIN segment is present and a segment length is not 3 or branch length exceeds 5.",
+                      "fields":  [
+                                     "frm1701A:txtSpouseTIN1",
+                                     "frm1701A:txtSpouseTIN2",
+                                     "frm1701A:txtSpouseTIN3",
+                                     "frm1701A:txtSpouseBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid TIN number on Item 66.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5772-L5777"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Blank spouse branch passes; only an upper bound is checked.",
+                      "recommended_app_behavior":  "Require the exact branch-code shape when spouse TIN is present.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-015",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Spouse TIN checksum helper returns nonzero.",
+                      "fields":  [
+                                     "frm1701A:txtSpouseTIN1",
+                                     "frm1701A:txtSpouseTIN2",
+                                     "frm1701A:txtSpouseTIN3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "dynamic: getChkTinErrDesc(tinChkCode) + \" on Item 66.\"",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5778-L5782"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-016",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Spouse TIN is present and spouse RDO selectedIndex is zero.",
+                      "fields":  [
+                                     "frm1701A:txtSpouseRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 67.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5783-L5786"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-017",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Spouse TIN is present and spouse name is blank.",
+                      "fields":  [
+                                     "frm1701A:txtSpouseName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter Spouse Name on Item 70.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5787-L5790"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-018",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Spouse TIN is present and no spouse ATC is selected.",
+                      "fields":  [
+                                     "frm1701A:optSpouseATC_1",
+                                     "frm1701A:optSpouseATC_2",
+                                     "frm1701A:optSpouseATC_3",
+                                     "frm1701A:optSpouseATC_4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Item 69.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5791-L5794"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-019",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "No taxpayer type is selected.",
+                      "fields":  [
+                                     "frm1701A:optTaxType_1",
+                                     "frm1701A:optTaxType_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5798-L5800"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-020",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "No taxpayer ATC is selected.",
+                      "fields":  [
+                                     "frm1701A:optATC_1",
+                                     "frm1701A:optATC_2",
+                                     "frm1701A:optATC_3",
+                                     "frm1701A:optATC_4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5801-L5803"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-021",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "No taxpayer tax rate is selected.",
+                      "fields":  [
+                                     "frm1701A:optTaxRate_1",
+                                     "frm1701A:optTaxRate_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Item 19.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5804-L5806"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-022",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Spouse name is nonblank and no spouse taxpayer type is selected.",
+                      "fields":  [
+                                     "frm1701A:txtSpouseName",
+                                     "frm1701A:optSpouseTaxType_1",
+                                     "frm1701A:optSpouseTaxType_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Item 68.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5807-L5810"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-023",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Spouse name is nonblank and no spouse ATC is selected.",
+                      "fields":  [
+                                     "frm1701A:txtSpouseName",
+                                     "frm1701A:optSpouseATC_1",
+                                     "frm1701A:optSpouseATC_2",
+                                     "frm1701A:optSpouseATC_3",
+                                     "frm1701A:optSpouseATC_4"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an option for Item 69.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5811-L5814"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-024",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Aggregate Item 30 is negative and no overpayment choice is selected.",
+                      "fields":  [
+                                     "frm1701A:txt30",
+                                     "frm1701A:optRefund_1",
+                                     "frm1701A:optRefund_2",
+                                     "frm1701A:optRefund_3"
+                                 ],
+                      "accepted_behavior":  "Condition is false; validation continues.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please select an Overpayment option in Page 1 after Item 30.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5816-L5818"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops ordered validation.",
+                      "recommended_app_behavior":  "Retain with revision-aware wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-validate-success",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "All active validation branches pass.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Controls disable and success alert appears.",
+                      "rejected_behavior":  "No rejection.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L5820-L5822",
+                                          "official-hta-runtime#disableAllControl:L5827-L5946"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-birth-001",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Birth date does not split into exactly three slash-separated components.",
+                      "fields":  [
+                                     "frm1701A:txtBirthDate"
+                                 ],
+                      "accepted_behavior":  "Three components.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Invalid birthdate.Format should be MM/DD/YYYY",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkBirthDate:L5657-L5670"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The message omits a space after the period.",
+                      "recommended_app_behavior":  "Use strict date parsing and clearer wording.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-birth-002",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "validate",
+                      "order":  null,
+                      "condition":  "Month/day/year range or leap-day check fails.",
+                      "fields":  [
+                                     "frm1701A:txtBirthDate"
+                                 ],
+                      "accepted_behavior":  "Component tests pass.",
+                      "rejected_behavior":  "Validation stops.",
+                      "exact_message":  "Please enter a valid date in Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkBirthDate:L5671-L5695"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "No minimum year or full future-date comparison; nonnumeric components can evade numeric comparisons.",
+                      "recommended_app_behavior":  "Use strict non-future calendar-date parsing with a reasonable minimum.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-item53-tp",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Taxpayer Item 53A exceeds 3,000,000.",
+                      "fields":  [
+                                     "frm1701A:txt53A",
+                                     "frm1701A:optATC_3",
+                                     "frm1701A:optATC_4"
+                                 ],
+                      "accepted_behavior":  "At most 3,000,000.",
+                      "rejected_behavior":  "Item 53A resets to zero and both 8% ATCs clear.",
+                      "exact_message":  "Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.",
+                      "source_refs":  [
+                                          "official-hta-runtime#item53Validate:L5615-L5626"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "P3M threshold is hard-coded.",
+                      "recommended_app_behavior":  "Apply the threshold effective for the filing period.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-item53-sp",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Spouse Item 53B exceeds 3,000,000.",
+                      "fields":  [
+                                     "frm1701A:txt53B",
+                                     "frm1701A:optSpouseATC_3",
+                                     "frm1701A:optSpouseATC_4"
+                                 ],
+                      "accepted_behavior":  "At most 3,000,000.",
+                      "rejected_behavior":  "Item 53B resets and both spouse 8% ATCs clear.",
+                      "exact_message":  "Your Gross Sales/Receipts and Other Non-Operating Income exceeds VAT Threshold (P3M), thus, not qualified to 8% tax rate and shall be subjected to graduated rates. Please choose ATC and fill in Schedule IV.A if method of Deduction is OSD. Otherwise, use BIR Form 1701.",
+                      "source_refs":  [
+                                          "official-hta-runtime#item53Validate:L5628-L5639"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "P3M threshold is hard-coded.",
+                      "recommended_app_behavior":  "Apply the threshold effective for the filing period.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-item54-tp",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 54A exceeds 250,000.",
+                      "fields":  [
+                                     "frm1701A:txt54A"
+                                 ],
+                      "accepted_behavior":  "At most 250,000.",
+                      "rejected_behavior":  "Field resets to zero.",
+                      "exact_message":  "Item 54A cannot be more than P250,000.",
+                      "source_refs":  [
+                                          "official-hta-runtime#item54Validate:L5642-L5648"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-item54-sp",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Item 54B exceeds 250,000.",
+                      "fields":  [
+                                     "frm1701A:txt54B"
+                                 ],
+                      "accepted_behavior":  "At most 250,000.",
+                      "rejected_behavior":  "Field resets to zero.",
+                      "exact_message":  "Item 54B cannot be more than P250,000.",
+                      "source_refs":  [
+                                          "official-hta-runtime#item54Validate:L5649-L5655"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-modal-description",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "A materialized modal row description is blank unless maxLength equals 25.",
+                      "fields":  [
+                                     "frm1701A:txtmodalPartIVADesc_{N\u003e=1}C1",
+                                     "frm1701A:txtmodalPartIVBDesc_{N\u003e=1}C1"
+                                 ],
+                      "accepted_behavior":  "Description is nonblank.",
+                      "rejected_behavior":  "Modal save stops.",
+                      "exact_message":  "Please enter a valid Description",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateModal:L3882-L3913"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Validation is bypassed solely when maxLength equals 25.",
+                      "recommended_app_behavior":  "Always require description for materialized rows.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-modal-amount",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "page navigation",
+                      "order":  null,
+                      "condition":  "Applicable modal amount columns compare \u003c= 0 under the row-width/party branch.",
+                      "fields":  [
+                                     "frm1701A:txtmodalPartIVA_{N\u003e=1}C2",
+                                     "frm1701A:txtmodalPartIVA_{N\u003e=1}C3",
+                                     "frm1701A:txtmodalPartIVB_{N\u003e=1}C2",
+                                     "frm1701A:txtmodalPartIVB_{N\u003e=1}C3"
+                                 ],
+                      "accepted_behavior":  "Applicable amount is positive.",
+                      "rejected_behavior":  "Modal save stops.",
+                      "exact_message":  "Amount should not be zero.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateModal:L3919-L3934"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The code compares booleans to strings in isTaxpayerDisabled branches, making conditions difficult to reach as intended.",
+                      "recommended_app_behavior":  "Use explicit boolean conditions and parsed amounts.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-short-period-change",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "blur/change",
+                      "order":  null,
+                      "condition":  "Short-period Yes is selected.",
+                      "fields":  [
+                                     "frm1701A:optShortPeriod_1",
+                                     "frm1701A:txtMonth"
+                                 ],
+                      "accepted_behavior":  "User acknowledges and chooses the last return-period month.",
+                      "rejected_behavior":  "Month is enabled and focused.",
+                      "exact_message":  "Choosing \u0027YES\u0027 means you are filing for a short period return. You are required to change the Month field to correspond with your Last Return Period.",
+                      "source_refs":  [
+                                          "official-hta-runtime#processShortPeriod:L3370-L3380"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The first active branch alerts and returns.",
+                      "recommended_app_behavior":  "Retain as a structured field error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-final-001",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "final-copy",
+                      "order":  1,
+                      "condition":  "Final Copy is requested.",
+                      "fields":  [
+                                     "txtFinalFlag",
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Confirmation/encryption/connectivity flow proceeds.",
+                      "rejected_behavior":  "Connectivity or confirmation can stop it.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#openAlertEmail:L6382-L6447",
+                                          "official-hta-runtime#saveEncryptedProfile:L6524-L6675"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Final copy remains coupled to transport/connectivity.",
+                      "recommended_app_behavior":  "Separate deterministic offline finalization from submission.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-submit-001",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "submit",
+                      "order":  1,
+                      "condition":  "Online send is invoked.",
+                      "fields":  [
+                                     "return-body"
+                                 ],
+                      "accepted_behavior":  "Encrypted payload is prepared.",
+                      "rejected_behavior":  "Online submission was not exercised.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#sendEmail:L6448-L6523",
+                                          "official-hta-runtime#saveXMLsubmit:L5369-L5598"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "unverified",
+                      "official_behavior":  "Source-derived only.",
+                      "recommended_app_behavior":  "Keep local validation independently testable.",
+                      "confidence":  "medium",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1701a-resource-001",
+                      "form_id":  "1701a-v2018",
+                      "revision":  "2018-01-01",
+                      "phase":  "input",
+                      "order":  null,
+                      "condition":  "The HTA loads ../js/gserializer.js.",
+                      "fields":  [
+                                     "runtime-package"
+                                 ],
+                      "accepted_behavior":  "The linked file exists.",
+                      "rejected_behavior":  "In this extracted package it is absent; browser load fails for that resource.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#script-src:gserializer.js",
+                                          "runtime-package#missing:js/gserializer.js"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Missing linked resource is tolerated because required behavior is implemented elsewhere.",
+                      "recommended_app_behavior":  "Do not depend on the missing script; retain the defect in compatibility evidence.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

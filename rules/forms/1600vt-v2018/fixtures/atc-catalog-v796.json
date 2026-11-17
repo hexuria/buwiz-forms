@@ -1,0 +1,195 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1600vt-v2018",
+    "package_version":  "7.9.6.0",
+    "source_sha256":  "16e4db6ce456a6fb0a97f085cf8ef19349c2f6fc183971e97d4e253f63cdd22b",
+    "selection_semantics":  "AtcCodeN is the Nth entry after filtering by Item 10 category; PG records appear in both ordered lists, so slot meanings differ between P and G.",
+    "private_slot_count":  11,
+    "government_slot_count":  13,
+    "unreachable_record_count":  0,
+    "entry_count":  14,
+    "entries":  [
+                    {
+                        "source_index":  1025,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  1
+                                         },
+                        "code":  "WV010",
+                        "description":  "VAT WITHHOLDING ON PURCHASE OF GOODS",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1026,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  2
+                                         },
+                        "code":  "WV020",
+                        "description":  "VAT WITHHOLDING ON PURCHASE OF SERVICES",
+                        "catalog_rate":  "5.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1027,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  1,
+                                             "government":  3
+                                         },
+                        "code":  "WV110",
+                        "description":  "VAT ON LOCAL SALES OF REGISTERED BUSINESS ENTERPRISES (RBEs)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1027,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  2,
+                                             "government":  4
+                                         },
+                        "code":  "WV040",
+                        "description":  "FINAL WITHHOLDING VAT ON PAYMENTS FOR LEASE OR USE OF PROPERTIES OR PROPERTY RIGHTS OWNED BY NONRESIDENTS (GOVERNMENT WITHHOLDING AGENT)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1028,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  3,
+                                             "government":  5
+                                         },
+                        "code":  "WV050",
+                        "description":  "FINAL WITHHOLDING VAT ON PAYMENTS FOR LEASE OR USE OF PROPERTIES OR PROPERTY RIGHTS OWNED BY NONRESIDENTS (PRIVATE WITHHOLDING AGENT)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1029,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  4,
+                                             "government":  6
+                                         },
+                        "code":  "WV060",
+                        "description":  "FINAL WITHHOLDING VAT ON OTHER SERVICES RENDERED IN THE PHILIPPINES BY NON-RESIDENTS (GOVERNMENT WITHHOLDING AGENT)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1030,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  5,
+                                             "government":  7
+                                         },
+                        "code":  "WV070",
+                        "description":  "FINAL WITHHOLDING VAT ON OTHER SERVICES RENDERED IN THE PHILIPPINES BY NON-RESIDENTS (PRIVATE WITHHOLDING AGENT)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1031,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  6,
+                                             "government":  8
+                                         },
+                        "code":  "WV012",
+                        "description":  "VAT WITHHOLDING ON PURCHASES OF GOODS (WITH WAIVER OF PRIVILEGE TO CLAIM INPUT TAX CREDIT) (CREDITABLE)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1032,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  7,
+                                             "government":  9
+                                         },
+                        "code":  "WV014",
+                        "description":  "VAT WITHHOLDING ON PURCHASES OF GOODS (WITH WAIVER OF PRIVILEGE TO CLAIM INPUT TAX CREDIT) (FINAL)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1033,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  8,
+                                             "government":  10
+                                         },
+                        "code":  "WV022",
+                        "description":  "VAT WITHHOLDING ON PURCHASES OF SERVICES (WITH WAIVER OF PRIVILEGE TO CLAIM INPUT TAX CREDIT)(CREDITABLE)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1034,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  9,
+                                             "government":  11
+                                         },
+                        "code":  "WV024",
+                        "description":  "VAT WITHHOLDING ON PURCHASES OF SERVICES (WITH WAIVER OF PRIVILEGE TO CLAIM INPUT TAX CREDIT) (FINAL)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1072,
+                        "category":  "P",
+                        "runtime_slot":  {
+                                             "private":  10,
+                                             "government":  null
+                                         },
+                        "code":  "WV080",
+                        "description":  "FINAL WITHHOLDING VAT ON PURCHASE OF DIGITAL SERVICE CONSUMED IN THE PHILS FROM NON-RESIDENT DSPs (PRIVATE WA)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1073,
+                        "category":  "G",
+                        "runtime_slot":  {
+                                             "private":  null,
+                                             "government":  12
+                                         },
+                        "code":  "WV090",
+                        "description":  "FINAL WITHHOLDING VAT ON PURCHASE OF DIGITAL SERVICE CONSUMED IN THE PHILS FROM NON-RESIDENT DSPs (GOVT WA)",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    },
+                    {
+                        "source_index":  1074,
+                        "category":  "PG",
+                        "runtime_slot":  {
+                                             "private":  11,
+                                             "government":  13
+                                         },
+                        "code":  "WV100",
+                        "description":  "FINAL WITHHOLDING VAT ON THE GROSS AMOUNT BY RESIDENT E-MARKETPLACE TO THE NON-RESIDENT SELLERS/MERCHANTS FOR THE DIGITAL SERVICES SOLD/PAID THRU THEIR PLATFORM/FACILITY",
+                        "catalog_rate":  "12.0",
+                        "reachable_from_category_ui":  true,
+                        "parse_issue":  null
+                    }
+                ]
+}

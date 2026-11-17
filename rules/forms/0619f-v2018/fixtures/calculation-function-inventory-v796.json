@@ -1,0 +1,119 @@
+{
+    "source_sha256":  "994818ea7b5691656d302d32025a39c6895a032d417871a6080803373436ecca",
+    "function_count":  8,
+    "functions":  [
+                      {
+                          "name":  "checkiftaxwheldisYes",
+                          "start_line":  2259,
+                          "end_line":  2270,
+                          "body_sha256":  "e0b77fd79d6e8fcbf59d86c8978312ceaff251fa52ff596915f9a44d3a289f15",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:optcategory:G",
+                                              "frm0619F:optCategory:P",
+                                              "frm0619F:optWithheld:N",
+                                              "frm0619F:optWithheld:Y"
+                                          ]
+                      },
+                      {
+                          "name":  "setInputTextControl_NumberFormatter",
+                          "start_line":  2277,
+                          "end_line":  2283,
+                          "body_sha256":  "43b6174e81f5d35aa7b5f02dbde5747f4d5efa2a2ef06c6b0211f791d0eb4480",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAtc",
+                          "start_line":  2284,
+                          "end_line":  2290,
+                          "body_sha256":  "4b7ab6c0999bf114e0c13c16098c3fcabe871766ab505b690f6f8ce645fd0100",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtTax13",
+                                              "frm0619F:txtTax14",
+                                              "frm0619F:txtTax15"
+                                          ]
+                      },
+                      {
+                          "name":  "computeNetAmtRem",
+                          "start_line":  2291,
+                          "end_line":  2296,
+                          "body_sha256":  "e4d205e923e82270e884dedb0b5ffc5648e5aaf2fc185b2a6a3dca327d801dab",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtTax15",
+                                              "frm0619F:txtTax16",
+                                              "frm0619F:txtTax17"
+                                          ]
+                      },
+                      {
+                          "name":  "computePenalties",
+                          "start_line":  2297,
+                          "end_line":  2303,
+                          "body_sha256":  "a8bd2d1f8071ea74a99c18ace57846a14a47f53d59563347434f5a814ff5b5b5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtTax18A",
+                                              "frm0619F:txtTax18B",
+                                              "frm0619F:txtTax18C",
+                                              "frm0619F:txtTax18D"
+                                          ]
+                      },
+                      {
+                          "name":  "computeTotalAmtRem",
+                          "start_line":  2304,
+                          "end_line":  2309,
+                          "body_sha256":  "a5f7430329ab82d4504e5cf5908c8cc86199c4e1110d19ee6519496707e3f49e",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtTax17",
+                                              "frm0619F:txtTax18D",
+                                              "frm0619F:txtTax19"
+                                          ]
+                      },
+                      {
+                          "name":  "taxTypeCodeChange",
+                          "start_line":  2310,
+                          "end_line":  2325,
+                          "body_sha256":  "1b00a08bf14ad2e1a2bf02a3a81075414e86649e3e463d02d4d4dee2460d575b",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtTax13",
+                                              "frm0619F:txtTax14",
+                                              "frm0619F:txtTaxTypeCode"
+                                          ]
+                      },
+                      {
+                          "name":  "computeDueDate",
+                          "start_line":  2326,
+                          "end_line":  2348,
+                          "body_sha256":  "fd171de49d06cf17c73804c80c8d4ed86efe7308a2a0ff1c422cd0a1e04823d9",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm0619F:txtDueMonth",
+                                              "frm0619F:txtDueYear",
+                                              "frm0619F:txtMonth",
+                                              "frm0619F:txtYear"
+                                          ]
+                      }
+                  ]
+}

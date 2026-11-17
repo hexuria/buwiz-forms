@@ -1,0 +1,347 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1602q-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1602q-validate-001-year-required",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 1 year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-001-year-required"
+                  },
+                  {
+                      "case_id":  "case-02-1602q-validate-002-year-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 1 year exceeds the current full calendar year."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.1. Entry should not be later than Current Date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-002-year-future"
+                  },
+                  {
+                      "case_id":  "case-03-1602q-validate-003-year-before-2018",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 1 year is below 2018."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 1. Entry should not be lower than 2018.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-003-year-before-2018"
+                  },
+                  {
+                      "case_id":  "case-04-1602q-validate-004-quarter",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No quarter radio is selected."
+                                    },
+                      "expected_message":  "Please select an option in item number 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-004-quarter"
+                  },
+                  {
+                      "case_id":  "case-05-1602q-validate-005-amended",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither amended-return radio is selected."
+                                    },
+                      "expected_message":  "Please select an option in item number 3.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-005-amended"
+                  },
+                  {
+                      "case_id":  "case-06-1602q-validate-006-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1602q-validate-006-tin"
+                  },
+                  {
+                      "case_id":  "case-07-1602q-validate-007-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "The runtime RDO select remains at index zero."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-007-rdo"
+                  },
+                  {
+                      "case_id":  "case-08-1602q-validate-008-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-008-name"
+                  },
+                  {
+                      "case_id":  "case-09-1602q-validate-009-phone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1602q-validate-009-phone"
+                  },
+                  {
+                      "case_id":  "case-10-1602q-validate-010-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-010-address"
+                  },
+                  {
+                      "case_id":  "case-11-1602q-validate-011-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Zip code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-011-zip"
+                  },
+                  {
+                      "case_id":  "case-12-1602q-validate-012-withheld",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Item 4 tax-withheld radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-012-withheld"
+                  },
+                  {
+                      "case_id":  "case-13-1602q-validate-013-agent-category",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Item 12 withholding-agent category is selected."
+                                    },
+                      "expected_message":  "Please select an option for Item 11.",
+                      "expected_behavior":  "The message cites Item 11 although the controls are printed as Item 12.",
+                      "rule_id":  "1602q-validate-013-agent-category"
+                  },
+                  {
+                      "case_id":  "case-14-1602q-validate-014-special-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither Item 13 special-tax radio is selected."
+                                    },
+                      "expected_message":  "Please select an option in item 13.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-014-special-tax"
+                  },
+                  {
+                      "case_id":  "case-15-1602q-validate-015-special-tax-kind",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 13 is Yes but Item 13A is still the blank option."
+                                    },
+                      "expected_message":  "Please select an option in item 13A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-015-special-tax-kind"
+                  },
+                  {
+                      "case_id":  "case-16-1602q-validate-016-part-iv",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 4 is Yes and Items 14 and 15 are zero."
+                                    },
+                      "expected_message":  "Please fill up Part IV if item 4 is set to Yes.",
+                      "expected_behavior":  "The source compares Item 15 twice and never examines Item 16, so a Schedule 3-only amount is rejected.",
+                      "rule_id":  "1602q-validate-016-part-iv"
+                  },
+                  {
+                      "case_id":  "case-17-1602q-validate-017-overremittance",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 28 is negative and no disposition radio is selected."
+                                    },
+                      "expected_message":  "Please select an option for over-remittance below item 28.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-validate-017-overremittance"
+                  },
+                  {
+                      "case_id":  "case-18-1602q-sched2-001-row1-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 1 has a treaty code but no ATC."
+                                    },
+                      "expected_message":  "Please fill up ATC field in Schedule 2 row 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched2-001-row1-atc"
+                  },
+                  {
+                      "case_id":  "case-19-1602q-sched2-002-row1-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 1 has an ATC but no treaty code."
+                                    },
+                      "expected_message":  "Please fill up Treaty Code field in Schedule 2 row 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched2-002-row1-treaty"
+                  },
+                  {
+                      "case_id":  "case-20-1602q-sched2-003-row1-complete",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 1 amount or rate is positive while ATC or treaty code is blank."
+                                    },
+                      "expected_message":  "Please fill up Schedule 2 row 1 completely.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched2-003-row1-complete"
+                  },
+                  {
+                      "case_id":  "case-21-1602q-sched2-004-row2-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 2 has a treaty code but no ATC."
+                                    },
+                      "expected_message":  "Please fill up ATC field in Schedule 2 row 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched2-004-row2-atc"
+                  },
+                  {
+                      "case_id":  "case-22-1602q-sched2-005-row2-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 2 has an ATC but no treaty code."
+                                    },
+                      "expected_message":  "Please fill up Treaty Code field in Schedule 2 row 2.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched2-005-row2-treaty"
+                  },
+                  {
+                      "case_id":  "case-23-1602q-sched2-006-row2-amount",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 2 amount is positive while ATC or treaty code is blank."
+                                    },
+                      "expected_message":  "Please fill up Schedule 2 row 2 completely.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched2-006-row2-amount"
+                  },
+                  {
+                      "case_id":  "case-24-1602q-sched2-007-row2-rate",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 2 row 2 rate is positive while ATC or treaty code is blank."
+                                    },
+                      "expected_message":  "Please fill up Schedule 2 row 12 completely.",
+                      "expected_behavior":  "The message says row 12 although the branch validates row 2.",
+                      "rule_id":  "1602q-sched2-007-row2-rate"
+                  },
+                  {
+                      "case_id":  "case-25-1602q-sched3-001-row1",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3 row 1 amount or rate is positive while IPA is blank."
+                                    },
+                      "expected_message":  "Please fill up Schedule 3 row 1 completely.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched3-001-row1"
+                  },
+                  {
+                      "case_id":  "case-26-1602q-sched3-002-row2",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Schedule 3 row 2 amount or rate is positive while IPA is blank."
+                                    },
+                      "expected_message":  "Please fill up Schedule 3 row 2 completely.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-sched3-002-row2"
+                  },
+                  {
+                      "case_id":  "case-27-1602q-validate-027-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All prior checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "expected_behavior":  "Controls are disabled and final-copy/print actions are enabled.",
+                      "rule_id":  "1602q-validate-027-success"
+                  },
+                  {
+                      "case_id":  "case-28-1602q-save-001-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "1602q-save-001-tin"
+                  },
+                  {
+                      "case_id":  "case-29-1602q-save-002-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-save-002-rdo"
+                  },
+                  {
+                      "case_id":  "case-30-1602q-save-003-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding-agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-save-003-name"
+                  },
+                  {
+                      "case_id":  "case-31-1602q-year-blur-getyear",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any normal four-digit year is compared with Date.getYear(), which returns year minus 1900 in this runtime."
+                                    },
+                      "expected_message":  "Invalid year. Year should not be later than the current year.",
+                      "expected_behavior":  "The field can be reset to a value such as 126 instead of 2026.",
+                      "rule_id":  "1602q-year-blur-getyear"
+                  },
+                  {
+                      "case_id":  "case-32-1602q-atc-code-list",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 2 ATC is outside the hard-coded 13-code list."
+                                    },
+                      "expected_message":  "Invalid ATC Code! Please refer to the ATC Codes in Schedule 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-atc-code-list"
+                  },
+                  {
+                      "case_id":  "case-33-1602q-treaty-code-list",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 2 treaty code is outside the hard-coded country-code list."
+                                    },
+                      "expected_message":  "Invalid Treaty Code! Please refer to the treaty code in schedule 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-treaty-code-list"
+                  },
+                  {
+                      "case_id":  "case-34-1602q-ipa-code-list",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A Schedule 3 IPA is outside the hard-coded IPA list."
+                                    },
+                      "expected_message":  "Invalid IPA Code! Please refer to IPA Codes in Schedule 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1602q-ipa-code-list"
+                  }
+              ]
+}

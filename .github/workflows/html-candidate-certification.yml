@@ -1,0 +1,430 @@
+name: HTML Candidate Certification Inputs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: html-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  policy:
+    name: Verify candidate source policy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux source-gate dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libwayland-dev libwayland-client0 \
+            libasound2-dev libudev-dev libvulkan-dev libfontconfig1-dev \
+            libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev mesa-vulkan-drivers
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Bind the candidate to the exact clean workflow SHA
+        shell: bash
+        run: |
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          python3 scripts/audit_no_legacy.py
+
+      - name: Check out formgen scripts from buwiz-forms-html
+        uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - name: Verify non-promotional candidate gates
+        run: |
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --self-test
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/audit_no_legacy.py
+          python3 -m unittest scripts.tests.test_html_release_gate_policy scripts.tests.test_write_html_candidate_manifest scripts.tests.test_macos_candidate_collector scripts.tests.test_windows_candidate_collector scripts.tests.test_linux_candidate_collector -v
+
+      - name: Verify full Rust workspace before candidate construction
+        run: |
+          cargo fmt --all -- --check
+          cargo check --locked --workspace
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo test --locked --workspace
+
+  macos-candidate:
+    name: Build macOS non-dev candidate
+    needs: policy
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require macOS candidate signing and notarization inputs
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for name in APPLE_CERTIFICATE_P12 APPLE_CERTIFICATE_PASSWORD APPLE_TEAM_ID APPLE_ID APPLE_APP_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required macOS candidate secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Verify frozen HTML without release promotion
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          python3 scripts/audit_no_legacy.py
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
+
+      - name: Build exact non-dev universal binary
+        run: |
+          cargo build --locked --release --target aarch64-apple-darwin
+          cargo build --locked --release --target x86_64-apple-darwin
+          python3 scripts/alias_app_bin.py target/aarch64-apple-darwin/release
+          python3 scripts/alias_app_bin.py target/x86_64-apple-darwin/release
+
+      - name: Assemble, sign, notarize, and bind candidate application
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ROOT="$PWD/target/certification/macos"
+          APP="$ROOT/eBIRForms.app"
+          ARCHIVE="$ROOT/eBIRForms-macOS-universal-$GITHUB_SHA.zip"
+          SOURCE_REVISION="$GITHUB_SHA"
+          NOTARY_ARCHIVE="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.zip"
+          NOTARY_RESULT="$RUNNER_TEMP/eBIRForms-macOS-notary-$GITHUB_SHA.json"
+          KEYCHAIN_PATH="$RUNNER_TEMP/candidate-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          cleanup_signing() {
+            security delete-keychain "$KEYCHAIN_PATH" >/dev/null 2>&1 || true
+            rm -f "$RUNNER_TEMP/candidate-certificate.p12" "$NOTARY_ARCHIVE" "$NOTARY_RESULT"
+          }
+          trap cleanup_signing EXIT
+
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          lipo -create \
+            target/aarch64-apple-darwin/release/bir \
+            target/x86_64-apple-darwin/release/bir \
+            -output "$APP/Contents/MacOS/bir"
+          cp -R assets "$APP/Contents/Resources/"
+          rm -rf "$APP/Contents/Resources/assets/macos"
+          cp assets/AppIcon.icns "$APP/Contents/Resources/"
+          cp assets/macos/Info.plist "$APP/Contents/Info.plist"
+          VERSION="$(awk -F '"' '/^version[[:space:]]*=/{print $2; exit}' Cargo.toml)"
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" "$APP/Contents/Info.plist"
+          sed -i '' "s/BUILD_NUMBER_PLACEHOLDER/${GITHUB_RUN_NUMBER}/g" "$APP/Contents/Info.plist"
+          sed -i '' "s/BUNDLE_ID_PLACEHOLDER/dev.goldcoders.bir/g" "$APP/Contents/Info.plist"
+          sed -i '' "s/APP_NAME_PLACEHOLDER/eBIRForms/g" "$APP/Contents/Info.plist"
+          python3 scripts/audit_no_legacy.py --package-root "$APP"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          printf '%s' "$APPLE_CERTIFICATE_P12" | base64 --decode \
+            > "$RUNNER_TEMP/candidate-certificate.p12"
+          security import "$RUNNER_TEMP/candidate-certificate.p12" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          IDENTITIES="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")"
+          IDENTITY_COUNT="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { count++ } END { print count + 0 }')"
+          if [ "$IDENTITY_COUNT" -ne 1 ]; then
+            echo "Expected exactly one imported Developer ID Application identity" >&2
+            printf '%s\n' "$IDENTITIES" >&2
+            exit 1
+          fi
+          IDENTITY_LINE="$(printf '%s\n' "$IDENTITIES" | awk '/"Developer ID Application:/ { print; exit }')"
+          case "$IDENTITY_LINE" in
+            *"($APPLE_TEAM_ID)"*) ;;
+            *)
+              echo "Imported Developer ID identity does not belong to team $APPLE_TEAM_ID" >&2
+              printf '%s\n' "$IDENTITY_LINE" >&2
+              exit 1
+              ;;
+          esac
+          SIGNING_IDENTITY="$(printf '%s\n' "$IDENTITY_LINE" | awk '{ print $2 }')"
+
+          codesign --force --options runtime \
+            --keychain "$KEYCHAIN_PATH" \
+            --sign "$SIGNING_IDENTITY" \
+            --entitlements assets/macos/entitlements.mac.plist \
+            "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$NOTARY_ARCHIVE"
+          xcrun notarytool submit "$NOTARY_ARCHIVE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json > "$NOTARY_RESULT"
+          python3 -c \
+            'import json,sys; result=json.load(open(sys.argv[1], encoding="utf-8")); ok=result.get("status") == "Accepted" and bool(result.get("id")); sys.exit(0 if ok else f"notarytool did not accept submission: {result!r}")' \
+            "$NOTARY_RESULT"
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose=2 "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          python3 scripts/audit_no_legacy.py --package-root "$APP"
+
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
+          python3 scripts/write_html_candidate_manifest.py \
+            --platform macos \
+            --architecture universal \
+            --source-revision "$SOURCE_REVISION" \
+            --artifact "$ARCHIVE" \
+            --renderer-identity assets/form-renderer-build-identity.json \
+            --output "$ROOT/candidate-manifest.json"
+          cp assets/form-renderer-build-identity.json "$ROOT/"
+          python3 scripts/macos_candidate_certification.py inspect \
+            --candidate-manifest "$ROOT/candidate-manifest.json" \
+            --candidate-archive "$ARCHIVE" \
+            --renderer-identity "$ROOT/form-renderer-build-identity.json" \
+            --output-dir "$ROOT/inspection"
+
+      - name: Upload macOS certification inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-candidate-macos-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            target/certification/macos/*.zip
+            target/certification/macos/candidate-manifest.json
+            target/certification/macos/form-renderer-build-identity.json
+
+  windows-candidate:
+    name: Build Windows non-dev candidate
+    needs: policy
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install OpenSSL build dependency
+        shell: pwsh
+        run: |
+          choco install openssl -y
+          $opensslDir = if (Test-Path "C:\Program Files\OpenSSL\include") {
+            "C:\Program Files\OpenSSL"
+          } elseif (Test-Path "C:\Program Files\OpenSSL-Win64\include") {
+            "C:\Program Files\OpenSSL-Win64"
+          } else {
+            throw "OpenSSL include directory not found"
+          }
+          "OPENSSL_DIR=$opensslDir" >> $env:GITHUB_ENV
+          $library = Get-ChildItem -Path $opensslDir -Filter "*crypto*.lib" -Recurse |
+            Select-Object -First 1
+          if (-not $library) { throw "OpenSSL crypto library not found" }
+          "OPENSSL_LIB_DIR=$($library.DirectoryName)" >> $env:GITHUB_ENV
+          if ($library.Name -ne "libcrypto.lib") {
+            Copy-Item $library.FullName "$($library.DirectoryName)\libcrypto.lib"
+          }
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Verify frozen HTML without release promotion
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne $env:GITHUB_SHA) { throw "candidate SHA mismatch" }
+          if (git status --porcelain=v1 --untracked-files=all) { throw "candidate source is dirty" }
+          python scripts/audit_no_legacy.py
+          python .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision $env:GITHUB_SHA --out assets/form-renderer-build-identity.json
+
+      - name: Build exact non-dev Windows binary
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc
+
+      - name: Assemble portable candidate application
+        shell: pwsh
+        run: |
+          $root = "target/certification/windows"
+          $stage = "$root/eBIRForms-Windows-x64"
+          $archive = "$root/eBIRForms-Windows-x64-$env:GITHUB_SHA.zip"
+          $sourceRevision = $env:GITHUB_SHA
+          python scripts/alias_app_bin.py "target/x86_64-pc-windows-msvc/release"
+          New-Item -ItemType Directory -Force -Path "$stage/assets" | Out-Null
+          Copy-Item "target/x86_64-pc-windows-msvc/release/bir.exe" "$stage/bir.exe"
+          Copy-Item "assets/*" "$stage/assets" -Recurse -Force
+          python scripts/audit_no_legacy.py --package-root "$stage"
+          Compress-Archive -Path "$stage/*" -DestinationPath "$archive" -Force
+          python scripts/write_html_candidate_manifest.py `
+            --platform windows `
+            --architecture x86_64 `
+            --source-revision $sourceRevision `
+            --artifact "$archive" `
+            --renderer-identity assets/form-renderer-build-identity.json `
+            --output "$root/candidate-manifest.json"
+          Copy-Item assets/form-renderer-build-identity.json "$root/form-renderer-build-identity.json"
+
+      - name: Upload Windows certification inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-candidate-windows-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            target/certification/windows/*.zip
+            target/certification/windows/candidate-manifest.json
+            target/certification/windows/form-renderer-build-identity.json
+
+  linux-candidate:
+    name: Build Linux non-dev candidate
+    needs: policy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config libx11-dev libxcb1-dev libxcb-render0-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev \
+            libxkbcommon-x11-dev libwayland-dev libwayland-client0 \
+            libasound2-dev libudev-dev libvulkan-dev libfontconfig1-dev \
+            libfreetype-dev libssl-dev libpolkit-gobject-1-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev mesa-vulkan-drivers
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          targets: x86_64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/checkout@v4
+        with:
+          repository: hexuria/buwiz-forms-html
+          path: .ci-html
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Verify frozen HTML without release promotion
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          python3 scripts/audit_no_legacy.py
+          python3 .ci-html/tools/formgen/freeze_html.py --verify --out html-frozen --index rules/index.json
+          python3 .ci-html/tools/formgen/stamp_frozen_names.py --check-all --html-root html-frozen --rules-root rules/forms --catalog .ci-html/tools/formgen/identity/catalog.json
+          python3 scripts/write_frozen_html_identity.py --html-frozen html-frozen --source-revision "$GITHUB_SHA" --out assets/form-renderer-build-identity.json
+
+      - name: Build exact non-dev Linux binary
+        run: cargo build --locked --release --target x86_64-unknown-linux-gnu
+
+      - name: Assemble portable candidate application
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$PWD/target/certification/linux"
+          STAGE="$ROOT/eBIRForms-Linux-x64"
+          ARCHIVE="$ROOT/eBIRForms-Linux-x64-$GITHUB_SHA.tar.gz"
+          SOURCE_REVISION="$GITHUB_SHA"
+          python3 scripts/alias_app_bin.py target/x86_64-unknown-linux-gnu/release
+          mkdir -p "$STAGE"
+          cp target/x86_64-unknown-linux-gnu/release/bir "$STAGE/"
+          cp -R assets "$STAGE/"
+          python3 scripts/audit_no_legacy.py --package-root "$STAGE"
+          tar czf "$ARCHIVE" -C "$ROOT" "$(basename "$STAGE")"
+          python3 scripts/write_html_candidate_manifest.py \
+            --platform linux \
+            --architecture x86_64 \
+            --source-revision "$SOURCE_REVISION" \
+            --artifact "$ARCHIVE" \
+            --renderer-identity assets/form-renderer-build-identity.json \
+            --output "$ROOT/candidate-manifest.json"
+          cp assets/form-renderer-build-identity.json "$ROOT/"
+
+      - name: Upload Linux certification inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-candidate-linux-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            target/certification/linux/*.tar.gz
+            target/certification/linux/candidate-manifest.json
+            target/certification/linux/form-renderer-build-identity.json

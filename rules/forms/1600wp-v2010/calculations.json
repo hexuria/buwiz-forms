@@ -1,0 +1,205 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1600wp-v2010",
+    "revision":  "2010-01-01",
+    "evaluation_order":  [
+                             "1600wp-return-period-to",
+                             "1600wp-partii-row-tax",
+                             "1600wp-item12-total",
+                             "1600wp-item14-balance",
+                             "1600wp-penalty-total",
+                             "1600wp-total-amount-due",
+                             "1600wp-schedule-row-tax",
+                             "1600wp-schedule-total"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "1600wp-return-period-to",
+                             "outputs":  [
+                                             "frm1600WP:DateWithholdingToMonth",
+                                             "frm1600WP:DateWithholdingToDay",
+                                             "frm1600WP:DateWithholdingToYear"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:DateWithholdingMonth",
+                                            "frm1600WP:DateWithholdingDay",
+                                            "frm1600WP:DateWithholdingYear"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Each To component mirrors its corresponding From component on blur.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "inline onblur",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#controls:L291-L301"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-partii-row-tax",
+                             "outputs":  [
+                                             "frm1600WP:txtTaxbeWithHeld{index}"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:txtTaxBase{index}",
+                                            "frm1600WP:txtTaxRate{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Tax required to be withheld = tax base Ã— (rate / 100).",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "getRequiredWithheld",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#getRequiredWithheld:L3445-L3448"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-item12-total",
+                             "outputs":  [
+                                             "frm1600WP:txtTax12"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:txtTaxbeWithHeld{index}"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 12 is the sum of all generated Part II tax-withheld rows.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "computeofTotalWithheldTax",
+                             "depends_on":  [
+                                                "1600wp-partii-row-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeofTotalWithheldTax:L3501-L3511"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-item14-balance",
+                             "outputs":  [
+                                             "frm1600WP:txtTax14"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:txtTax12",
+                                            "frm1600WP:txtTax13"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 14 = Item 12 - Item 13.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "computeofTotalWithheldTax",
+                             "depends_on":  [
+                                                "1600wp-item12-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeofTotalWithheldTax:L3510-L3513"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-penalty-total",
+                             "outputs":  [
+                                             "frm1600WP:txtTax15D"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:txtTax15A",
+                                            "frm1600WP:txtTax15B",
+                                            "frm1600WP:txtTax15C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 15D = surcharge + interest + compromise.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L3485-L3492"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-total-amount-due",
+                             "outputs":  [
+                                             "frm1600WP:txtTax16"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:txtTax14",
+                                            "frm1600WP:txtTax15D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 16 = Item 14 + Item 15D.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "computeOfTotalAmtDue",
+                             "depends_on":  [
+                                                "1600wp-item14-balance",
+                                                "1600wp-penalty-total"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOfTotalAmtDue:L3493-L3499"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and deterministic two-decimal formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-schedule-row-tax",
+                             "outputs":  [
+                                             "frm1600WP:dtSched:taxWithheld1..10"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:dtSched:amount1..10",
+                                            "frm1600WP:dtSched:txtRatePercent1..10"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "For each row, tax = amount Ã— round(rate / 100, 2), then the money result is rounded to two decimals.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "computeDtShedTaxWithheld",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeDtShedTaxWithheld:L3517-L3527"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Use exact decimal rate / 100 and round only the monetary output.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "1600wp-schedule-total",
+                             "outputs":  [
+                                             "frm1600WP:dtSched:TotaltaxWithheld"
+                                         ],
+                             "inputs":  [
+                                            "frm1600WP:dtSched:taxWithheld1..10"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum the ten Schedule II tax-withheld outputs, rounding the running total to two decimals each iteration.",
+                             "rounding":  "formatCurrency applies two decimals unless the formula documents an earlier rounding defect.",
+                             "trigger":  "computeDtShedTaxWithheld",
+                             "depends_on":  [
+                                                "1600wp-schedule-row-tax"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeDtShedTaxWithheld:L3519-L3527"
+                                             ],
+                             "assessment":  "official-bug-compatible",
+                             "recommended_app_behavior":  "Sum exact row-money values once and round the final total unless compatibility requires iterative rounding.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

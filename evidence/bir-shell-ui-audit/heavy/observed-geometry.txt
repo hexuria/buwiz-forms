@@ -1,0 +1,35 @@
+Heavy-form audit 2026-11-01. Preserved synthetic state, not fresh.
+Shell d65a473ce7eed80065d082707923448245bcdc9e; app unchanged vs b833bdcc.
+Reference14fe8efb29e171cac4e794d0d1ee9afaf1069310.
+Native desktop2560x1920 unchanged. App content crop x560,y478.
+Default shell outer1480x940 ->1440x900 after20px shadow each edge.
+Narrow shell outer840x940 ->800x900 after same shadow crop.
+Reference compositor content1440x900, native decoration excluded.
+
+Observed native PNG coordinates (inclusive pixel endpoints):
+shell-1700-top: left sidebar0..247=248; right panel1120..1439=320.
+Part-nav row282..489=208. Visible part card518..1117=600, clipped seam.
+shell-1700-top-panel-closed: part card569..1388=820, rounded right border.
+ref-fallback-1601c-top: nav281..488=208; part card505..1078=574.
+Shell visible card span is26px more, but clipped and different editor;
+not intended width or equivalent annual field/grid fidelity.
+Shell1700 year field477..508=32px high.
+Reference fallback year field502..533=32px high.
+Shell1701 Schedule1 grid successive row starts247,290: pitch43px;
+editable input30px, columns140px apart. Source confirms30/140 sizing.
+Not universal row-height equality. No supported annual reference grid exists.
+
+Observed badge counts:1700=296fields/2pages/6parts;
+1701=946/4/17 and Draft layout;1702RT=269/4/12;1702MX=663/4/17.
+Panel-open and narrow card right edge cut at main viewport seam.
+Source owners: form_page.js3460-3484/main.js1722-1734.
+Root cause not measured; viewport/shadow/split width candidate only.
+Horizontal wheel probe changed vertical position too; last columns unverified.
+
+Immediate reference toast native screenshots cropped without scaling:
+1700 ss_60c4a0ef.png;1701 ss_1968aff7.png;
+1702RT ss_d53a4fe6.png;1702MX ss_7c81e402.png.
+Each exact catalog code rejected Open form. All annual scroll/save blocked.
+Supported1601Cv2018 fallback explicitly non-annual,70fields,October2026.
+Full document wheel endpoints checked with selected parts expanded only.
+No all-fields-at-once, timing benchmark, valid-return or live-send claim.

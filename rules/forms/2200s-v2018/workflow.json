@@ -1,0 +1,159 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200s-v2018",
+    "revision":  "2018-01-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-form-pdf",
+                                           "official-guide-pdf"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "January 2018 sweetened-beverages excise return with ten fixed product rows and unbounded Others rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L8022-L8106"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save validates date and identity only through main line of business."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateForm:L7673-L7855"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate runs full identity, location, relief/payment, deposit/balance, and Schedule 1 checks."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "encrypted-field-audit-v796"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Revision-matched encrypted dummy copy contains exactly 118 concrete keys; values excluded."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables Final Copy."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateForm"
+                                            ],
+                            "guard":  "Full Validate graph passes."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#editForm"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts/compresses copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveEncryptedProfile"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Untested online attempt."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "Return date",
+                          "TIN/RDO and identity",
+                          "PSIC/email",
+                          "Production/removal locations",
+                          "Treaty choice",
+                          "Payment manner and deposit",
+                          "Schedule 1"
+                      ],
+    "required_attachments":  [
+
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "revision-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the covered products."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "revision-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the covered products."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "revision-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the covered products."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "revision-help"
+                                                 ],
+                                 "confidence":  "medium",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "For each place of production, file a separate return and pay before removal of the covered products."
+                             }
+                         ]
+}

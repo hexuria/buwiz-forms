@@ -1,0 +1,63 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702rt-v2018c",
+    "cases":  [
+                  {
+                      "case_id":  "item21-positive",
+                      "inputs":  {
+                                     "penalties":  25,
+                                     "item16":  100
+                                 },
+                      "calculation_id":  "1702rt-item21-total-payable",
+                      "official_output":  "125"
+                  },
+                  {
+                      "case_id":  "item21-overpayment-with-penalty",
+                      "inputs":  {
+                                     "penalties":  25,
+                                     "item16":  -100
+                                 },
+                      "calculation_id":  "1702rt-item21-total-payable",
+                      "official_output":  "25"
+                  },
+                  {
+                      "case_id":  "osd-40-percent",
+                      "inputs":  {
+                                     "gross":  1000000
+                                 },
+                      "calculation_id":  "1702rt-item38-osd",
+                      "official_output":  "400000"
+                  },
+                  {
+                      "case_id":  "pre2020-regular-tax",
+                      "inputs":  {
+                                     "net_taxable":  1000000,
+                                     "year":  2019
+                                 },
+                      "calculation_id":  "1702rt-item41-rate-tax",
+                      "official_output":  "300000"
+                  },
+                  {
+                      "case_id":  "pre2020-mcit",
+                      "inputs":  {
+                                     "gross":  1000000,
+                                     "year":  2019,
+                                     "atc_ic055":  true
+                                 },
+                      "calculation_id":  "1702rt-item42-mcit",
+                      "official_output":  "20000"
+                  },
+                  {
+                      "case_id":  "schedule4-negative",
+                      "inputs":  {
+                                     "c7":  20,
+                                     "c5":  50,
+                                     "c6":  40,
+                                     "c4":  100
+                                 },
+                      "expected_validation":  "negative-balance alert",
+                      "calculation_id":  "1702rt-schedule4-row-balances",
+                      "official_output":  "-10"
+                  }
+              ]
+}

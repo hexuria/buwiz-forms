@@ -1,0 +1,377 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2551q-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2551q-input-year-revision",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is below 2018."
+                                    },
+                      "expected_message":  "Please file using the old version of the form.",
+                      "expected_behavior":  "Alerts and rewrites the year to 2018.",
+                      "rule_id":  "2551q-input-year-revision"
+                  },
+                  {
+                      "case_id":  "case-02-2551q-input-money",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A money field loses focus."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "parseFloat/toFixed(2); NaN becomes 0.00.",
+                      "rule_id":  "2551q-input-money"
+                  },
+                  {
+                      "case_id":  "case-03-2551q-input-integer",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "An integer-like field loses focus."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "parseFloat/toFixed(0); NaN becomes blank.",
+                      "rule_id":  "2551q-input-integer"
+                  },
+                  {
+                      "case_id":  "case-04-2551q-item2-blank-year",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Please indicate a valid Year.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-item2-blank-year"
+                  },
+                  {
+                      "case_id":  "case-05-2551q-item2-month",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year-ended month equals zero."
+                                    },
+                      "expected_message":  "Please choose a valid Month.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-item2-month"
+                  },
+                  {
+                      "case_id":  "case-06-2551q-item2-future-year",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year exceeds current system year."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 2. Entry should not be later than Current Date.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-item2-future-year"
+                  },
+                  {
+                      "case_id":  "case-07-2551q-item2-future-month",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year equals current year and selected month is later than current system month."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 2. Entry should not be later than Current Date.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-item2-future-month"
+                  },
+                  {
+                      "case_id":  "case-08-2551q-treaty-toggle",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty Yes is not selected."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Disables and clears the relief selector; Yes enables it.",
+                      "rule_id":  "2551q-treaty-toggle"
+                  },
+                  {
+                      "case_id":  "case-09-2551q-amended-toggle",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Amended No is selected."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Disables and zeros Item 16; amended Yes enables it unless the 8% option is active.",
+                      "rule_id":  "2551q-amended-toggle"
+                  },
+                  {
+                      "case_id":  "case-10-2551q-tax-rate-net",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Graduated/net-taxable-income option is selected."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Enables credit, penalty, and Schedule 1 controls.",
+                      "rule_id":  "2551q-tax-rate-net"
+                  },
+                  {
+                      "case_id":  "case-11-2551q-tax-rate-eight-percent",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "8% option is selected."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Zeros and disables all listed figures and all six ATC rows for compliance-only filing.",
+                      "rule_id":  "2551q-tax-rate-eight-percent"
+                  },
+                  {
+                      "case_id":  "case-12-2551q-atc-row-enable",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "An ATC row selection is zero or nonzero."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Zero selection disables and zeros amount/rate; a selected ATC enables amount and copies the catalog rate.",
+                      "rule_id":  "2551q-atc-row-enable"
+                  },
+                  {
+                      "case_id":  "case-13-2551q-atc-sequence",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "First ATC row is empty or populated."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Rows 2-6 are cleared/disabled while row 1 is empty; otherwise they are enabled.",
+                      "rule_id":  "2551q-atc-sequence"
+                  },
+                  {
+                      "case_id":  "case-14-2551q-atc-duplicate-catalog",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Catalog substring filter loads two PT010 entries at 3% and 1%."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "Both entries are exposed because the filter only checks for substring 2551_ and does not deduplicate by code or effective period.",
+                      "rule_id":  "2551q-atc-duplicate-catalog"
+                  },
+                  {
+                      "case_id":  "case-15-2551q-validate-calendar",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither calendar nor fiscal type is selected."
+                                    },
+                      "expected_message":  "Select a calendar type on Item no. 1.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-calendar"
+                  },
+                  {
+                      "case_id":  "case-16-2551q-validate-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year-ended month has selectedIndex zero."
+                                    },
+                      "expected_message":  "Please enter valid Year Ended month on item 2.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-month"
+                  },
+                  {
+                      "case_id":  "case-17-2551q-validate-year-min",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year numeric value is below 1900."
+                                    },
+                      "expected_message":  "Invalid date entry on Item no.2. Entry should not be lower than 1900.",
+                      "expected_behavior":  "Main Validate accepts 1900-2017, conflicting with validateYear which rewrites values below 2018 when that handler runs.",
+                      "rule_id":  "2551q-validate-year-min"
+                  },
+                  {
+                      "case_id":  "case-18-2551q-validate-quarter",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No quarter is selected."
+                                    },
+                      "expected_message":  "Select a Quarter on Item no. 3.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-quarter"
+                  },
+                  {
+                      "case_id":  "case-19-2551q-validate-year-blank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Please enter valid year on item 2.",
+                      "expected_behavior":  "This branch is effectively unreachable because blank coerces to zero and fails the earlier below-1900 branch first.",
+                      "rule_id":  "2551q-validate-year-blank"
+                  },
+                  {
+                      "case_id":  "case-20-2551q-validate-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6.",
+                      "expected_behavior":  "Only nonblank segments are enforced; no digit shape or TIN checksum.",
+                      "rule_id":  "2551q-validate-tin"
+                  },
+                  {
+                      "case_id":  "case-21-2551q-validate-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-rdo"
+                  },
+                  {
+                      "case_id":  "case-22-2551q-validate-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-name"
+                  },
+                  {
+                      "case_id":  "case-23-2551q-validate-telephone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter Telephone Number on Item 10.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-telephone"
+                  },
+                  {
+                      "case_id":  "case-24-2551q-validate-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-address"
+                  },
+                  {
+                      "case_id":  "case-25-2551q-validate-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Zip Code on Item 9A.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-zip"
+                  },
+                  {
+                      "case_id":  "case-26-2551q-validate-treaty",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Treaty Yes is selected and relief selector remains at index zero."
+                                    },
+                      "expected_message":  "Please specify Tax Relief on Item 12.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-treaty"
+                  },
+                  {
+                      "case_id":  "case-27-2551q-validate-zero-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither tax-rate option is selected and first ATC plus amount are zero."
+                                    },
+                      "expected_message":  "If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-zero-atc"
+                  },
+                  {
+                      "case_id":  "case-28-2551q-validate-amount-without-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither tax-rate option is selected, first ATC is zero, and first amount is nonzero."
+                                    },
+                      "expected_message":  "Please select an ATC in Schedule 1.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-amount-without-atc"
+                  },
+                  {
+                      "case_id":  "case-29-2551q-validate-net-zero-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Graduated/net option is selected and first ATC is zero."
+                                    },
+                      "expected_message":  "If you are filing zero transaction, please select the applicable ATC in Page 2 Schedule 1.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-validate-net-zero-atc"
+                  },
+                  {
+                      "case_id":  "case-30-2551q-validate-overpayment-raw",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Raw Item 24 compares below zero and neither disposition is selected."
+                                    },
+                      "expected_message":  "Please specify If overpayment below Item 24.",
+                      "expected_behavior":  "Raw JavaScript less-than coercion catches unformatted negative values.",
+                      "rule_id":  "2551q-validate-overpayment-raw"
+                  },
+                  {
+                      "case_id":  "case-31-2551q-validate-overpayment-formatted",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "NumWithComma(Item 24) is below zero and neither disposition is selected."
+                                    },
+                      "expected_message":  "Please select overpayment option.",
+                      "expected_behavior":  "The duplicate parsed check catches comma-formatted negative values and emits a different alert.",
+                      "rule_id":  "2551q-validate-overpayment-formatted"
+                  },
+                  {
+                      "case_id":  "case-32-2551q-validate-line-business-disabled",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Line of business is blank."
+                                    },
+                      "expected_message":  null,
+                      "expected_behavior":  "The entire intended validation is commented out.",
+                      "rule_id":  "2551q-validate-line-business-disabled"
+                  },
+                  {
+                      "case_id":  "case-33-2551q-save-month",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year-ended month is unselected."
+                                    },
+                      "expected_message":  "Please enter valid Year Ended month on item 2.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-save-month"
+                  },
+                  {
+                      "case_id":  "case-34-2551q-save-quarter",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "No quarter is selected."
+                                    },
+                      "expected_message":  "Select a Quarter on Item no. 3.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-save-quarter"
+                  },
+                  {
+                      "case_id":  "case-35-2551q-save-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 6.",
+                      "expected_behavior":  "Only nonblank pieces are checked.",
+                      "rule_id":  "2551q-save-tin"
+                  },
+                  {
+                      "case_id":  "case-36-2551q-save-rdo-disabled",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 7.",
+                      "expected_behavior":  "The entire RDO Save guard is commented out.",
+                      "rule_id":  "2551q-save-rdo-disabled"
+                  },
+                  {
+                      "case_id":  "case-37-2551q-save-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 8.",
+                      "expected_behavior":  "The first failing branch alerts and returns.",
+                      "rule_id":  "2551q-save-name"
+                  }
+              ]
+}

@@ -1,0 +1,1177 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200p-v2020",
+    "revision":  "2020-01-01",
+    "first_error_behavior":  "Validate/Save stop at the first source-ordered failure; Schedule 1 stops at the first failing row.",
+    "rules":  [
+                  {
+                      "rule_id":  "2200p-validate-001-month",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "Month is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1I1Month"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Month field on Page 1 Item 1 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5201-L5207"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-002-day",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "Day is blank.",
+                      "fields":  [
+                                     "frm2200P:txtPg1I1Day"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Day field on Page 1 Item 1 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5209-L5214"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-003-year",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "Year is blank.",
+                      "fields":  [
+                                     "frm2200P:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year field on Page 1 Item 1 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5216-L5221"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-004-date",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "Return date fails calendar/component checks.",
+                      "fields":  [
+                                     "Return-period-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please provide a valid date. (MM/DD/YYYY format) in Page 1 Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L5777-L5850"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-005-future",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "Return date is after today.",
+                      "fields":  [
+                                     "Return-period-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Page 1 Item 1 Date cannot be a future date ",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L5839-L5843"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-006-pre-revision",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "Return date is before January 1, 2020.",
+                      "fields":  [
+                                     "Return-period-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Page 1 Item 1 Date cannot be earlier than January 2020",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L5844-L5848"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-007-rdo",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Hidden RDO is 000.",
+                      "fields":  [
+                                     "frm2200P:txtPg1I5RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Page 1 Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5224"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-008-name",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Field is blank after trim.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I6RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Name field on Page 1 Item 7 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5225-L5229"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-009-address",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Field is blank after trim.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I7RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Registered Address field on Page 1 Item 8 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5225-L5229"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-010-zip",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Field is blank after trim.",
+                      "fields":  [
+                                     "frm2200P:txPg1I7ZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Zip Code field on Page 1 Item 8A is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5225-L5229"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-011-contact",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Field is blank after trim.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I8ContactNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Contact Number field on Page 1 Item 9 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5225-L5229"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-012-email",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Field is blank after trim.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I9Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "E-mail address on page 1 item 10 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5225-L5229"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-013-prod-region",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Location selector is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I10Region"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Region field on Page 1 Item 10 (Place of Production) is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5231-L5241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-014-prod-province",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Location selector is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I10Province"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Province field on Page 1 Item 10 (Place of Production) is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5231-L5241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-015-prod-city",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "Location selector is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I10City"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "City field on Page 1 Item 10 (Place of Production) is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5231-L5241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-016-rem-region",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Location selector is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I11Region"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Region field on Page 1 Item 11 (Place of Removal) is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5231-L5241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-017-rem-province",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Location selector is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I11Province"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Province field on Page 1 Item 11 (Place of Removal) is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5231-L5241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-018-rem-city",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Location selector is 00.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I11City"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "City field on Page 1 Item 11 (Place of Removal) is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5231-L5241"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-019-relief-choice",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Neither relief radio is selected.",
+                      "fields":  [
+                                     "frm2200P:rdoPg1I12TaxReliefYes",
+                                     "frm2200P:rdoPg1I12TaxReliefNo"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Availing of Tax Relief field on Page 1 Item 12 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5243-L5247"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-020-relief-specify",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Relief Yes is selected and specification is blank.",
+                      "fields":  [
+                                     "frm2200P:rdoPg1I12TaxReliefYes",
+                                     "frm2200P:txtPg1I12TaxReliefSpecify"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Specify Tax Relief field on Page 1 Item 12A is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5249-L5253"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-021-payment-choice",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "No manner-of-payment radio is selected.",
+                      "fields":  [
+                                     "Manner-of-payment-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Manner of Payment on Page 1 Part II is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5255-L5260"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-022-payment-other",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "Other manner is selected and description is blank.",
+                      "fields":  [
+                                     "frm2200P:rdoPg1Pt2MOPOther",
+                                     "frm2200P:txtPg1Pt2MOPOtherDesc"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Specfy Manner of Payment field on Page 1 Part II Item 15 is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5262-L5266"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-validate-023-fund",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "Item 24 balance is positive.",
+                      "fields":  [
+                                     "frm2200P:txtPg1P3I24BalToCarryOver"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "YOU HAVE INSUFICIENT FUND. PLEASE APPLY DEPOSIT TO PROCEED",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateAll:L5268-L5272"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-schedule-024-atc",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "Custom/dynamic row 26+ lacks ATC.",
+                      "fields":  [
+                                     "frm2200P:txtSched1ATC{26..n}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "ATC in row #{row} is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPartVReqRow:L5728-L5735"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-schedule-025-description",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "Custom/dynamic row lacks description.",
+                      "fields":  [
+                                     "frm2200P:txtSched1Description{26..n}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Description in row #{row} is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPartVReqRow:L5737-L5743"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-schedule-026-unit",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "Custom/dynamic row lacks unit of measure.",
+                      "fields":  [
+                                     "frm2200P:txtSched1UnitOfMeasure{26..n}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Unit of Measure in row #{row} is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPartVReqRow:L5745-L5751"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-schedule-027-rate",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "Custom/dynamic row lacks applicable rate.",
+                      "fields":  [
+                                     "frm2200P:txtSched1ApplicableRate{26..n}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Applicable Rate in row #{row} is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPartVReqRow:L5753-L5759"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-schedule-028-place",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "Populated row lacks place of removal.",
+                      "fields":  [
+                                     "frm2200P:txtSched1PlaceOfRemoval{1..n}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Place of Removal in row #{row} is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPartVRow:L5757-L5764"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-schedule-029-one-column",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "Row has place but all other tested amount columns are blank.",
+                      "fields":  [
+                                     "Schedule-1-row-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Input at least 1 more column in row #{row}",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkPartVRow:L5766-L5774"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-addrow-030-atc",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "Previous custom row lacks ATC before Add Row.",
+                      "fields":  [
+                                     "frm2200P:txtSched1ATC{n}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "ATC in row #{row} is required.",
+                      "source_refs":  [
+                                          "official-hta-runtime#isPrevRowValid"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-input-031-email",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  2,
+                      "condition":  "Nonblank email fails source substring regex.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I9Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid e-mail address on page 1 item 10",
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L6023-L6034"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-input-032-year",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  3,
+                      "condition":  "Nonblank year is after current year.",
+                      "fields":  [
+                                     "frm2200P:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Year shall not be greater than the present year",
+                      "source_refs":  [
+                                          "official-hta-runtime#checkYear:L6107-L6119"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-save-033-date",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Return date is blank or month/day is 00.",
+                      "fields":  [
+                                     "Return-period-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter correct date on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L11812-L11815"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-save-034-rdo",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "Runtime RDO is 000.",
+                      "fields":  [
+                                     "frm2200P:rdoPg1Pt1I6RDO"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L11819"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-save-035-name",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Name is blank.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I6RegisteredName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid name on Page 1 Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L11820"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-save-036-address",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Address is blank.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I7RegisteredAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Registered Address on Page 1 Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L11821"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-save-037-contact",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  5,
+                      "condition":  "Contact is blank.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I8ContactNumber"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Contact Number on Page 1 Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L11822"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-defect-038-manual-derived",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  4,
+                      "condition":  "Derived schedule totals/tax due disagree with their inputs.",
+                      "fields":  [
+                                     "Schedule-1-derived-columns"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#computeTotTaxRemov:L5344-L5370",
+                                          "official-hta-runtime#computeTotTaxPaid:L5372-L5406",
+                                          "official-hta-runtime#computeBasicExciseDue:L5408-L5421"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "All row derivation functions are commented out; taxable removals, tax-paid totals, and excise due remain manual.",
+                      "recommended_app_behavior":  "Compute every derived schedule column from revision-pinned inputs and rates.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-defect-039-nonnumeric-date",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "Day is two nonnumeric characters or year is four nonnumeric characters.",
+                      "fields":  [
+                                     "frm2200P:txtPg1I1Day",
+                                     "frm2200P:txtPg1I1Year"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateDate:L5777-L5850"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "isNaN(strmm || strdd || stryyyy) checks only the first truthy component and Invalid Date comparisons fail open.",
+                      "recommended_app_behavior":  "Strictly parse each component as digits.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-defect-040-email-substring",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  5,
+                      "condition":  "Email has a valid-looking substring plus junk.",
+                      "fields":  [
+                                     "frm2200P:txtPg1Pt1I9Email"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validateEmail:L6023-L6034"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The regex is unanchored.",
+                      "recommended_app_behavior":  "Validate the full normalized value.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-defect-041-save-sparse",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "save",
+                      "order":  6,
+                      "condition":  "Any Validate-only location, relief, payment, balance, ZIP, email, or schedule rule fails.",
+                      "fields":  [
+                                     "Validate-only-fields"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L11809-L11825",
+                                          "official-hta-runtime#validateAll:L5198-L5277"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save checks only date, RDO, name, address, and contact.",
+                      "recommended_app_behavior":  "Use one phase-aware validation graph.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-defect-042-row-index",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  6,
+                      "condition":  "Dynamic row index reaches 100.",
+                      "fields":  [
+                                     "Schedule-1-dynamic-families"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#getFieldRowNum:L5465-L5476"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Only the final two ID characters are parsed.",
+                      "recommended_app_behavior":  "Keep typed row identity.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "2200p-defect-043-malformed-template",
+                      "form_id":  "2200p-v2020",
+                      "revision":  "2020-01-01",
+                      "phase":  "blur/change",
+                      "order":  7,
+                      "condition":  "A dynamic row is created from rowTemplate.",
+                      "fields":  [
+                                     "Schedule-1-dynamic-families"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#rowTemplate:L5577-L5615"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Generated input strings omit whitespace/closing quotes between id, name, type, and value attributes in multiple controls.",
+                      "recommended_app_behavior":  "Generate controls through DOM APIs or valid escaped templates.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

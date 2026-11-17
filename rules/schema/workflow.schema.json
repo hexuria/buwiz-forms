@@ -1,0 +1,210 @@
+{
+    "$schema":  "https://json-schema.org/draft/2020-12/schema",
+    "$id":  "https://goldcoders.dev/schemas/ebirforms/workflow.schema.json",
+    "type":  "object",
+    "required":  [
+                     "schema_version",
+                     "form_id",
+                     "revision",
+                     "phases",
+                     "transitions",
+                     "prerequisites",
+                     "required_attachments",
+                     "filing_deadlines"
+                 ],
+    "properties":  {
+                       "$schema":  {
+                                       "type":  "string"
+                                   },
+                       "schema_version":  {
+                                              "type":  "string"
+                                          },
+                       "form_id":  {
+                                       "type":  "string"
+                                   },
+                       "revision":  {
+                                        "type":  "string"
+                                    },
+                       "phases":  {
+                                      "type":  "array",
+                                      "items":  {
+                                                    "$ref":  "#/$defs/phase"
+                                                }
+                                  },
+                       "transitions":  {
+                                           "type":  "array",
+                                           "items":  {
+                                                         "$ref":  "#/$defs/transition"
+                                                     }
+                                       },
+                       "prerequisites":  {
+                                             "type":  "array",
+                                             "items":  {
+                                                           "type":  "string"
+                                                       }
+                                         },
+                       "required_attachments":  {
+                                                    "type":  "array",
+                                                    "items":  {
+                                                                  "type":  "object",
+                                                                  "required":  [
+                                                                                   "attachment_id",
+                                                                                   "label",
+                                                                                   "required_when",
+                                                                                   "official_ui_enforcement",
+                                                                                   "source_refs",
+                                                                                   "confidence"
+                                                                               ],
+                                                                  "properties":  {
+                                                                                     "attachment_id":  {
+                                                                                                           "type":  "string"
+                                                                                                       },
+                                                                                     "label":  {
+                                                                                                   "type":  "string"
+                                                                                               },
+                                                                                     "required_when":  {
+                                                                                                           "type":  "string"
+                                                                                                       },
+                                                                                     "official_ui_enforcement":  {
+                                                                                                                     "type":  "string"
+                                                                                                                 },
+                                                                                     "source_refs":  {
+                                                                                                         "type":  "array",
+                                                                                                         "items":  {
+                                                                                                                       "type":  "string"
+                                                                                                                   },
+                                                                                                         "minItems":  1
+                                                                                                     },
+                                                                                     "confidence":  {
+                                                                                                        "enum":  [
+                                                                                                                     "high",
+                                                                                                                     "medium",
+                                                                                                                     "low",
+                                                                                                                     "unknown"
+                                                                                                                 ]
+                                                                                                    }
+                                                                                 },
+                                                                  "additionalProperties":  false
+                                                              }
+                                                },
+                       "filing_deadlines":  {
+                                                "type":  "array",
+                                                "items":  {
+                                                              "type":  "object",
+                                                              "required":  [
+                                                                               "quarter",
+                                                                               "due_date_rule",
+                                                                               "source_refs",
+                                                                               "confidence"
+                                                                           ],
+                                                              "properties":  {
+                                                                                 "quarter":  {
+                                                                                                 "enum":  [
+                                                                                                              "Q1",
+                                                                                                              "Q2",
+                                                                                                              "Q3",
+                                                                                                              "Q4"
+                                                                                                          ]
+                                                                                             },
+                                                                                 "due_date_rule":  {
+                                                                                                       "type":  "string"
+                                                                                                   },
+                                                                                 "source_refs":  {
+                                                                                                     "type":  "array",
+                                                                                                     "items":  {
+                                                                                                                   "type":  "string"
+                                                                                                               },
+                                                                                                     "minItems":  1
+                                                                                                 },
+                                                                                 "confidence":  {
+                                                                                                    "enum":  [
+                                                                                                                 "high",
+                                                                                                                 "medium",
+                                                                                                                 "low",
+                                                                                                                 "unknown"
+                                                                                                             ]
+                                                                                                }
+                                                                             },
+                                                              "additionalProperties":  false
+                                                          }
+                                            }
+                   },
+    "$defs":  {
+                  "phase":  {
+                                "type":  "object",
+                                "required":  [
+                                                 "phase",
+                                                 "official_behavior",
+                                                 "source_refs",
+                                                 "confidence"
+                                             ],
+                                "properties":  {
+                                                   "phase":  {
+                                                                 "type":  "string"
+                                                             },
+                                                   "official_behavior":  {
+                                                                             "type":  "string"
+                                                                         },
+                                                   "source_refs":  {
+                                                                       "type":  "array",
+                                                                       "items":  {
+                                                                                     "type":  "string"
+                                                                                 },
+                                                                       "minItems":  1
+                                                                   },
+                                                   "confidence":  {
+                                                                      "enum":  [
+                                                                                   "high",
+                                                                                   "medium",
+                                                                                   "low",
+                                                                                   "unknown"
+                                                                               ]
+                                                                  }
+                                               },
+                                "additionalProperties":  false
+                            },
+                  "transition":  {
+                                     "type":  "object",
+                                     "required":  [
+                                                      "from",
+                                                      "action",
+                                                      "to",
+                                                      "guard",
+                                                      "side_effects",
+                                                      "source_refs"
+                                                  ],
+                                     "properties":  {
+                                                        "from":  {
+                                                                     "type":  "string"
+                                                                 },
+                                                        "action":  {
+                                                                       "type":  "string"
+                                                                   },
+                                                        "to":  {
+                                                                   "type":  "string"
+                                                               },
+                                                        "guard":  {
+                                                                      "type":  [
+                                                                                   "string",
+                                                                                   "null"
+                                                                               ]
+                                                                  },
+                                                        "side_effects":  {
+                                                                             "type":  "array",
+                                                                             "items":  {
+                                                                                           "type":  "string"
+                                                                                       }
+                                                                         },
+                                                        "source_refs":  {
+                                                                            "type":  "array",
+                                                                            "items":  {
+                                                                                          "type":  "string"
+                                                                                      },
+                                                                            "minItems":  1
+                                                                        }
+                                                    },
+                                     "additionalProperties":  false
+                                 }
+              },
+    "additionalProperties":  false
+}

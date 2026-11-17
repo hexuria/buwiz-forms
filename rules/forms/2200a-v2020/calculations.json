@@ -1,0 +1,278 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "2200a-v2020",
+    "revision":  "2020-01-01",
+    "evaluation_order":  [
+                             "2200a-schedule-fixed-row-due",
+                             "2200a-schedule-others-due",
+                             "2200a-schedule-total",
+                             "2200a-item17c",
+                             "2200a-item18",
+                             "2200a-item20",
+                             "2200a-item21d",
+                             "2200a-item22",
+                             "2200a-item23b",
+                             "2200a-item23c",
+                             "2200a-item24"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "2200a-schedule-fixed-row-due",
+                             "outputs":  [
+                                             "frm2200Av2020:txtSched1_*_Due"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtSched1_*_ATR",
+                                            "frm2200Av2020:txtSched1_*_Taxable"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Due = ATR x taxable amount; export is read but not part of the formula.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "computeField",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeField:L7327-L7348"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-schedule-others-due",
+                             "outputs":  [
+                                             "frm2200Av2020:txtSched1_xa_others{N\u003e=1}_Due"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtSched1_xa_others{N\u003e=1}_Rate",
+                                            "frm2200Av2020:txtSched1_xa_others{N\u003e=1}_Taxable"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "No assignment occurs; the existing Due value is retained.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "computeOthers",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOthers:L7351-L7388"
+                                             ],
+                             "assessment":  "incorrect-official-behavior",
+                             "recommended_app_behavior":  "Compute rate x taxable amount and make Due read-only.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-schedule-total",
+                             "outputs":  [
+                                             "frm2200Av2020:txtSched1_TotalDue",
+                                             "frm2200Av2020:txtExciseDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtSched1_*_Due"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Sum every Schedule 1 input whose id ends in _Due; copy total to Item 16.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Sched1_TotalDue",
+                             "depends_on":  [
+                                                "2200a-schedule-fixed-row-due",
+                                                "2200a-schedule-others-due"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Sched1_TotalDue:L7391-L7400"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item17c",
+                             "outputs":  [
+                                             "frm2200Av2020:txtLess_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtLess_Balance",
+                                            "frm2200Av2020:txtLess_Excise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 17C = Item 17A + Item 17B.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7275-L7279"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item18",
+                             "outputs":  [
+                                             "frm2200Av2020:txtNetTaxDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtExciseDue",
+                                            "frm2200Av2020:txtLess_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 18 = Item 16 - Item 17C.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200a-schedule-total",
+                                                "2200a-item17c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7280-L7283"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item20",
+                             "outputs":  [
+                                             "frm2200Av2020:txtStillDue"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtNetTaxDue",
+                                            "frm2200Av2020:txtPrevReturn"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 20 = Item 18 - Item 19.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200a-item18"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7285-L7288"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item21d",
+                             "outputs":  [
+                                             "frm2200Av2020:txtPen_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtPen_Surcharge",
+                                            "frm2200Av2020:txtPen_Interest",
+                                            "frm2200Av2020:txtPen_Compromise"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 21D = Item 21A + Item 21B + Item 21C.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7290-L7294"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item22",
+                             "outputs":  [
+                                             "frm2200Av2020:txtAmtPayable"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtStillDue",
+                                            "frm2200Av2020:txtPen_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 22 = Item 20 + Item 21D.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200a-item20",
+                                                "2200a-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7296-L7299"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item23b",
+                             "outputs":  [
+                                             "frm2200Av2020:txtPay_Penalties"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtPen_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23B copies Item 21D.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200a-item21d"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7301-L7302"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item23c",
+                             "outputs":  [
+                                             "frm2200Av2020:txtPay_Tot"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtPay_TaxPayment",
+                                            "frm2200Av2020:txtPay_Penalties"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 23C = Item 23A + Item 23B.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200a-item23b"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7304-L7307"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "2200a-item24",
+                             "outputs":  [
+                                             "frm2200Av2020:txtBalance"
+                                         ],
+                             "inputs":  [
+                                            "frm2200Av2020:txtAmtPayable",
+                                            "frm2200Av2020:txtPay_Tot"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "Item 24 = Item 22 - Item 23C.",
+                             "rounding":  "amtFormat/toFixed(2) after source arithmetic.",
+                             "trigger":  "calculate_Part3",
+                             "depends_on":  [
+                                                "2200a-item22",
+                                                "2200a-item23c"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#calculate_Part3:L7309-L7312"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Implement with typed decimals and two-decimal display formatting.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

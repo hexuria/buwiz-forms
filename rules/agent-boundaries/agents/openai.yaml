@@ -1,0 +1,4 @@
+interface:
+  display_name: "eBIRForms Validation Rules"
+  short_description: "Audit and compile official rule evidence"
+  default_prompt: "Use $ebirforms-validation-rules to audit, compile, or extend the official eBIRForms validation-rules corpus."

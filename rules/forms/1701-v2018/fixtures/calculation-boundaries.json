@@ -1,0 +1,65 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1701-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "tax-table-250000",
+                      "inputs":  {
+                                     "taxable_income":  250000
+                                 },
+                      "calculation_id":  "1701-tax-table-2018",
+                      "official_output":  "0.00"
+                  },
+                  {
+                      "case_id":  "tax-table-400000",
+                      "inputs":  {
+                                     "taxable_income":  400000
+                                 },
+                      "calculation_id":  "1701-tax-table-2018",
+                      "official_output":  "30000.00"
+                  },
+                  {
+                      "case_id":  "tax-table-800000",
+                      "inputs":  {
+                                     "taxable_income":  800000
+                                 },
+                      "calculation_id":  "1701-tax-table-2018",
+                      "official_output":  "130000.00"
+                  },
+                  {
+                      "case_id":  "tax-table-2000000",
+                      "inputs":  {
+                                     "taxable_income":  2000000
+                                 },
+                      "calculation_id":  "1701-tax-table-2018",
+                      "official_output":  "490000.00"
+                  },
+                  {
+                      "case_id":  "tax-table-8000000",
+                      "inputs":  {
+                                     "taxable_income":  8000000
+                                 },
+                      "calculation_id":  "1701-tax-table-2018",
+                      "official_output":  "2410000.00"
+                  },
+                  {
+                      "case_id":  "item31-negative-with-penalty",
+                      "inputs":  {
+                                     "item30":  200,
+                                     "item26":  -100
+                                 },
+                      "calculation_id":  "1701-part2-item31",
+                      "official_output":  "200.00",
+                      "recommended_review":  "Determine whether 100.00 is legally intended."
+                  },
+                  {
+                      "case_id":  "eight-percent-cap",
+                      "inputs":  {
+                                     "item28":  500000,
+                                     "item29":  250000
+                                 },
+                      "calculation_id":  "1701-schedule3b-item30",
+                      "official_output":  "250000.00"
+                  }
+              ]
+}

@@ -1,0 +1,217 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2000ot-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2000ot-validate-001-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Transaction date is blank."
+                                    },
+                      "expected_message":  "Please enter a valid date on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-001-date"
+                  },
+                  {
+                      "case_id":  "case-02-2000ot-validate-002-atc",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No ATC radio is selected."
+                                    },
+                      "expected_message":  "Please choose an ATC on item 3.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-002-atc"
+                  },
+                  {
+                      "case_id":  "case-03-2000ot-validate-003-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "2000ot-validate-003-tin"
+                  },
+                  {
+                      "case_id":  "case-04-2000ot-validate-004-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "Validate rejects blank but not the placeholder 000 that Save rejects.",
+                      "rule_id":  "2000ot-validate-004-rdo"
+                  },
+                  {
+                      "case_id":  "case-05-2000ot-validate-005-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-005-name"
+                  },
+                  {
+                      "case_id":  "case-06-2000ot-validate-006-phone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "2000ot-validate-006-phone"
+                  },
+                  {
+                      "case_id":  "case-07-2000ot-validate-007-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address first line is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-007-address"
+                  },
+                  {
+                      "case_id":  "case-08-2000ot-validate-008-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Zip code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 8A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-008-zip"
+                  },
+                  {
+                      "case_id":  "case-09-2000ot-validate-009-other-party",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither other-party classification is selected."
+                                    },
+                      "expected_message":  "Please choose one (1) Other Party to the transaction on item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-009-other-party"
+                  },
+                  {
+                      "case_id":  "case-10-2000ot-validate-010-other-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other-party name is blank."
+                                    },
+                      "expected_message":  "Please enter a name for item 11A. The name that you will enter corresponds to your choice in item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-010-other-name"
+                  },
+                  {
+                      "case_id":  "case-11-2000ot-validate-011-other-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other-party TIN is blank."
+                                    },
+                      "expected_message":  "Please enter TIN for item 11B. The TIN that you will enter is the TIN of your entry in item 11A.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "2000ot-validate-011-other-tin"
+                  },
+                  {
+                      "case_id":  "case-12-2000ot-validate-012-nature",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No nature-of-transaction radio is selected."
+                                    },
+                      "expected_message":  "Please choose one (1) Nature of Transaction on item 12.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-012-nature"
+                  },
+                  {
+                      "case_id":  "case-13-2000ot-validate-013-real-location",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Either real-property nature is selected and location is blank."
+                                    },
+                      "expected_message":  "Please enter the address of the Location of Real Property in item 13.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-validate-013-real-location"
+                  },
+                  {
+                      "case_id":  "case-14-2000ot-validate-014-success",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "All prior checks pass."
+                                    },
+                      "expected_message":  "Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.",
+                      "expected_behavior":  "Controls are disabled and the success alert is shown.",
+                      "rule_id":  "2000ot-validate-014-success"
+                  },
+                  {
+                      "case_id":  "case-15-2000ot-save-001-date",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Transaction date is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Transaction Date on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-save-001-date"
+                  },
+                  {
+                      "case_id":  "case-16-2000ot-save-002-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any taxpayer TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 5.",
+                      "expected_behavior":  "Only blankness is checked.",
+                      "rule_id":  "2000ot-save-002-tin"
+                  },
+                  {
+                      "case_id":  "case-17-2000ot-save-003-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-save-003-rdo"
+                  },
+                  {
+                      "case_id":  "case-18-2000ot-save-004-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxpayer name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-save-004-name"
+                  },
+                  {
+                      "case_id":  "case-19-2000ot-date-001-format",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "A date control is not a real MM/DD/YYYY date."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2000ot-date-001-format"
+                  },
+                  {
+                      "case_id":  "case-20-2000ot-date-002-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date is after today."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The field clears but the function still returns true.",
+                      "rule_id":  "2000ot-date-002-future"
+                  },
+                  {
+                      "case_id":  "case-21-2000ot-date-003-pre2018",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Date year is before 2018."
+                                    },
+                      "expected_message":  "This date cannot be prior to 2018.",
+                      "expected_behavior":  "The field clears but the function still returns true.",
+                      "rule_id":  "2000ot-date-003-pre2018"
+                  }
+              ]
+}

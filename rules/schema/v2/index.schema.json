@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/index.schema.json",
+  "title": "eBIRForms executable rules IR v2 index",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema_version",
+    "snapshots"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../../schema/v2/index.schema.json"
+    },
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schema_version"
+    },
+    "snapshots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/snapshot"
+      },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "profile_states": {
+      "type": "object",
+      "required": [
+        "official",
+        "filing_safe"
+      ],
+      "properties": {
+        "official": {
+          "$ref": "common.schema.json#/$defs/branch_state"
+        },
+        "filing_safe": {
+          "$ref": "common.schema.json#/$defs/branch_state"
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "rule_set_id",
+        "form_code",
+        "form_revision",
+        "official_package_version",
+        "source_set_sha256",
+        "path",
+        "review_status",
+        "profile_states"
+      ],
+      "properties": {
+        "rule_set_id": {
+          "$ref": "common.schema.json#/$defs/rule_set_id"
+        },
+        "form_code": {
+          "$ref": "common.schema.json#/$defs/form_code"
+        },
+        "form_revision": {
+          "$ref": "common.schema.json#/$defs/iso_date"
+        },
+        "official_package_version": {
+          "$ref": "common.schema.json#/$defs/package_version"
+        },
+        "source_set_sha256": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]*/rule-set\\.json$"
+        },
+        "review_status": {
+          "$ref": "common.schema.json#/$defs/review_status"
+        },
+        "profile_states": {
+          "$ref": "#/$defs/profile_states"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "review_status": {
+                "const": "candidate"
+              }
+            },
+            "required": [
+              "review_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_set_sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "profile_states": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "official": {
+                        "const": "executable"
+                      }
+                    },
+                    "required": [
+                      "official"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "filing_safe": {
+                        "const": "executable"
+                      }
+                    },
+                    "required": [
+                      "filing_safe"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "review_status": {
+                "const": "reviewed"
+              }
+            },
+            "required": [
+              "review_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_set_sha256": {
+                "$ref": "common.schema.json#/$defs/sha256"
+              },
+              "profile_states": {
+                "properties": {
+                  "official": {
+                    "const": "executable"
+                  },
+                  "filing_safe": {
+                    "const": "executable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

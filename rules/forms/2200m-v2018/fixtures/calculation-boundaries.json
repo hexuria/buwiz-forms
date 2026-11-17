@@ -1,0 +1,31 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200m-v2018",
+    "cases":  [
+                  {
+                      "case_id":  "item17c",
+                      "b":  20.1,
+                      "calculation_id":  "2200m-item17c",
+                      "official_output":  120.35,
+                      "a":  100.25
+                  },
+                  {
+                      "case_id":  "last-row-omitted",
+                      "official_output":  30,
+                      "calculation_id":  "2200m-schedule-total",
+                      "rows":  [
+                                   10,
+                                   20,
+                                   30
+                               ],
+                      "complete_output":  60
+                  },
+                  {
+                      "case_id":  "item24",
+                      "item22":  1200,
+                      "calculation_id":  "2200m-item24",
+                      "official_output":  100,
+                      "item23c":  1100
+                  }
+              ]
+}

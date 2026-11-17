@@ -1,0 +1,29 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "values_emitted":  false,
+    "samples":  [
+                    {
+                        "sample_id":  "plain-a",
+                        "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605-save-a-#email-redacted#.xml",
+                        "audit":  {
+                                      "sha256":  "01992fcdaef50493e756b89728af8d107ec1a0cafa94e677edbac1e2f08dc499",
+                                      "field_count":  235,
+                                      "unique_field_count":  235,
+                                      "field_inventory_sha256":  "50600e48510a3ea1bbc6c7bf533fbe336c04af7a87700edd503e7a96fa51177d",
+                                      "values_emitted":  false
+                                  }
+                    },
+                    {
+                        "sample_id":  "plain-b",
+                        "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\0605\\0605-save-b-#email-redacted#.xml",
+                        "audit":  {
+                                      "sha256":  "f8659d2011d2914073725ccef1fc4f2e74d4f315bf333d5ec3084a1fdff524f7",
+                                      "field_count":  235,
+                                      "unique_field_count":  235,
+                                      "field_inventory_sha256":  "50600e48510a3ea1bbc6c7bf533fbe336c04af7a87700edd503e7a96fa51177d",
+                                      "values_emitted":  false
+                                  }
+                    }
+                ]
+}

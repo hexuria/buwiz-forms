@@ -1,0 +1,383 @@
+{
+    "source_sha256":  "23b5502509383379d993fe724e28fdf2d13010b75cd2694c394bc8c72af34f29",
+    "function_count":  23,
+    "functions":  [
+                      {
+                          "name":  "setInputTextControl_NumberFormatter",
+                          "start_line":  4906,
+                          "end_line":  4912,
+                          "body_sha256":  "abaf7ab40f6e89501cbd5cc577f19457673d13a1ada29a6ed28229e58e0c78c5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "TaxWithhelOption",
+                          "start_line":  5001,
+                          "end_line":  5138,
+                          "body_sha256":  "d08c99f235b4a38af4962f9b9bee65fc5fbfaf3b866916d2181c8f88c27a8228",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:OptTaxWithheld1",
+                                              "frm2200ANv2018:txtSched1",
+                                              "frm2200ANv2018:txtSched1Amount1",
+                                              "frm2200ANv2018:txtSched1Amount10",
+                                              "frm2200ANv2018:txtSched1Amount11",
+                                              "frm2200ANv2018:txtSched1Amount12",
+                                              "frm2200ANv2018:txtSched1Amount13",
+                                              "frm2200ANv2018:txtSched1Amount14",
+                                              "frm2200ANv2018:txtSched1Amount15",
+                                              "frm2200ANv2018:txtSched1Amount2",
+                                              "frm2200ANv2018:txtSched1Amount3",
+                                              "frm2200ANv2018:txtSched1Amount4",
+                                              "frm2200ANv2018:txtSched1Amount5",
+                                              "frm2200ANv2018:txtSched1Amount6",
+                                              "frm2200ANv2018:txtSched1Amount7",
+                                              "frm2200ANv2018:txtSched1Amount8",
+                                              "frm2200ANv2018:txtSched1Amount9",
+                                              "frm2200ANv2018:txtSched1Rate13",
+                                              "frm2200ANv2018:txtSched1Rate14",
+                                              "frm2200ANv2018:txtSched2",
+                                              "frm2200ANv2018:txtSched2TaxRate1",
+                                              "frm2200ANv2018:txtSched2TaxRate2",
+                                              "frm2200ANv2018:txtSched2TreatyCode1",
+                                              "frm2200ANv2018:txtSched2TreatyCode2",
+                                              "frm2200ANv2018:txtSched3",
+                                              "frm2200ANv2018:txtSched3IPA1",
+                                              "frm2200ANv2018:txtSched3IPA2",
+                                              "frm2200ANv2018:txtSched3TaxRate1",
+                                              "frm2200ANv2018:txtSched3TaxRate2",
+                                              "frm2200ANv2018:txtSched3TotInterest1",
+                                              "frm2200ANv2018:txtSched3TotInterest2",
+                                              "frm2200ANv2018:txtXG021Exempt1",
+                                              "frm2200ANv2018:txtXG021Taxable1",
+                                              "frm2200ANv2018:txtXG022Exempt1",
+                                              "frm2200ANv2018:txtXG022Taxable1"
+                                          ]
+                      },
+                      {
+                          "name":  "computeAll",
+                          "start_line":  8723,
+                          "end_line":  8735,
+                          "body_sha256":  "7ac11abbb26e30cbc5e9b2865d65df1a61200f58f214ef59cf6b0c2467a93cef",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeItem27",
+                          "start_line":  8736,
+                          "end_line":  8747,
+                          "body_sha256":  "c9b3b9db83506ae3ace22758784de5116c0a4e7620d3d90e7b3340ae006ed087",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt21B",
+                                              "frm2200ANv2018:txt21C",
+                                              "frm2200ANv2018:txt21D",
+                                              "frm2200ANv2018:txt24"
+                                          ]
+                      },
+                      {
+                          "name":  "computeItem17",
+                          "start_line":  8748,
+                          "end_line":  8755,
+                          "body_sha256":  "4124b2ad18ca4b8104893c55aaf8761d3a5f41c78ab52f42df465412ab117642",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt16",
+                                              "frm2200ANv2018:txt17",
+                                              "frm2200ANv2018:txt18"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched3",
+                          "start_line":  8774,
+                          "end_line":  8785,
+                          "body_sha256":  "c4101aff4ae0c29bca4edd6a4f5d56da72c1bd36488fadccea43e06bbf80bdad",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched3Total",
+                          "start_line":  8786,
+                          "end_line":  8795,
+                          "body_sha256":  "3ddfe17a398d411ba254c695f996cb1dca26709cce96e1687f0859bb3c3d17c6",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt16",
+                                              "frm2200ANv2018:txtSched3TaxWithheld1",
+                                              "frm2200ANv2018:txtSched3TaxWithheld2",
+                                              "frm2200ANv2018:txtSched3Total"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched2",
+                          "start_line":  8796,
+                          "end_line":  8807,
+                          "body_sha256":  "d08bb16e2373911ff220bdfb219da05049e952334f6c55b8de24a08db3669c7f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched2Total",
+                          "start_line":  8808,
+                          "end_line":  8817,
+                          "body_sha256":  "17f1f4ee0fde0e827212c66c19ab1a980cee60e8ab9e7d85165f164a2affeae7",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt18",
+                                              "frm2200ANv2018:txtSched2TaxesWithheld1",
+                                              "frm2200ANv2018:txtSched2TaxesWithheld2",
+                                              "frm2200ANv2018:txtSched2Total"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1",
+                          "start_line":  8856,
+                          "end_line":  8864,
+                          "body_sha256":  "48f3334acdf4445d1e613ee998e0f19461ffa783bb34302bd3744d8c1cc0e962",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1BspRate",
+                          "start_line":  8865,
+                          "end_line":  8876,
+                          "body_sha256":  "2157575de28f8326ee50c7b62caa7e802956c26b9bbc05b7ffa54bacc29e95b1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "computeSched1Total",
+                          "start_line":  8877,
+                          "end_line":  8893,
+                          "body_sha256":  "dd25bac48014ab552c87c1e88c7baf149060a9b1bd2d9976015a776802823ffa",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt16",
+                                              "frm2200ANv2018:txtSched1Tax10",
+                                              "frm2200ANv2018:txtSched1Tax11",
+                                              "frm2200ANv2018:txtSched1Tax13",
+                                              "frm2200ANv2018:txtSched1Tax14",
+                                              "frm2200ANv2018:txtSched1Tax15",
+                                              "frm2200ANv2018:txtSched1Total"
+                                          ]
+                      },
+                      {
+                          "name":  "processTaxRelief",
+                          "start_line":  9207,
+                          "end_line":  9215,
+                          "body_sha256":  "faed9c336244247f4a8a16c93e44cc552ae9876aed7d75af7dd2ab0ae63a707f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:lstSpecialTax",
+                                              "frm2200ANv2018:OptSpecialTax1"
+                                          ]
+                      },
+                      {
+                          "name":  "compute17C",
+                          "start_line":  9216,
+                          "end_line":  9221,
+                          "body_sha256":  "d4944e25d3396241fbf80a311aeee502789c9d695b93657801ffcd36bb8ce9d5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt17A",
+                                              "frm2200ANv2018:txt17B",
+                                              "frm2200ANv2018:txt17C"
+                                          ]
+                      },
+                      {
+                          "name":  "compute18",
+                          "start_line":  9222,
+                          "end_line":  9227,
+                          "body_sha256":  "78ef1c09e60512562f383739ae5c50173e6992abda0af01a38c01d6a13751b3f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt16",
+                                              "frm2200ANv2018:txt17C",
+                                              "frm2200ANv2018:txt18"
+                                          ]
+                      },
+                      {
+                          "name":  "compute20",
+                          "start_line":  9228,
+                          "end_line":  9233,
+                          "body_sha256":  "ce38a547a2844a8b9b43987f490a08b0b8aa62bf0ec09b135e653b8d5acf6c23",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt18",
+                                              "frm2200ANv2018:txt19",
+                                              "frm2200ANv2018:txt20"
+                                          ]
+                      },
+                      {
+                          "name":  "compute21D",
+                          "start_line":  9234,
+                          "end_line":  9242,
+                          "body_sha256":  "c9a0bdb97ddd0099ed5e13f9653d6b872a889f718b1f5a22509d9d57d6dcd69d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt21A",
+                                              "frm2200ANv2018:txt21B",
+                                              "frm2200ANv2018:txt21C",
+                                              "frm2200ANv2018:txt21D",
+                                              "frm2200ANv2018:txt23B"
+                                          ]
+                      },
+                      {
+                          "name":  "compute22",
+                          "start_line":  9243,
+                          "end_line":  9251,
+                          "body_sha256":  "112276e2b7a87c1fe890643ebc036513eeb937cc26faefbb903d007cdd761bad",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt20",
+                                              "frm2200ANv2018:txt21A",
+                                              "frm2200ANv2018:txt21B",
+                                              "frm2200ANv2018:txt21C",
+                                              "frm2200ANv2018:txt21D",
+                                              "frm2200ANv2018:txt22"
+                                          ]
+                      },
+                      {
+                          "name":  "compute23C",
+                          "start_line":  9252,
+                          "end_line":  9257,
+                          "body_sha256":  "00a4281ce8c85997c6483b08668b94eeffde5caf7770204b10b6d8b2b8ad9272",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt23A",
+                                              "frm2200ANv2018:txt23B",
+                                              "frm2200ANv2018:txt23C"
+                                          ]
+                      },
+                      {
+                          "name":  "compute24",
+                          "start_line":  9258,
+                          "end_line":  9262,
+                          "body_sha256":  "d43c768fcd500ac5e670d0ec7257f70f5af5817da837700b9bc9a3daf5104073",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt22",
+                                              "frm2200ANv2018:txt23C",
+                                              "frm2200ANv2018:txt24"
+                                          ]
+                      },
+                      {
+                          "name":  "computeBasicExciseAuto",
+                          "start_line":  9263,
+                          "end_line":  9288,
+                          "body_sha256":  "73c8b32d0ef263320ec8036304c496dcd92fa056330f277944abccfeca30d751",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtBasicExciseTaxDue",
+                                              "frm2200ANv2018:txtXG021TaxDue",
+                                              "frm2200ANv2018:txtXG022TaxDue",
+                                              "frm2200ANv2018:txtXG023TaxDue",
+                                              "frm2200ANv2018:txtXG024TaxDue",
+                                              "frm2200ANv2018:txtXG031TaxDue",
+                                              "frm2200ANv2018:txtXG032TaxDue",
+                                              "frm2200ANv2018:txtXG033TaxDue",
+                                              "frm2200ANv2018:txtXG034TaxDue",
+                                              "frm2200ANv2018:txtXG041TaxDue",
+                                              "frm2200ANv2018:txtXG042TaxDue",
+                                              "frm2200ANv2018:txtXG043TaxDue",
+                                              "frm2200ANv2018:txtXG044TaxDue",
+                                              "frm2200ANv2018:txtXG055TaxDue",
+                                              "frm2200ANv2018:txtXG061TaxDue",
+                                              "frm2200ANv2018:txtXG062TaxDue",
+                                              "frm2200ANv2018:txtXG063TaxDue",
+                                              "frm2200ANv2018:txtXG064TaxDue",
+                                              "frm2200ANv2018:txtXG065TaxDue",
+                                              "frm2200ANv2018:txtXG068TaxDue",
+                                              "frm2200ANv2018:txtXG071TaxDue",
+                                              "frm2200ANv2018:txtXG072TaxDue",
+                                              "frm2200ANv2018:txtXG073TaxDue"
+                                          ]
+                      },
+                      {
+                          "name":  "computeBasicExciseGoods",
+                          "start_line":  9289,
+                          "end_line":  9297,
+                          "body_sha256":  "ecb4ba154eb769cdc76c8843b9df30304b0740fcd8d3b04c48cbf987dcbf4561",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods",
+                                              "frm2200ANv2018:txtXG100TaxDue",
+                                              "frm2200ANv2018:txtXG110TaxDue",
+                                              "frm2200ANv2018:txtXG120TaxDue",
+                                              "frm2200ANv2018:txtXGOthers1TaxDue",
+                                              "frm2200ANv2018:txtXGOthers2TaxDue"
+                                          ]
+                      },
+                      {
+                          "name":  "computeSchedule1C",
+                          "start_line":  9298,
+                          "end_line":  9307,
+                          "body_sha256":  "aab0b741ecad1df14b65ac4dfcc9462a859c2c209cd87ec0812b5d9ca5e82f50",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txt16",
+                                              "frm2200ANv2018:txtBasicExciseTaxDue",
+                                              "frm2200ANv2018:txtBasicExciseTaxDueNonEssentialGoods",
+                                              "frm2200ANv2018:txtSchedule1C"
+                                          ]
+                      }
+                  ]
+}

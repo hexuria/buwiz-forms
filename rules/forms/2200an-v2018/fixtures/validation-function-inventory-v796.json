@@ -1,0 +1,423 @@
+{
+    "source_sha256":  "23b5502509383379d993fe724e28fdf2d13010b75cd2694c394bc8c72af34f29",
+    "function_count":  22,
+    "functions":  [
+                      {
+                          "name":  "saveEncryptedProfile",
+                          "start_line":  3992,
+                          "end_line":  4088,
+                          "body_sha256":  "283a9a851daadae9f5a64aa971ca6edd0ca5fdc590adc049169903a1c98b0d53",
+                          "alerts":  [
+                                         "\"File \u0027\" + xmlFileName + \"\u0027 already exists!\\n\\nThis will overwrite existing data.\"",
+                                         "\"Make sure you already inserted your USB flash drive or CD-RW before proceeding.\"",
+                                         "\"You have not saved the file to either your USB flash drive or CD-RW.\\n\\n In case you want to submit it via email,\\nyou may locate it under : \u0027C:\\\\IAF_RDO_Copy\u0027\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "isItAFinalCopy",
+                          "start_line":  4106,
+                          "end_line":  4118,
+                          "body_sha256":  "5ac3a6b6fec536f9227fcc75ed1e6e4e1e5ffbed8e1fdbf3e34a67735f80b1bc",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "saveXML",
+                          "start_line":  4166,
+                          "end_line":  4478,
+                          "body_sha256":  "6d55bb2921c256d27c7adf0da1206f06f15c4d3dec2d8d26d51dd3b93bbf5b9c",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:AmendedRtn1",
+                                              "frm2200ANv2018:AmendedRtn2",
+                                              "frm2200ANv2018:txt35",
+                                              "frm2200ANv2018:txt36A",
+                                              "frm2200ANv2018:txt36B",
+                                              "frm2200ANv2018:txt36C",
+                                              "frm2200ANv2018:txt36D",
+                                              "frm2200ANv2018:txt37",
+                                              "frm2200ANv2018:txtAddress",
+                                              "frm2200ANv2018:txtBranchCode",
+                                              "frm2200ANv2018:txtRDOCode",
+                                              "frm2200ANv2018:txtTaxpayerName",
+                                              "frm2200ANv2018:txtTelNum",
+                                              "frm2200ANv2018:txtTIN1",
+                                              "frm2200ANv2018:txtTIN2",
+                                              "frm2200ANv2018:txtTIN3",
+                                              "frm2200ANv2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLsubmit",
+                          "start_line":  4479,
+                          "end_line":  4712,
+                          "body_sha256":  "3f5424b6e33ae5f340d7b7c4c86f809776b37de14ffe6315f7aae422307ffdc5",
+                          "alerts":  [
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\"If your intention is to make an amended return, kindly tick Amended Return to \u0027Yes\u0027 before hitting \u0027Save\u0027 or \u0027Final Copy\u0027 or \u0027Submit\u0027.\"",
+                                         "\u0027BIR Form saved successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:AmendedRtn1",
+                                              "frm2200ANv2018:AmendedRtn2",
+                                              "frm2200ANv2018:txt35",
+                                              "frm2200ANv2018:txt36A",
+                                              "frm2200ANv2018:txt36B",
+                                              "frm2200ANv2018:txt36C",
+                                              "frm2200ANv2018:txt36D",
+                                              "frm2200ANv2018:txt37",
+                                              "frm2200ANv2018:txtAddress",
+                                              "frm2200ANv2018:txtBranchCode",
+                                              "frm2200ANv2018:txtLineBus",
+                                              "frm2200ANv2018:txtRDOCode",
+                                              "frm2200ANv2018:txtTaxpayerName",
+                                              "frm2200ANv2018:txtTelNum",
+                                              "frm2200ANv2018:txtTIN1",
+                                              "frm2200ANv2018:txtTIN2",
+                                              "frm2200ANv2018:txtTIN3",
+                                              "frm2200ANv2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "validateSched2",
+                          "start_line":  8522,
+                          "end_line":  8599,
+                          "body_sha256":  "c5aa6ae00373a1e3cf8386f56676e71460b1a3941aac72d2573d4c02ebbd921b",
+                          "alerts":  [
+                                         "\"Please fill up ATC field in Schedule 2 row 1.\"",
+                                         "\"Please fill up Treaty Code field in Schedule 2 row 1.\"",
+                                         "\"Please fill up Schedule 2 row 1 completely.\"",
+                                         "\"Please fill up Schedule 2 row 1 completely.\"",
+                                         "\"Please fill up ATC field in Schedule 2 row 2.\"",
+                                         "\"Please fill up Treaty Code field in Schedule 2 row 2.\"",
+                                         "\"Please fill up Schedule 2 row 2 completely.\"",
+                                         "\"Please fill up Schedule 2 row 12 completely.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtSched2TaxRate1",
+                                              "frm2200ANv2018:txtSched2TaxRate2",
+                                              "frm2200ANv2018:txtSched2TreatyCode1",
+                                              "frm2200ANv2018:txtSched2TreatyCode2",
+                                              "frm2200ANv2018:txtXG021Exempt1",
+                                              "frm2200ANv2018:txtXG021Taxable1",
+                                              "frm2200ANv2018:txtXG022Exempt1",
+                                              "frm2200ANv2018:txtXG022Taxable1"
+                                          ]
+                      },
+                      {
+                          "name":  "validateSched3",
+                          "start_line":  8600,
+                          "end_line":  8640,
+                          "body_sha256":  "aa751685d5c636e01b968e390f0870ce8eb6556ec594b309edd1e034cd37a65c",
+                          "alerts":  [
+                                         "\"Please fill up Schedule 3 row 1 completely.\"",
+                                         "\"Please fill up Schedule 3 row 1 completely.\"",
+                                         "\"Please fill up Schedule 3 row 2 completely.\"",
+                                         "\"Please fill up Schedule 3 row 2 completely.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtSched3IPA1",
+                                              "frm2200ANv2018:txtSched3IPA2",
+                                              "frm2200ANv2018:txtSched3TaxRate1",
+                                              "frm2200ANv2018:txtSched3TaxRate2",
+                                              "frm2200ANv2018:txtSched3TotInterest1",
+                                              "frm2200ANv2018:txtSched3TotInterest2"
+                                          ]
+                      },
+                      {
+                          "name":  "validateIPA",
+                          "start_line":  8756,
+                          "end_line":  8773,
+                          "body_sha256":  "c6474f34b395ba9587897b7df9937118e0dee0a536cda9a4e21df85e098659ac",
+                          "alerts":  [
+                                         "\"Invalid IPA Code! Please refer to IPA Codes in Schedule 6.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateATC",
+                          "start_line":  8818,
+                          "end_line":  8835,
+                          "body_sha256":  "048bfcfc9f0c0105b00b7b60123449d4f5e3a6544725290e0ac35659e3844136",
+                          "alerts":  [
+                                         "\"Invalid ATC Code! Please refer to the ATC Codes in Schedule 1.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateTreatyCode",
+                          "start_line":  8836,
+                          "end_line":  8855,
+                          "body_sha256":  "0bddf0721f8dbe3629b658999ee60e60512ec4387e17da548a46f743e4050e39",
+                          "alerts":  [
+                                         "\"Invalid Treaty Code! Please refer to the treaty code in schedule 5.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "processNext",
+                          "start_line":  8908,
+                          "end_line":  8917,
+                          "body_sha256":  "193f58ac1cd12c9e1b5d2ce92d0197191a103b1f2c16b1468587d93c9bdaa324",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "processPrev",
+                          "start_line":  8918,
+                          "end_line":  8930,
+                          "body_sha256":  "0012defb7d7133708a3952a02f24760774cd1397384489c76c71ee6630fc5a66",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtCurrentPage"
+                                          ]
+                      },
+                      {
+                          "name":  "validateYear",
+                          "start_line":  8931,
+                          "end_line":  8944,
+                          "body_sha256":  "218e30a780d3219d655f257f3ba2d0931f62eb0aff6f53cd3b201e986a5b43ec",
+                          "alerts":  [
+                                         "\"Please file using the old version of the form.\"",
+                                         "\"Invalid year. Year should not be later than the current year.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "validate",
+                          "start_line":  8945,
+                          "end_line":  9151,
+                          "body_sha256":  "0ab668e298dc453fc216304f25d29dc1b4d5fb7e88ab268eeebd3ffd88ec4b19",
+                          "alerts":  [
+                                         "\"Date should not be later than the current date.\"",
+                                         "\"Date should not be later than the current date.\"",
+                                         "\"Date should not be later than the current date.\"",
+                                         "\"Please select the place of production in item 10.\") d.getElementById(\u0027frm2200ANv2018optRegion\u0027).focus(",
+                                         "\"Please select the place of production in item 10.\") d.getElementById(\u0027frm2200ANv2018optProvince\u0027).focus(",
+                                         "\"Please select the place of production in item 10.\") d.getElementById(\u0027frm2200ANv2018optCity\u0027).focus(",
+                                         "\"Please select the place of removal in item 11.\") d.getElementById(\u0027frm2200ANv2018optRegion1\u0027).focus(",
+                                         "\"Please select the place of removal in item 11.\") d.getElementById(\u0027frm2200ANv2018optProvince1\u0027).focus(",
+                                         "\"Please select the place of removal in item 11.\") d.getElementById(\u0027frm2200ANv2018optCity1\u0027).focus(",
+                                         "\"Please enter a valid year on Item 1.\"",
+                                         "\"Invalid date entry on Item no.1. Entry should not be later than Current Date.\") return; } if (d.getElementById(\u0027frm2200ANv2018:txtYear\u0027).value * 1 \u003c 2018) { alert(\"Invalid date entry on Item 1. Entry should not be lower than 2018.\") return; }*/ /* if(d.getElementById(\u0027frm2200ANv2018:qtr_1\u0027).checked==false \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:qtr_2\u0027).checked==false \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:qtr_3\u0027).checked==false \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:qtr_4\u0027).checked==false) { alert(\"Please select an option in item number 2.\") return; } */ if(d.getElementById(\u0027frm2200ANv2018:AmendedRtn1\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:AmendedRtn2\u0027).checked == false) { alert(\"Please select an option in item number 2.\") return; } if(d.getElementById(\u0027frm2200ANv2018:OptSpecialTax1\u0027).checked == false \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:OptSpecialTax2\u0027).checked == false) { alert(\"Please select an option in item number 12.\"",
+                                         "\"Please specify tax relief in item 12A.\"",
+                                         "\"Please select from items 13, 14 and 15 the manner of payment.\"",
+                                         "\"Please specify the other similar schemes in item 15.\"",
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Line of Business/Occupation on Item 7.\"",
+                                         "\"Please enter a valid Taxpayer Name on Item 8.\"",
+                                         "\"Please enter a valid Telephone Number on Item 9.\"",
+                                         "\"Please enter Taxpayer\u0027s Registered Address on Item 10.\"",
+                                         "\"Please enter Taxpayer\u0027s Zip Code on Item 11.\"",
+                                         "\"Please select an option for Item 4.\"",
+                                         "\"Please select an option for Item 11.\"",
+                                         "\"Please select an option in item 13.\"",
+                                         "\u0027Please select an option in item 13A.\u0027) return; } } /*if (d.getElementById(\u0027frm2200ANv2018:OptTaxWithheld1\u0027).checked == true) { if (d.getElementById(\u0027frm2200ANv2018:txt16\u0027).value == 0 \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:txt18\u0027).value == 0 \u0026\u0026 d.getElementById(\u0027frm2200ANv2018:txt18\u0027).value == 0) { alert(\"Please fill up Part IV if item 4 is set to Yes.\"",
+                                         "\"Please select an option for over-remittance below item 28.\"",
+                                         "\"Validation successful. Click on \u0027Edit\u0027 if you wish to modify your entries.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:AmendedRtn1",
+                                              "frm2200ANv2018:AmendedRtn2",
+                                              "frm2200ANv2018:btnFinalCopy",
+                                              "frm2200ANv2018:cmdEdit",
+                                              "frm2200ANv2018:cmdValidate",
+                                              "frm2200ANv2018:lstSpecialTax",
+                                              "frm2200ANv2018:MannerOfPayment",
+                                              "frm2200ANv2018:MannerOfPayment1",
+                                              "frm2200ANv2018:MannerOfPayment2",
+                                              "frm2200ANv2018:MannerOfPayment3",
+                                              "frm2200ANv2018:MannerOfPaymentOthers",
+                                              "frm2200ANv2018:OptCategoryAgent1",
+                                              "frm2200ANv2018:OptCategoryAgent2",
+                                              "frm2200ANv2018:OptSpecialTax",
+                                              "frm2200ANv2018:OptSpecialTax1",
+                                              "frm2200ANv2018:OptSpecialTax2",
+                                              "frm2200ANv2018:OptTaxWithheld1",
+                                              "frm2200ANv2018:OptTaxWithheld2",
+                                              "frm2200ANv2018:OverRemittance1",
+                                              "frm2200ANv2018:OverRemittance2",
+                                              "frm2200ANv2018:OverRemittance3",
+                                              "frm2200ANv2018:qtr_1",
+                                              "frm2200ANv2018:qtr_2",
+                                              "frm2200ANv2018:qtr_3",
+                                              "frm2200ANv2018:qtr_4",
+                                              "frm2200ANv2018:txt16",
+                                              "frm2200ANv2018:txt18",
+                                              "frm2200ANv2018:txt28",
+                                              "frm2200ANv2018:txtAddress",
+                                              "frm2200ANv2018:txtBranchCode",
+                                              "frm2200ANv2018:txtDate",
+                                              "frm2200ANv2018:txtLineBus",
+                                              "frm2200ANv2018:txtMonth",
+                                              "frm2200ANv2018:txtRDOCode",
+                                              "frm2200ANv2018:txtTaxpayerName",
+                                              "frm2200ANv2018:txtTelNum",
+                                              "frm2200ANv2018:txtTIN1",
+                                              "frm2200ANv2018:txtTIN2",
+                                              "frm2200ANv2018:txtTIN3",
+                                              "frm2200ANv2018:txtYear",
+                                              "frm2200ANv2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "setDate",
+                          "start_line":  9152,
+                          "end_line":  9168,
+                          "body_sha256":  "13eb72cd8fd3101fa30dc7f454f82a5de7c45cb3ff855e45aac21ff06d2aedf1",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtDate",
+                                              "frm2200ANv2018:txtMonth",
+                                              "frm2200ANv2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "checkDate",
+                          "start_line":  9169,
+                          "end_line":  9184,
+                          "body_sha256":  "bd710e500d5b2db6b5189c159d2a82ca6020ff0c32e00bedc0372aaf9d031cfb",
+                          "alerts":  [
+                                         "\"Date should not be later than the current date.\"",
+                                         "\"Date should not be later than the current date.\"",
+                                         "\"Date should not be later than the current date.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtDate",
+                                              "frm2200ANv2018:txtMonth",
+                                              "frm2200ANv2018:txtYear"
+                                          ]
+                      },
+                      {
+                          "name":  "processAmended",
+                          "start_line":  9185,
+                          "end_line":  9195,
+                          "body_sha256":  "dbbeb2c654f4440844f3eed3054c2e3db5dc104948235e9477def42c6b0beb7d",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:AmendedRtn1",
+                                              "frm2200ANv2018:txt19"
+                                          ]
+                      },
+                      {
+                          "name":  "processItem15",
+                          "start_line":  9196,
+                          "end_line":  9206,
+                          "body_sha256":  "385125768e371cf89696f7e0d63530c3735df5ad90b49ee0d5977e34fd7826f5",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:MannerOfPayment3",
+                                              "frm2200ANv2018:MannerOfPaymentOthers"
+                                          ]
+                      },
+                      {
+                          "name":  "processTaxRelief",
+                          "start_line":  9207,
+                          "end_line":  9215,
+                          "body_sha256":  "faed9c336244247f4a8a16c93e44cc552ae9876aed7d75af7dd2ab0ae63a707f",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:lstSpecialTax",
+                                              "frm2200ANv2018:OptSpecialTax1"
+                                          ]
+                      },
+                      {
+                          "name":  "initialValidateBeforeSave",
+                          "start_line":  9785,
+                          "end_line":  9846,
+                          "body_sha256":  "90b8dc2f5699ea397c0297b8f3d5ae81da4b339652f506c7c9efce7b35ec5d9d",
+                          "alerts":  [
+                                         "\"Please enter a valid TIN number on Item 5.\"",
+                                         "\"Please enter a valid RDO Code on Item 6.\"",
+                                         "\"Please enter a valid Withholding Agent\u0027s Name on Item 8.\""
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtBranchCode",
+                                              "frm2200ANv2018:txtRDOCode",
+                                              "frm2200ANv2018:txtTaxpayerName",
+                                              "frm2200ANv2018:txtTIN1",
+                                              "frm2200ANv2018:txtTIN2",
+                                              "frm2200ANv2018:txtTIN3"
+                                          ]
+                      },
+                      {
+                          "name":  "saveXMLProfile",
+                          "start_line":  9950,
+                          "end_line":  9991,
+                          "body_sha256":  "0f2c03cf077b5d270c8b98c30bb83dd721ce5c7529cd12d3743b1707e5c7600f",
+                          "alerts":  [
+                                         "\u0027Background information saved/updated successfully as : \u0027 + xmlFileName"
+                                     ],
+                          "control_ids":  [
+                                              "frm2200ANv2018:txtAddress",
+                                              "frm2200ANv2018:txtBranchCode",
+                                              "frm2200ANv2018:txtLineBus",
+                                              "frm2200ANv2018:txtRDOCode",
+                                              "frm2200ANv2018:txtTaxpayerName",
+                                              "frm2200ANv2018:txtTelNum",
+                                              "frm2200ANv2018:txtTIN1",
+                                              "frm2200ANv2018:txtTIN2",
+                                              "frm2200ANv2018:txtTIN3",
+                                              "frm2200ANv2018:txtZipCode"
+                                          ]
+                      },
+                      {
+                          "name":  "saveBeforeExit",
+                          "start_line":  10369,
+                          "end_line":  10382,
+                          "body_sha256":  "77e99678e379c859c04424755a309e65750fd11dc37114af85d1ee377b62e548",
+                          "alerts":  [
+
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      },
+                      {
+                          "name":  "validateAdminLogon",
+                          "start_line":  10578,
+                          "end_line":  10591,
+                          "body_sha256":  "60ec90c0edf007b54d4f66eb8c84ae347b2e67fded599e39a2a823a256993041",
+                          "alerts":  [
+                                         "\"Please provide Username and Password.\""
+                                     ],
+                          "control_ids":  [
+
+                                          ]
+                      }
+                  ]
+}

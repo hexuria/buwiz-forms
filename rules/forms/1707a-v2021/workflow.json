@@ -1,0 +1,171 @@
+{
+    "$schema":  "../../schema/workflow.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1707a-v2021",
+    "revision":  "2021-04-01",
+    "phases":  [
+                   {
+                       "phase":  "edit",
+                       "source_refs":  [
+                                           "official-hta-runtime",
+                                           "official-help-runtime"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "April 2021 annual consolidated capital-gains return with fixed and source-unbounded Schedule 1/2 rows."
+                   },
+                   {
+                       "phase":  "saved-draft",
+                       "source_refs":  [
+                                           "official-hta-runtime#initialValidateBeforeSave:L6570-L6583",
+                                           "official-hta-runtime#saveXML:L6028-L6346"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Save checks RDO, name, address, and year end only, then records modal lengths and serializes controls."
+                   },
+                   {
+                       "phase":  "validated",
+                       "source_refs":  [
+                                           "official-hta-runtime#validateAll:L4816-L4873"
+                                       ],
+                       "confidence":  "high",
+                       "official_behavior":  "Validate checks revision, ATC, identity, treaty selection, and schedules; Zip and overpayment branches merely alert."
+                   },
+                   {
+                       "phase":  "final-copy",
+                       "source_refs":  [
+                                           "official-hta-runtime#saveXML:L6028-L6346"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Final-copy encryption is defined, but no revision-matched April 2021 encrypted sample is available."
+                   },
+                   {
+                       "phase":  "submitted",
+                       "source_refs":  [
+                                           "official-hta-runtime#processSubmit",
+                                           "official-hta-runtime#sendEmail"
+                                       ],
+                       "confidence":  "medium",
+                       "official_behavior":  "Online transport exists but was not exercised."
+                   }
+               ],
+    "transitions":  [
+                        {
+                            "action":  "Save",
+                            "side_effects":  [
+                                                 "Writes flat pseudo-XML.",
+                                                 "Records modal schedule lengths."
+                                             ],
+                            "to":  "saved-draft",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#initialValidateBeforeSave:L6570-L6583",
+                                                "official-hta-runtime#saveXML:L6028-L6346"
+                                            ],
+                            "guard":  "Sparse Save checks pass."
+                        },
+                        {
+                            "action":  "Validate",
+                            "side_effects":  [
+                                                 "Disables controls.",
+                                                 "Enables print/final-copy actions."
+                                             ],
+                            "to":  "validated",
+                            "from":  "edit",
+                            "source_refs":  [
+                                                "official-hta-runtime#validateAll:L4816-L4873",
+                                                "official-hta-runtime#validate"
+                                            ],
+                            "guard":  "All blocking validateAll checks pass."
+                        },
+                        {
+                            "action":  "Edit",
+                            "side_effects":  [
+                                                 "Re-enables controls subject to ATC/treaty conditions."
+                                             ],
+                            "to":  "edit",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#enableAllControl"
+                                            ],
+                            "guard":  null
+                        },
+                        {
+                            "action":  "Final Copy",
+                            "side_effects":  [
+                                                 "Encrypts/compresses the final copy."
+                                             ],
+                            "to":  "final-copy",
+                            "from":  "validated",
+                            "source_refs":  [
+                                                "official-hta-runtime#saveXML:L6028-L6346"
+                                            ],
+                            "guard":  "Finalization succeeds."
+                        },
+                        {
+                            "action":  "Transport",
+                            "side_effects":  [
+                                                 "Online attempt; untested."
+                                             ],
+                            "to":  "submitted",
+                            "from":  "final-copy",
+                            "source_refs":  [
+                                                "official-hta-runtime#processSubmit",
+                                                "official-hta-runtime#sendEmail"
+                                            ],
+                            "guard":  "Connectivity and acceptance succeed."
+                        }
+                    ],
+    "prerequisites":  [
+                          "April 2021-compatible year end",
+                          "ATC and calendar/fiscal choice",
+                          "RDO and identity",
+                          "Treaty-relief selection",
+                          "At least one complete gain/loss schedule row"
+                      ],
+    "required_attachments":  [
+                                 {
+                                     "attachment_id":  "tax-payment-proofs",
+                                     "label":  "Photocopies of proof of capital-gains tax payments covering all taxable transactions of the preceding year.",
+                                     "source_refs":  [
+                                                         "official-help-runtime#L249-L256"
+                                                     ],
+                                     "required_when":  "Annual consolidated return filing.",
+                                     "official_ui_enforcement":  "Not enforced by local Validate.",
+                                     "confidence":  "high"
+                                 }
+                             ],
+    "filing_deadlines":  [
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L122-L130"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q1",
+                                 "due_date_rule":  "Individual: April 15 covering the preceding taxable year. Corporate: fifteenth day of the fourth month following taxable-year close."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L122-L130"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q2",
+                                 "due_date_rule":  "Individual: April 15 covering the preceding taxable year. Corporate: fifteenth day of the fourth month following taxable-year close."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L122-L130"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q3",
+                                 "due_date_rule":  "Individual: April 15 covering the preceding taxable year. Corporate: fifteenth day of the fourth month following taxable-year close."
+                             },
+                             {
+                                 "source_refs":  [
+                                                     "official-help-runtime#L122-L130"
+                                                 ],
+                                 "confidence":  "high",
+                                 "quarter":  "Q4",
+                                 "due_date_rule":  "Individual: April 15 covering the preceding taxable year. Corporate: fifteenth day of the fourth month following taxable-year close."
+                             }
+                         ]
+}

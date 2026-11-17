@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "package_version": "7.9.6.0",
+  "rules": [
+    {
+      "rule_id": "shared-ui-focus-001",
+      "official_behavior": "Text inputs select their contents and receive a yellow background on focus, restored to white on blur.",
+      "source_refs": [
+        "string-util-runtime#L65-L71"
+      ],
+      "confidence": "high"
+    },
+    {
+      "rule_id": "shared-ui-credentials-001",
+      "official_behavior": "Paste, drag, and drop are prevented for the inspected online username/password controls.",
+      "source_refs": [
+        "official-hta-runtime#L4687-L4690"
+      ],
+      "confidence": "high"
+    }
+  ]
+}

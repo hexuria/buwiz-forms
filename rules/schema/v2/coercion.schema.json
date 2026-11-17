@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://goldcoders.dev/schemas/ebirforms/v2/coercion.schema.json",
+  "title": "eBIRForms executable rules IR v2 coercion nodes",
+  "$defs": {
+    "coercion": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/string_coercion"
+        },
+        {
+          "$ref": "#/$defs/decimal_coercion"
+        },
+        {
+          "$ref": "#/$defs/integer_coercion"
+        },
+        {
+          "$ref": "#/$defs/boolean_coercion"
+        },
+        {
+          "$ref": "#/$defs/date_coercion"
+        }
+      ]
+    },
+    "string_coercion": {
+      "type": "object",
+      "required": [
+        "kind",
+        "on_empty"
+      ],
+      "properties": {
+        "kind": {
+          "const": "string"
+        },
+        "on_empty": {
+          "enum": [
+            "empty-string",
+            "null",
+            "error"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "decimal_coercion": {
+      "type": "object",
+      "required": [
+        "kind",
+        "decimal",
+        "grouping",
+        "on_empty",
+        "on_invalid"
+      ],
+      "properties": {
+        "kind": {
+          "const": "decimal"
+        },
+        "decimal": {
+          "$ref": "decimal.schema.json#/$defs/decimal_policy"
+        },
+        "grouping": {
+          "enum": [
+            "forbidden",
+            "comma"
+          ]
+        },
+        "on_empty": {
+          "enum": [
+            "null",
+            "zero",
+            "error"
+          ]
+        },
+        "on_invalid": {
+          "enum": [
+            "error",
+            "preserve-raw"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "integer_coercion": {
+      "type": "object",
+      "required": [
+        "kind",
+        "on_empty",
+        "on_invalid"
+      ],
+      "properties": {
+        "kind": {
+          "const": "integer"
+        },
+        "on_empty": {
+          "enum": [
+            "null",
+            "zero",
+            "error"
+          ]
+        },
+        "on_invalid": {
+          "enum": [
+            "error",
+            "preserve-raw"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "boolean_coercion": {
+      "type": "object",
+      "required": [
+        "kind",
+        "true_values",
+        "false_values",
+        "on_empty",
+        "on_invalid"
+      ],
+      "properties": {
+        "kind": {
+          "const": "boolean"
+        },
+        "true_values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "false_values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "on_empty": {
+          "enum": [
+            "null",
+            "false",
+            "error"
+          ]
+        },
+        "on_invalid": {
+          "enum": [
+            "error",
+            "preserve-raw"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "date_coercion": {
+      "type": "object",
+      "required": [
+        "kind",
+        "accepted_formats",
+        "on_empty",
+        "on_invalid"
+      ],
+      "properties": {
+        "kind": {
+          "const": "date"
+        },
+        "accepted_formats": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "yyyy-mm-dd",
+              "mm/dd/yyyy",
+              "mm-dd-yyyy"
+            ]
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "on_empty": {
+          "enum": [
+            "null",
+            "error"
+          ]
+        },
+        "on_invalid": {
+          "enum": [
+            "error",
+            "preserve-raw"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/coercion"
+}

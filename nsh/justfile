@@ -1,0 +1,18 @@
+# Thin shortcuts for working inside nsh/. The real recipes (PATH, CARGO_TARGET_DIR, dev environment, guards) are the
+# nsh-* recipes in the repository's root justfile; these only call them. Run from anywhere under nsh/.
+root := justfile_directory() / ".."
+
+check *args="":
+    just --justfile {{root}}/justfile --working-directory {{root}} nsh-check {{args}}
+
+build *args="":
+    just --justfile {{root}}/justfile --working-directory {{root}} nsh-build {{args}}
+
+test *args="":
+    just --justfile {{root}}/justfile --working-directory {{root}} nsh-test {{args}}
+
+run *args="":
+    just --justfile {{root}}/justfile --working-directory {{root}} nsh-run {{args}}
+
+shots name="base" *args="":
+    just --justfile {{root}}/justfile --working-directory {{root}} nsh-shots {{name}} {{args}}

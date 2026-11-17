@@ -1,0 +1,61 @@
+[package]
+name = "nsh-app-ebirforms"
+version = "0.2.0"
+edition = "2024"
+publish = false
+
+# Its own workspace, like crates/bir-shell: the root workspace (and its Cargo.lock) never sees this crate.
+[workspace]
+
+# Every nsh-* crate comes from the one NSH checkout, by path (the hexuria/nsh fork with upstream v0.5.1 merged, NSH 0.5.1).
+# The checkout is a SIBLING of the buwiz-forms checkout: <parent>/buwiz-forms and <parent>/nsh, so from this folder it is ../../nsh.
+# The worktree layout (features/nsh-tsx/{buwiz-forms,nsh}) and CI (.github/workflows/nsh.yml) both follow it. The nsh CLI takes
+# the source from these paths (`cargo metadata` makes them absolute), so relative paths work with nsh check/build/test/run.
+# Never mix sources: a version or source mismatch is a cargo error. See nsh/AGENTS.md and docs/platforms/nsh.md.
+[dependencies]
+nsh-core = { path = "../../nsh/crates/nsh-core" }
+
+# The door: the UI-free host functions of the Rust brain, in plain SQLite (no sqlcipher, no database key).
+# default-features = false is what keeps SQLCipher out; the gate is
+# `cargo tree -e features -i libsqlite3-sys --manifest-path nsh/Cargo.toml` (no bundled-sqlcipher).
+bir-app-api = { path = "../crates/bir-app-api", default-features = false }
+bir-core = { path = "../crates/bir-core", default-features = false }
+# Object keys keep their order (the host functions rely on it); bir-app-api turns it on, this states it.
+serde_json = { version = "1", features = ["preserve_order"] }
+tracing = "0.1"
+# Print preview (src/print.rs): the PDF is made from the same sheet as the printer gets; bir-print merges the pages.
+bir-print = { path = "../crates/bir-print", default-features = false }
+lopdf = "0.34"
+# Agent remote control (feature `agent`, off by default): the gpui-agent protocol at the one rev bir-shell and bir-mcp use.
+gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent", rev = "dab85991d700b8f3410cbaacbc5d9f90568c7ee3", optional = true }
+
+# The database guard asks the password database (getpwuid_r) for the account's home folder, never $HOME.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
+# (crates/bir-shell/Cargo.toml). Used by src/auth.rs.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+robius-authentication = { version = "0.1.1", features = ["async"] }
+
+# Print preview on macOS (src/print.rs): the hidden WKWebView that makes the PDF and the system print panel, reached
+# through objc2 as the reference app and nsh do (same versions as nsh's workspace).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSData", "NSArray", "NSGeometry"] }
+block2 = "0.6.2"
+dispatch2 = "0.3.1"
+# The window's own control plane (semantic tree, press, type, screenshot) is NSH's, in nsh-platform-macos: feature
+# `gpui-agent-server`, a second listener. Only under `agent`; see nsh/AGENTS.md "Agent remote control".
+nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos", default-features = false, optional = true }
+
+[features]
+default = []
+# Agent remote control, as the old app (`bir-shell --features agent`): the shared gpui-agent session over a loopback listener,
+# and NSH's own window control plane on macOS. Compiled in only here; the listener still needs GPUI_AGENT=1 (see src/agent.rs).
+agent = ["bir-app-api/agent", "dep:gpui-agent", "dep:nsh-platform-macos", "nsh-platform-macos/gpui-agent-server"]
+
+[dev-dependencies]
+futures = "0.3"
+temp-env = "0.3"
+tempfile = "3"

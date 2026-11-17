@@ -1,0 +1,1039 @@
+{
+    "$schema":  "../../schema/validations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "1600wp-v2010",
+    "revision":  "2010-01-01",
+    "first_error_behavior":  "Validate and Save alert and return on the first source-ordered failure; row messages interpolate sequence or ATC.",
+    "rules":  [
+                  {
+                      "rule_id":  "1600wp-validate-001-month-required",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  1,
+                      "condition":  "From-month is blank.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid month on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3157-L3167"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-002-month-width",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  2,
+                      "condition":  "From-month has one character.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid month on item 1. Format should be MM/DD/YYYY.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3168-L3172"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-003-day-required",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  3,
+                      "condition":  "From-day is blank.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingDay"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid day on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3173-L3177"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-004-day-width",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  4,
+                      "condition":  "From-day has one character.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingDay"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid day on item 1. Format should be MM/DD/YYYY.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3178-L3182"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-005-year-required",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  5,
+                      "condition":  "From-year is blank.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid year on Item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3183-L3187"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-006-positive-day",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  6,
+                      "condition":  "From-day is below 1.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingDay"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3188-L3192"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-007-nonleap-feb29",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  7,
+                      "condition":  "Date is February 29 in a non-leap year.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingMonth",
+                                     "frm1600WP:DateWithholdingDay",
+                                     "frm1600WP:DateWithholdingYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Filing year is not a leap year.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3193-L3198"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-008-calendar-day",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  8,
+                      "condition":  "Day exceeds the allowed value for a recognized month.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingMonth",
+                                     "frm1600WP:DateWithholdingDay",
+                                     "frm1600WP:DateWithholdingYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on item 1.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3199-L3219"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-009-year-floor",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  9,
+                      "condition":  "Year is below 1900.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Invalid date entry on Item no.1. Entry should not be lower than 1900.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3235-L3239"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-010-invalid-month-gap",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  10,
+                      "condition":  "Month is a two-character value outside 01 through 12.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingMonth"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3163-L3219"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The value bypasses both month arrays and is accepted.",
+                      "recommended_app_behavior":  "Parse and validate a real calendar date.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-011-future-date-gap",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  11,
+                      "condition":  "Return date is later than the current date.",
+                      "fields":  [
+                                     "frm1600WP:DateWithholdingMonth",
+                                     "frm1600WP:DateWithholdingDay",
+                                     "frm1600WP:DateWithholdingYear"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3220-L3234"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "All future-date checks are commented out.",
+                      "recommended_app_behavior":  "Reject dates beyond the allowed return period.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-012-amended",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  12,
+                      "condition":  "Neither amended-return radio is selected.",
+                      "fields":  [
+                                     "frm1600WP:AmendedReturn_1",
+                                     "frm1600WP:AmendedReturn_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please choose amended return on item 2.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3240-L3244"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-013-tax-held",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  13,
+                      "condition":  "Neither Item 4 radio is selected.",
+                      "fields":  [
+                                     "frm1600WP:AnyTaxHeld_1",
+                                     "frm1600WP:AnyTaxHeld_2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 4.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3245-L3249"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-014-tin",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  14,
+                      "condition":  "Any withholding-agent TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1600WP:txtTIN1",
+                                     "frm1600WP:txtTIN2",
+                                     "frm1600WP:txtTIN3",
+                                     "frm1600WP:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3251-L3255"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Apply the shared TIN checksum and segment constraints.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-015-rdo",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  15,
+                      "condition":  "The runtime RDO select remains at index zero.",
+                      "fields":  [
+                                     "frm1600WP:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3256-L3261"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-016-category",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  16,
+                      "condition":  "Neither withholding-agent category is selected.",
+                      "fields":  [
+                                     "frm1600WP:CategoryAgent_P",
+                                     "frm1600WP:CategoryAgent_G"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3262-L3266"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-017-name",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  17,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm1600WP:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3267-L3271"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-018-address",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  18,
+                      "condition":  "Registered address is blank.",
+                      "fields":  [
+                                     "frm1600WP:txtAddress"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Registered Address on Item 9.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3272-L3276"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-019-zip",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  19,
+                      "condition":  "Zip code is blank.",
+                      "fields":  [
+                                     "frm1600WP:txtZipCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Taxpayer\u0027s Zip Code on Item 10.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3278-L3282"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-020-category-duplicate",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  20,
+                      "condition":  "Neither withholding-agent category is selected after the identical earlier check passed.",
+                      "fields":  [
+                                     "frm1600WP:CategoryAgent_P",
+                                     "frm1600WP:CategoryAgent_G"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an option for Item 7.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3284-L3288"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "obsolete",
+                      "official_behavior":  "This branch is unreachable because the identical condition already returned at order 16.",
+                      "recommended_app_behavior":  "Keep one category check.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-021-partii-required",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  21,
+                      "condition":  "Item 4 is Yes but the Part II table has no selected ATC rows.",
+                      "fields":  [
+                                     "frm1600WP:AnyTaxHeld_1",
+                                     "frm1600WP:txtAtcCode{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Part II Computation of Tax if item 4 is set to Yes.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3289-L3295"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-022-partii-base-blank",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  22,
+                      "condition":  "A Part II ATC row has blank tax base.",
+                      "fields":  [
+                                     "frm1600WP:txtAtcCode{index}",
+                                     "frm1600WP:txtTaxBase{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid value for tax base for {ATC}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3296-L3306"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-023-partii-base-positive",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  23,
+                      "condition":  "A Part II ATC row has tax base at or below zero.",
+                      "fields":  [
+                                     "frm1600WP:txtAtcCode{index}",
+                                     "frm1600WP:txtTaxBase{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Tax Base for ATC \u003c{ATC}\u003e.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3307-L3310"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-024-partii-atc",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  24,
+                      "condition":  "A generated Part II row has blank ATC.",
+                      "fields":  [
+                                     "frm1600WP:txtAtcCode{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please fill up Part II Computation of Tax if item 4 is set to Yes.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3311-L3314"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-025-schedule-tin",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  25,
+                      "condition":  "A used Schedule II row has blank or shorter-than-12 TIN.",
+                      "fields":  [
+                                     "frm1600WP:dtSched:txtTin{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN Number for Sequence {index}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3316-L3324"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only length is checked; checksum and structure are not.",
+                      "recommended_app_behavior":  "Apply payee TIN structure/checksum rules.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-026-schedule-name",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  26,
+                      "condition":  "A used Schedule II row has blank payee name.",
+                      "fields":  [
+                                     "frm1600WP:dtSched:txtFullname{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Name of Individual/Corporation for Sequence {index}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3324-L3327"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-027-schedule-atc",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  27,
+                      "condition":  "A used Schedule II row has blank ATC or nature of payment.",
+                      "fields":  [
+                                     "frm1600WP:dtSched:drpAtcCode{index}",
+                                     "frm1600WP:dtSched:naturePayment{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please select an ATC from the list for Sequence {index}.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3327-L3330"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-028-schedule-amount",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  28,
+                      "condition":  "A used Schedule II row has amount at or below zero.",
+                      "fields":  [
+                                     "frm1600WP:dtSched:amount{index}",
+                                     "frm1600WP:dtSched:drpAtcCode{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter Tax Base for ATC {ATC}. Value must be greater than 0.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3330-L3333"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-029-schedule-trigger-gap",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  29,
+                      "condition":  "A Schedule II row contains only rate or computed tax-withheld data.",
+                      "fields":  [
+                                     "frm1600WP:dtSched:txtRatePercent{index}",
+                                     "frm1600WP:dtSched:taxWithheld{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3316-L3321"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "The row-use predicate repeats naturePayment and omits rate and tax-withheld.",
+                      "recommended_app_behavior":  "Trigger row validation on any non-empty serialized row field.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-validate-030-success",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "validate",
+                      "order":  30,
+                      "condition":  "All prior checks pass.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Validation successful. Click on Edit if you wish to modify your entries.",
+                      "source_refs":  [
+                                          "official-hta-runtime#validate:L3362-L3367"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "Controls are disabled after hPartIITableSize is updated.",
+                      "recommended_app_behavior":  "Model validated state explicitly.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-save-001-tin",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "save",
+                      "order":  1,
+                      "condition":  "Any withholding-agent TIN segment or branch code is blank.",
+                      "fields":  [
+                                     "frm1600WP:txtTIN1",
+                                     "frm1600WP:txtTIN2",
+                                     "frm1600WP:txtTIN3",
+                                     "frm1600WP:txtBranchCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid TIN number on Item 5.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3751-L3756"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Only blankness is checked.",
+                      "recommended_app_behavior":  "Apply shared TIN validation.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-save-002-rdo",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "save",
+                      "order":  2,
+                      "condition":  "RDO value is 000.",
+                      "fields":  [
+                                     "frm1600WP:txtRDOCode"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid RDO Code on Item 6.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3757-L3760"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-save-003-name",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "save",
+                      "order":  3,
+                      "condition":  "Withholding-agent name is blank.",
+                      "fields":  [
+                                     "frm1600WP:txtTaxpayerName"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 8.",
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3761-L3765"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "verified-correct",
+                      "official_behavior":  "The branch alerts and stops the active operation.",
+                      "recommended_app_behavior":  "Retain as a structured revision-aware error.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-save-004-sparse",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "save",
+                      "order":  4,
+                      "condition":  "Any period, classification, address, Part II, or Schedule II Validate-only rule fails.",
+                      "fields":  [
+
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#initialValidateBeforeSave:L3751-L3767",
+                                          "official-hta-runtime#validate:L3157-L3368"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Save ignores every check except TIN blankness, RDO 000, and name blankness.",
+                      "recommended_app_behavior":  "Use a shared validation graph with explicit phase exceptions.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-schedule-rounding",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "blur/change",
+                      "order":  1,
+                      "condition":  "Schedule II computes amount Ã— (rate/100 rounded to two decimals).",
+                      "fields":  [
+                                     "frm1600WP:dtSched:amount{index}",
+                                     "frm1600WP:dtSched:txtRatePercent{index}",
+                                     "frm1600WP:dtSched:taxWithheld{index}"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#computeDtShedTaxWithheld:L3517-L3527"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "incorrect-official-behavior",
+                      "official_behavior":  "Rates with fractional percentage points are distorted; e.g. 2.5% becomes 3% before multiplication.",
+                      "recommended_app_behavior":  "Divide the exact decimal rate by 100, multiply, then round only the monetary result.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-serialization-runtime-selectors",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "save",
+                      "order":  null,
+                      "condition":  "The generic serializer reaches transient ATC-modal selectors.",
+                      "fields":  [
+                                     "AtcCd1",
+                                     "AtcCd2",
+                                     "SchedIIAtcCde1",
+                                     "SchedIIAtcCde2"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#changedrpATCList:L3529-L3556",
+                                          "official-hta-runtime#saveXML:L2580-L2660",
+                                          "revision-matched-encrypted-sample"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "Transient selector state is retained as ordinary XML fields.",
+                      "recommended_app_behavior":  "Preserve exact keys for round-trip compatibility but keep them outside the typed tax model.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  },
+                  {
+                      "rule_id":  "1600wp-serialization-unprefixed-email",
+                      "form_id":  "1600wp-v2010",
+                      "revision":  "2010-01-01",
+                      "phase":  "save",
+                      "order":  null,
+                      "condition":  "The generic serializer reaches email.",
+                      "fields":  [
+                                     "txtEmail"
+                                 ],
+                      "accepted_behavior":  "Condition is false; processing continues.",
+                      "rejected_behavior":  "The active operation stops unless official_behavior states otherwise.",
+                      "exact_message":  null,
+                      "source_refs":  [
+                                          "official-hta-runtime#control:L1795",
+                                          "official-hta-runtime#saveXML:L2580-L2660"
+                                      ],
+                      "evidence_type":  [
+                                            "source"
+                                        ],
+                      "assessment":  "official-bug-compatible",
+                      "official_behavior":  "The unprefixed ID txtEmail becomes the XML key.",
+                      "recommended_app_behavior":  "Preserve the literal key with a typed alias.",
+                      "confidence":  "high",
+                      "unresolved_questions":  [
+
+                                               ]
+                  }
+              ]
+}

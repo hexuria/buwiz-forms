@@ -1,0 +1,59 @@
+{
+    "$schema":  "../../schema/calculations.schema.json",
+    "schema_version":  "1.0.0",
+    "form_id":  "0605-v2003",
+    "revision":  "2003-09-01",
+    "evaluation_order":  [
+                             "0605-item20d-penalties",
+                             "0605-item21-total"
+                         ],
+    "calculations":  [
+                         {
+                             "calculation_id":  "0605-item20d-penalties",
+                             "outputs":  [
+                                             "frm0605:txtTax20D"
+                                         ],
+                             "inputs":  [
+                                            "frm0605:txtTax20A",
+                                            "frm0605:txtTax20B",
+                                            "frm0605:txtTax20C"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "20D = 20A + 20B + 20C.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computePenalties",
+                             "depends_on":  [
+
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computePenalties:L2578-L2585"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals, explicit two-decimal rounding, and preserve the source dependency order.",
+                             "confidence":  "high"
+                         },
+                         {
+                             "calculation_id":  "0605-item21-total",
+                             "outputs":  [
+                                             "frm0605:txtTax21"
+                                         ],
+                             "inputs":  [
+                                            "frm0605:txtTax19",
+                                            "frm0605:txtTax20D"
+                                        ],
+                             "condition":  null,
+                             "official_formula":  "21 = 19 + 20D.",
+                             "rounding":  "formatCurrency after NumWithComma conversion; displayed to two decimal places.",
+                             "trigger":  "computeOfTax",
+                             "depends_on":  [
+                                                "0605-item20d-penalties"
+                                            ],
+                             "source_refs":  [
+                                                 "official-hta-runtime#computeOfTax:L2586-L2591"
+                                             ],
+                             "assessment":  "verified-correct",
+                             "recommended_app_behavior":  "Use typed decimals, explicit two-decimal rounding, and preserve the source dependency order.",
+                             "confidence":  "high"
+                         }
+                     ]
+}

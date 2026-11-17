@@ -1,0 +1,12 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702mx-v2018c",
+    "source_path":  "C:\\Mac\\Home\\Downloads\\forms\\1702MXv2018c\\00000000000000-1702MXv2018C-1225.xml",
+    "sha256":  "ed96c5b56eecee68f1f73eef50dda00f69a42bd0dc5d0849e2cbe22c6b70b239",
+    "field_count":  210,
+    "unique_field_count":  210,
+    "field_inventory_sha256":  "49026b6af417cebf286a7fbc4edddfe2b90a66fde4d84f1de512f72b02e8b04b",
+    "exact_subset_of_final_copy":  true,
+    "final_copy_only_field_count":  378,
+    "values_emitted":  false
+}

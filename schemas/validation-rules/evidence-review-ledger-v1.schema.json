@@ -1,0 +1,325 @@
+{
+  "$id": "urn:dev.goldcoders.bir:schema:evidence-review-ledger:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonicalization": {
+      "const": "bir-json-c14n-v1"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/entry"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "format": {
+      "const": "bir-evidence-review-ledger-v1"
+    }
+  },
+  "required": [
+    "canonicalization",
+    "entries",
+    "format"
+  ],
+  "title": "Reviewed evidence packet construction ledger v1",
+  "type": "object",
+  "$defs": {
+    "captureGap": {
+      "additionalProperties": false,
+      "properties": {
+        "gap_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "reason": {
+          "$ref": "#/$defs/humanText"
+        },
+        "source_evidence_ids": {
+          "items": {
+            "$ref": "#/$defs/portableIdentifier"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "gap_id",
+        "reason",
+        "source_evidence_ids"
+      ],
+      "type": "object"
+    },
+    "derivedReview": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "pattern": "^derived/(?!.*(?:^|/)\\.\\.?/)[a-zA-Z0-9._-]+(?:/[a-zA-Z0-9._-]+)*\\.json$",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "candidate",
+            "reviewed"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "status"
+      ],
+      "type": "object"
+    },
+    "entry": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "review": {
+                "properties": {
+                  "status": {
+                    "const": "candidate"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "review"
+            ]
+          },
+          "then": {
+            "properties": {
+              "derived_reviews": {
+                "items": {
+                  "properties": {
+                    "status": {
+                      "const": "candidate"
+                    }
+                  }
+                }
+              },
+              "expected_packet_digest_sha256": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "review": {
+                "properties": {
+                  "status": {
+                    "const": "reviewed"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            },
+            "required": [
+              "review"
+            ]
+          },
+          "then": {
+            "properties": {
+              "derived_reviews": {
+                "items": {
+                  "properties": {
+                    "status": {
+                      "const": "reviewed"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "attestations": {
+          "items": false,
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/derivedOnlyAttestation"
+            },
+            {
+              "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/noTaxpayerValuesAttestation"
+            },
+            {
+              "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/noCredentialsAttestation"
+            },
+            {
+              "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/noOnlineSubmissionAttestation"
+            }
+          ],
+          "type": "array"
+        },
+        "capture_gaps": {
+          "items": {
+            "$ref": "#/$defs/captureGap"
+          },
+          "type": "array"
+        },
+        "capture_provenance": {
+          "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/captureProvenance"
+        },
+        "capture_session_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "created_at_utc": {
+          "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/utcTimestamp"
+        },
+        "derived_reviews": {
+          "items": {
+            "$ref": "#/$defs/derivedReview"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "expected_packet_digest_sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "form_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "official_package_asset_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "packet_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "review": {
+          "oneOf": [
+            {
+              "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/candidateReview"
+            },
+            {
+              "$ref": "#/$defs/reviewed"
+            }
+          ]
+        },
+        "rule_set_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "rule_set_source_state": {
+          "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/ruleSetSourceState"
+        },
+        "source_excerpts": {
+          "items": {
+            "$ref": "#/$defs/sourceExcerpt"
+          },
+          "type": "array"
+        },
+        "source_map_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_verification_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "tracked_v1_source_set_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "attestations",
+        "capture_gaps",
+        "capture_provenance",
+        "capture_session_id",
+        "created_at_utc",
+        "derived_reviews",
+        "expected_packet_digest_sha256",
+        "form_id",
+        "official_package_asset_id",
+        "packet_id",
+        "review",
+        "rule_set_id",
+        "rule_set_source_state",
+        "source_excerpts",
+        "source_map_sha256",
+        "source_verification_sha256",
+        "tracked_v1_source_set_sha256"
+      ],
+      "type": "object"
+    },
+    "humanText": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "^\\S(?:.*\\S)?$",
+      "type": "string"
+    },
+    "portableIdentifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "type": "string"
+    },
+    "reviewed": {
+      "additionalProperties": false,
+      "properties": {
+        "reviewed_at_utc": {
+          "$ref": "urn:dev.goldcoders.bir:schema:evidence-packet:v1#/$defs/utcTimestamp"
+        },
+        "reviewed_by": {
+          "$ref": "#/$defs/humanText"
+        },
+        "status": {
+          "const": "reviewed"
+        }
+      },
+      "required": [
+        "reviewed_at_utc",
+        "reviewed_by",
+        "status"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "sourceExcerpt": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt_end_byte": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "excerpt_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        },
+        "excerpt_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "excerpt_start_byte": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "upstream_evidence_id": {
+          "$ref": "#/$defs/portableIdentifier"
+        }
+      },
+      "required": [
+        "excerpt_end_byte",
+        "excerpt_id",
+        "excerpt_sha256",
+        "excerpt_start_byte",
+        "upstream_evidence_id"
+      ],
+      "type": "object"
+    }
+  }
+}

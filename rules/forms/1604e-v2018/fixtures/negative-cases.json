@@ -1,0 +1,407 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1604e-v2018",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-1604e-save-001",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-save-001"
+                  },
+                  {
+                      "case_id":  "case-02-1604e-save-002",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "Only nonblankness is checked.",
+                      "rule_id":  "1604e-save-002"
+                  },
+                  {
+                      "case_id":  "case-03-1604e-save-003",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-save-003"
+                  },
+                  {
+                      "case_id":  "case-04-1604e-save-004",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Withholding Agent\u0027s Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-save-004"
+                  },
+                  {
+                      "case_id":  "case-05-1604e-validate-001",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Taxable year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-001"
+                  },
+                  {
+                      "case_id":  "case-06-1604e-validate-002",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "No length, digit, or checksum validation follows.",
+                      "rule_id":  "1604e-validate-002"
+                  },
+                  {
+                      "case_id":  "case-07-1604e-validate-003",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-003"
+                  },
+                  {
+                      "case_id":  "case-08-1604e-validate-004",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Withholding agent name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-004"
+                  },
+                  {
+                      "case_id":  "case-09-1604e-validate-005",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Contact number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 9.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-005"
+                  },
+                  {
+                      "case_id":  "case-10-1604e-validate-006",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-006"
+                  },
+                  {
+                      "case_id":  "case-11-1604e-validate-007",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-007"
+                  },
+                  {
+                      "case_id":  "case-12-1604e-validate-008",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Neither withholding-agent category is selected."
+                                    },
+                      "expected_message":  "Please select an option in Item 8.",
+                      "expected_behavior":  "The branch alerts and returns.",
+                      "rule_id":  "1604e-validate-008"
+                  },
+                  {
+                      "case_id":  "case-13-1604e-sched1-01-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 1st Quarter row has no date of remittance."
+                                    },
+                      "expected_message":  "Please enter Date of Remittance for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-01-date"
+                  },
+                  {
+                      "case_id":  "case-14-1604e-sched1-01-bank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 1st Quarter row has no drawee bank/bank code/agency."
+                                    },
+                      "expected_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-01-bank"
+                  },
+                  {
+                      "case_id":  "case-15-1604e-sched1-01-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 1st Quarter row has no TRA/eROR/eAR number."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-01-tra"
+                  },
+                  {
+                      "case_id":  "case-16-1604e-sched1-01-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 1st Quarter row has Taxes Withheld equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-01-tax"
+                  },
+                  {
+                      "case_id":  "case-17-1604e-sched1-01-penalty-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Penalties equal 0.00 in a populated 1st Quarter row."
+                                    },
+                      "expected_message":  "Please enter the Penalties for the 1st Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "rule_id":  "1604e-sched1-01-penalty-unreachable"
+                  },
+                  {
+                      "case_id":  "case-18-1604e-sched1-02-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 2nd Quarter row has no date of remittance."
+                                    },
+                      "expected_message":  "Please enter Date of Remittance for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-02-date"
+                  },
+                  {
+                      "case_id":  "case-19-1604e-sched1-02-bank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 2nd Quarter row has no drawee bank/bank code/agency."
+                                    },
+                      "expected_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-02-bank"
+                  },
+                  {
+                      "case_id":  "case-20-1604e-sched1-02-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 2nd Quarter row has no TRA/eROR/eAR number."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-02-tra"
+                  },
+                  {
+                      "case_id":  "case-21-1604e-sched1-02-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 2nd Quarter row has Taxes Withheld equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-02-tax"
+                  },
+                  {
+                      "case_id":  "case-22-1604e-sched1-02-penalty-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Penalties equal 0.00 in a populated 2nd Quarter row."
+                                    },
+                      "expected_message":  "Please enter the Penalties for the 2nd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "rule_id":  "1604e-sched1-02-penalty-unreachable"
+                  },
+                  {
+                      "case_id":  "case-23-1604e-sched1-03-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 3rd Quarter row has no date of remittance."
+                                    },
+                      "expected_message":  "Please enter Date of Remittance for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-03-date"
+                  },
+                  {
+                      "case_id":  "case-24-1604e-sched1-03-bank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 3rd Quarter row has no drawee bank/bank code/agency."
+                                    },
+                      "expected_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-03-bank"
+                  },
+                  {
+                      "case_id":  "case-25-1604e-sched1-03-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 3rd Quarter row has no TRA/eROR/eAR number."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-03-tra"
+                  },
+                  {
+                      "case_id":  "case-26-1604e-sched1-03-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 3rd Quarter row has Taxes Withheld equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-03-tax"
+                  },
+                  {
+                      "case_id":  "case-27-1604e-sched1-03-penalty-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Penalties equal 0.00 in a populated 3rd Quarter row."
+                                    },
+                      "expected_message":  "Please enter the Penalties for the 3rd Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "rule_id":  "1604e-sched1-03-penalty-unreachable"
+                  },
+                  {
+                      "case_id":  "case-28-1604e-sched1-04-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 4th Quarter row has no date of remittance."
+                                    },
+                      "expected_message":  "Please enter Date of Remittance for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-04-date"
+                  },
+                  {
+                      "case_id":  "case-29-1604e-sched1-04-bank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 4th Quarter row has no drawee bank/bank code/agency."
+                                    },
+                      "expected_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-04-bank"
+                  },
+                  {
+                      "case_id":  "case-30-1604e-sched1-04-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 4th Quarter row has no TRA/eROR/eAR number."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA / eROR / eAR Number for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-04-tra"
+                  },
+                  {
+                      "case_id":  "case-31-1604e-sched1-04-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated 4th Quarter row has Taxes Withheld equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched1-04-tax"
+                  },
+                  {
+                      "case_id":  "case-32-1604e-sched1-04-penalty-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Penalties equal 0.00 in a populated 4th Quarter row."
+                                    },
+                      "expected_message":  "Please enter the Penalties for the 4th Quarter. You may refer to your 1601EQ for the said Quarter.",
+                      "expected_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "rule_id":  "1604e-sched1-04-penalty-unreachable"
+                  },
+                  {
+                      "case_id":  "case-33-1604e-sched2-01-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated January row has no date of remittance."
+                                    },
+                      "expected_message":  "Please enter Date of Remittance for the January. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-01-date"
+                  },
+                  {
+                      "case_id":  "case-34-1604e-sched2-01-bank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated January row has no drawee bank/bank code/agency."
+                                    },
+                      "expected_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the January. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-01-bank"
+                  },
+                  {
+                      "case_id":  "case-35-1604e-sched2-01-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated January row has no TRA/eROR/eAR number."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA / eROR / eAR Number for the January. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-01-tra"
+                  },
+                  {
+                      "case_id":  "case-36-1604e-sched2-01-tax",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated January row has Taxes Withheld equal to 0.00."
+                                    },
+                      "expected_message":  "Please enter the Taxes Withheld for the January. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-01-tax"
+                  },
+                  {
+                      "case_id":  "case-37-1604e-sched2-01-penalty-unreachable",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Penalties equal 0.00 in a populated January row."
+                                    },
+                      "expected_message":  "Please enter the Penalties for the January. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "A duplicated penalties != 0.00 condition makes this message branch unreachable; zero penalties pass.",
+                      "rule_id":  "1604e-sched2-01-penalty-unreachable"
+                  },
+                  {
+                      "case_id":  "case-38-1604e-sched2-02-date",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated February row has no date of remittance."
+                                    },
+                      "expected_message":  "Please enter Date of Remittance for the February. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-02-date"
+                  },
+                  {
+                      "case_id":  "case-39-1604e-sched2-02-bank",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated February row has no drawee bank/bank code/agency."
+                                    },
+                      "expected_message":  "Please enter any of the following details Drawee Bank / Bank Code / Agency for the February. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-02-bank"
+                  },
+                  {
+                      "case_id":  "case-40-1604e-sched2-02-tra",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "A partially populated February row has no TRA/eROR/eAR number."
+                                    },
+                      "expected_message":  "Please enter any of the following details TRA / eROR / eAR Number for the February. You may refer to your 1606 for the said month.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "1604e-sched2-02-tra"
+                  }
+              ]
+}

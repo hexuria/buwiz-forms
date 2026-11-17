@@ -1,0 +1,327 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "2200a-v2020",
+    "synthetic_only":  true,
+    "cases":  [
+                  {
+                      "case_id":  "case-01-2200a-validate-001-month",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Month is blank, below 1, above 12, or parses falsy."
+                                    },
+                      "expected_message":  "Please enter a valid month on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-001-month"
+                  },
+                  {
+                      "case_id":  "case-02-2200a-validate-002-nonleap-february",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "February day exceeds 28 in a non-leap year."
+                                    },
+                      "expected_message":  "Please enter a valid date on Item 1. Filing year is not a leap year.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-002-nonleap-february"
+                  },
+                  {
+                      "case_id":  "case-03-2200a-validate-003-day",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Day is blank, below 1, above the computed month maximum, or parses falsy."
+                                    },
+                      "expected_message":  "Please enter a valid day on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-003-day"
+                  },
+                  {
+                      "case_id":  "case-04-2200a-validate-004-year",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is blank."
+                                    },
+                      "expected_message":  "Please enter a valid year on Item 1.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-004-year"
+                  },
+                  {
+                      "case_id":  "case-05-2200a-validate-005-effectivity",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Year is earlier than 2020."
+                                    },
+                      "expected_message":  "Returning old forms is restricted to the last version up to the effectivity of the new form version.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-005-effectivity"
+                  },
+                  {
+                      "case_id":  "case-06-2200a-validate-006-future",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Return date is after today."
+                                    },
+                      "expected_message":  "Invalid date entry on Item 1. Date cannot be after the current date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-006-future"
+                  },
+                  {
+                      "case_id":  "case-07-2200a-validate-007-tin",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-007-tin"
+                  },
+                  {
+                      "case_id":  "case-08-2200a-validate-008-rdo",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Runtime RDO selectedIndex is 0."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-008-rdo"
+                  },
+                  {
+                      "case_id":  "case-09-2200a-validate-009-name",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer\u0027s Name on Item 6.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-009-name"
+                  },
+                  {
+                      "case_id":  "case-10-2200a-validate-010-address",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered address is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Registered Address on Item 7.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-010-address"
+                  },
+                  {
+                      "case_id":  "case-11-2200a-validate-011-zip",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "ZIP code is blank."
+                                    },
+                      "expected_message":  "Please enter Taxpayer\u0027s Zip Code on Item 7A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-011-zip"
+                  },
+                  {
+                      "case_id":  "case-12-2200a-validate-012-phone",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Telephone number is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Telephone Number on Item 8.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-012-phone"
+                  },
+                  {
+                      "case_id":  "case-13-2200a-validate-013-production-place",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Production city selectedIndex is 0."
+                                    },
+                      "expected_message":  "Please enter a valid Place of Production on Item 10.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-013-production-place"
+                  },
+                  {
+                      "case_id":  "case-14-2200a-validate-014-removal-place",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Removal city selectedIndex is 0."
+                                    },
+                      "expected_message":  "Please enter a valid Place of Removal on Item 11.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-014-removal-place"
+                  },
+                  {
+                      "case_id":  "case-15-2200a-validate-015-tax-relief",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Tax relief Yes is selected and Item 12A is blank."
+                                    },
+                      "expected_message":  "Please specify a Tax Relief on Item 12A.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-015-tax-relief"
+                  },
+                  {
+                      "case_id":  "case-16-2200a-validate-016-payment-kind",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "No Part II payment option is selected."
+                                    },
+                      "expected_message":  "Please enter a Manner of Payment on Part II.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-016-payment-kind"
+                  },
+                  {
+                      "case_id":  "case-17-2200a-validate-017-other-scheme",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Other Similar Scheme is selected and Item 15 specification is blank."
+                                    },
+                      "expected_message":  "Please specify a Scheme on Item 15.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-017-other-scheme"
+                  },
+                  {
+                      "case_id":  "case-18-2200a-validate-018-insufficient-fund",
+                      "phase":  "validate",
+                      "mutations":  {
+                                        "synthetic_condition":  "Item 22 amount payable minus Item 23C payment is positive."
+                                    },
+                      "expected_message":  "YOU HAVE INSUFFICIENT FUND. PLEASE APPLY DEPOSIT TO PROCEED",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-validate-018-insufficient-fund"
+                  },
+                  {
+                      "case_id":  "case-19-2200a-date-019-format",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Payment date is not valid MM/DD/YYYY."
+                                    },
+                      "expected_message":  "Please provide a valid date. (MM/DD/YYYY format)",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-date-019-format"
+                  },
+                  {
+                      "case_id":  "case-20-2200a-date-020-future",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Payment date is after the current moment."
+                                    },
+                      "expected_message":  "This date cannot be a future date.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-date-020-future"
+                  },
+                  {
+                      "case_id":  "case-21-2200a-date-021-prior-2018",
+                      "phase":  "blur/change",
+                      "mutations":  {
+                                        "synthetic_condition":  "Payment date year is before 2018."
+                                    },
+                      "expected_message":  "This date cannot be prior to 2018.",
+                      "expected_behavior":  "The January 2020 form accepts payment dates from 2018 onward.",
+                      "rule_id":  "2200a-date-021-prior-2018"
+                  },
+                  {
+                      "case_id":  "case-22-2200a-schedule-022-atc-required",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "An existing Others row has blank ATC when Add is pressed."
+                                    },
+                      "expected_message":  "ATC is required in row #{row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-schedule-022-atc-required"
+                  },
+                  {
+                      "case_id":  "case-23-2200a-schedule-023-atc-length",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others ATC is nonblank but length is not exactly 3."
+                                    },
+                      "expected_message":  "Please supply valid ATC Code for row #{row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-schedule-023-atc-length"
+                  },
+                  {
+                      "case_id":  "case-24-2200a-schedule-024-description",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others description is blank."
+                                    },
+                      "expected_message":  "Description is required in row #{row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-schedule-024-description"
+                  },
+                  {
+                      "case_id":  "case-25-2200a-schedule-025-bracket",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others tax bracket or unit of measure is blank."
+                                    },
+                      "expected_message":  "Tax Bracket/Unit of Measure is required in row #{row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-schedule-025-bracket"
+                  },
+                  {
+                      "case_id":  "case-26-2200a-schedule-026-rate",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Others applicable rate is blank."
+                                    },
+                      "expected_message":  "Applicable Tax Rate is required in row #{row}",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-schedule-026-rate"
+                  },
+                  {
+                      "case_id":  "case-27-2200a-schedule-027-first-three-delete",
+                      "phase":  "input",
+                      "mutations":  {
+                                        "synthetic_condition":  "Delete targets one of the first three Others rows."
+                                    },
+                      "expected_message":  "First 3 (three) rows cannot be deleted.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-schedule-027-first-three-delete"
+                  },
+                  {
+                      "case_id":  "case-28-2200a-navigation-028-schedule",
+                      "phase":  "page navigation",
+                      "mutations":  {
+                                        "synthetic_condition":  "A new form initializes and Schedule 1 has not yet been visited."
+                                    },
+                      "expected_message":  "Fill-up Schedule 1.",
+                      "expected_behavior":  "The alert navigates but does not prove Schedule 1 completeness.",
+                      "rule_id":  "2200a-navigation-028-schedule"
+                  },
+                  {
+                      "case_id":  "case-29-2200a-save-029-return-date",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "All three return-date components are blank."
+                                    },
+                      "expected_message":  "Please enter a valid Return Date",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-save-029-return-date"
+                  },
+                  {
+                      "case_id":  "case-30-2200a-save-030-tin",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Any TIN segment or branch code is blank."
+                                    },
+                      "expected_message":  "Please enter a valid TIN number on Item 4.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-save-030-tin"
+                  },
+                  {
+                      "case_id":  "case-31-2200a-save-031-rdo",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "RDO value is 000."
+                                    },
+                      "expected_message":  "Please enter a valid RDO Code on Item 5.",
+                      "expected_behavior":  "The branch alerts and stops the active operation.",
+                      "rule_id":  "2200a-save-031-rdo"
+                  },
+                  {
+                      "case_id":  "case-32-2200a-save-032-name",
+                      "phase":  "save",
+                      "mutations":  {
+                                        "synthetic_condition":  "Registered name is blank."
+                                    },
+                      "expected_message":  "Please enter a valid Taxpayer Name on Item 7.",
+                      "expected_behavior":  "The printed field is Item 6, but Save reports Item 7.",
+                      "rule_id":  "2200a-save-032-name"
+                  }
+              ]
+}

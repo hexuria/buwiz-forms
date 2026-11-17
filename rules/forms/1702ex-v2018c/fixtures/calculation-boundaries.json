@@ -1,0 +1,34 @@
+{
+    "schema_version":  "1.0.0",
+    "form_id":  "1702ex-v2018c",
+    "cases":  [
+                  {
+                      "case_id":  "osd-40-percent",
+                      "calculation_id":  "1702ex-osd",
+                      "official_output":  400,
+                      "gross":  1000
+                  },
+                  {
+                      "case_id":  "tax-due",
+                      "official_output":  200,
+                      "calculation_id":  "1702ex-tax-due",
+                      "rate":  20,
+                      "net_taxable":  1000
+                  },
+                  {
+                      "case_id":  "overpayment-with-penalty",
+                      "official_output":  25,
+                      "calculation_id":  "1702ex-total-payable",
+                      "overpayment":  -100,
+                      "penalty":  25
+                  },
+                  {
+                      "recommended_output":  0,
+                      "calculation_id":  "1702ex-total-payable",
+                      "case_id":  "negative-payable-defect",
+                      "penalty":  0,
+                      "official_output":  -100,
+                      "overpayment":  -100
+                  }
+              ]
+}
