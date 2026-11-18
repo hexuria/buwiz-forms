@@ -46,6 +46,10 @@ for (const look of LOOKS) {
     await shoot(app, `controls-${look.name}-drawer-select`);
     await app.back();
     // On NSH 0.6 a Back from the drawer's select closes the drawer too (headless); Done closes it where it stays.
+    // Look only once the select, and the drawer if Back closes it, finished closing: a closing drawer still shows its
+    // Done but takes no press (macOS CI: "no pressable view matches").
+    await app.waitFor("text:WC010 - Professional fees, juridical", { state: "gone" });
+    await app.wait(500);
     if (app.shows("id:fp-table-sch1pay-done")) await app.press("id:fp-table-sch1pay-done");
     await app.waitFor("text:Row 1", { state: "gone" });
     // A few choices, then a long list searched by words.
