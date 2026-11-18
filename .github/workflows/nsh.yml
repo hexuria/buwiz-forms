@@ -1,8 +1,8 @@
 name: NSH app
 
 # The NSH (TSX) app in nsh/ (docs/platforms/nsh.md, nsh/AGENTS.md): type check, build, Rust tests and the headless TSX
-# tests on macOS; type check, build and the Windows development host on Windows; plus the plain-SQLite tests of the two
-# crates the app is built on.
+# tests on macOS and on Windows (where the Windows development host is built too); plus the plain-SQLite tests of the
+# two crates the app is built on.
 #
 # The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
 # this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes:
@@ -205,11 +205,18 @@ jobs:
   # The same app on Windows (the NSH Win32 backend), as far as a machine without a display reaches: the CLI built from
   # the pin, the crate and its TSX types, the bundle, and the Windows development host `nsh run --target windows`
   # builds, which links NSH's Win32 backend with its development features. A pin whose Windows backend does not build is
-  # caught here (c346e920e's did not: chrome.rs called choose() with three arguments, hexuria/nsh#13). The crate's Rust
-  # tests, the headless TSX tests and real windows are not run here yet (docs/platforms/nsh-windows-handover.md, W5
-  # onwards).
+  # caught here (c346e920e's did not: chrome.rs called choose() with three arguments, hexuria/nsh#13). Then, as on
+  # macOS, the crate's Rust tests and the headless TSX tests, sharded the same way (the database guard verifies on
+  # Windows since #228, so a test's scratch database opens). Real windows are not run here yet
+  # (docs/platforms/nsh-windows-handover.md, W11 onwards).
   nsh-windows:
-    name: NSH app (Windows)
+    # A pull request splits the headless TSX test files over three runners, as the macOS job does; shard 0 also runs
+    # the type check, the build, the development host and the Rust tests. main and manual runs use one runner.
+    name: NSH app (Windows, shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[0, 1, 2]' || '[0]') }}
     # Pinned, as the other jobs are: the steps below name paths of this image (Strawberry Perl, LLVM). windows-2025 is
     # Windows Server 2025 with Visual Studio 2026, the image the job was first verified on.
     runs-on: windows-2025
@@ -223,6 +230,15 @@ jobs:
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
       # rustc can overflow its default stack on the windows crate's bindings (NSH's own Windows CI sets it).
       RUST_MIN_STACK: "268435456"
+      # The four safety variables every nsh recipe sets (the justfile's are Unix-only): no credential store, a test
+      # environment (scratch databases, no account sign-in in debug builds), and a dry run that sends nothing.
+      # Nothing sets BIR_DATABASE_PATH.
+      BUWIZ_NO_KEYCHAIN: "1"
+      EBIR_TEST_ENV: "1"
+      BIR_AUTH_BYPASS: "1"
+      BIR_SFTP_DRY_RUN: "1"
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 1 }}
     steps:
       - name: Check out buwiz-forms
         uses: actions/checkout@v4
@@ -278,8 +294,9 @@ jobs:
         shell: pwsh
         run: cargo install --locked --path crates/nsh-cli --root "$HOME\BuwizNsh\tools"
 
+      # Only shard 0 saves: the shards of a new pin's first run all build it, and one copy is enough.
       - name: Save the nsh command line
-        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        if: steps.nsh-cli.outputs.cache-hit != 'true' && matrix.shard == 0
         uses: actions/cache/save@v4
         with:
           path: ~/BuwizNsh/tools
@@ -292,21 +309,55 @@ jobs:
           & "$HOME\BuwizNsh\tools\bin\nsh.exe" -V
 
       - name: nsh check (the crate, then the TSX types)
+        if: matrix.shard == 0
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: nsh check -v
 
       - name: nsh build
+        if: matrix.shard == 0
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: nsh build
 
+      - name: Rust tests of the app's crate
+        if: matrix.shard == 0
+        working-directory: buwiz-forms/nsh
+        shell: pwsh
+        run: cargo test --manifest-path Cargo.toml --no-fail-fast
+
       # The host `nsh run --target windows` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's
       # Win32 backend with its development features (the dev and agent code a plain build leaves out).
       - name: Build the Windows development host
+        if: matrix.shard == 0
         working-directory: buwiz-forms/nsh
         shell: pwsh
         run: cargo build --manifest-path .nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-windows-host
+
+      # Every tracked *.test.ts and *.test.tsx, one headless run per file, as the macOS job runs them (nsh/verify holds
+      # real-window verifiers that need the owner's data copy, so it is left out). Shards: file k of the list in
+      # ordinal order (from 0) belongs to shard k % SHARDS, so every file is in exactly one shard.
+      - name: Headless TSX tests, file by file
+        working-directory: buwiz-forms/nsh
+        shell: pwsh
+        run: |
+          [string[]]$files = git ls-files -- '*.test.ts' '*.test.tsx' | Where-Object { $_ -notlike 'verify/*' }
+          [Array]::Sort($files, [StringComparer]::Ordinal)
+          $failed = @()
+          $ran = 0
+          for ($k = 0; $k -lt $files.Count; $k++) {
+            if ($k % [int]$env:SHARDS -ne [int]$env:SHARD) { continue }
+            $ran++
+            nsh test "./$($files[$k])"
+            if ($LASTEXITCODE -ne 0) { $failed += $files[$k] }
+          }
+          "shard $env:SHARD of $env:SHARDS ran $ran test files"
+          if ($ran -eq 0) { throw "this shard found no test files" }
+          if ($failed.Count -gt 0) {
+            "failed in:"
+            $failed | ForEach-Object { "  $_" }
+            exit 1
+          }
 
   # bir-core and bir-app-api with --no-default-features: the plain-SQLite build the NSH app ships (no sqlcipher).
   # `just core-plain-test` sets the four safety variables itself. Linux, because it is the cheapest runner; the
