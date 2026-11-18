@@ -68,6 +68,9 @@ export interface ShortcutRecorderProps {
   error?: string;
   /** Told when recording starts and when it ends, however it ends (a chord, Escape, a press elsewhere, the part going away). */
   onRecordingChange?: (recording: boolean) => void;
+  /** Another way a chord can come while recording, for the keys nsh/keymap cannot bind (the app's Quit and Hide keys come through
+   * the application menu): called when recording starts with what to tell; returns the way to stop. */
+  listen?: (heard: (keystroke: string) => void) => () => void;
   /** The box's width in points; unset, its container's. */
   width?: number;
   disabled?: boolean;
@@ -131,7 +134,12 @@ export function ShortcutRecorder(props: ShortcutRecorderProps) {
     if (recording() || props.disabled) return;
     note.set("");
     try {
-      unbind = listenForChords(heard);
+      const off = listenForChords(heard);
+      const offOther = props.listen?.((keystroke) => heard({ keystroke }));
+      unbind = () => {
+        off();
+        offOther?.();
+      };
     } catch {
       return; // no keyboard shortcuts here: stay as it was
     }

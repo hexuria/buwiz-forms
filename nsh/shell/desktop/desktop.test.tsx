@@ -1,6 +1,8 @@
 // The desktop host in a window (DesktopDemo.tsx), at desktop size on macOS: the application menu follows the state of the app and its
-// items drive the frame; the close button hides, the tray shows the window again; the hotkey follows the setting; the update banner
-// works end to end against a fake nsh/updater and says nothing at all when no source is configured.
+// items drive the frame; close, quit and hide follow the owner's rules (macOS: the close button hides and the Dock icon goes, Cmd+Q
+// quits; Windows and Linux: the close button asks, the hide key never does); any quit warns while returns are still sending; the tray
+// shows the window again; the hotkey follows the setting; the update banner works end to end against a fake nsh/updater and says
+// nothing at all when no source is configured.
 // The system's menu bar and tray cannot be clicked from a test: the fixture runs the same items the system was given (their onSelect),
 // and the keys that reach the application menu with no key binding of the frame's own (Cmd+H, Cmd+W) go through the real path.
 import { type App, expect, open, test } from "nsh/test";
@@ -14,6 +16,12 @@ const ENTRY = "../../DesktopDemo.tsx";
 const WIDE = { width: 1440, height: 900, platform: "macos" as const };
 const asking = (params: Record<string, unknown> = {}) => ({ host: { params } });
 
+/** What the fixture last wrote of what a hidden window cannot show: the Dock icon, the tray's menu, the quits. */
+function posted(app: App): { dock: boolean; tray: string[]; quits: number } | null {
+  const raw = app.storage()["fixture.desktop"];
+  return raw ? (JSON.parse(raw) as { dock: boolean; tray: string[]; quits: number }) : null;
+}
+
 test("the application menu is installed, and follows the taxpayer, the form and the gate", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking() });
   await app.waitFor("id:sidebar");
@@ -21,7 +29,7 @@ test("the application menu is installed, and follows the taxpayer, the form and 
   expect(app.shows("id:run:File > New Return…")).toBe(true);
   expect(app.shows("id:run:View > Toggle Tax Profile")).toBe(true);
   expect(app.shows("id:tray:Show eBIRForms")).toBe(true);
-  expect(app.shows("id:tray:Quit")).toBe(true);
+  expect(app.shows("id:tray:Quit eBIRForms")).toBe(true);
   // 27 of ours and the platform's own roles are all in the list; the number only has to say "the full menu".
   const full = Number(app.texts().find((t) => t.startsWith("menu="))?.slice(5));
   expect(full > 25).toBe(true);
@@ -108,16 +116,20 @@ async function pressUntil(app: App, keys: string, done: () => boolean, cap = 15_
   }
 }
 
-test("Cmd+H and Cmd+W reach the application menu: the window hides, and the tray's Show brings it back", async () => {
+test("Cmd+H and Cmd+W reach the application menu: the window hides, the Dock icon goes, and the tray's Show brings both back", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking() });
   await app.waitFor("id:sidebar");
   expect(shown(app)).toBe(true);
+  expect(app.texts()).toContain("dock=shown");
 
   await pressUntil(app, "mod+h", () => hidden(app));
+  await app.waitUntil(() => posted(app)?.dock === false);
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
+  await app.waitFor("text:dock=shown");
 
   await pressUntil(app, "mod+w", () => hidden(app));
+  await app.waitUntil(() => posted(app)?.dock === false);
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
 
@@ -128,25 +140,189 @@ test("Cmd+H and Cmd+W reach the application menu: the window hides, and the tray
   // The app is as it was (a headless window comes back at the default viewport, so the layout is not compared).
   expect(app.texts()).toContain("view=home");
   expect(app.texts()).toContain("overlay=none");
+  expect(app.texts()).toContain("dock=shown");
 });
 
-test("the window's close button hides the window instead of closing it, and the app keeps running", async () => {
+test("the tray's Show and Hide follow the window: one of them is always disabled, Quit never is", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking() });
+  await app.waitFor("id:sidebar");
+  const tray = () => posted(app)?.tray.join(" | ");
+  await app.waitUntil(() => tray() === "Show eBIRForms  (disabled) | Hide eBIRForms | Quit eBIRForms");
+  await app.host.send("run", { id: "tray:Hide eBIRForms" });
+  await app.waitUntil(() => hidden(app));
+  await app.waitUntil(() => tray() === "Show eBIRForms | Hide eBIRForms  (disabled) | Quit eBIRForms");
+  await app.host.send("run", { id: "tray:Show eBIRForms" });
+  await app.waitUntil(() => shown(app));
+  await app.waitUntil(() => tray() === "Show eBIRForms  (disabled) | Hide eBIRForms | Quit eBIRForms");
+});
+
+test("macOS: the window's close button hides the window and the Dock icon, and the app keeps running", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ quit: "fake" }) });
   await app.waitFor("id:sidebar");
   await app.window("main").pressClose();
   await app.waitUntil(() => hidden(app));
-  // Still alive: Show brings the window back with the frame as it was.
+  await app.waitUntil(() => posted(app)?.dock === false);
+  expect(posted(app)?.quits).toBe(0);
+  // Still alive: Show brings the window back with the frame as it was, and no question was asked.
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
   expect(app.texts()).toContain("view=home");
+  expect(app.shows("id:close-ask")).toBe(false);
 });
 
-test("Cmd+Q hides to the tray on macOS (the quit is in the tray)", async () => {
-  const app = await open(ENTRY, { ...WIDE, ...asking() });
+test("macOS: Cmd+Q quits (Apple review), from the app menu and the tray alike, signed in or locked", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ quit: "fake" }) });
   await app.waitFor("id:sidebar");
+  await pressUntil(app, "mod+q", () => app.texts().includes("quits=1"));
+  expect(shown(app)).toBe(true);
+  await app.host.send("run", { id: "tray:Quit eBIRForms" });
+  await app.waitFor("text:quits=2");
+
+  // Locked: the quit and hide keys still work.
+  const locked = await open(ENTRY, { ...WIDE, ...asking({ locked: true, quit: "fake" }) });
+  await locked.waitFor("id:run:eBIRForms > Hide eBIRForms");
+  await pressUntil(locked, "mod+q", () => locked.texts().includes("quits=1"));
+  await pressUntil(locked, "mod+h", () => hidden(locked));
+  await locked.host.send("run", { id: "tray:Show eBIRForms" });
+  await locked.waitUntil(() => shown(locked));
+});
+
+test("remapped keys: with Hide on Cmd+Q and Quit on Option+Cmd+Q, Cmd+Q hides and Option+Cmd+Q quits; the menu shows them", async () => {
+  const storage = { "desktop.close": JSON.stringify({ quit: "alt+cmd+q", hide: "cmd+q", close: "ask" }) };
+  const app = await open(ENTRY, { ...WIDE, storage, ...asking({ quit: "fake" }) });
+  await app.waitFor("id:sidebar");
+  await app.waitFor("text:close=ask");
+  await app.waitFor("id:run:eBIRForms > Hide eBIRForms");
   await pressUntil(app, "mod+q", () => hidden(app));
+  expect(posted(app)?.quits).toBe(0);
   await app.host.send("run", { id: "tray:Show eBIRForms" });
   await app.waitUntil(() => shown(app));
+  await pressUntil(app, "alt+cmd+q", () => app.texts().includes("quits=1"));
+});
+
+test("any quit warns while returns are still sending: Wait stays, Hide to tray hides, Quit anyway quits", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ quit: "fake", sending: 2 }) });
+  await app.waitFor("id:sidebar");
+  await pressUntil(app, "mod+q", () => app.shows("id:sending-ask"));
+  expect(app.texts()).toContain("2 returns are still sending");
+  expect(app.texts()).toContain("Quitting stops them. Hide keeps them going in the background.");
+  await app.press("id:sending-ask-wait");
+  await app.waitFor("id:sending-ask", { state: "gone" });
+  expect(app.texts()).toContain("quits=0");
+  expect(shown(app)).toBe(true);
+
+  // From the tray: the window comes up with the warning; Hide to tray keeps sending in the background.
+  await app.host.send("run", { id: "tray:Quit eBIRForms" });
+  await app.waitFor("id:sending-ask");
+  await app.press("id:sending-ask-hide");
+  await app.waitUntil(() => hidden(app));
+  expect(posted(app)?.quits).toBe(0);
+
+  await app.host.send("run", { id: "tray:Quit eBIRForms" });
+  await app.waitUntil(() => shown(app));
+  await app.waitFor("id:sending-ask");
+  await app.press("id:sending-ask-quit");
+  await app.waitFor("text:quits=1");
+
+  // Nothing sending: no warning.
+  const idle = await open(ENTRY, { ...WIDE, ...asking({ quit: "fake", sending: 0 }) });
+  await idle.waitFor("id:sidebar");
+  await idle.host.send("run", { id: "tray:Quit eBIRForms" });
+  await idle.waitFor("text:quits=1");
+  expect(idle.shows("id:sending-ask")).toBe(false);
+});
+
+for (const platform of ["windows", "linux"] as const) {
+  const SIZE = { width: 1440, height: 900, platform };
+
+  test(`${platform}: the close button asks "Hide to tray or Quit?"; Esc keeps the window, Quit quits, and the hide key never asks`, async () => {
+    const app = await open(ENTRY, { ...SIZE, ...asking({ quit: "fake" }) });
+    await app.waitFor("id:sidebar");
+    await app.window("main").pressClose();
+    await app.waitFor("id:close-ask");
+    expect(app.texts()).toContain("Close eBIRForms?");
+    expect(app.texts()).toContain("Hide to tray keeps sending your queued returns and reminders. Quit stops everything.");
+    expect(app.texts()).toContain("Don't ask again. You can change this in Settings.");
+    expect(shown(app)).toBe(true);
+    await app.keyboard.press("escape");
+    await app.waitFor("id:close-ask", { state: "gone" });
+    expect(shown(app)).toBe(true);
+    expect(app.texts()).toContain("quits=0");
+
+    await app.window("main").pressClose();
+    await app.waitFor("id:close-ask");
+    await app.press("id:close-ask-quit");
+    await app.waitFor("text:quits=1");
+    // Not remembered: the next close asks again.
+    expect(app.texts()).toContain("close=ask");
+    expect(app.storage()["desktop.close"]).toBe(undefined);
+
+    // Ctrl+H hides at once, no question; Ctrl+Q quits.
+    await pressUntil(app, "mod+h", () => hidden(app));
+    await app.host.send("run", { id: "tray:Show eBIRForms" });
+    await app.waitUntil(() => shown(app));
+    expect(app.shows("id:close-ask")).toBe(false);
+    await pressUntil(app, "mod+q", () => app.texts().includes("quits=2"));
+  });
+
+  test(`${platform}: "Don't ask again" remembers Hide to tray: it is stored, and the next close hides without asking`, async () => {
+    const app = await open(ENTRY, { ...SIZE, ...asking({ quit: "fake" }) });
+    await app.waitFor("id:sidebar");
+    await app.window("main").pressClose();
+    await app.waitFor("id:close-ask");
+    await app.press("id:close-ask-remember");
+    await app.press("id:close-ask-hide");
+    await app.waitUntil(() => hidden(app));
+    await app.waitUntil(() => JSON.parse(app.storage()["desktop.close"] ?? "{}").close === "hide");
+    await app.host.send("run", { id: "tray:Show eBIRForms" });
+    await app.waitUntil(() => shown(app));
+    await app.waitFor("text:close=hide");
+    await app.window("main").pressClose();
+    await app.waitUntil(() => hidden(app));
+    expect(posted(app)?.quits).toBe(0);
+
+    // Stored as Quit: the close button quits at once (through the warning when returns are sending).
+    const quitting = await open(ENTRY, { ...SIZE, storage: { "desktop.close": JSON.stringify({ close: "quit" }) }, ...asking({ quit: "fake" }) });
+    await quitting.waitFor("text:close=quit");
+    await quitting.window("main").pressClose();
+    await quitting.waitFor("text:quits=1");
+    expect(quitting.shows("id:close-ask")).toBe(false);
+  });
+}
+
+test("macOS: the Dock icon comes back with every show, NSH's own reopen (the Finder, Spotlight) included", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ quit: "fake" }) });
+  await app.waitFor("id:sidebar");
+  await pressUntil(app, "mod+h", () => hidden(app));
+  await app.waitUntil(() => posted(app)?.dock === false);
+  // The window comes back without showMain: the Dock icon follows the window's visible state.
+  await app.host.send("run", { id: "reopen" });
+  await app.waitUntil(() => shown(app));
+  await app.waitUntil(() => posted(app)?.dock === true);
+});
+
+test("linux without a tray icon (GNOME without AppIndicator): the close question offers Quit, Enter quits, and nothing hides into nothing", async () => {
+  const NO_TRAY = { width: 1440, height: 900, platform: "linux" as const, tray: false };
+  const app = await open(ENTRY, { ...NO_TRAY, ...asking({ quit: "fake" }) });
+  await app.waitFor("id:sidebar");
+  await app.window("main").pressClose();
+  await app.waitFor("id:close-ask");
+  expect(app.shows("id:close-ask-no-tray")).toBe(true);
+  expect(app.shows("id:close-ask-hide")).toBe(false);
+  expect(app.shows("id:close-ask-cancel")).toBe(true);
+  await app.keyboard.press("enter");
+  await app.waitFor("text:quits=1");
+
+  // A remembered "Hide to tray" asks instead; the hide key minimizes the window (the taskbar brings it back) rather than hiding it.
+  const kept = await open(ENTRY, { ...NO_TRAY, storage: { "desktop.close": JSON.stringify({ close: "hide" }) }, ...asking({ quit: "fake" }) });
+  await kept.waitFor("text:close=hide");
+  await kept.window("main").pressClose();
+  await kept.waitFor("id:close-ask");
+  expect(kept.shows("id:close-ask-hide")).toBe(false);
+  await kept.press("id:close-ask-cancel");
+  await kept.waitFor("id:close-ask", { state: "gone" });
+  await pressUntil(kept, "mod+h", () => kept.window("main").state()?.minimized === true);
+  expect(posted(kept)?.quits ?? 0).toBe(0);
 });
 
 test("the global hotkey follows the stored setting: registered, replaced when it changes, off when it is cleared or the gate is up", async () => {

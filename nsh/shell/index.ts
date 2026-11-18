@@ -10,4 +10,6 @@ export { contentBox, contentColumn, ROUTES, TABS, type Route, type RouteMeta, ty
 export { ALREADY_SENT, cancelQueue, cancelQueueMessage, isAlreadySent } from "./queue";
 export { store, type Store } from "./store";
 export { holdHotkey, hotkeyStatus } from "./desktop/hotkey_state";
+export { captureMenuKeys, closePrefs, loadClosePrefs, setAppKey, setCloseChoice } from "./desktop/app_keys";
+export { appKeyUsable, CLOSE_CHOICES, DEFAULT_KEYS, keyHolder, type AppKeys, type CloseChoice } from "./desktop/menu_model";
 export { refreshToday, today, todayIso } from "./clock";

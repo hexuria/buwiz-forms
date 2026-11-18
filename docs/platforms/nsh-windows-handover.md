@@ -360,9 +360,23 @@ Rebuild the nsh command line from that NSH checkout first if section 3.4's build
 
 1. Wide window, light theme and dark theme: two rows; row 1 has the app icon, the seven titles with chevrons, the caption buttons at the right end, and its colours follow the app's theme (no white Win32 strip in dark).
 2. Drag row 1's empty space: the window moves. Double-click it: the window maximizes; again: it restores. Right-click it: the system window menu.
-3. Caption buttons: — minimizes; ☐ maximizes/restores and hovering it shows Windows 11's snap layouts; ✕ hides the window to the tray (as before).
+3. Caption buttons: — minimizes; ☐ maximizes/restores and hovering it shows Windows 11's snap layouts; ✕ asks "Hide to tray or Quit?" (9.4).
 4. Click each title: its menu opens just under the title, with the items in 9.1; choose File > New Tax Profile… (opens the new taxpayer page when allowed; disabled for "Just me" with a taxpayer already, as the profile panel), Profiles > another taxpayer (switches, toast "Switched to …"), eBIRForms > Settings….
 5. Keyboard: F10, Right ×2, Down opens Edit; Esc closes it and Esc again leaves the row. Alt+F opens File. Ctrl+N still starts a new return.
 6. Narrow the window to about 700 points: same rows, no chevrons, the pill without its TIN. Then under 600: no menu row; the header shows ☰, the title, the badge and the caption buttons on one row, nothing under the buttons; ☰ lists every menu with submenus.
 7. Lock the app (Ctrl+L): the locked screen has row 1 with eBIRForms, File, Edit, Help only.
+
+### 9.4 Close, quit and hide (branch `feat/close-quit-hide`, stacked on `feat/app-menu`)
+
+The owner's approved rules: Ctrl+Q quits (Windows too), Ctrl+H hides to the tray with no question, ✕ and Alt+F4 ask "Hide to tray or Quit?" with "Don't ask again" (Settings › Keyboard changes the choice: Ask / Hide to tray / Quit), any quit warns while returns are still sending, the tray menu is Show / Hide / Quit with Show or Hide disabled to match the window. Quit and Hide keys are remapped in Settings › Keyboard with the key recorder. Build `feat/close-quit-hide` of buwiz-forms against the NSH pin as in 9.2 (it reads NSH's `Tray.available()` and `Application.on("quitRequest")`; on Windows the tray is always available), then run `shell/desktop/menu_model.test.ts`, `shell/desktop/desktop.test.tsx`, `shell/desktop/keysRecorder.test.tsx`, `shell/desktop/app_keys.test.ts` and `shell/desktop/sending.test.ts`. Eye-check (seen or not seen; a picture of each dialog):
+
+1. ✕: the box "Close eBIRForms?" with "Hide to tray keeps sending your queued returns and reminders. Quit stops everything.", the "Don't ask again. You can change this in Settings." checkbox, and Quit (red) and Hide to tray (primary). Esc closes the box and the window stays; Enter hides to the tray.
+2. Alt+F4: the same box (not an instant quit, not an instant hide). The taskbar button's right-click Close window: the same box.
+3. Hide to tray: the window goes, the tray icon stays; the tray's Show brings it back where it was. Tick "Don't ask again", choose Hide to tray: the next ✕ hides with no box; Settings › Keyboard › Close button (✕) now says Hide to tray; set it back to Ask and the box returns. With Quit remembered, ✕ quits.
+4. Ctrl+H (signed in, and on the sign-in screen): hides at once, no box. Ctrl+H inside a text field (a form's field, the search box) also hides: say if anything else happens there (a character deleted, a Find/Replace box).
+5. Ctrl+Q: quits (the tray icon goes, the process ends: Task Manager). On the sign-in screen too.
+6. Quit while a return is Queued (queue a return with the sending worker off, or watch for one in Filings › Queued): "N return(s) is/are still sending" with Quit anyway / Wait / Hide to tray. Wait keeps the app open; Hide to tray hides it; Quit anyway quits. From the tray's Quit with the window hidden: the window comes back with the box.
+7. Tray icon, right-click: Show eBIRForms, Hide eBIRForms, Quit eBIRForms; while the window is up Show is greyed, while it is hidden Hide is greyed. Left-click: shows the window.
+8. Settings › Keyboard: record Quit as Ctrl+Shift+Q, then Hide as Ctrl+Q. The eBIRForms menu shows Hide eBIRForms Ctrl+Q and Quit eBIRForms Ctrl+Shift+Q; Ctrl+Q now hides, Ctrl+Shift+Q quits. Recording Ctrl+K says "That shortcut is already Command Palette…." under the box. Put both back (Delete removes a key; record Ctrl+Q and Ctrl+H again).
+9. Task Manager › End task on eBIRForms (a close another program asks for: NSH's `system` reason): it ends without the box. Sign out of Windows with the app running: say whether it ends cleanly or holds the sign-out.
 

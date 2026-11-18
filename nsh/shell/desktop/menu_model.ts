@@ -8,18 +8,25 @@
 // New here: with no taxpayer the items that need one are present but disabled (New Return…, Toggle Tax Profile).
 // Added for the eBIRForms app menu design: File's "New Tax Profile…" (above New Return…, no shortcut: Ctrl/Cmd+N stays New
 // Return…), a last "Profiles" menu while signed in (the taxpayers as a switcher, the current one checked, then New Tax
-// Profile…), and on Windows and Linux an "eBIRForms" app menu first, as on macOS. There its items have no shortcuts: File and
-// Edit keep them, so an accelerator is never bound twice. The in-window menu row (shell/MenuRow.tsx) and the narrow ☰ list
-// draw this same data.
+// Profile…), and on Windows and Linux an "eBIRForms" app menu first, as on macOS. There Hide and Quit carry the user's keys (their
+// copies in File carry none) and Settings… none (File or Edit keeps Ctrl+,), so an accelerator is never bound twice. The in-window
+// menu row (shell/MenuRow.tsx) and the narrow ☰ list draw this same data.
 //
 // Dropped on purpose: macOS's "Services" submenu (NSH has no role for it; AppKit adds its own to the app menu) and Edit's
 // "Delete" (no NSH role). "Enter Full Screen" on macOS is AppKit's own item. A shortcut the old app bound a second way
 // (ctrl on macOS, cmd elsewhere) is bound once, as "mod".
 //
-// Quit: docs/platforms/macos.md says the window's X and Cmd+Q hide the app to the menu bar and that Quit is in the tray menu
-// ("quitKeyHides" below); docs/platforms/linux.md says X and Ctrl+Q quit; docs/platforms/windows.md says X and Alt+F4 hide and
-// there is no Ctrl+Q. The old app_menu.rs bound Ctrl/Cmd+Q to a real quit everywhere: this follows the platform docs.
+// Close, quit and hide (the owner's approved rules, 2026-11-18; they replace the old CLOSE_POLICY, which followed docs/platforms):
+//   * Quit: Cmd+Q on macOS, Ctrl+Q on Windows and Linux really quit (Apple review: Cmd+Q quits out of the box, and a Quit item is
+//     always in the app menu and the tray). Super+Q is off by default on Linux; the recorder can bind it.
+//   * Hide: Cmd+H / Ctrl+H hide to the tray (macOS: the menu-bar icon) and never ask.
+//   * Close: macOS's red button and Cmd+W hide the window and take the Dock icon away (Show brings it back). Windows' and Linux's X,
+//     Alt+F4 and Close Window ask "Hide to tray or Quit?" unless "Don't ask again" remembered a choice (Settings > Keyboard changes it).
+//   * Any quit while returns are still sending warns first: Quit anyway / Wait / Hide to tray.
+//   * The quit and hide keys are the user's (Settings > Keyboard, ShortcutRecorder): the menus show the keys they chose.
+// `closePolicy(os, prefs)` is that data; actions.ts carries it out.
 import type { MenuItem } from "nsh/desktop";
+import { KEYSTROKE_WORDS, MODIFIER_ORDER } from "../../lib/settings_model";
 
 /** The platforms the menu has a shape for. */
 export type Os = "macos" | "windows" | "linux";
@@ -44,8 +51,7 @@ export type MenuAction =
   | "check-updates"
   | "support"
   | "website"
-  | "show"
-  | "quit-now";
+  | "show";
 
 /** What decides the menu. */
 export interface MenuState {
@@ -64,6 +70,11 @@ export interface MenuState {
   canAddTaxpayer?: boolean;
   /** Another taxpayer can be switched to (app.isAdmin(), as the profile panel's switcher). Default true. */
   canSwitchTaxpayer?: boolean;
+  /** The quit and hide keys the user chose (Settings > Keyboard). Default DEFAULT_KEYS. */
+  keys?: AppKeys;
+  /** A Quit or Hide key recorder is listening: the Quit and Hide items carry the platform's own quit and hide keys (CAPTURE_KEYS), which
+   * nsh/keymap cannot bind, so the recorder hears them through the menu (menu.ts hands their onSelect to it). */
+  capturing?: boolean;
 }
 
 /** One taxpayer in the Profiles menu. */
@@ -81,12 +92,176 @@ export const WEBSITE_URL = "https://goldcoders.dev";
 /** The About text's last line. */
 export const COPYRIGHT = "© 2026 Goldcoders Corp";
 
-/** What each platform does with the window's close button and the quit key (see the header). */
-export const CLOSE_POLICY: Record<Os, { closeHides: boolean; quitKeyHides: boolean; quitShortcut: string | null }> = {
-  macos: { closeHides: true, quitKeyHides: true, quitShortcut: "mod+q" },
-  windows: { closeHides: true, quitKeyHides: false, quitShortcut: null },
-  linux: { closeHides: false, quitKeyHides: false, quitShortcut: "mod+q" },
+// ---------------------------------------------------------------- close, quit and hide
+
+/** The quit and hide keys, as nsh/keymap and menu shortcuts write them ("mod+q", "alt+cmd+q"); "" for none. */
+export interface AppKeys {
+  quit: string;
+  hide: string;
+}
+
+/** Out of the box: Cmd+Q / Ctrl+Q quit, Cmd+H / Ctrl+H hide ("mod" is Command on macOS, Ctrl elsewhere). Super+Q is not bound on Linux. */
+export const DEFAULT_KEYS: AppKeys = { quit: "mod+q", hide: "mod+h" };
+
+/** What Windows' and Linux's close button does: ask each time, or the choice "Don't ask again" remembered. */
+export type CloseChoice = "ask" | "hide" | "quit";
+
+/** The close button's choices as Settings > Keyboard offers them. */
+export const CLOSE_CHOICES: readonly { value: CloseChoice; label: string }[] = [
+  { value: "ask", label: "Ask" },
+  { value: "hide", label: "Hide to tray" },
+  { value: "quit", label: "Quit" },
+];
+
+/** What the user chose: their keys and the close button's remembered choice. */
+export interface ClosePrefs {
+  keys: AppKeys;
+  close: CloseChoice;
+}
+
+export const DEFAULT_CLOSE_PREFS: ClosePrefs = { keys: DEFAULT_KEYS, close: "ask" };
+
+/** What a platform does, with the user's choices. */
+export interface ClosePolicy {
+  /** The window's close button, Alt+F4 and Close Window (Cmd+W, Ctrl+W): hide, ask "Hide to tray or Quit?", or quit. */
+  close: "hide" | "ask" | "quit";
+  /** Hiding takes the Dock icon away and showing brings it back (macOS). */
+  hideTakesDockIcon: boolean;
+  /** The quit item's shortcut, or null. */
+  quitShortcut: string | null;
+  /** The hide item's shortcut, or null. The hide key never asks. */
+  hideShortcut: string | null;
+}
+
+/** The rules above for `os`: macOS's close always hides; Windows' and Linux's follows the remembered choice. */
+export function closePolicy(os: Os, prefs: ClosePrefs = DEFAULT_CLOSE_PREFS): ClosePolicy {
+  return {
+    close: os === "macos" ? "hide" : prefs.close,
+    hideTakesDockIcon: os === "macos",
+    quitShortcut: prefs.keys.quit || null,
+    hideShortcut: prefs.keys.hide || null,
+  };
+}
+
+/** Reads what was stored (desktop/app_keys.ts): anything missing or unknown is the default. */
+export function parseClosePrefs(raw: string | null | undefined): ClosePrefs {
+  let value: { quit?: unknown; hide?: unknown; close?: unknown } = {};
+  try {
+    value = raw ? (JSON.parse(raw) ?? {}) : {};
+  } catch {
+    value = {};
+  }
+  const key = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
+  const close = CLOSE_CHOICES.some((c) => c.value === value.close) ? (value.close as CloseChoice) : "ask";
+  return { keys: { quit: key(value.quit, DEFAULT_KEYS.quit), hide: key(value.hide, DEFAULT_KEYS.hide) }, close };
+}
+
+/** The keys the platform keeps for quitting and hiding: nsh/keymap refuses them, so while a recorder listens the menu carries them. */
+export const CAPTURE_KEYS: Record<Os, { quit: string; hide: string | null }> = {
+  macos: { quit: "cmd+q", hide: "cmd+h" },
+  windows: { quit: "ctrl+q", hide: null },
+  linux: { quit: "ctrl+q", hide: null },
 };
+
+/** The shortcuts the Quit and Hide items carry in `state` (null: none). While a recorder listens, the platform's kept keys. */
+export function itemKeys(state: Pick<MenuState, "os" | "keys" | "capturing">): { quit: string | null; hide: string | null } {
+  const keys = state.keys ?? DEFAULT_KEYS;
+  if (!state.capturing) return { quit: keys.quit || null, hide: keys.hide || null };
+  const kept = CAPTURE_KEYS[state.os];
+  const quit = kept.quit;
+  const hide = kept.hide ?? (keys.hide && chord(state.os, keys.hide) !== chord(state.os, quit) ? keys.hide : null);
+  return { quit, hide };
+}
+
+/** How many returns are still sending, in the warning's words; null when none is (the quit goes ahead). */
+export function sendingWarning(count: number): { title: string; message: string } | null {
+  if (count <= 0) return null;
+  return {
+    title: count === 1 ? "1 return is still sending" : `${count} returns are still sending`,
+    message: "Quitting stops them. Hide keeps them going in the background.",
+  };
+}
+
+// ---------------------------------------------------------------- the keys: one spelling, and who holds each
+
+const KEY_NAMES: Readonly<Record<string, string>> = {
+  "-": "minus",
+  "=": "plus",
+  esc: "escape",
+  return: "enter",
+  del: "delete",
+  arrowup: "up",
+  arrowdown: "down",
+  arrowleft: "left",
+  arrowright: "right",
+};
+
+/** A keystroke in one spelling for `os`: "mod" made concrete, aliases resolved, modifiers in the order ctrl, alt, shift, cmd ("" for none). */
+export function chord(os: Os, keystroke: string): string {
+  const parts = keystroke.toLowerCase().split("+").filter(Boolean);
+  if (!parts.length) return "";
+  const key = parts[parts.length - 1];
+  // nsh/keymap's modifier words (lib/settings_model.ts KEYSTROKE_WORDS), "mod" made concrete for `os`.
+  const mods = new Set<string>(parts.slice(0, -1).map((m) => (m === "mod" || m === "cmdorctrl" ? (os === "macos" ? "cmd" : "ctrl") : (KEYSTROKE_WORDS[m] ?? m))));
+  return [...MODIFIER_ORDER.filter((m) => mods.has(m)), KEY_NAMES[key] ?? key].join("+");
+}
+
+/** Windows' and Linux's: the same edit roles and Alt+F4. */
+const PC_ROLE_KEYS: Readonly<Record<string, string>> = {
+  "ctrl+z": "Undo",
+  "ctrl+y": "Redo",
+  "ctrl+shift+z": "Redo",
+  "ctrl+x": "Cut",
+  "ctrl+c": "Copy",
+  "ctrl+v": "Paste",
+  "ctrl+a": "Select All",
+  "alt+f4": "Close",
+};
+
+/** The keys the platform's own items keep (the edit roles, Minimize, Hide Others, full screen, Alt+F4), with what they do. */
+const ROLE_KEYS: Record<Os, Readonly<Record<string, string>>> = {
+  macos: {
+    "cmd+z": "Undo",
+    "shift+cmd+z": "Redo",
+    "cmd+x": "Cut",
+    "cmd+c": "Copy",
+    "cmd+v": "Paste",
+    "cmd+a": "Select All",
+    "cmd+m": "Minimize",
+    "alt+cmd+h": "Hide Others",
+    "ctrl+cmd+f": "Enter Full Screen",
+  },
+  windows: PC_ROLE_KEYS,
+  linux: PC_ROLE_KEYS,
+};
+
+/** The frame's own keys that no menu item shows (shell/Shell.tsx bindKeys). */
+export const FRAME_KEYS: Readonly<Record<string, string>> = { "mod+l": "Lock", "mod+[": "Back", "mod+]": "Forward" };
+
+/**
+ * Who already holds `keystroke` if it became the `which` key: another menu item (in the full signed-in menu, whatever the state now),
+ * a platform item, one of the frame's keys, the other of quit and hide, or the global show hotkey. Null when it is free. A shortcut is
+ * never bound twice.
+ */
+export function keyHolder(os: Os, which: keyof AppKeys, keystroke: string, keys: AppKeys = DEFAULT_KEYS, globalHotkey = ""): string | null {
+  const want = chord(os, keystroke);
+  if (!want) return null;
+  const others: AppKeys = { ...keys, [which]: "" };
+  const full: MenuState = { os, unlocked: true, hasTaxpayer: true, formOpen: false, keys: others };
+  for (const line of flatten(buildMenu(full, () => {}))) {
+    if (line.shortcut && chord(os, line.shortcut) === want) return line.path.split(" > ").pop() ?? line.path;
+  }
+  const role = ROLE_KEYS[os][want];
+  if (role) return role;
+  for (const [key, name] of Object.entries(FRAME_KEYS)) if (chord(os, key) === want) return name;
+  if (globalHotkey && chord(os, globalHotkey) === want) return "the global show hotkey";
+  return null;
+}
+
+/** Whether a recorded chord can be a quit or hide key at all: it needs Control, Option/Alt or Command/Super (a plain key would take typing). */
+export function appKeyUsable(keystroke: string): boolean {
+  return keystroke.split("+").slice(0, -1).some((m) => m === "ctrl" || m === "alt" || m === "cmd" || m === "mod");
+}
 
 /** Carries out an item; "switch-taxpayer" names the taxpayer's tin_root. */
 type Run = (action: MenuAction, root?: string) => void;
@@ -117,8 +292,13 @@ function menu(label: string, entries: Entry[]): MenuItem {
   return { label, submenu: tidy(entries) };
 }
 
-function quitItem(state: MenuState, run: Run, withShortcut = true): MenuItem {
-  return item(run, "Quit " + APP_NAME, "quit", { shortcut: withShortcut ? (CLOSE_POLICY[state.os].quitShortcut ?? undefined) : undefined });
+/** Quit and Hide: in the app menu they carry the user's keys (rule 8); their copies in File carry none, so no key is bound twice. */
+function quitItem(state: MenuState, run: Run, withShortcut: boolean): MenuItem {
+  return item(run, "Quit " + APP_NAME, "quit", { shortcut: withShortcut ? (itemKeys(state).quit ?? undefined) : undefined });
+}
+
+function hideItem(state: MenuState, run: Run, withShortcut: boolean): MenuItem {
+  return item(run, "Hide " + APP_NAME, "hide", { shortcut: withShortcut ? (itemKeys(state).hide ?? undefined) : undefined });
 }
 
 function editMenu(settingsAtEnd: Entry): MenuItem {
@@ -136,9 +316,9 @@ function editMenu(settingsAtEnd: Entry): MenuItem {
   ]);
 }
 
-/** The app menu. macOS: AppKit's, with the shortcuts and Hide Others / Show All. Windows and Linux: the first menu of the row
- * in the window, with no shortcuts of its own (File and Edit carry the same items' shortcuts) and no hideOthers/showAll roles
- * (macOS only). */
+/** The app menu: About, Settings…, Hide, Sign Out, Quit, the same on every desktop. Hide and Quit carry the user's keys here, signed
+ * in or locked (a locked app still hides and quits). macOS: AppKit's app menu, with Settings' shortcut and Hide Others / Show All.
+ * Windows and Linux: the first menu of the row in the window; Settings' shortcut stays in File (Windows) or Edit (Linux). */
 function appMenu(state: MenuState, run: Run): MenuItem {
   const { unlocked } = state;
   const mac = state.os === "macos";
@@ -147,19 +327,19 @@ function appMenu(state: MenuState, run: Run): MenuItem {
     SEP,
     unlocked ? item(run, "Settings…", "settings", { shortcut: mac ? "mod+," : undefined }) : null,
     unlocked ? SEP : null,
-    unlocked ? item(run, "Hide " + APP_NAME, "hide", { shortcut: mac ? "mod+h" : undefined }) : null,
+    hideItem(state, run, true),
     unlocked && mac ? { role: "hideOthers" } : null,
     unlocked && mac ? { role: "showAll" } : null,
-    unlocked ? SEP : null,
+    SEP,
     unlocked ? item(run, "Sign Out", "sign-out") : null,
     unlocked ? SEP : null,
-    quitItem(state, run, mac),
+    quitItem(state, run, true),
   ]);
 }
 
 function fileMenu(state: MenuState, run: Run): MenuItem {
   const { os, unlocked, hasTaxpayer } = state;
-  if (!unlocked) return menu("File", [quitItem(state, run)]);
+  if (!unlocked) return menu("File", [hideItem(state, run, false), quitItem(state, run, false)]);
   const newProfile = newTaxProfileItem(state, run);
   const newReturn = item(run, "New Return…", "new-return", { shortcut: "mod+n", disabled: !hasTaxpayer });
   if (os === "macos") return menu("File", [newProfile, newReturn, SEP, item(run, "Close Window", "close-window", { shortcut: "mod+w" })]);
@@ -171,9 +351,9 @@ function fileMenu(state: MenuState, run: Run): MenuItem {
       item(run, "Settings…", "settings", { shortcut: "mod+," }),
       item(run, "Sign Out", "sign-out"),
       SEP,
-      item(run, "Hide " + APP_NAME, "hide", { shortcut: "mod+h" }),
+      hideItem(state, run, false),
       SEP,
-      quitItem(state, run),
+      quitItem(state, run, false),
     ]);
   }
   return menu("File", [
@@ -181,10 +361,10 @@ function fileMenu(state: MenuState, run: Run): MenuItem {
     newReturn,
     SEP,
     item(run, "Close Window", "close-window", { shortcut: "mod+w" }),
-    item(run, "Hide " + APP_NAME, "hide", { shortcut: "mod+h" }),
+    hideItem(state, run, false),
     SEP,
     item(run, "Sign Out", "sign-out"),
-    quitItem(state, run),
+    quitItem(state, run, false),
   ]);
 }
 
@@ -260,11 +440,17 @@ export function buildMenu(state: MenuState, run: Run): MenuItem[] {
 }
 
 /**
- * The tray icon's menu (old tray.rs): Show, Hide, and Quit, the one way out on macOS and Windows (the window's X and the quit key
- * hide the app; the quit here awaits the frame's quit path). The same on every state: the tray outlives the sign-in screens.
+ * The tray icon's menu (old tray.rs): Show, Hide and Quit on every platform and in every state (the tray outlives the sign-in screens), the
+ * real way out when the window is hidden. Show is disabled while the window is on screen, Hide while it is not. No shortcuts: the
+ * application menu has them.
  */
-export function buildTrayMenu(run: Run): MenuItem[] {
-  return [item(run, "Show " + APP_NAME, "show"), item(run, "Hide " + APP_NAME, "hide"), SEP, item(run, "Quit", "quit-now")];
+export function buildTrayMenu(run: Run, windowVisible: boolean): MenuItem[] {
+  return [
+    item(run, "Show " + APP_NAME, "show", { disabled: windowVisible }),
+    item(run, "Hide " + APP_NAME, "hide", { disabled: !windowVisible }),
+    SEP,
+    item(run, "Quit " + APP_NAME, "quit"),
+  ];
 }
 
 /** One line of a flattened menu: where it is, what it says, its accelerator, whether it can be chosen. */
