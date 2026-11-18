@@ -245,10 +245,15 @@ jobs:
       # GTK 4 and WebKitGTK 6.0 (which brings bubblewrap and xdg-dbus-proxy for its sandbox, and its helper processes),
       # GStreamer, clang for QuickJS's bindgen, libdbus and perl for the app's crates, python3 for stylo's build, and a
       # virtual display for the real-window test.
+      # Non-interactive, and bounded: on the first run one runner's install hung for half an hour while the other
+      # shards' took a minute or two; a hang now fails the step instead of the whole job's two hours.
       - name: Install GTK 4, WebKitGTK, GStreamer and the build tools
+        timeout-minutes: 20
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config perl python3 \
+          sudo -E apt-get install -y --no-install-recommends build-essential pkg-config perl python3 \
             clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
