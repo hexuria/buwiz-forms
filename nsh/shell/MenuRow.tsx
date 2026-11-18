@@ -6,11 +6,13 @@
 //     A title opens its menu with Menu.popup under it, in the theme's colours, light and dark.
 //   * MenuListButton: the narrow header's ☰ (under 600): every menu as one list with submenus.
 //   * bindMenuKeys: F10 puts the keyboard on the row (the first title), Left and Right move along it, Down, Enter or Space
-//     open the menu, Esc leaves; Alt with a title's letter opens that menu. Under 600, F10 opens the ☰ list. Inside an open
-//     menu the platform's own keys work (arrows, Enter, Esc).
+//     open the menu, Esc leaves; Alt with a title's letter opens that menu. Under 600, F10 opens the ☰ list under the ☰.
+//     Inside an open menu the platform's own keys work (arrows, Enter, Esc). The row lets go of the keyboard when the menu
+//     closes, chosen or dismissed, and its Left, Right, Down, Enter and Space are bound only while it holds the keyboard,
+//     never in a text field (the field keeps its own keys).
 // Windows' native Win32 menu bar and GTK's PopoverMenuBar are not used: neither shows while the title bar is hidden.
 import type { JSX } from "nsh";
-import { effect, Image, keymap, signal, untracked, View, type ViewRef } from "nsh";
+import { computed, effect, Image, keymap, signal, untracked, View, type ViewRef } from "nsh";
 import { Button } from "nsh/base";
 import { Menu, type MenuItem, titleBar } from "nsh/desktop";
 import { Icon, ICONS, IconButton, Text } from "../ui";
@@ -24,6 +26,14 @@ const keyed = signal<string | null>(null);
 const opened = signal<string | null>(null);
 /** The titles' views, to place a menu under its title. */
 const anchors = new Map<string, ViewRef>();
+/** The ☰ button's view (the one on screen), to place the list under it. */
+let listAnchor: ViewRef | undefined;
+
+/** Just under `view` (where a menu opens below its button), or undefined when it is not on screen (the menu opens at the pointer). */
+async function belowAnchor(view: ViewRef | undefined): Promise<{ x: number; y: number } | undefined> {
+  const at = view ? await view.measure() : null;
+  return at ? { x: at.pagePosition.x, y: at.pagePosition.y + at.bounds.size.height } : undefined;
+}
 
 /** The row's menus now: [title, items]. */
 function menus(): { title: string; items: MenuItem[] }[] {
@@ -36,13 +46,14 @@ function menus(): { title: string; items: MenuItem[] }[] {
 export async function openMenu(title: string): Promise<void> {
   const found = untracked(menus).find((m) => m.title === title);
   if (!found) return;
-  const view = anchors.get(title);
-  const at = view ? await view.measure() : null;
+  const at = await belowAnchor(anchors.get(title));
   opened.set(title);
   try {
-    await Menu.popup(found.items, at ? { x: at.pagePosition.x, y: at.pagePosition.y + at.bounds.size.height } : undefined);
+    await Menu.popup(found.items, at);
   } finally {
     if (opened() === title) opened.set(null);
+    // However it closed (an item chosen, Esc, a click away), the keyboard goes back to where it was: the row lets go.
+    keyed.set(null);
   }
 }
 
@@ -90,39 +101,34 @@ export function MenuRow(): JSX.Element {
   );
 }
 
-/** The narrow header's ☰: every menu as one list, each a submenu. */
-export function openMenuList(at?: { x: number; y: number }): Promise<void> {
+/** The narrow header's ☰: every menu as one list, each a submenu, under the ☰ button. */
+export async function openMenuList(): Promise<void> {
   const os = menuOs();
-  return os ? Menu.popup(menuNow(os), at) : Promise.resolve();
+  if (!os) return;
+  const at = await belowAnchor(listAnchor);
+  await Menu.popup(menuNow(os), at);
 }
 
 /** The ☰ button (Windows and Linux windows under 600 with an in-window menu). */
 export function MenuListButton(props: { testID: string }): JSX.Element {
-  let view: ViewRef | undefined;
   return (
-    <View ref={(r: ViewRef) => (view = r)}>
-      <IconButton
-        testID={props.testID}
-        icon="menu"
-        tooltip="Menu"
-        onPress={async () => {
-          const at = view ? await view.measure() : null;
-          await openMenuList(at ? { x: at.pagePosition.x, y: at.pagePosition.y + at.bounds.size.height } : undefined);
-        }}
-      />
+    <View ref={(r: ViewRef) => (listAnchor = r)}>
+      <IconButton testID={props.testID} icon="menu" tooltip="Menu" onPress={() => void openMenuList()} />
     </View>
   );
 }
 
 /** The menu row's keys, for as long as the caller lives (Shell's root). Only where the window draws the menu. */
 export function bindMenuKeys(): void {
+  // Read through memos: a resize rebinds nothing until the layout itself changes (a breakpoint, the Global Menu).
+  const inWindow = computed(() => chromeNow().menu === "window");
+  const rowShown = computed(() => chromeNow().menuRow);
   // F10 and Alt+letter, while the menu is the window's own.
   effect(() => {
-    const layout = chromeNow();
-    if (layout.menu !== "window") return;
+    if (!inWindow()) return;
     const titles = menus().map((m) => m.title);
     const bindings: Record<string, () => void> = {};
-    if (layout.menuRow) {
+    if (rowShown()) {
       bindings.f10 = () => keyed.set(keyed() === null ? (titles[0] ?? null) : null);
       const taken: string[] = [];
       for (const title of titles) {
@@ -139,10 +145,11 @@ export function bindMenuKeys(): void {
     }
     return keymap.bind(bindings, { when: "always" });
   });
-  // While the keyboard is on the row: Left, Right, Down/Enter/Space, Esc.
+  // While the keyboard is on the row: Left, Right, Down/Enter/Space, Esc. Only then, and with the default `when`: a text field that
+  // has the focus keeps its arrows, Enter and Space (keymap gives them to the field). Esc leaves the row from anywhere.
+  const onRow = computed(() => keyed() !== null);
   effect(() => {
-    const on = keyed();
-    if (on === null) return;
+    if (!onRow()) return;
     const step = (by: number) => () => {
       const titles = untracked(menus).map((m) => m.title);
       const at = titles.indexOf(keyed() ?? "");
@@ -152,16 +159,15 @@ export function bindMenuKeys(): void {
       const title = keyed();
       if (title) void openMenu(title);
     };
-    return keymap.bind(
-      { left: step(-1), right: step(1), down: open, enter: open, space: open, escape: () => keyed.set(null) },
-      { when: "always" },
-    );
+    const unbindMoves = keymap.bind({ left: step(-1), right: step(1), down: open, enter: open, space: open });
+    const unbindEscape = keymap.bind("escape", () => keyed.set(null), { when: "always" });
+    return () => {
+      unbindMoves();
+      unbindEscape();
+    };
   });
   // The row loses the keyboard when the window's menu is not drawn in it any more.
   effect(() => {
-    if (!chromeNow().menuRow) untracked(() => keyed.set(null));
+    if (!rowShown()) untracked(() => keyed.set(null));
   });
 }
-
-/** For tests: the title the keyboard is on, the title whose menu is open. */
-export const menuRowState = { keyed: () => keyed(), opened: () => opened() };

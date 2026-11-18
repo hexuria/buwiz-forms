@@ -79,6 +79,32 @@ test("F10 puts the keyboard on the row, Right moves along it, Down opens the men
   await app.keyboard.press("escape");
 });
 
+test("a keyboard choice lets go of the row: Space and Enter in a text field afterwards open no menu", async () => {
+  const app = await open(ENTRY, { width: 1440, height: 900, platform: "windows", ...asking({ demo: false }) });
+  await app.waitFor("id:menu-row");
+  // F10, Right to View (eBIRForms File Edit View), Down opens it, then an item is chosen: the menu closes.
+  await app.keyboard.press("f10");
+  for (let i = 0; i < 3; i++) await app.keyboard.press("right");
+  await app.keyboard.press("down");
+  await app.waitUntil(() => app.menu() !== null);
+  await app.chooseMenuItem("Command Palette…");
+  await app.waitFor("id:palette-input");
+  expect(app.menu()).toBe(null);
+  // The palette's field has the keyboard: its Space and Enter are the field's, never the row's.
+  await app.type("id:palette-input", "ui");
+  await app.keyboard.press("space");
+  await app.wait(100);
+  expect(app.menu()).toBe(null);
+  await app.keyboard.press("enter");
+  await app.wait(100);
+  expect(app.menu()).toBe(null);
+  // Outside a field too (the palette closed), Down opens no menu: the row's keys went with its menu.
+  await app.keyboard.press("escape");
+  await app.keyboard.press("down");
+  await app.wait(100);
+  expect(app.menu()).toBe(null);
+});
+
 test("macOS: one row, no menu row (the system's menu bar)", async () => {
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", ...asking() });
   await app.waitFor("id:title-bar");

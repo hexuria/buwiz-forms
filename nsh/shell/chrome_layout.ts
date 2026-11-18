@@ -10,6 +10,8 @@
 //                          and KDE's Global Menu keep their menus at the top of the screen.
 //   iOS, Android, web      no menu.
 
+import { BREAK, SIZE } from "../theme/tokens";
+
 /** The OS as nsh's `platform.os` says it. */
 export type PlatformOs = "ios" | "android" | "macos" | "windows" | "linux" | "web" | string;
 
@@ -18,7 +20,7 @@ export interface ChromeInput {
   os: PlatformOs;
   /** A desktop with windows (nsh/desktop isAvailable && platform.desktop). */
   desktop: boolean;
-  /** Linux only: KDE Plasma with its Global Menu registrar on the session bus (Desktop.globalMenu()). */
+  /** Linux only: NSH exported the menu to KDE Plasma's Global Menu and tied the window to it (nsh/desktop Menu.inGlobalMenu()). */
   globalMenu: boolean;
   /** The window's width, in points. */
   width: number;
@@ -48,12 +50,12 @@ export interface ChromeLayout {
 
 /** The menu row's height (and the title bar's in the two-row layout): Windows 11's caption buttons' height. */
 export const MENU_ROW = 32;
-/** The toolbar's height (SIZE.titleBar): the one-row title bar and the narrow header. */
-export const TOOLBAR = 40;
-/** Under it: the narrow layout (BREAK.phone). */
-export const PHONE = 600;
-/** Under it: tablet width (BREAK.overlays). */
-export const TABLET = 860;
+/** The toolbar's height: the one-row title bar and the narrow header. */
+export const TOOLBAR = SIZE.titleBar;
+/** Under it: the narrow layout, as app.layout.narrow(). */
+export const PHONE = BREAK.phone;
+/** Under it: tablet width (the sidebar and panel are overlays). */
+export const TABLET = BREAK.overlays;
 
 /** Where the menu shows on this platform. */
 export function menuPlace(input: Pick<ChromeInput, "os" | "desktop" | "globalMenu">): ChromeLayout["menu"] {

@@ -29,8 +29,3 @@ export function hotkeyShortcut(combo: string): string | null {
 export function instance(): InstanceStatus {
   return Desktop.instance();
 }
-
-/** The application menu shows in KDE Plasma's Global Menu (Linux only): the window draws no menu row of its own. */
-export function globalMenu(): boolean {
-  return Desktop.globalMenu();
-}
