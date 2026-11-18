@@ -234,7 +234,10 @@ test("the menu installs on Windows and Linux too (every accelerator is one NSH r
   await win.waitFor("id:run:File > Settings…");
   expect(win.shows("id:run:File > Quit eBIRForms")).toBe(true);
   expect(win.shows("id:run:Help > About eBIRForms")).toBe(true);
-  expect(win.shows("id:run:eBIRForms > Quit eBIRForms")).toBe(false);
+  // The app-menu design: Windows and Linux start with an eBIRForms menu too (About, Settings…, Hide, Sign Out, Quit).
+  expect(win.shows("id:run:eBIRForms > Quit eBIRForms")).toBe(true);
+  expect(win.shows("id:run:File > New Tax Profile…")).toBe(true);
+  expect(win.shows("id:run:Profiles > New Tax Profile…")).toBe(true);
 
   const linux = await open(ENTRY, { width: 1440, height: 900, platform: "linux", ...asking() });
   await linux.waitFor("id:sidebar");
