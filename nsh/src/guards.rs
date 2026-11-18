@@ -1289,9 +1289,15 @@ mod tests {
         temp_env::with_var("HOME", Some(elsewhere.path()), || {
             assert_eq!(account_home().as_deref(), Some(account.as_path()));
             let folders = protected_folders_here().expect("folders");
-            assert_eq!(folders.len(), 3);
-            for folder in folders {
+            // A test environment (`EBIR_TEST_ENV`, as CI sets it) adds the app's data folders.
+            assert_eq!(
+                folders,
+                protected_folders_for(&account, crate::door::test_environment())
+            );
+            for folder in protected_folders(&account) {
                 assert!(folder.starts_with(&account), "{}", folder.display());
+            }
+            for folder in folders {
                 assert!(
                     !folder.starts_with(elsewhere.path()),
                     "{}",
