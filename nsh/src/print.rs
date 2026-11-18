@@ -362,6 +362,8 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
 }
 
 /// Writes the PDF of a preview into its folder (`<title>.pdf`, this user's only) and answers its path.
+// Windows prints the sheet itself (`windows_print::print_document`), so only the tests write a PDF there.
+#[cfg_attr(all(windows, target_env = "msvc", not(test)), allow(dead_code))]
 fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
     private_dir(dir)?;
     let path = dir.join(format!("{}.pdf", file_stem(title)));
