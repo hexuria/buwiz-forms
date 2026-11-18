@@ -250,8 +250,34 @@ fn sweep_stale(parent: &Path, alive: impl Fn(u32) -> bool) {
 
 /// `path` as a file URL (everything but unreserved characters and `/` is percent-encoded).
 fn url_for(path: &Path) -> String {
+    file_url(&path.to_string_lossy(), cfg!(windows))
+}
+
+/// [`url_for`] for a path's text, on Windows (`windows`) or not. A Windows path's backslashes are its separators and
+/// its drive keeps the colon, so `C:\Users\x\sheet.html` is `file:///C:/Users/x/sheet.html`, the URL WebView2 loads
+/// (encoding both gave `file://C%3A%5CUsers...`, which names no file); a verbatim path (`\\?\C:\...`, what
+/// `canonicalize` gives) loses its prefix, and a share (`\\server\share\...`) puts its server in the URL's host.
+/// Elsewhere a backslash is a character of a name and is encoded with the rest.
+fn file_url(path: &str, windows: bool) -> String {
     let mut url = String::from("file://");
-    for byte in path.to_string_lossy().bytes() {
+    let plain: String;
+    let mut rest = path;
+    if windows {
+        plain = match path.strip_prefix(r"\\?\UNC\") {
+            Some(share) => format!(r"\\{share}"),
+            None => path.strip_prefix(r"\\?\").unwrap_or(path).to_owned(),
+        }
+        .replace('\\', "/");
+        rest = &plain;
+        if let Some(share) = rest.strip_prefix("//") {
+            rest = share;
+        } else if rest.len() >= 2 && rest.as_bytes()[0].is_ascii_alphabetic() && rest.as_bytes()[1] == b':' {
+            url.push('/');
+            url.push_str(&rest[..2]);
+            rest = &rest[2..];
+        }
+    }
+    for byte in rest.bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => url.push(byte as char),
             other => url.push_str(&format!("%{other:02X}")),
@@ -1187,6 +1213,31 @@ mod tests {
         assert_eq!(file_stem("BIR Form 1701Q \u{2014} Juana Santos"), "BIR Form 1701Q - Juana Santos");
         assert_eq!(file_stem("a/b:c"), "a-b-c");
         assert_eq!(file_stem("  "), "Print preview");
+    }
+
+    #[test]
+    fn windows_paths_become_file_urls_webview2_loads() {
+        assert_eq!(
+            file_url(r"C:\Users\x\AppData\Local\Temp\ebirforms-print-1\2551Q\sheet.html", true),
+            "file:///C:/Users/x/AppData/Local/Temp/ebirforms-print-1/2551Q/sheet.html"
+        );
+        assert_eq!(file_url(r"C:\Users\ADMINI~1\a b\é.html", true), "file:///C:/Users/ADMINI~1/a%20b/%C3%A9.html");
+        assert_eq!(file_url(r"\\?\D:\x\sheet.html", true), "file:///D:/x/sheet.html");
+        assert_eq!(file_url(r"\\server\share\x\sheet.html", true), "file://server/share/x/sheet.html");
+        assert_eq!(file_url(r"\\?\UNC\server\share\sheet.html", true), "file://server/share/sheet.html");
+        // Not on Windows: a backslash is part of a name, and a path is not rewritten.
+        assert_eq!(file_url(r"/tmp/a\b.html", false), "file:///tmp/a%5Cb.html");
+        assert_eq!(file_url("/tmp/a b/é.html", false), "file:///tmp/a%20b/%C3%A9.html");
+    }
+
+    /// The folder previews are written to, as this system names it, is a URL with nothing of the path encoded but
+    /// what a URL needs.
+    #[cfg(windows)]
+    #[test]
+    fn the_preview_folder_is_a_loadable_file_url_here() {
+        let url = url_for(&std::env::temp_dir().join("ebirforms-print-1").join("sheet.html"));
+        assert!(url.starts_with("file:///") && url.as_bytes().get(9) == Some(&b':'), "{url}");
+        assert!(!url.contains("%5C") && !url.contains("%3A"), "{url}");
     }
 
     #[test]

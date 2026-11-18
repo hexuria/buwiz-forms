@@ -5,17 +5,20 @@
 //!   worker may start at all. The one way out of a dry run is the mock BIR server on loopback.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
 //!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
-//!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`.
+//!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`. In a
+//!   test environment the NSH app's own data folder is one of them ([`protected_folders_for`]): a dev, test or
+//!   agent run never opens the shipped app's real database.
 //!
 //! Both are plain functions over the environment and a list of folders, so their tests use temp folders and
 //! never touch a real path. Contract: `docs/plans/nsh-tsx-migration.md`, "The door".
 //!
-//! **Platforms.** On Unix (macOS, Linux) the database guard is complete: the account's real home folder from
-//! the password database, and a folder or file known by device and inode. Windows has neither here (std has no
-//! inode, and the profile folder std finds starts from the `USERPROFILE` variable, which a caller can change), and
-//! nobody has run this crate on Windows. So there the guard opens a database only when the caller names it
-//! with `BIR_DATABASE_PATH` ([`unverified_refusal`]); the by-name check still applies to that path. A Windows
-//! owner-folder lookup and same-file check are not written: see `docs/platforms/nsh.md`.
+//! **Platforms.** The database guard is complete on Unix (macOS, Linux) and Windows. On Unix the account's real
+//! home folder comes from the password database, and a folder or file is known by device and inode. On Windows the
+//! profile folder comes from the process's own token (`GetUserProfileDirectoryW`), never from the `USERPROFILE`
+//! variable a caller can change, and a folder or file is known by its volume serial number and file index
+//! (`GetFileInformationByHandle`), which junctions, symlinks, 8.3 short names, `\\?\` prefixes and hard links do
+//! not change. Where neither exists, the guard opens a database only when the caller names it with
+//! `BIR_DATABASE_PATH` ([`unverified_refusal`]).
 //!
 //! **Environment.** The send guard is the only code here that changes the process environment (two
 //! variables). It runs once, from the door's process setup, which the native module's registration calls
@@ -151,9 +154,9 @@ pub fn protected_folders(home: &Path) -> [PathBuf; 3] {
 
 /// The home folder of the user this process runs as, from the password database (the real uid), never
 /// from `$HOME`: a process started with `HOME=/tmp/x` still protects the owner's real folders. `None` when
-/// the account has no entry. On Windows, where there is no password database, the profile folder std knows: that
-/// starts from `USERPROFILE`, so it is a best effort for the by-name check and is not trusted (see
-/// [`unverified_refusal`], which is why Windows opens only a database the caller names).
+/// the account has no entry. On Windows the profile folder of the account this process's token belongs to, from
+/// Windows itself (`GetUserProfileDirectoryW`), never from `USERPROFILE`: a process started with
+/// `USERPROFILE=C:\x` still protects the owner's real folders.
 pub fn account_home() -> Option<PathBuf> {
     #[cfg(unix)]
     {
@@ -180,19 +183,53 @@ pub fn account_home() -> Option<PathBuf> {
             (!dir.is_empty()).then(|| PathBuf::from(OsStr::from_bytes(dir)))
         }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        windows::profile_folder()
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         std::env::home_dir()
     }
 }
 
-/// The owner's protected folders, under the account's real home folder. `None` when that cannot be found.
+/// Where the NSH app keeps its own data (bir-core's `platform::data_dir` of the plain build): the default under
+/// `home` (macOS `Library/Application Support`, Windows `AppData\Local`, elsewhere `.local/share`), and where the
+/// variable the app reads (`LOCALAPPDATA` on Windows, an absolute `XDG_DATA_HOME` elsewhere off macOS) moves it.
+pub fn app_data_folders(home: &Path) -> Vec<PathBuf> {
+    let id = bir_core::platform::NSH_APP_ID;
+    let (default, moved) = if cfg!(target_os = "macos") {
+        (home.join("Library/Application Support"), None)
+    } else if cfg!(windows) {
+        (home.join("AppData/Local"), std::env::var_os("LOCALAPPDATA"))
+    } else {
+        (home.join(".local/share"), std::env::var_os("XDG_DATA_HOME"))
+    };
+    let mut folders = vec![default.join(id)];
+    if let Some(moved) = moved.map(PathBuf::from).filter(|path| path.is_absolute()) {
+        folders.push(moved.join(id));
+    }
+    folders
+}
+
+/// The folders the guard protects under `home`: the owner's ([`protected_folders`]), and in a test environment
+/// (`test_environment`) the NSH app's own data folders too ([`app_data_folders`]), so a dev, test or agent run never
+/// opens the shipped app's real database, even named. Outside a test environment that is the database the app opens.
+pub fn protected_folders_for(home: &Path, test_environment: bool) -> Vec<PathBuf> {
+    let mut folders = protected_folders(home).to_vec();
+    if test_environment {
+        folders.extend(app_data_folders(home));
+    }
+    folders
+}
+
+/// The protected folders, under the account's real home folder. `None` when that cannot be found.
 fn protected_folders_here() -> Option<Vec<PathBuf>> {
     #[cfg(test)]
     if let Some(folders) = TEST_PROTECTED.with(|slot| slot.borrow().clone()) {
         return Some(folders);
     }
-    account_home().map(|home| protected_folders(&home).to_vec())
+    account_home().map(|home| protected_folders_for(&home, crate::door::test_environment()))
 }
 
 #[cfg(test)]
@@ -224,7 +261,8 @@ pub(crate) fn with_home_for_test<R>(home: &Path, body: impl FnOnce() -> R) -> R 
 /// * **By name.** `path` is made absolute and resolved through symlinks (as far as it exists, then the rest
 ///   by name), so `..` and links cannot reach a protected folder; names compare case-insensitively where
 ///   the file system usually is (macOS, Windows).
-/// * **By identity** (Unix). A protected folder that exists is known by its device and inode, which no
+/// * **By identity** (Unix: device and inode; Windows: volume serial number and file index; see [`identity`]).
+///   A protected folder that exists is known by its identity, which no
 ///   spelling changes: macOS reaches the same folder as `/Users/u/x` and `/System/Volumes/Data/Users/u/x`
 ///   (a firmlink, not a symlink), a case-insensitive volume answers to any case, a bind mount to its other
 ///   path. So `path` is refused when any ancestor of it that exists IS a protected folder, and, when it is
@@ -290,7 +328,7 @@ pub fn database_refusal_here(path: &Path) -> Option<String> {
     let seamed = false;
     if !seamed
         && let Some(why) = unverified_refusal(
-            cfg!(unix),
+            cfg!(any(unix, windows)),
             path,
             std::env::var_os(DATABASE_PATH_ENV),
         )
@@ -303,8 +341,8 @@ pub fn database_refusal_here(path: &Path) -> Option<String> {
 /// The variable that names the database file (bir-core reads it as well).
 const DATABASE_PATH_ENV: &str = "BIR_DATABASE_PATH";
 
-/// Where the guard cannot do what it promises (`can_verify` is false: Windows, anything without Unix's password
-/// database and inodes), it opens no database the caller has not named: `path` must be the file `BIR_DATABASE_PATH`
+/// Where the guard cannot do what it promises (`can_verify` is false: a system that is neither Unix nor Windows, so
+/// has no account lookup and no file identity here), it opens no database the caller has not named: `path` must be the file `BIR_DATABASE_PATH`
 /// names (`named`). The default data folder is refused there, whoever asks. `None` when `can_verify` or when the
 /// caller named this very file. Pure, so every branch runs on any system.
 pub(crate) fn unverified_refusal(
@@ -347,8 +385,13 @@ fn identity(path: &Path) -> Option<Identity> {
         .map(|meta| (meta.dev(), meta.ino()))
 }
 
-/// Windows has no device and inode in std; there the guard is by name only.
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn identity(path: &Path) -> Option<Identity> {
+    windows::identity(path)
+}
+
+/// Elsewhere there is no file identity: the guard is by name only (and [`unverified_refusal`] applies).
+#[cfg(not(any(unix, windows)))]
 fn identity(_path: &Path) -> Option<Identity> {
     None
 }
@@ -361,9 +404,117 @@ fn hard_linked_file_identity(path: &Path) -> Option<Identity> {
     (meta.is_file() && meta.nlink() > 1).then(|| (meta.dev(), meta.ino()))
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn hard_linked_file_identity(path: &Path) -> Option<Identity> {
+    windows::hard_linked_file_identity(path)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn hard_linked_file_identity(_path: &Path) -> Option<Identity> {
     None
+}
+
+/// The Windows side of the database guard, from Windows itself: the profile folder of the process's account, and a
+/// file's identity (volume serial number, file index) and link count.
+#[cfg(windows)]
+mod windows {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use std::path::{Path, PathBuf};
+
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Security::TOKEN_QUERY;
+    use windows_sys::Win32::Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE,
+        FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle, OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    use windows_sys::Win32::UI::Shell::GetUserProfileDirectoryW;
+
+    use super::Identity;
+
+    /// A handle this module opened, closed when it goes.
+    struct Owned(HANDLE);
+
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            // SAFETY: the handle was opened by this module, is valid, and is closed only here, once.
+            unsafe { CloseHandle(self.0) };
+        }
+    }
+
+    /// The profile folder of the account the process's token belongs to (`C:\Users\<name>`), as Windows records
+    /// it for that account; the `USERPROFILE` variable plays no part. `None` when Windows has none to give.
+    pub(super) fn profile_folder() -> Option<PathBuf> {
+        let mut token: HANDLE = std::ptr::null_mut();
+        // SAFETY: the current-process pseudo-handle needs no closing; on success `token` holds a handle that `Owned`
+        // closes.
+        if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+            return None;
+        }
+        let token = Owned(token);
+        let mut size: u32 = 0;
+        // SAFETY: with no buffer the call only writes the size it needs, in UTF-16 units, to `size`.
+        unsafe { GetUserProfileDirectoryW(token.0, std::ptr::null_mut(), &mut size) };
+        if size == 0 {
+            return None;
+        }
+        let mut buffer = vec![0u16; size as usize];
+        // SAFETY: `buffer` holds the `size` units the call asked for and outlives it.
+        if unsafe { GetUserProfileDirectoryW(token.0, buffer.as_mut_ptr(), &mut size) } == 0 {
+            return None;
+        }
+        let len = buffer.iter().position(|&unit| unit == 0).unwrap_or(buffer.len());
+        (len > 0).then(|| PathBuf::from(OsString::from_wide(&buffer[..len])))
+    }
+
+    /// What Windows knows of the file or folder `path` reaches (a symlink or junction on the way is followed), or
+    /// `None` when it cannot be opened.
+    fn information(path: &Path) -> Option<BY_HANDLE_FILE_INFORMATION> {
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        // SAFETY: `wide` is a NUL-terminated UTF-16 path that outlives the call. It asks for attributes only and
+        // shares everything, so an open database is not disturbed; backup semantics lets it open a folder too.
+        let handle = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                FILE_READ_ATTRIBUTES,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS,
+                std::ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let handle = Owned(handle);
+        // SAFETY: all-zero is a valid BY_HANDLE_FILE_INFORMATION, which the call below fills.
+        let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: `handle` is open and `info` is ours to write.
+        (unsafe { GetFileInformationByHandle(handle.0, &mut info) } != 0).then_some(info)
+    }
+
+    fn key(info: &BY_HANDLE_FILE_INFORMATION) -> Identity {
+        (
+            u64::from(info.dwVolumeSerialNumber),
+            (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        )
+    }
+
+    /// The file or folder `path` reaches, by volume and file index.
+    pub(super) fn identity(path: &Path) -> Option<Identity> {
+        information(path).map(|info| key(&info))
+    }
+
+    /// The identity of `path` when it is an existing regular file with more than one link.
+    pub(super) fn hard_linked_file_identity(path: &Path) -> Option<Identity> {
+        if !std::fs::metadata(path).ok()?.is_file() {
+            return None;
+        }
+        let info = information(path)?;
+        (info.nNumberOfLinks > 1).then(|| key(&info))
+    }
 }
 
 fn inside(path: &Path, folder: &Path) -> bool {
@@ -778,13 +929,13 @@ mod tests {
     }
 
     /// A folder tree like the owner's, for the identity checks: the three protected folders exist, with a
-    /// database in each, plus a folder that is not protected. (Only the Unix tests use it: Windows has no identity checks.)
-    #[cfg(unix)]
+    /// database in each, plus a folder that is not protected.
+    #[cfg(any(unix, windows))]
     struct Owner {
         home: Home,
     }
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     impl Owner {
         fn new() -> Self {
             let home = Home::new();
@@ -801,8 +952,11 @@ mod tests {
             Owner { home }
         }
 
-        /// The temp home as the file system names it (macOS puts /var behind /private).
+        /// The temp home as the file system names it (macOS puts /var behind /private; Windows gives the verbatim
+        /// `\\?\C:\...` spelling).
         fn real(&self, relative: &str) -> PathBuf {
+            // Joined name by name, so the separators are the system's: a verbatim Windows path takes `/` literally.
+            let relative: PathBuf = relative.split('/').collect();
             self.home
                 .root
                 .path()
@@ -870,6 +1024,137 @@ mod tests {
         assert_eq!(owner.home.refusal(&agents.join("mine-too.db")), None);
         // And a file with a single name, inside no protected folder, is fine.
         assert_eq!(owner.home.refusal(&agents.join("fresh.db")), None);
+    }
+
+    /// The spellings Windows has for one folder or file are one identity to the guard: the verbatim `\\?\` path,
+    /// a junction (which any user can make), an 8.3 short name, another case, and a hard link. Each reaches the
+    /// owner's data and is refused; a junction or hard link to something else is not.
+    #[cfg(windows)]
+    #[test]
+    fn windows_spellings_of_a_protected_folder_are_refused() {
+        use std::process::Command;
+
+        let owner = Owner::new();
+        let data = owner.real("BuwizNsh/data");
+        let agents = owner.real("BuwizNsh/agents");
+        assert!(data.to_string_lossy().starts_with(r"\\?\"), "{}", data.display());
+        for candidate in [data.join("bir_data.db"), data.join(r"new\deeper.db"), data.clone()] {
+            assert!(owner.home.refusal(&candidate).is_some(), "verbatim {}", candidate.display());
+        }
+        // A junction to the data folder, and one to a harmless folder.
+        // mklink reads a `/` as a switch: name both ends with backslashes.
+        let native = |path: PathBuf| PathBuf::from(path.to_string_lossy().replace('/', "\\"));
+        let junction = |name: &str, target: PathBuf| {
+            let link = native(owner.home.path(&format!("BuwizNsh/agents/{name}")));
+            let made = Command::new("cmd").args(["/C", "mklink", "/J"]).arg(&link).arg(native(target)).output().expect("cmd");
+            assert!(
+                made.status.success(),
+                "mklink /J: {}{}",
+                String::from_utf8_lossy(&made.stdout),
+                String::from_utf8_lossy(&made.stderr)
+            );
+            link
+        };
+        let to_data = junction("to-data", owner.home.path("BuwizNsh/data"));
+        assert!(owner.home.refusal(&to_data.join("bir_data.db")).is_some(), "through a junction");
+        assert!(owner.home.refusal(&to_data.join("new.db")).is_some(), "a new file through a junction");
+        let scratch = owner.home.make("scratch");
+        let to_scratch = junction("to-scratch", scratch);
+        assert_eq!(owner.home.refusal(&to_scratch.join("door.db")), None);
+        // Another case of every name.
+        let upper = PathBuf::from(owner.home.path("BuwizNsh/data/bir_data.db").to_string_lossy().to_uppercase());
+        assert!(owner.home.refusal(&upper).is_some(), "{}", upper.display());
+        // The 8.3 short name of a protected folder with long names (`GROUPC~1\GROUPD~1.BIR`), where the volume makes
+        // short names (not every volume does).
+        let long = owner.home.path(GROUP);
+        let short = {
+            use std::os::windows::ffi::{OsStrExt, OsStringExt};
+            let wide: Vec<u16> = long.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+            let mut buffer = vec![0u16; 1024];
+            // SAFETY: `wide` is NUL-terminated and outlives the call; `buffer` holds the units the call is told of.
+            let len = unsafe {
+                windows_sys::Win32::Storage::FileSystem::GetShortPathNameW(
+                    wide.as_ptr(),
+                    buffer.as_mut_ptr(),
+                    buffer.len() as u32,
+                )
+            } as usize;
+            PathBuf::from(std::ffi::OsString::from_wide(&buffer[..len.min(buffer.len())]))
+        };
+        if !short.as_os_str().is_empty() && !short.to_string_lossy().eq_ignore_ascii_case(&long.to_string_lossy()) {
+            let spelled = short.join("x.db");
+            assert!(owner.home.refusal(&spelled).is_some(), "short name {}", spelled.display());
+        }
+        // A hard link outside the protected folders to the owner's database, and links to a file that is not the
+        // owner's.
+        let alias = agents.join("alias.db");
+        fs::hard_link(data.join("bir_data.db"), &alias).expect("hard link");
+        let why = owner.home.refusal(&alias).expect("hard link refused");
+        assert!(why.contains("hard link"), "{why}");
+        let mine = agents.join("mine.db");
+        fs::write(&mine, b"mine").expect("write");
+        fs::hard_link(&mine, agents.join("mine-too.db")).expect("hard link");
+        assert_eq!(owner.home.refusal(&mine), None);
+        assert_eq!(owner.home.refusal(&agents.join("mine-too.db")), None);
+        assert_eq!(owner.home.refusal(&agents.join("door.db")), None);
+    }
+
+    /// The protected folders hang off the profile folder Windows records for this process's account, not
+    /// `USERPROFILE` (or `HOME`): a process started with either pointing elsewhere still protects the owner's real
+    /// ones.
+    #[cfg(windows)]
+    #[test]
+    fn the_protected_folders_ignore_userprofile() {
+        let elsewhere = tempfile::tempdir().expect("elsewhere");
+        let account = account_home().expect("the account has a profile folder");
+        assert!(account.is_absolute(), "{}", account.display());
+        temp_env::with_var("USERPROFILE", Some(elsewhere.path()), || {
+            temp_env::with_var("HOME", Some(elsewhere.path()), || {
+                assert_eq!(account_home().as_deref(), Some(account.as_path()));
+                let folders = protected_folders_here().expect("folders");
+                assert!(folders.len() >= 3, "{folders:?}");
+                for folder in folders {
+                    assert!(folder.starts_with(&account), "{}", folder.display());
+                    assert!(!folder.starts_with(elsewhere.path()), "{}", folder.display());
+                }
+            })
+        });
+    }
+
+    /// In a test environment the NSH app's own data folder (the shipped app's real database) is refused like the
+    /// owner's folders, by its default name under home; outside one it is the app's database and opens.
+    #[test]
+    fn a_test_environment_also_protects_the_apps_own_data_folder() {
+        let home = Home::new();
+        let own = app_data_folders(home.root.path());
+        assert!(!own.is_empty());
+        let default = own[0].join("bir_data.db");
+        assert!(default.starts_with(home.root.path()), "{}", default.display());
+        let in_test = protected_folders_for(home.root.path(), true);
+        let shipped = protected_folders_for(home.root.path(), false);
+        assert_eq!(shipped, protected_folders(home.root.path()).to_vec(), "outside a test environment: unchanged");
+        let why = database_refusal(&default, &in_test).expect("refused in a test environment");
+        assert!(why.contains("Refusing to open"), "{why}");
+        assert_eq!(database_refusal(&default, &shipped), None, "the shipped app opens its own database");
+        // A scratch database and the agents folder are untouched either way.
+        assert_eq!(database_refusal(&home.path("BuwizNsh/agents/door.db"), &in_test), None);
+    }
+
+    /// On Windows the guard verifies now: with nothing named, a scratch database opens and the owner's real data
+    /// folder stays refused. (Asking creates nothing.)
+    #[cfg(windows)]
+    #[test]
+    fn here_a_scratch_database_opens_and_the_owners_data_does_not() {
+        let profile = account_home().expect("the account has a profile folder");
+        let scratch = tempfile::tempdir().expect("scratch");
+        temp_env::with_var(DATABASE_PATH_ENV, None::<&str>, || {
+            assert_eq!(database_refusal_here(&scratch.path().join("door.db")), None);
+            for folder in [r"BuwizNsh\data", r"BuwizNsh\migration"] {
+                let owner = profile.join(folder).join("bir_data.db");
+                let why = database_refusal_here(&owner).unwrap_or_else(|| panic!("{} opened", owner.display()));
+                assert!(why.contains("the owner's data"), "{why}");
+            }
+        });
     }
 
     /// The `_nsh-db-guard` recipe of the root justfile is this guard in Python (for `just nsh-run` and
@@ -971,8 +1256,8 @@ mod tests {
         }
     }
 
-    /// Windows cannot be verified here, so no database opens unless the caller named exactly that file. The rule is
-    /// pure: this runs it as a system without the Unix lookups would.
+    /// A system with neither Unix's nor Windows' lookups cannot be verified, so no database opens unless the caller
+    /// named exactly that file. The rule is pure: this runs it as such a system would.
     #[test]
     fn where_nothing_can_be_verified_only_a_named_database_opens() {
         let folder = tempfile::tempdir().expect("temp");
@@ -989,7 +1274,7 @@ mod tests {
         // Spelled with a `..` in between, it is still the same file.
         let detour = folder.path().join("x/../bir_data.db");
         assert_eq!(unverified_refusal(false, &detour, named()), None);
-        // Where the lookups exist (Unix) the rule never applies.
+        // Where the lookups exist (Unix, Windows) the rule never applies.
         assert_eq!(unverified_refusal(true, &db, None), None);
     }
 
@@ -1004,9 +1289,15 @@ mod tests {
         temp_env::with_var("HOME", Some(elsewhere.path()), || {
             assert_eq!(account_home().as_deref(), Some(account.as_path()));
             let folders = protected_folders_here().expect("folders");
-            assert_eq!(folders.len(), 3);
-            for folder in folders {
+            // A test environment (`EBIR_TEST_ENV`, as CI sets it) adds the app's data folders.
+            assert_eq!(
+                folders,
+                protected_folders_for(&account, crate::door::test_environment())
+            );
+            for folder in protected_folders(&account) {
                 assert!(folder.starts_with(&account), "{}", folder.display());
+            }
+            for folder in folders {
                 assert!(
                     !folder.starts_with(elsewhere.path()),
                     "{}",

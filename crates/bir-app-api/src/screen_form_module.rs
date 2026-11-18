@@ -122,6 +122,8 @@ export interface ScreenFormOpened {
     filed_original_view?: { status: string; filed_on: string | null };
     /** When a return was sent to BIR and confirmed (a read-only view says so). */
     submitted_at: string | null;
+    /** The send `submitted_at` names was a dry run: the worker only simulated it and nothing reached BIR. False for a real send and for every return sent before this was recorded. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;
@@ -3202,11 +3204,30 @@ fn undated_sale_notice(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
 
 // --------------------------------------------------------- host functions
 
+/// A lifecycle fact of a stored return, as text. The 1601C and 2551Q shapes
+/// keep their lifecycle at the top level, the generic shape in `lifecycle`:
+/// this is the one place that knows both.
+fn lifecycle_text<'a>(draft: &'a Value, name: &str) -> Option<&'a str> {
+    draft[name]
+        .as_str()
+        .or_else(|| draft["lifecycle"][name].as_str())
+}
+
+/// A lifecycle fact that is a yes or no (absent is no); see [`lifecycle_text`].
+fn lifecycle_flag(draft: &Value, name: &str) -> bool {
+    draft[name]
+        .as_bool()
+        .or_else(|| draft["lifecycle"][name].as_bool())
+        .unwrap_or(false)
+}
+
 fn draft_argument(arguments: &HostArguments, index: usize) -> Result<Value, HostError> {
-    let draft = to_json(arguments.value(index)?);
+    let mut draft = to_json(arguments.value(index)?);
     if !draft.is_object() {
         return Err(host_error("draft must be an object"));
     }
+    // Whether a send was a dry run is the worker's to say, never a page's.
+    crate::bir_module::drop_client_dry_run(&mut draft);
     Ok(draft)
 }
 
@@ -3823,8 +3844,10 @@ fn opened_json(
         "profile_differs": differs,
         // A filed return: what the tax profile changed after it (decision 5).
         "profile_changed": fact_asks::filed_changes(kind, &status, &draft, &from_profile.draft),
-        "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
-        "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
+        "submitted_at": lifecycle_text(&draft, "submitted_at"),
+        // The worker's send of this return was a dry run (nothing reached BIR).
+        "submitted_dry_run": lifecycle_flag(&draft, "submitted_dry_run"),
+        "confirmed_at": lifecycle_text(&draft, "confirmed_at"),
         "errors": errors,
         "quiet": quiet,
     }))
@@ -4600,12 +4623,7 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
         actions.push("amend");
     }
     actions.push("keep");
-    let stamp = |name: &str| {
-        stored[name]
-            .as_str()
-            .or_else(|| stored["lifecycle"][name].as_str())
-            .map(str::to_string)
-    };
+    let stamp = |name: &str| lifecycle_text(stored, name).map(str::to_string);
     Ok(json!({
         "actions": actions,
         "submitted_at": stamp("submitted_at"),
@@ -13677,6 +13695,60 @@ mod tests {
             })
             .map(|entry| entry.key.clone())
             .expect("an amount box")
+    }
+
+    /// The page's save never stores a dry-run fact a client put in the draft,
+    /// at the top level or inside `lifecycle`.
+    #[test]
+    fn a_page_save_never_stores_a_clients_dry_run_fact() {
+        setup();
+        for (code, period) in [("0619E", 6i64), ("1601C", 6), ("2551Q", 2)] {
+            let opened = open_for(TIN, code, 2024, period);
+            let mut draft = opened["draft"].clone();
+            draft.as_object_mut().unwrap().remove(SAMPLE_MARK);
+            draft["submitted_dry_run"] = json!(true);
+            if draft["lifecycle"].is_object() {
+                draft["lifecycle"]["submitted_dry_run"] = json!(true);
+            }
+            let id = save(code, &draft)["id"].as_i64().unwrap();
+            assert!(!raw_row(id).1.contains("submitted_dry_run"), "{code}");
+            assert_eq!(
+                open_for(TIN, code, 2024, period)["submitted_dry_run"],
+                false,
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn open_says_whether_the_send_was_a_dry_run() {
+        setup();
+        for (code, period) in [("0619E", 6i64), ("1601C", 6), ("2551Q", 2)] {
+            let opened = open_for(TIN, code, 2024, period);
+            let id = store_filed(code, &opened["draft"], "Submitted");
+            // A real send (and every return sent before the fact was kept).
+            let real = open_for(TIN, code, 2024, period);
+            assert!(real["submitted_at"].is_string(), "{code}");
+            assert_eq!(real["submitted_dry_run"], false, "{code}");
+            assert!(!raw_row(id).1.contains("submitted_dry_run"), "{code}");
+
+            // The worker's dry-run send, as bir-core stores it.
+            let (_, raw) = raw_row(id);
+            let mut sent: Value = serde_json::from_str(&raw).unwrap();
+            if sent["lifecycle"].is_object() {
+                sent["lifecycle"]["submitted_dry_run"] = json!(true);
+            } else {
+                sent["submitted_dry_run"] = json!(true);
+            }
+            raw_exec(
+                &format!("UPDATE form_drafts SET data_json = ?1 WHERE id = {id}"),
+                &[&serde_json::to_string(&sent).unwrap()],
+            );
+            let dry = open_for(TIN, code, 2024, period);
+            assert_eq!(dry["status"], "Submitted", "{code}");
+            assert_eq!(dry["submitted_at"], real["submitted_at"], "{code}");
+            assert_eq!(dry["submitted_dry_run"], true, "{code}");
+        }
     }
 
     #[test]

@@ -467,7 +467,7 @@ mod tests {
             panic!("expected claim");
         };
         let filename = queued.default_submission_filename();
-        draft.transition_to_submitted(filename.clone());
+        draft.transition_to_submitted(filename.clone(), false);
         db.finish_claimed_1601c_submission(&draft, &token).unwrap();
 
         let confirmation = BirReceiptConfirmation {
@@ -516,7 +516,7 @@ mod tests {
             panic!("expected claim");
         };
         let filename = queued.default_submission_filename();
-        draft.transition_to_submitted(filename);
+        draft.transition_to_submitted(filename, false);
         db.finish_claimed_1601c_submission(&draft, &token).unwrap();
         db.get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
             .unwrap()

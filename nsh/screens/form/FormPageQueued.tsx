@@ -3,7 +3,8 @@
 // the stand-in worker sends it, and bir.list_returns("filed") lists it as the stand-in says. The frame's own Queued watch is not mounted
 // here: a button does what its look does (drops the polled lists), so a test decides when the lists are read again.
 //   fx-look   the frame reads the worker's lists again (store.forgetWhere(POLL_KEYS))
-//   fx-send   the worker sends the return: the host's open and the lists both say Submitted
+//   fx-send   the worker sends the return: the host's open and the lists both say Submitted (sent Apr 10, 2025)
+//   fx-dry    the worker's next send is a dry run: the host's open answers `submitted_dry_run` (press it before fx-send)
 //   fx-list   the lists say Submitted while the host's open still says Queued (a page the lists keep disagreeing with)
 //   fx-hide   the page goes away (the route changed)
 //   fx-hold   the host's next open waits (a slow read: the real one takes a few tenths of a second) until fx-release answers it
@@ -25,6 +26,9 @@ const shown = signal(true);
 /** What the host's open says (Queued until the worker sends), and what the filed list says. */
 let opened: "Queued" | "Submitted" = "Queued";
 let listed: "Queued" | "Submitted" = "Queued";
+/** How the stand-in worker sends: a dry run (nothing reached BIR) or a real send. */
+let dryRun = false;
+const SENT_AT = "2025-04-10T01:02:03+00:00";
 /** The open that fx-hold holds (answered by fx-release), and whether the next open is to wait. */
 let holding = false;
 let answer: (() => void) | null = null;
@@ -43,7 +47,8 @@ function Fixture() {
       holding = false;
       await new Promise<void>((done) => (answer = done));
     }
-    return { ...r, status: opened, editable: false };
+    if (opened === "Queued") return { ...r, status: opened, editable: false };
+    return { ...r, status: opened, editable: false, submitted_at: SENT_AT, submitted_dry_run: dryRun };
   };
   fake.list_returns = (which: "filed" | "saved" | "all") => {
     if (which !== "filed") return which === "saved" ? [] : real.list(which);
@@ -73,6 +78,7 @@ function Fixture() {
             listed = "Submitted";
           }}
         />
+        <AppButton testID="fx-dry" size="sm" label="Dry" onPress={() => void (dryRun = true)} />
         <AppButton testID="fx-list" size="sm" label="List" onPress={() => void (listed = "Submitted")} />
         <AppButton testID="fx-hide" size="sm" label="Hide" onPress={() => shown.set(false)} />
         <AppButton testID="fx-hold" size="sm" label="Hold" onPress={() => void (holding = true)} />
