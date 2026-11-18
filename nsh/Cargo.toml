@@ -49,6 +49,12 @@ peniko = "0.6"
 base64 = "0.22"
 png = "0.17"
 
+# Print and Save as PDF on Linux (src/print.rs): WebKitGTK's print operation on GTK's main thread, the GTK and WebKit
+# nsh's Linux backend links (the versions of nsh's workspace, so one copy of each is built).
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk4 = { version = "0.11", features = ["v4_14"] }
+webkit6 = "0.6"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
 # Print preview on Windows (src/print.rs): a hidden WebView2 of the app's own makes the PDF (PrintToPdf) and prints
