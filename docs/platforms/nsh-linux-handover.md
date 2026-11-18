@@ -260,7 +260,7 @@ One item at a time, in this order. Each item ends with its check; write the resu
 - **L10. The agent data-plane tests.** `cargo test --manifest-path nsh/Cargo.toml --features agent --test agent --test agent_send` from `$REPO`, with the session block. It fetches `hexuria/gpui-agent` from GitHub. Check: both test binaries pass, or the failure is recorded.
 - **L11. The database guard on Linux.** Run `cargo test --manifest-path nsh/Cargo.toml guards` and `just _nsh-db-guard "$HOME/BuwizNsh/data/x.db"` (it must refuse and exit 1; it does not create the file). Check: both outputs in the report. Do not try to open a protected path with the app.
 - **L12. The window's chrome, by hand** (only on a real desktop session; no test API reads the tray or the menu bar). Tray icon appears (GNOME needs the AppIndicator extension), a click shows the window, the close button quits and `nsh run` ends, Ctrl+Q with a draft open leaves the draft saved after relaunch, File > Hide hides. Check: each of those written as seen or not seen. On a headless sandbox write "not testable".
-- **L13. The application menu on Linux.** Look for the menu bar. If it is not visible, record that and apply the owner's answer to question 2; until then do not build a menu button. Check: a written yes or no with a picture of the title bar.
+- **L13. The application menu on Linux.** Answered (question 2): KDE Plasma with a Global Menu gets the menu in its panel; GNOME and every other desktop get an in-window two-row bar. Build and check it as section 9 says. Check: every line of 9.4 written as seen or not seen, with pictures, for each desktop tried.
 - **L14. The hotkey, the one-copy guard and the remembered bounds** (a real desktop session for the hotkey; the other two also work under a virtual display with `nsh run`). Hotkey: Settings shows the status for each preset. One copy: run `nsh run` twice on the same named database with `BIR_SINGLE_INSTANCE=1` (the second must print that eBIRForms is already running and exit 0; stop only the processes you started). Bounds: resize, quit, relaunch. Check: three short notes.
 - **L15. Print preview opens on Linux.** Run `shots print`. Check: the preview window opens, shows the sheet (not a placeholder), and an edit in the form reaches it without a reload; the Save as PDF and Print buttons answer with the stub sentence. The test's own PDF step is expected to stop at the stub; note where.
 - **L16. The OS sign-in wording on Linux.** Check: the sentences that say "Mac login" and still show on Linux listed with file and line (`screens/auth/logic.ts:19`, `state.ts`, `screens/settings/Security.tsx`); confirm in a window that the recovery button is hidden.
@@ -290,10 +290,58 @@ A branch per topic (the test expectation, the guard, the wording), each with its
 ## 8. Open questions for the owner
 
 1. **Print and Save as PDF on Linux.** NSH 0.5.1 has no PDF call, so this needs code of our own. Options visible in the repository: the older app's route (open the filled HTML in the default browser and print from there, `docs/platforms/linux.md:176`), our own call into WebKitGTK's print operation, or keep the stub for now. Which?
-2. **The application menu on Linux.** With the title bar hidden NSH does not show the menu bar. Add a menu button to the app's title bar that opens the same menus with `Menu.popup`?
+2. **The application menu on Linux.** Answered: KDE's Global Menu where there is one, else an in-window menu row above the toolbar (section 9).
 3. **The database guard.** Protect the older Linux app's data folder `~/.taxman-ebir` as well? That adds to the three folders listed in the contract (`docs/plans/nsh-tsx-migration.md`, "The door").
 4. **The sandbox.** Which distribution and version is it, does it have a desktop session (tray, hotkey portal, file dialogs, a Secret Service) or only a virtual display, and may packages be installed with `sudo`? Is Linux a real target for users, and on which display server (X11 or Wayland)?
 5. **Wording and OS sign-in.** Leave Linux with no OS sign-in prompt (recovery by PIN, authenticator and recovery key)? The recovery sentence still says "Mac login" there (`screens/auth/logic.ts:19`); say it per platform?
 6. **Ctrl+Q.** NSH treats Ctrl+Q as its own quit and says it cannot be bound. Keep the app's `mod+q` Quit item on Linux (`menu_model.ts:67`), or drop the shortcut label and rely on NSH's?
 7. **CI.** Add a Linux job for `nsh check`, `nsh build`, the Rust tests and the headless TSX tests to `.github/workflows/nsh.yml` (`ubuntu-24.04` already runs the plain-SQLite job there), with `xvfb` for a first real-window run?
 8. **PR #221** shows as not a draft on GitHub although its body says "Draft. Not for merge yet" (read with `gh pr view 221`). Mark it as a draft?
+
+## 9. The application menu (branch `feat/app-menu`)
+
+The owner approved one design for the menu on every desktop; macOS was built and run on the Mac, Linux was not run (it cannot be run from the Mac; the NSH Linux crate was compile-checked in a Debian trixie container, see 9.2). Until the PRs merge, the work is on branch `feat/app-menu` of **both** repositories: `hexuria/buwiz-forms` (based on `feat/nsh-tsx-followups`, PR #225) and `hexuria/nsh` (based on `buwiz`), and the two must be checked out side by side as in 3.3.
+
+### 9.1 What Linux shows
+
+- **KDE Plasma with a Global Menu** (`XDG_CURRENT_DESKTOP` contains `KDE` and `com.canonical.AppMenu.Registrar` is on the session bus): NSH exports the application menu over D-Bus (`com.canonical.dbusmenu` at `/com/canonical/menu/nsh`) and ties the window to it: on Wayland with KWin's `org_kde_kwin_appmenu` protocol, on X11 with the registrar's `RegisterWindow`. The menu shows in the panel's Global Menu: `eBIRForms File Edit View Window Help Profiles`. The window is ONE row: our toolbar, with the window buttons (GTK's, client-side, KWin's title bar hidden) at the end the desktop's button layout gives. Phone width keeps the normal narrow header (no ☰). Code: `crates/nsh-platform-linux/src/global_menu.rs` (NSH, feature `global-menu`, on by default) and `Desktop.globalMenu()` in `nsh/src/desktop.rs` (the app; the same rule). `NSH_GLOBAL_MENU=0` turns it off for both, which shows the fallback below.
+- **KDE without a Global Menu, GNOME, every other desktop:** TWO rows. Row 1, 32 points: the titles (with small chevrons when wide), empty drag space, and GTK's window buttons where `gtk-decoration-layout` puts them (at the right by default; the row keeps room at the left too when the layout puts buttons there). Row 2: the toolbar, no room kept for window buttons. Tablet width (600 to 860): no chevrons, the pill without the TIN. Phone width: no menu row; the narrow header is ☰, the title, the account badge, the window buttons; ☰ lists every menu with submenus. GTK's `PopoverMenuBar` is not used.
+- Keys in the two-row layout: F10 puts the keyboard on the first title, Left/Right move, Down/Enter/Space open, Esc leaves; Alt with a title's letter opens it (B eBIRForms, F, E, V, W, H, P). A lone Alt does nothing (NSH's keymap cannot bind a lone modifier). Under 600, F10 opens the ☰ list.
+- Items as on Windows: File starts with "New Tax Profile…" (no shortcut) above "New Return…" (Ctrl+N); Profiles is the taxpayer switcher plus "New Tax Profile…"; the eBIRForms menu is About, Settings…, Hide, Sign Out, Quit (locked: About, Quit), with no shortcuts of its own. Close and Ctrl+Q behave as before.
+
+### 9.2 Build
+
+```bash
+cd ~/w
+git -C buwiz-forms fetch origin && git -C buwiz-forms switch feat/app-menu
+git -C nsh fetch origin && git -C nsh switch feat/app-menu
+sudo apt-get install -y libwayland-dev     # wayland-client links libwayland-client (gdk4-wayland's wayland_crate feature)
+(cd ~/w/nsh && cargo test -p nsh-platform-linux global_menu tray)    # the Global Menu rule and the dbusmenu numbering
+cd "$REPO" && step am-01-check just nsh-check -v && step am-02-build just nsh-build
+for f in shell/desktop/menu_model.test.ts shell/chrome_layout.test.ts shell/menuRow.test.tsx shell/narrow.test.tsx; do step am-03-$(basename $f) just nsh-test $f; done
+```
+
+Rebuild the nsh command line from the `feat/app-menu` NSH checkout (3.4) so its Linux host links the new crate. The container check that was done: `cargo check -p nsh-platform-linux --features global-menu --tests` on `rust:1-trixie` with `libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libwayland-dev`; it compiled, nothing was run.
+
+### 9.3 Is the Global Menu there? (KDE only)
+
+```bash
+echo "$XDG_CURRENT_DESKTOP" "$XDG_SESSION_TYPE"
+gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.NameHasOwner com.canonical.AppMenu.Registrar   # (true,) with a Global Menu
+# While the app runs: its exported menu (replace :1.NN by the app's unique name from `busctl --user list | grep -i nsh`)
+gdbus call --session --dest :1.NN --object-path /com/canonical/menu/nsh --method com.canonical.dbusmenu.GetLayout 0 -1 '[]'
+```
+
+Add the "Global Menu" widget to a panel (right-click the panel, Add Widgets) if `NameHasOwner` says `(false,)`.
+
+### 9.4 What to check by eye (each as seen or not seen; a picture of each, per desktop)
+
+1. KDE with a Global Menu, Wayland session: the panel shows eBIRForms, File, Edit, View, Window, Help, Profiles while the window is focused; the window has one row, window buttons at its end, no menu row. Choosing File > New Return…, View > Toggle Theme and Profiles > another taxpayer works from the panel. Repeat in an X11 session if there is one.
+2. KDE with a Global Menu, narrow the window under 600: no ☰; the menu stays in the panel.
+3. KDE without a Global Menu (remove the widget and log out and in, or run with `NSH_GLOBAL_MENU=0`): the two-row layout below.
+4. GNOME (and KDE fallback): two rows; row 1 in the app's light and dark colours; the window buttons where the desktop's layout puts them (`gsettings get org.gnome.desktop.wm.preferences button-layout`), not over a title.
+5. Drag row 1's empty space: the window moves; double-click: maximizes and restores; right-click: the window menu.
+6. Each title opens its menu under it; F10, Right, Down opens File; Esc closes it and Esc again leaves the row; Alt+F opens File; Ctrl+N still starts a new return; Ctrl+Q quits as before.
+7. About 700 points wide: same rows, no chevrons, the pill without the TIN. Under 600: one header row with ☰, title, badge, window buttons; ☰ lists every menu with submenus.
+8. Lock the app (Ctrl+L): row 1 with eBIRForms, File, Edit, Help only.
+

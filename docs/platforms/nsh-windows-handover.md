@@ -300,7 +300,7 @@ One item at a time, in this order. Each item ends with its check; write the resu
 - **W10. The agent data-plane tests.** `cargo test --manifest-path Cargo.toml --features agent --test agent --test agent_send` from `nsh/`, with the session block. It fetches `hexuria/gpui-agent` from GitHub. Check: both test binaries pass, or the failure is recorded.
 - **W11. The first real-window tests.** 4.7: `Shots "base"`. Check: the four tests pass and the pictures look right (Inter, tabular figures, icons, title bar).
 - **W12. The window's chrome, by hand** (a person at the screen; no test API reads the tray or the menu bar). With `nsh run` from 4.6: the tray icon appears; a click shows the window; the close button hides it; Show, Hide and Quit in the tray menu work; Quit ends `nsh run`; Ctrl-C also ends it. Check: each of those written as seen or not seen.
-- **W13. The application menu on Windows.** Look for the menu bar. If it is not visible, record that and apply the owner's answer to question 2; until then do not build a menu button. Check: a written yes or no with a picture of the title bar.
+- **W13. The application menu on Windows.** Answered (question 2): the app draws its own two-row bar. Build and check it as section 9 says. Check: every line of 9.3 written as seen or not seen, with pictures.
 - **W14. The hotkey, the one-copy guard and the remembered bounds.** Hotkey: Settings shows the status for each preset. One copy: run `nsh run` twice on the same named database with `$env:BIR_SINGLE_INSTANCE = "1"` (the second must print that eBIRForms is already running and exit 0; stop only the processes you started). Bounds: move and resize, Quit from the tray, relaunch. Check: three short notes.
 - **W15. Print preview opens on Windows.** Fix `url_for` for Windows paths with a unit test, then run `Shots "print"`. Check: the preview window opens, shows the sheet (not a placeholder), and an edit in the form reaches it without a reload; the Save as PDF and Print buttons answer with the stub sentence. The test's own PDF step uses `/tmp` and is expected to stop there; note where.
 - **W16. The OS sign-in wording and Windows Hello.** Check: the label and sentences that say "Mac login" listed with file and line (`screens/auth/SignIn.tsx`, `logic.ts`, `state.ts`, `screens/settings/Security.tsx`); the real prompt is not reachable in a test environment, so write that down instead of trying a non-test run.
@@ -330,10 +330,47 @@ A branch per topic (the guard, the print URL, the wording), each with its own dr
 ## 8. Open questions for the owner
 
 1. **Print and Save as PDF on Windows.** NSH 0.5.1 has no PDF call, so this needs code of our own. Options visible in the repository: the older app's route (the WebView2 print UI behind a Print button, `docs/platforms/windows.md:107`, untested there), or our own native call into WebView2, or keep the stub for now. Which?
-2. **The application menu on Windows.** With the title bar hidden NSH does not show the menu bar. Add a menu button to the app's title bar that opens the same menus with `Menu.popup`?
+2. **The application menu on Windows.** Answered: the approved design is an in-window menu row above the toolbar (section 9).
 3. **The database guard.** OK to implement the profile-folder lookup and same-file check (W7)? Should the older Windows app's data folder `%LOCALAPPDATA%\Taxman\eBIRForms` be protected too? That adds to the three folders listed in the contract (`docs/plans/nsh-tsx-migration.md`, "The door").
 4. **The EC2 image.** Which Windows edition is it? NSH names Windows 10 1809 and later and Windows 11; Server editions are not named and WebView2 may be absent. Is a display of at least 1920x1080 available over RDP?
 5. **Wording.** The sign-in recovery says "Mac login" on every platform (`screens/auth/SignIn.tsx:114`). Say "Windows Hello" or "your Windows sign-in" on Windows?
 6. **Print folder on Windows.** It holds a filled return and has no ACLs or sweep (`print.rs:231-236`, `302-305`). Accept per-user temp, or add both?
 7. **CI.** Done in part: `NSH app (Windows)` in `.github/workflows/nsh.yml` builds the command line, runs `nsh check -v` and `nsh build`, and builds the development host (PR #223). Still open: add the crate's Rust tests and the headless TSX tests to it once they pass by hand.
 8. **PR #221** shows as not a draft on GitHub although its body says "Draft. Not for merge yet" (read with `gh pr view 221`). Mark it as a draft?
+
+## 9. The application menu (branch `feat/app-menu`)
+
+The owner approved one design for the menu on every desktop; macOS was built and run on the Mac, Windows was not (it cannot be built from the Mac). Until the PRs merge, the work is on branch `feat/app-menu` of **both** repositories: `hexuria/buwiz-forms` (based on `feat/nsh-tsx-followups`, PR #225) and `hexuria/nsh` (based on `buwiz`; it changes only the Linux crate, so Windows builds the same NSH code as before).
+
+### 9.1 What Windows shows
+
+- **Wide (from 860 points) and tablet (600 to 860):** two rows. Row 1, 32 points (`MENU_ROW`, `nsh/shell/chrome_layout.ts`): the small app icon (`assets/icons/e_logo.svg`), then the titles `eBIRForms File Edit View Window Help Profiles` (each with a small chevron when wide, none at tablet width), then empty drag space, then NSH's caption buttons (— ☐ ✕, drawn by NSH in Windows 11's style). Row 2: the toolbar (sidebar, back/forward, taxpayer pill, bell, theme, right panel) with no room kept for caption buttons. At tablet width the pill shows the name without the TIN.
+- **Phone width (under 600):** no menu row. The narrow header is one row: ☰, the page title ("eBIRForms" on Home), the account badge, the caption buttons. ☰ opens every menu as one list with submenus. The badge and its menu are #226's, unchanged.
+- **Locked screens** (first run, sign-in, the account gate): row 1 only, with the locked menu (`eBIRForms` = About, Quit; File = Quit; Edit; Help = About); at phone width a ☰ in the drag strip.
+- The Win32 menu bar is not used. A title opens its menu with `Menu.popup` under it. Keys: F10 puts the keyboard on the first title (it looks selected), Left/Right move along the row, Down/Enter/Space open the menu, Esc leaves; Alt with a title's letter opens it directly (B eBIRForms, F, E, V, W, H, P). Alt pressed alone does nothing: NSH's keymap cannot bind a lone modifier. Under 600, F10 opens the ☰ list.
+- Menu items: File starts with "New Tax Profile…" (no shortcut) above "New Return…" (Ctrl+N). Profiles lists the taxpayers (the current one checked), a separator and "New Tax Profile…"; with no taxpayers "No taxpayers yet" (disabled). About, Settings and Quit appear in both eBIRForms and File/Help (the owner accepted that); the eBIRForms copies show no shortcut so no accelerator is bound twice. Close, Alt+F4, hide and quit behave exactly as before.
+
+### 9.2 Build
+
+```powershell
+Set-Location C:\w
+git -C buwiz-forms fetch origin; git -C buwiz-forms switch feat/app-menu
+git -C nsh fetch origin; git -C nsh switch feat/app-menu
+Set-Location C:\w\buwiz-forms\nsh
+Step "am-01-check" { nsh check -v }
+Step "am-02-build" { nsh build }
+Step "am-03-tests" { foreach ($f in "shell/desktop/menu_model.test.ts","shell/chrome_layout.test.ts","shell/menuRow.test.tsx","shell/narrow.test.tsx") { nsh test ./$f } }
+```
+
+Rebuild the nsh command line from the `feat/app-menu` NSH checkout first if section 3.4's build came from another commit (`cargo install --locked --path crates/nsh-cli --root "$HOME\BuwizNsh\tools"` in `C:\w\nsh`). Pass: no errors, no warnings, every test passes. Then open the window as in 4.6 (`nsh run --target windows` on a database in the agents folder).
+
+### 9.3 What to check by eye (write each as seen or not seen; a picture of each)
+
+1. Wide window, light theme and dark theme: two rows; row 1 has the app icon, the seven titles with chevrons, the caption buttons at the right end, and its colours follow the app's theme (no white Win32 strip in dark).
+2. Drag row 1's empty space: the window moves. Double-click it: the window maximizes; again: it restores. Right-click it: the system window menu.
+3. Caption buttons: — minimizes; ☐ maximizes/restores and hovering it shows Windows 11's snap layouts; ✕ hides the window to the tray (as before).
+4. Click each title: its menu opens just under the title, with the items in 9.1; choose File > New Tax Profile… (opens the new taxpayer page when allowed; disabled for "Just me" with a taxpayer already, as the profile panel), Profiles > another taxpayer (switches, toast "Switched to …"), eBIRForms > Settings….
+5. Keyboard: F10, Right ×2, Down opens Edit; Esc closes it and Esc again leaves the row. Alt+F opens File. Ctrl+N still starts a new return.
+6. Narrow the window to about 700 points: same rows, no chevrons, the pill without its TIN. Then under 600: no menu row; the header shows ☰, the title, the badge and the caption buttons on one row, nothing under the buttons; ☰ lists every menu with submenus.
+7. Lock the app (Ctrl+L): the locked screen has row 1 with eBIRForms, File, Edit, Help only.
+

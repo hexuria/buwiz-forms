@@ -7,6 +7,7 @@ Rust half: `src/desktop.rs` (the hooks' mailbox, the one-copy guard, the hotkey 
 | File | What |
 |---|---|
 | `menu_model.ts` | Pure: the menus as data for macOS/Windows/Linux, signed in or locked, with or without a taxpayer (`buildMenu`, `buildTrayMenu`, `flatten`, `printMenu`, `CLOSE_POLICY`). Port of crates/bir-shell/src/app_menu.rs. |
+| `menu.ts` | `menuNow(os)`: the menu for the state now (taxpayers, the current one, `canAddTaxpayer`, `isAdmin`), wired to `perform`. The one source for `Menu.setApplicationMenu` (Desktop.tsx), the in-window menu row and the narrow ☰ (`shell/MenuRow.tsx`). |
 | `actions.ts` | What an item does through the frame's API (`app.go`, `toggleSidebar`, `togglePanel`, `cycleTheme`, `openPalette`, `startNewReturn`); `showMain`, `hideToTray`, `toggleMain`, `quitApp` (= `app.quit`: beforeLeave hooks, then the door's `shutdown()`, then `Application.quit()`), `closePressed`, `setSignOutHandler` (the sign-in screens take over Sign Out; the default is the old fallback: `cloud_account_sign_out`, `session_closed`, `app.setCloudLocked(true)`). |
 | `Desktop.tsx` | `DesktopHost`: close guard (`closeOnPress: false` + `closePress`), the menu effect, `Tray.set`, the hotkey effect, a 250 ms tick of `Desktop.poll()`. Props `updater` and `shortcuts` swap nsh/updater and GlobalShortcut for a test. `installedMenu()`, `installedTray()` for fixtures. |
 | `hotkey.ts` | Pure: follows the stored combo, replaces a chord the system has not answered yet, gives late answers back. |
@@ -14,6 +15,10 @@ Rust half: `src/desktop.rs` (the hooks' mailbox, the one-copy guard, the hotkey 
 | `updater.ts`, `updates.ts` | Pure state machine (idle, checking, downloading, ready, failed, up_to_date, available, installing) and its wiring to nsh/updater and to Rust (`publishUpdate`). |
 | `banner.ts` | Pure: what the banner says (`shell/UpdateSlot.tsx` draws it; the frame mounts it, the locked frames do not yet). |
 | `native.ts` | The only import of `Desktop` from `ebirforms/native`. |
+
+## The app menu design (feat/app-menu)
+- File > New Tax Profile… (no shortcut; Ctrl/Cmd+N stays New Return…), a last Profiles menu (switcher, current checked, New Tax Profile…; "No taxpayers yet" when empty), and an eBIRForms menu first on Windows and Linux too (its items carry no shortcuts: File/Edit keep them). New Tax Profile… is disabled where the profile panel offers no New taxpayer; other taxpayers are disabled for a non-admin.
+- Where the menu shows is `shell/chrome_layout.ts` (pure, tested): macOS the system bar, KDE with a Global Menu the panel (`Desktop.globalMenu()`, NSH's `global_menu.rs`), Windows and other Linux desktops a 32-point menu row above the toolbar (`shell/MenuRow.tsx`), ☰ in the narrow header under 600.
 
 ## Behaviour (and where it differs from the old app)
 - Close button, Cmd+W, Cmd+H hide the window (`win.hide()`); the Dock icon stays (NSH has no per-window activation switch: `macos.activationPolicy: accessory` would remove it for good), and a Dock click shows the window again by itself (nsh-platform-macos `applicationShouldHandleReopen`). Per docs/platforms: macOS X and Cmd+Q hide, quit is in the tray; Windows X and Alt+F4 hide, no Ctrl+Q; Linux X and Ctrl+Q quit. The old app_menu.rs bound Ctrl/Cmd+Q to a real quit everywhere: `CLOSE_POLICY` is the one place to flip it.
