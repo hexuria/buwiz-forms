@@ -66,11 +66,11 @@ env:
   # repository's cache storage is full); panics still name their file and line.
   CARGO_PROFILE_DEV_DEBUG: "0"
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # 699a0f57df29458cfe9153b0cb2398f8295dcfcf = hexuria/nsh, branch feat/app-menu (hexuria/nsh#14: the Global Menu,
-  # Menu.inGlobalMenu() and Tray.available(), on buwiz rebuilt on upstream 0.6). The app menu needs them, so 87e0a4ea4
-  # (buwiz since hexuria/nsh#13) no longer builds this branch. TEMPORARY: once hexuria/nsh#14 merges into buwiz, move the
-  # pin to that merge commit.
-  NSH_PINNED_REF: 699a0f57df29458cfe9153b0cb2398f8295dcfcf
+  # 95b5600c6acff85dce02e4690398705f2f5b059c = hexuria/nsh, branch feat/menu-tray-availability (hexuria/nsh#16:
+  # Menu.inGlobalMenu(), Tray.available() and nsh/test's open({ tray, globalMenu })), on buwiz at 8e59996b6, which merged
+  # hexuria/nsh#14 (the KDE Global Menu) on NSH 0.6.0. The app menu needs them, so 87e0a4ea4 (buwiz before #14) no longer
+  # builds this branch. TEMPORARY: once hexuria/nsh#16 merges into buwiz, move the pin to that merge commit.
+  NSH_PINNED_REF: 95b5600c6acff85dce02e4690398705f2f5b059c
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"

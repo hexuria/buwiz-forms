@@ -300,7 +300,7 @@ A branch per topic (the test expectation, the guard, the wording), each with its
 
 ## 9. The application menu (branch `feat/app-menu`)
 
-The owner approved one design for the menu on every desktop; macOS was built and run on the Mac, Linux was not run (it cannot be run from the Mac; the NSH Linux crate was compile-checked in a Debian trixie container, see 9.2). The app's part is `hexuria/buwiz-forms` PR #230 (branch `feat/app-menu`, on `main`). The Global Menu is NSH's: hexuria/nsh#14 (branch `feat/app-menu`), which merges into NSH's `buwiz`; the app's NSH pin (`NSH_PINNED_REF` in `.github/workflows/nsh.yml`) then moves to that merge commit, and the sibling `nsh` checkout follows the pin as in 3.3. Until #14 merges, the pin is the pushed head of `feat/app-menu` in hexuria/nsh, so build against that: the `feat/app-menu` worktree, side by side as in 3.3.
+The owner approved one design for the menu on every desktop; macOS was built and run on the Mac, Linux was not run (it cannot be run from the Mac; the NSH Linux crate was compile-checked in a Debian trixie container, see 9.2). The app's part is `hexuria/buwiz-forms` PR #230 (branch `feat/app-menu`, on `main`). The Global Menu is NSH's: hexuria/nsh#14, merged into NSH's `buwiz` as `8e59996b6`. `Menu.inGlobalMenu()`, `Tray.available()` and `nsh/test`'s `open({ tray, globalMenu })` are hexuria/nsh#16 (branch `feat/menu-tray-availability`), on top of it. The app's NSH pin (`NSH_PINNED_REF` in `.github/workflows/nsh.yml`) is #16's pushed head until #16 merges, then moves to that merge commit; the sibling `nsh` checkout follows the pin as in 3.3.
 
 ### 9.1 What Linux shows
 
@@ -314,7 +314,7 @@ The owner approved one design for the menu on every desktop; macOS was built and
 ```bash
 cd ~/w
 git -C buwiz-forms fetch origin && git -C buwiz-forms switch feat/app-menu
-git -C nsh fetch origin && git -C nsh checkout --detach "$(grep -m1 'NSH_PINNED_REF:' buwiz-forms/.github/workflows/nsh.yml | awk '{print $2}')"   # the pin: feat/app-menu's head until hexuria/nsh#14 merges, then the buwiz merge commit
+git -C nsh fetch origin && git -C nsh checkout --detach "$(grep -m1 'NSH_PINNED_REF:' buwiz-forms/.github/workflows/nsh.yml | awk '{print $2}')"   # the pin: hexuria/nsh#16's head until it merges, then the buwiz merge commit
 sudo apt-get install -y libwayland-dev     # wayland-client links libwayland-client (gdk4-wayland's wayland_crate feature)
 (cd ~/w/nsh && cargo test -p nsh-platform-linux global_menu tray)    # the Global Menu rule and tie, the dbusmenu numbering and EventGroup
 cd "$REPO" && step am-01-check just nsh-check -v && step am-02-build just nsh-build
