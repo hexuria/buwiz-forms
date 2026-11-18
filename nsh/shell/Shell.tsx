@@ -3,7 +3,7 @@
 // tab bar and the sheets (under 600 points), floats the sidebar and panel as overlays under 860, and mounts the dialogs
 // and the toaster once. Screens are drawn by views.tsx.
 import type { JSX } from "nsh";
-import { cleanup, effect, ErrorBoundary, keymap, platform, Scroll, untracked, View } from "nsh";
+import { cleanup, computed, effect, ErrorBoundary, keymap, platform, Scroll, untracked, View } from "nsh";
 import { Button } from "nsh/base";
 import { isAvailable as desktopAvailable, currentWindow, titleBar } from "nsh/desktop";
 import { BackHandler, isAvailable as mobileAvailable } from "nsh/mobile";
@@ -258,8 +258,10 @@ export function Shell(props: ShellProps) {
   // The app draws its own 40-point title bar where the platform has windows (the traffic lights and caption buttons stay).
   // Two rows (Windows, Linux without a Global Menu): the title bar is the 32-point menu row, whose end holds the window's buttons.
   if (desktopAvailable && platform.desktop) {
+    // A memo: the title bar is set again only when its height changes (two rows and one), not at every resize.
+    const titleBarHeight = computed(() => chromeNow().titleBarHeight);
     effect(() => {
-      const height = chromeNow().titleBarHeight;
+      const height = titleBarHeight();
       untracked(() => currentWindow().set({ titleBar: { style: "hidden", height } }));
     });
   }

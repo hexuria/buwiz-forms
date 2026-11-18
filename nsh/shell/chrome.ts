@@ -1,24 +1,8 @@
 // The chrome layout for this window now (chrome_layout.ts over the platform and the window's width). Read inside JSX or a closure.
-import { platform, windowSize } from "nsh";
-import { isAvailable } from "nsh/desktop";
+import { computed, platform, windowSize } from "nsh";
+import { isAvailable, Menu } from "nsh/desktop";
 import { chromeLayout, MENU_ROW, TOOLBAR, type ChromeLayout } from "./chrome_layout";
-import { globalMenu } from "./desktop/native";
 import type { Os } from "./desktop/menu_model";
-
-let globalAnswer: boolean | null = null;
-
-/** Linux only: Plasma's Global Menu shows the app's menu (asked of Rust once). */
-function globalMenuOnce(): boolean {
-  if (platform.os !== "linux") return false;
-  if (globalAnswer === null) {
-    try {
-      globalAnswer = globalMenu();
-    } catch {
-      globalAnswer = false;
-    }
-  }
-  return globalAnswer;
-}
 
 /** A desktop with windows. */
 export function isDesktop(): boolean {
@@ -31,9 +15,21 @@ export function menuOs(): Os | null {
   return platform.os === "macos" || platform.os === "windows" || platform.os === "linux" ? platform.os : null;
 }
 
-/** The chrome now (reactive on the window's width). */
+/** The same rows and flags: a resize inside one breakpoint changes nothing. */
+function sameLayout(a: ChromeLayout, b: ChromeLayout): boolean {
+  return (Object.keys(a) as (keyof ChromeLayout)[]).every((k) => a[k] === b[k]);
+}
+
+// NSH says whether the menu really is in KDE Plasma's Global Menu: exported, and the window tied to it (Linux; false elsewhere).
+// It turns false when the widget goes, so the layout falls back to the two rows while the app runs.
+const layout = computed(
+  () => chromeLayout({ os: platform.os, desktop: isDesktop(), globalMenu: platform.os === "linux" && Menu.inGlobalMenu(), width: windowSize().width }),
+  { equals: sameLayout },
+);
+
+/** The chrome now (reactive; it changes when the layout does, not at every width). */
 export function chromeNow(): ChromeLayout {
-  return chromeLayout({ os: platform.os, desktop: isDesktop(), globalMenu: globalMenuOnce(), width: windowSize().width });
+  return layout();
 }
 
 /** How far the frame's chrome reaches down the window: the toolbar, and the menu row above it when there is one. */

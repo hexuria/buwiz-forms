@@ -30,11 +30,6 @@ export function instance(): InstanceStatus {
   return Desktop.instance();
 }
 
-/** The application menu shows in KDE Plasma's Global Menu (Linux only): the window draws no menu row of its own. */
-export function globalMenu(): boolean {
-  return Desktop.globalMenu();
-}
-
 /** macOS: shows the Dock icon (the app is a regular app again and comes to the front) or takes it away (a menu-bar app while hidden). Does nothing elsewhere. */
 export function setDockIcon(shown: boolean): void {
   Desktop.setDockIcon(shown);
