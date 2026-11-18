@@ -687,9 +687,14 @@ pub struct PdfProbe {
     pub width_pt: f64,
     /// The first page's height in points.
     pub height_pt: f64,
-    /// The text of the pages as the system reads it (macOS: PDFKit), the first 3000 characters.
+    /// The text of the pages as the system reads it (macOS: PDFKit; elsewhere the fonts' ToUnicode maps), the first
+    /// [`PROBE_TEXT_CHARS`] characters.
     pub text: String,
 }
+
+/// How much of a PDF's text a probe keeps. A form's field values can come after every label of its page in the text
+/// (WebView2 writes them last), and the 2551Q's labels alone pass 3000 characters.
+const PROBE_TEXT_CHARS: usize = 20_000;
 
 fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
     let bytes = std::fs::metadata(path).map_err(|error| format!("Cannot read {}: {error}", path.display()))?.len();
@@ -711,9 +716,9 @@ fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
         })
         .unwrap_or((0.0, 0.0));
     #[cfg(target_os = "macos")]
-    let text = mac::pdf_text(path).chars().take(3000).collect();
+    let text = mac::pdf_text(path).chars().take(PROBE_TEXT_CHARS).collect();
     #[cfg(not(target_os = "macos"))]
-    let text = String::new();
+    let text = pdf_text(&document).chars().take(PROBE_TEXT_CHARS).collect();
     Ok(PdfProbe {
         pages: pages.len() as u32,
         bytes: bytes.min(u64::from(u32::MAX)) as u32,
@@ -722,6 +727,146 @@ fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
         height_pt,
         text,
     })
+}
+
+/// The text of a PDF's pages read through each font's `ToUnicode` map: the strings its pages show, in order, a line per
+/// text object. (WebView2's PDFs draw text in Type3 fonts whose maps lopdf's own text reader does not parse.)
+#[cfg(not(target_os = "macos"))]
+fn pdf_text(document: &lopdf::Document) -> String {
+    let mut text = String::new();
+    for page in document.get_pages().values() {
+        let maps: HashMap<Vec<u8>, UnicodeMap> = document
+            .get_page_fonts(*page)
+            .map(|fonts| fonts.into_iter().map(|(name, font)| (name, unicode_map(document, font))).collect())
+            .unwrap_or_default();
+        let Ok(content) = document.get_and_decode_page_content(*page) else {
+            continue;
+        };
+        let mut font: Option<&UnicodeMap> = None;
+        for operation in &content.operations {
+            match operation.operator.as_str() {
+                "Tf" => font = operation.operands.first().and_then(|name| name.as_name().ok()).and_then(|name| maps.get(name)),
+                "Tj" | "TJ" | "'" | "\"" => {
+                    for operand in &operation.operands {
+                        show(&mut text, font, operand);
+                    }
+                }
+                "ET" => text.push('\n'),
+                _ => {}
+            }
+        }
+    }
+    text
+}
+
+/// A font's codes (`width` bytes each) and the text each stands for.
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+struct UnicodeMap {
+    width: usize,
+    codes: HashMap<u32, String>,
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show(text: &mut String, font: Option<&UnicodeMap>, operand: &lopdf::Object) {
+    let Some(font) = font.filter(|font| font.width > 0) else {
+        return;
+    };
+    match operand {
+        lopdf::Object::String(bytes, _) => {
+            for code in bytes.chunks(font.width) {
+                let code = code.iter().fold(0u32, |n, &b| (n << 8) | u32::from(b));
+                if let Some(chars) = font.codes.get(&code) {
+                    text.push_str(chars);
+                }
+            }
+        }
+        lopdf::Object::Array(items) => {
+            for item in items {
+                show(text, Some(font), item);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn unicode_map(document: &lopdf::Document, font: &lopdf::Dictionary) -> UnicodeMap {
+    font.get_deref(b"ToUnicode", document)
+        .ok()
+        .and_then(|object| object.as_stream().ok())
+        .map(|stream| parse_unicode_map(&String::from_utf8_lossy(&stream.decompressed_content().unwrap_or_else(|_| stream.content.clone()))))
+        .unwrap_or_default()
+}
+
+/// A `ToUnicode` CMap's `bfchar` and `bfrange` entries (a range's destination counts up from its first, or is a list).
+#[cfg(not(target_os = "macos"))]
+fn parse_unicode_map(cmap: &str) -> UnicodeMap {
+    fn hex(token: &str) -> Option<Vec<u8>> {
+        let digits = token.strip_prefix('<')?.strip_suffix('>')?;
+        (0..digits.len()).step_by(2).map(|i| u8::from_str_radix(digits.get(i..i + 2)?, 16).ok()).collect()
+    }
+    fn code(bytes: &[u8]) -> u32 {
+        bytes.iter().fold(0u32, |n, &b| (n << 8) | u32::from(b))
+    }
+    fn utf16(bytes: &[u8], plus: u16) -> String {
+        let mut units: Vec<u16> = bytes.chunks(2).map(|pair| u16::from_be_bytes([pair[0], *pair.get(1).unwrap_or(&0)])).collect();
+        if let Some(last) = units.last_mut() {
+            *last = last.wrapping_add(plus);
+        }
+        String::from_utf16_lossy(&units)
+    }
+    let spaced = cmap.replace('<', " <").replace('>', "> ").replace('[', " [ ").replace(']', " ] ");
+    let tokens: Vec<&str> = spaced.split_whitespace().collect();
+    let mut map = UnicodeMap::default();
+    let mut i = 0;
+    while i < tokens.len() {
+        match tokens[i] {
+            "beginbfchar" => {
+                i += 1;
+                while i + 1 < tokens.len() && tokens[i] != "endbfchar" {
+                    if let (Some(source), Some(target)) = (hex(tokens[i]), hex(tokens[i + 1])) {
+                        map.width = source.len();
+                        map.codes.insert(code(&source), utf16(&target, 0));
+                    }
+                    i += 2;
+                }
+            }
+            "beginbfrange" => {
+                i += 1;
+                while i + 2 < tokens.len() && tokens[i] != "endbfrange" {
+                    let (Some(low), Some(high)) = (hex(tokens[i]), hex(tokens[i + 1])) else {
+                        i += 1;
+                        continue;
+                    };
+                    map.width = low.len();
+                    let (low, high) = (code(&low), code(&high));
+                    if tokens[i + 2] == "[" {
+                        let mut at = i + 3;
+                        let mut n = low;
+                        while at < tokens.len() && tokens[at] != "]" {
+                            if let Some(target) = hex(tokens[at]) {
+                                map.codes.insert(n, utf16(&target, 0));
+                            }
+                            n += 1;
+                            at += 1;
+                        }
+                        i = at + 1;
+                    } else {
+                        if let Some(target) = hex(tokens[i + 2]) {
+                            for n in low..=high.min(low.saturating_add(0xFFFF)) {
+                                map.codes.insert(n, utf16(&target, (n - low) as u16));
+                            }
+                        }
+                        i += 3;
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    map
 }
 
 /// The PDF of `html` (the document of a preview), made by the platform's web engine.
@@ -1695,6 +1840,7 @@ mod tests {
         assert_eq!(probe.pages, page_info(&html).pages, "{probe:?}");
         assert!((probe.width_pt - 595.28).abs() < 1.5 && (probe.height_pt - 841.89).abs() < 1.5, "{probe:?}");
         assert!(probe.content_bytes > 0, "blank pages: {probe:?}");
+        assert!(probe.text.contains("Juana Santos"), "the form's text: {probe:?}");
     }
 
     /// Windows: a PDF that is not one A4 page per sheet is refused, as the macOS capture refuses one.
@@ -1716,6 +1862,23 @@ mod tests {
         assert!(process_alive(std::process::id()));
         // Windows process ids are multiples of four: this one never names a process.
         assert!(!process_alive(4_000_001));
+    }
+
+
+    /// The ToUnicode maps WebView2 writes for its Type3 fonts (one-byte codes, single codes and ranges) read back.
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn a_type3_fonts_unicode_map_is_read() {
+        let map = parse_unicode_map(
+            "/CIDInit /ProcSet findresource begin 12 dict begin begincmap 1 begincodespacerange <00> <FF> endcodespacerange \
+             9 beginbfchar <03> <0020> <37> <0054> <44> <0061> <46> <0063> <48> <0065> <4A> <0067> <4F> <006C> <51> <006E> \
+             <55> <0072> endbfchar 3 beginbfrange <33> <35> <0050> <57> <58> <0074> <5B> <5C> <0078> \
+             <60> <61> [<0041> <0042>] endbfrange endcmap",
+        );
+        assert_eq!(map.width, 1);
+        let read = |codes: &[u32]| codes.iter().filter_map(|c| map.codes.get(c).cloned()).collect::<String>();
+        assert_eq!(read(&[0x37, 0x48, 0x5B, 0x57]), "Text");
+        assert_eq!(read(&[0x33, 0x34, 0x35, 0x03, 0x60, 0x61]), "PQR AB");
     }
 
     #[test]
