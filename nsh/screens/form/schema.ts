@@ -127,6 +127,12 @@ export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, availab
   return Math.min(320, available);
 }
 
+/** How a read-only return says it was sent: the worker's dry run ("Dry run Nov 18, 2026, not sent to BIR") or a real send ("Sent to BIR Nov 18, 2026"). */
+export function sentWords(submittedAt: string, dryRun: boolean): string {
+  const when = shortIsoDate(submittedAt);
+  return dryRun ? `Dry run ${when}, not sent to BIR` : `Sent to BIR ${when}`;
+}
+
 /** The strip on an amended return's filed version, opened from its history. */
 export function filedOriginalStrip(view: { filed_on: string | null }): string {
   const when = view.filed_on ? ` on ${shortIsoDate(view.filed_on)}` : "";

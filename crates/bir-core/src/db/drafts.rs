@@ -1332,6 +1332,7 @@ impl Database {
             existing.submitted_payload = draft.submitted_payload.clone();
         }
         existing.submission_filename = draft.submission_filename.clone();
+        existing.submitted_dry_run = draft.submitted_dry_run;
         existing.submission_attempts = 0;
         existing.next_retry_at = None;
         existing.last_error = None;

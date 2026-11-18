@@ -1364,6 +1364,25 @@ mod tests {
     }
 
     #[test]
+    fn reverting_a_dry_run_return_for_amendment_clears_the_dry_run_fact() {
+        let db = Database::open_in_memory_for_tests().unwrap();
+        let mut form = queued();
+        let filename = form.submission_filename();
+        form.lifecycle.transition_to_submitted_with(filename, true);
+        store(&db, &form);
+        let result = db
+            .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
+            .unwrap();
+        assert!(result.marked_amended);
+        assert!(!result.draft.lifecycle.submitted_dry_run);
+        let stored = db
+            .get_queueable_draft::<TestForm>(TIN, 2025, 6)
+            .unwrap()
+            .unwrap();
+        assert!(!stored.lifecycle.submitted_dry_run);
+    }
+
+    #[test]
     fn reverting_a_confirmed_return_keeps_its_receipt_and_every_earlier_snapshot() {
         let db = Database::open_in_memory_for_tests().unwrap();
         store(&db, &confirmed());

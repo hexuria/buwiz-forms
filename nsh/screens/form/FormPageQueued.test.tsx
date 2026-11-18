@@ -78,6 +78,35 @@ test("desktop: Cancel queue and the chip move together: both say Queued until th
   expect(view()).toEqual({ chip: "Submitted", cancel: false });
 });
 
+test("desktop: a real send says Sent to BIR, a dry-run send says it was not sent", async () => {
+  const app = await open(ENTRY, DESKTOP);
+  await app.waitFor("text:Queued · read-only", { timeout: 15_000 });
+  await app.press("id:fx-send");
+  await look(app);
+  await app.waitFor("text:Sent to BIR Apr 10, 2025. Nothing here can be changed.", { timeout: 10_000 });
+  expect(app.texts().some((t) => t.includes("Dry run"))).toBe(false);
+
+  const dry = await open(ENTRY, DESKTOP);
+  await dry.waitFor("text:Queued · read-only", { timeout: 15_000 });
+  await dry.press("id:fx-dry");
+  await dry.press("id:fx-send");
+  await look(dry);
+  await dry.waitFor("text:Dry run Apr 10, 2025, not sent to BIR. Nothing here can be changed.", { timeout: 10_000 });
+  expect(dry.texts().some((t) => t.includes("Sent to BIR"))).toBe(false);
+  expect(dry.texts()).toContain("Submitted · read-only");
+});
+
+test("phone: a dry-run send says it was not sent to BIR", async () => {
+  const app = await open(ENTRY);
+  await app.waitFor("text:Queued · read-only", { timeout: 15_000 });
+  await app.press("id:fx-dry");
+  await app.press("id:fx-send");
+  await app.press("id:fx-look");
+  // On a phone the line sits under the header, out of the first screen: read the texts, not what is in view.
+  await app.waitUntil(() => app.texts().includes("Dry run Apr 10, 2025, not sent to BIR. Nothing here can be changed."), { timeout: 10_000 });
+  expect(app.texts().some((t) => t.includes("Sent to BIR"))).toBe(false);
+});
+
 test("desktop: a page the lists keep disagreeing with reads once, not on every look", async () => {
   const app = await open(ENTRY, DESKTOP);
   await app.waitFor("text:Queued · read-only", { timeout: 15_000 });
