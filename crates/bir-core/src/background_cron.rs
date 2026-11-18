@@ -771,7 +771,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             // Keep the exact bytes that were encrypted for PUT, so an
             // amendment can later snapshot what BIR received.
             draft.submitted_payload = Some(xml_payload);
-            draft.transition_to_submitted_with(filename, session_source.is_dry_run());
+            draft.transition_to_submitted(filename, session_source.is_dry_run());
             if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -1167,7 +1167,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             draft.lifecycle_mut().submitted_payload = Some(payload);
             draft
                 .lifecycle_mut()
-                .transition_to_submitted_with(filename, session_source.is_dry_run());
+                .transition_to_submitted(filename, session_source.is_dry_run());
             if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -1543,7 +1543,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
             crate::notification::send_notification(&notice_title, &notice_body);
             // Keep the exact bytes that were encrypted for PUT.
             draft.submitted_payload = Some(xml_payload);
-            draft.transition_to_submitted_with(filename.clone(), session_source.is_dry_run());
+            draft.transition_to_submitted(filename.clone(), session_source.is_dry_run());
             if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                 match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -3112,7 +3112,7 @@ mod tests {
         let mut monthly = queued_1601c_draft(&test_profile());
         let reviewed = monthly.to_bir_field_map();
         let filename = monthly.default_submission_filename();
-        monthly.transition_to_submitted_with(filename, true);
+        monthly.transition_to_submitted(filename, true);
         assert!(monthly.submitted_dry_run);
         assert_eq!(monthly.to_bir_field_map(), reviewed);
         let mut legacy = serde_json::to_value(&monthly).unwrap();
@@ -3129,7 +3129,7 @@ mod tests {
         monthly.transition_to_queued().unwrap();
         assert!(!monthly.submitted_dry_run);
         let filename = monthly.default_submission_filename();
-        monthly.transition_to_submitted(filename);
+        monthly.transition_to_submitted(filename, false);
         assert!(
             serde_json::to_value(&monthly)
                 .unwrap()
@@ -3140,7 +3140,7 @@ mod tests {
         let mut quarterly = queued_draft(&reviewed_profile());
         let reviewed = quarterly.to_bir_field_map();
         let filename = quarterly.default_submission_filename();
-        quarterly.transition_to_submitted_with(filename, true);
+        quarterly.transition_to_submitted(filename, true);
         assert!(quarterly.submitted_dry_run);
         assert_eq!(quarterly.to_bir_field_map(), reviewed);
         let mut legacy = serde_json::to_value(&quarterly).unwrap();
@@ -3157,7 +3157,7 @@ mod tests {
         quarterly.transition_to_queued().unwrap();
         assert!(!quarterly.submitted_dry_run);
         let filename = quarterly.default_submission_filename();
-        quarterly.transition_to_submitted(filename);
+        quarterly.transition_to_submitted(filename, false);
         assert!(
             serde_json::to_value(&quarterly)
                 .unwrap()
@@ -3194,6 +3194,75 @@ mod tests {
                 .all(|job| !is_email_poll_job(job)),
             "dry-run must not schedule IMAP poll"
         );
+    }
+
+    /// The session fails before any upload: nothing was sent, so the return
+    /// stays Queued and unclaimed, with one attempt counted, to be retried.
+    #[tokio::test]
+    async fn process_queued_2551q_pre_store_failure_stays_unclaimed_and_backs_off() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::PreStore);
+
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+
+        assert!(transport.calls().is_empty());
+        let failed = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(failed.status, FilingStatus::Queued);
+        assert_eq!(failed.submission_attempts, 1);
+        assert!(failed.submission_claim_token.is_none());
+        assert!(failed.submission_put_started_at.is_none());
+        assert!(failed.submitted_at.is_none());
+        assert!(
+            failed
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("no PUT attempted")),
+            "{:?}",
+            failed.last_error
+        );
+    }
+
+    /// The upload's outcome is unknown (it may have reached BIR): the return
+    /// keeps its claim and is never uploaded again, so it cannot be filed
+    /// twice.
+    #[tokio::test]
+    async fn process_queued_2551q_unknown_outcome_stays_claimed_and_is_not_retried() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::UnknownIo);
+
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+
+        assert_eq!(transport.calls().len(), 1);
+        let stored = || {
+            db.lock()
+                .unwrap()
+                .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .unwrap()
+        };
+        let claimed = stored();
+        assert_eq!(claimed.status, FilingStatus::Queued);
+        assert!(claimed.submission_claim_token.is_some());
+        assert!(claimed.submission_put_started_at.is_some());
+        assert!(claimed.submitted_at.is_none());
+
+        // A second run must not upload again: the outcome is unknown.
+        let retry = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &retry)
+            .await;
+        assert!(retry.calls().is_empty());
+        let after = stored();
+        assert_eq!(after.status, FilingStatus::Queued);
+        assert!(after.submission_claim_token.is_some());
     }
 
     #[tokio::test]

@@ -11,6 +11,9 @@ import { Toaster } from "./ui";
 const YEAR = 2025;
 const MONTH = 9;
 const sent = signal(false);
+const gaveUp = signal(false);
+/** How long the fixture waits for the worker (the worker sends a queued return at once). */
+const WAIT_MS = 30_000;
 
 function sendThroughTheWorker(): void {
   createDemoTaxpayer();
@@ -19,9 +22,11 @@ function sendThroughTheWorker(): void {
   bir.set_year_facts(DEMO.tin, YEAR, { eopt_tier: "Micro" });
   bir.save_form_draft(DEMO.tin, "1601C", YEAR, MONTH, "Draft", { tax_14_total_compensation: 100000, tax_25_total_taxes_withheld: 10000 });
   bir.queue_form_draft(DEMO.tin, "1601C", YEAR, MONTH);
+  const until = Date.now() + WAIT_MS;
   const look = () => {
     const stored = (bir.get_form_draft(DEMO.tin, "1601C", YEAR, MONTH) ?? {}) as { status?: string };
     if (stored.status === "Submitted") sent.set(true);
+    else if (Date.now() > until) gaveUp.set(true);
     else setTimeout(look, 100);
   };
   look();
@@ -31,7 +36,7 @@ function Preview() {
   sendThroughTheWorker();
   return (
     <View class="flex-1 bg-card">
-      <If when={sent()} else={<Text testID="fx-sending">Sending…</Text>}>
+      <If when={sent()} else={<Text testID="fx-sending">{gaveUp() ? "The worker did not send the return." : "Sending…"}</Text>}>
         <FormPage tin={DEMO.tin} formCode="1601C" year={YEAR} period={MONTH} mode="return" />
       </If>
       <Toaster bottom={96} />

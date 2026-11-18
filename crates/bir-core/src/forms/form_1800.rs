@@ -1237,7 +1237,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
             let filename = filed.submission_filename();
-            filed.lifecycle.transition_to_submitted(filename);
+            filed.lifecycle.transition_to_submitted(filename, false);
             db.conn
                 .execute(
                     "UPDATE form_drafts SET status = 'Submitted', data_json = ?1 WHERE id = ?2",

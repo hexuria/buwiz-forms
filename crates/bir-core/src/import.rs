@@ -766,7 +766,7 @@ mod tests {
         // A return the worker sent in a dry run keeps saying so.
         let mut dry_run = crate::forms::Form1601CDraft::new_from_profile(&profile, 2024, 5);
         dry_run.status = crate::forms::FilingStatus::Queued;
-        dry_run.transition_to_submitted_with(dry_run.default_submission_filename(), true);
+        dry_run.transition_to_submitted(dry_run.default_submission_filename(), true);
         db.conn
             .execute(
                 "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)

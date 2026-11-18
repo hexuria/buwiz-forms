@@ -1292,7 +1292,7 @@ mod tests {
     fn submitted() -> TestForm {
         let mut form = queued();
         let filename = form.submission_filename();
-        form.lifecycle.transition_to_submitted(filename);
+        form.lifecycle.transition_to_submitted(filename, false);
         form
     }
 
@@ -1368,7 +1368,7 @@ mod tests {
         let db = Database::open_in_memory_for_tests().unwrap();
         let mut form = queued();
         let filename = form.submission_filename();
-        form.lifecycle.transition_to_submitted_with(filename, true);
+        form.lifecycle.transition_to_submitted(filename, true);
         store(&db, &form);
         let result = db
             .revert_queueable_for_amendment::<TestForm>(TIN, 2025, 6)
@@ -1399,7 +1399,7 @@ mod tests {
             .queue(crate::filing_queue::QueueAuthSource::Gui)
             .unwrap();
         let filename = amended.submission_filename();
-        amended.lifecycle.transition_to_submitted(filename);
+        amended.lifecycle.transition_to_submitted(filename, false);
         let json = serde_json::to_string(&amended).unwrap();
         db.conn
             .execute(

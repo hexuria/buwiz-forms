@@ -3204,6 +3204,23 @@ fn undated_sale_notice(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
 
 // --------------------------------------------------------- host functions
 
+/// A lifecycle fact of a stored return, as text. The 1601C and 2551Q shapes
+/// keep their lifecycle at the top level, the generic shape in `lifecycle`:
+/// this is the one place that knows both.
+fn lifecycle_text<'a>(draft: &'a Value, name: &str) -> Option<&'a str> {
+    draft[name]
+        .as_str()
+        .or_else(|| draft["lifecycle"][name].as_str())
+}
+
+/// A lifecycle fact that is a yes or no (absent is no); see [`lifecycle_text`].
+fn lifecycle_flag(draft: &Value, name: &str) -> bool {
+    draft[name]
+        .as_bool()
+        .or_else(|| draft["lifecycle"][name].as_bool())
+        .unwrap_or(false)
+}
+
 fn draft_argument(arguments: &HostArguments, index: usize) -> Result<Value, HostError> {
     let mut draft = to_json(arguments.value(index)?);
     if !draft.is_object() {
@@ -3827,10 +3844,10 @@ fn opened_json(
         "profile_differs": differs,
         // A filed return: what the tax profile changed after it (decision 5).
         "profile_changed": fact_asks::filed_changes(kind, &status, &draft, &from_profile.draft),
-        "submitted_at": draft["submitted_at"].as_str().or_else(|| draft["lifecycle"]["submitted_at"].as_str()),
+        "submitted_at": lifecycle_text(&draft, "submitted_at"),
         // The worker's send of this return was a dry run (nothing reached BIR).
-        "submitted_dry_run": draft["submitted_dry_run"].as_bool().or_else(|| draft["lifecycle"]["submitted_dry_run"].as_bool()).unwrap_or(false),
-        "confirmed_at": draft["confirmed_at"].as_str().or_else(|| draft["lifecycle"]["confirmed_at"].as_str()),
+        "submitted_dry_run": lifecycle_flag(&draft, "submitted_dry_run"),
+        "confirmed_at": lifecycle_text(&draft, "confirmed_at"),
         "errors": errors,
         "quiet": quiet,
     }))
@@ -4606,12 +4623,7 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
         actions.push("amend");
     }
     actions.push("keep");
-    let stamp = |name: &str| {
-        stored[name]
-            .as_str()
-            .or_else(|| stored["lifecycle"][name].as_str())
-            .map(str::to_string)
-    };
+    let stamp = |name: &str| lifecycle_text(stored, name).map(str::to_string);
     Ok(json!({
         "actions": actions,
         "submitted_at": stamp("submitted_at"),

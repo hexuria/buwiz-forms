@@ -554,13 +554,9 @@ impl Form1601CDraft {
         }
     }
 
-    pub fn transition_to_submitted(&mut self, filename: String) {
-        self.transition_to_submitted_with(filename, false);
-    }
-
     /// Queued -> Submitted after a successful PUT; `dry_run`: the worker's
     /// transport only simulated it (`submitted_dry_run`).
-    pub fn transition_to_submitted_with(&mut self, filename: String, dry_run: bool) {
+    pub fn transition_to_submitted(&mut self, filename: String, dry_run: bool) {
         assert!(
             matches!(self.status, FilingStatus::Queued),
             "Cannot submit form in {:?} status - must be Queued",

@@ -194,14 +194,9 @@ impl SubmissionLifecycle {
         }
     }
 
-    /// Queued -> Submitted after a successful PUT.
-    pub fn transition_to_submitted(&mut self, filename: String) {
-        self.transition_to_submitted_with(filename, false);
-    }
-
     /// Queued -> Submitted after a successful PUT; `dry_run`: the worker's
     /// transport only simulated it (`submitted_dry_run`).
-    pub fn transition_to_submitted_with(&mut self, filename: String, dry_run: bool) {
+    pub fn transition_to_submitted(&mut self, filename: String, dry_run: bool) {
         assert!(
             matches!(self.status, FilingStatus::Queued),
             "Cannot submit form in {:?} status - must be Queued",
@@ -1091,7 +1086,7 @@ mod tests {
         form.queue(QueueAuthSource::Gui).unwrap();
         let reviewed = form.field_map();
         let filename = form.submission_filename();
-        form.lifecycle.transition_to_submitted_with(filename, true);
+        form.lifecycle.transition_to_submitted(filename, true);
         assert!(form.lifecycle.submitted_dry_run);
         let json = serde_json::to_value(&form).unwrap();
         assert_eq!(json["submitted_dry_run"], true);
@@ -1116,7 +1111,7 @@ mod tests {
         form.queue(QueueAuthSource::Gui).unwrap();
         assert!(!form.lifecycle.submitted_dry_run);
         let filename = form.submission_filename();
-        form.lifecycle.transition_to_submitted(filename);
+        form.lifecycle.transition_to_submitted(filename, false);
         assert!(!form.lifecycle.submitted_dry_run);
         let json = serde_json::to_value(&form).unwrap();
         assert!(json.get("submitted_dry_run").is_none(), "{json}");
