@@ -66,9 +66,11 @@ env:
   # repository's cache storage is full); panics still name their file and line.
   CARGO_PROFILE_DEV_DEBUG: "0"
   # THE PIN: the NSH commit every job builds against. Change it here and nowhere else.
-  # 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8 = hexuria/nsh, branch buwiz: "windows: Apply an input's text alpha to what
-  # RichEdit draws" (hexuria/nsh#13, on the v0.5.1 merge of hexuria/nsh#12).
-  NSH_PINNED_REF: 87e0a4ea44256e59c15736c2f95b4d0e9ba91ae8
+  # 10a4f6262ca6c724ef028ed584d8ef7f36eb24b9 = hexuria/nsh, branch feat/app-menu (hexuria/nsh#14: the Global Menu,
+  # Menu.inGlobalMenu() and Tray.available(), on buwiz rebuilt on upstream 0.6). The app menu needs them, so 87e0a4ea4
+  # (buwiz since hexuria/nsh#13) no longer builds this branch. TEMPORARY: once hexuria/nsh#14 merges into buwiz, move the
+  # pin to that merge commit.
+  NSH_PINNED_REF: 10a4f6262ca6c724ef028ed584d8ef7f36eb24b9
   NSH_REPOSITORY: hexuria/nsh
   # The four safety variables: nothing reaches the keychain, a real database or the BIR.
   BUWIZ_NO_KEYCHAIN: "1"
