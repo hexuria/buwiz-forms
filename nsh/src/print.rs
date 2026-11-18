@@ -30,7 +30,8 @@
 //! min((595.28 - 20) / w, (841.89 - 20) / h, 1) with 10 pt of safety above it: down to fit, never up. One printed
 //! page per form page (`.sheet`).
 //!
-//! macOS and Windows; other systems (Linux) answer "not available" honestly.
+//! Linux: WebKitGTK's print operation makes the PDF (GTK's "Print to File" printer, the same page rule, checked as
+//! Windows' is) and prints after GTK's print dialog. Other systems answer "not available" honestly.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -367,8 +368,9 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
 }
 
 /// Writes the PDF of a preview into its folder (`<title>.pdf`, this user's only) and answers its path.
-// Windows prints the sheet itself (`windows_print::print_document`), so only the tests write a PDF there.
-#[cfg_attr(all(windows, target_env = "msvc", not(test)), allow(dead_code))]
+// Windows and Linux print the sheet themselves (`windows_print::print_document`, `linux_print::print_document`), so
+// only the tests write a PDF there.
+#[cfg_attr(all(any(all(windows, target_env = "msvc"), target_os = "linux"), not(test)), allow(dead_code))]
 fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
     private_dir(dir)?;
     let path = dir.join(format!("{}.pdf", file_stem(title)));
@@ -898,9 +900,14 @@ fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
     windows_print::make_pdf(html)
 }
 
-#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"))))]
+#[cfg(target_os = "linux")]
+fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
+    linux_print::make_pdf(html)
+}
+
+#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"), target_os = "linux")))]
 fn platform_pdf(_html: &str) -> Result<Vec<u8>, String> {
-    Err("Print and Save as PDF are available on macOS and Windows only for now.".to_owned())
+    Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
 }
 
 /// The system print panel for the PDF at `path`: up when this returns.
@@ -909,9 +916,290 @@ fn platform_print(path: &Path) -> Result<(), String> {
     mac::print_pdf(path)
 }
 
-#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"))))]
+#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"), target_os = "linux")))]
 fn platform_print(_path: &Path) -> Result<(), String> {
-    Err("Print and Save as PDF are available on macOS and Windows only for now.".to_owned())
+    Err("Print and Save as PDF are available on macOS, Windows and Linux only for now.".to_owned())
+}
+
+/// What Windows and Linux share: their web engine (WebView2, WebKitGTK) prints the sheet HTML itself, by one page rule,
+/// from a job folder of its own, and the PDF it makes is checked to be one A4 page per sheet.
+#[cfg(any(all(windows, target_env = "msvc"), target_os = "linux"))]
+mod engine_print {
+    use std::path::PathBuf;
+
+    use super::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT};
+
+    /// The sheets as printed pages: no margin, one A4 page per sheet and nothing else. The paper style gives a sheet
+    /// its safety padding on top of its height, which would make it taller than the page and spill each one onto a
+    /// second page: here the padding is inside the height, which stays just under the page's, and the only page
+    /// breaks are the ones between sheets.
+    pub(super) const PRINT_CSS: &str = "<style id=\"pdf-print\">@page{size:A4;margin:0}html,body{width:595.28pt !important;\
+    margin:0 !important;padding:0 !important;background:#fff !important}.sheet{margin:0 !important;box-shadow:none !important;\
+    box-sizing:border-box !important;width:595.28pt !important;height:841pt !important;overflow:hidden !important;\
+    break-inside:avoid;break-after:auto !important;page-break-after:auto !important}\
+    .sheet+.sheet{break-before:page;page-break-before:always}.sheet::after{content:none !important}</style>";
+
+    /// The document with the print style last in its head.
+    pub(super) fn for_print(html: &str) -> String {
+        match html.rfind("</head>") {
+            Some(at) => format!("{}{PRINT_CSS}{}", &html[..at], &html[at..]),
+            None => format!("{PRINT_CSS}{html}"),
+        }
+    }
+
+    /// A folder of this job's own in the process's print folder (`ebirforms-print-<pid>`, which the app's quit and
+    /// the next start's sweep remove), with the document written into it.
+    pub(super) fn job_folder(html: &str) -> Result<(PathBuf, PathBuf), String> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let folder = std::env::temp_dir()
+            .join(format!("ebirforms-print-{}", std::process::id()))
+            .join(format!("job-{n}"));
+        std::fs::create_dir_all(&folder).map_err(|error| format!("Could not make the print folder: {error}"))?;
+        let sheet = folder.join("sheet.html");
+        std::fs::write(&sheet, for_print(html)).map_err(|error| format!("Could not write the sheet: {error}"))?;
+        Ok((folder, sheet))
+    }
+
+    /// The PDF has one A4 page per sheet: what the printer gets and what the file holds are the same pages.
+    pub(super) fn check_a4(bytes: &[u8], sheets: u32) -> Result<(), String> {
+        let document = lopdf::Document::load_mem(bytes).map_err(|error| format!("Not a PDF: {error}"))?;
+        let pages = document.get_pages();
+        if pages.len() as u32 != sheets {
+            return Err(format!("A page did not come out as A4: {} pages for {sheets} sheets.", pages.len()));
+        }
+        for id in pages.values() {
+            let size = document
+                .get_dictionary(*id)
+                .ok()
+                .and_then(|page| page.get(b"MediaBox").ok())
+                .and_then(|media| media.as_array().ok())
+                .map(|media| {
+                    let at = |i: usize| media.get(i).and_then(|n| n.as_float().ok()).map_or(0.0, f64::from);
+                    (at(2) - at(0), at(3) - at(1))
+                })
+                .unwrap_or((0.0, 0.0));
+            let (width, height) = (f64::from(PAPER_WIDTH_PT), f64::from(PAPER_HEIGHT_PT));
+            if (size.0 - width).abs() > 1.5 || (size.1 - height).abs() > 1.5 {
+                return Err(format!("A page did not come out as A4: {:.1} x {:.1} pt.", size.0, size.1));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The Linux half: WebKitGTK's print operation, on GTK's main thread, where WebKit and GTK live. Each job loads the
+/// sheet into a hidden web view of its own (never shown, so nsh's web views are never touched) and prints it by the
+/// page rule: A4, no margins, scale 1. Save as PDF prints to GTK's own "Print to File" printer (built into GTK 4, as
+/// is CUPS), which writes a vector PDF that is then checked as Windows' is; Print shows GTK's print dialog (the
+/// printers CUPS knows, copies, pages, sides) over the preview window and prints there. Callers are worker threads
+/// (`blocking`), never the main thread, which would wait on itself. A run without GTK (headless tests) answers with a
+/// sentence instead of waiting.
+#[cfg(target_os = "linux")]
+mod linux_print {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::{Mutex, mpsc};
+    use std::time::Duration;
+
+    use gtk4::{self as gtk, glib, prelude::*};
+    use webkit6::prelude::*;
+
+    use super::engine_print::{check_a4, job_folder};
+    use super::{page_info, url_for};
+
+    /// One print job at a time.
+    static ONE: Mutex<()> = Mutex::new(());
+
+    /// How long making a PDF may take before it gives up (loading the sheet and printing it is a second or two).
+    const PDF_TIME: Duration = Duration::from_secs(120);
+
+    type Answer<T> = mpsc::Sender<Result<T, String>>;
+
+    /// Runs `job` on GTK's main thread and waits for what it sends, at most `limit`.
+    fn on_main<T: Send + 'static>(limit: Option<Duration>, job: impl FnOnce(Answer<T>) + Send + 'static) -> Result<T, String> {
+        if !gtk::is_initialized() {
+            return Err("Print and Save as PDF need the app's window, which this run does not have.".to_owned());
+        }
+        let (tx, rx) = mpsc::channel();
+        glib::MainContext::default().invoke(move || job(tx));
+        match limit {
+            Some(limit) => rx.recv_timeout(limit).map_err(|_| "The print job did not finish in time.".to_owned())?,
+            None => rx.recv().map_err(|_| "The print job ended without an answer.".to_owned())?,
+        }
+    }
+
+    /// Sends `answer` once, whichever of the job's callbacks comes first.
+    fn once<T: 'static>(tx: Answer<T>) -> impl Fn(Result<T, String>) + Clone + 'static {
+        let tx = Rc::new(RefCell::new(Some(tx)));
+        move |answer| {
+            if let Some(tx) = tx.borrow_mut().take() {
+                let _ = tx.send(answer);
+            }
+        }
+    }
+
+    /// A4 portrait with no margins: the paper of the page rule.
+    fn page_setup() -> gtk::PageSetup {
+        let setup = gtk::PageSetup::new();
+        setup.set_paper_size(&gtk::PaperSize::new(Some(gtk::PAPER_NAME_A4)));
+        setup.set_orientation(gtk::PageOrientation::Portrait);
+        setup.set_top_margin(0.0, gtk::Unit::Points);
+        setup.set_bottom_margin(0.0, gtk::Unit::Points);
+        setup.set_left_margin(0.0, gtk::Unit::Points);
+        setup.set_right_margin(0.0, gtk::Unit::Points);
+        setup
+    }
+
+    /// Loads `url` into a hidden web view and calls `ready` with it once the page is in (or why it is not).
+    fn load(url: &str, ready: impl FnOnce(Result<webkit6::WebView, String>) + 'static) {
+        let view = webkit6::WebView::new();
+        // WebKit loads only into a view in a window: a window of its own, realized and never shown.
+        let window = gtk::Window::new();
+        window.set_child(Some(&view));
+        window.set_default_size(800, 1100);
+        WidgetExt::realize(&window);
+        let ready = Rc::new(RefCell::new(Some(ready)));
+        let failed = ready.clone();
+        view.connect_load_failed(move |_, _, _, error| {
+            if let Some(ready) = failed.borrow_mut().take() {
+                ready(Err(format!("The sheet did not load: {error}")));
+            }
+            true
+        });
+        view.connect_load_changed(move |view, event| {
+            if event == webkit6::LoadEvent::Finished
+                && let Some(ready) = ready.borrow_mut().take()
+            {
+                ready(Ok(view.clone()));
+            }
+        });
+        view.load_uri(url);
+    }
+
+    /// Prints `view` with `settings` by the page rule: straight away (`parent` none), or after GTK's print dialog over
+    /// `parent`. Answers true once the job is done, false when the person cancelled the dialog.
+    fn print_view(view: webkit6::WebView, settings: gtk::PrintSettings, parent: Option<gtk::Window>, answer: impl Fn(Result<bool, String>) + Clone + 'static) {
+        let operation = webkit6::PrintOperation::new(&view);
+        operation.set_print_settings(&settings);
+        operation.set_page_setup(&page_setup());
+        // The view and the operation live until the job ends.
+        let kept = Rc::new(RefCell::new(Some((view, operation.clone()))));
+        let failed = answer.clone();
+        let released = kept.clone();
+        operation.connect_failed(move |_, error| {
+            failed(Err(format!("The document could not be printed: {error}")));
+            released.borrow_mut().take();
+        });
+        let done = answer.clone();
+        operation.connect_finished(move |_| {
+            done(Ok(true));
+            kept.borrow_mut().take();
+        });
+        match parent {
+            None => operation.print(),
+            Some(parent) => {
+                if operation.run_dialog(Some(&parent)) == webkit6::PrintOperationResponse::Cancel {
+                    answer(Ok(false));
+                }
+            }
+        }
+    }
+
+    /// GTK's "Print to File" printer (its name is translated, so it is found by what it is: the virtual printer that
+    /// takes PDF). `found` gets it, or None once every printer was listed without it.
+    fn file_printer(found: impl FnOnce(Option<gtk::Printer>) + 'static) {
+        let found = Rc::new(RefCell::new(Some(found)));
+        let last = found.clone();
+        // GTK calls this on the main thread, but its binding asks for a thread-safe function: the guard says so,
+        // and would panic if it were ever touched elsewhere.
+        let guarded = glib::thread_guard::ThreadGuard::new(found);
+        gtk::enumerate_printers(
+            move |printer| {
+                if printer.is_virtual() && printer.accepts_pdf() {
+                    if let Some(found) = guarded.get_ref().borrow_mut().take() {
+                        found(Some(printer.clone()));
+                    }
+                    return true;
+                }
+                false
+            },
+            false,
+        );
+        // The file printer is GTK's own and listed at once; the CUPS ones may take a while and are not waited for.
+        glib::timeout_add_local_once(Duration::from_secs(10), move || {
+            if let Some(found) = last.borrow_mut().take() {
+                found(None);
+            }
+        });
+    }
+
+    /// The PDF of `html`: WebKitGTK prints the document to GTK's "Print to File" printer, A4 with no margins, one page
+    /// per sheet, checked to be that (as Windows' is).
+    pub(super) fn make_pdf(html: &str) -> Result<Vec<u8>, String> {
+        let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let expected = page_info(html).pages.max(1);
+        let (folder, sheet) = job_folder(html)?;
+        let out = folder.join("document.pdf");
+        let (url, out_url) = (url_for(&sheet), url_for(&out));
+        let made = on_main(Some(PDF_TIME), move |tx| {
+            let answer = once(tx);
+            load(&url, move |view| {
+                let view = match view {
+                    Ok(view) => view,
+                    Err(error) => return answer(Err(error)),
+                };
+                file_printer(move |printer| {
+                    let Some(printer) = printer else {
+                        return answer(Err("GTK's Print to File printer is not there to make the PDF.".to_owned()));
+                    };
+                    let settings = gtk::PrintSettings::new();
+                    settings.set_printer(&printer.name());
+                    settings.set(gtk::PRINT_SETTINGS_OUTPUT_URI, Some(&out_url));
+                    settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT, Some("pdf"));
+                    settings.set_scale(100.0);
+                    print_view(view, settings, None, answer);
+                });
+            });
+        });
+        let bytes = made.and_then(|_| std::fs::read(&out).map_err(|error| format!("Could not read the PDF: {error}")));
+        let _ = std::fs::remove_dir_all(&folder);
+        let bytes = bytes?;
+        check_a4(&bytes, expected)?;
+        Ok(bytes)
+    }
+
+    /// Prints `html`: GTK's print dialog over the front window (the preview, which asked), then WebKitGTK prints the
+    /// document there by the same page rule as the PDF. Resolves once the job is with the printer, or when the person
+    /// cancels the dialog; rejects with a sentence.
+    pub(super) fn print_document(html: &str) -> Result<(), String> {
+        let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let (folder, sheet) = job_folder(html)?;
+        let url = url_for(&sheet);
+        let printed = on_main(None, move |tx| {
+            let answer = once(tx);
+            load(&url, move |view| {
+                let view = match view {
+                    Ok(view) => view,
+                    Err(error) => return answer(Err(error)),
+                };
+                let windows = gtk::Window::list_toplevels();
+                let parent = windows
+                    .iter()
+                    .filter_map(|w| w.clone().downcast::<gtk::Window>().ok())
+                    .find(|w| w.is_active())
+                    .or_else(|| windows.iter().filter_map(|w| w.clone().downcast::<gtk::Window>().ok()).find(|w| w.is_visible()));
+                let Some(parent) = parent else {
+                    return answer(Err("There is no window to show the print dialog over.".to_owned()));
+                };
+                let settings = gtk::PrintSettings::new();
+                settings.set_scale(100.0);
+                print_view(view, settings, Some(parent), answer);
+            });
+        });
+        let _ = std::fs::remove_dir_all(&folder);
+        printed.map(|_| ())
+    }
 }
 
 /// The Windows half: WebView2 and the system print dialog, on a thread of its own. WebView2 wants a single-threaded COM
@@ -952,6 +1240,8 @@ mod windows_print {
     };
     use windows::core::{HRESULT, HSTRING, Interface, PCWSTR, w};
 
+    pub(super) use super::engine_print::check_a4;
+    use super::engine_print::job_folder;
     use super::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT, page_info, url_for};
 
     // The loader is linked statically, as nsh's Windows backend does (`WebView2LoaderStatic.lib`, which
@@ -970,40 +1260,8 @@ mod windows_print {
     /// One print job at a time.
     static ONE: Mutex<()> = Mutex::new(());
 
-    /// The sheets as printed pages: no margin, one A4 page per sheet and nothing else. The paper style gives a sheet
-    /// its safety padding on top of its height, which would make it taller than the page and spill each one onto a
-    /// second page: here the padding is inside the height, which stays just under the page's, and the only page
-    /// breaks are the ones between sheets.
-    const PRINT_CSS: &str = "<style id=\"pdf-print\">@page{size:A4;margin:0}html,body{width:595.28pt !important;\
-margin:0 !important;padding:0 !important;background:#fff !important}.sheet{margin:0 !important;box-shadow:none !important;\
-box-sizing:border-box !important;width:595.28pt !important;height:841pt !important;overflow:hidden !important;\
-break-inside:avoid;break-after:auto !important;page-break-after:auto !important}\
-.sheet+.sheet{break-before:page;page-break-before:always}.sheet::after{content:none !important}</style>";
-
     fn text(error: impl std::fmt::Display) -> String {
         error.to_string()
-    }
-
-    /// The document with the print style last in its head.
-    fn for_print(html: &str) -> String {
-        match html.rfind("</head>") {
-            Some(at) => format!("{}{PRINT_CSS}{}", &html[..at], &html[at..]),
-            None => format!("{PRINT_CSS}{html}"),
-        }
-    }
-
-    /// A folder of this job's own in the process's print folder (`ebirforms-print-<pid>`, which the app's quit and
-    /// the next start's sweep remove), with the document written into it.
-    fn job_folder(html: &str) -> Result<(PathBuf, PathBuf), String> {
-        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let folder = std::env::temp_dir()
-            .join(format!("ebirforms-print-{}", std::process::id()))
-            .join(format!("job-{n}"));
-        std::fs::create_dir_all(&folder).map_err(|error| format!("Could not make the print folder: {error}"))?;
-        let sheet = folder.join("sheet.html");
-        std::fs::write(&sheet, for_print(html)).map_err(|error| format!("Could not write the sheet: {error}"))?;
-        Ok((folder, sheet))
     }
 
     /// The PDF of `html`: WebView2's `PrintToPdf` of the document, A4 with no margins, one page per sheet, checked
@@ -1032,32 +1290,6 @@ break-inside:avoid;break-after:auto !important;page-break-after:auto !important}
         let bytes = bytes?;
         check_a4(&bytes, expected)?;
         Ok(bytes)
-    }
-
-    /// The PDF has one A4 page per sheet: what the printer gets and what the file holds are the same pages.
-    pub(super) fn check_a4(bytes: &[u8], sheets: u32) -> Result<(), String> {
-        let document = lopdf::Document::load_mem(bytes).map_err(|error| format!("Not a PDF: {error}"))?;
-        let pages = document.get_pages();
-        if pages.len() as u32 != sheets {
-            return Err(format!("A page did not come out as A4: {} pages for {sheets} sheets.", pages.len()));
-        }
-        for id in pages.values() {
-            let size = document
-                .get_dictionary(*id)
-                .ok()
-                .and_then(|page| page.get(b"MediaBox").ok())
-                .and_then(|media| media.as_array().ok())
-                .map(|media| {
-                    let at = |i: usize| media.get(i).and_then(|n| n.as_float().ok()).map_or(0.0, f64::from);
-                    (at(2) - at(0), at(3) - at(1))
-                })
-                .unwrap_or((0.0, 0.0));
-            let (width, height) = (f64::from(PAPER_WIDTH_PT), f64::from(PAPER_HEIGHT_PT));
-            if (size.0 - width).abs() > 1.5 || (size.1 - height).abs() > 1.5 {
-                return Err(format!("A page did not come out as A4: {:.1} x {:.1} pt.", size.0, size.1));
-            }
-        }
-        Ok(())
     }
 
     /// Prints `html`: the system print dialog (printer, copies, pages, sides, colour), then WebView2 prints the
@@ -1766,7 +1998,12 @@ impl Print {
             let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
             blocking(move || windows_print::print_document(&html)).await.map_err(|error| error.to_string())?
         }
-        #[cfg(not(all(windows, target_env = "msvc")))]
+        #[cfg(target_os = "linux")]
+        {
+            let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
+            blocking(move || linux_print::print_document(&html)).await.map_err(|error| error.to_string())?
+        }
+        #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
         {
             let (pdf, title, dir) = pdf_of(&key).await?;
             let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
