@@ -20,6 +20,11 @@
 //!    the key window, so the file has the pages the printer gets. Windows: the system print dialog (printer, copies,
 //!    pages, sides, colour), then WebView2 prints the sheet there by the same page rule as its PDF.
 //!
+//! **What the window shows.** macOS: the sheet's page in a web view, which the live update patches by script. Windows
+//! and Linux: one picture per sheet, drawn on the CPU by Blitz and vello_cpu (`sheets.rs`), asked again at every
+//! revision. No web view and no GPU are involved there: WebView2's page never reaches the screen on a computer
+//! without a GPU, and a browser process is slow to start. The PDF and the printout still come from the web engine.
+//!
 //! **The page rule** (kept from the old shell): paper is always A4, 595.28 x 841.89 pt, zero margins. A sheet
 //! whose own `@page` size is another (the frozen BIR forms are Folio, 612 x 936 pt) is scaled by
 //! min((595.28 - 20) / w, (841.89 - 20) / h, 1) with 10 pt of safety above it: down to fit, never up. One printed
@@ -674,6 +679,17 @@ pub(crate) fn assemble_pdf(pages: &[Vec<u8>]) -> Result<Vec<u8>, String> {
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("A page did not come out as A4: {error}"))?;
     merge_single_page_pdfs(&normalized).map_err(|error| error.to_string())
+}
+
+/// One sheet of a preview as a picture (where the app draws the sheets itself: [`Print::draws_sheets`]).
+#[derive(Debug, Clone, PartialEq, JsObject)]
+pub struct SheetImage {
+    /// The picture: a PNG in a `data:` URI.
+    pub src: String,
+    /// Its width at 100%, in points of the window (CSS pixels of the sheet).
+    pub width: f64,
+    /// Its height at 100%.
+    pub height: f64,
 }
 
 /// What a PDF holds (a probe for tests, and for the toolbar's "Saved" note).
@@ -1719,6 +1735,27 @@ impl Print {
         forget(&key);
     }
 
+    /// Whether this system draws the preview's sheets itself, as pictures (Windows and Linux: on the CPU, see
+    /// `sheets.rs`), in place of a web view showing the sheet's page (macOS).
+    pub fn draws_sheets() -> bool {
+        cfg!(any(windows, target_os = "linux"))
+    }
+
+    /// The sheets of `key`'s document as pictures, one per printed page, where [`Print::draws_sheets`] says so. Asked
+    /// again after every change of the document: only the sheets that changed are drawn again.
+    pub async fn sheets(key: String) -> Result<Vec<SheetImage>, String> {
+        let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
+        #[cfg(any(windows, target_os = "linux"))]
+        {
+            blocking(move || crate::sheets::images(&key, &html)).await.map_err(|error| error.to_string())?
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
+        {
+            let _ = html;
+            Err("This system shows the sheet in a web view.".to_owned())
+        }
+    }
+
     /// Prints the preview of `key`. macOS: makes the PDF of its document, then shows the system print panel (A4, no
     /// scaling) as a sheet of the front window, and resolves once the panel is up. Windows: shows the system print
     /// dialog, then prints the document by the PDF's page rule, and resolves once the job is with the printer (or the
@@ -1773,11 +1810,15 @@ impl Print {
 
 fn forget(key: &str) {
     STATE.with(|state| state.borrow_mut().close(key));
+    #[cfg(any(windows, target_os = "linux"))]
+    crate::sheets::forget(key);
 }
 
 /// The app quits: every preview of this engine thread is forgotten and its folder (`ebirforms-print-<pid>`) deleted. The door's
 /// `shutdown` calls it; a quit that skips it leaves the folder to the next start's sweep.
 pub(crate) fn remove_all() {
+    #[cfg(any(windows, target_os = "linux"))]
+    crate::sheets::forget_all();
     let _ = STATE.try_with(|state| state.borrow_mut().close_all());
 }
 
@@ -1881,6 +1922,35 @@ mod tests {
         let read = |codes: &[u32]| codes.iter().filter_map(|c| map.codes.get(c).cloned()).collect::<String>();
         assert_eq!(read(&[0x37, 0x48, 0x5B, 0x57]), "Text");
         assert_eq!(read(&[0x33, 0x34, 0x35, 0x03, 0x60, 0x61]), "PQR AB");
+    }
+
+    /// Windows and Linux: the sheets of a real document come out as one picture each, drawn on the CPU, and an edit
+    /// draws only the sheet it changed again.
+    #[cfg(any(windows, target_os = "linux"))]
+    #[test]
+    fn the_sheets_are_drawn_as_pictures_and_an_edit_redraws_only_its_sheet() {
+        let html = sheet_doc(&["Juana Santos", "000-123-453-00000"]);
+        let started = std::time::Instant::now();
+        let first = crate::sheets::images("pictures-test", &html).expect("pictures");
+        let opened = started.elapsed();
+        assert_eq!(first.len() as u32, page_info(&html).pages);
+        for image in &first {
+            assert!(image.src.starts_with("data:image/png;base64,"), "{}", &image.src[..40.min(image.src.len())]);
+            // A4 at 96 CSS pixels per inch, the paper style's 1 pt under the page aside.
+            assert!((image.width - 793.7).abs() < 2.0 && (image.height - 1122.5).abs() < 14.0, "{} x {}", image.width, image.height);
+            assert!(image.src.len() > 20_000, "a blank picture: {} bytes", image.src.len());
+        }
+        // The same document again: nothing is drawn, the pictures are the same.
+        assert_eq!(crate::sheets::images("pictures-test", &html).expect("again"), first);
+        // An edit on the first sheet: its picture changes, the second sheet's does not.
+        let edited = html.replacen("Juana Santos", "Maria Clara", 1);
+        assert_ne!(edited, html, "the fixture holds the name");
+        let started = std::time::Instant::now();
+        let second = crate::sheets::images("pictures-test", &edited).expect("edited");
+        eprintln!("sheets: opened in {opened:?}, edit redrawn in {:?}", started.elapsed());
+        assert_eq!(second.len(), first.len());
+        assert_eq!(second.iter().zip(&first).filter(|(now, before)| now.src != before.src).count(), 1);
+        crate::sheets::forget("pictures-test");
     }
 
     #[test]
