@@ -1,0 +1,9 @@
+Producer:        Skia/PDF m145
+Pages:           2
+Page size:       595 x 842 pts (A4)
+name                                 type              encoding         emb sub uni object ID
+------------------------------------ ----------------- ---------------- --- --- --- ---------
+AAAAAA+Arimo_700wght                 Type 3            Custom           yes yes yes      7  0
+BAAAAA+Arimo-Regular                 Type 3            Custom           yes yes yes      8  0
+CAAAAA+Arimo-Italic                  Type 3            Custom           yes yes yes      9  0
+CAAAAA+Arimo-Italic                  Type 3            Custom           yes yes yes     10  0
