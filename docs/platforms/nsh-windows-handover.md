@@ -340,7 +340,7 @@ A branch per topic (the guard, the print URL, the wording), each with its own dr
 
 ## 9. The application menu (branch `feat/app-menu`)
 
-The owner approved one design for the menu on every desktop; macOS was built and run on the Mac, Windows was not (it cannot be built from the Mac). The app's part is `hexuria/buwiz-forms` PR #230 (branch `feat/app-menu`, on `main`). NSH's part is hexuria/nsh#14 (branch `feat/app-menu`), which merges into NSH's `buwiz`; the app's NSH pin (`NSH_PINNED_REF` in `.github/workflows/nsh.yml`) then moves to that merge commit. Until #14 merges, the pin is the pushed head of `feat/app-menu` in hexuria/nsh: build against that (check it out in the sibling `nsh` as in the build section). On Windows #14 adds only `Tray.available()` (true) and `Menu.inGlobalMenu()` (false), on the newer `buwiz` it is merged with.
+The owner approved one design for the menu on every desktop; macOS was built and run on the Mac, Windows was not (it cannot be built from the Mac). The app's part is `hexuria/buwiz-forms` PR #230 (branch `feat/app-menu`, on `main`). NSH's part is hexuria/nsh#14 (the KDE Global Menu, merged into NSH's `buwiz` as `8e59996b6`) and hexuria/nsh#16 (branch `feat/menu-tray-availability`: `Menu.inGlobalMenu()`, `Tray.available()`). The app's NSH pin (`NSH_PINNED_REF` in `.github/workflows/nsh.yml`) is #16's pushed head until #16 merges, then moves to that merge commit: build against the pin (check it out in the sibling `nsh` as in the build section). On Windows #16 gives `Tray.available()` true and `Menu.inGlobalMenu()` false.
 
 ### 9.1 What Windows shows
 
@@ -355,7 +355,7 @@ The owner approved one design for the menu on every desktop; macOS was built and
 ```powershell
 Set-Location C:\w
 git -C buwiz-forms fetch origin; git -C buwiz-forms switch feat/app-menu
-git -C nsh fetch origin; git -C nsh checkout --detach ((Select-String -Path buwiz-forms\.github\workflows\nsh.yml -Pattern 'NSH_PINNED_REF: (\w+)').Matches[0].Groups[1].Value)   # the pin: feat/app-menu's head until hexuria/nsh#14 merges, then the buwiz merge commit
+git -C nsh fetch origin; git -C nsh checkout --detach ((Select-String -Path buwiz-forms\.github\workflows\nsh.yml -Pattern 'NSH_PINNED_REF: (\w+)').Matches[0].Groups[1].Value)   # the pin: hexuria/nsh#16's head until it merges, then the buwiz merge commit
 Set-Location C:\w\buwiz-forms\nsh
 Step "am-01-check" { nsh check -v }
 Step "am-02-build" { nsh build }
