@@ -12,18 +12,25 @@
 //!    position, when the sheet has the same shape as the one shown, else the whole body. The page is never
 //!    reloaded, so the scroll position stays. A host function is a synchronous call of the engine (no task, no
 //!    reactive runtime), so the fill runs inside it and the events are posted to the TSX listener.
-//! 3. **The PDF.** A hidden WKWebView loads the same HTML and `createPDF` captures each `.sheet` as one A4 page;
-//!    bir-print normalizes the pages and merges them (the reference app's way, see `internal/DECISIONS.md` D24).
-//!    Print and Save as PDF both start from these bytes, so the file has the pages the printer gets.
-//! 4. **Print.** The system print panel for that PDF (PDFKit's print operation), A4, no scaling, as a sheet of
-//!    the key window. Save as PDF uses the host save panel.
+//! 3. **The PDF.** macOS: a hidden WKWebView loads the same HTML and `createPDF` captures each `.sheet` as one A4
+//!    page; bir-print normalizes the pages and merges them (the reference app's way, see `internal/DECISIONS.md`
+//!    D24). Windows: a hidden WebView2 of this crate's own loads the sheet and `PrintToPdf` prints it to a PDF by the
+//!    page rule below, one A4 page per sheet, which is checked. Save as PDF uses the host save panel.
+//! 4. **Print.** macOS: the system print panel for that PDF (PDFKit's print operation), A4, no scaling, as a sheet of
+//!    the key window, so the file has the pages the printer gets. Windows: the system print dialog (printer, copies,
+//!    pages, sides, colour), then WebView2 prints the sheet there by the same page rule as its PDF.
+//!
+//! **What the window shows.** macOS: the sheet's page in a web view, which the live update patches by script. Windows
+//! and Linux: one picture per sheet, drawn on the CPU by Blitz and vello_cpu (`sheets.rs`), asked again at every
+//! revision. No web view and no GPU are involved there: WebView2's page never reaches the screen on a computer
+//! without a GPU, and a browser process is slow to start. The PDF and the printout still come from the web engine.
 //!
 //! **The page rule** (kept from the old shell): paper is always A4, 595.28 x 841.89 pt, zero margins. A sheet
 //! whose own `@page` size is another (the frozen BIR forms are Folio, 612 x 936 pt) is scaled by
 //! min((595.28 - 20) / w, (841.89 - 20) / h, 1) with 10 pt of safety above it: down to fit, never up. One printed
 //! page per form page (`.sheet`).
 //!
-//! macOS only, for now: other systems answer "not available" honestly (D7 brings Windows and Linux).
+//! macOS and Windows; other systems (Linux) answer "not available" honestly.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -225,10 +232,16 @@ fn process_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as libc::pid_t, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
 }
 
-/// Where a process cannot be asked here (Windows: no OpenProcess binding in this crate) every one counts as running, so
-/// [`Print::listen`] does not sweep at all there: a stale folder stays until the system cleans its temp folder. (Nothing
-/// outside the tests calls it there, so it may stand unused.)
-#[cfg(not(unix))]
+/// Whether a process with this id is running.
+#[cfg(all(windows, target_env = "msvc"))]
+fn process_alive(pid: u32) -> bool {
+    windows_print::process_alive(pid)
+}
+
+/// Where a process cannot be asked here every one counts as running, so [`Print::listen`] does not sweep at all
+/// there: a stale folder stays until the system cleans its temp folder. (Nothing outside the tests calls it there, so
+/// it may stand unused.)
+#[cfg(not(any(unix, all(windows, target_env = "msvc"))))]
 #[cfg_attr(not(test), allow(dead_code))]
 fn process_alive(_pid: u32) -> bool {
     true
@@ -354,6 +367,8 @@ fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
 }
 
 /// Writes the PDF of a preview into its folder (`<title>.pdf`, this user's only) and answers its path.
+// Windows prints the sheet itself (`windows_print::print_document`), so only the tests write a PDF there.
+#[cfg_attr(all(windows, target_env = "msvc", not(test)), allow(dead_code))]
 fn write_pdf(dir: &Path, title: &str, pdf: &[u8]) -> std::io::Result<PathBuf> {
     private_dir(dir)?;
     let path = dir.join(format!("{}.pdf", file_stem(title)));
@@ -666,6 +681,17 @@ pub(crate) fn assemble_pdf(pages: &[Vec<u8>]) -> Result<Vec<u8>, String> {
     merge_single_page_pdfs(&normalized).map_err(|error| error.to_string())
 }
 
+/// One sheet of a preview as a picture (where the app draws the sheets itself: [`Print::draws_sheets`]).
+#[derive(Debug, Clone, PartialEq, JsObject)]
+pub struct SheetImage {
+    /// The picture: a PNG in a `data:` URI.
+    pub src: String,
+    /// Its width at 100%, in points of the window (CSS pixels of the sheet).
+    pub width: f64,
+    /// Its height at 100%.
+    pub height: f64,
+}
+
 /// What a PDF holds (a probe for tests, and for the toolbar's "Saved" note).
 #[derive(Debug, Clone, PartialEq, JsObject)]
 pub struct PdfProbe {
@@ -679,9 +705,14 @@ pub struct PdfProbe {
     pub width_pt: f64,
     /// The first page's height in points.
     pub height_pt: f64,
-    /// The text of the pages as the system reads it (macOS: PDFKit), the first 3000 characters.
+    /// The text of the pages as the system reads it (macOS: PDFKit; elsewhere the fonts' ToUnicode maps), the first
+    /// [`PROBE_TEXT_CHARS`] characters.
     pub text: String,
 }
+
+/// How much of a PDF's text a probe keeps. A form's field values can come after every label of its page in the text
+/// (WebView2 writes them last), and the 2551Q's labels alone pass 3000 characters.
+const PROBE_TEXT_CHARS: usize = 20_000;
 
 fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
     let bytes = std::fs::metadata(path).map_err(|error| format!("Cannot read {}: {error}", path.display()))?.len();
@@ -703,9 +734,9 @@ fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
         })
         .unwrap_or((0.0, 0.0));
     #[cfg(target_os = "macos")]
-    let text = mac::pdf_text(path).chars().take(3000).collect();
+    let text = mac::pdf_text(path).chars().take(PROBE_TEXT_CHARS).collect();
     #[cfg(not(target_os = "macos"))]
-    let text = String::new();
+    let text = pdf_text(&document).chars().take(PROBE_TEXT_CHARS).collect();
     Ok(PdfProbe {
         pages: pages.len() as u32,
         bytes: bytes.min(u64::from(u32::MAX)) as u32,
@@ -716,15 +747,160 @@ fn probe_pdf(path: &Path) -> Result<PdfProbe, String> {
     })
 }
 
+/// The text of a PDF's pages read through each font's `ToUnicode` map: the strings its pages show, in order, a line per
+/// text object. (WebView2's PDFs draw text in Type3 fonts whose maps lopdf's own text reader does not parse.)
+#[cfg(not(target_os = "macos"))]
+fn pdf_text(document: &lopdf::Document) -> String {
+    let mut text = String::new();
+    for page in document.get_pages().values() {
+        let maps: HashMap<Vec<u8>, UnicodeMap> = document
+            .get_page_fonts(*page)
+            .map(|fonts| fonts.into_iter().map(|(name, font)| (name, unicode_map(document, font))).collect())
+            .unwrap_or_default();
+        let Ok(content) = document.get_and_decode_page_content(*page) else {
+            continue;
+        };
+        let mut font: Option<&UnicodeMap> = None;
+        for operation in &content.operations {
+            match operation.operator.as_str() {
+                "Tf" => font = operation.operands.first().and_then(|name| name.as_name().ok()).and_then(|name| maps.get(name)),
+                "Tj" | "TJ" | "'" | "\"" => {
+                    for operand in &operation.operands {
+                        show(&mut text, font, operand);
+                    }
+                }
+                "ET" => text.push('\n'),
+                _ => {}
+            }
+        }
+    }
+    text
+}
+
+/// A font's codes (`width` bytes each) and the text each stands for.
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+struct UnicodeMap {
+    width: usize,
+    codes: HashMap<u32, String>,
+}
+
+#[cfg(not(target_os = "macos"))]
+fn show(text: &mut String, font: Option<&UnicodeMap>, operand: &lopdf::Object) {
+    let Some(font) = font.filter(|font| font.width > 0) else {
+        return;
+    };
+    match operand {
+        lopdf::Object::String(bytes, _) => {
+            for code in bytes.chunks(font.width) {
+                let code = code.iter().fold(0u32, |n, &b| (n << 8) | u32::from(b));
+                if let Some(chars) = font.codes.get(&code) {
+                    text.push_str(chars);
+                }
+            }
+        }
+        lopdf::Object::Array(items) => {
+            for item in items {
+                show(text, Some(font), item);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn unicode_map(document: &lopdf::Document, font: &lopdf::Dictionary) -> UnicodeMap {
+    font.get_deref(b"ToUnicode", document)
+        .ok()
+        .and_then(|object| object.as_stream().ok())
+        .map(|stream| parse_unicode_map(&String::from_utf8_lossy(&stream.decompressed_content().unwrap_or_else(|_| stream.content.clone()))))
+        .unwrap_or_default()
+}
+
+/// A `ToUnicode` CMap's `bfchar` and `bfrange` entries (a range's destination counts up from its first, or is a list).
+#[cfg(not(target_os = "macos"))]
+fn parse_unicode_map(cmap: &str) -> UnicodeMap {
+    fn hex(token: &str) -> Option<Vec<u8>> {
+        let digits = token.strip_prefix('<')?.strip_suffix('>')?;
+        (0..digits.len()).step_by(2).map(|i| u8::from_str_radix(digits.get(i..i + 2)?, 16).ok()).collect()
+    }
+    fn code(bytes: &[u8]) -> u32 {
+        bytes.iter().fold(0u32, |n, &b| (n << 8) | u32::from(b))
+    }
+    fn utf16(bytes: &[u8], plus: u16) -> String {
+        let mut units: Vec<u16> = bytes.chunks(2).map(|pair| u16::from_be_bytes([pair[0], *pair.get(1).unwrap_or(&0)])).collect();
+        if let Some(last) = units.last_mut() {
+            *last = last.wrapping_add(plus);
+        }
+        String::from_utf16_lossy(&units)
+    }
+    let spaced = cmap.replace('<', " <").replace('>', "> ").replace('[', " [ ").replace(']', " ] ");
+    let tokens: Vec<&str> = spaced.split_whitespace().collect();
+    let mut map = UnicodeMap::default();
+    let mut i = 0;
+    while i < tokens.len() {
+        match tokens[i] {
+            "beginbfchar" => {
+                i += 1;
+                while i + 1 < tokens.len() && tokens[i] != "endbfchar" {
+                    if let (Some(source), Some(target)) = (hex(tokens[i]), hex(tokens[i + 1])) {
+                        map.width = source.len();
+                        map.codes.insert(code(&source), utf16(&target, 0));
+                    }
+                    i += 2;
+                }
+            }
+            "beginbfrange" => {
+                i += 1;
+                while i + 2 < tokens.len() && tokens[i] != "endbfrange" {
+                    let (Some(low), Some(high)) = (hex(tokens[i]), hex(tokens[i + 1])) else {
+                        i += 1;
+                        continue;
+                    };
+                    map.width = low.len();
+                    let (low, high) = (code(&low), code(&high));
+                    if tokens[i + 2] == "[" {
+                        let mut at = i + 3;
+                        let mut n = low;
+                        while at < tokens.len() && tokens[at] != "]" {
+                            if let Some(target) = hex(tokens[at]) {
+                                map.codes.insert(n, utf16(&target, 0));
+                            }
+                            n += 1;
+                            at += 1;
+                        }
+                        i = at + 1;
+                    } else {
+                        if let Some(target) = hex(tokens[i + 2]) {
+                            for n in low..=high.min(low.saturating_add(0xFFFF)) {
+                                map.codes.insert(n, utf16(&target, (n - low) as u16));
+                            }
+                        }
+                        i += 3;
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    map
+}
+
 /// The PDF of `html` (the document of a preview), made by the platform's web engine.
 #[cfg(target_os = "macos")]
 fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
     mac::make_pdf(html)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(windows, target_env = "msvc"))]
+fn platform_pdf(html: &str) -> Result<Vec<u8>, String> {
+    windows_print::make_pdf(html)
+}
+
+#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"))))]
 fn platform_pdf(_html: &str) -> Result<Vec<u8>, String> {
-    Err("Print and Save as PDF are available on macOS only for now.".to_owned())
+    Err("Print and Save as PDF are available on macOS and Windows only for now.".to_owned())
 }
 
 /// The system print panel for the PDF at `path`: up when this returns.
@@ -733,10 +909,524 @@ fn platform_print(path: &Path) -> Result<(), String> {
     mac::print_pdf(path)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", all(windows, target_env = "msvc"))))]
 fn platform_print(_path: &Path) -> Result<(), String> {
-    Err("Print and Save as PDF are available on macOS only for now.".to_owned())
+    Err("Print and Save as PDF are available on macOS and Windows only for now.".to_owned())
 }
+
+/// The Windows half: WebView2 and the system print dialog, on a thread of its own. WebView2 wants a single-threaded COM
+/// apartment with a message loop, which any thread can be, so each job runs on a fresh one with a hidden window that
+/// hosts a hidden web view (its own profile folder in the temp folder, so nsh's web views are never touched), waits for
+/// it, and ends. Callers are worker threads, never the main thread and never the engine's.
+#[cfg(all(windows, target_env = "msvc"))]
+mod windows_print {
+    use std::ffi::c_void;
+    use std::path::PathBuf;
+    use std::sync::{Mutex, mpsc};
+
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        COREWEBVIEW2_PRINT_COLLATION_COLLATED, COREWEBVIEW2_PRINT_COLLATION_UNCOLLATED,
+        COREWEBVIEW2_PRINT_COLOR_MODE_COLOR, COREWEBVIEW2_PRINT_COLOR_MODE_GRAYSCALE, COREWEBVIEW2_PRINT_DUPLEX_DEFAULT,
+        COREWEBVIEW2_PRINT_DUPLEX_ONE_SIDED, COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_LONG_EDGE,
+        COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_SHORT_EDGE, COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT,
+        COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE, COREWEBVIEW2_PRINT_STATUS_SUCCEEDED, ICoreWebView2,
+        ICoreWebView2_7, ICoreWebView2_16, ICoreWebView2Controller, ICoreWebView2Environment,
+        ICoreWebView2Environment6, ICoreWebView2PrintSettings, ICoreWebView2PrintSettings2,
+    };
+    use webview2_com::{
+        CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+        NavigationCompletedEventHandler, PrintCompletedHandler, PrintToPdfCompletedHandler, wait_with_pump,
+    };
+    use windows::Win32::Foundation::{GlobalFree, HGLOBAL, HWND, LPARAM, LRESULT, RECT, WPARAM};
+    use windows::Win32::Graphics::Gdi::{DEVMODEW, DMCOLOR_MONOCHROME, DMCOLLATE_TRUE, DMDUP_HORIZONTAL, DMDUP_SIMPLEX, DMDUP_VERTICAL};
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUninitialize};
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+    use windows::Win32::UI::Controls::Dialogs::{
+        DEVNAMES, PD_NOCURRENTPAGE, PD_NOSELECTION, PD_PAGENUMS, PD_RESULT_PRINT, PD_USEDEVMODECOPIESANDCOLLATE,
+        PRINTDLGEXW, PRINTPAGERANGE, PrintDlgExW, START_PAGE_GENERAL,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, GetForegroundWindow, RegisterClassW, WINDOW_EX_STYLE, WNDCLASSW,
+        WS_OVERLAPPEDWINDOW,
+    };
+    use windows::core::{HRESULT, HSTRING, Interface, PCWSTR, w};
+
+    use super::{PAPER_HEIGHT_PT, PAPER_WIDTH_PT, page_info, url_for};
+
+    // The loader is linked statically, as nsh's Windows backend does (`WebView2LoaderStatic.lib`, which
+    // webview2-com-sys ships and puts on the link path), so the app ships no `WebView2Loader.dll`.
+    #[link(name = "WebView2LoaderStatic", kind = "static")]
+    unsafe extern "system" {
+        #[link_name = "CreateCoreWebView2EnvironmentWithOptions"]
+        fn create_environment(
+            browser_folder: PCWSTR,
+            user_data_folder: PCWSTR,
+            options: *mut c_void,
+            handler: *mut c_void,
+        ) -> HRESULT;
+    }
+
+    /// One print job at a time.
+    static ONE: Mutex<()> = Mutex::new(());
+
+    /// The sheets as printed pages: no margin, one A4 page per sheet and nothing else. The paper style gives a sheet
+    /// its safety padding on top of its height, which would make it taller than the page and spill each one onto a
+    /// second page: here the padding is inside the height, which stays just under the page's, and the only page
+    /// breaks are the ones between sheets.
+    const PRINT_CSS: &str = "<style id=\"pdf-print\">@page{size:A4;margin:0}html,body{width:595.28pt !important;\
+margin:0 !important;padding:0 !important;background:#fff !important}.sheet{margin:0 !important;box-shadow:none !important;\
+box-sizing:border-box !important;width:595.28pt !important;height:841pt !important;overflow:hidden !important;\
+break-inside:avoid;break-after:auto !important;page-break-after:auto !important}\
+.sheet+.sheet{break-before:page;page-break-before:always}.sheet::after{content:none !important}</style>";
+
+    fn text(error: impl std::fmt::Display) -> String {
+        error.to_string()
+    }
+
+    /// The document with the print style last in its head.
+    fn for_print(html: &str) -> String {
+        match html.rfind("</head>") {
+            Some(at) => format!("{}{PRINT_CSS}{}", &html[..at], &html[at..]),
+            None => format!("{PRINT_CSS}{html}"),
+        }
+    }
+
+    /// A folder of this job's own in the process's print folder (`ebirforms-print-<pid>`, which the app's quit and
+    /// the next start's sweep remove), with the document written into it.
+    fn job_folder(html: &str) -> Result<(PathBuf, PathBuf), String> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let folder = std::env::temp_dir()
+            .join(format!("ebirforms-print-{}", std::process::id()))
+            .join(format!("job-{n}"));
+        std::fs::create_dir_all(&folder).map_err(|error| format!("Could not make the print folder: {error}"))?;
+        let sheet = folder.join("sheet.html");
+        std::fs::write(&sheet, for_print(html)).map_err(|error| format!("Could not write the sheet: {error}"))?;
+        Ok((folder, sheet))
+    }
+
+    /// The PDF of `html`: WebView2's `PrintToPdf` of the document, A4 with no margins, one page per sheet, checked
+    /// to be that (as the macOS capture is).
+    pub(super) fn make_pdf(html: &str) -> Result<Vec<u8>, String> {
+        let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let expected = page_info(html).pages.max(1);
+        let (folder, sheet) = job_folder(html)?;
+        let out = folder.join("document.pdf");
+        let target = out.clone();
+        let made = on_print_thread(move |page| {
+            page.load(&url_for(&sheet))?;
+            let settings = page.settings()?;
+            let web: ICoreWebView2_7 = page.web.cast().map_err(|_| "This WebView2 cannot make PDFs; update the WebView2 Runtime.".to_owned())?;
+            let (tx, rx) = mpsc::channel();
+            let handler = PrintToPdfCompletedHandler::create(Box::new(move |result, ok| {
+                let _ = tx.send(result.is_ok() && ok);
+                Ok(())
+            }));
+            // SAFETY: live objects of this thread; the handler is kept until it is called (the wait below).
+            unsafe { web.PrintToPdf(&HSTRING::from(target.as_os_str()), &settings, &handler) }.map_err(text)?;
+            if wait_with_pump(rx).map_err(text)? { Ok(()) } else { Err("WebView2 could not make the PDF.".to_owned()) }
+        });
+        let bytes = made.and_then(|()| std::fs::read(&out).map_err(|error| format!("Could not read the PDF: {error}")));
+        let _ = std::fs::remove_dir_all(&folder);
+        let bytes = bytes?;
+        check_a4(&bytes, expected)?;
+        Ok(bytes)
+    }
+
+    /// The PDF has one A4 page per sheet: what the printer gets and what the file holds are the same pages.
+    pub(super) fn check_a4(bytes: &[u8], sheets: u32) -> Result<(), String> {
+        let document = lopdf::Document::load_mem(bytes).map_err(|error| format!("Not a PDF: {error}"))?;
+        let pages = document.get_pages();
+        if pages.len() as u32 != sheets {
+            return Err(format!("A page did not come out as A4: {} pages for {sheets} sheets.", pages.len()));
+        }
+        for id in pages.values() {
+            let size = document
+                .get_dictionary(*id)
+                .ok()
+                .and_then(|page| page.get(b"MediaBox").ok())
+                .and_then(|media| media.as_array().ok())
+                .map(|media| {
+                    let at = |i: usize| media.get(i).and_then(|n| n.as_float().ok()).map_or(0.0, f64::from);
+                    (at(2) - at(0), at(3) - at(1))
+                })
+                .unwrap_or((0.0, 0.0));
+            let (width, height) = (f64::from(PAPER_WIDTH_PT), f64::from(PAPER_HEIGHT_PT));
+            if (size.0 - width).abs() > 1.5 || (size.1 - height).abs() > 1.5 {
+                return Err(format!("A page did not come out as A4: {:.1} x {:.1} pt.", size.0, size.1));
+            }
+        }
+        Ok(())
+    }
+
+    /// Prints `html`: the system print dialog (printer, copies, pages, sides, colour), then WebView2 prints the
+    /// document there by the same page rule as the PDF. Resolves once the job is with the printer, or when the
+    /// person cancels the dialog; rejects with a sentence.
+    pub(super) fn print_document(html: &str) -> Result<(), String> {
+        let _one = ONE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let pages = page_info(html).pages.max(1);
+        let (folder, sheet) = job_folder(html)?;
+        // The front window owns the dialog (the preview, which asked).
+        // SAFETY: plain queries.
+        let owner = unsafe { GetForegroundWindow() };
+        let owner = owner.0 as isize;
+        let printed = on_print_thread(move |page| {
+            let owner = if owner == 0 { page.window } else { HWND(owner as *mut c_void) };
+            let Some(choice) = choose_printer(owner, pages)? else {
+                return Ok(());
+            };
+            page.load(&url_for(&sheet))?;
+            let settings = page.settings()?;
+            choice.apply(&settings)?;
+            let web: ICoreWebView2_16 =
+                page.web.cast().map_err(|_| "This WebView2 cannot print; update the WebView2 Runtime.".to_owned())?;
+            let (tx, rx) = mpsc::channel();
+            let handler = PrintCompletedHandler::create(Box::new(move |result, status| {
+                let _ = tx.send(result.map(|()| status));
+                Ok(())
+            }));
+            // SAFETY: live objects of this thread; the handler is kept until it is called (the wait below).
+            unsafe { web.Print(&settings, &handler) }.map_err(text)?;
+            match wait_with_pump(rx).map_err(text)?.map_err(text)? {
+                status if status == COREWEBVIEW2_PRINT_STATUS_SUCCEEDED => Ok(()),
+                status if status == COREWEBVIEW2_PRINT_STATUS_PRINTER_UNAVAILABLE => {
+                    Err(format!("The printer {} is not available.", choice.printer))
+                }
+                _ => Err("The document could not be printed.".to_owned()),
+            }
+        });
+        let _ = std::fs::remove_dir_all(&folder);
+        printed
+    }
+
+    /// What the person chose in the print dialog.
+    struct Choice {
+        printer: String,
+        copies: i32,
+        collate: bool,
+        /// `"1-2,4"`, or empty for every page.
+        ranges: String,
+        duplex: Option<i16>,
+        mono: bool,
+    }
+
+    impl Choice {
+        fn apply(&self, settings: &ICoreWebView2PrintSettings) -> Result<(), String> {
+            let settings: ICoreWebView2PrintSettings2 =
+                settings.cast().map_err(|_| "This WebView2 cannot print; update the WebView2 Runtime.".to_owned())?;
+            // SAFETY: setters of a live settings object.
+            unsafe {
+                settings.SetPrinterName(&HSTRING::from(&self.printer)).map_err(text)?;
+                settings.SetCopies(self.copies.max(1)).map_err(text)?;
+                settings
+                    .SetCollation(if self.collate { COREWEBVIEW2_PRINT_COLLATION_COLLATED } else { COREWEBVIEW2_PRINT_COLLATION_UNCOLLATED })
+                    .map_err(text)?;
+                if !self.ranges.is_empty() {
+                    settings.SetPageRanges(&HSTRING::from(&self.ranges)).map_err(text)?;
+                }
+                let duplex = match self.duplex {
+                    Some(d) if d == DMDUP_SIMPLEX.0 as i16 => COREWEBVIEW2_PRINT_DUPLEX_ONE_SIDED,
+                    Some(d) if d == DMDUP_VERTICAL.0 as i16 => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_LONG_EDGE,
+                    Some(d) if d == DMDUP_HORIZONTAL.0 as i16 => COREWEBVIEW2_PRINT_DUPLEX_TWO_SIDED_SHORT_EDGE,
+                    _ => COREWEBVIEW2_PRINT_DUPLEX_DEFAULT,
+                };
+                settings.SetDuplex(duplex).map_err(text)?;
+                settings
+                    .SetColorMode(if self.mono { COREWEBVIEW2_PRINT_COLOR_MODE_GRAYSCALE } else { COREWEBVIEW2_PRINT_COLOR_MODE_COLOR })
+                    .map_err(text)?;
+            }
+            Ok(())
+        }
+    }
+
+    /// The system print dialog over `owner`, for a document of `pages` pages. `None` when the person cancels.
+    fn choose_printer(owner: HWND, pages: u32) -> Result<Option<Choice>, String> {
+        let mut ranges = [PRINTPAGERANGE { nFromPage: 1, nToPage: pages }; 32];
+        let mut dialog = PRINTDLGEXW {
+            lStructSize: std::mem::size_of::<PRINTDLGEXW>() as u32,
+            hwndOwner: owner,
+            Flags: PD_NOSELECTION | PD_NOCURRENTPAGE | PD_USEDEVMODECOPIESANDCOLLATE,
+            nMaxPageRanges: ranges.len() as u32,
+            lpPageRanges: ranges.as_mut_ptr(),
+            nMinPage: 1,
+            nMaxPage: pages,
+            nCopies: 1,
+            nStartPage: START_PAGE_GENERAL,
+            ..Default::default()
+        };
+        // SAFETY: `dialog` is a filled PRINTDLGEXW whose page-range buffer outlives the call; the handles it returns
+        // are read and freed below.
+        unsafe { PrintDlgExW(&mut dialog) }.map_err(|error| format!("The print dialog could not open: {error}"))?;
+        let devmode = dialog.hDevMode;
+        let devnames = dialog.hDevNames;
+        let choice = if dialog.dwResultAction == PD_RESULT_PRINT {
+            // SAFETY: the handles the dialog returned, locked while read.
+            let printer = unsafe { device_name(devnames) };
+            let (copies, collate, duplex, mono) = unsafe { device_mode(devmode) };
+            let ranges = if dialog.Flags.contains(PD_PAGENUMS) {
+                ranges[..dialog.nPageRanges as usize]
+                    .iter()
+                    .map(|r| if r.nFromPage == r.nToPage { r.nFromPage.to_string() } else { format!("{}-{}", r.nFromPage, r.nToPage) })
+                    .collect::<Vec<_>>()
+                    .join(",")
+            } else {
+                String::new()
+            };
+            Some(Choice { printer, copies, collate, ranges, duplex, mono })
+        } else {
+            None
+        };
+        // SAFETY: the dialog's handles are the caller's to free, once.
+        unsafe {
+            if !devmode.is_invalid() {
+                let _ = GlobalFree(Some(devmode));
+            }
+            if !devnames.is_invalid() {
+                let _ = GlobalFree(Some(devnames));
+            }
+        }
+        Ok(choice)
+    }
+
+    /// The printer's name in a DEVNAMES block.
+    unsafe fn device_name(handle: HGLOBAL) -> String {
+        // SAFETY: a DEVNAMES block from the dialog; its offsets count UTF-16 units from its start.
+        unsafe {
+            let names = GlobalLock(handle) as *const DEVNAMES;
+            if names.is_null() {
+                return String::new();
+            }
+            let start = (names as *const u16).add((*names).wDeviceOffset as usize);
+            let name = PCWSTR(start).to_string().unwrap_or_default();
+            let _ = GlobalUnlock(handle);
+            name
+        }
+    }
+
+    /// Copies, collation, sides and colour from a DEVMODE block.
+    unsafe fn device_mode(handle: HGLOBAL) -> (i32, bool, Option<i16>, bool) {
+        // SAFETY: a DEVMODEW block from the dialog, read while locked.
+        unsafe {
+            let mode = GlobalLock(handle) as *const DEVMODEW;
+            if mode.is_null() {
+                return (1, true, None, false);
+            }
+            let mode = &*mode;
+            let printer = mode.Anonymous1.Anonymous1;
+            let read = (
+                i32::from(printer.dmCopies),
+                mode.dmCollate == DMCOLLATE_TRUE,
+                Some(mode.dmDuplex.0 as i16),
+                mode.dmColor == DMCOLOR_MONOCHROME,
+            );
+            let _ = GlobalUnlock(handle);
+            read
+        }
+    }
+
+    /// A hidden web view on a hidden window, on the print thread.
+    struct Page {
+        window: HWND,
+        environment: ICoreWebView2Environment,
+        controller: ICoreWebView2Controller,
+        web: ICoreWebView2,
+    }
+
+    impl Page {
+        fn open() -> Result<Page, String> {
+            let window = hidden_window()?;
+            let opened = Self::web_view(window);
+            if opened.is_err() {
+                // SAFETY: the window this thread made.
+                unsafe {
+                    let _ = DestroyWindow(window);
+                }
+            }
+            opened
+        }
+
+        fn web_view(window: HWND) -> Result<Page, String> {
+            let folder = HSTRING::from(std::env::temp_dir().join("ebirforms-print-webview2").as_os_str());
+            let (tx, rx) = mpsc::channel();
+            let handler = CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |result, environment| {
+                let _ = tx.send(result.ok().and(environment));
+                Ok(())
+            }));
+            // SAFETY: valid strings; the handler is an owned COM object kept until the loader calls it (the wait below).
+            unsafe { create_environment(PCWSTR::null(), PCWSTR(folder.as_ptr()), std::ptr::null_mut(), handler.as_raw()) }
+                .ok()
+                .map_err(|error| format!("WebView2 is not available on this computer: {error}"))?;
+            let environment =
+                wait_with_pump(rx).map_err(text)?.ok_or("WebView2 is not available on this computer.".to_owned())?;
+            let (tx, rx) = mpsc::channel();
+            let handler = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(move |result, controller| {
+                let _ = tx.send(result.map(|()| controller));
+                Ok(())
+            }));
+            // SAFETY: a live environment and this thread's window; the handler is kept until it is called.
+            unsafe { environment.CreateCoreWebView2Controller(window, &handler) }.map_err(text)?;
+            let controller = wait_with_pump(rx)
+                .map_err(text)?
+                .map_err(|error| format!("WebView2 could not open a web view: {error}"))?
+                .ok_or("WebView2 could not open a web view.".to_owned())?;
+            // SAFETY: a live controller.
+            let web = unsafe {
+                let _ = controller.SetBounds(RECT { left: 0, top: 0, right: 794, bottom: 1123 });
+                controller.CoreWebView2()
+            }
+            .map_err(text)?;
+            Ok(Page { window, environment, controller, web })
+        }
+
+        /// Loads `url` and waits until it has loaded.
+        fn load(&self, url: &str) -> Result<(), String> {
+            let (tx, rx) = mpsc::channel();
+            let handler = NavigationCompletedEventHandler::create(Box::new(move |_, args| {
+                let mut ok = windows::core::BOOL(0);
+                if let Some(args) = args {
+                    // SAFETY: the event's live arguments.
+                    unsafe {
+                        let _ = args.IsSuccess(&mut ok);
+                    }
+                }
+                let _ = tx.send(ok.as_bool());
+                Ok(())
+            }));
+            let mut token = 0i64;
+            // SAFETY: a live web view of this thread; the handler is removed once it has answered.
+            unsafe {
+                self.web.add_NavigationCompleted(&handler, &mut token).map_err(text)?;
+                self.web.Navigate(&HSTRING::from(url)).map_err(text)?;
+            }
+            let loaded = wait_with_pump(rx).map_err(text)?;
+            // SAFETY: the token of the handler added above.
+            unsafe {
+                let _ = self.web.remove_NavigationCompleted(token);
+            }
+            if loaded { Ok(()) } else { Err("The sheet did not load.".to_owned()) }
+        }
+
+        /// The page rule: A4 portrait, no margins, no scaling, backgrounds, no header or footer.
+        fn settings(&self) -> Result<ICoreWebView2PrintSettings, String> {
+            let environment: ICoreWebView2Environment6 =
+                self.environment.cast().map_err(|_| "This WebView2 cannot print; update the WebView2 Runtime.".to_owned())?;
+            // SAFETY: a live environment, and setters of the settings object it made.
+            unsafe {
+                let settings = environment.CreatePrintSettings().map_err(text)?;
+                settings.SetOrientation(COREWEBVIEW2_PRINT_ORIENTATION_PORTRAIT).map_err(text)?;
+                settings.SetPageWidth(f64::from(PAPER_WIDTH_PT) / 72.0).map_err(text)?;
+                settings.SetPageHeight(f64::from(PAPER_HEIGHT_PT) / 72.0).map_err(text)?;
+                settings.SetMarginTop(0.0).map_err(text)?;
+                settings.SetMarginBottom(0.0).map_err(text)?;
+                settings.SetMarginLeft(0.0).map_err(text)?;
+                settings.SetMarginRight(0.0).map_err(text)?;
+                settings.SetScaleFactor(1.0).map_err(text)?;
+                settings.SetShouldPrintBackgrounds(true).map_err(text)?;
+                settings.SetShouldPrintHeaderAndFooter(false).map_err(text)?;
+                Ok(settings)
+            }
+        }
+
+        fn close(self) {
+            // SAFETY: the controller and window this thread made, closed once.
+            unsafe {
+                let _ = self.controller.Close();
+                let _ = DestroyWindow(self.window);
+            }
+        }
+    }
+
+    unsafe extern "system" fn window_proc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        // SAFETY: the default handling of a message for a window of this class.
+        unsafe { DefWindowProcW(window, message, wparam, lparam) }
+    }
+
+    /// A window that is never shown, to host the web view.
+    fn hidden_window() -> Result<HWND, String> {
+        // SAFETY: registering a class (again is harmless) and making a window of it on this thread.
+        unsafe {
+            let instance = GetModuleHandleW(None).map_err(text)?;
+            let class = w!("EbirformsPrintHost");
+            let _ = RegisterClassW(&WNDCLASSW {
+                lpfnWndProc: Some(window_proc),
+                hInstance: instance.into(),
+                lpszClassName: class,
+                ..Default::default()
+            });
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                class,
+                w!("eBIRForms print"),
+                WS_OVERLAPPEDWINDOW,
+                0,
+                0,
+                794,
+                1123,
+                None,
+                None,
+                Some(instance.into()),
+                None,
+            )
+            .map_err(|error| format!("Could not make the print window: {error}"))
+        }
+    }
+
+    /// Runs `job` with a hidden web view on a thread of its own (a single-threaded apartment, as WebView2 needs) and
+    /// waits for it.
+    fn on_print_thread(job: impl FnOnce(&Page) -> Result<(), String> + Send + 'static) -> Result<(), String> {
+        std::thread::Builder::new()
+            .name("print".into())
+            .spawn(move || {
+                // SAFETY: this thread's own apartment, ended below.
+                if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+                    return Err("Could not start printing (COM).".to_owned());
+                }
+                let result = Page::open().and_then(|page| {
+                    let done = job(&page);
+                    page.close();
+                    done
+                });
+                // SAFETY: the apartment begun above.
+                unsafe { CoUninitialize() };
+                result
+            })
+            .map_err(|error| format!("Could not start printing: {error}"))?
+            .join()
+            .map_err(|_| "Printing stopped unexpectedly.".to_owned())?
+    }
+
+    /// Whether this process runs in session 0 (a service, or a remote shell such as SSH), which has no desktop:
+    /// WebView2 cannot host a web view there (`0x80070578`, an invalid window handle). The app's own windows never
+    /// run there.
+    #[cfg(test)]
+    pub(super) fn in_session_zero() -> bool {
+        use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+        let mut session = 0u32;
+        // SAFETY: asks for this process's own session.
+        unsafe { ProcessIdToSessionId(std::process::id(), &mut session) }.is_ok() && session == 0
+    }
+
+    /// Whether the process `pid` is running.
+    pub(super) fn process_alive(pid: u32) -> bool {
+        use windows::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
+        use windows::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+        // SAFETY: opening a process to ask for its exit code, and closing the handle.
+        unsafe {
+            let process = match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+                Ok(process) => process,
+                // Gone, or not ours to ask: one we may not open (another account's) counts as running.
+                Err(error) => return error.code() == windows::Win32::Foundation::E_ACCESSDENIED,
+            };
+            let mut code = 0u32;
+            let running = GetExitCodeProcess(process, &mut code).is_ok() && code == STILL_ACTIVE.0 as u32;
+            let _ = CloseHandle(process);
+            running
+        }
+    }
+
+}
+
 
 /// The macOS half: WebKit and PDFKit through objc2, on the main thread (every AppKit call is posted to the main
 /// queue and waited for; callers are worker threads, never the main thread and never the engine's).
@@ -1033,8 +1723,8 @@ impl Print {
     /// Hears every preview event until the returned function is called: a sheet to open (or to focus), a newer
     /// document for an open one, a device that has no window for it. One host listens at a time; the latest wins.
     pub fn listen(#[args(event)] listener: Callback<PrintEvent>) -> Stop {
-        // Where a process cannot be asked (not unix), nothing is swept: see process_alive.
-        #[cfg(unix)]
+        // Where a process cannot be asked (neither unix nor Windows), nothing is swept: see process_alive.
+        #[cfg(any(unix, all(windows, target_env = "msvc")))]
         sweep_stale(&std::env::temp_dir(), process_alive);
         let id = install(Rc::new(HostBackend { listener }));
         Stop::new(move || uninstall(id))
@@ -1045,12 +1735,43 @@ impl Print {
         forget(&key);
     }
 
-    /// Prints the preview of `key`: makes the PDF of its document, then shows the system print panel (A4, no
-    /// scaling) as a sheet of the front window. Resolves once the panel is up; rejects with a sentence.
+    /// Whether this system draws the preview's sheets itself, as pictures (Windows and Linux: on the CPU, see
+    /// `sheets.rs`), in place of a web view showing the sheet's page (macOS).
+    pub fn draws_sheets() -> bool {
+        cfg!(any(windows, target_os = "linux"))
+    }
+
+    /// The sheets of `key`'s document as pictures, one per printed page, where [`Print::draws_sheets`] says so. Asked
+    /// again after every change of the document: only the sheets that changed are drawn again.
+    pub async fn sheets(key: String) -> Result<Vec<SheetImage>, String> {
+        let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
+        #[cfg(any(windows, target_os = "linux"))]
+        {
+            blocking(move || crate::sheets::images(&key, &html)).await.map_err(|error| error.to_string())?
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
+        {
+            let _ = html;
+            Err("This system shows the sheet in a web view.".to_owned())
+        }
+    }
+
+    /// Prints the preview of `key`. macOS: makes the PDF of its document, then shows the system print panel (A4, no
+    /// scaling) as a sheet of the front window, and resolves once the panel is up. Windows: shows the system print
+    /// dialog, then prints the document by the PDF's page rule, and resolves once the job is with the printer (or the
+    /// dialog was cancelled). Rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
-        let (pdf, title, dir) = pdf_of(&key).await?;
-        let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
-        blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
+        #[cfg(all(windows, target_env = "msvc"))]
+        {
+            let (html, _, _) = snapshot(&key).ok_or("The preview is closed.")?;
+            blocking(move || windows_print::print_document(&html)).await.map_err(|error| error.to_string())?
+        }
+        #[cfg(not(all(windows, target_env = "msvc")))]
+        {
+            let (pdf, title, dir) = pdf_of(&key).await?;
+            let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
+            blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
+        }
     }
 
     /// Saves the PDF of `key`'s document: asks where with the system save panel and resolves with the path it
@@ -1089,11 +1810,15 @@ impl Print {
 
 fn forget(key: &str) {
     STATE.with(|state| state.borrow_mut().close(key));
+    #[cfg(any(windows, target_os = "linux"))]
+    crate::sheets::forget(key);
 }
 
 /// The app quits: every preview of this engine thread is forgotten and its folder (`ebirforms-print-<pid>`) deleted. The door's
 /// `shutdown` calls it; a quit that skips it leaves the folder to the next start's sweep.
 pub(crate) fn remove_all() {
+    #[cfg(any(windows, target_os = "linux"))]
+    crate::sheets::forget_all();
     let _ = STATE.try_with(|state| state.borrow_mut().close_all());
 }
 
@@ -1139,6 +1864,94 @@ mod tests {
     }
 
     // The page rule ----------------------------------------------------------------------------------------------
+
+    /// Windows: WebView2 makes the PDF of a real sheet document (two Folio form pages scaled onto A4 papers): one A4
+    /// page per sheet, with drawing on them.
+    #[cfg(all(windows, target_env = "msvc"))]
+    #[test]
+    fn windows_makes_the_pdf_one_a4_page_per_sheet() {
+        if windows_print::in_session_zero() {
+            eprintln!("session 0 has no desktop for WebView2: run this test in a desktop session");
+            return;
+        }
+        let html = sheet_doc(&["Juana Santos", "000-123-453-00000"]);
+        let pdf = platform_pdf(&html).expect("the PDF");
+        let folder = tempfile::tempdir().expect("temp");
+        let path = folder.path().join("preview.pdf");
+        std::fs::write(&path, &pdf).expect("write");
+        let probe = probe_pdf(&path).expect("probe");
+        assert_eq!(probe.pages, page_info(&html).pages, "{probe:?}");
+        assert!((probe.width_pt - 595.28).abs() < 1.5 && (probe.height_pt - 841.89).abs() < 1.5, "{probe:?}");
+        assert!(probe.content_bytes > 0, "blank pages: {probe:?}");
+        assert!(probe.text.contains("Juana Santos"), "the form's text: {probe:?}");
+    }
+
+    /// Windows: a PDF that is not one A4 page per sheet is refused, as the macOS capture refuses one.
+    #[cfg(all(windows, target_env = "msvc"))]
+    #[test]
+    fn windows_refuses_a_pdf_that_is_not_one_a4_page_per_sheet() {
+        let not_a4 = captured_page("x");
+        assert!(windows_print::check_a4(&not_a4, 1).is_err(), "a CSS-pixel page is not A4");
+        let two = assemble_pdf(&[captured_page("a"), captured_page("b")]).expect("two A4 pages");
+        assert_eq!(windows_print::check_a4(&two, 2), Ok(()));
+        let why = windows_print::check_a4(&two, 3).expect_err("three sheets, two pages");
+        assert!(why.contains("2 pages for 3 sheets"), "{why}");
+    }
+
+    /// Windows: the sweep of stale preview folders can tell a running process from a gone one.
+    #[cfg(all(windows, target_env = "msvc"))]
+    #[test]
+    fn windows_tells_a_running_process_from_a_gone_one() {
+        assert!(process_alive(std::process::id()));
+        // Windows process ids are multiples of four: this one never names a process.
+        assert!(!process_alive(4_000_001));
+    }
+
+
+    /// The ToUnicode maps WebView2 writes for its Type3 fonts (one-byte codes, single codes and ranges) read back.
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn a_type3_fonts_unicode_map_is_read() {
+        let map = parse_unicode_map(
+            "/CIDInit /ProcSet findresource begin 12 dict begin begincmap 1 begincodespacerange <00> <FF> endcodespacerange \
+             9 beginbfchar <03> <0020> <37> <0054> <44> <0061> <46> <0063> <48> <0065> <4A> <0067> <4F> <006C> <51> <006E> \
+             <55> <0072> endbfchar 3 beginbfrange <33> <35> <0050> <57> <58> <0074> <5B> <5C> <0078> \
+             <60> <61> [<0041> <0042>] endbfrange endcmap",
+        );
+        assert_eq!(map.width, 1);
+        let read = |codes: &[u32]| codes.iter().filter_map(|c| map.codes.get(c).cloned()).collect::<String>();
+        assert_eq!(read(&[0x37, 0x48, 0x5B, 0x57]), "Text");
+        assert_eq!(read(&[0x33, 0x34, 0x35, 0x03, 0x60, 0x61]), "PQR AB");
+    }
+
+    /// Windows and Linux: the sheets of a real document come out as one picture each, drawn on the CPU, and an edit
+    /// draws only the sheet it changed again.
+    #[cfg(any(windows, target_os = "linux"))]
+    #[test]
+    fn the_sheets_are_drawn_as_pictures_and_an_edit_redraws_only_its_sheet() {
+        let html = sheet_doc(&["Juana Santos", "000-123-453-00000"]);
+        let started = std::time::Instant::now();
+        let first = crate::sheets::images("pictures-test", &html).expect("pictures");
+        let opened = started.elapsed();
+        assert_eq!(first.len() as u32, page_info(&html).pages);
+        for image in &first {
+            assert!(image.src.starts_with("data:image/png;base64,"), "{}", &image.src[..40.min(image.src.len())]);
+            // A4 at 96 CSS pixels per inch, the paper style's 1 pt under the page aside.
+            assert!((image.width - 793.7).abs() < 2.0 && (image.height - 1122.5).abs() < 14.0, "{} x {}", image.width, image.height);
+            assert!(image.src.len() > 20_000, "a blank picture: {} bytes", image.src.len());
+        }
+        // The same document again: nothing is drawn, the pictures are the same.
+        assert_eq!(crate::sheets::images("pictures-test", &html).expect("again"), first);
+        // An edit on the first sheet: its picture changes, the second sheet's does not.
+        let edited = html.replacen("Juana Santos", "Maria Clara", 1);
+        assert_ne!(edited, html, "the fixture holds the name");
+        let started = std::time::Instant::now();
+        let second = crate::sheets::images("pictures-test", &edited).expect("edited");
+        eprintln!("sheets: opened in {opened:?}, edit redrawn in {:?}", started.elapsed());
+        assert_eq!(second.len(), first.len());
+        assert_eq!(second.iter().zip(&first).filter(|(now, before)| now.src != before.src).count(), 1);
+        crate::sheets::forget("pictures-test");
+    }
 
     #[test]
     fn a_folio_sheet_prints_on_a4_scaled_down_to_fit() {

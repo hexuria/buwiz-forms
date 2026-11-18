@@ -2,12 +2,15 @@
 // (no sidebar, no frame chrome); the toolbar follows the theme, the sheet stays white (the page is the Rust side's static
 // HTML, a file the web view loads with read access to its own folder). Nothing here prints: Print and Save as PDF
 // ask the Rust side (native.ts), which makes one PDF from the same document for both.
-import { colorScheme, effect, signal, token, View, WebView, type WebViewRef } from "nsh";
+import { colorScheme, effect, Image, Scroll, signal, token, View, WebView, type WebViewRef } from "nsh";
 import { errorText } from "../../lib/errors";
 import { AppButton, Line, Segmented, Spinner } from "../../ui";
-import { type PrintActions, REAL_ACTIONS } from "./native";
+import { type PrintActions, REAL_ACTIONS, type SheetImage } from "./native";
 import { previews } from "./store";
 import { baseName, chromeScript, pageSummary, type ZoomMode } from "./titles";
+
+/** The desk around the sheets, in points. */
+const DESK_PAD = 16;
 
 /** What the toolbar last said about a button's work. */
 interface Note {
@@ -24,12 +27,44 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
   const zoom = signal<ZoomMode>("fit");
   const busy = signal<"" | "print" | "save">("");
   const note = signal<Note | null>(null);
+  // Where the app draws the sheets itself they are pictures in a scroll view; elsewhere a web view shows the sheet's page.
+  const draw = (props.actions ?? REAL_ACTIONS).sheets;
+  const sheets = signal<SheetImage[]>([]);
+  let asked = 0;
+  let drawnRevision = -1;
+
+  // The pictures of the newest document: asked again at every revision (the Rust side draws only the sheets that changed).
+  // An answer that a newer question overtook is dropped.
+  effect(() => {
+    const revision = info()?.revision;
+    // Once per revision: the store changes for other reasons too (the load count below).
+    if (!draw || revision === undefined || revision === drawnRevision) return;
+    drawnRevision = revision;
+    const mine = ++asked;
+    void draw(props.previewKey)
+      .then((drawn) => {
+        if (mine !== asked) return;
+        const first = sheets().length === 0;
+        sheets.set(drawn);
+        if (first) previews.noteLoad(props.previewKey);
+      })
+      .catch((error) => {
+        if (mine === asked) note.set({ tone: "danger", text: `The sheet did not load: ${errorText(error)}` });
+      });
+  });
+
+  /** A sheet's size on screen: the window's width at "Fit width" (never wider than twice its own), its own at 100%. */
+  const shown = (sheet: SheetImage) => {
+    const fit = Math.max(120, Math.min(width() - 2 * DESK_PAD, sheet.width * 2));
+    const w = zoom() === "fit" && width() > 0 ? fit : sheet.width;
+    return { width: w, height: (w * sheet.height) / sheet.width };
+  };
 
   // The Rust side sends a script for every change of the document: the page is never reloaded, so it keeps its scroll.
   // The newest script is also run when the page finishes loading (a change may have come while it loaded).
   effect(() => {
     const script = info()?.script;
-    if (loaded() && script) web.injectJavaScript(script);
+    if (!draw && loaded() && script) web.injectJavaScript(script);
   });
 
   // The desk and the size of the sheets: again when the theme, the choice or the window's width changes.
@@ -38,7 +73,7 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
     const desk = token("selected");
     const dark = colorScheme() === "dark";
     width();
-    if (loaded()) web.injectJavaScript(chromeScript(mode, desk, dark));
+    if (!draw && loaded()) web.injectJavaScript(chromeScript(mode, desk, dark));
   });
 
   const summary = () => {
@@ -96,6 +131,20 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
         <AppButton testID="print-print" label="Print" icon="printer" variant="primary" disabled={busy() !== ""} onPress={() => void run("print")} />
       </View>
       <View class="flex-1" onLayout={(e) => width.set(Math.round(e.bounds.size.width))}>
+        <If when={draw !== undefined}>
+          <Scroll testID="print-sheet" class="min-h-0 flex-1 bg-selected" contentClass="items-center" contentStyle={{ padding: DESK_PAD, gap: DESK_PAD }}>
+            <Each of={sheets().map((sheet, at) => ({ ...sheet, page: at + 1 }))} key={(sheet) => sheet.page}>
+              {(sheet) => (
+                <Image
+                  testID={`print-sheet-${sheet().page}`}
+                  src={sheet().src}
+                  style={{ ...shown(sheet()), backgroundColor: "#ffffff", boxShadow: "0 2px 10px rgba(0,0,0,0.25)" }}
+                />
+              )}
+            </Each>
+          </Scroll>
+        </If>
+        <If when={draw === undefined}>
         <WebView
           ref={web}
           testID="print-sheet"
@@ -109,6 +158,7 @@ export function PreviewWindow(props: { previewKey: string; actions?: PrintAction
           }}
           onError={(e) => note.set({ tone: "danger", text: `The sheet did not load: ${e.message}` })}
         />
+        </If>
       </View>
     </View>
   );

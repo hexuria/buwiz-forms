@@ -36,8 +36,25 @@ libc = "0.2"
 # The database guard on Windows: the account's profile folder from its token (GetUserProfileDirectoryW), never
 # USERPROFILE, and a file or folder known by volume and file index (GetFileInformationByHandle). The version the lock
 # already holds.
+# The print preview's sheets as pictures (src/sheets.rs): Blitz lays the static sheet HTML out and vello_cpu paints it
+# on the CPU, so the preview needs no web view and no GPU. The versions the older app (crates/bir-shell) uses.
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+blitz-dom = "=0.3.0-beta.3"
+blitz-html = "=0.3.0-beta.3"
+blitz-paint = "=0.3.0-beta.3"
+blitz-traits = "=0.3.0-beta.3"
+anyrender = "0.14"
+anyrender_vello_cpu = { version = "0.18", features = ["multithreading"] }
+peniko = "0.6"
+base64 = "0.22"
+png = "0.17"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
+# Print preview on Windows (src/print.rs): a hidden WebView2 of the app's own makes the PDF (PrintToPdf) and prints
+# (Print) after the system's print dialog (PrintDlgEx). The versions nsh's Windows backend uses.
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Threading", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging"] }
 
 # Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
 # (crates/bir-shell/Cargo.toml). Used by src/auth.rs.

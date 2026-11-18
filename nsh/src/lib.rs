@@ -14,6 +14,8 @@ pub mod door;
 pub mod guards;
 mod hooks;
 mod print;
+#[cfg(any(windows, target_os = "linux"))]
+mod sheets;
 
 use nsh_core::JsonValue;
 use nsh_core::prelude::*;

@@ -1,0 +1,60 @@
+# The print preview draws its sheets on the CPU (src/sheets.rs): CSS, layout, text and painting, in these crates.
+# Unoptimized they take seconds per form, so they are optimized in development builds too, as the older app
+# (crates/bir-shell/Cargo.toml) has them. A config file, not Cargo.toml: the hosts are built in the workspace nsh
+# generates (.nsh/rust), which does not read this crate's profiles but does read this file.
+[profile.dev.package.blitz-dom]
+opt-level = 3
+
+[profile.dev.package.blitz-html]
+opt-level = 3
+
+[profile.dev.package.blitz-paint]
+opt-level = 3
+
+[profile.dev.package.anyrender_vello_cpu]
+opt-level = 3
+
+[profile.dev.package.vello_cpu]
+opt-level = 3
+
+[profile.dev.package.vello_common]
+opt-level = 3
+
+[profile.dev.package.stylo]
+opt-level = 3
+
+[profile.dev.package.selectors]
+opt-level = 3
+
+[profile.dev.package.parley]
+opt-level = 3
+
+[profile.dev.package.fontique]
+opt-level = 3
+
+[profile.dev.package.skrifa]
+opt-level = 3
+
+[profile.dev.package.html5ever]
+opt-level = 3
+
+[profile.dev.package.png]
+opt-level = 3
+
+[profile.dev.package.fdeflate]
+opt-level = 3
+
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+
+[profile.dev.package.base64]
+opt-level = 3
+
+[profile.dev.package.read-fonts]
+opt-level = 3
+
+[profile.dev.package.harfrust]
+opt-level = 3
+
+[profile.dev.package.taffy]
+opt-level = 3
