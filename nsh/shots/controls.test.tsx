@@ -45,7 +45,8 @@ for (const look of LOOKS) {
     await app.wait(300);
     await shoot(app, `controls-${look.name}-drawer-select`);
     await app.back();
-    await app.press("id:fp-table-sch1pay-done");
+    // On NSH 0.6 a Back from the drawer's select closes the drawer too (headless); Done closes it where it stays.
+    if (app.shows("id:fp-table-sch1pay-done")) await app.press("id:fp-table-sch1pay-done");
     await app.waitFor("text:Row 1", { state: "gone" });
     // A few choices, then a long list searched by words.
     await app.press("id:fp-month-trigger");
