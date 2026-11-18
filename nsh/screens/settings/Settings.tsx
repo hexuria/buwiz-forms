@@ -1,5 +1,5 @@
 // Settings: a page in the main area (plan, UI decisions), opened from the account menu, the palette and Cmd/Ctrl+comma. From 600
-// points: a section list on the left (Personal: General, Account; Data: Import / Export, Jobs; System: Computer) with the search
+// points: a section list on the left (Personal: General, Account; Data: Import / Export, Jobs; System: Keyboard, Computer) with the search
 // over rows, and the section's cards on the right. Under 600: the section list first, then the section as its own page with Back.
 // Ported from app/shell/settings.js. Params: `section` opens a section (the old cron_tasks view is `section: "jobs"`).
 import { cleanup, Scroll, signal, View } from "nsh";
@@ -10,6 +10,7 @@ import { AccountSection } from "./AccountSection";
 import { ComputerSection } from "./Computer";
 import { GeneralSection } from "./General";
 import { JobsSection } from "./Jobs";
+import { KeyboardSection } from "./Keyboard";
 import { groupSections } from "./logic";
 import { nav } from "./nav";
 import { Labeled } from "./parts";
@@ -83,6 +84,9 @@ function SectionBody(props: { id: string; rows: string[] }) {
       </If>
       <If when={props.id === "jobs"}>
         <JobsSection />
+      </If>
+      <If when={props.id === "keyboard"}>
+        <KeyboardSection rows={props.rows} />
       </If>
       <If when={props.id === "computer"}>
         <ComputerSection rows={props.rows} />

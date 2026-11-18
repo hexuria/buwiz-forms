@@ -46,6 +46,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "account", label: "Account", icon: "user", group: "Personal", adminOnly: false, search: "account personal profile" },
   { id: "transfer", label: "Import / Export", icon: "archive", group: "Data", adminOnly: false, search: "import export data transfer" },
   { id: "jobs", label: "Jobs", icon: "list", group: "Data", adminOnly: true, search: "jobs data background tasks" },
+  { id: "keyboard", label: "Keyboard", icon: "keyboard", group: "System", adminOnly: false, search: "keyboard keys shortcuts" },
   { id: "computer", label: "Computer", icon: "laptop", group: "System", adminOnly: true, search: "computer system this computer" },
 ];
 
@@ -67,11 +68,15 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
     { id: "export", search: "export profile archive backup zip" },
   ],
   jobs: [{ id: "jobs", search: "jobs background tasks queue logs confirmation watcher cron archive" }],
+  keyboard: [
+    { id: "quit", search: "quit key shortcut exit" },
+    { id: "hide", search: "hide key shortcut tray menu bar" },
+    { id: "close", search: "close button window tray menu bar hide quit ask alt f4" },
+  ],
   computer: [
     { id: "data", search: "database data location path local files" },
     { id: "logs", search: "logs folder retention log files" },
     { id: "hotkey", search: "hotkey shortcut global show keyboard" },
-    { id: "tray", search: "tray menu bar close window hide quit" },
     { id: "setup", search: "setup owner help desk who this computer is for" },
     { id: "version", search: "version about ebirforms" },
   ],

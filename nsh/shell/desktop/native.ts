@@ -34,3 +34,8 @@ export function instance(): InstanceStatus {
 export function globalMenu(): boolean {
   return Desktop.globalMenu();
 }
+
+/** macOS: shows the Dock icon (the app is a regular app again and comes to the front) or takes it away (a menu-bar app while hidden). Does nothing elsewhere. */
+export function setDockIcon(shown: boolean): void {
+  Desktop.setDockIcon(shown);
+}

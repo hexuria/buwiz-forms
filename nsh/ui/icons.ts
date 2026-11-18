@@ -27,6 +27,7 @@ import i_history from "../assets/icons/history.svg";
 import i_house from "../assets/icons/house.svg";
 import i_info from "../assets/icons/info.svg";
 import i_key_round from "../assets/icons/key-round.svg";
+import i_keyboard from "../assets/icons/keyboard.svg";
 import i_laptop from "../assets/icons/laptop.svg";
 import i_layout_template from "../assets/icons/layout-template.svg";
 import i_list from "../assets/icons/list.svg";
@@ -86,6 +87,7 @@ export const ICONS = {
   house: i_house,
   info: i_info,
   "key-round": i_key_round,
+  keyboard: i_keyboard,
   laptop: i_laptop,
   "layout-template": i_layout_template,
   list: i_list,

@@ -1,7 +1,10 @@
 // The application menu as data: which menus and items exist, which are enabled, and their accelerators, in every state the app
 // can be in (signed in with and without a taxpayer, a form open, locked) on each platform. A plain test: no window.
 import { expect, test } from "nsh/test";
-import { buildMenu, buildTrayMenu, CLOSE_POLICY, flatten, printMenu, type MenuAction, type MenuState, type Os } from "./menu_model";
+import {
+  appKeyUsable, buildMenu, buildTrayMenu, chord, closePolicy, DEFAULT_CLOSE_PREFS, DEFAULT_KEYS, flatten, itemKeys, keyHolder, parseClosePrefs,
+  printMenu, sendingWarning, type MenuAction, type MenuState, type Os,
+} from "./menu_model";
 
 const JUANA = { root: "000123453", name: "Juana Santos" };
 const PEDRO = { root: "000777888", name: "Pedro Reyes" };
@@ -75,7 +78,10 @@ test("Windows and Linux signed in: the eBIRForms menu first, File holds the app 
   expect(titles(win)).toEqual(["eBIRForms", "File", "Edit", "View", "Window", "Help", "Profiles"]);
   expect(shape(win, "File")).toEqual(["New Tax Profile…", "New Return…", "-", "Settings…", "Sign Out", "-", "Hide eBIRForms", "-", "Quit eBIRForms"]);
   expect(linesOf(win, "File")).toContain("Settings…  mod+,");
-  expect(linesOf(win, "File")).toContain("Quit eBIRForms"); // the docs: no Ctrl+Q on Windows
+  // Hide and Quit keep their keys in the eBIRForms menu (Ctrl+Q quits on Windows too); File's copies carry none.
+  expect(linesOf(win, "File")).toContain("Quit eBIRForms");
+  expect(linesOf(win, "File")).toContain("Hide eBIRForms");
+  expect(linesOf(win, "eBIRForms")).toContain("Quit eBIRForms  mod+q");
   expect(shape(win, "Edit")).not.toContain("Settings…");
   expect(shape(win, "Help")).toEqual(["About eBIRForms", "-", "Check for Updates…", "Contact Support…", "Goldcoders Website"]);
   expect(linesOf(win, "View")).toContain("Enter Full Screen  f11");
@@ -84,7 +90,9 @@ test("Windows and Linux signed in: the eBIRForms menu first, File holds the app 
   const linux = state("linux");
   expect(titles(linux)).toEqual(["eBIRForms", "File", "Edit", "View", "Window", "Help", "Profiles"]);
   expect(shape(linux, "File")).toEqual(["New Tax Profile…", "New Return…", "-", "Close Window", "Hide eBIRForms", "-", "Sign Out", "Quit eBIRForms"]);
-  expect(linesOf(linux, "File")).toContain("Quit eBIRForms  mod+q");
+  expect(linesOf(linux, "File")).toContain("Quit eBIRForms");
+  expect(linesOf(linux, "eBIRForms")).toContain("Quit eBIRForms  mod+q");
+  expect(linesOf(linux, "eBIRForms")).toContain("Hide eBIRForms  mod+h");
   expect(shape(linux, "Edit").slice(-2)).toEqual(["-", "Settings…"]);
   expect(linesOf(linux, "Edit")).toContain("Settings…  mod+,");
 });
@@ -109,7 +117,7 @@ test("a form open changes nothing: its page owns the text fields, the menu never
   }
 });
 
-test("locked (first-run setup, sign-in, the account gate): only About, Quit and editing are there", () => {
+test("locked (first-run setup, sign-in, the account gate): only About, Hide, Quit and editing are there", () => {
   const BANNED = [
     "Settings…",
     "New Return…",
@@ -120,7 +128,6 @@ test("locked (first-run setup, sign-in, the account gate): only About, Quit and 
     "Toggle Tax Profile",
     "Toggle Notifications",
     "Toggle Theme",
-    "Hide eBIRForms",
     "Close Window",
     "New Tax Profile…",
     "No taxpayers yet",
@@ -130,20 +137,22 @@ test("locked (first-run setup, sign-in, the account gate): only About, Quit and 
     for (const banned of BANNED) expect(lines.some((l) => l.path.endsWith("> " + banned))).toBe(false);
     expect(lines.some((l) => l.path.includes("About"))).toBe(true);
     expect(lines.some((l) => l.path.includes("Quit"))).toBe(true);
+    // A locked app still hides and quits with its keys.
+    expect(linesOf(state(os, { unlocked: false }), "eBIRForms")).toEqual(["About eBIRForms", "Hide eBIRForms  mod+h", "Quit eBIRForms  mod+q"]);
     expect(lines.filter((l) => l.disabled)).toEqual([]);
   }
   const mac = state("macos", { unlocked: false });
   expect(titles(mac)).toEqual(["eBIRForms", "Edit"]);
-  expect(shape(mac, "eBIRForms")).toEqual(["About eBIRForms", "-", "Quit eBIRForms"]);
+  expect(shape(mac, "eBIRForms")).toEqual(["About eBIRForms", "-", "Hide eBIRForms", "-", "Quit eBIRForms"]);
   expect(shape(mac, "Edit")).toContain("role:paste");
   expect(titles(state("windows", { unlocked: false }))).toEqual(["eBIRForms", "File", "Edit", "Help"]);
   expect(titles(state("linux", { unlocked: false }))).toEqual(["eBIRForms", "File", "Edit", "Help"]);
   for (const os of ["windows", "linux"] as Os[]) {
-    expect(shape(state(os, { unlocked: false }), "eBIRForms")).toEqual(["About eBIRForms", "-", "Quit eBIRForms"]);
+    expect(shape(state(os, { unlocked: false }), "eBIRForms")).toEqual(["About eBIRForms", "-", "Hide eBIRForms", "-", "Quit eBIRForms"]);
     expect(titles(state(os, { unlocked: false }))).not.toContain("Profiles");
   }
   expect(titles(mac)).not.toContain("Profiles");
-  expect(shape(state("windows", { unlocked: false }), "File")).toEqual(["Quit eBIRForms"]);
+  expect(shape(state("windows", { unlocked: false }), "File")).toEqual(["Hide eBIRForms", "Quit eBIRForms"]);
   expect(shape(state("linux", { unlocked: false }), "Help")).toEqual(["About eBIRForms"]);
   expect(shape(state("linux", { unlocked: false }), "Edit")).not.toContain("Settings…");
 });
@@ -153,7 +162,9 @@ test("every state has a tidy menu: no stray separators, no shortcut used twice, 
     for (const unlocked of [true, false]) {
       for (const hasTaxpayer of [true, false]) {
         for (const formOpen of [true, false]) {
-          const s = state(os, { unlocked, hasTaxpayer, formOpen, taxpayers: hasTaxpayer ? [JUANA, PEDRO] : [], currentTaxpayer: hasTaxpayer ? JUANA.root : null });
+          for (const keys of [DEFAULT_KEYS, { quit: "alt+cmd+q", hide: "cmd+q" }, { quit: "ctrl+shift+q", hide: "ctrl+q" }, { quit: "", hide: "" }])
+          for (const capturing of [false, true]) {
+          const s = state(os, { unlocked, hasTaxpayer, formOpen, taxpayers: hasTaxpayer ? [JUANA, PEDRO] : [], currentTaxpayer: hasTaxpayer ? JUANA.root : null, keys, capturing });
           for (const menu of menusOf(s)) {
             if (!("submenu" in menu) || !menu.submenu) throw new Error("a top-level item has no submenu");
             const kinds = menu.submenu.map((e) => (!e ? "?" : "type" in e ? "-" : "item"));
@@ -161,9 +172,10 @@ test("every state has a tidy menu: no stray separators, no shortcut used twice, 
             expect(kinds[kinds.length - 1]).toBe("item");
             expect(kinds.join("").includes("--")).toBe(false);
           }
-          const shortcuts = flatten(menusOf(s)).flatMap((l) => (l.shortcut ? [l.shortcut] : []));
+          const shortcuts = flatten(menusOf(s)).flatMap((l) => (l.shortcut ? [chord(os, l.shortcut)] : []));
           expect(new Set(shortcuts).size).toBe(shortcuts.length);
-          expect(flatten(menusOf(s)).some((l) => l.path.endsWith("Quit eBIRForms"))).toBe(true);
+          expect(flatten(menusOf(s)).some((l) => l.path === "eBIRForms > Quit eBIRForms")).toBe(true);
+          }
         }
       }
     }
@@ -216,27 +228,114 @@ test("each item runs the action its label says", () => {
   ]);
 });
 
-test("the tray menu is Show, Hide and Quit, the same in every state", () => {
+test("the tray menu is Show, Hide and Quit on every platform; Show or Hide is disabled to match the window", () => {
   const ran: MenuAction[] = [];
-  const lines = flatten(buildTrayMenu((a) => ran.push(a)));
-  expect(lines.map((l) => l.path)).toEqual(["Show eBIRForms", "Hide eBIRForms", "Quit"]);
-  for (const line of lines) line.select?.();
-  expect(ran).toEqual(["show", "hide", "quit-now"]);
+  const up = flatten(buildTrayMenu((a) => ran.push(a), true));
+  expect(up.map((l) => l.path)).toEqual(["Show eBIRForms", "Hide eBIRForms", "Quit eBIRForms"]);
+  expect(printMenu(buildTrayMenu(() => {}, true))).toEqual(["Show eBIRForms  (disabled)", "Hide eBIRForms", "Quit eBIRForms"]);
+  expect(printMenu(buildTrayMenu(() => {}, false))).toEqual(["Show eBIRForms", "Hide eBIRForms  (disabled)", "Quit eBIRForms"]);
+  for (const line of up) line.select?.();
+  expect(ran).toEqual(["show", "hide", "quit"]);
+  // Quit is never disabled and carries no shortcut (the application menu has the keys).
+  for (const visible of [true, false]) expect(flatten(buildTrayMenu(() => {}, visible)).every((l) => l.shortcut === null)).toBe(true);
 });
 
-test("the platform docs decide what close and the quit key do", () => {
-  // docs/platforms/macos.md: X and Cmd+Q hide to the menu bar; quit is in the tray. windows.md: X and Alt+F4 hide, no Ctrl+Q. linux.md: X and Ctrl+Q quit.
-  expect(CLOSE_POLICY.macos).toEqual({ closeHides: true, quitKeyHides: true, quitShortcut: "mod+q" });
-  expect(CLOSE_POLICY.windows).toEqual({ closeHides: true, quitKeyHides: false, quitShortcut: null });
-  expect(CLOSE_POLICY.linux).toEqual({ closeHides: false, quitKeyHides: false, quitShortcut: "mod+q" });
+test("the close policy per platform: macOS hides (the Dock icon goes), Windows and Linux ask or do the remembered choice; quit and hide keys everywhere", () => {
+  expect(closePolicy("macos")).toEqual({ close: "hide", hideTakesDockIcon: true, quitShortcut: "mod+q", hideShortcut: "mod+h" });
+  expect(closePolicy("windows")).toEqual({ close: "ask", hideTakesDockIcon: false, quitShortcut: "mod+q", hideShortcut: "mod+h" });
+  expect(closePolicy("linux")).toEqual({ close: "ask", hideTakesDockIcon: false, quitShortcut: "mod+q", hideShortcut: "mod+h" });
+  // "Don't ask again" remembered a choice: Windows and Linux follow it; macOS's red button always hides.
+  for (const close of ["hide", "quit"] as const) {
+    expect(closePolicy("windows", { ...DEFAULT_CLOSE_PREFS, close }).close).toBe(close);
+    expect(closePolicy("linux", { ...DEFAULT_CLOSE_PREFS, close }).close).toBe(close);
+    expect(closePolicy("macos", { ...DEFAULT_CLOSE_PREFS, close }).close).toBe("hide");
+  }
+  // Apple review: out of the box Cmd+Q is a real quit, and every platform's menu has a Quit item with it.
+  for (const os of OSES) {
+    const quit = flatten(menusOf(state(os))).find((l) => l.path === "eBIRForms > Quit eBIRForms");
+    expect(quit?.shortcut).toBe("mod+q");
+    const ran: MenuAction[] = [];
+    flatten(menusOf(state(os), (a) => ran.push(a))).find((l) => l.path === "eBIRForms > Quit eBIRForms")?.select?.();
+    expect(ran).toEqual(["quit"]);
+  }
+  // Super+Q is off on Linux until the recorder binds it.
+  expect(flatten(menusOf(state("linux"))).some((l) => l.shortcut !== null && chord("linux", l.shortcut) === "cmd+q")).toBe(false);
+  const superQ = state("linux", { keys: { quit: "cmd+q", hide: "mod+h" } });
+  expect(linesOf(superQ, "eBIRForms")).toContain("Quit eBIRForms  cmd+q");
 });
 
-test("Windows and Linux: the eBIRForms menu is About, Settings…, Hide, Sign Out, Quit, with no shortcuts of its own", () => {
+test("the stored choices are read back, and anything unknown is the default", () => {
+  expect(parseClosePrefs(null)).toEqual(DEFAULT_CLOSE_PREFS);
+  expect(parseClosePrefs("not json")).toEqual(DEFAULT_CLOSE_PREFS);
+  expect(parseClosePrefs(JSON.stringify({ quit: "alt+cmd+q", hide: "cmd+q", close: "hide" }))).toEqual({ keys: { quit: "alt+cmd+q", hide: "cmd+q" }, close: "hide" });
+  expect(parseClosePrefs(JSON.stringify({ quit: "", close: "quit" }))).toEqual({ keys: { quit: "", hide: "mod+h" }, close: "quit" });
+  expect(parseClosePrefs(JSON.stringify({ quit: 4, close: "sometimes" }))).toEqual(DEFAULT_CLOSE_PREFS);
+});
+
+test("remapped keys show in the menu: Cmd+Q hides and Option+Cmd+Q quits", () => {
+  const keys = { quit: "alt+cmd+q", hide: "cmd+q" };
+  expect(linesOf(state("macos", { keys }), "eBIRForms")).toContain("Hide eBIRForms  cmd+q");
+  expect(linesOf(state("macos", { keys }), "eBIRForms")).toContain("Quit eBIRForms  alt+cmd+q");
+  // The same on the locked app menu, and on Windows and Linux in the eBIRForms menu.
+  expect(linesOf(state("macos", { keys, unlocked: false }), "eBIRForms")).toEqual(["About eBIRForms", "Hide eBIRForms  cmd+q", "Quit eBIRForms  alt+cmd+q"]);
+  const win = { quit: "ctrl+shift+q", hide: "ctrl+q" };
+  for (const os of ["windows", "linux"] as Os[]) {
+    expect(linesOf(state(os, { keys: win }), "eBIRForms")).toContain("Hide eBIRForms  ctrl+q");
+    expect(linesOf(state(os, { keys: win }), "eBIRForms")).toContain("Quit eBIRForms  ctrl+shift+q");
+  }
+  // No key: the item stays, with no shortcut.
+  expect(linesOf(state("macos", { keys: { quit: "mod+q", hide: "" } }), "eBIRForms")).toContain("Hide eBIRForms");
+  // The policy carries the same keys.
+  expect(closePolicy("macos", { keys, close: "ask" })).toEqual({ close: "hide", hideTakesDockIcon: true, quitShortcut: "alt+cmd+q", hideShortcut: "cmd+q" });
+});
+
+test("while a recorder listens, Quit and Hide carry the platform's own quit and hide keys (nsh/keymap cannot bind them)", () => {
+  const keys = { quit: "alt+cmd+q", hide: "ctrl+cmd+h" };
+  expect(itemKeys({ os: "macos", keys, capturing: true })).toEqual({ quit: "cmd+q", hide: "cmd+h" });
+  expect(itemKeys({ os: "macos", keys, capturing: false })).toEqual({ quit: "alt+cmd+q", hide: "ctrl+cmd+h" });
+  expect(itemKeys({ os: "windows", keys: DEFAULT_KEYS, capturing: true })).toEqual({ quit: "ctrl+q", hide: "mod+h" });
+  // Hide on Ctrl+Q would be bound twice while Quit carries Ctrl+Q: it lets go of it.
+  expect(itemKeys({ os: "linux", keys: { quit: "ctrl+shift+q", hide: "ctrl+q" }, capturing: true })).toEqual({ quit: "ctrl+q", hide: null });
+});
+
+test("a key another item, the platform, the frame or the global hotkey holds is refused; a free one is taken", () => {
+  expect(keyHolder("macos", "hide", "cmd+k")).toBe("Command Palette…");
+  expect(keyHolder("macos", "hide", "mod+q")).toBe("Quit eBIRForms");
+  expect(keyHolder("macos", "quit", "cmd+h")).toBe("Hide eBIRForms");
+  expect(keyHolder("macos", "quit", "cmd+w")).toBe("Close Window");
+  expect(keyHolder("macos", "quit", "cmd+c")).toBe("Copy");
+  expect(keyHolder("macos", "quit", "cmd+m")).toBe("Minimize");
+  expect(keyHolder("macos", "quit", "cmd+l")).toBe("Lock");
+  expect(keyHolder("windows", "quit", "ctrl+n")).toBe("New Return…");
+  expect(keyHolder("windows", "quit", "alt+f4")).toBe("Close");
+  expect(keyHolder("linux", "hide", "f11")).toBe("Enter Full Screen");
+  expect(keyHolder("macos", "quit", "ctrl+alt+b", DEFAULT_KEYS, "ctrl+alt+b")).toBe("the global show hotkey");
+  // Its own key is free to keep, and a swap goes in two steps: Quit to Option+Cmd+Q first, then Cmd+Q is free for Hide.
+  expect(keyHolder("macos", "quit", "cmd+q")).toBe(null);
+  expect(keyHolder("macos", "quit", "alt+cmd+q")).toBe(null);
+  expect(keyHolder("macos", "hide", "cmd+q", { quit: "alt+cmd+q", hide: "mod+h" })).toBe(null);
+  // Super+Q on Linux is free; a plain key or Shift with one is never a quit or hide key.
+  expect(keyHolder("linux", "quit", "cmd+q")).toBe(null);
+  expect(appKeyUsable("cmd+q")).toBe(true);
+  expect(appKeyUsable("ctrl+h")).toBe(true);
+  expect(appKeyUsable("shift+q")).toBe(false);
+  expect(appKeyUsable("q")).toBe(false);
+  expect(chord("macos", "Mod+Shift+K")).toBe("shift+cmd+k");
+  expect(chord("windows", "cmd+alt+ctrl+-")).toBe("ctrl+alt+cmd+minus");
+});
+
+test("the warning before quitting while returns are still sending", () => {
+  expect(sendingWarning(0)).toBe(null);
+  expect(sendingWarning(1)).toEqual({ title: "1 return is still sending", message: "Quitting stops them. Hide keeps them going in the background." });
+  expect(sendingWarning(2)?.title).toBe("2 returns are still sending");
+});
+
+test("Windows and Linux: the eBIRForms menu is About, Settings…, Hide, Sign Out, Quit; Hide and Quit show their keys", () => {
   for (const os of ["windows", "linux"] as Os[]) {
     const s = state(os);
     expect(shape(s, "eBIRForms")).toEqual(["About eBIRForms", "-", "Settings…", "-", "Hide eBIRForms", "-", "Sign Out", "-", "Quit eBIRForms"]);
-    // File (Windows) and Edit (Linux) keep Settings' and Hide's shortcuts, File keeps Quit's: an accelerator is never bound twice.
-    expect(linesOf(s, "eBIRForms")).toEqual(["About eBIRForms", "Settings…", "Hide eBIRForms", "Sign Out", "Quit eBIRForms"]);
+    // File (Windows) and Edit (Linux) keep Settings' shortcut; Hide's and Quit's are here, and File's copies carry none: never bound twice.
+    expect(linesOf(s, "eBIRForms")).toEqual(["About eBIRForms", "Settings…", "Hide eBIRForms  mod+h", "Sign Out", "Quit eBIRForms  mod+q"]);
     // About, Settings and Quit show twice (the owner accepted it); each runs the same action.
     const ran: MenuAction[] = [];
     const lines = flatten(menusOf(s, (a) => ran.push(a)));

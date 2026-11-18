@@ -25,13 +25,14 @@ const rowsOf = (view: ReturnType<typeof settingsView>, id: string) => view.find(
 describe("settingsView", () => {
   test("an admin sees every section and every row", () => {
     const view = settingsView("", true);
-    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "computer"]);
+    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "jobs", "keyboard", "computer"]);
+    expect(rowsOf(view, "keyboard")).toEqual(["quit", "hide", "close"]);
     expect(rowsOf(view, "general")).toEqual(["theme", "recent", "compact", "updates"]);
     expect(rowsOf(view, "transfer")).toContain("import");
   });
   test("a non-admin sees no admin-only section and no admin-only row", () => {
     const view = settingsView("", false);
-    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer"]);
+    expect(view.map((section) => section.id)).toEqual(["general", "account", "transfer", "keyboard"]);
     expect(rowsOf(view, "transfer")).toEqual(["export"]);
   });
   test("a non-admin does not see the import row even when searching for it", () => {
@@ -43,6 +44,8 @@ describe("settingsView", () => {
     expect(settingsView("theme", true).map((s) => [s.id, s.rows])).toEqual([["general", ["theme"]]]);
     expect(settingsView("buwiz", true).map((s) => [s.id, s.rows])).toEqual([["account", ["buwiz"]]]);
     expect(settingsView("HOTKEY", true).map((s) => [s.id, s.rows])).toEqual([["computer", ["hotkey"]]]);
+    expect(settingsView("tray", false).map((s) => [s.id, s.rows])).toEqual([["keyboard", ["hide", "close"]]]);
+    expect(settingsView("keyboard", true).map((s) => [s.id, s.rows])).toEqual([["keyboard", ["quit", "hide", "close"]], ["computer", ["hotkey"]]]);
     // "eBIRForms" also names the app (the version row); in Import / Export it is the import from the old program.
     expect(rowsOf(settingsView("eBIRForms", true), "transfer")).toEqual(["import"]);
     expect(settingsView("eBIRForms folder", true).map((s) => [s.id, s.rows])).toEqual([["transfer", ["import"]]]);

@@ -1,5 +1,5 @@
-// Settings > Computer (old computerCards; admin only): the local files, how long logs are kept, the global show hotkey, how closing
-// the window behaves, who the computer is set up for, and the version. The hotkey is a shortcut recorder (the box is pressed, then the
+// Settings > Computer (old computerCards; admin only): the local files, how long logs are kept, the global show hotkey, who the
+// computer is set up for, and the version (how closing the window behaves is Settings > Keyboard now). The hotkey is a shortcut recorder (the box is pressed, then the
 // keys): it stores the chord through set_global_hotkey, which the desktop host follows (shell/desktop/Desktop.tsx), holds that host's
 // hotkey off while it listens (so the chord pressed to record it does not hide the window), and says where the registration stands.
 import { cleanup, platform, View } from "nsh";
@@ -84,17 +84,6 @@ export function ComputerSection(props: { rows: string[] }) {
                 onRecordingChange={hold}
               />
             </SettingRow>
-          </Card>
-        </Labeled>
-      </If>
-      <If when={has("tray")}>
-        <Labeled label="Window">
-          <Card testID="settings-tray">
-            <NoteRow
-              testID="settings-tray-row"
-              title="Close window"
-              note="Closing hides eBIRForms to the menu bar when a tray icon exists. With no tray, closing quits. Quit is always in the application menu."
-            />
           </Card>
         </Labeled>
       </If>

@@ -14,15 +14,15 @@ const SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 const KEY = /^[A-Z0-9]{4}(-[A-Z0-9]{4}){3}$/;
 
 for (const { name, size } of SIZES) {
-  test(`${name}: the local files, the version and how closing works are told; retention is stored by the host`, async () => {
+  test(`${name}: the local files and the version are told; retention is stored by the host`, async () => {
     const app = await openSettings(size, { solo: true }, "computer");
     await app.waitFor("id:settings-files");
     expectTexts(app, [
       "Computer", "Local files", "Database", "Data folder", "Logs folder", "Keep logs for", "Older daily log files are deleted", "7 days",
-      "Shortcuts", "Global show hotkey", "Shows or hides eBIRForms from any app", "None", "Click to record", "Window", "Close window",
-      "Closing hides eBIRForms to the menu bar when a tray icon exists. With no tray, closing quits. Quit is always in the application menu.",
-      "Computer setup", "eBIRForms 0.2.0",
+      "Shortcuts", "Global show hotkey", "Shows or hides eBIRForms from any app", "None", "Click to record", "Computer setup", "eBIRForms 0.2.0",
     ]);
+    // How closing works is Settings > Keyboard's now.
+    expect(app.texts()).not.toContain("Close window");
     expect(app.texts().some((t) => t.includes("ebirforms-door") && t.endsWith("bir_data.db"))).toBe(true);
     expect(app.texts().some((t) => t.endsWith("dev.goldcoders.bir.nsh/logs"))).toBe(true);
 
