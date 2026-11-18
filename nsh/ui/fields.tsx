@@ -246,6 +246,7 @@ function MaskedField(props: MaskedProps) {
           reveal: (options) => r.reveal(options),
           setSelection: (start, end) => r.setSelection(start, end),
           insertText: (t) => r.insertText(t),
+          animateLayout: (transition) => r.animateLayout(transition),
         }
       : r;
   // A value set from outside (another box, a reload) shows; the field's own edits come back equal and change nothing.
