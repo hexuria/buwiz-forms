@@ -2,10 +2,10 @@
 // Every action goes through the frame's own API (shell/app.ts): navigation, the layers, the theme; none reaches into a screen.
 import { openUrl, platform, signal, untracked } from "nsh";
 import type { CloseReason } from "nsh/desktop";
-import { Window } from "nsh/desktop";
-import { bir } from "../../bir";
+import { Application, Tray, Window } from "nsh/desktop";
 import { errorText } from "../../lib/errors";
 import { app } from "../app";
+import { store } from "../store";
 import { closePrefs, setCloseChoice } from "./app_keys";
 import { closePolicy, SUPPORT_URL, WEBSITE_URL, type MenuAction, type Os } from "./menu_model";
 import * as native from "./native";
@@ -32,6 +32,21 @@ function setDockIcon(shown: boolean): void {
   native.setDockIcon(shown);
 }
 
+/**
+ * The window came on screen, however it did: showMain, or NSH itself when the user opens the app again from the Finder, Spotlight or
+ * Launchpad (applicationShouldHandleReopen shows the window natively). Every show brings the Dock icon back, so it cannot stay away
+ * while the window is up. DesktopHost calls it from the window's visible state, as the tray's menu follows it.
+ */
+export function windowShown(): void {
+  setDockIcon(true);
+}
+
+/** A tray icon shows, so a window hidden to it can come back (nsh/desktop Tray.available(): always on macOS and Windows; on Linux
+ * while a panel hosts tray icons, which GNOME without the AppIndicator extension does not). Reactive. */
+export function trayShows(): boolean {
+  return Tray.available();
+}
+
 /** Brings the window back and gives it the keyboard (tray Show, the hotkey, a second launch); on macOS the Dock icon first. */
 export function showMain(): void {
   const window = mainWindow();
@@ -41,11 +56,20 @@ export function showMain(): void {
   window.focus();
 }
 
-/** Hides the window: the app keeps running (and sending) in the tray. macOS: the Dock icon goes too, the menu-bar icon stays. Never asks. */
+/**
+ * Hides the window: the app keeps running (and sending) in the tray. macOS: the Dock icon goes too, the menu-bar icon stays. Never asks.
+ * Without a tray icon (Linux with no panel that hosts one) hiding would leave no way back: the window is minimized instead (the
+ * taskbar or the dock brings it back), and the app keeps sending.
+ */
 export function hideToTray(): void {
   const window = mainWindow();
-  window?.hide();
-  if (window && platform.os === "macos") setDockIcon(false);
+  if (!window) return;
+  if (!untracked(trayShows)) {
+    window.minimize();
+    return;
+  }
+  window.hide();
+  if (platform.os === "macos") setDockIcon(false);
 }
 
 /** Show when it is hidden or behind, hide when it is up (the global hotkey). */
@@ -65,10 +89,15 @@ export function quitApp(exit?: () => void): Promise<void> {
   return app.quit(exit);
 }
 
-/** How many returns the submission worker still has to send (Queued, every taxpayer's: the worker sends them all). 0 when it cannot tell. */
+/**
+ * How many returns are still sending: the Queued ones of the frame's filed list, through the scoped store (a taxpayer session counts
+ * its own, as everywhere: store.returns applies canSee). Always 0 behind a lock (the sign-in gate, the app lock): nothing is read for
+ * nobody, as the Queued watch does (app.ts queuedKey). 0 when it cannot tell.
+ */
 export function returnsSending(): number {
+  if (app.cloudLocked() || app.appLocked()) return 0;
   try {
-    return untracked(() => bir.list_returns("filed")).filter((r) => r.status === "Queued").length;
+    return untracked(() => store.returns("filed")).filter((r) => r.status === "Queued").length;
   } catch {
     return 0;
   }
@@ -95,11 +124,31 @@ export function requestQuit(): void {
   sendingAsk.set(count);
 }
 
-/** The warning's answer: "quit" (Quit anyway), "wait" (stay open, keep sending), "hide" (hide to the tray, keep sending). */
+/**
+ * The warning's answer: "quit" (Quit anyway), "wait" (stay open, keep sending), "hide" (hide to the tray, keep sending). Wait and Hide
+ * also answer a quit the system asked for (macOS: logging out, restarting, shutting down): the request is cancelled, so the system's
+ * logout stops and says the app stopped it. Quit anyway lets it go on.
+ */
 export function answerSending(answer: "quit" | "wait" | "hide"): void {
   sendingAsk.set(0);
-  if (answer === "quit") void quitApp();
-  else if (answer === "hide") hideToTray();
+  if (answer === "quit") {
+    void quitApp();
+    return;
+  }
+  Application.cancelQuitRequest();
+  if (answer === "hide") hideToTray();
+}
+
+/**
+ * The platform's own quit requests (NSH's quitRequest): macOS's Dock › Quit, Command-Q where the menu does not take it, and, with
+ * setQuitRequestOptions({ system: true }), logging out, restarting and shutting down; Ctrl+Q on Windows and Linux. They run the same
+ * check as the menu's Quit: nothing sending quits at once (a logout goes on without a word); returns sending show the warning. A
+ * logout left unanswered is cancelled by NSH before macOS's two-minute limit (the returns keep sending; the user logs out again).
+ * Returns a function that stops listening (DesktopHost's cleanup).
+ */
+export function listenToQuitRequests(): () => void {
+  if (platform.os === "macos") Application.setQuitRequestOptions({ system: true });
+  return Application.on("quitRequest", () => requestQuit());
 }
 
 // ---------------------------------------------------------------- the close button
@@ -117,7 +166,8 @@ export function closePressed(os: Os, reason: CloseReason = "closeButton"): void 
     return;
   }
   const close = closePolicy(os, untracked(closePrefs)).close;
-  if (close === "hide") hideToTray();
+  // A remembered "hide" with no tray icon to come back from asks instead (the question then offers Quit, not Hide to tray).
+  if (close === "hide" && untracked(trayShows)) hideToTray();
   else if (close === "quit") requestQuit();
   else closeAsk.set(true);
 }

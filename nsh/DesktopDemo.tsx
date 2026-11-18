@@ -20,7 +20,8 @@
 // change (host.post would need a capability the app does not declare): a test reads app.storage().
 // Over the frame, a strip of 8-point buttons (off the window's rounded corner, where a click misses the window) runs the installed menu's items (id "run:File > New Return…") and the tray's ("tray:Show
 // eBIRForms"), because a test cannot click the system's menu bar; the readouts say what the menu did. While the window is hidden nothing
-// on it can be pressed or read: a test sends host.send("run", { id }) and reads app.window("main").state(). It sits at the nsh root because a
+// on it can be pressed or read: a test sends host.send("run", { id }) and reads app.window("main").state(); { id: "reopen" } shows the
+// window as NSH's reopen does (the app opened again from the Finder: no action of the app's runs). It sits at the nsh root because a
 // real-window run serves assets from the entry's folder down.
 import { effect, host, mount, signal, Storage, Text, untracked, View } from "nsh";
 import { Button } from "nsh/base";
@@ -150,6 +151,8 @@ function Demo() {
     const id = String((payload as { id?: unknown } | null)?.id ?? "");
     if (id.startsWith("chord:")) chords()[id.slice(6)]?.();
     else if (id.startsWith("hotkey:")) store.write("set_global_hotkey", id.slice(7));
+    // NSH's own reopen (the Finder, Spotlight, Launchpad): the window shows natively, none of the app's actions runs.
+    else if (id === "reopen") win.show();
     else
       runnable()
         .find((item) => item.id === id)

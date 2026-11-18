@@ -290,6 +290,42 @@ for (const platform of ["windows", "linux"] as const) {
   });
 }
 
+test("macOS: the Dock icon comes back with every show, NSH's own reopen (the Finder, Spotlight) included", async () => {
+  const app = await open(ENTRY, { ...WIDE, ...asking({ quit: "fake" }) });
+  await app.waitFor("id:sidebar");
+  await pressUntil(app, "mod+h", () => hidden(app));
+  await app.waitUntil(() => posted(app)?.dock === false);
+  // The window comes back without showMain: the Dock icon follows the window's visible state.
+  await app.host.send("run", { id: "reopen" });
+  await app.waitUntil(() => shown(app));
+  await app.waitUntil(() => posted(app)?.dock === true);
+});
+
+test("linux without a tray icon (GNOME without AppIndicator): the close question offers Quit, Enter quits, and nothing hides into nothing", async () => {
+  const NO_TRAY = { width: 1440, height: 900, platform: "linux" as const, tray: false };
+  const app = await open(ENTRY, { ...NO_TRAY, ...asking({ quit: "fake" }) });
+  await app.waitFor("id:sidebar");
+  await app.window("main").pressClose();
+  await app.waitFor("id:close-ask");
+  expect(app.shows("id:close-ask-no-tray")).toBe(true);
+  expect(app.shows("id:close-ask-hide")).toBe(false);
+  expect(app.shows("id:close-ask-cancel")).toBe(true);
+  await app.keyboard.press("enter");
+  await app.waitFor("text:quits=1");
+
+  // A remembered "Hide to tray" asks instead; the hide key minimizes the window (the taskbar brings it back) rather than hiding it.
+  const kept = await open(ENTRY, { ...NO_TRAY, storage: { "desktop.close": JSON.stringify({ close: "hide" }) }, ...asking({ quit: "fake" }) });
+  await kept.waitFor("text:close=hide");
+  await kept.window("main").pressClose();
+  await kept.waitFor("id:close-ask");
+  expect(kept.shows("id:close-ask-hide")).toBe(false);
+  await kept.press("id:close-ask-cancel");
+  await kept.waitFor("id:close-ask", { state: "gone" });
+  await pressUntil(kept, "mod+h", () => kept.window("main").state()?.mode === "minimized");
+  expect(hidden(kept)).toBe(false);
+  expect(posted(kept)?.quits ?? 0).toBe(0);
+});
+
 test("the global hotkey follows the stored setting: registered, replaced when it changes, off when it is cleared or the gate is up", async () => {
   const app = await open(ENTRY, { ...WIDE, ...asking({ hotkey: "control+alt+shift+9", system: "fake" }) });
   await app.waitFor("id:sidebar");

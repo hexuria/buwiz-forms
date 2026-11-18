@@ -5,6 +5,7 @@
 // platform's own quit and hide keys (Cmd+Q, Cmd+H, Ctrl+Q), which nsh/keymap cannot bind: so Cmd+Q can be made Hide, say.
 import { cleanup, platform, signal } from "nsh";
 import { comboToKeystroke, modifierWords } from "../../lib/settings_model";
+import { menuOs } from "../../shell/chrome";
 import {
   appKeyUsable, captureMenuKeys, CLOSE_CHOICES, closePrefs, holdHotkey, keyHolder, loadClosePrefs, setAppKey, setCloseChoice, store,
   type AppKeys, type CloseChoice,
@@ -12,9 +13,10 @@ import {
 import { Card, Dropdown, SettingRow, ShortcutRecorder } from "../../ui";
 import { Labeled, NoteRow } from "./parts";
 
-/** The platform as the menus know it (iOS and Android have no such keys: they read as macOS and Linux, and nothing is bound there). */
+/** The platform as the menus know it (shell/chrome.ts menuOs); iOS and Android have no such keys: they read as macOS and Linux, and
+ * nothing is bound there. */
 function os(): "macos" | "windows" | "linux" {
-  return platform.os === "macos" || platform.os === "ios" ? "macos" : platform.os === "windows" ? "windows" : "linux";
+  return menuOs() ?? (platform.os === "ios" ? "macos" : "linux");
 }
 
 /** One recorder for the quit or the hide key. */

@@ -2,45 +2,75 @@
 // recorder takes of the menu. A leaf (nothing of the app is imported), so Settings, the menu and the desktop host share it without a cycle.
 //
 // Kept in NSH Storage under "desktop.close" for the whole computer (not per database, as redesign.prefs): read when the desktop host
-// starts, so the keys also hold on the sign-in screens. A change made before the read came back is not overwritten by it.
+// starts, so the keys also hold on the sign-in screens. A change made before the read came back is kept as a change: once the read is
+// in, it is applied over what was stored and only then written, so it never overwrites the stored fields it did not touch.
 import { signal, Storage } from "nsh";
 import { DEFAULT_CLOSE_PREFS, parseClosePrefs, type AppKeys, type CloseChoice, type ClosePrefs } from "./menu_model";
 
 /** The Storage key. */
 export const CLOSE_PREFS_KEY = "desktop.close";
 
+/** What the choices are read from and written to: NSH Storage (a test hands in a slower one). */
+export interface ClosePrefsStorage {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+}
+
+let storage: ClosePrefsStorage = Storage;
 const prefs = signal<ClosePrefs>(DEFAULT_CLOSE_PREFS);
 let loading: Promise<void> | null = null;
-let changed = false;
+/** The changes made before the read came back (null once it has): applied over the stored choices, then written. */
+let early: ((now: ClosePrefs) => ClosePrefs)[] | null = [];
 
 /** Reads the stored choices once (later calls get the same promise). */
 export function loadClosePrefs(): Promise<void> {
-  loading ??= Storage.getItem(CLOSE_PREFS_KEY)
+  loading ??= storage
+    .getItem(CLOSE_PREFS_KEY)
+    .catch(() => null)
     .then((raw) => {
-      if (!changed) prefs.set(parseClosePrefs(raw));
-    })
-    .catch(() => {});
+      const changes = early ?? [];
+      early = null;
+      const next = changes.reduce((now, change) => change(now), parseClosePrefs(raw));
+      prefs.set(next);
+      if (changes.length) write(next);
+    });
   return loading;
+}
+
+/** For a test: reads and writes go to `store` from now on, as if the app had just started (nothing read yet). */
+export function useClosePrefsStorage(store: ClosePrefsStorage): void {
+  storage = store;
+  prefs.set(DEFAULT_CLOSE_PREFS);
+  loading = null;
+  early = [];
 }
 
 /** The choices now (reactive). */
 export const closePrefs = (): ClosePrefs => prefs();
 
-function save(next: ClosePrefs): void {
-  changed = true;
-  prefs.set(next);
-  Storage.setItem(CLOSE_PREFS_KEY, JSON.stringify({ quit: next.keys.quit, hide: next.keys.hide, close: next.close })).catch(() => {});
+function write(next: ClosePrefs): void {
+  storage.setItem(CLOSE_PREFS_KEY, JSON.stringify({ quit: next.keys.quit, hide: next.keys.hide, close: next.close })).catch(() => {});
+}
+
+/** Shows `change` at once; writes once the stored choices are in (before that, it waits for them and is applied over them). */
+function save(change: (now: ClosePrefs) => ClosePrefs): void {
+  prefs.set(change(prefs()));
+  if (early) {
+    early.push(change);
+    void loadClosePrefs();
+  } else {
+    write(prefs());
+  }
 }
 
 /** Sets the quit or the hide key ("" for none). The caller has checked it is free (menu_model keyHolder). */
 export function setAppKey(which: keyof AppKeys, keystroke: string): void {
-  const now = prefs();
-  save({ ...now, keys: { ...now.keys, [which]: keystroke } });
+  save((now) => ({ ...now, keys: { ...now.keys, [which]: keystroke } }));
 }
 
 /** Sets what Windows' and Linux's close button does: ask, or hide or quit without asking. */
 export function setCloseChoice(close: CloseChoice): void {
-  save({ ...prefs(), close });
+  save((now) => ({ ...now, close }));
 }
 
 // ---------------------------------------------------------------- the capture

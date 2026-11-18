@@ -26,6 +26,7 @@
 //   * The quit and hide keys are the user's (Settings > Keyboard, ShortcutRecorder): the menus show the keys they chose.
 // `closePolicy(os, prefs)` is that data; actions.ts carries it out.
 import type { MenuItem } from "nsh/desktop";
+import { KEYSTROKE_WORDS, MODIFIER_ORDER } from "../../lib/settings_model";
 
 /** The platforms the menu has a shape for. */
 export type Os = "macos" | "windows" | "linux";
@@ -183,20 +184,6 @@ export function sendingWarning(count: number): { title: string; message: string 
 
 // ---------------------------------------------------------------- the keys: one spelling, and who holds each
 
-const MODIFIERS: Readonly<Record<string, string>> = {
-  ctrl: "ctrl",
-  control: "ctrl",
-  alt: "alt",
-  option: "alt",
-  opt: "alt",
-  shift: "shift",
-  cmd: "cmd",
-  command: "cmd",
-  meta: "cmd",
-  super: "cmd",
-  win: "cmd",
-};
-const MODIFIER_ORDER = ["ctrl", "alt", "shift", "cmd"];
 const KEY_NAMES: Readonly<Record<string, string>> = {
   "-": "minus",
   "=": "plus",
@@ -214,9 +201,22 @@ export function chord(os: Os, keystroke: string): string {
   const parts = keystroke.toLowerCase().split("+").filter(Boolean);
   if (!parts.length) return "";
   const key = parts[parts.length - 1];
-  const mods = new Set(parts.slice(0, -1).map((m) => (m === "mod" || m === "cmdorctrl" ? (os === "macos" ? "cmd" : "ctrl") : (MODIFIERS[m] ?? m))));
+  // nsh/keymap's modifier words (lib/settings_model.ts KEYSTROKE_WORDS), "mod" made concrete for `os`.
+  const mods = new Set<string>(parts.slice(0, -1).map((m) => (m === "mod" || m === "cmdorctrl" ? (os === "macos" ? "cmd" : "ctrl") : (KEYSTROKE_WORDS[m] ?? m))));
   return [...MODIFIER_ORDER.filter((m) => mods.has(m)), KEY_NAMES[key] ?? key].join("+");
 }
+
+/** Windows' and Linux's: the same edit roles and Alt+F4. */
+const PC_ROLE_KEYS: Readonly<Record<string, string>> = {
+  "ctrl+z": "Undo",
+  "ctrl+y": "Redo",
+  "ctrl+shift+z": "Redo",
+  "ctrl+x": "Cut",
+  "ctrl+c": "Copy",
+  "ctrl+v": "Paste",
+  "ctrl+a": "Select All",
+  "alt+f4": "Close",
+};
 
 /** The keys the platform's own items keep (the edit roles, Minimize, Hide Others, full screen, Alt+F4), with what they do. */
 const ROLE_KEYS: Record<Os, Readonly<Record<string, string>>> = {
@@ -231,8 +231,8 @@ const ROLE_KEYS: Record<Os, Readonly<Record<string, string>>> = {
     "alt+cmd+h": "Hide Others",
     "ctrl+cmd+f": "Enter Full Screen",
   },
-  windows: { "ctrl+z": "Undo", "ctrl+y": "Redo", "ctrl+shift+z": "Redo", "ctrl+x": "Cut", "ctrl+c": "Copy", "ctrl+v": "Paste", "ctrl+a": "Select All", "alt+f4": "Close" },
-  linux: { "ctrl+z": "Undo", "ctrl+y": "Redo", "ctrl+shift+z": "Redo", "ctrl+x": "Cut", "ctrl+c": "Copy", "ctrl+v": "Paste", "ctrl+a": "Select All", "alt+f4": "Close" },
+  windows: PC_ROLE_KEYS,
+  linux: PC_ROLE_KEYS,
 };
 
 /** The frame's own keys that no menu item shows (shell/Shell.tsx bindKeys). */

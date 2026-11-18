@@ -11,8 +11,9 @@
 //   * the updater driver (updates.ts).
 // The window's size and position are kept by NSH itself (nsh.json window.restoreBounds). Off the desktops it does nothing.
 import type { JSX } from "nsh";
-import { cleanup, computed, effect, keymap, platform, signal, untracked, View } from "nsh";
-import { currentWindow, GlobalShortcut, isAvailable, Menu, type MenuItem, Tray } from "nsh/desktop";
+import { cleanup, computed, effect, keymap, signal, untracked, View } from "nsh";
+import { currentWindow, GlobalShortcut, Menu, type MenuItem, Tray } from "nsh/desktop";
+import { menuOs } from "../chrome";
 import { store } from "../store";
 import { app } from "../app";
 import { errorText } from "../../lib/errors";
@@ -20,14 +21,14 @@ import { startPolls } from "../../lib/poll";
 import { AppButton, Checkbox, Dialog, Text } from "../../ui";
 import { signOut as signOutOfTheAccount } from "../../screens/settings/cloud";
 import {
-  aboutOpen, answerClose, answerSending, closeAsk, closePressed, mainWindow, perform, sendingAsk, setSignOutHandler, showMain, toggleMain,
-  useSendingCount,
+  aboutOpen, answerClose, answerSending, closeAsk, closePressed, listenToQuitRequests, mainWindow, perform, sendingAsk, setSignOutHandler,
+  showMain, toggleMain, trayShows, useSendingCount, windowShown,
 } from "./actions";
 import { loadClosePrefs } from "./app_keys";
 import { createHotkey } from "./hotkey";
 import { hotkeyHeld, setHotkeyStatus } from "./hotkey_state";
 import { menuNow as menuForState } from "./menu";
-import { APP_NAME, buildTrayMenu, COPYRIGHT, sendingWarning, type Os } from "./menu_model";
+import { APP_NAME, buildTrayMenu, COPYRIGHT, sendingWarning } from "./menu_model";
 import * as native from "./native";
 import icon from "./tray.png";
 import { updates } from "./updates";
@@ -43,11 +44,8 @@ export const installedMenu = (): readonly MenuItem[] => menuNow();
 /** The tray icon's menu now installed. */
 export const installedTray = (): readonly MenuItem[] => trayNow();
 
-/** The desktop platform this run is, or null where there are no desktop windows. */
-export function desktopOs(): Os | null {
-  if (!isAvailable || !platform.desktop) return null;
-  return platform.os === "macos" || platform.os === "windows" || platform.os === "linux" ? platform.os : null;
-}
+/** The desktop platform this run is, or null where there are no desktop windows: the chrome's menuOs (shell/chrome.ts), one definition. */
+export const desktopOs = menuOs;
 
 /** How often the host reads what Rust has for it, in ms: a second launch comes forward and the banner's buttons act within this. */
 const TICK_MS = 250;
@@ -86,7 +84,11 @@ function whileOpen(open: () => boolean, keys: Record<string, () => void>): void 
   cleanup(() => unbind?.());
 }
 
-/** "Close eBIRForms?" (Windows and Linux, the close button and Alt+F4): Quit or Hide to tray, and "Don't ask again". Enter hides, Esc keeps the window. */
+/**
+ * "Close eBIRForms?" (Windows and Linux, the close button and Alt+F4): Quit or Hide to tray, and "Don't ask again". Enter hides, Esc keeps
+ * the window. With no tray icon (Linux without a panel that hosts one: GNOME without the AppIndicator extension) a hidden window could not
+ * come back: the question offers Quit and Cancel, Quit is the default (Enter), and it says why.
+ */
 function CloseDialog() {
   const remember = signal(false);
   const answer = (choice: "hide" | "quit" | null) => {
@@ -94,23 +96,43 @@ function CloseDialog() {
     remember.set(false);
     answerClose(choice, kept);
   };
-  // While the question is up: Enter is Hide to tray (a focused button still takes its own Enter), Esc keeps the window (before the
-  // frame's own Escape, which knows nothing of this dialog).
-  whileOpen(closeAsk, { enter: () => answer("hide"), escape: () => answer(null) });
+  // While the question is up: Enter is the default (Hide to tray, or Quit without a tray; a focused button still takes its own Enter),
+  // Esc keeps the window (before the frame's own Escape, which knows nothing of this dialog).
+  whileOpen(closeAsk, { enter: () => answer(trayShows() ? "hide" : "quit"), escape: () => answer(null) });
   return (
     <Dialog testID="close-ask" width={400} open={closeAsk()} onOpenChange={(open) => !open && answer(null)}>
       <View class="gap-3 p-5">
         <View class="gap-1">
           <Text variant="title">{"Close " + APP_NAME + "?"}</Text>
-          <Text tone="fg2">Hide to tray keeps sending your queued returns and reminders. Quit stops everything.</Text>
+          <If
+            when={trayShows()}
+            else={
+              <Text testID="close-ask-no-tray" tone="fg2">
+                This desktop shows no tray icons, so a hidden window could not be brought back. Quit stops sending your queued returns and
+                reminders.
+              </Text>
+            }
+          >
+            <Text tone="fg2">Hide to tray keeps sending your queued returns and reminders. Quit stops everything.</Text>
+          </If>
         </View>
         <View class="flex-row items-center gap-2">
           <Checkbox testID="close-ask-remember" label="Don't ask again" checked={remember()} onChange={(on) => remember.set(on)} />
           <Text variant="meta">Don't ask again. You can change this in Settings.</Text>
         </View>
         <View class="flex-row justify-end gap-2 pt-1">
-          <AppButton testID="close-ask-quit" variant="danger" label="Quit" onPress={() => answer("quit")} />
-          <AppButton testID="close-ask-hide" variant="primary" label="Hide to tray" onPress={() => answer("hide")} />
+          <If
+            when={trayShows()}
+            else={
+              <>
+                <AppButton testID="close-ask-cancel" label="Cancel" onPress={() => answer(null)} />
+                <AppButton testID="close-ask-quit" variant="primary" label="Quit" onPress={() => answer("quit")} />
+              </>
+            }
+          >
+            <AppButton testID="close-ask-quit" variant="danger" label="Quit" onPress={() => answer("quit")} />
+            <AppButton testID="close-ask-hide" variant="primary" label="Hide to tray" onPress={() => answer("hide")} />
+          </If>
         </View>
       </View>
     </Dialog>
@@ -131,7 +153,9 @@ function SendingDialog() {
         <View class="flex-row justify-end gap-2 pt-1">
           <AppButton testID="sending-ask-quit" variant="danger" label="Quit anyway" onPress={() => answerSending("quit")} />
           <AppButton testID="sending-ask-wait" label="Wait" onPress={() => answerSending("wait")} />
-          <AppButton testID="sending-ask-hide" variant="primary" label="Hide to tray" onPress={() => answerSending("hide")} />
+          <If when={trayShows()}>
+            <AppButton testID="sending-ask-hide" variant="primary" label="Hide to tray" onPress={() => answerSending("hide")} />
+          </If>
         </View>
       </View>
     </Dialog>
@@ -171,6 +195,8 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
   // Closing: the window stays, the app hears it, and closePolicy decides (hide, ask "Hide to tray or Quit?", or quit through the frame).
   win.set({ closeOnPress: false });
   win.on("closePress", (event) => closePressed(os, event.reason));
+  // The platform's own quits (the Dock's Quit, a logout on macOS, Ctrl+Q) run the same check as the menu's Quit (actions.ts).
+  cleanup(listenToQuitRequests());
 
   // The application menu follows the state it depends on.
   const refreshes = signal(0);
@@ -194,6 +220,8 @@ export function DesktopHost(props: DesktopHostProps): JSX.Element {
   effect(() => {
     const up = visible();
     untracked(() => {
+      // macOS: every show brings the Dock icon back, NSH's own reopen (the Finder, Spotlight, Launchpad) included.
+      if (up) windowShown();
       const trayMenu = buildTrayMenu((action) => perform(action, os), up);
       trayNow.set(trayMenu);
       Tray.set({ icon, tooltip: "eBIRForms", onClick: () => showMain(), menu: trayMenu });
