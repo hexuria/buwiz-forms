@@ -24,11 +24,11 @@ No Windows or Linux machine was available, so nothing below was run there. "Writ
 | Database guard: never opens the owner's data folders | built and tested (home folder from the password database; folders also known by device and inode) | built and tested (profile folder from the process's token, never `USERPROFILE`; folders and files also known by volume and file index) | written (the macOS code); names compared case-sensitively; never run |
 | OS sign-in for admin recovery (Touch ID or password; Windows Hello) | written; no test shows the real prompt (a test environment answers "no" without asking) | written (`robius-authentication`), never run | stub: answers "no" (`this platform has no OS sign-in prompt`). PIN, authenticator and recovery key work as everywhere |
 | Print preview window | built and tested | the TSX side is shared; never opened | the same |
-| Print and Save as PDF | built and tested (WebKit makes the PDF, the system print panel prints) | stub: "Print and Save as PDF are available on macOS only for now." | the same stub |
+| Print and Save as PDF | built and tested (WebKit makes the PDF, the system print panel prints) | built (WebView2 makes the PDF, tested in a desktop session; the system print dialog, then WebView2 prints) | stub: "Print and Save as PDF are available on macOS and Windows only for now." |
 | One copy per database (a second launch brings the first forward) | built and tested | written (std file lock and a loopback port); never run | the same |
 | App menu, tray, hide to tray, global hotkey, updater driver | built; a test cannot click the system menu bar or tray | not tried: NSH's `nsh/desktop` decides what exists there | not tried |
 | Agent remote control (cargo feature `agent`) | built and tested; the window control plane is macOS-only | data plane only; type-checks | the same |
-| Private print folder (modes 0700/0600) and removal of stale ones at start | built and tested | per-user temp folder only: no ACLs, no sweep | written (the Unix code); never run |
+| Private print folder (modes 0700/0600) and removal of stale ones at start | built and tested | per-user temp folder, no ACLs; stale ones removed at start (`OpenProcess`) | written (the Unix code); never run |
 
 ## Cross-check from the macOS machine
 
@@ -77,6 +77,6 @@ CI: `.github/workflows/nsh.yml` runs the macOS steps above and `just core-plain-
 
 ## Parked
 
-- Windows: stale print-folder sweep (`OpenProcess`), Print and Save as PDF (a web view that can make a PDF), the real-window tests.
+- Windows: the real-window tests, and a person trying Print at a printer.
 - Linux: the same PDF work, an OS sign-in prompt, running any of it.
 - iOS and Android: everything. Screens are already built wide and narrow with a test at 390x844; the Rust side (guards, print, desktop glue) has no phone paths yet.
