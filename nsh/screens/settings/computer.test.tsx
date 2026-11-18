@@ -24,7 +24,8 @@ for (const { name, size } of SIZES) {
       "Computer setup", "eBIRForms 0.2.0",
     ]);
     expect(app.texts().some((t) => t.includes("ebirforms-door") && t.endsWith("bir_data.db"))).toBe(true);
-    expect(app.texts().some((t) => t.endsWith("dev.goldcoders.bir.nsh/logs"))).toBe(true);
+    // The logs folder inside the app's data folder, with the system's own separator (a backslash on Windows).
+    expect(app.texts().some((t) => t.replace(/\\/g, "/").endsWith("dev.goldcoders.bir.nsh/logs"))).toBe(true);
 
     // The longest retention loses nothing newer than 90 days of the NSH app's own logs.
     await app.press("id:settings-retention-trigger");

@@ -124,15 +124,27 @@ fn choose_database() -> Result<(), String> {
     }
     let root = std::env::temp_dir().join("ebirforms-door");
     SWEPT.call_once(|| forget_old_scratch(&root, SCRATCH_LIFETIME));
-    let folder = root.join(format!(
-        "{}-{}",
-        std::process::id(),
-        SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst)
-    ));
-    std::fs::create_dir_all(&folder)
+    let folder = fresh_scratch_folder(&root, std::process::id(), SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst))
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;
     bir_core::db::set_database_path_override(Some(folder.join("bir_data.db")));
     Ok(())
+}
+
+/// An empty folder for the scratch database of this process's engine number `sequence`: `<root>/<pid>-<sequence>`.
+///
+/// The system gives a process id out again once its process is gone (Windows does so within minutes), and scratch
+/// folders are kept for a day. So a folder of this name can already be there, with the database of a run that is
+/// over: one a test left a PIN in opened the next test's app at the sign-in screen. No live process but this one
+/// has this id, so what is there is nobody's: it goes first.
+fn fresh_scratch_folder(root: &Path, pid: u32, sequence: u32) -> std::io::Result<PathBuf> {
+    let folder = root.join(format!("{pid}-{sequence}"));
+    match std::fs::remove_dir_all(&folder) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    std::fs::create_dir_all(&folder)?;
+    Ok(folder)
 }
 
 /// Whether the door makes a scratch database of its own (per engine thread, in [`choose_database`]): a test environment
@@ -963,6 +975,23 @@ mod tests {
     const LONG_AGO: std::time::Duration = std::time::Duration::from_secs(3 * 24 * 60 * 60);
 
     /// A scratch folder with a database, its log and (after a lock) its lock file, all of them `by` old.
+    /// A process id comes round again: the folder a dead run left under it, database and all, is emptied before the
+    /// new run uses it.
+    #[test]
+    fn a_scratch_folder_left_under_a_reused_process_id_starts_empty() {
+        let root = tempfile::tempdir().expect("scratch root");
+        let left = root.path().join("4242-0");
+        std::fs::create_dir_all(&left).unwrap();
+        std::fs::write(left.join("bir_data.db"), b"a dead run's database, with its PIN").unwrap();
+        let folder = fresh_scratch_folder(root.path(), 4242, 0).expect("fresh folder");
+        assert_eq!(folder, left);
+        assert!(folder.is_dir());
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 0, "nothing of the dead run is left");
+        // Another engine of the same process, and a first run, get folders of their own.
+        assert!(fresh_scratch_folder(root.path(), 4242, 1).expect("second").ends_with("4242-1"));
+        assert!(fresh_scratch_folder(root.path(), 7, 0).expect("new").is_dir());
+    }
+
     fn scratch_folder(root: &Path, name: &str, by: std::time::Duration) -> PathBuf {
         let folder = root.join(name);
         std::fs::create_dir_all(&folder).unwrap();
