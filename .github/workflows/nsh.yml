@@ -1,8 +1,9 @@
 name: NSH app
 
 # The NSH (TSX) app in nsh/ (docs/platforms/nsh.md, nsh/AGENTS.md): type check, build, Rust tests and the headless TSX
-# tests on macOS; type check, build and the Windows development host on Windows; plus the plain-SQLite tests of the two
-# crates the app is built on.
+# tests on macOS and on Linux (where the Linux development host is built and the first real-window test runs too); type
+# check, build and the Windows development host on Windows; plus the plain-SQLite tests of the two crates the app is
+# built on.
 #
 # The app depends on NSH 0.5.1 by relative path (nsh/Cargo.toml, ../../nsh/crates/...), so CI checks NSH out next to
 # this repository. The commit it needs is the hexuria/nsh fork with upstream v0.5.1 merged and two Windows fixes:
@@ -185,6 +186,177 @@ jobs:
       #
       # Shards: line k of the sorted list (from 0) belongs to shard k % SHARDS, so every file is in exactly one shard
       # and the shards together run the same list as before. LC_ALL=C makes the order the same on every runner.
+      - name: Headless TSX tests, file by file
+        working-directory: buwiz-forms/nsh
+        run: |
+          failed=()
+          ran=0
+          while IFS= read -r file; do
+            ran=$((ran + 1))
+            just test "$file" || failed+=("$file")
+          done < <(find . -mindepth 1 \( -path ./verify -o -name node_modules -o -name target -o -name '.*' \) -prune -o \( -name '*.test.ts' -o -name '*.test.tsx' \) -print | LC_ALL=C sort | awk -v n="$SHARDS" -v i="$SHARD" '(NR - 1) % n == i')
+          echo "shard $SHARD of $SHARDS ran $ran test files"
+          [ "$ran" -gt 0 ] || { echo "::error::this shard found no test files"; exit 1; }
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "failed in:"
+            printf '  %s\n' "${failed[@]}"
+            exit 1
+          fi
+
+  # The same app on Linux (NSH's GTK 4 backend, docs/platforms/nsh-linux-handover.md): the CLI built from the pin, the
+  # crate and its TSX types, the bundle, the crate's Rust tests and the headless TSX tests (sharded as on macOS), the
+  # development host `nsh run --target linux` builds, and the first real-window test (`shots/base`, the handover's L-list)
+  # in GTK windows on a virtual display, its screenshots kept as an artifact. The packages are the handover's install
+  # line (section 3.2), which is NSH's own Linux CI's plus the app's: libdbus and OpenSSL's build, and python3 for stylo.
+  nsh-linux:
+    name: NSH app (Linux, shard ${{ matrix.shard }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[0, 1, 2]' || '[0]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      RUSTUP_TOOLCHAIN: "1.99.0"
+      CARGO_INCREMENTAL: "0"
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 1 }}
+    steps:
+      - name: Check out buwiz-forms
+        uses: actions/checkout@v4
+        with:
+          path: buwiz-forms
+
+      - name: Check out NSH (the pinned commit, beside buwiz-forms)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.NSH_REPOSITORY }}
+          ref: ${{ env.NSH_PINNED_REF }}
+          token: ${{ secrets.NSH_REPO_TOKEN || github.token }}
+          path: nsh
+          persist-credentials: false
+
+      - name: Check the two checkouts line up
+        run: |
+          test -f nsh/crates/nsh-core/Cargo.toml
+          test -f buwiz-forms/nsh/Cargo.toml
+          git -C nsh log -1 --format='NSH at %H %s'
+
+      # GTK 4 and WebKitGTK 6.0 (which brings bubblewrap and xdg-dbus-proxy for its sandbox, and its helper processes),
+      # GStreamer, clang for QuickJS's bindgen, libdbus and perl for the app's crates, python3 for stylo's build, and a
+      # virtual display for the real-window test.
+      # The downloaded packages are cached between runs (key: this file), so a slow mirror costs one cold run, not
+      # every run: on the first runs one runner's mirror took over 20 minutes for 170 packages while the other shards'
+      # took a minute or two. Non-interactive, and bounded so a hang fails the step rather than the job's two hours.
+      - name: Restore the Linux packages
+        id: apt-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/apt-archives
+          key: nsh-linux-apt-${{ runner.arch }}-${{ hashFiles('buwiz-forms/.github/workflows/nsh.yml') }}
+          restore-keys: nsh-linux-apt-${{ runner.arch }}-
+
+      - name: Install GTK 4, WebKitGTK, GStreamer and the build tools
+        timeout-minutes: 45
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          mkdir -p ~/apt-archives/partial
+          sudo apt-get update
+          sudo -E apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$HOME/apt-archives" \
+            build-essential pkg-config perl python3 \
+            clang libclang-dev libgtk-4-dev libwebkitgtk-6.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            libdbus-1-dev libssl-dev \
+            xvfb xauth at-spi2-core libxtst6
+          sudo chown -R "$(id -u):$(id -g)" ~/apt-archives
+          rm -rf ~/apt-archives/partial ~/apt-archives/lock
+
+      - name: Save the Linux packages
+        if: steps.apt-cache.outputs.cache-hit != 'true' && matrix.shard == 0
+        uses: actions/cache/save@v4
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+          components: clippy, rustfmt
+
+      - name: Install just
+        run: cargo install just --version 1.45.0 --locked
+
+      - name: Install huacnlee/cargo
+        uses: ./nsh/.github/actions/cargo
+        with:
+          cache: buwiz-nsh-app
+          lockfiles: buwiz-forms/nsh/Cargo.lock
+
+      - name: Restore the nsh command line
+        id: nsh-cli
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: nsh-cli-${{ runner.os }}-${{ runner.arch }}-${{ env.NSH_PINNED_REF }}
+
+      - name: Build the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true'
+        working-directory: nsh
+        run: cargo install --locked --path crates/nsh-cli --root "$HOME/BuwizNsh/tools"
+
+      - name: Save the nsh command line
+        if: steps.nsh-cli.outputs.cache-hit != 'true' && matrix.shard == 0
+        uses: actions/cache/save@v4
+        with:
+          path: ~/BuwizNsh/tools
+          key: ${{ steps.nsh-cli.outputs.cache-primary-key }}
+
+      - name: Put the nsh command line on the path
+        run: |
+          echo "$HOME/BuwizNsh/tools/bin" >> "$GITHUB_PATH"
+          "$HOME/BuwizNsh/tools/bin/nsh" -V
+
+      - name: nsh check (the crate, then the TSX types)
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: just nsh-check -v
+
+      - name: nsh build (every warning is a finding)
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: just nsh-build
+
+      - name: Rust tests of the app's crate
+        if: matrix.shard == 0
+        working-directory: buwiz-forms
+        run: cargo test --manifest-path nsh/Cargo.toml --no-fail-fast
+
+      # The host `nsh run --target linux` builds, from the workspace nsh check generated in .nsh/rust: it links NSH's GTK
+      # backend with its development features (the dev and agent code a plain build leaves out).
+      - name: Build the Linux development host
+        if: matrix.shard == 0
+        working-directory: buwiz-forms/nsh
+        run: cargo build --manifest-path .nsh/rust/Cargo.toml -p nsh-app-nsh-app-ebirforms-linux-host
+
+      # The base screen in GTK windows (wide and narrow, light and dark), as NSH's own Linux CI runs real windows: a
+      # session bus of its own and a virtual display. The four safety variables are the workflow's; nothing sets
+      # BIR_DATABASE_PATH. Run from nsh/ so the test host reuses the build above.
+      - name: Real windows (shots/base)
+        if: matrix.shard == 0
+        working-directory: buwiz-forms/nsh
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' nsh test shots/base.test.tsx --target linux
+
+      - name: Keep the real-window screenshots
+        if: always() && matrix.shard == 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: nsh-linux-shots
+          path: buwiz-forms/nsh/base-*.png
+          if-no-files-found: ignore
+
       - name: Headless TSX tests, file by file
         working-directory: buwiz-forms/nsh
         run: |
