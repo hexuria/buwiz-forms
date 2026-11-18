@@ -3,6 +3,7 @@
 import { openUrl, platform, signal, untracked } from "nsh";
 import type { CloseReason } from "nsh/desktop";
 import { Application, Tray, Window } from "nsh/desktop";
+import { bir } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { app } from "../app";
 import { store } from "../store";

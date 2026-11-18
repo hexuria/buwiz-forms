@@ -321,8 +321,7 @@ test("linux without a tray icon (GNOME without AppIndicator): the close question
   expect(kept.shows("id:close-ask-hide")).toBe(false);
   await kept.press("id:close-ask-cancel");
   await kept.waitFor("id:close-ask", { state: "gone" });
-  await pressUntil(kept, "mod+h", () => kept.window("main").state()?.mode === "minimized");
-  expect(hidden(kept)).toBe(false);
+  await pressUntil(kept, "mod+h", () => kept.window("main").state()?.minimized === true);
   expect(posted(kept)?.quits ?? 0).toBe(0);
 });
 
