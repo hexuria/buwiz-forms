@@ -38,6 +38,19 @@ fn is_exact_initial_migration_backfill(
         )
 }
 
+/// Who stands behind the confirmed versions a save brings.
+#[derive(Clone, Copy)]
+enum ConfirmedBy<'a> {
+    /// A save from the app: a newly confirmed version needs the plan the
+    /// person reviewed (`None` allows only the one-time migration backfill).
+    Review(Option<&'a TaxProfileVersionConfirmationPlan>),
+    /// A restore of a taxpayer export. The versions were confirmed, under
+    /// review, in the database that wrote the export, so a taxpayer this
+    /// database does not have yet comes in with them as recorded. A taxpayer
+    /// that is already here is held to the review rule like any other save.
+    Restore,
+}
+
 fn validate_reviewed_confirmation_plan(
     existing_profile: Option<&TaxpayerProfile>,
     submitted_profile: &TaxpayerProfile,
@@ -394,7 +407,19 @@ impl Database {
         &self,
         profile: TaxpayerProfile,
     ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
-        self.save_profile_inner(profile, None)
+        self.save_profile_inner(profile, ConfirmedBy::Review(None))
+    }
+
+    /// Save a profile read from a taxpayer export (the owner's rule: a
+    /// restore keeps what was confirmed where the export was made). Only the
+    /// import calls this; a taxpayer already in this database gets the same
+    /// check as [`Database::save_profile`].
+    pub(crate) fn save_restored_profile(
+        &self,
+        profile: TaxpayerProfile,
+    ) -> Result<TaxpayerProfile, DbError> {
+        self.save_profile_inner(profile, ConfirmedBy::Restore)
+            .map(super::PostCommitWrite::into_committed)
     }
 
     pub fn save_profile_with_confirmation_plan(
@@ -413,13 +438,13 @@ impl Database {
         profile: TaxpayerProfile,
         reviewed_plan: &TaxProfileVersionConfirmationPlan,
     ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
-        self.save_profile_inner(profile, Some(reviewed_plan))
+        self.save_profile_inner(profile, ConfirmedBy::Review(Some(reviewed_plan)))
     }
 
     fn save_profile_inner(
         &self,
         mut profile: TaxpayerProfile,
-        reviewed_plan: Option<&TaxProfileVersionConfirmationPlan>,
+        confirmed_by: ConfirmedBy<'_>,
     ) -> Result<super::PostCommitWrite<TaxpayerProfile>, DbError> {
         let tin = profile.tin.full();
         let previous_tin = profile
@@ -447,7 +472,20 @@ impl Database {
             profile.atc_codes.clone_from(existing_atc_codes);
         }
 
-        validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, reviewed_plan)?;
+        match confirmed_by {
+            ConfirmedBy::Review(reviewed_plan) => validate_reviewed_confirmation_plan(
+                existing_profile.as_ref(),
+                &profile,
+                reviewed_plan,
+            )?,
+            // Nothing here to compare with: the export's timeline is taken as
+            // recorded. (Undated or overlapping confirmed versions are not
+            // guessed into a year either way: the resolution reports them.)
+            ConfirmedBy::Restore if existing_profile.is_none() => {}
+            ConfirmedBy::Restore => {
+                validate_reviewed_confirmation_plan(existing_profile.as_ref(), &profile, None)?;
+            }
+        }
 
         // A caller may already hold a transaction — the profile import
         // writes the whole archive atomically. Then this save rides that

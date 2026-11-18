@@ -137,7 +137,9 @@ pub fn import_profile_data(db: &Database, import_file: &Path) -> Result<(), DbEr
             };
             profile.id = id;
             profile.put_credentials(credentials);
-            db.save_profile(profile)?;
+            // A restore: versions confirmed where the export was made come in
+            // as recorded when this database does not have the taxpayer yet.
+            db.save_restored_profile(profile)?;
 
             // 2. Read submissions.json — deduplicate via (tin, form_type, period, submitted_at)
             if let Ok(submissions_json) = read_from_zip("submissions.json") {
@@ -1587,6 +1589,99 @@ mod tests {
     /// The whole archive writes under one transaction: a later profile's
     /// bad `profile.json` fails the import and rolls the earlier profile
     /// back — no half-imported state.
+    /// A profile's version ledger, as it is stored.
+    fn versions_of(profile: &TaxpayerProfile) -> serde_json::Value {
+        serde_json::to_value(&profile.profile_versions).unwrap()
+    }
+
+    /// A taxpayer whose COR version was confirmed under review, as the app
+    /// saves it.
+    fn save_with_a_confirmed_cor(db: &Database, full_name: &str, tin: &str) -> TaxpayerProfile {
+        use crate::profile::TaxProfileVersionSource;
+        let mut profile = branch_profile(full_name, tin);
+        profile.business_start_date = chrono::NaiveDate::from_ymd_opt(2025, 1, 1);
+        profile.ensure_profile_version_ledger();
+        let version = &mut profile.profile_versions[0];
+        version.id = "reviewed-cor".to_string();
+        version.label = "Reviewed COR".to_string();
+        version.source = TaxProfileVersionSource::ManualCor;
+        let effective_from = version.effective_from.expect("a dated version");
+        let plan = profile
+            .profile_version_confirmation_plan("reviewed-cor", effective_from)
+            .expect("a plan for the first confirmed version");
+        db.save_profile_with_confirmation_plan(profile, &plan)
+            .expect("the reviewed confirmation saves")
+    }
+
+    /// The owner's rule for a restore: an export of a taxpayer with a
+    /// confirmed COR version comes into a database that does not have the
+    /// taxpayer with that version confirmed, as recorded. Typing the same
+    /// profile into the app without a review is still refused.
+    #[test]
+    fn a_restore_keeps_the_confirmed_versions_of_a_taxpayer_the_database_lacks() {
+        let versions = versions_of;
+        use crate::profile::{TaxProfileVersionSource, TaxProfileVersionStatus};
+        let dir = tempdir().unwrap();
+        let source = Database::open_ephemeral().unwrap();
+        let exported = save_with_a_confirmed_cor(&source, "Confirmed Corp", TIN_X);
+        let archive = dir.path().join("confirmed.zip");
+        crate::export::export_profile_data(&source, TIN_X, &archive, None).unwrap();
+
+        let target = Database::open_ephemeral().unwrap();
+        import_profile_data(&target, &archive).expect("the export restores");
+        let restored = target.get_profile_by_tin(TIN_X).unwrap().expect("restored");
+        assert_eq!(versions(&restored), versions(&exported));
+        let version = &restored.profile_versions[0];
+        assert_eq!(version.status, TaxProfileVersionStatus::Confirmed);
+        assert_eq!(version.source, TaxProfileVersionSource::ManualCor);
+
+        // Restoring it again, now that the taxpayer is here, changes nothing.
+        import_profile_data(&target, &archive).expect("the same export restores again");
+        assert_eq!(
+            versions(&target.get_profile_by_tin(TIN_X).unwrap().unwrap()),
+            versions(&exported)
+        );
+
+        // The rule for a save from the app is as it was.
+        let mut typed = exported.clone();
+        typed.id = None;
+        let error = Database::open_ephemeral()
+            .unwrap()
+            .save_profile(typed)
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("requires an explicit reviewed confirmation plan"),
+            "{error}"
+        );
+    }
+
+    /// A taxpayer that is already here is not given confirmed versions by a
+    /// file: the import is refused and the stored taxpayer is as it was.
+    #[test]
+    fn a_restore_does_not_confirm_versions_for_a_taxpayer_already_here() {
+        let dir = tempdir().unwrap();
+        let source = Database::open_ephemeral().unwrap();
+        save_with_a_confirmed_cor(&source, "Confirmed Corp", TIN_X);
+        let archive = dir.path().join("confirmed.zip");
+        crate::export::export_profile_data(&source, TIN_X, &archive, None).unwrap();
+
+        let target = Database::open_ephemeral().unwrap();
+        target
+            .save_profile(branch_profile("Already Here Corp", TIN_X))
+            .unwrap();
+        let before = target.get_profile_by_tin(TIN_X).unwrap().unwrap();
+        let error = import_profile_data(&target, &archive).unwrap_err();
+        assert!(
+            error.to_string().contains("reviewed confirmation plan"),
+            "{error}"
+        );
+        let after = target.get_profile_by_tin(TIN_X).unwrap().unwrap();
+        assert_eq!(after.full_name, "Already Here Corp");
+        assert_eq!(versions_of(&after), versions_of(&before));
+    }
+
     #[test]
     fn a_failed_second_profile_rolls_back_the_whole_import() {
         let dir = tempdir().unwrap();
