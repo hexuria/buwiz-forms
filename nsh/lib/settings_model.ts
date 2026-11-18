@@ -46,6 +46,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   { id: "account", label: "Account", icon: "user", group: "Personal", adminOnly: false, search: "account personal profile" },
   { id: "transfer", label: "Import / Export", icon: "archive", group: "Data", adminOnly: false, search: "import export data transfer" },
   { id: "jobs", label: "Jobs", icon: "list", group: "Data", adminOnly: true, search: "jobs data background tasks" },
+  { id: "keyboard", label: "Keyboard", icon: "keyboard", group: "System", adminOnly: false, search: "keyboard keys shortcuts" },
   { id: "computer", label: "Computer", icon: "laptop", group: "System", adminOnly: true, search: "computer system this computer" },
 ];
 
@@ -67,11 +68,15 @@ export const SETTINGS_ROWS: Readonly<Record<string, readonly SettingsRow[]>> = {
     { id: "export", search: "export profile archive backup zip" },
   ],
   jobs: [{ id: "jobs", search: "jobs background tasks queue logs confirmation watcher cron archive" }],
+  keyboard: [
+    { id: "quit", search: "quit key shortcut exit" },
+    { id: "hide", search: "hide key shortcut tray menu bar" },
+    { id: "close", search: "close button window tray menu bar hide quit ask alt f4" },
+  ],
   computer: [
     { id: "data", search: "database data location path local files" },
     { id: "logs", search: "logs folder retention log files" },
     { id: "hotkey", search: "hotkey shortcut global show keyboard" },
-    { id: "tray", search: "tray menu bar close window hide quit" },
     { id: "setup", search: "setup owner help desk who this computer is for" },
     { id: "version", search: "version about ebirforms" },
   ],
@@ -216,14 +221,14 @@ function keyOfWord(word: string): string | null {
 }
 
 type Modifier = "ctrl" | "alt" | "shift" | "cmd";
-/** The modifiers in the order both languages write them. */
-const ORDER: readonly Modifier[] = ["ctrl", "alt", "shift", "cmd"];
+/** The modifiers in the order both languages write them (the menus' chords too: shell/desktop/menu_model.ts chord). */
+export const MODIFIER_ORDER: readonly Modifier[] = ["ctrl", "alt", "shift", "cmd"];
 /** What a stored combo's words mean (lower case); any other word is ignored, as the listeners ignore it. */
 const STORED_WORDS: Readonly<Record<string, Modifier>> = {
   control: "ctrl", ctrl: "ctrl", alt: "alt", option: "alt", opt: "alt", shift: "shift", platform: "cmd", super: "cmd", cmd: "cmd", meta: "cmd", win: "cmd",
 };
 /** What a keystroke's modifier words mean (nsh/keymap's; "mod" depends on the platform, so it is none of them). */
-const KEYSTROKE_WORDS: Readonly<Record<string, Modifier>> = {
+export const KEYSTROKE_WORDS: Readonly<Record<string, Modifier>> = {
   ctrl: "ctrl", control: "ctrl", alt: "alt", option: "alt", opt: "alt", shift: "shift", cmd: "cmd", command: "cmd", meta: "cmd", super: "cmd", win: "cmd",
 };
 /** The word a stored combo uses for each modifier. */
@@ -246,7 +251,7 @@ export function comboToKeystroke(combo: string | null | undefined, os: string): 
   if (!parts) return null;
   const words = parts.words.length ? parts.words : os === "macos" ? ["control", "alt"] : ["platform", "shift"];
   const on = new Set(words.map((word) => STORED_WORDS[word.toLowerCase()]).filter(Boolean));
-  return [...ORDER.filter((m) => on.has(m)), keyOfWord(parts.key)].join("+");
+  return [...MODIFIER_ORDER.filter((m) => on.has(m)), keyOfWord(parts.key)].join("+");
 }
 
 /**
@@ -265,7 +270,7 @@ export function keystrokeToCombo(keystroke: string | null | undefined): string |
     if (!modifier) return null;
     on.add(modifier);
   }
-  return [...ORDER.filter((m) => on.has(m)).map((m) => STORED[m]), key].join("+");
+  return [...MODIFIER_ORDER.filter((m) => on.has(m)).map((m) => STORED[m]), key].join("+");
 }
 
 /** Whether the door takes this keystroke as the global hotkey: a key of HOTKEY_KEYS or HOTKEY_NSH_KEYS with Control, Alt or Command (Shift alone, or a bare key, is refused with hotkey_combo::NOT_REGISTRABLE). */

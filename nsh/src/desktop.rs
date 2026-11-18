@@ -655,6 +655,57 @@ pub struct InstanceStatus {
     pub note: Option<String>,
 }
 
+// ---------------------------------------------------------------- the Dock icon (macOS)
+
+/// `NSApplicationActivationPolicy`: Regular (a Dock icon), Accessory (a menu-bar app), Prohibited (in the background: test runs).
+#[cfg(any(target_os = "macos", test))]
+const POLICY_REGULAR: isize = 0;
+#[cfg(any(target_os = "macos", test))]
+const POLICY_ACCESSORY: isize = 1;
+#[cfg(any(target_os = "macos", test))]
+const POLICY_PROHIBITED: isize = 2;
+
+/// The policy `shown` asks for, from the one the app has: none when it runs in the background or already has it.
+#[cfg(any(target_os = "macos", test))]
+fn next_policy(current: isize, shown: bool) -> Option<isize> {
+    let want = if shown { POLICY_REGULAR } else { POLICY_ACCESSORY };
+    (current != POLICY_PROHIBITED && current != want).then_some(want)
+}
+
+/// NSH has no switch for the activation policy at run time (nsh.json `macos.activationPolicy` is fixed at launch), so the app sets
+/// it on NSApp itself, as print.rs reaches AppKit: on the main queue, without waiting.
+#[cfg(target_os = "macos")]
+fn set_dock_icon(shown: bool) {
+    use dispatch2::DispatchQueue;
+    use objc2::msg_send;
+    use objc2::runtime::{AnyObject, Bool};
+
+    #[link(name = "AppKit", kind = "framework")]
+    unsafe extern "C" {
+        static NSApp: *mut AnyObject;
+    }
+
+    DispatchQueue::main().exec_async(move || {
+        // SAFETY: AppKit's documented API, on the main thread; NSApp is only read, and is null in a process with no NSApplication.
+        unsafe {
+            let app = NSApp;
+            if app.is_null() {
+                return;
+            }
+            let app = &*app;
+            let current: isize = msg_send![app, activationPolicy];
+            let Some(next) = next_policy(current, shown) else { return };
+            let _: Bool = msg_send![app, setActivationPolicy: next];
+            if shown {
+                let _: () = msg_send![app, activateIgnoringOtherApps: Bool::YES];
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_dock_icon(_shown: bool) {}
+
 /// The desktop shell's door to Rust: what the menu, tray and updater of `nsh/shell/desktop` need and TSX cannot know.
 /// Only that folder imports it.
 #[module]
@@ -688,6 +739,13 @@ impl Desktop {
         hotkey_shortcut(&combo)
     }
 
+    /// macOS: `true` makes the app a regular one again (the Dock icon and the app switcher, then it comes to the front); `false` makes it
+    /// a menu-bar app while its window is hidden (the tray icon stays). Posted to the main thread; nothing in a process with no
+    /// NSApplication (a headless test) or one that runs in the background (a real-window test). Does nothing on other platforms.
+    pub fn set_dock_icon(shown: bool) {
+        set_dock_icon(shown);
+    }
+
     /// How the one-copy guard stands in this process.
     pub fn instance() -> InstanceStatus {
         let (state, note) = INSTANCE
@@ -703,6 +761,19 @@ impl Desktop {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_dock_icon_follows_the_window_but_never_brings_a_background_run_forward() {
+        use super::next_policy;
+        // Hidden: a menu-bar app; shown: a regular app again; already so: nothing.
+        assert_eq!(next_policy(0, false), Some(1));
+        assert_eq!(next_policy(1, true), Some(0));
+        assert_eq!(next_policy(0, true), None);
+        assert_eq!(next_policy(1, false), None);
+        // A test window runs in the background (Prohibited): it is left there either way.
+        assert_eq!(next_policy(2, true), None);
+        assert_eq!(next_policy(2, false), None);
+    }
+
     use std::io::{BufRead, BufReader};
     use std::process::{Child, Command, Stdio};
     use std::sync::mpsc::{self, Receiver};

@@ -13,20 +13,26 @@
 //   refuse   a chord the fake GlobalShortcut does not take, as the system does for one another app holds ("ctrl+alt+b")
 //   signOut  true: the Buwiz account's sign-out answers signed out at once (no network) and the gate then stays closed; the readout
 //            "r-settings-search" shows Settings' search text
+//   quit     "fake": the end of the run is a stand-in that counts (readout "quits=N"; the door is not shut down), so a test sees a quit
+//   sending  a number: that many returns are still sending (DesktopHost's `sending` stand-in), for the warning before a quit
+// The close button's remembered choice and the keys come from NSH Storage ("desktop.close"): open(entry, { storage: { ... } }) seeds them.
+// What a hidden window cannot show (the Dock icon, the tray's menu, the quits) is also written to NSH Storage as "fixture.desktop" on each
+// change (host.post would need a capability the app does not declare): a test reads app.storage().
 // Over the frame, a strip of 8-point buttons (off the window's rounded corner, where a click misses the window) runs the installed menu's items (id "run:File > New Return…") and the tray's ("tray:Show
 // eBIRForms"), because a test cannot click the system's menu bar; the readouts say what the menu did. While the window is hidden nothing
-// on it can be pressed or read: a test sends host.send("run", { id }) and reads app.window("main").state(). It sits at the nsh root because a
+// on it can be pressed or read: a test sends host.send("run", { id }) and reads app.window("main").state(); { id: "reopen" } shows the
+// window as NSH's reopen does (the app opened again from the Finder: no action of the app's runs). It sits at the nsh root because a
 // real-window run serves assets from the entry's folder down.
-import { host, mount, signal, Text, View } from "nsh";
+import { effect, host, mount, signal, Storage, Text, untracked, View } from "nsh";
 import { Button } from "nsh/base";
 import { currentWindow } from "nsh/desktop";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer, warmForms } from "./bir/testing";
 import { nav } from "./screens/settings/nav";
-import { app } from "./shell/app";
+import { app, quitSteps } from "./shell/app";
 import { store } from "./shell/store";
-import { DesktopHost, flatten, hotkeyStatus, installedMenu, installedTray, type UpdaterApi } from "./shell/desktop";
+import { closePrefs, DesktopHost, dockIconShown, flatten, hotkeyStatus, installedMenu, installedTray, printMenu, type UpdaterApi } from "./shell/desktop";
 import { Shell } from "./shell/Shell";
 
 // A start route that opens a form builds every form's schema in the frame's first render (the host does it lazily, once per process): more than the
@@ -44,7 +50,12 @@ interface Params {
   solo?: boolean;
   refuse?: string;
   signOut?: boolean;
+  quit?: "fake";
+  sending?: number;
 }
+
+/** How many times the run would have ended (param quit: "fake"). */
+const quits = signal(0);
 
 /** What the fake updater was asked, in order. */
 const asked = signal<string[]>([]);
@@ -115,6 +126,10 @@ function Demo() {
   if (p.refuse) refusing.add(p.refuse);
   if (p.hotkey) bir.set_global_hotkey(p.hotkey);
   if (p.locked) app.setCloudLocked(true);
+  if (p.quit === "fake") {
+    quitSteps.shutdown = () => {};
+    quitSteps.end = () => quits.update((n) => n + 1);
+  }
   if (p.signOut) {
     const h = bir as unknown as Record<string, unknown>;
     let signedOut = false;
@@ -126,12 +141,18 @@ function Demo() {
     h.cloud_account_gate = () => (signedOut ? { unlocked: false, offline: false, server_url: "http://localhost:3008", email: null, detail: "" } : realGate());
   }
   const win = currentWindow();
+  effect(() => {
+    const state = { dock: dockIconShown(), tray: printMenu(installedTray()), quits: quits() };
+    untracked(() => void Storage.setItem("fixture.desktop", JSON.stringify(state)).catch(() => {}));
+  });
   // A hidden window shows nothing a test can press: the test sends "run" to choose an item while the window is hidden, as the tray
   // (the system's) is chosen from outside the window. (await app.host.send("run", { id: "tray:Show eBIRForms" }))
   host.on("run", (payload) => {
     const id = String((payload as { id?: unknown } | null)?.id ?? "");
     if (id.startsWith("chord:")) chords()[id.slice(6)]?.();
     else if (id.startsWith("hotkey:")) store.write("set_global_hotkey", id.slice(7));
+    // NSH's own reopen (the Finder, Spotlight, Launchpad): the window shows natively, none of the app's actions runs.
+    else if (id === "reopen") win.show();
     else
       runnable()
         .find((item) => item.id === id)
@@ -140,7 +161,11 @@ function Demo() {
   return (
     <View class="flex-1">
       <Shell start={p.start} polling={p.poll === true} />
-      <DesktopHost updater={p.updater ? fakeUpdater(p.updater) : undefined} shortcuts={p.system === "fake" ? fakeShortcuts : undefined} />
+      <DesktopHost
+        updater={p.updater ? fakeUpdater(p.updater) : undefined}
+        shortcuts={p.system === "fake" ? fakeShortcuts : undefined}
+        sending={p.sending !== undefined ? () => p.sending ?? 0 : undefined}
+      />
       <View class="absolute top-12 right-0 items-end">
         <Text testID="r-view">{"view=" + app.view()}</Text>
         <Text testID="r-overlay">{"overlay=" + (app.overlay() ?? "none")}</Text>
@@ -155,6 +180,9 @@ function Demo() {
         <Text testID="r-menu">{"menu=" + flatten(installedMenu()).length}</Text>
         <Text testID="r-settings-search">{"settings search=" + nav.query()}</Text>
         <Text testID="r-gate">{"gate=" + (app.cloudLocked() ? "closed" : "open")}</Text>
+        <Text testID="r-quits">{"quits=" + quits()}</Text>
+        <Text testID="r-dock">{"dock=" + (dockIconShown() ? "shown" : "gone")}</Text>
+        <Text testID="r-close">{"close=" + closePrefs().close}</Text>
       </View>
       <Runner />
     </View>

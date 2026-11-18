@@ -1,4 +1,4 @@
-// Quitting for real (the tray's Quit, Ctrl+Q on Linux, Install now): the frame's quit path runs every screen's beforeLeave hook first
+// Quitting for real (Quit, Cmd/Ctrl+Q, the tray's Quit, Install now): the frame's quit path runs every screen's beforeLeave hook first
 // (an open form flushes its unsaved edits), and only then does the run end. A plain test: the end of the run is a stand-in.
 import { expect, test } from "nsh/test";
 import { app } from "../app";

@@ -32,6 +32,27 @@ for (const look of LOOKS) {
   }, 120_000);
 }
 
+for (const look of LOOKS) {
+  test("the warning before a quit while returns are sending, and Settings > Keyboard, " + look.name, async () => {
+    const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", colorScheme: look.colorScheme, ...asking({ quit: "fake", sending: 2 }) });
+    await app.waitFor("id:sidebar");
+    await app.press("id:tray:Quit eBIRForms");
+    await app.waitFor("id:sending-ask");
+    await app.wait(400);
+    await shoot(app, "desktop-" + look.name + "-sending");
+    await app.press("id:sending-ask-wait");
+    await app.waitFor("id:sending-ask", { state: "gone" });
+    expect(app.texts()).toContain("quits=0");
+
+    await app.press("id:run:eBIRForms > Settings…");
+    await app.waitFor("id:settings-nav-keyboard");
+    await app.press("id:settings-nav-keyboard");
+    await app.waitFor("id:settings-keys");
+    await app.wait(400);
+    await shoot(app, "desktop-" + look.name + "-keyboard");
+  }, 120_000);
+}
+
 test("the update banner over a form page keeps clear of the form's pill", async () => {
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", colorScheme: "light", ...asking({ poll: true, updater: "found", start: "form=1601C/2025/3" }) });
   await app.waitFor("text:view=form");

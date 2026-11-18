@@ -114,18 +114,17 @@ test("a chord another app holds is said under the box in plain words, and anothe
 });
 
 test("Command+Q does what the app does with it before and after a recording, and the recording leaves nothing bound", async () => {
-  const app = await open(ENTRY, { ...WIDE, ...asking({ hotkey: "control+alt+shift+9" }) });
+  const app = await open(ENTRY, { ...WIDE, ...asking({ hotkey: "control+alt+shift+9", quit: "fake" }) });
   await app.waitFor("id:settings-hotkey", { timeout: 30000 });
   await app.waitFor("text:chords=ctrl+alt+shift+9");
   await app.press(BOX);
   await app.waitFor("text:Type shortcut");
   await app.keyboard.press("escape");
   await app.waitFor("text:chords=ctrl+alt+shift+9");
-  // The recording is over: keys it listened for do nothing, and Command+Q is the app's own again (it hides to the tray on macOS).
+  // The recording is over: keys it listened for do nothing, and Command+Q is the app's own again (it quits: the fixture counts it).
   await app.keyboard.press("ctrl+alt+z");
   expect(app.texts()).not.toContain("⌃⌥Z");
   expect(app.texts()).toContain("⌃⌥⇧9");
-  await pressUntil(app, "mod+q", () => hidden(app));
-  await app.host.send("run", { id: "tray:Show eBIRForms" });
-  await app.waitUntil(() => shown(app));
+  await pressUntil(app, "mod+q", () => app.texts().includes("quits=1"));
+  expect(shown(app)).toBe(true);
 });
