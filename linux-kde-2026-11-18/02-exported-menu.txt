@@ -1,0 +1,55 @@
+  eBIRForms   #1
+    About eBIRForms   #2
+    ——
+    Settings…   #4
+    ——
+    Hide eBIRForms   [Control+h]   #6
+    ——
+    Sign Out   #8
+    ——
+    Quit eBIRForms   [Control+q]   #10
+  File   #11
+    New Tax Profile…   #12
+    New Return…   [Control+n]   #13
+    ——
+    Close Window   [Control+w]   #15
+    Hide eBIRForms   #16
+    ——
+    Sign Out   #18
+    Quit eBIRForms   #19
+  Edit   #20
+    Undo   [Control+z]   #21
+    Redo   [Control+y]   #22
+    ——
+    Cut   [Control+x]   #24
+    Copy   [Control+c]   #25
+    Paste   [Control+v]   #26
+    ——
+    Select All   [Control+a]   #28
+    ——
+    Settings…   [Control+comma]   #30
+  View   #31
+    Toggle Sidebar   [Control+b]   #32
+    Toggle Tax Profile   [Control+Shift+b]   #33
+    Toggle Notifications   [Control+Shift+n]   #34
+    Toggle Theme   [Control+t]   #35
+    ——
+    Command Palette…   [Control+k]   #37
+    ——
+    Enter Full Screen   [F11]   #39
+  Window   #40
+    Minimize   #41
+    Zoom   #42
+  Help   #43
+    About eBIRForms   #44
+    ——
+    Check for Updates…   #46
+    Contact Support…   #47
+    Goldcoders Website   #48
+  Profiles   #49
+    Dela Cruz Trading Corporation   (check: 1)   #50
+    Juana Santos   (check: 0)   #51
+    Pedro Reyes   (check: 0)   #52
+    Santos Reyes and Partners   (check: 0)   #53
+    ——
+    New Tax Profile…   #55

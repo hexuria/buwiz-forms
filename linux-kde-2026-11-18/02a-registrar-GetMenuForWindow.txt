@@ -1,0 +1,3 @@
+method return time=1795007426.597474 sender=:1.2 -> destination=:1.44 serial=216 reply_serial=2
+   string ":1.39"
+   object path "/com/canonical/menu/nsh"

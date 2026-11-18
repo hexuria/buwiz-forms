@@ -1,0 +1,5 @@
+tray item org.kde.StatusNotifierItem-17702-1: Id=string "dev.goldcoders.bir.nsh" Title=string "nsh" Status=string "Active" Menu=/MenuBar
+  Show eBIRForms   (disabled)   #1
+  Hide eBIRForms   #2
+  ——
+  Quit eBIRForms   #4

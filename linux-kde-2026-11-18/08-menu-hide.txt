@@ -1,0 +1,4 @@
+Global Menu › eBIRForms › Hide eBIRForms (#6): before IsViewable
+  after: IsUnMapped
+tray › Show eBIRForms: IsViewable
+Global Menu › File › Close Window (#15) sent; window IsViewable

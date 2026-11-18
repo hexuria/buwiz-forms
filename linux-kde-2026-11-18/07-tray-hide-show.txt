@@ -1,0 +1,17 @@
+== window IsViewable: tray menu
+  Show eBIRForms   (disabled)   #1
+  Hide eBIRForms   #2
+  ——
+  Quit eBIRForms   #4
+
+== after tray › Hide eBIRForms: window IsUnMapped: tray menu
+  Show eBIRForms   #1
+  Hide eBIRForms   (disabled)   #2
+  ——
+  Quit eBIRForms   #4
+
+== after tray › Show eBIRForms: window IsViewable: tray menu
+  Show eBIRForms   (disabled)   #1
+  Hide eBIRForms   #2
+  ——
+  Quit eBIRForms   #4
