@@ -552,6 +552,8 @@ export interface ScreenFormOpened {
     filed_original_view?: { status: string; filed_on: string | null };
     /** When a return was sent to BIR and confirmed (a read-only view says so). */
     submitted_at: string | null;
+    /** The send `submitted_at` names was a dry run: the worker only simulated it and nothing reached BIR. False for a real send and for every return sent before this was recorded. */
+    submitted_dry_run: boolean;
     confirmed_at: string | null;
     /** A new amended return (`screen_form_amend`): the status of the filed return it amends. */
     amends?: ScreenFormStatus;

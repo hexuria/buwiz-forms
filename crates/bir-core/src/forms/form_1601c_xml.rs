@@ -491,6 +491,7 @@ impl Form1601CDraft {
             created_at: now.clone(),
             updated_at: now,
             submitted_at: None,
+            submitted_dry_run: false,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,

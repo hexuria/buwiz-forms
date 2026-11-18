@@ -444,7 +444,7 @@ mod tests {
     fn submitted_1601c(confirmed: bool) -> Form1601CDraft {
         let mut draft = queued_1601c();
         let filename = draft.default_submission_filename();
-        draft.transition_to_submitted(filename);
+        draft.transition_to_submitted(filename, false);
         if confirmed {
             draft.transition_to_confirmed("2026-06-10T08:00:00".into(), Some(7), None);
         }
@@ -454,7 +454,7 @@ mod tests {
     fn submitted_2551q(confirmed: bool) -> Form2551QDraft {
         let mut draft = queued_2551q();
         let filename = draft.default_submission_filename();
-        draft.transition_to_submitted(filename);
+        draft.transition_to_submitted(filename, false);
         if confirmed {
             draft.transition_to_confirmed("2026-04-30T08:00:00".into(), Some(9), None);
         }

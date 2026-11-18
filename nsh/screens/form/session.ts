@@ -39,7 +39,7 @@ import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -204,7 +204,7 @@ export interface HeaderInfo {
   filedOriginal: boolean;
   /** On the filed original: its strip, or "". */
   filedOriginalView: { status: string; filed_on: string | null } | null;
-  /** "Sent to BIR … Nothing here can be changed.", or "". */
+  /** "Sent to BIR … Nothing here can be changed." ("Dry run …, not sent to BIR" for a dry-run send), or "". */
   submittedLine: string;
   profileUpdates: string[];
   profileDiffers: string[];
@@ -274,6 +274,8 @@ interface St {
   existing: ScreenFormExisting | null;
   saveAfterAnswer: { then: (() => void) | null } | null;
   submittedAt: string | null;
+  /** The send `submittedAt` names was a dry run (the host's `submitted_dry_run`): nothing reached BIR. */
+  submittedDryRun: boolean;
   confirmedAt: string | null;
   amends: ScreenFormStatus | null;
   filedOriginal: { id: number; status: string; filed_on: string | null } | null;
@@ -345,7 +347,7 @@ function freshState(target: FormTarget): St {
     blank: new Set(), needs: {}, whys: {}, waits: {}, off: {}, penalties: [], penaltyOpen: new Set(), poolTexts: {},
     typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodAsked: null,
     periodAnswered: null, periodComplete: false, periodSeq: 0, periodToken: 0, periodInFlight: null, opens: null,
-    existing: null, saveAfterAnswer: null, submittedAt: null, confirmedAt: null, amends: null, filedOriginal: null,
+    existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, confirmedAt: null, amends: null, filedOriginal: null,
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
@@ -708,6 +710,7 @@ export class FormSession {
     s.periodParts = new Map((r.period_parts || []).map((p) => [p.key, p]));
     s.periodSet = Boolean(r.period_set);
     s.submittedAt = r.submitted_at || null;
+    s.submittedDryRun = Boolean(r.submitted_dry_run);
     s.confirmedAt = r.confirmed_at || null;
     s.amends = r.amends || null;
     s.filedOriginal = r.filed_original || null;
@@ -2892,7 +2895,7 @@ export class FormSession {
       this.sAllOpen.set(this.schema.parts.every((_p, i) => s.openParts.has(i)));
     }
     const sent: string[] = [];
-    if (s.submittedAt) sent.push(`Sent to BIR ${shortIsoDate(s.submittedAt)}`);
+    if (s.submittedAt) sent.push(sentWords(s.submittedAt, s.submittedDryRun));
     if (s.confirmedAt) sent.push(`confirmed ${shortIsoDate(s.confirmedAt)}`);
     this.sHeader.set({
       loading: s.loading,

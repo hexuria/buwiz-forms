@@ -295,6 +295,15 @@ pub struct Form2551QDraft {
     pub updated_at: String,
     #[serde(default)]
     pub submitted_at: Option<String>,
+    /// The send that made this return Submitted (`submitted_at`) was a dry
+    /// run: the submission worker's transport only simulated the PUT, so
+    /// nothing reached BIR. Written by the worker alone, at that moment, from
+    /// the session's source; cleared when the return goes back to Draft or is
+    /// queued again. Absent (false) on a real send and on every return stored
+    /// before it existed (those cannot be told apart). Never filed, printed or
+    /// part of the queued fingerprint.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub submitted_dry_run: bool,
     #[serde(default)]
     pub confirmed_at: Option<String>,
     #[serde(default)]
@@ -475,6 +484,7 @@ impl Form2551QDraft {
             created_at: now.clone(),
             updated_at: now,
             submitted_at: None,
+            submitted_dry_run: false,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -1125,6 +1135,7 @@ impl Form2551QDraft {
             self.period_code(),
             QueueAuthSource::Gui,
         ));
+        self.submitted_dry_run = false;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
@@ -1145,8 +1156,9 @@ impl Form2551QDraft {
         }
     }
 
-    /// Transition: Queued → Submitted (called by background cron after successful SFTP PUT).
-    pub fn transition_to_submitted(&mut self, filename: String) {
+    /// Queued → Submitted after a successful PUT; `dry_run`: the worker's
+    /// transport only simulated it (`submitted_dry_run`).
+    pub fn transition_to_submitted(&mut self, filename: String, dry_run: bool) {
         assert!(
             matches!(self.status, FilingStatus::Queued),
             "Cannot submit form in {:?} status — must be Queued",
@@ -1156,6 +1168,7 @@ impl Form2551QDraft {
         self.status = FilingStatus::Submitted;
         self.submitted_at = Some(now.to_rfc3339());
         self.submission_filename = Some(filename);
+        self.submitted_dry_run = dry_run;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
@@ -1218,6 +1231,7 @@ impl Form2551QDraft {
         // the filer chooses it (the page offers "Use profile values").
         self.profile_baseline.clear();
         self.submitted_at = None;
+        self.submitted_dry_run = false;
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;

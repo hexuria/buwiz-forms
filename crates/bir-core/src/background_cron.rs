@@ -771,7 +771,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             // Keep the exact bytes that were encrypted for PUT, so an
             // amendment can later snapshot what BIR received.
             draft.submitted_payload = Some(xml_payload);
-            draft.transition_to_submitted(filename);
+            draft.transition_to_submitted(filename, session_source.is_dry_run());
             if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -1165,7 +1165,9 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             // Keep the exact bytes that were encrypted for PUT, so an
             // amendment can later snapshot what BIR received.
             draft.lifecycle_mut().submitted_payload = Some(payload);
-            draft.lifecycle_mut().transition_to_submitted(filename);
+            draft
+                .lifecycle_mut()
+                .transition_to_submitted(filename, session_source.is_dry_run());
             if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -1250,6 +1252,359 @@ fn submission_queue_year_at<Tz: chrono::TimeZone>(now: &chrono::DateTime<Tz>) ->
     now.year() as u16
 }
 
+async fn process_queued_2551q(
+    summary: &FormDraftSummary,
+    profile: &TaxpayerProfile,
+    db: Arc<Mutex<Database>>,
+) {
+    process_queued_2551q_with_transport(summary, profile, db, &NetworkSubmissionTransport).await;
+}
+
+/// One queued 2551Q: revalidate, claim, PUT through `transport`, finish.
+async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
+    summary: &FormDraftSummary,
+    profile_clone: &TaxpayerProfile,
+    db_clone: Arc<Mutex<Database>>,
+    transport: &T,
+) {
+    let (loaded_draft, current_profile) = {
+        let db_guard = match lock_timing::lock(&db_clone) {
+            Ok(g) => g,
+            Err(_) => return,
+        };
+        let current_profile =
+            match db_guard.get_profile_for_year(&profile_clone.tin.full(), summary.taxable_year) {
+                Ok(Some(profile)) => profile,
+                _ => return,
+            };
+        let draft = match db_guard.get_2551q_draft(
+            &current_profile.tin.full(),
+            summary.taxable_year,
+            summary.quarter.unwrap_or(0),
+        ) {
+            Ok(Some(draft)) => draft,
+            _ => return,
+        };
+        (draft, current_profile)
+    };
+
+    if loaded_draft.submission_claim_token.is_some() || loaded_draft.submission_claimed_at.is_some()
+    {
+        let recovered = {
+            let db_guard = match lock_timing::lock(&db_clone) {
+                Ok(guard) => guard,
+                Err(_) => return,
+            };
+            db_guard
+                .recover_expired_unstarted_2551q_claim(
+                    &loaded_draft.tin,
+                    loaded_draft.taxable_year,
+                    loaded_draft.quarter,
+                    Utc::now(),
+                )
+                .unwrap_or(false)
+        };
+        if !recovered {
+            warn!(
+                "Cron: Form {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
+                loaded_draft.period_code()
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+        return;
+    }
+
+    let (mut draft, queue_revision) =
+        match prepare_queued_2551q(loaded_draft, &current_profile, None) {
+            Queued2551QPreparation::Ready { draft, revision } => (draft, revision),
+            Queued2551QPreparation::Rejected {
+                draft,
+                revision,
+                errors,
+            } => {
+                let reason = validation_reason(&errors);
+                warn!(
+                    "Cron: Refusing invalid queued form {} before XML generation: {}",
+                    draft.period_code(),
+                    reason
+                );
+                if let Ok(db_guard) = lock_timing::lock(&db_clone) {
+                    let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                        &draft,
+                        &revision.fingerprint,
+                        &revision.next_retry_at,
+                        revision.submission_attempts,
+                    );
+                }
+                crate::ipc::post_db_changed();
+                return;
+            }
+            Queued2551QPreparation::Superseded => return,
+        };
+
+    match queued_retry_is_due(draft.next_retry_at.as_deref(), Utc::now()) {
+        Ok(false) => return,
+        Ok(true) => {}
+        Err(error) => {
+            warn!(
+                "Cron: Refusing queued form {} because its retry timestamp is invalid: {}",
+                draft.period_code(),
+                error
+            );
+            draft.revert_to_draft();
+            draft.last_error = Some(
+                "Submission blocked because queued retry metadata is invalid; review and queue the return again"
+                    .to_string(),
+            );
+            if let Ok(db_guard) = lock_timing::lock(&db_clone) {
+                let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                    &draft,
+                    &queue_revision.fingerprint,
+                    &queue_revision.next_retry_at,
+                    queue_revision.submission_attempts,
+                );
+            }
+            crate::ipc::post_db_changed();
+            return;
+        }
+    }
+
+    info!(
+        "Cron: Attempting to submit queued form {} for {}",
+        draft.period_code(),
+        current_profile.tin.full()
+    );
+
+    let filename = draft.default_submission_filename();
+    let xml_payload = match draft.to_bir_xml_payload() {
+        Ok(payload) => payload,
+        Err(errors) => {
+            let reason = errors
+                .iter()
+                .map(|(field, message)| format!("{field}: {message}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            warn!(
+                "Cron: Refusing invalid form {} at XML generation boundary: {}",
+                draft.period_code(),
+                reason
+            );
+            draft.revert_to_draft();
+            draft.last_error = Some(format!(
+                "Submission blocked at XML generation boundary: {reason}"
+            ));
+            if let Ok(db_guard) = lock_timing::lock(&db_clone) {
+                let _ = db_guard.replace_unclaimed_queued_2551q_submission(
+                    &draft,
+                    &queue_revision.fingerprint,
+                    &queue_revision.next_retry_at,
+                    queue_revision.submission_attempts,
+                );
+            }
+            crate::ipc::post_db_changed();
+            return;
+        }
+    };
+    let encrypted = match crate::crypto::compress_and_encrypt(
+        xml_payload.as_bytes(),
+        crate::crypto::BIR_IAF_PASSPHRASE,
+    ) {
+        Ok(enc) => enc,
+        Err(e) => {
+            fail_draft_2551q(&mut draft, &queue_revision, db_clone.clone(), e.to_string());
+            return;
+        }
+    };
+
+    // Resolve the exact transport identifier from the audited
+    // capability registry at the irreversible boundary. Never
+    // revive an uncertified submitter with a hard-coded fallback.
+    let Some(form_type) = crate::forms::queue_authorized_form_type_id("2551Q") else {
+        warn!(
+            "Cron: Refusing to submit {} because 2551Q is not authorized for queue submission",
+            draft.period_code()
+        );
+        return;
+    };
+
+    let session = match transport.open_session(form_type, &draft.tin).await {
+        Ok(session) => session,
+        Err(error) => {
+            fail_draft_2551q(
+                &mut draft,
+                &queue_revision,
+                db_clone.clone(),
+                format!("BIR SFTP session failed before upload (no PUT attempted): {error}"),
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+    };
+
+    // Claim only after the SFTP session is open, immediately before PUT.
+    let claim_result = {
+        let db_guard = match lock_timing::lock(&db_clone) {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        db_guard.claim_queued_2551q_submission(
+            &draft.tin,
+            draft.taxable_year,
+            draft.quarter,
+            &queue_revision.fingerprint,
+            &queue_revision.next_retry_at,
+            queue_revision.submission_attempts,
+        )
+    };
+    let claim_token = match claim_result {
+        Ok(Claim2551QSubmissionResult::Claimed {
+            draft: claimed_draft,
+            token,
+        }) => {
+            draft = claimed_draft;
+            // Let an open form window replace its stale Queued copy
+            // with the claimed row before PUT returns.
+            crate::ipc::post_db_changed();
+            token
+        }
+        Ok(Claim2551QSubmissionResult::Rejected {
+            draft: rejected_draft,
+            errors,
+        }) => {
+            let reason = validation_reason(&errors);
+            warn!(
+                "Cron: Submission claim rejected form {}: {}",
+                rejected_draft.period_code(),
+                reason
+            );
+            crate::ipc::post_db_changed();
+            return;
+        }
+        Ok(Claim2551QSubmissionResult::Superseded) => {
+            info!(
+                "Cron: Submission job for {} was canceled or superseded before PUT",
+                draft.period_code()
+            );
+            return;
+        }
+        Err(_) => {
+            warn!(
+                "Cron: Could not claim queued form {} because the database claim failed",
+                draft.period_code()
+            );
+            return;
+        }
+    };
+
+    let session_source = transport.session_source(&session);
+    let put_marked = {
+        let db_guard = match lock_timing::lock(&db_clone) {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        db_guard
+            .mark_claimed_2551q_put_started(
+                &draft.tin,
+                draft.taxable_year,
+                draft.quarter,
+                &claim_token,
+            )
+            .unwrap_or(false)
+    };
+    if !put_marked {
+        warn!(
+            "Cron: Form {} claim disappeared before PUT start was recorded; skipping PUT",
+            draft.period_code()
+        );
+        return;
+    }
+    match transport
+        .store_session(session, &filename, &encrypted)
+        .await
+    {
+        Ok(_) => {
+            if session_source.is_dry_run() {
+                info!(
+                    "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
+                    filename
+                );
+            } else {
+                info!("Cron: Successfully submitted queued form {}", filename);
+            }
+            let period_label = quarterly_period_label(draft.taxable_year, draft.quarter);
+            let (notice_title, notice_body) = submission_notice(
+                &current_profile,
+                "2551Q",
+                &period_label,
+                &chrono::Local::now(),
+                session_source.is_dry_run(),
+            );
+            crate::notification::send_notification(&notice_title, &notice_body);
+            // Keep the exact bytes that were encrypted for PUT.
+            draft.submitted_payload = Some(xml_payload);
+            draft.transition_to_submitted(filename.clone(), session_source.is_dry_run());
+            if let Ok(db_guard) = lock_timing::lock(&db_clone) {
+                match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
+                    Ok(_) => {
+                        record_submission_alert(
+                            &db_guard,
+                            &current_profile,
+                            "2551Q",
+                            &period_label,
+                            &filename,
+                            &notice_title,
+                            &notice_body,
+                        );
+                        if session_source.is_dry_run() {
+                            info!(
+                                "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
+                            );
+                        } else {
+                            schedule_email_poll(
+                                &current_profile,
+                                "2551Q",
+                                &draft.tin,
+                                draft.taxable_year,
+                                None,
+                                Some(draft.quarter),
+                                &db_guard,
+                            );
+                        }
+                        crate::dev_mode::maybe_auto_confirm(&db_guard, session_source, &filename);
+                    }
+                    Err(error) => warn!(
+                        "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
+                        draft.period_code(),
+                        error
+                    ),
+                }
+            }
+        }
+        Err(error) => {
+            let error_category = match error {
+                crate::transport::TransportError::Sftp(_) => "sftp",
+                crate::transport::TransportError::Ssh(_) => "ssh",
+                crate::transport::TransportError::Dispatcher(_) => "dispatcher",
+                crate::transport::TransportError::Crypto(_) => "crypto",
+                crate::transport::TransportError::Http(_) => "http",
+                crate::transport::TransportError::Io(_) => "io",
+                crate::transport::TransportError::Config(_) => "config",
+                crate::transport::TransportError::Rejected => "rejected",
+            };
+            // Once PUT has started, an error does not prove that BIR
+            // received no bytes. Keep the durable claim just like a
+            // process crash: retrying could duplicate a return.
+            warn!(
+                error_category,
+                "Cron: Submission PUT ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
+            );
+            crate::ipc::post_db_changed();
+        }
+    }
+    crate::ipc::post_db_changed();
+}
+
 async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Database>>) {
     let summaries = {
         let db_guard = match lock_timing::lock(&db) {
@@ -1299,354 +1654,10 @@ async fn process_submission_queue(profile: &TaxpayerProfile, db: Arc<Mutex<Datab
             };
 
             if summary.form_code == "2551Q" {
-                let (loaded_draft, current_profile) = {
-                    let db_guard = match lock_timing::lock(&db_clone) {
-                        Ok(g) => g,
-                        Err(_) => return,
-                    };
-                    let current_profile = match db_guard
-                        .get_profile_for_year(&profile_clone.tin.full(), summary.taxable_year)
-                    {
-                        Ok(Some(profile)) => profile,
-                        _ => return,
-                    };
-                    let draft = match db_guard.get_2551q_draft(
-                        &current_profile.tin.full(),
-                        summary.taxable_year,
-                        summary.quarter.unwrap_or(0),
-                    ) {
-                        Ok(Some(draft)) => draft,
-                        _ => return,
-                    };
-                    (draft, current_profile)
-                };
-
-                if loaded_draft.submission_claim_token.is_some()
-                    || loaded_draft.submission_claimed_at.is_some()
-                {
-                    let recovered = {
-                        let db_guard = match lock_timing::lock(&db_clone) {
-                            Ok(guard) => guard,
-                            Err(_) => return,
-                        };
-                        db_guard
-                            .recover_expired_unstarted_2551q_claim(
-                                &loaded_draft.tin,
-                                loaded_draft.taxable_year,
-                                loaded_draft.quarter,
-                                Utc::now(),
-                            )
-                            .unwrap_or(false)
-                    };
-                    if !recovered {
-                        warn!(
-                            "Cron: Form {} has an unresolved submission outcome; automatic retry is disabled and support-assisted manual reconciliation is required",
-                            loaded_draft.period_code()
-                        );
-                        crate::ipc::post_db_changed();
-                        return;
-                    }
-                    return;
-                }
-
-                let (mut draft, queue_revision) =
-                    match prepare_queued_2551q(loaded_draft, &current_profile, None) {
-                        Queued2551QPreparation::Ready { draft, revision } => (draft, revision),
-                        Queued2551QPreparation::Rejected {
-                            draft,
-                            revision,
-                            errors,
-                        } => {
-                            let reason = validation_reason(&errors);
-                            warn!(
-                                "Cron: Refusing invalid queued form {} before XML generation: {}",
-                                draft.period_code(),
-                                reason
-                            );
-                            if let Ok(db_guard) = lock_timing::lock(&db_clone) {
-                                let _ = db_guard.replace_unclaimed_queued_2551q_submission(
-                                    &draft,
-                                    &revision.fingerprint,
-                                    &revision.next_retry_at,
-                                    revision.submission_attempts,
-                                );
-                            }
-                            crate::ipc::post_db_changed();
-                            return;
-                        }
-                        Queued2551QPreparation::Superseded => return,
-                    };
-
-                match queued_retry_is_due(draft.next_retry_at.as_deref(), Utc::now()) {
-                    Ok(false) => return,
-                    Ok(true) => {}
-                    Err(error) => {
-                        warn!(
-                            "Cron: Refusing queued form {} because its retry timestamp is invalid: {}",
-                            draft.period_code(),
-                            error
-                        );
-                        draft.revert_to_draft();
-                        draft.last_error = Some(
-                            "Submission blocked because queued retry metadata is invalid; review and queue the return again"
-                                .to_string(),
-                        );
-                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
-                            let _ = db_guard.replace_unclaimed_queued_2551q_submission(
-                                &draft,
-                                &queue_revision.fingerprint,
-                                &queue_revision.next_retry_at,
-                                queue_revision.submission_attempts,
-                            );
-                        }
-                        crate::ipc::post_db_changed();
-                        return;
-                    }
-                }
-
-                info!(
-                    "Cron: Attempting to submit queued form {} for {}",
-                    draft.period_code(),
-                    current_profile.tin.full()
-                );
-
-                let filename = draft.default_submission_filename();
-                let xml_payload = match draft.to_bir_xml_payload() {
-                    Ok(payload) => payload,
-                    Err(errors) => {
-                        let reason = errors
-                            .iter()
-                            .map(|(field, message)| format!("{field}: {message}"))
-                            .collect::<Vec<_>>()
-                            .join("; ");
-                        warn!(
-                            "Cron: Refusing invalid form {} at XML generation boundary: {}",
-                            draft.period_code(),
-                            reason
-                        );
-                        draft.revert_to_draft();
-                        draft.last_error = Some(format!(
-                            "Submission blocked at XML generation boundary: {reason}"
-                        ));
-                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
-                            let _ = db_guard.replace_unclaimed_queued_2551q_submission(
-                                &draft,
-                                &queue_revision.fingerprint,
-                                &queue_revision.next_retry_at,
-                                queue_revision.submission_attempts,
-                            );
-                        }
-                        crate::ipc::post_db_changed();
-                        return;
-                    }
-                };
-                let encrypted = match crate::crypto::compress_and_encrypt(
-                    xml_payload.as_bytes(),
-                    crate::crypto::BIR_IAF_PASSPHRASE,
-                ) {
-                    Ok(enc) => enc,
-                    Err(e) => {
-                        fail_draft_2551q(
-                            &mut draft,
-                            &queue_revision,
-                            db_clone.clone(),
-                            e.to_string(),
-                        );
-                        return;
-                    }
-                };
-
-                // Resolve the exact transport identifier from the audited
-                // capability registry at the irreversible boundary. Never
-                // revive an uncertified submitter with a hard-coded fallback.
-                let Some(form_type) = crate::forms::queue_authorized_form_type_id("2551Q") else {
-                    warn!(
-                        "Cron: Refusing to submit {} because 2551Q is not authorized for queue submission",
-                        draft.period_code()
-                    );
-                    return;
-                };
-
-                let session = match crate::transport::open_iaf_session(form_type, &draft.tin).await
-                {
-                    Ok(session) => session,
-                    Err(error) => {
-                        fail_draft_2551q(
-                            &mut draft,
-                            &queue_revision,
-                            db_clone.clone(),
-                            format!(
-                                "BIR SFTP session failed before upload (no PUT attempted): {error}"
-                            ),
-                        );
-                        crate::ipc::post_db_changed();
-                        return;
-                    }
-                };
-
-                // Claim only after the SFTP session is open, immediately before PUT.
-                let claim_result = {
-                    let db_guard = match lock_timing::lock(&db_clone) {
-                        Ok(guard) => guard,
-                        Err(_) => return,
-                    };
-                    db_guard.claim_queued_2551q_submission(
-                        &draft.tin,
-                        draft.taxable_year,
-                        draft.quarter,
-                        &queue_revision.fingerprint,
-                        &queue_revision.next_retry_at,
-                        queue_revision.submission_attempts,
-                    )
-                };
-                let claim_token = match claim_result {
-                    Ok(Claim2551QSubmissionResult::Claimed {
-                        draft: claimed_draft,
-                        token,
-                    }) => {
-                        draft = claimed_draft;
-                        // Let an open form window replace its stale Queued copy
-                        // with the claimed row before PUT returns.
-                        crate::ipc::post_db_changed();
-                        token
-                    }
-                    Ok(Claim2551QSubmissionResult::Rejected {
-                        draft: rejected_draft,
-                        errors,
-                    }) => {
-                        let reason = validation_reason(&errors);
-                        warn!(
-                            "Cron: Submission claim rejected form {}: {}",
-                            rejected_draft.period_code(),
-                            reason
-                        );
-                        crate::ipc::post_db_changed();
-                        return;
-                    }
-                    Ok(Claim2551QSubmissionResult::Superseded) => {
-                        info!(
-                            "Cron: Submission job for {} was canceled or superseded before PUT",
-                            draft.period_code()
-                        );
-                        return;
-                    }
-                    Err(_) => {
-                        warn!(
-                            "Cron: Could not claim queued form {} because the database claim failed",
-                            draft.period_code()
-                        );
-                        return;
-                    }
-                };
-
-                let session_source = session.source();
-                let put_marked = {
-                    let db_guard = match lock_timing::lock(&db_clone) {
-                        Ok(guard) => guard,
-                        Err(_) => return,
-                    };
-                    db_guard
-                        .mark_claimed_2551q_put_started(
-                            &draft.tin,
-                            draft.taxable_year,
-                            draft.quarter,
-                            &claim_token,
-                        )
-                        .unwrap_or(false)
-                };
-                if !put_marked {
-                    warn!(
-                        "Cron: Form {} claim disappeared before PUT start was recorded; skipping PUT",
-                        draft.period_code()
-                    );
-                    return;
-                }
-                match session.store(&filename, &encrypted).await {
-                    Ok(_) => {
-                        if session_source.is_dry_run() {
-                            info!(
-                                "Cron: dry run: simulated submission of queued form {} (nothing sent to BIR)",
-                                filename
-                            );
-                        } else {
-                            info!("Cron: Successfully submitted queued form {}", filename);
-                        }
-                        let period_label =
-                            quarterly_period_label(draft.taxable_year, draft.quarter);
-                        let (notice_title, notice_body) = submission_notice(
-                            &current_profile,
-                            "2551Q",
-                            &period_label,
-                            &chrono::Local::now(),
-                            session_source.is_dry_run(),
-                        );
-                        crate::notification::send_notification(&notice_title, &notice_body);
-                        // Keep the exact bytes that were encrypted for PUT.
-                        draft.submitted_payload = Some(xml_payload);
-                        draft.transition_to_submitted(filename.clone());
-                        if let Ok(db_guard) = lock_timing::lock(&db_clone) {
-                            match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
-                                Ok(_) => {
-                                    record_submission_alert(
-                                        &db_guard,
-                                        &current_profile,
-                                        "2551Q",
-                                        &period_label,
-                                        &filename,
-                                        &notice_title,
-                                        &notice_body,
-                                    );
-                                    if session_source.is_dry_run() {
-                                        info!(
-                                            "Cron: 2551Q dry-run PUT succeeded; skipping IMAP poll (source=dry-run)"
-                                        );
-                                    } else {
-                                        schedule_email_poll(
-                                            &current_profile,
-                                            "2551Q",
-                                            &draft.tin,
-                                            draft.taxable_year,
-                                            None,
-                                            Some(draft.quarter),
-                                            &db_guard,
-                                        );
-                                    }
-                                    crate::dev_mode::maybe_auto_confirm(
-                                        &db_guard,
-                                        session_source,
-                                        &filename,
-                                    );
-                                }
-                                Err(error) => warn!(
-                                    "Cron: Form {} was transmitted but its submission claim could not be finalized: {}",
-                                    draft.period_code(),
-                                    error
-                                ),
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        let error_category = match error {
-                            crate::transport::TransportError::Sftp(_) => "sftp",
-                            crate::transport::TransportError::Ssh(_) => "ssh",
-                            crate::transport::TransportError::Dispatcher(_) => "dispatcher",
-                            crate::transport::TransportError::Crypto(_) => "crypto",
-                            crate::transport::TransportError::Http(_) => "http",
-                            crate::transport::TransportError::Io(_) => "io",
-                            crate::transport::TransportError::Config(_) => "config",
-                            crate::transport::TransportError::Rejected => "rejected",
-                        };
-                        // Once PUT has started, an error does not prove that BIR
-                        // received no bytes. Keep the durable claim just like a
-                        // process crash: retrying could duplicate a return.
-                        warn!(
-                            error_category,
-                            "Cron: Submission PUT ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
-                        );
-                        crate::ipc::post_db_changed();
-                    }
-                }
-            } else if summary.form_code == "1601C" {
+                process_queued_2551q(&summary, &profile_clone, db_clone.clone()).await;
+                return;
+            }
+            if summary.form_code == "1601C" {
                 process_queued_1601c(&summary, &profile_clone, db_clone.clone()).await;
             } else {
                 process_queued_by_kind(&summary, &profile_clone, db_clone.clone()).await;
@@ -2567,6 +2578,19 @@ mod tests {
         }
     }
 
+    /// The stored row's JSON exactly as written.
+    fn stored_json(db: &Arc<Mutex<Database>>, form_code: &str, tin: &str) -> String {
+        db.lock()
+            .unwrap()
+            .conn
+            .query_row(
+                "SELECT data_json FROM form_drafts WHERE form_code = ?1 AND tin = ?2",
+                rusqlite::params![form_code, tin],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
     fn queued_1601c_summary(id: i64, draft: &Form1601CDraft) -> FormDraftSummary {
         FormDraftSummary {
             id,
@@ -2823,6 +2847,7 @@ mod tests {
         assert!(submitted.submitted_at.is_some());
         assert!(submitted.submission_claim_token.is_none());
         assert!(submitted.submission_claimed_at.is_none());
+        assert!(!submitted.submitted_dry_run, "a real send is not a dry run");
         let jobs = db_guard
             .list_jobs()
             .expect("the email-poll job lookup should succeed");
@@ -2837,6 +2862,13 @@ mod tests {
         assert_eq!(
             email_job.command.as_deref(),
             Some("bir_poll_email receipts@example.com")
+        );
+        drop(db_guard);
+        let stored = stored_json(&db, "1601C", &queued.tin);
+        assert!(stored.contains("\"submitted_at\""), "{stored}");
+        assert!(
+            !stored.contains("submitted_dry_run"),
+            "a real send stores no dry-run key: {stored}"
         );
     }
 
@@ -2867,6 +2899,11 @@ mod tests {
             .expect("the submitted 1601C lookup should succeed")
             .expect("the submitted 1601C snapshot should remain persisted");
         assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(
+            submitted.submitted_dry_run,
+            "a dry-run send is stored as one"
+        );
+        assert!(stored_json(&db, "1601C", &queued.tin).contains("\"submitted_dry_run\":true"));
         let jobs = db
             .lock()
             .expect("the cron database should not be poisoned")
@@ -3022,6 +3059,233 @@ mod tests {
             submitted.lifecycle.submission_filename.as_deref(),
             Some(queued.submission_filename().as_str())
         );
+        assert!(submitted.lifecycle.submitted_dry_run);
+    }
+
+    #[tokio::test]
+    async fn generic_worker_real_send_stores_no_dry_run_key() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &transport,
+            allow_test_form,
+        )
+        .await;
+
+        assert_eq!(transport.calls().len(), 1);
+        let submitted = stored_test_form(&db, &queued);
+        assert_eq!(submitted.lifecycle.status, FilingStatus::Submitted);
+        assert!(!submitted.lifecycle.submitted_dry_run);
+        let stored = stored_json(&db, TestForm::CODE, &queued.tin);
+        assert!(stored.contains("\"submitted_at\""), "{stored}");
+        assert!(!stored.contains("submitted_dry_run"), "{stored}");
+    }
+
+    /// A queued 2551Q saved with its profile, and the worker's summary of it.
+    fn stored_queued_2551q(db: &Arc<Mutex<Database>>) -> (Form2551QDraft, FormDraftSummary) {
+        let profile = reviewed_profile();
+        let guard = db.lock().unwrap();
+        guard.save_profile(profile.clone()).unwrap();
+        let queued = queued_draft(&profile);
+        let id = guard.save_queued_2551q_draft_and_election(&queued).unwrap();
+        let summary = FormDraftSummary {
+            id,
+            tin: queued.tin.clone(),
+            form_code: "2551Q".to_string(),
+            taxable_year: queued.taxable_year,
+            quarter: Some(queued.quarter),
+            month: None,
+            status: FilingStatus::Queued,
+            updated_at: queued.updated_at.clone(),
+        };
+        (queued, summary)
+    }
+
+    #[test]
+    fn the_dry_run_fact_of_1601c_and_2551q_describes_only_its_own_send() {
+        let mut monthly = queued_1601c_draft(&test_profile());
+        let reviewed = monthly.to_bir_field_map();
+        let filename = monthly.default_submission_filename();
+        monthly.transition_to_submitted(filename, true);
+        assert!(monthly.submitted_dry_run);
+        assert_eq!(monthly.to_bir_field_map(), reviewed);
+        let mut legacy = serde_json::to_value(&monthly).unwrap();
+        assert_eq!(legacy["submitted_dry_run"], true);
+        legacy.as_object_mut().unwrap().remove("submitted_dry_run");
+        assert!(
+            !serde_json::from_value::<Form1601CDraft>(legacy)
+                .unwrap()
+                .submitted_dry_run
+        );
+        monthly.revert_to_draft();
+        assert!(!monthly.submitted_dry_run);
+        monthly.submitted_dry_run = true;
+        monthly.transition_to_queued().unwrap();
+        assert!(!monthly.submitted_dry_run);
+        let filename = monthly.default_submission_filename();
+        monthly.transition_to_submitted(filename, false);
+        assert!(
+            serde_json::to_value(&monthly)
+                .unwrap()
+                .get("submitted_dry_run")
+                .is_none()
+        );
+
+        let mut quarterly = queued_draft(&reviewed_profile());
+        let reviewed = quarterly.to_bir_field_map();
+        let filename = quarterly.default_submission_filename();
+        quarterly.transition_to_submitted(filename, true);
+        assert!(quarterly.submitted_dry_run);
+        assert_eq!(quarterly.to_bir_field_map(), reviewed);
+        let mut legacy = serde_json::to_value(&quarterly).unwrap();
+        assert_eq!(legacy["submitted_dry_run"], true);
+        legacy.as_object_mut().unwrap().remove("submitted_dry_run");
+        assert!(
+            !serde_json::from_value::<Form2551QDraft>(legacy)
+                .unwrap()
+                .submitted_dry_run
+        );
+        quarterly.revert_to_draft();
+        assert!(!quarterly.submitted_dry_run);
+        quarterly.submitted_dry_run = true;
+        quarterly.transition_to_queued().unwrap();
+        assert!(!quarterly.submitted_dry_run);
+        let filename = quarterly.default_submission_filename();
+        quarterly.transition_to_submitted(filename, false);
+        assert!(
+            serde_json::to_value(&quarterly)
+                .unwrap()
+                .get("submitted_dry_run")
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn process_queued_2551q_dry_run_is_stored_as_one() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let transport = RecordingSubmissionTransport::dry_run(TestTransportOutcome::Success);
+
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+
+        assert_eq!(transport.calls().len(), 1);
+        let submitted = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(submitted.submitted_dry_run);
+        assert!(stored_json(&db, "2551Q", &queued.tin).contains("\"submitted_dry_run\":true"));
+        assert!(
+            db.lock()
+                .unwrap()
+                .list_jobs()
+                .unwrap()
+                .iter()
+                .all(|job| !is_email_poll_job(job)),
+            "dry-run must not schedule IMAP poll"
+        );
+    }
+
+    /// The session fails before any upload: nothing was sent, so the return
+    /// stays Queued and unclaimed, with one attempt counted, to be retried.
+    #[tokio::test]
+    async fn process_queued_2551q_pre_store_failure_stays_unclaimed_and_backs_off() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::PreStore);
+
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+
+        assert!(transport.calls().is_empty());
+        let failed = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(failed.status, FilingStatus::Queued);
+        assert_eq!(failed.submission_attempts, 1);
+        assert!(failed.submission_claim_token.is_none());
+        assert!(failed.submission_put_started_at.is_none());
+        assert!(failed.submitted_at.is_none());
+        assert!(
+            failed
+                .last_error
+                .as_deref()
+                .is_some_and(|message| message.contains("no PUT attempted")),
+            "{:?}",
+            failed.last_error
+        );
+    }
+
+    /// The upload's outcome is unknown (it may have reached BIR): the return
+    /// keeps its claim and is never uploaded again, so it cannot be filed
+    /// twice.
+    #[tokio::test]
+    async fn process_queued_2551q_unknown_outcome_stays_claimed_and_is_not_retried() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::UnknownIo);
+
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+
+        assert_eq!(transport.calls().len(), 1);
+        let stored = || {
+            db.lock()
+                .unwrap()
+                .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .unwrap()
+        };
+        let claimed = stored();
+        assert_eq!(claimed.status, FilingStatus::Queued);
+        assert!(claimed.submission_claim_token.is_some());
+        assert!(claimed.submission_put_started_at.is_some());
+        assert!(claimed.submitted_at.is_none());
+
+        // A second run must not upload again: the outcome is unknown.
+        let retry = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &retry)
+            .await;
+        assert!(retry.calls().is_empty());
+        let after = stored();
+        assert_eq!(after.status, FilingStatus::Queued);
+        assert!(after.submission_claim_token.is_some());
+    }
+
+    #[tokio::test]
+    async fn process_queued_2551q_real_send_stores_no_dry_run_key() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let transport = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &transport)
+            .await;
+
+        assert_eq!(transport.calls().len(), 1);
+        let submitted = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(!submitted.submitted_dry_run);
+        let stored = stored_json(&db, "2551Q", &queued.tin);
+        assert!(stored.contains("\"submitted_at\""), "{stored}");
+        assert!(!stored.contains("submitted_dry_run"), "{stored}");
     }
 
     #[tokio::test]
@@ -3444,6 +3708,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(submitted.status, FilingStatus::Submitted);
+        assert!(submitted.submitted_dry_run);
         assert_eq!(submitted.tax_36_total_amount_payable, 0.0);
         assert!(
             db.lock()

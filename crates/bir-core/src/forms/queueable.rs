@@ -27,6 +27,15 @@ pub struct SubmissionLifecycle {
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub submitted_at: Option<String>,
+    /// The send that made this return Submitted (`submitted_at`) was a dry
+    /// run: the submission worker's transport only simulated the PUT, so
+    /// nothing reached BIR. Written by the worker alone, at that moment, from
+    /// the session's source; cleared when the return goes back to Draft or is
+    /// queued again. Absent (false) on a real send and on every return stored
+    /// before it existed (those cannot be told apart). Never filed, printed or
+    /// part of the queued fingerprint.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub submitted_dry_run: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confirmed_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -121,6 +130,7 @@ impl Default for SubmissionLifecycle {
             created_at: now.clone(),
             updated_at: now,
             submitted_at: None,
+            submitted_dry_run: false,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -169,6 +179,7 @@ impl SubmissionLifecycle {
     fn mark_queued(&mut self, fingerprint: String, authorization: QueueAuthorization) {
         self.queued_submission_fingerprint = Some(fingerprint);
         self.queue_authorization = Some(authorization);
+        self.submitted_dry_run = false;
         self.clear_claim();
         self.status = FilingStatus::Queued;
         self.submission_attempts = 0;
@@ -183,8 +194,9 @@ impl SubmissionLifecycle {
         }
     }
 
-    /// Queued -> Submitted after a successful PUT.
-    pub fn transition_to_submitted(&mut self, filename: String) {
+    /// Queued -> Submitted after a successful PUT; `dry_run`: the worker's
+    /// transport only simulated it (`submitted_dry_run`).
+    pub fn transition_to_submitted(&mut self, filename: String, dry_run: bool) {
         assert!(
             matches!(self.status, FilingStatus::Queued),
             "Cannot submit form in {:?} status - must be Queued",
@@ -194,6 +206,7 @@ impl SubmissionLifecycle {
         self.status = FilingStatus::Submitted;
         self.submitted_at = Some(now.clone());
         self.submission_filename = Some(filename);
+        self.submitted_dry_run = dry_run;
         self.submission_attempts = 0;
         self.submission_error = None;
         self.next_retry_at = None;
@@ -234,6 +247,7 @@ impl SubmissionLifecycle {
         // the filer chooses it (the page offers "Use profile values").
         self.profile_baseline.clear();
         self.submitted_at = None;
+        self.submitted_dry_run = false;
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;
@@ -1064,6 +1078,43 @@ mod tests {
             assert!(json.get(key).is_some(), "{key}");
         }
         assert!(json.get("lifecycle").is_none());
+    }
+
+    #[test]
+    fn a_dry_run_send_is_recorded_until_the_return_leaves_submitted() {
+        let mut form = TestForm::new(6, 10.0);
+        form.queue(QueueAuthSource::Gui).unwrap();
+        let reviewed = form.field_map();
+        let filename = form.submission_filename();
+        form.lifecycle.transition_to_submitted(filename, true);
+        assert!(form.lifecycle.submitted_dry_run);
+        let json = serde_json::to_value(&form).unwrap();
+        assert_eq!(json["submitted_dry_run"], true);
+        assert_eq!(form.field_map(), reviewed, "never part of what is filed");
+        form.lifecycle
+            .transition_to_confirmed("2025-07-01T08:00:00".to_string(), None, None);
+        assert!(
+            form.lifecycle.submitted_dry_run,
+            "confirming keeps how it was sent"
+        );
+
+        // A row stored before the field existed reads as a real send.
+        let mut legacy = json.clone();
+        legacy.as_object_mut().unwrap().remove("submitted_dry_run");
+        let legacy: TestForm = serde_json::from_value(legacy).unwrap();
+        assert!(!legacy.lifecycle.submitted_dry_run);
+
+        form.lifecycle.revert_to_draft();
+        assert!(!form.lifecycle.submitted_dry_run);
+        // A client's copy that still says so loses it when queued again.
+        form.lifecycle.submitted_dry_run = true;
+        form.queue(QueueAuthSource::Gui).unwrap();
+        assert!(!form.lifecycle.submitted_dry_run);
+        let filename = form.submission_filename();
+        form.lifecycle.transition_to_submitted(filename, false);
+        assert!(!form.lifecycle.submitted_dry_run);
+        let json = serde_json::to_value(&form).unwrap();
+        assert!(json.get("submitted_dry_run").is_none(), "{json}");
     }
 
     #[test]

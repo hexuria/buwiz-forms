@@ -33,6 +33,12 @@ gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent",
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# The database guard on Windows: the account's profile folder from its token (GetUserProfileDirectoryW), never
+# USERPROFILE, and a file or folder known by volume and file index (GetFileInformationByHandle). The version the lock
+# already holds.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_UI_Shell"] }
+
 # Touch ID / the account password and Windows Hello (admin recovery, `mac_login`): the old host's crate and version
 # (crates/bir-shell/Cargo.toml). Used by src/auth.rs.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]

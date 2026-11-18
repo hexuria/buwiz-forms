@@ -1332,6 +1332,7 @@ impl Database {
             existing.submitted_payload = draft.submitted_payload.clone();
         }
         existing.submission_filename = draft.submission_filename.clone();
+        existing.submitted_dry_run = draft.submitted_dry_run;
         existing.submission_attempts = 0;
         existing.next_retry_at = None;
         existing.last_error = None;
@@ -3519,7 +3520,7 @@ mod tests {
             _ => panic!("the exact queued generation should be claimed"),
         };
         let filename = claimed.default_submission_filename();
-        claimed.transition_to_submitted(filename);
+        claimed.transition_to_submitted(filename, false);
         claimed.submitted_at = Some("2026-04-25T04:00:00+00:00".to_string());
         db.finish_claimed_2551q_submission(&claimed, &token)
             .expect("the claimed draft should become Submitted");
@@ -3877,12 +3878,12 @@ mod tests {
 
         let filename = claimed.default_submission_filename();
         let mut wrong_filename = claimed.clone();
-        wrong_filename.transition_to_submitted("wrong.xml".to_string());
+        wrong_filename.transition_to_submitted("wrong.xml".to_string(), false);
         assert!(
             db.finish_claimed_1601c_submission(&wrong_filename, &token)
                 .is_err()
         );
-        claimed.transition_to_submitted(filename.clone());
+        claimed.transition_to_submitted(filename.clone(), false);
         assert!(
             db.finish_claimed_1601c_submission(&claimed, "wrong-token")
                 .is_err()
@@ -4071,7 +4072,7 @@ mod tests {
         assert!(persisted.submission_claim_token.is_none());
 
         let mut finished = claimed.clone();
-        finished.transition_to_submitted(claimed.default_submission_filename());
+        finished.transition_to_submitted(claimed.default_submission_filename(), false);
         assert!(
             db.finish_claimed_1601c_submission(&finished, &token)
                 .is_err(),
@@ -4129,7 +4130,7 @@ mod tests {
             _ => panic!("queued 1601C should be claimed"),
         };
         let filename = claimed.default_submission_filename();
-        claimed.transition_to_submitted(filename.clone());
+        claimed.transition_to_submitted(filename.clone(), false);
         db.finish_claimed_1601c_submission(&claimed, &token)
             .expect("finish_claimed remains the success path");
         let submitted = db
@@ -4256,7 +4257,7 @@ mod tests {
             .unwrap();
 
         let mut submitted = orphaned.clone();
-        submitted.transition_to_submitted(submitted.default_submission_filename());
+        submitted.transition_to_submitted(submitted.default_submission_filename(), false);
         assert!(
             db.finish_claimed_1601c_submission(&submitted, claim_token)
                 .is_err()
@@ -5325,7 +5326,7 @@ mod tests {
         );
 
         let mut mutated = claimed.clone();
-        mutated.transition_to_submitted(expected_filename.clone());
+        mutated.transition_to_submitted(expected_filename.clone(), false);
         mutated.schedule_1[0].taxable_amount += 1.0;
         assert!(
             db.finish_claimed_2551q_submission(&mutated, &token)
@@ -5333,7 +5334,7 @@ mod tests {
         );
 
         let mut missing_metadata = claimed.clone();
-        missing_metadata.transition_to_submitted(expected_filename.clone());
+        missing_metadata.transition_to_submitted(expected_filename.clone(), false);
         missing_metadata.submitted_at = None;
         assert!(
             db.finish_claimed_2551q_submission(&missing_metadata, &token)
@@ -5341,7 +5342,7 @@ mod tests {
         );
 
         let mut changed_fingerprint = claimed.clone();
-        changed_fingerprint.transition_to_submitted(expected_filename.clone());
+        changed_fingerprint.transition_to_submitted(expected_filename.clone(), false);
         changed_fingerprint.queued_submission_fingerprint = Some("different".to_string());
         assert!(
             db.finish_claimed_2551q_submission(&changed_fingerprint, &token)
@@ -5349,13 +5350,13 @@ mod tests {
         );
 
         let mut wrong_filename = claimed.clone();
-        wrong_filename.transition_to_submitted("wrong.xml".to_string());
+        wrong_filename.transition_to_submitted("wrong.xml".to_string(), false);
         assert!(
             db.finish_claimed_2551q_submission(&wrong_filename, &token)
                 .is_err()
         );
 
-        claimed.transition_to_submitted(expected_filename.clone());
+        claimed.transition_to_submitted(expected_filename.clone(), false);
         assert!(
             db.finish_claimed_2551q_submission(&claimed, "wrong-token")
                 .is_err()
@@ -5743,7 +5744,7 @@ mod tests {
             _ => panic!("the exact queued generation should be claimed"),
         };
         let filename = claimed.default_submission_filename();
-        claimed.transition_to_submitted(filename);
+        claimed.transition_to_submitted(filename, false);
         db.finish_claimed_2551q_submission(&claimed, &token)
             .unwrap();
         assert!(
@@ -5813,7 +5814,7 @@ mod tests {
             _ => panic!("the exact queued generation should be claimed"),
         };
         let submission_filename = claimed.default_submission_filename();
-        claimed.transition_to_submitted(submission_filename.clone());
+        claimed.transition_to_submitted(submission_filename.clone(), false);
         db.finish_claimed_2551q_submission(&claimed, &token)
             .expect("the claim owner should advance the stored return");
 
@@ -6061,7 +6062,7 @@ mod tests {
         );
 
         let mut finished = claimed.clone();
-        finished.transition_to_submitted(claimed.default_submission_filename());
+        finished.transition_to_submitted(claimed.default_submission_filename(), false);
         assert!(
             db.finish_claimed_2551q_submission(&finished, &token)
                 .is_err()

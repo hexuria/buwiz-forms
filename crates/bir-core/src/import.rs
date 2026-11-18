@@ -763,6 +763,18 @@ mod tests {
         };
         db.save_submission(sub.clone()).unwrap();
 
+        // A return the worker sent in a dry run keeps saying so.
+        let mut dry_run = crate::forms::Form1601CDraft::new_from_profile(&profile, 2024, 5);
+        dry_run.status = crate::forms::FilingStatus::Queued;
+        dry_run.transition_to_submitted(dry_run.default_submission_filename(), true);
+        db.conn
+            .execute(
+                "INSERT INTO form_drafts (tin, form_code, taxable_year, quarter, status, data_json)
+                 VALUES ('123456789000', '1601C', 2024, 5, 'Submitted', ?1)",
+                rusqlite::params![serde_json::to_string(&dry_run).unwrap()],
+            )
+            .unwrap();
+
         // Export to zip
         let export_zip = dir.path().join("export.zip");
         crate::export::export_profile_data(&db, "123456789000", &export_zip, None).unwrap();
@@ -780,6 +792,18 @@ mod tests {
         let submissions = db2.list_submissions_for_tin("123456789000").unwrap();
         assert_eq!(submissions.len(), 1);
         assert_eq!(submissions[0].form_type, "2551Q");
+
+        let imported: String = db2
+            .conn
+            .query_row(
+                "SELECT data_json FROM form_drafts WHERE form_code = '1601C' AND tin = '123456789000'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let imported: crate::forms::Form1601CDraft = serde_json::from_str(&imported).unwrap();
+        assert_eq!(imported.status, crate::forms::FilingStatus::Submitted);
+        assert!(imported.submitted_dry_run);
     }
 
     #[test]

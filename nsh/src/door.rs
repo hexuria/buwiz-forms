@@ -176,14 +176,18 @@ fn forget_old_scratch_with(root: &Path, lifetime: std::time::Duration, remove: i
         }
         // Hold the owner lock until the folder is gone: a run that opens the database now is refused while
         // we delete, and one that already has it open keeps the lock, so we skip. (The lock file is made if
-        // the folder has none. Windows cannot delete the lock file it holds open: the folder keeps that
-        // one empty file.)
+        // the folder has none.)
         let Ok(lock) = bir_core::db::try_acquire_live_owner_lock(&folder.join("bir_data.db"))
         else {
             continue;
         };
         remove(&folder);
         drop(lock);
+        // Windows cannot delete the lock file while it is open, so the folder kept it: let it go too. A run that
+        // took the lock in between holds that file open (unshared), and Windows refuses to delete an open file,
+        // so its folder stays.
+        #[cfg(windows)]
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }
 
@@ -925,17 +929,34 @@ mod tests {
     fn grow_old(path: &Path, by: std::time::Duration) {
         let when = std::time::SystemTime::now() - by;
         if path.is_dir() {
-            std::fs::File::open(path)
-                .unwrap()
-                .set_modified(when)
-                .unwrap();
+            // Windows opens a folder only with backup semantics, and setting its time takes write-attributes access.
+            #[cfg(windows)]
+            let folder = {
+                use std::os::windows::fs::OpenOptionsExt;
+                use windows_sys::Win32::Storage::FileSystem::{FILE_FLAG_BACKUP_SEMANTICS, FILE_WRITE_ATTRIBUTES};
+                std::fs::OpenOptions::new()
+                    .access_mode(FILE_WRITE_ATTRIBUTES)
+                    .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                    .open(path)
+                    .unwrap()
+            };
+            #[cfg(not(windows))]
+            let folder = std::fs::File::open(path).unwrap();
+            folder.set_modified(when).unwrap();
         } else {
-            std::fs::OpenOptions::new()
-                .write(true)
-                .open(path)
-                .unwrap()
-                .set_modified(when)
-                .unwrap();
+            // On Windows asking only to write attributes, which a file another handle holds unshared (an owner lock)
+            // still allows.
+            #[cfg(windows)]
+            let file = {
+                use std::os::windows::fs::OpenOptionsExt;
+                std::fs::OpenOptions::new()
+                    .access_mode(windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES)
+                    .open(path)
+                    .unwrap()
+            };
+            #[cfg(not(windows))]
+            let file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+            file.set_modified(when).unwrap();
         }
     }
 

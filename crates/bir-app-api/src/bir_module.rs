@@ -1554,6 +1554,24 @@ fn keep_stored_trigger_flag(
     Ok(())
 }
 
+/// `submitted_dry_run` is the submission worker's (bir-core
+/// `background_cron`, at the moment it marks a return Submitted): a save
+/// never stores a client's. Whatever this save writes did not come from
+/// the worker's send (a stored return that left Draft cannot be saved over).
+pub(crate) fn drop_client_dry_run(data: &mut serde_json::Value) {
+    let Some(object) = data.as_object_mut() else {
+        return;
+    };
+    object.remove("submitted_dry_run");
+    // The shapes that keep their lifecycle in a `lifecycle` object.
+    if let Some(lifecycle) = object
+        .get_mut("lifecycle")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        lifecycle.remove("submitted_dry_run");
+    }
+}
+
 fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
     let form_code = arguments.string(1)?.to_owned();
@@ -1561,6 +1579,7 @@ fn save_form_draft(arguments: &gpui_shell::HostArguments) -> HostResult {
     let quarter = optional_quarter(arguments, 3)?;
     let status = filing_status(arguments.string(4)?)?;
     let mut data = to_json(arguments.value(5)?);
+    drop_client_dry_run(&mut data);
     with_database(|db| {
         // The engine requires dedicated typed persistence for these two forms;
         // route them inside the host so the script keeps one uniform call.
@@ -2985,6 +3004,40 @@ mod tests {
 
     fn args(values: Vec<HostValue>) -> HostArguments {
         HostArguments::new(values)
+    }
+
+    /// `submitted_dry_run` is the worker's: a save never stores a client's.
+    #[test]
+    fn a_save_never_stores_a_clients_dry_run_fact() {
+        setup();
+        let sent = serde_json::json!({
+            "created_at": "2026-02-01T00:00:00+00:00",
+            "submitted_at": "2026-02-05T00:00:00+00:00",
+            "submitted_dry_run": true,
+            "lifecycle": { "submitted_dry_run": true },
+        });
+        save_form_draft(&args(vec![
+            TIN.into(),
+            "0619E".into(),
+            2026_i64.into(),
+            1_i64.into(),
+            "Submitted".into(),
+            json(sent),
+        ]))
+        .unwrap();
+        let stored = with_database(|db| {
+            Ok(db
+                .get_form_draft::<serde_json::Value>(TIN, "0619E", 2026, Some(1))
+                .unwrap()
+                .unwrap())
+        })
+        .unwrap();
+        assert_eq!(stored["submitted_at"], "2026-02-05T00:00:00+00:00");
+        assert!(stored.get("submitted_dry_run").is_none(), "{stored}");
+        assert!(
+            stored["lifecycle"].get("submitted_dry_run").is_none(),
+            "{stored}"
+        );
     }
 
     /// Round 3, item 4: the generic save never stores a client's
