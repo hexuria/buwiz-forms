@@ -323,7 +323,7 @@ A branch per topic (the guard, the print URL, the wording), each with its own dr
 
 1. **Print and Save as PDF on Windows.** NSH 0.5.1 has no PDF call, so this needs code of our own. Options visible in the repository: the older app's route (the WebView2 print UI behind a Print button, `docs/platforms/windows.md:107`, untested there), or our own native call into WebView2, or keep the stub for now. Which?
 2. **The application menu on Windows.** With the title bar hidden NSH does not show the menu bar. Add a menu button to the app's title bar that opens the same menus with `Menu.popup`?
-3. **The database guard.** OK to implement the profile-folder lookup and same-file check (W7)? Should the older Windows app's data folder `%LOCALAPPDATA%\Taxman\eBIRForms` be protected too? That adds to the three folders listed in the contract (`docs/plans/nsh-tsx-migration.md`, "The door").
+3. **The database guard.** Answered (2026-11-18): W7 is done; the older Windows app's folder `%LOCALAPPDATA%\Taxman\eBIRForms` is not protected (that app is being retired); in a test environment the NSH app's own data folder (`%LOCALAPPDATA%\dev.goldcoders.bir.nsh` on Windows) is protected, so no dev or test run opens the shipped app's database.
 4. **The EC2 image.** Which Windows edition is it? NSH names Windows 10 1809 and later and Windows 11; Server editions are not named and WebView2 may be absent. Is a display of at least 1920x1080 available over RDP?
 5. **Wording.** The sign-in recovery says "Mac login" on every platform (`screens/auth/SignIn.tsx:114`). Say "Windows Hello" or "your Windows sign-in" on Windows?
 6. **Print folder on Windows.** It holds a filled return and has no ACLs or sweep (`print.rs:231-236`, `302-305`). Accept per-user temp, or add both?

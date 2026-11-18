@@ -5,7 +5,9 @@
 //!   worker may start at all. The one way out of a dry run is the mock BIR server on loopback.
 //! * The **database guard** ([`database_refusal`]) refuses to open a database inside the owner's data
 //!   folders, by name and by device and inode. It is checked before every host call, so a lazy open can
-//!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`.
+//!   never get around it. The folders hang off the home folder of the account's real uid, not `$HOME`. In a
+//!   test environment the NSH app's own data folder is one of them ([`protected_folders_for`]): a dev, test or
+//!   agent run never opens the shipped app's real database.
 //!
 //! Both are plain functions over the environment and a list of folders, so their tests use temp folders and
 //! never touch a real path. Contract: `docs/plans/nsh-tsx-migration.md`, "The door".
@@ -191,13 +193,43 @@ pub fn account_home() -> Option<PathBuf> {
     }
 }
 
-/// The owner's protected folders, under the account's real home folder. `None` when that cannot be found.
+/// Where the NSH app keeps its own data (bir-core's `platform::data_dir` of the plain build): the default under
+/// `home` (macOS `Library/Application Support`, Windows `AppData\Local`, elsewhere `.local/share`), and where the
+/// variable the app reads (`LOCALAPPDATA` on Windows, an absolute `XDG_DATA_HOME` elsewhere off macOS) moves it.
+pub fn app_data_folders(home: &Path) -> Vec<PathBuf> {
+    let id = bir_core::platform::NSH_APP_ID;
+    let (default, moved) = if cfg!(target_os = "macos") {
+        (home.join("Library/Application Support"), None)
+    } else if cfg!(windows) {
+        (home.join("AppData/Local"), std::env::var_os("LOCALAPPDATA"))
+    } else {
+        (home.join(".local/share"), std::env::var_os("XDG_DATA_HOME"))
+    };
+    let mut folders = vec![default.join(id)];
+    if let Some(moved) = moved.map(PathBuf::from).filter(|path| path.is_absolute()) {
+        folders.push(moved.join(id));
+    }
+    folders
+}
+
+/// The folders the guard protects under `home`: the owner's ([`protected_folders`]), and in a test environment
+/// (`test_environment`) the NSH app's own data folders too ([`app_data_folders`]), so a dev, test or agent run never
+/// opens the shipped app's real database, even named. Outside a test environment that is the database the app opens.
+pub fn protected_folders_for(home: &Path, test_environment: bool) -> Vec<PathBuf> {
+    let mut folders = protected_folders(home).to_vec();
+    if test_environment {
+        folders.extend(app_data_folders(home));
+    }
+    folders
+}
+
+/// The protected folders, under the account's real home folder. `None` when that cannot be found.
 fn protected_folders_here() -> Option<Vec<PathBuf>> {
     #[cfg(test)]
     if let Some(folders) = TEST_PROTECTED.with(|slot| slot.borrow().clone()) {
         return Some(folders);
     }
-    account_home().map(|home| protected_folders(&home).to_vec())
+    account_home().map(|home| protected_folders_for(&home, crate::door::test_environment()))
 }
 
 #[cfg(test)]
@@ -1080,13 +1112,32 @@ mod tests {
             temp_env::with_var("HOME", Some(elsewhere.path()), || {
                 assert_eq!(account_home().as_deref(), Some(account.as_path()));
                 let folders = protected_folders_here().expect("folders");
-                assert_eq!(folders.len(), 3);
+                assert!(folders.len() >= 3, "{folders:?}");
                 for folder in folders {
                     assert!(folder.starts_with(&account), "{}", folder.display());
                     assert!(!folder.starts_with(elsewhere.path()), "{}", folder.display());
                 }
             })
         });
+    }
+
+    /// In a test environment the NSH app's own data folder (the shipped app's real database) is refused like the
+    /// owner's folders, by its default name under home; outside one it is the app's database and opens.
+    #[test]
+    fn a_test_environment_also_protects_the_apps_own_data_folder() {
+        let home = Home::new();
+        let own = app_data_folders(home.root.path());
+        assert!(!own.is_empty());
+        let default = own[0].join("bir_data.db");
+        assert!(default.starts_with(home.root.path()), "{}", default.display());
+        let in_test = protected_folders_for(home.root.path(), true);
+        let shipped = protected_folders_for(home.root.path(), false);
+        assert_eq!(shipped, protected_folders(home.root.path()).to_vec(), "outside a test environment: unchanged");
+        let why = database_refusal(&default, &in_test).expect("refused in a test environment");
+        assert!(why.contains("Refusing to open"), "{why}");
+        assert_eq!(database_refusal(&default, &shipped), None, "the shipped app opens its own database");
+        // A scratch database and the agents folder are untouched either way.
+        assert_eq!(database_refusal(&home.path("BuwizNsh/agents/door.db"), &in_test), None);
     }
 
     /// On Windows the guard verifies now: with nothing named, a scratch database opens and the owner's real data
