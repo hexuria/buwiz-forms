@@ -33,7 +33,8 @@ function PaletteHeading(props: { label: string }) {
 }
 
 export function Palette() {
-  keymap.bind({ down: () => movePalette(1), up: () => movePalette(-1) });
+  // "always": the search field has the focus, and its Up and Down move the list's highlight (NSH 0.6 leaves them to the field by default).
+  keymap.bind({ down: () => movePalette(1), up: () => movePalette(-1) }, { when: "always" });
   // The forms index is built as the palette opens, so the first typed letter filters at once like the rest.
   indexPalette();
   return (
