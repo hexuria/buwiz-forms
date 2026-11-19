@@ -73,7 +73,9 @@ pub mod env {
 }
 
 /// OS keychain entry for the test SFTP server password.
+#[cfg(not(target_os = "android"))]
 const KEYCHAIN_SERVICE: &str = "com.ebir.rust";
+#[cfg(not(target_os = "android"))]
 const KEYCHAIN_ACCOUNT: &str = "dev_sftp_password";
 
 /// File name of the separate dev database, next to the normal one.
