@@ -54,8 +54,12 @@ Packaged APKs are not debuggable, so `adb shell run-as` cannot write their
 private configuration. Bake synthetic-test defaults into the opted-in APK instead:
 
 ```sh
-BUWIZ_ANDROID_DEV=1 BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BIR_RELAY_URL=http://127.0.0.1:8787' nsh package --target android --abi x86_64
+CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true BUWIZ_ANDROID_DEV=1 BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BIR_RELAY_URL=http://127.0.0.1:8787' nsh package --target android --abi x86_64
 ```
+
+The sign-in bypass (`BIR_AUTH_BYPASS`) only exists in builds with
+`debug_assertions`, hence `CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true`; without it
+the app shows the real Buwiz sign-in.
 
 `BUWIZ_ANDROID_DEV_ENV` accepts the same allowlisted `KEY=VALUE` entries,
 separated by semicolons or newlines, with the same validation and 16 KiB limit.
