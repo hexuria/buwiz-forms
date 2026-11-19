@@ -1064,6 +1064,28 @@ export class FormSession {
     }
     if (Object.keys(s.pending).length) this.flush();
     else this.publish();
+    this.syncHostCase(k);
+  }
+
+  /**
+   * B20: a text box the host answered in another case or outer spaces takes the host's text once it
+   * is left (0605's official map capital()s name, address and line of business, so "Retail" is
+   * "RETAIL" in the draft's shown values). While the box has the keys it keeps what was typed —
+   * no caret jumps — and a refused edit keeps its typed text (B19).
+   */
+  private syncHostCase(k: string) {
+    const s = this.st;
+    if (!s.draft || this.reopening) return;
+    const kind = this.kindOf.get(k);
+    if (kind === "money" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
+    if (this.oneDates.has(k) || this.datePartKeys.has(k) || this.pools.has(k)) return;
+    if (s.rejected[k] !== undefined || s.unfixable.has(k) || this.isShut(k)) return;
+    const box = this.sValue.get(k);
+    if (!box) return;
+    const shown = untracked(box);
+    const host = String(s.values[k] ?? "");
+    if (shown === host || shown.trim().toLowerCase() !== host.trim().toLowerCase()) return;
+    box.set(this.shownText(k));
   }
 
   /** The part whose box has the keyboard now, or null: the page keeps that part's rows drawn wherever it scrolls. */

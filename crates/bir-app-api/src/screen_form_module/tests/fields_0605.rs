@@ -440,3 +440,16 @@ fn the_official_lists_reach_the_page_as_options() {
     // And a PT ATC is on it.
     assert!(atc_options.iter().any(|o| o["value"] == "PT010"));
 }
+
+/// B20: the official map uppercases the line-of-business text (capital()), so
+/// the page can take the host's casing when the box is left; the draft keeps
+/// what was typed, the field map and the print show the capitals.
+#[test]
+fn the_line_of_business_prints_in_capitals() {
+    setup();
+    let mut draft = open("0605", 1)["draft"].clone();
+    draft["line_of_business"] = json!("Retail");
+    let map = agent::field_map(kind_of("0605").expect("0605 kind"), &draft)
+        .expect("0605 field map");
+    assert_eq!(map["frm0605:txtLineBus"], "RETAIL");
+}

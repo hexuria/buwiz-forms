@@ -229,3 +229,36 @@ test("B2: the ATC list follows the tax type — PT offers only PT ATCs and clear
   expect((s.draft() as { atc?: unknown })?.atc ?? null).toBeNull();
   s.dispose();
 });
+
+test("B20: a box the host answers in capitals takes them on blur; one it does not keeps its case", async () => {
+  // 0605's official map capital()s the line-of-business text: the box keeps
+  // "Retail" while it is typed, takes "RETAIL" when left, and a reopened
+  // return shows the same — the box, the reopen and the print agree.
+  const target = at("0605", 2024, 1);
+  const lob = "frm0605:txtLineBus";
+  const s = await opened(target);
+  s.edit(lob, "Retail");
+  await s.idle();
+  // While the box could still have the keys it shows what was typed.
+  expect(s.shownOf(lob)).toBe("Retail");
+  s.blur(lob);
+  await s.idle();
+  expect(s.shownOf(lob)).toBe("RETAIL");
+  expect(s.valueOf(lob)).toBe("RETAIL");
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  const again = await opened(target);
+  expect(again.shownOf(lob)).toBe("RETAIL");
+  again.dispose();
+  // 2551Q's item-17 specify box is an ordinary text box its host does not
+  // touch: the same typing stays as typed.
+  const q = await opened(at("2551Q", 2025, 1));
+  const qBox = "frm2551Qv2018:txt17Specify";
+  q.edit(qBox, "TaX TrEaTy ReLiEf");
+  await q.idle();
+  q.blur(qBox);
+  await q.idle();
+  expect(q.shownOf(qBox)).toBe("TaX TrEaTy ReLiEf");
+  q.dispose();
+});
