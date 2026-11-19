@@ -29,8 +29,9 @@ Answers (JSON):
 | Status | Body | The app |
 | --- | --- | --- |
 | `202` | `{"status":"accepted","receipt_id":"relay-…","sha256":"…","forwarded":"mock-bir"\|"none",…}` | the return is **Submitted** |
-| `4xx` | `{"status":"rejected","error":"…"}` | rejected (`TransportError::Rejected`), not retried as sent |
-| `5xx` | `{"status":"failed","error":"…"}` | transport error (`TransportError::Http`); after PUT-start the claim stays pending for manual reconciliation |
+| `4xx` | `{"status":"rejected","error":"…"}` | refused, nothing kept (`TransportError::RelayRefused`): the claim is let go and the return goes back to **Draft** with the reason |
+| `503` | `{"status":"failed","error":"…"}` | unavailable, nothing kept (`TransportError::RelayUnavailable`): the claim is let go, the return stays **Queued** and is retried after 1, 2, 4, 8 minutes (the fifth failure returns it to Draft) |
+| other `5xx` (`502` = the mock BIR hand-off failed) | `{"status":"failed","error":"…"}` | outcome unknown (`TransportError::Http`): the file may have gone on, so the return keeps its claim and is never sent again without a person |
 
 `202` means the relay holds the file. Confirmation from the BIR (the email
 receipt) stays outside this contract, as on the desktop.
@@ -38,6 +39,9 @@ receipt) stays outside this contract, as on the desktop.
 ### `GET /v1/health`
 
 `200 {"ok":true,"mock":true}`.
+
+The app asks it before it claims a queued return: a relay that does not answer
+there leaves the return Queued, unclaimed, and retried after the back-off.
 
 ### Android development APK: private dev.env
 

@@ -64,6 +64,36 @@ pub enum TransportError {
     Config(String),
     #[error("submission rejected by server")]
     Rejected,
+    /// The relay answered 4xx: it refused the file and kept nothing (docs/relay.md). Retrying the same file will not help.
+    #[error("the relay refused the submission: {0}")]
+    RelayRefused(String),
+    /// The relay could not be reached, or answered 503: it did not take the file, so nothing went on. Safe to retry.
+    #[error("the relay is unavailable: {0}")]
+    RelayUnavailable(String),
+}
+
+impl TransportError {
+    /// The relay proved it did not take the file (refused or unavailable), so the claim on the return can be let go.
+    /// Every other failure after the upload started may have delivered it and keeps the claim.
+    pub fn relay_did_not_accept(&self) -> bool {
+        matches!(self, Self::RelayRefused(_) | Self::RelayUnavailable(_))
+    }
+
+    /// A short name for logs.
+    pub fn category(&self) -> &'static str {
+        match self {
+            Self::Sftp(_) => "sftp",
+            Self::Ssh(_) => "ssh",
+            Self::Dispatcher(_) => "dispatcher",
+            Self::Crypto(_) => "crypto",
+            Self::Http(_) => "http",
+            Self::Io(_) => "io",
+            Self::Config(_) => "config",
+            Self::Rejected => "rejected",
+            Self::RelayRefused(_) => "relay_refused",
+            Self::RelayUnavailable(_) => "relay_unavailable",
+        }
+    }
 }
 
 impl From<reqwest::Error> for TransportError {
@@ -129,6 +159,11 @@ impl SftpEndpointSource {
     pub fn is_dry_run(self) -> bool {
         matches!(self, Self::DryRun)
     }
+
+    /// The send goes to the local mock relay, not to BIR.
+    pub fn is_relay(self) -> bool {
+        matches!(self, Self::Relay)
+    }
 }
 
 /// Result of resolving where to send an IAF file.
@@ -181,13 +216,23 @@ pub fn loopback_relay_url(raw: &str) -> Result<String, TransportError> {
     if url.scheme() != "http" {
         return refuse("only http:// is accepted");
     }
-    let host = url.host_str().unwrap_or_default().trim_start_matches('[').trim_end_matches(']');
+    let host = url
+        .host_str()
+        .unwrap_or_default()
+        .trim_start_matches('[')
+        .trim_end_matches(']');
     let loopback = host.eq_ignore_ascii_case("localhost")
-        || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback());
+        || host
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback());
     if !loopback {
         return refuse("the host is not loopback");
     }
-    if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
         return refuse("no credentials, query or fragment");
     }
     if !matches!(url.path(), "" | "/") {
@@ -197,11 +242,25 @@ pub fn loopback_relay_url(raw: &str) -> Result<String, TransportError> {
 }
 
 /// `POST {url}/v1/submissions` with the encrypted IAF file as the body (docs/relay.md). `Ok` only on 202 with
-/// `{"status":"accepted"}`; a 4xx answer is [`TransportError::Rejected`].
-async fn relay_store(url: &str, folder: &str, filename: &str, payload: &[u8]) -> Result<(), TransportError> {
+/// `{"status":"accepted"}`. A 4xx answer is [`TransportError::RelayRefused`]; no connection or a 503 answer is
+/// [`TransportError::RelayUnavailable`] (the relay took nothing). Anything else (a timeout, a 502 from a failed hand-off,
+/// a 202 that does not say accepted) leaves the outcome unknown: [`TransportError::Http`].
+async fn relay_store(
+    url: &str,
+    folder: &str,
+    filename: &str,
+    payload: &[u8],
+) -> Result<(), TransportError> {
     let name = iaf_basename(filename);
     let digest = hex::encode(Sha256::digest(payload));
-    info!(source = "relay", relay = url, folder, filename = name, payload_len = payload.len(), "Relay PUT");
+    info!(
+        source = "relay",
+        relay = url,
+        folder,
+        filename = name,
+        payload_len = payload.len(),
+        "Relay PUT"
+    );
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -215,15 +274,34 @@ async fn relay_store(url: &str, folder: &str, filename: &str, payload: &[u8]) ->
         .header("x-relay-sha256", &digest)
         .body(payload.to_vec())
         .send()
-        .await?;
+        .await
+        .map_err(|error| {
+            if error.is_connect() {
+                TransportError::RelayUnavailable(error.to_string())
+            } else {
+                TransportError::from(error)
+            }
+        })?;
     let status = response.status();
-    let body: serde_json::Value = serde_json::from_slice(&response.bytes().await?).unwrap_or_default();
+    let body: serde_json::Value =
+        serde_json::from_slice(&response.bytes().await?).unwrap_or_default();
+    let said = || {
+        body["error"]
+            .as_str()
+            .map_or_else(|| status.to_string(), |error| format!("{status}: {error}"))
+    };
     if status.is_client_error() {
         warn!(%status, ?body, "relay refused the submission");
-        return Err(TransportError::Rejected);
+        return Err(TransportError::RelayRefused(said()));
+    }
+    if status == reqwest::StatusCode::SERVICE_UNAVAILABLE {
+        warn!(%status, ?body, "relay is unavailable");
+        return Err(TransportError::RelayUnavailable(said()));
     }
     if status != reqwest::StatusCode::ACCEPTED || body["status"] != "accepted" {
-        return Err(TransportError::Http(format!("relay answered {status}: {body}")));
+        return Err(TransportError::Http(format!(
+            "relay answered {status}: {body}"
+        )));
     }
     info!(receipt = %body["receipt_id"], "Relay accepted the submission");
     Ok(())
@@ -407,7 +485,12 @@ pub async fn resolve_sftp_endpoint(
     if let Some(url) = relay_url() {
         let url = url?;
         let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
-        info!(source = "relay", relay = url.as_str(), folder = folder.as_str(), "Using the local mock relay");
+        info!(
+            source = "relay",
+            relay = url.as_str(),
+            folder = folder.as_str(),
+            "Using the local mock relay"
+        );
         return Ok(ResolvedSftpTarget::Relay { url, folder });
     }
     if sftp_dry_run_requested() {
@@ -839,8 +922,33 @@ pub(crate) async fn open_iaf_session(
         ResolvedSftpTarget::Live { endpoint, source } => {
             open_iaf_session_with_source(form_type, endpoint, source).await
         }
-        ResolvedSftpTarget::Relay { url, folder } => Ok(relay_session(url, folder)),
+        ResolvedSftpTarget::Relay { url, folder } => {
+            relay_health(&url).await?;
+            Ok(relay_session(url, folder))
+        }
     }
+}
+
+/// `GET {url}/v1/health` before a return is claimed: a relay that is down fails here, where the worker can retry
+/// later, instead of after the claim.
+async fn relay_health(url: &str) -> Result<(), TransportError> {
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+    let response = client
+        .get(format!("{url}/v1/health"))
+        .send()
+        .await
+        .map_err(|error| TransportError::RelayUnavailable(error.to_string()))?;
+    if !response.status().is_success() {
+        return Err(TransportError::RelayUnavailable(format!(
+            "health answered {}",
+            response.status()
+        )));
+    }
+    Ok(())
 }
 
 fn relay_session(url: String, folder: String) -> IafSftpSession {
@@ -982,7 +1090,9 @@ pub async fn submit_sftp_target(
             };
             session.store(filename, payload).await
         }
-        ResolvedSftpTarget::Relay { url, folder } => relay_session(url, folder).store(filename, payload).await,
+        ResolvedSftpTarget::Relay { url, folder } => {
+            relay_session(url, folder).store(filename, payload).await
+        }
         ResolvedSftpTarget::Live { endpoint, source } => {
             let session = open_iaf_session_with_source(form_type, endpoint, source).await?;
             session.store(filename, payload).await
@@ -994,9 +1104,18 @@ pub async fn submit_sftp_target(
 mod tests {
     #[test]
     fn only_a_loopback_http_origin_is_a_relay() {
-        assert_eq!(loopback_relay_url("http://127.0.0.1:8787/").unwrap(), "http://127.0.0.1:8787");
-        assert_eq!(loopback_relay_url("http://[::1]:8787").unwrap(), "http://[::1]:8787");
-        assert_eq!(loopback_relay_url("http://localhost:8787").unwrap(), "http://localhost:8787");
+        assert_eq!(
+            loopback_relay_url("http://127.0.0.1:8787/").unwrap(),
+            "http://127.0.0.1:8787"
+        );
+        assert_eq!(
+            loopback_relay_url("http://[::1]:8787").unwrap(),
+            "http://[::1]:8787"
+        );
+        assert_eq!(
+            loopback_relay_url("http://localhost:8787").unwrap(),
+            "http://localhost:8787"
+        );
         for refused in [
             "https://127.0.0.1:8787",
             "http://relay.buwiz.com",
@@ -1006,7 +1125,10 @@ mod tests {
             "http://127.0.0.1:8787?x=1",
             "not a url",
         ] {
-            assert!(matches!(loopback_relay_url(refused), Err(TransportError::Config(_))), "{refused}");
+            assert!(
+                matches!(loopback_relay_url(refused), Err(TransportError::Config(_))),
+                "{refused}"
+            );
         }
     }
 

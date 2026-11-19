@@ -37,6 +37,8 @@ export interface HostDeps {
    * first) and settles once the sheet is up. Absent where previews are windows.
    */
   nativePreview?(key: string): Promise<void>;
+  /** Takes down the system's print sheet if it is up (with `nativePreview`). */
+  dismissNative?(): void;
   /** The Rust side: the window of `key` is gone (it deletes the files). */
   print: { closed(key: string): void };
   previews: { apply(event: PrintEvent, title?: string): void; get(key: string): unknown; remove(key: string): void };
@@ -63,6 +65,8 @@ export function createPreviewHost(deps: HostDeps) {
   /** The preview of each form code, as the Rust side holds it. */
   const owners = new Map<string, Owner>();
   const androidPreviews = new Map<string, object>();
+  /** The forms whose system print sheet is being prepared or is up (a phone). A lock takes them away. */
+  const natives = new Set<string>();
   let hooked = false;
 
   /** The preview of `key` is over: the host forgets it and the Rust side deletes its files. */
@@ -91,20 +95,40 @@ export function createPreviewHost(deps: HostDeps) {
     deps.windows.get(owner.id)?.close();
   }
 
-  /** A phone that previews in the system's print sheet: the sheet comes up with the PDF, then the Rust side forgets the preview. */
+  /**
+   * A phone that previews in the system's print sheet: the sheet comes up with the PDF, then the Rust side forgets the preview. A lock
+   * while the PDF is made ends it: the Rust side forgets it (so it refuses to show the sheet), and a sheet that came up anyway is taken down.
+   */
   function openNative(event: PrintEvent, show: (key: string) => Promise<void>): void {
     if (!deps.chromeVisible()) {
       deps.print.closed(event.key);
       return;
     }
+    natives.add(event.key);
     deps.toast("Preparing the print preview...", "printer");
+    const ended = () => !natives.has(event.key) || !deps.chromeVisible();
     show(event.key).then(
-      () => deps.print.closed(event.key),
-      (error: unknown) => {
+      () => {
+        if (ended()) deps.dismissNative?.();
         deps.print.closed(event.key);
-        deps.toast(`Print preview could not open: ${deps.errorText(error)}`, "triangle-alert");
+      },
+      (error: unknown) => {
+        const quiet = ended();
+        natives.delete(event.key);
+        deps.print.closed(event.key);
+        if (!quiet) deps.toast(`Print preview could not open: ${deps.errorText(error)}`, "triangle-alert");
       },
     );
+  }
+
+  /** Every system print sheet ends: the ones being prepared never show, the one up is taken down. */
+  function endNative(): void {
+    if (!deps.nativePreview) return;
+    for (const key of [...natives]) {
+      natives.delete(key);
+      deps.print.closed(key);
+    }
+    deps.dismissNative?.();
   }
 
   function open(event: PrintEvent): void {
@@ -181,6 +205,7 @@ export function createPreviewHost(deps: HostDeps) {
       for (const key of androidPreviews.keys()) deps.print.closed(key);
       androidPreviews.clear();
       for (const key of [...owners.keys()]) end(key);
+      endNative();
     },
     /** The page on screen is now `here` (a return's identity, or null): the previews of other returns end. */
     leftReturn(here: string | null): void {

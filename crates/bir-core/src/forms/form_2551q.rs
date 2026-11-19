@@ -304,6 +304,11 @@ pub struct Form2551QDraft {
     /// part of the queued fingerprint.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub submitted_dry_run: bool,
+    /// The worker's send of this return went to the local mock relay
+    /// (docs/relay.md), not to BIR: set with `submitted_dry_run`, cleared with
+    /// it. Absent (false) on every other send.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub submitted_via_relay: bool,
     #[serde(default)]
     pub confirmed_at: Option<String>,
     #[serde(default)]
@@ -485,6 +490,7 @@ impl Form2551QDraft {
             updated_at: now,
             submitted_at: None,
             submitted_dry_run: false,
+            submitted_via_relay: false,
             confirmed_at: None,
             submission_filename: None,
             receipt_id: None,
@@ -1136,6 +1142,7 @@ impl Form2551QDraft {
             QueueAuthSource::Gui,
         ));
         self.submitted_dry_run = false;
+        self.submitted_via_relay = false;
         self.submission_claim_token = None;
         self.submission_claimed_at = None;
         self.submission_claim_lease_until = None;
@@ -1169,6 +1176,7 @@ impl Form2551QDraft {
         self.submitted_at = Some(now.to_rfc3339());
         self.submission_filename = Some(filename);
         self.submitted_dry_run = dry_run;
+        self.submitted_via_relay = false;
         self.submission_attempts = 0;
         self.next_retry_at = None;
         self.last_error = None;
@@ -1232,6 +1240,7 @@ impl Form2551QDraft {
         self.profile_baseline.clear();
         self.submitted_at = None;
         self.submitted_dry_run = false;
+        self.submitted_via_relay = false;
         self.confirmed_at = None;
         self.receipt_id = None;
         self.submission_filename = None;

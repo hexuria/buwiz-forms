@@ -60,7 +60,8 @@ impl MockBirTarget {
     /// Reads `app.env` (`BIR_SFTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_HOST_KEY_SHA256`). Refuses a host that
     /// is not `127.0.0.1` or `::1`.
     pub fn from_app_env(path: &Path) -> Result<Self, String> {
-        let text = std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
         let value = |key: &str| {
             text.lines()
                 .filter_map(|line| line.split_once('='))
@@ -70,11 +71,15 @@ impl MockBirTarget {
         };
         let host = value("BIR_SFTP_HOST")?;
         if host != "127.0.0.1" && host != "::1" {
-            return Err(format!("the mock BIR host {host} is not loopback; refusing to hand anything on"));
+            return Err(format!(
+                "the mock BIR host {host} is not loopback; refusing to hand anything on"
+            ));
         }
         Ok(Self {
             host,
-            port: value("BIR_SFTP_PORT")?.parse().map_err(|_| "BIR_SFTP_PORT is not a port".to_string())?,
+            port: value("BIR_SFTP_PORT")?
+                .parse()
+                .map_err(|_| "BIR_SFTP_PORT is not a port".to_string())?,
             username: value("BIR_SFTP_USERNAME")?,
             password: value("BIR_SFTP_PASSWORD")?,
             host_key_sha256: value("BIR_SFTP_HOST_KEY_SHA256")?,
@@ -116,7 +121,10 @@ impl MockRelay {
     /// Listens on `addr`, which must be loopback.
     pub async fn start(addr: SocketAddr, config: RelayConfig) -> std::io::Result<Self> {
         if !addr.ip().is_loopback() {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the mock relay listens on loopback only"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "the mock relay listens on loopback only",
+            ));
         }
         let listener = TcpListener::bind(addr).await?;
         let addr = listener.local_addr()?;
@@ -159,7 +167,10 @@ struct Request {
 
 impl Request {
     fn header(&self, name: &str) -> Option<&str> {
-        self.headers.iter().find(|(key, _)| key.eq_ignore_ascii_case(name)).map(|(_, value)| value.as_str())
+        self.headers
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
     }
 }
 
@@ -173,7 +184,10 @@ async fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
             return Err("request head too large".into());
         }
         let mut chunk = [0u8; 4096];
-        let read = stream.read(&mut chunk).await.map_err(|error| error.to_string())?;
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .map_err(|error| error.to_string())?;
         if read == 0 {
             return Err("connection closed before the request head ended".into());
         }
@@ -200,17 +214,29 @@ async fn read_request(stream: &mut TcpStream) -> Result<Request, String> {
     let mut body = buffer[head_end + 4..].to_vec();
     while body.len() < length {
         let mut chunk = vec![0u8; (length - body.len()).min(64 * 1024)];
-        let read = stream.read(&mut chunk).await.map_err(|error| error.to_string())?;
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .map_err(|error| error.to_string())?;
         if read == 0 {
             return Err("connection closed before the body ended".into());
         }
         body.extend_from_slice(&chunk[..read]);
     }
     body.truncate(length);
-    Ok(Request { method, path, headers, body })
+    Ok(Request {
+        method,
+        path,
+        headers,
+        body,
+    })
 }
 
-async fn respond(stream: &mut TcpStream, status: u16, body: serde_json::Value) -> Result<(), String> {
+async fn respond(
+    stream: &mut TcpStream,
+    status: u16,
+    body: serde_json::Value,
+) -> Result<(), String> {
     let reason = match status {
         200 => "OK",
         202 => "Accepted",
@@ -225,8 +251,14 @@ async fn respond(stream: &mut TcpStream, status: u16, body: serde_json::Value) -
         "HTTP/1.1 {status} {reason}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
         body.len()
     );
-    stream.write_all(head.as_bytes()).await.map_err(|error| error.to_string())?;
-    stream.write_all(body.as_bytes()).await.map_err(|error| error.to_string())?;
+    stream
+        .write_all(head.as_bytes())
+        .await
+        .map_err(|error| error.to_string())?;
+    stream
+        .write_all(body.as_bytes())
+        .await
+        .map_err(|error| error.to_string())?;
     stream.shutdown().await.map_err(|error| error.to_string())
 }
 
@@ -235,7 +267,9 @@ fn plain_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 200
         && !value.starts_with('.')
-        && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        && value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 /// An IAF file name (`{TIN}-{form}-{period}#{email}#.xml`): printable ASCII with no path separator, not starting with a dot.
@@ -243,32 +277,53 @@ fn file_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 255
         && !value.starts_with('.')
-        && value.chars().all(|c| c.is_ascii_graphic() && !matches!(c, '/' | '\\' | ':'))
+        && value
+            .chars()
+            .all(|c| c.is_ascii_graphic() && !matches!(c, '/' | '\\' | ':'))
 }
 
 async fn serve(mut stream: TcpStream, config: &RelayConfig) -> Result<(), String> {
     let request = match read_request(&mut stream).await {
         Ok(request) => request,
         // The app's send guard only checks that the port answers: it connects and closes without a request.
-        Err(error) if error.starts_with("connection closed before the request head") => return Ok(()),
+        Err(error) if error.starts_with("connection closed before the request head") => {
+            return Ok(());
+        }
         Err(error) => return Err(error),
     };
     let (status, body) = match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/v1/health") => (200, serde_json::json!({ "ok": true, "mock": true })),
         ("POST", "/v1/submissions") => submit(&request, config).await,
-        _ => (404, serde_json::json!({ "status": "rejected", "error": "no such route" })),
+        _ => (
+            404,
+            serde_json::json!({ "status": "rejected", "error": "no such route" }),
+        ),
     };
-    println!("[mock-relay] {} {} -> {status} {body}", request.method, request.path);
+    println!(
+        "[mock-relay] {} {} -> {status} {body}",
+        request.method, request.path
+    );
     respond(&mut stream, status, body).await
 }
 
 async fn submit(request: &Request, config: &RelayConfig) -> (u16, serde_json::Value) {
-    let reject = |status: u16, error: &str| (status, serde_json::json!({ "status": "rejected", "error": error }));
+    let reject = |status: u16, error: &str| {
+        (
+            status,
+            serde_json::json!({ "status": "rejected", "error": error }),
+        )
+    };
     let form = request.header("x-relay-form").unwrap_or_default();
     let filename = request.header("x-relay-filename").unwrap_or_default();
-    let claimed = request.header("x-relay-sha256").unwrap_or_default().to_ascii_lowercase();
+    let claimed = request
+        .header("x-relay-sha256")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if !plain_name(form) || !file_name(filename) {
-        return reject(400, "x-relay-form must be a plain name and x-relay-filename a file name, never a path");
+        return reject(
+            400,
+            "x-relay-form must be a plain name and x-relay-filename a file name, never a path",
+        );
     }
     if request.body.is_empty() {
         return reject(400, "empty body");
@@ -280,20 +335,38 @@ async fn submit(request: &Request, config: &RelayConfig) -> (u16, serde_json::Va
     match config.failure {
         RelayFailure::Reject => return reject(422, "the mock relay is set to reject"),
         RelayFailure::Unavailable => {
-            return (503, serde_json::json!({ "status": "failed", "error": "the mock relay is set to be unavailable" }));
+            return (
+                503,
+                serde_json::json!({ "status": "failed", "error": "the mock relay is set to be unavailable" }),
+            );
         }
         RelayFailure::None => {}
     }
     let inbox = config.root.join("inbox").join(form);
-    if let Err(error) = std::fs::create_dir_all(&inbox).and_then(|()| std::fs::write(inbox.join(filename), &request.body)) {
-        return (503, serde_json::json!({ "status": "failed", "error": format!("could not keep the file: {error}") }));
+    if let Err(error) = std::fs::create_dir_all(&inbox)
+        .and_then(|()| std::fs::write(inbox.join(filename), &request.body))
+    {
+        return (
+            503,
+            serde_json::json!({ "status": "failed", "error": format!("could not keep the file: {error}") }),
+        );
     }
     let forwarded = match &config.mock_bir {
         None => "none",
-        Some(mock) => match crate::transport::submit_sftp_target(form, filename, &request.body, mock.target(form)).await {
+        Some(mock) => match crate::transport::submit_sftp_target(
+            form,
+            filename,
+            &request.body,
+            mock.target(form),
+        )
+        .await
+        {
             Ok(()) => "mock-bir",
             Err(error) => {
-                return (502, serde_json::json!({ "status": "failed", "error": format!("mock BIR hand-off failed: {error}") }));
+                return (
+                    502,
+                    serde_json::json!({ "status": "failed", "error": format!("mock BIR hand-off failed: {error}") }),
+                );
             }
         },
     };
@@ -309,8 +382,12 @@ async fn submit(request: &Request, config: &RelayConfig) -> (u16, serde_json::Va
         "mock": true,
     });
     let receipts = config.root.join("receipts");
-    let _ = std::fs::create_dir_all(&receipts)
-        .and_then(|()| std::fs::write(receipts.join(format!("{receipt_id}.json")), receipt.to_string()));
+    let _ = std::fs::create_dir_all(&receipts).and_then(|()| {
+        std::fs::write(
+            receipts.join(format!("{receipt_id}.json")),
+            receipt.to_string(),
+        )
+    });
     (202, receipt)
 }
 
@@ -321,32 +398,85 @@ mod tests {
 
     async fn relay(failure: RelayFailure) -> (MockRelay, tempfile::TempDir) {
         let dir = tempfile::tempdir().unwrap();
-        let config = RelayConfig { root: dir.path().to_path_buf(), failure, mock_bir: None };
-        (MockRelay::start("127.0.0.1:0".parse().unwrap(), config).await.unwrap(), dir)
+        let config = RelayConfig {
+            root: dir.path().to_path_buf(),
+            failure,
+            mock_bir: None,
+        };
+        (
+            MockRelay::start("127.0.0.1:0".parse().unwrap(), config)
+                .await
+                .unwrap(),
+            dir,
+        )
     }
 
     fn target(relay: &MockRelay) -> ResolvedSftpTarget {
-        ResolvedSftpTarget::Relay { url: relay.url(), folder: "1701Qv2018".into() }
+        ResolvedSftpTarget::Relay {
+            url: relay.url(),
+            folder: "1701Qv2018".into(),
+        }
     }
 
     #[tokio::test]
     async fn an_accepted_file_is_kept_byte_for_byte_with_a_receipt() {
         let (relay, dir) = relay(RelayFailure::None).await;
         let name = "000123453000-1701Qv2018-122025#juana.santos@example.com#.xml";
-        submit_sftp_target("1701Qv2018", &format!("/tmp/{name}"), b"iaf-bytes", target(&relay)).await.unwrap();
+        submit_sftp_target(
+            "1701Qv2018",
+            &format!("/tmp/{name}"),
+            b"iaf-bytes",
+            target(&relay),
+        )
+        .await
+        .unwrap();
         let kept = std::fs::read(dir.path().join("inbox/1701Qv2018").join(name)).unwrap();
         assert_eq!(kept, b"iaf-bytes");
-        assert_eq!(std::fs::read_dir(dir.path().join("receipts")).unwrap().count(), 1);
+        assert_eq!(
+            std::fs::read_dir(dir.path().join("receipts"))
+                .unwrap()
+                .count(),
+            1
+        );
     }
 
     #[tokio::test]
-    async fn a_rejecting_relay_is_a_rejection_and_an_unavailable_one_an_http_error() {
+    async fn a_rejecting_relay_is_a_refusal_and_an_unavailable_or_absent_one_is_unavailable() {
         let (relay, _dir) = relay(RelayFailure::Reject).await;
-        let error = submit_sftp_target("1701Qv2018", "a.xml", b"x", target(&relay)).await.unwrap_err();
-        assert!(matches!(error, TransportError::Rejected), "{error:?}");
+        let error = submit_sftp_target("1701Qv2018", "a.xml", b"x", target(&relay))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, TransportError::RelayRefused(_)),
+            "{error:?}"
+        );
+        assert!(error.relay_did_not_accept());
         let (relay, _dir) = relay_unavailable().await;
-        let error = submit_sftp_target("1701Qv2018", "a.xml", b"x", target(&relay)).await.unwrap_err();
-        assert!(matches!(error, TransportError::Http(_)), "{error:?}");
+        let error = submit_sftp_target("1701Qv2018", "a.xml", b"x", target(&relay))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, TransportError::RelayUnavailable(_)),
+            "{error:?}"
+        );
+        assert!(error.relay_did_not_accept());
+        // Nothing listening: the connection is refused, so nothing was sent.
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let absent = crate::transport::ResolvedSftpTarget::Relay {
+            url: format!("http://127.0.0.1:{port}"),
+            folder: "1701Qv2018".into(),
+        };
+        let error = submit_sftp_target("1701Qv2018", "a.xml", b"x", absent)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, TransportError::RelayUnavailable(_)),
+            "{error:?}"
+        );
     }
 
     async fn relay_unavailable() -> (MockRelay, tempfile::TempDir) {
@@ -360,7 +490,9 @@ mod tests {
         assert!(!plain_name("a/b"));
         assert!(!plain_name(".hidden"));
         assert!(!plain_name(""));
-        assert!(file_name("000123453000-1601Cv2018-102026#juana.santos@example.com#.xml"));
+        assert!(file_name(
+            "000123453000-1601Cv2018-102026#juana.santos@example.com#.xml"
+        ));
         assert!(!file_name("../x.xml"));
         assert!(!file_name("a/b.xml"));
         assert!(!file_name("a b.xml"));
@@ -371,7 +503,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("app.env");
         let env = |host: &str| {
-            format!("BIR_SFTP_HOST={host}\nBIR_SFTP_PORT=2222\nBIR_SFTP_USERNAME=u\nBIR_SFTP_PASSWORD=p\nBIR_SFTP_HOST_KEY_SHA256=abc\n")
+            format!(
+                "BIR_SFTP_HOST={host}\nBIR_SFTP_PORT=2222\nBIR_SFTP_USERNAME=u\nBIR_SFTP_PASSWORD=p\nBIR_SFTP_HOST_KEY_SHA256=abc\n"
+            )
         };
         std::fs::write(&file, env("127.0.0.1")).unwrap();
         assert_eq!(MockBirTarget::from_app_env(&file).unwrap().port, 2222);

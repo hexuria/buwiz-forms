@@ -31,27 +31,51 @@ fn parse_args() -> Result<(SocketAddr, RelayConfig), String> {
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
         match arg.as_str() {
-            "--port" => port = value()?.parse().map_err(|_| "--port needs a number".to_string())?,
-            "--bind" => ip = value()?.parse().map_err(|_| "--bind needs an IP".to_string())?,
+            "--port" => {
+                port = value()?
+                    .parse()
+                    .map_err(|_| "--port needs a number".to_string())?
+            }
+            "--bind" => {
+                ip = value()?
+                    .parse()
+                    .map_err(|_| "--bind needs an IP".to_string())?
+            }
             "--dir" => root = PathBuf::from(value()?),
             "--mock-bir" => env_file = Some(PathBuf::from(value()?)),
             "--no-forward" => forward = false,
-            "--fail" => failure = RelayFailure::parse(&value()?).ok_or("--fail: none | reject | unavailable")?,
+            "--fail" => {
+                failure =
+                    RelayFailure::parse(&value()?).ok_or("--fail: none | reject | unavailable")?
+            }
             "-h" | "--help" => return Err(USAGE.to_string()),
             other => return Err(format!("unknown option {other}\n\n{USAGE}")),
         }
     }
     if !ip.is_loopback() {
-        return Err(format!("--bind {ip} is not loopback; the mock relay never listens elsewhere"));
+        return Err(format!(
+            "--bind {ip} is not loopback; the mock relay never listens elsewhere"
+        ));
     }
     let mock_bir = if !forward {
         None
     } else {
         let explicit = env_file.is_some();
         let file = env_file.unwrap_or_else(|| PathBuf::from("target/mock-bir/app.env"));
-        if explicit || file.exists() { Some(MockBirTarget::from_app_env(&file)?) } else { None }
+        if explicit || file.exists() {
+            Some(MockBirTarget::from_app_env(&file)?)
+        } else {
+            None
+        }
     };
-    Ok((SocketAddr::new(ip, port), RelayConfig { root, failure, mock_bir }))
+    Ok((
+        SocketAddr::new(ip, port),
+        RelayConfig {
+            root,
+            failure,
+            mock_bir,
+        },
+    ))
 }
 
 #[tokio::main]
