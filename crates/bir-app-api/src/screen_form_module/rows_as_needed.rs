@@ -194,7 +194,7 @@ fn date_part_refusal(part: DatePart, value: &Value) -> Option<String> {
 /// The page's own message for a date that is not one (form_page.js
 /// `DATE_ERROR`), so the page and the host read the same.
 pub(super) const DATE_ERROR: &str =
-    "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023";
+    "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.";
 
 /// Whether month/day/year make a date the page's `parseTypedDate` reads: a
 /// real calendar day of a year 1900-2100.

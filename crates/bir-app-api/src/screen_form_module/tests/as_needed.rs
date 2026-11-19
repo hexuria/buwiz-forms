@@ -2209,7 +2209,7 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         // form_page.js is frozen with its earlier wording).
         assert_eq!(
             rows_as_needed::DATE_ERROR,
-            "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023"
+            "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023."
         );
         for bad in [
             json!({ keys[0]: "13" }),

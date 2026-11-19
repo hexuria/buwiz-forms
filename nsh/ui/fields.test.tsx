@@ -68,9 +68,9 @@ for (const size of SIZES) {
     expect(app.value("id:kit-date")).toBe("Dec 10, 2020");
     await app.clear("id:kit-date");
     await app.type("id:kit-date", "13/45");
-    expect(app.texts().some((t) => t.startsWith("Enter a valid date"))).toBe(false);
+    expect(app.texts().some((t) => t.startsWith("Type the date as MM/DD/YYYY"))).toBe(false);
     await app.type("id:kit-name", " ");
-    expect(app.texts().some((t) => t.startsWith("Enter a valid date"))).toBe(true);
+    expect(app.texts().some((t) => t.startsWith("Type the date as MM/DD/YYYY"))).toBe(true);
     await app.type("id:kit-code", "123456");
     expect(readout(app, "PIN digits:")).toBe("PIN digits: 0 | Code complete: 123456");
     await app.type("id:kit-pin", "4321");

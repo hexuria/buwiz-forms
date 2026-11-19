@@ -35,7 +35,7 @@ export const MONTHS_LONG: readonly string[] = [
 ];
 
 /** What a date box says when its text is not a date. */
-export const DATE_ERROR = "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023";
+export const DATE_ERROR = "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.";
 
 /** ISO date (YYYY-MM-DD) in local time. */
 export function isoDate(date: Date): string {
