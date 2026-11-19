@@ -129,13 +129,13 @@ test("F3-4: every write through the door is told to the page (the frame drops it
   await s.idle();
   expect(h.said.writes).toContain("screen_form_save");
   const row = s.row("1:7")();
-  const ask = row.asks.find((a) => a.control === "choice");
-  if (ask) {
-    s.pickAsk(ask.fact, ask.choices[0].value);
-    s.saveAsk(ask.fact);
-    await s.idle();
-    expect(h.said.writes).toContain("set_year_facts");
-  }
+  // Juana Santos has no income type for the year, so Item 13's row asks it in a card.
+  const ask = row.asks.find((a) => a.control === "choice")!;
+  expect(ask.fact).toBe("tax_classification");
+  s.pickAsk(ask.fact, ask.choices[0].value);
+  s.saveAsk(ask.fact);
+  await s.idle();
+  expect(h.said.writes).toContain("set_year_facts");
   s.dispose();
 });
 

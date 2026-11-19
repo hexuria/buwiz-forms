@@ -52,7 +52,7 @@ test("F9-3 desktop: the calendar beside a split date with a locked year (2551Q 2
   await app.press("id:fp-date-0:1");
   await app.waitFor("text:Su");
   for (let i = 0; i < 3; i++) await app.press("label:Next month");
-  await app.press("text:15").catch(() => {});
+  expect(String(await app.press("text:15").then(() => "pressed", (e) => e))).toContain("is disabled");
   await app.wait(300);
   expect(app.texts()).toContain("11 - November");
   expect(app.texts()).not.toContain("02 - February");

@@ -1,6 +1,7 @@
 //! Runtime audit of the on-screen form page against the print preview.
 //!
-//! `audit_all_screen_forms` (ignored; run it on demand) opens every one of
+//! `audit_all_screen_forms` (ignored in a plain test run, since it writes a
+//! report; CI runs it on every pull request) opens every one of
 //! the 43 forms for a fictional taxpayer whose profile has every field
 //! filled, the way `screen_form_open` does, builds the print field map the
 //! way `form_print_html` does (no browser), and compares the two per schema
@@ -1104,6 +1105,22 @@ fn audit_all_screen_forms() {
         "{}",
         serde_json::to_string_pretty(&report["totals"]).unwrap()
     );
+    // What CI gates on (it runs this audit on every pull request): every
+    // form opens, builds its print map, comes back from a fill, a save and
+    // a reopen, and fills its print sheet. The other classes are the
+    // report's findings and do not fail the run.
+    for class in [
+        "open_failed",
+        "print_map_failed",
+        "ii_roundtrip_failed",
+        "print_sheet_fill_failed",
+    ] {
+        assert_eq!(
+            report["totals"][class].as_u64().unwrap_or(0),
+            0,
+            "{class}: see tmp/screen-form-audit/runtime.md"
+        );
+    }
 }
 
 // --------------------------------------------------------------- report
