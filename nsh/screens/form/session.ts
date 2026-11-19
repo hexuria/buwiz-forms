@@ -2173,6 +2173,15 @@ export class FormSession {
     return out;
   }
 
+  /** A box's sentence as it shows: its row's after it was touched, every one after Check (a refusal touches its row as it lands). */
+  private shownBoxMsg(k: string): string {
+    const s = this.st;
+    const sentence = s.boxMessages[k];
+    if (!sentence) return "";
+    const id = this.keyIndex.get(k);
+    return s.showAll || !id || s.touched.has(id) ? sentence : "";
+  }
+
   /** How many box-home sentences row id carries (each box's message counts once). */
   private boxCountFor(id: string): number {
     const it = this.items.get(id);
@@ -2924,20 +2933,24 @@ export class FormSession {
       const blank = kind === "chk" || kind === "radio" ? !ticked(s.values[k]) : !String(s.values[k] ?? "").trim();
       this.sHint.get(k).set(shut && blank ? this.reasonFor(k) : "");
       if (kind === "sel") this.sOptions.get(k).set(this.selShown(k).options);
-      this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(s.boxMessages[k]));
+      // A box's sentence follows the same rule as a row's: after its row was left, or after Check (a refused
+      // edit's row is touched when the refusal lands, so its sentence still shows at once).
+      const boxMsg = this.shownBoxMsg(k);
+      this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
       // Grouped boxes (date parts, TIN segments, picks) draw their sentences above the row line.
       const kid = this.keyIndex.get(k);
       const kit = kid ? this.items.get(kid) : undefined;
       const grouped = ["sel", "chk", "radio"].includes(kind ?? "") || this.datePartKeys.has(k) || Boolean(kit && isTinItem(kit));
-      this.sBoxMsg.get(k).set(grouped ? "" : s.boxMessages[k] || "");
+      this.sBoxMsg.get(k).set(grouped ? "" : boxMsg);
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
       const shut = this.isShut(k);
       this.sLocked.get(k).set(shut);
       this.sHint.get(k).set(shut && !oneDateText(s.values, date) ? parts.map((f) => this.reasonFor(f.k)).find(Boolean) || "" : "");
-      const boxMsg = parts.some((f) => Boolean(s.boxMessages[f.k]));
-      const rowMsg = Boolean((s.showAll || s.touched.has(row)) && (s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k))));
+      const open = s.showAll || s.touched.has(row);
+      const boxMsg = open && parts.some((f) => Boolean(s.boxMessages[f.k]));
+      const rowMsg = open && (s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
       this.sInvalid.get(k).set(boxMsg || rowMsg);
     }
   }
@@ -2980,9 +2993,14 @@ export class FormSession {
       ...(date ? [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[] : []),
       ...keys.filter((k) => ["sel", "chk", "radio"].includes(this.kindOf.get(k) ?? "") || isTinItem(it)),
     ]);
-    // A split date's parts are one date: its sentence shows once, on the month box.
-    const dateMsgs = date ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => pk !== undefined && Boolean(s.boxMessages[pk])) : [];
-    const shownKeys = date && dateMsgs.length ? [dateMsgs[0]] : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
+    // A split date's parts are one date: its sentence shows once, on the month box. Box sentences show
+    // under the same rule as the row's own: after the row was left, or after Check.
+    const msgOpen = s.showAll || s.touched.has(id);
+    const dateMsgs =
+      msgOpen && date
+        ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => pk !== undefined && Boolean(s.boxMessages[pk]))
+        : [];
+    const shownKeys = msgOpen ? (date && dateMsgs.length ? [dateMsgs[0]] : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k))) : [];
     return {
       message: shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
