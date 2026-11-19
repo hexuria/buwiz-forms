@@ -34,7 +34,11 @@ pub fn send_notification(title: &str, body: &str) {
             .show();
     }
     #[cfg(target_os = "android")]
-    tracing::debug!(title, body, "desktop notifications are not available on Android");
+    tracing::debug!(
+        title,
+        body,
+        "desktop notifications are not available on Android"
+    );
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -1130,7 +1130,9 @@ fn keychain_delete() -> Result<(), anyhow::Error> {
 
 #[cfg(target_os = "android")]
 fn keychain_set(_value: &str) -> Result<(), anyhow::Error> {
-    Err(anyhow::anyhow!("The OS keychain is not available on Android"))
+    Err(anyhow::anyhow!(
+        "The OS keychain is not available on Android"
+    ))
 }
 
 #[cfg(target_os = "android")]

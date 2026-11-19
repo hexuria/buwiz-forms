@@ -28,7 +28,10 @@ pub fn set_data_dir(path: PathBuf) -> std::io::Result<()> {
 
 /// Returns the private directory set by the embedding app.
 pub fn data_dir() -> PathBuf {
-    DATA_DIR.get().expect("set_data_dir must run before bir-core starts").clone()
+    DATA_DIR
+        .get()
+        .expect("set_data_dir must run before bir-core starts")
+        .clone()
 }
 
 /// Returns a temporary directory inside the app's private storage.

@@ -283,9 +283,14 @@ fn env_is_true_literal(value: &str) -> bool {
 
 /// Which env var (if any) takes submission away from the panel.
 pub fn submission_env_override_from(get: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
-    [crate::transport::RELAY_URL_ENV, env::SFTP_LIVE, env::SFTP_DRY_RUN, env::SFTP_HOST]
-        .into_iter()
-        .find(|name| get(name).is_some())
+    [
+        crate::transport::RELAY_URL_ENV,
+        env::SFTP_LIVE,
+        env::SFTP_DRY_RUN,
+        env::SFTP_HOST,
+    ]
+    .into_iter()
+    .find(|name| get(name).is_some())
 }
 
 pub fn resolve_submission(
@@ -861,7 +866,12 @@ mod tests {
     #[test]
     fn submission_env_override_detects_each_variable() {
         assert_eq!(submission_env_override_from(|_| None), None);
-        for name in [crate::transport::RELAY_URL_ENV, env::SFTP_LIVE, env::SFTP_DRY_RUN, env::SFTP_HOST] {
+        for name in [
+            crate::transport::RELAY_URL_ENV,
+            env::SFTP_LIVE,
+            env::SFTP_DRY_RUN,
+            env::SFTP_HOST,
+        ] {
             let got = submission_env_override_from(|n| (n == name).then(|| "1".to_string()));
             assert_eq!(got, Some(name));
         }
