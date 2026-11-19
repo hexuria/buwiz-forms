@@ -281,7 +281,7 @@ fn env_is_true_literal(value: &str) -> bool {
 
 /// Which env var (if any) takes submission away from the panel.
 pub fn submission_env_override_from(get: impl Fn(&str) -> Option<String>) -> Option<&'static str> {
-    [env::SFTP_LIVE, env::SFTP_DRY_RUN, env::SFTP_HOST]
+    [crate::transport::RELAY_URL_ENV, env::SFTP_LIVE, env::SFTP_DRY_RUN, env::SFTP_HOST]
         .into_iter()
         .find(|name| get(name).is_some())
 }
@@ -602,19 +602,24 @@ pub fn set_test_server_password(password: &str) -> Result<(), String> {
             ))
         };
     }
-    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-        .map_err(|error| format!("Could not open OS keychain: {error}"))?;
-    if password.is_empty() {
-        return match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(error) => Err(format!(
-                "Could not remove password from OS keychain: {error}"
-            )),
-        };
+    #[cfg(target_os = "android")]
+    return Err("The OS keychain is not available on Android".into());
+    #[cfg(not(target_os = "android"))]
+    {
+        let entry = keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+            .map_err(|error| format!("Could not open OS keychain: {error}"))?;
+        if password.is_empty() {
+            return match entry.delete_credential() {
+                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+                Err(error) => Err(format!(
+                    "Could not remove password from OS keychain: {error}"
+                )),
+            };
+        }
+        entry
+            .set_password(password)
+            .map_err(|error| format!("Could not store password in OS keychain: {error}"))
     }
-    entry
-        .set_password(password)
-        .map_err(|error| format!("Could not store password in OS keychain: {error}"))
 }
 
 /// Whether a test-server password is stored in the keychain.
@@ -622,6 +627,7 @@ pub fn has_test_server_password() -> bool {
     is_debug_build() && keychain_password().is_some()
 }
 
+#[cfg(not(target_os = "android"))]
 fn keychain_password() -> Option<String> {
     if crate::platform::keychain_disabled() {
         return None;
@@ -631,6 +637,11 @@ fn keychain_password() -> Option<String> {
         .get_password()
         .ok()
         .filter(|value| !value.is_empty())
+}
+
+#[cfg(target_os = "android")]
+fn keychain_password() -> Option<String> {
+    None
 }
 
 /// Endpoint for the panel's "Test server" mode. Env fields win per field;
@@ -848,7 +859,7 @@ mod tests {
     #[test]
     fn submission_env_override_detects_each_variable() {
         assert_eq!(submission_env_override_from(|_| None), None);
-        for name in [env::SFTP_LIVE, env::SFTP_DRY_RUN, env::SFTP_HOST] {
+        for name in [crate::transport::RELAY_URL_ENV, env::SFTP_LIVE, env::SFTP_DRY_RUN, env::SFTP_HOST] {
             let got = submission_env_override_from(|n| (n == name).then(|| "1".to_string()));
             assert_eq!(got, Some(name));
         }
