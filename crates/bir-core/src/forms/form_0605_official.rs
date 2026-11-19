@@ -514,6 +514,50 @@ fn official_pair(selection: &Form0605IndexedCode, table: &[(&str, &str)]) -> boo
 }
 
 impl Form0605Draft {
+    /// Item 6's ATC pick (B2): a code the official list offers under the
+    /// held tax type stores its whole indexed code, a blank clears it, and
+    /// anything else — unlisted, or listed but not offered for this tax
+    /// type — is refused with the page's sentence.
+    pub fn set_atc(&mut self, code: &str) -> Result<(), String> {
+        let code = code.trim();
+        if code.is_empty() {
+            self.atc = None;
+            return Ok(());
+        }
+        let tax_type = self.tax_type.as_ref().map_or("", |t| t.code());
+        match form_0605_atc(code).filter(|_| form_0605_atc_offered_for(code, tax_type)) {
+            Some(indexed) => {
+                self.atc = Some(indexed);
+                Ok(())
+            }
+            None => Err("Pick an ATC from the list.".to_string()),
+        }
+    }
+
+    /// Item 8's tax type pick (B2): same contract as [`Self::set_atc`].
+    /// The ATC list follows the tax type, so a held ATC the new answer no
+    /// longer offers is cleared (`ATCList()`'s rule).
+    pub fn set_tax_type(&mut self, code: &str) -> Result<(), String> {
+        let code = code.trim();
+        if code.is_empty() {
+            self.tax_type = None;
+        } else {
+            match form_0605_tax_type(code) {
+                Some(indexed) => self.tax_type = Some(indexed),
+                None => return Err("Pick a tax type from the list.".to_string()),
+            }
+        }
+        let tax_type = self.tax_type.as_ref().map_or("", |t| t.code());
+        if self
+            .atc
+            .as_ref()
+            .is_some_and(|atc| !form_0605_atc_offered_for(atc.code(), tax_type))
+        {
+            self.atc = None;
+        }
+        Ok(())
+    }
+
     /// `computePenalties` / `computeOfTax`, on the values `round(this,2)`
     /// leaves in the fields.
     pub(super) fn official_recompute(&mut self) {

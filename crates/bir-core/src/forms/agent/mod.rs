@@ -1565,6 +1565,10 @@ fn write_bound_box(
                     DatePart::Year,
                 )
             }
+            // Item 6's ATC and Item 8's tax type are picks from the
+            // official lists, stored as the whole indexed code (B2).
+            "txtATCCode" => return write_0605_pick(kind, draft, |d| d.set_atc(&text)),
+            "txtTaxTypeCode" => return write_0605_pick(kind, draft, |d| d.set_tax_type(&text)),
             _ => {}
         }
     }
@@ -1705,6 +1709,21 @@ fn write_0605_date_part(
     };
     let mut typed = parse::<crate::forms::form_0605::Form0605Draft>(kind, draft)?;
     guarded("write", || typed.set_date_part(which, part, value))??;
+    *draft = to_json(&typed)?;
+    Ok(())
+}
+
+/// One 0605 official-list pick (B2): the typed setter decides what the
+/// code stores — a listed code's whole indexed entry, a blank's clear, an
+/// unlisted or unoffered code's refusal — and the draft is replaced only
+/// on success.
+fn write_0605_pick(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    set: impl FnOnce(&mut crate::forms::form_0605::Form0605Draft) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut typed = parse::<crate::forms::form_0605::Form0605Draft>(kind, draft)?;
+    guarded("write", || set(&mut typed))??;
     *draft = to_json(&typed)?;
     Ok(())
 }

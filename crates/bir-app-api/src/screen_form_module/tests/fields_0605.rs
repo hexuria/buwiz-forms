@@ -386,6 +386,15 @@ fn an_imported_atc_still_shows_its_code() {
     let mut draft = open("0605", 1)["draft"].clone();
     let filled = fill("0605", &draft, json!({ "txtATCCode": "FP010" }));
     draft = filled["draft"].clone();
+    assert!(
+        draft["atc"].is_object(),
+        "FP010 picked from the list: {:?}",
+        filled["rejected"]
+    );
+    // The official page writes the ATC radios only once a tax type is
+    // chosen; an imported return carries both.
+    let filled = fill("0605", &draft, json!({ "txtTaxTypeCode": "DO" }));
+    draft = filled["draft"].clone();
     draft["atc"]["evidence"] = json!("ImportedExact");
     let map = agent::field_map(kind_of("0605").expect("0605 kind"), &draft)
         .expect("0605 field map");

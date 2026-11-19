@@ -6,6 +6,7 @@ use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
     excise_places, form_1600wp, form_1601c, form_1601eq, form_1601fq, form_1701a,
     form_1702mx_official, form_1702q, form_2000, form_2200s, form_2550m, form_2551q,
+    form_0605_official,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -743,6 +744,25 @@ fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Va
         return Some(rows);
     }
     match code {
+        // 0605's Item 6 ATC and Item 8 tax type pick from the official
+        // lists (B2). The ATC list follows the held tax type the way the
+        // official ATCList() does: the PT ATCs only under PT.
+        "0605" if key == "txtTaxTypeCode" => Some(
+            form_0605_official::FORM_0605_TAX_TYPES
+                .iter()
+                .map(|(c, n)| code_option(c, n))
+                .collect(),
+        ),
+        "0605" if key == "txtATCCode" => {
+            let tax_type = draft["tax_type"]["code"].as_str().unwrap_or_default();
+            Some(
+                form_0605_official::FORM_0605_ATCS
+                    .iter()
+                    .filter(|(c, _)| form_0605_official::form_0605_atc_offered_for(c, tax_type))
+                    .map(|(c, n)| code_option(c, n))
+                    .collect(),
+            )
+        }
         "1601EQ" if atc_1601eq_row(kind, key).is_some() => Some(
             form_1601eq::FORM_1601EQ_ATC_OPTIONS
                 .iter()

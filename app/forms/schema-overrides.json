@@ -32,7 +32,12 @@
     },
     "txtATCCode": {
       "label": "ATC",
-      "evidence": "agent box label: 'ATC'; writer-cells printed caption: 'ATC'"
+      "kind": "sel",
+      "evidence": "agent box label: 'ATC'; writer-cells printed caption: 'ATC' | B2 (form-fields PR 1): the official popup list (FORM_0605_ATCS, filtered by the held tax type) fills the options; catalogs.rs"
+    },
+    "txtTaxTypeCode": {
+      "kind": "sel",
+      "evidence": "B2 (form-fields PR 1): the official popup list (FORM_0605_TAX_TYPES) fills the options; catalogs.rs"
     },
     "frm0605:txtReturnPeriodMonth": {
       "kind": "int",
