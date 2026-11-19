@@ -40,6 +40,7 @@ import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, sho
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
 import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { hostSentence, refusalSentence, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -145,6 +146,8 @@ export type ElectionCard =
 export interface RowInfo {
   /** The message the row shows now ("" until touched or Check). */
   message: string;
+  /** The box-home sentences of this row's split date parts and TIN boxes, in box order (B3/B4). */
+  boxMessages: { key: string; sentence: string }[];
   /** Why the row's shut blank boxes show blank. */
   notes: string[];
   /** What turns the row's faded boxes on ("Needs item 13 = Yes"). */
@@ -311,6 +314,8 @@ interface St {
   messageCounts: Record<string, number>;
   /** Boxes the host refused at the last fill, with its message (kept until the box is edited again). */
   rejected: Record<string, string>;
+  /** The plain sentence under each refused box, keyed by draft key (B3/B4's box home). */
+  boxMessages: Record<string, string>;
   formErrors: string[];
   checkable: Record<string, { token: string; label: string }[]>;
   electionAt: string | null;
@@ -352,7 +357,7 @@ function freshState(target: FormTarget): St {
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
-    messageKeys: {}, messageCounts: {}, rejected: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
+    messageKeys: {}, messageCounts: {}, rejected: {}, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
@@ -441,6 +446,7 @@ export class FormSession {
   private sOff = new SignalMap<string>("");
   private sOptions = new SignalMap<ChoiceOption[]>([], sameJson);
   private sInvalid = new SignalMap<boolean>(false);
+  private sBoxMsg = new SignalMap<string>("");
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
   private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, open: false, fold: null }, sameJson);
   private sHeader = signal<HeaderInfo>(null as unknown as HeaderInfo, { equals: sameJson });
@@ -539,6 +545,7 @@ export class FormSession {
       const off = this.sOff.get(k);
       const options = this.sOptions.get(k);
       const invalid = this.sInvalid.get(k);
+      const boxMsg = this.sBoxMsg.get(k);
       b = {
         value: () => value(),
         locked: () => locked(),
@@ -546,6 +553,7 @@ export class FormSession {
         off: () => off(),
         options: () => options(),
         invalid: () => invalid(),
+        message: () => boxMsg(),
         zeroWhenBlank: this.kindOf.get(k) === "money" && this.computedKeys.has(k),
       };
       this.boxes.set(k, b);
@@ -590,6 +598,14 @@ export class FormSession {
   }
   messageOf(id: string): string {
     return this.st.messages[id] || "";
+  }
+  /** The plain sentence under box k (a refused edit, a one-box validation error), "" none. */
+  boxMessageOf(k: string): string {
+    return this.st.boxMessages[k] || "";
+  }
+  /** Every box's sentence now (tests and the page's grouped lines). */
+  boxMessages(): Readonly<Record<string, string>> {
+    return this.st.boxMessages;
   }
   messages(): Readonly<Record<string, string>> {
     return this.st.messages;
@@ -908,6 +924,7 @@ export class FormSession {
       if (s.opened.has(k) && s.profileSave[k]) s.profileEdited.add(k);
       delete s.kept[k];
       delete s.rejected[k];
+      delete s.boxMessages[k];
     }
     s.dirty = true;
     this.unquiet(Object.keys(edits));
@@ -949,6 +966,7 @@ export class FormSession {
       s.values[k] = String(v);
       this.sValue.get(k).set(this.shownText(k));
     }
+    for (const k of Object.keys(edits)) delete s.boxMessages[k];
     this.cancelAutosave();
     this.markUnsaved();
     this.flush();
@@ -1133,11 +1151,15 @@ export class FormSession {
     this.syncShown(before, edits);
     this.livePreview();
     this.sayYearEndPutBack(edits);
-    // A refused box shows what the draft holds again; its message shows (its row is touched) until it is edited again.
+    // A refused box shows its own sentence under it; its message shows (its row is touched) until it is edited again.
     for (const [k, msg] of Object.entries(r.rejected || {})) {
+      const sentence = this.refusalText(k, msg);
+      s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
       const id = this.keyIndex.get(k);
-      s.messages[id || "form"] = msg;
-      if (!id) continue;
+      if (!id) {
+        s.messages["form"] = s.messages["form"] ? `${s.messages["form"]} ${sentence}` : sentence;
+        continue;
+      }
       s.rejected[k] = msg;
       s.touched.add(id);
       if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
@@ -1301,6 +1323,43 @@ export class FormSession {
     );
   }
 
+  /** What a refusal sentence is built from for box k (B3/B4's context). */
+  private refusalCtx(k: string, raw: string): RefusalContext {
+    const s = this.st;
+    const id = this.keyIndex.get(k);
+    const it = id ? this.items.get(id) : undefined;
+    const item = it ? /^(\d+[A-Z]?)\b/.exec(String(it.l).trim())?.[1] ?? null : null;
+    const f = this.fieldOf.get(k);
+    const label = (f?.l || it?.l || k).replace(/\s*\([^)]*\)\s*$/, "").trim();
+    return {
+      raw, key: k, item, label,
+      kind: this.kindOf.get(k) ?? "", form: s.target.formCode,
+      part: this.datePartName(k),
+    };
+  }
+
+  /** "month"/"day"/"year" when k is a split date part, else undefined. */
+  private datePartName(k: string): string | undefined {
+    const id = this.keyIndex.get(k);
+    const it = id ? this.items.get(id) : undefined;
+    const date = it?.f ? dateParts(it.f) : null;
+    if (!date) return undefined;
+    if (date.month.k === k) return "month";
+    if (date.day?.k === k) return "day";
+    if (date.year.k === k) return "year";
+    return undefined;
+  }
+
+  /** A refused fill's plain sentence for box k. */
+  private refusalText(k: string, raw: string): string {
+    return refusalSentence(this.refusalCtx(k, raw));
+  }
+
+  /** A host validation message as the page shows it (0605's four, plus the leak net). */
+  private validationText(k: string | null, raw: string, field?: string): string {
+    return hostSentence(this.refusalCtx(k ?? "", raw), field);
+  }
+
   /** Bind each validation message to an item (bindError). */
   private setErrors(errors: ScreenFormError[] | undefined) {
     const s = this.st;
@@ -1308,24 +1367,42 @@ export class FormSession {
     s.messages = {};
     s.messageKeys = {};
     s.messageCounts = {};
+    s.boxMessages = {};
     s.checkable = {};
     s.electionAt = null;
     const items = this.rowIds.map((id) => ({ id, it: this.items.get(id)! }));
+    // A refused edit's sentence sits on its box; it counts toward the row it belongs to.
+    for (const [k, msg] of Object.entries(s.rejected)) {
+      const sentence = this.refusalText(k, msg);
+      s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
+      const id = this.keyIndex.get(k);
+      if (id) (s.messageKeys[id] ||= []).push(k);
+    }
     for (const e of s.errors) {
+      const keys = (e.keys || []).filter((k) => this.keyIndex.has(k));
+      // A validation error naming exactly one drawn box is that box's message (B3/B4).
+      if (keys.length === 1) {
+        const k = keys[0];
+        const id = this.keyIndex.get(k)!;
+        const sentence = this.validationText(k, e.message, String(e.field));
+        s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
+        (s.messageKeys[id] ||= []).push(k);
+        if (e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
+        if (e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
+        continue;
+      }
       const id = bindError(e, items, (k) => this.keyIndex.get(k));
       if (!id) continue;
-      s.messages[id] = s.messages[id] ? `${s.messages[id]} · ${e.message}` : e.message;
+      // A split date group's item-level sentence shows only when no part has its own box message.
+      const it = this.items.get(id);
+      const date = it?.f ? dateParts(it.f) : null;
+      if (date && [date.month.k, date.day?.k, date.year.k].some((pk) => pk && s.boxMessages[pk])) continue;
+      const sentence = this.validationText(null, e.message, String(e.field));
+      s.messages[id] = s.messages[id] ? `${s.messages[id]} ${sentence}` : sentence;
       (s.messageKeys[id] ||= []).push(...(e.keys || []));
       s.messageCounts[id] = (s.messageCounts[id] || 0) + 1;
       if (e.dismiss) (s.checkable[id] ||= []).push({ token: e.dismiss, label: e.dismiss_label || "Checked" });
       if (e.field === "annual_income_tax_election" && ELECTION_UNRECORDED.test(e.message)) s.electionAt = id;
-    }
-    for (const [k, msg] of Object.entries(s.rejected)) {
-      const id = this.keyIndex.get(k);
-      if (!id) continue;
-      s.messages[id] = s.messages[id] ? `${msg} · ${s.messages[id]}` : msg;
-      (s.messageKeys[id] ||= []).push(k);
-      s.messageCounts[id] = (s.messageCounts[id] || 0) + 1;
     }
   }
 
@@ -2068,17 +2145,31 @@ export class FormSession {
     return out;
   }
 
+  /** How many box-home sentences row id carries (each box's message counts once). */
+  private boxCountFor(id: string): number {
+    const it = this.items.get(id);
+    if (!it) return 0;
+    const keys = it.rows ? (it.keys || []).flat() : keysOf(it);
+    return keys.filter((k) => this.st.boxMessages[k]).length;
+  }
+
   /** How many messages each row with a shown message carries (a date's own sentence counts once). */
   private shownCounts(): Record<string, number> {
     const s = this.st;
+    const shown = this.shownMessages();
     const out: Record<string, number> = {};
-    for (const id of Object.keys(this.shownMessages())) out[id] = Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1);
+    const ids = new Set([...Object.keys(shown), ...this.rowIds.filter((id) => this.boxCountFor(id) > 0)]);
+    for (const id of ids) {
+      const row = shown[id] ? Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1) : 0;
+      const n = row + this.boxCountFor(id);
+      if (n) out[id] = n;
+    }
     return out;
   }
 
   /** How many rows of part pi hold a validation message, shown or not (the old partErrors: the badges, "n parts need attention"). */
   private partErrors(pi: number): number {
-    return Object.keys(this.st.messages).filter((id) => id.startsWith(`${pi}:`)).length;
+    return this.rowIds.filter((id) => id.startsWith(`${pi}:`) && (this.st.messages[id] || this.st.dateErrors[id] || this.boxCountFor(id) > 0)).length;
   }
 
   /** The to-do list (old todo()): every row with a message counts, whether its text shows yet or not. */
@@ -2087,7 +2178,7 @@ export class FormSession {
     if (!this.schema || !s.draft) return [];
     return todoRows({
       parts: this.schema.parts as unknown as TodoPart[],
-      messages: s.messages,
+      messages: { ...s.messages, ...Object.fromEntries(this.rowIds.filter((id) => this.boxCountFor(id) > 0 && !s.messages[id]).map((id) => [id, " "])) },
       values: s.values,
       stops: s.editable ? s.stopKeys : new Set(),
       passed: s.passed,
@@ -2796,14 +2887,21 @@ export class FormSession {
       const blank = kind === "chk" || kind === "radio" ? !ticked(s.values[k]) : !String(s.values[k] ?? "").trim();
       this.sHint.get(k).set(shut && blank ? this.reasonFor(k) : "");
       if (kind === "sel") this.sOptions.get(k).set(this.selShown(k).options);
-      this.sInvalid.get(k).set(shownMsgKeys.has(k));
+      this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(s.boxMessages[k]));
+      // Grouped boxes (date parts, TIN segments, picks) draw their sentences above the row line.
+      const kid = this.keyIndex.get(k);
+      const kit = kid ? this.items.get(kid) : undefined;
+      const grouped = ["sel", "chk", "radio"].includes(kind ?? "") || this.datePartKeys.has(k) || Boolean(kit && isTinItem(kit));
+      this.sBoxMsg.get(k).set(grouped ? "" : s.boxMessages[k] || "");
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
       const shut = this.isShut(k);
       this.sLocked.get(k).set(shut);
       this.sHint.get(k).set(shut && !oneDateText(s.values, date) ? parts.map((f) => this.reasonFor(f.k)).find(Boolean) || "" : "");
-      this.sInvalid.get(k).set(Boolean((s.showAll || s.touched.has(row)) && (s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)))));
+      const boxMsg = parts.some((f) => Boolean(s.boxMessages[f.k]));
+      const rowMsg = Boolean((s.showAll || s.touched.has(row)) && (s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k))));
+      this.sInvalid.get(k).set(boxMsg || rowMsg);
     }
   }
 
@@ -2838,8 +2936,19 @@ export class FormSession {
       const pesos = wholePesosOf(s.values[it.from.k]);
       if (pesos) from = `${it.from.l}: ₱${formatMoney(String(pesos.amount), true)}${pesos.rounded ? " (rounded to whole pesos)" : ""}`;
     }
+    const date = it.f ? dateParts(it.f) : null;
+    // Side-by-side date parts, a TIN's segments and the pick kinds (their controls have no
+    // message line of their own) show their sentences as lines above the row's message.
+    const groupKeys = new Set<string>([
+      ...(date ? [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[] : []),
+      ...keys.filter((k) => ["sel", "chk", "radio"].includes(this.kindOf.get(k) ?? "") || isTinItem(it)),
+    ]);
+    // A split date's parts are one date: its sentence shows once, on the month box.
+    const dateMsgs = date ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => Boolean(pk) && Boolean(s.boxMessages[pk])) : [];
+    const shownKeys = date && dateMsgs.length ? [dateMsgs[0]] : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
     return {
       message: shown[id] || "",
+      boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
       notes: this.lockNotesFor(it),
       needs: [...new Set(keys.map((k) => s.off[k]).filter(Boolean))],
       kept: kept.includes("template") ? "template" : kept.includes("last") ? "last" : "",
@@ -2903,7 +3012,7 @@ export class FormSession {
                 first: tucked[0],
                 items: tucked,
                 label: `From tax profile · ${filled} filled box${filled === 1 ? "" : "es"}`,
-                flagged: tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors[`${pi}:${ii}`]).length,
+                flagged: tucked.filter((ii) => s.messages[`${pi}:${ii}`] || s.dateErrors[`${pi}:${ii}`] || this.boxCountFor(`${pi}:${ii}`) > 0).length,
                 open: s.profileOpen.has(pi),
               }
             : null,

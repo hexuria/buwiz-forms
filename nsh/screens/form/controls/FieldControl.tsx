@@ -139,7 +139,7 @@ function Choice(props: { p: FieldInput }) {
             value={model().shown || null}
             placeholder="Choose…"
             width={widthOf(p)}
-            error={p.box.invalid()}
+            error={p.box.invalid() || Boolean(p.box.message?.())}
             focusRef={(ref) => giveFocus(p, ref)}
             onChange={pick}
           />
@@ -155,7 +155,7 @@ function Choice(props: { p: FieldInput }) {
           options={model().options}
           value={model().shown}
           width={widthOf(p)}
-          error={p.box.invalid()}
+          error={p.box.invalid() || Boolean(p.box.message?.())}
           focusRef={(ref) => giveFocus(p, ref)}
           onPick={pick}
         />
@@ -175,7 +175,7 @@ function DateBox(props: { p: FieldInput }) {
         testID={p.testID}
         accessibilityLabel={nameOf(p)}
         value={mdy(p.box.value())}
-        error={p.box.invalid()}
+        error={p.box.message?.() || p.box.invalid()}
         placeholder={p.placeholder}
         onChange={(text) => p.onEdit(text)}
         onFocus={() => p.onFocus()}
@@ -217,7 +217,7 @@ function TypedBox(props: { p: FieldInput }) {
                       onFocus={() => p.onFocus()}
                       onBlur={() => p.onBlur()}
                       width={widthOf(p)}
-                      error={p.box.invalid()}
+                      error={p.box.message?.() || p.box.invalid()}
                       maxLength={p.field.m}
                       placeholder={p.placeholder}
                       keyboardType={kind() === "email" ? "email-address" : kind() === "phone" ? "phone-pad" : undefined}
@@ -234,7 +234,7 @@ function TypedBox(props: { p: FieldInput }) {
                     onFocus={() => p.onFocus()}
                     onBlur={() => p.onBlur()}
                     width={widthOf(p)}
-                    error={p.box.invalid()}
+                    error={p.box.message?.() || p.box.invalid()}
                     inputRef={(ref) => giveFocus(p, ref)}
                   />
                 </If>
@@ -248,7 +248,7 @@ function TypedBox(props: { p: FieldInput }) {
                 onFocus={() => p.onFocus()}
                 onBlur={() => p.onBlur()}
                 width={widthOf(p)}
-                error={p.box.invalid()}
+                error={p.box.message?.() || p.box.invalid()}
                 maxDigits={p.field.m}
                 placeholder={p.placeholder}
                 inputRef={(ref) => giveFocus(p, ref)}
@@ -264,7 +264,7 @@ function TypedBox(props: { p: FieldInput }) {
             onFocus={() => p.onFocus()}
             onBlur={() => p.onBlur()}
             width={widthOf(p)}
-            error={p.box.invalid()}
+            error={p.box.message?.() || p.box.invalid()}
             placeholder={p.placeholder}
             inputRef={(ref) => giveFocus(p, ref)}
           />
@@ -279,7 +279,7 @@ function TypedBox(props: { p: FieldInput }) {
         onFocus={() => p.onFocus()}
         onBlur={() => p.onBlur()}
         width={widthOf(p)}
-        error={p.box.invalid()}
+        error={p.box.message?.() || p.box.invalid()}
         whole={!!p.field.w}
         negative
         placeholder={p.placeholder}

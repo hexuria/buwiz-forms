@@ -134,7 +134,7 @@ describe("month names", () => {
 
 describe("DATE_ERROR", () => {
   test("is the message a date box shows for text that is not a date", () => {
-    expect(DATE_ERROR).toBe("Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)");
+    expect(DATE_ERROR).toBe("Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023");
   });
 });
 

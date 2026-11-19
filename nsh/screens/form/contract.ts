@@ -140,6 +140,8 @@ export interface BoxState {
   options: Accessor<ChoiceOption[]>;
   /** The box holds an error the user should see now (touched-only rule applied): a red border. */
   invalid: Accessor<boolean>;
+  /** The box's own sentence (a refused edit or a one-box validation error), "" none (B3/B4). */
+  message?: Accessor<string>;
   /** A computed or penalty amount: a locked blank money box shows "0.00", never an empty box. */
   zeroWhenBlank: boolean;
 }

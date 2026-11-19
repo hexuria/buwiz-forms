@@ -2,6 +2,7 @@
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
 import { shortIsoDate } from "../../lib/dates";
 import type { ScreenFormExisting } from "../../bir";
+import { stripOtherError } from "./refusals";
 
 /**
  * A listed dropdown option as { value, label }. The schema writes many as "CODE - Label" strings ("03 - March"): the
@@ -204,7 +205,7 @@ export function existingOfferFor(existing: ScreenFormExisting): { title: string;
 
 /** A host refusal in plain words: bir-core's "Other error: " prefix is not for the filer. */
 export function plainRefusal(text: string): string {
-  return String(text).replace(/^Other error:\s*/, "");
+  return stripOtherError(text);
 }
 
 /**

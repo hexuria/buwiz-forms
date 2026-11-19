@@ -2205,16 +2205,12 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         );
         // Each part alone, then the whole date the way the page's
         // parseTypedDate reads it: a real calendar day of 1900-2100, with
-        // the page's own message (form_page.js DATE_ERROR).
-        let page = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../app/shell/form_page.js"
-        ))
-        .unwrap();
-        assert!(page.contains(&format!(
-            "const DATE_ERROR = \"{}\";",
-            rows_as_needed::DATE_ERROR
-        )));
+        // the page's own message (the NSH page's DATE_ERROR; the old app's
+        // form_page.js is frozen with its earlier wording).
+        assert_eq!(
+            rows_as_needed::DATE_ERROR,
+            "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023"
+        );
         for bad in [
             json!({ keys[0]: "13" }),
             json!({ keys[1]: "32" }),
@@ -2268,6 +2264,30 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
             "{code}: {}",
             cleared["values"]
         );
+    }
+}
+
+/// Decision 6 (2552): its item 1 date is the return's identity — every write
+/// is refused by the identity lock, so refuse_dates skips it: an impossible
+/// date gets the lock's reason, never a date sentence that would pre-empt it.
+#[test]
+fn pr9_2552_item_1_date_is_the_identity_lock_not_a_date_check() {
+    setup();
+    let opened = open("2552", 1);
+    let keys = ONE_DATE_BOXES[2].2;
+    for bad in [
+        json!({ keys[0]: "02", keys[1]: "30", keys[2]: "2026" }),
+        json!({ keys[0]: "03", keys[1]: "15", keys[2]: "2026" }),
+    ] {
+        let refused = fill("2552", &opened["draft"], bad);
+        for key in keys {
+            let reason = refused["rejected"][key].as_str().unwrap_or("");
+            assert!(
+                reason.contains("picks which return this is"),
+                "2552 {key}: {reason}"
+            );
+            assert_ne!(reason, rows_as_needed::DATE_ERROR);
+        }
     }
 }
 

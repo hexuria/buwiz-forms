@@ -194,7 +194,7 @@ fn date_part_refusal(part: DatePart, value: &Value) -> Option<String> {
 /// The page's own message for a date that is not one (form_page.js
 /// `DATE_ERROR`), so the page and the host read the same.
 pub(super) const DATE_ERROR: &str =
-    "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+    "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023";
 
 /// Whether month/day/year make a date the page's `parseTypedDate` reads: a
 /// real calendar day of a year 1900-2100.
@@ -221,6 +221,9 @@ pub(super) fn refuse_dates(
     edits: &[(String, Value)],
 ) -> Map<String, Value> {
     let mut out = Map::new();
+    // 2552 is skipped on purpose: its item 1 date picks which return this is
+    // (the identity lock refuses its writes before a date is judged), so a
+    // date sentence would only ever pre-empt the lock's own reason.
     let Some((_, keys)) = ONE_DATES
         .iter()
         .find(|(form, _)| *form == kind.form_code() && *form != "2552")

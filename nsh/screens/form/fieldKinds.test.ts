@@ -153,10 +153,11 @@ test("B15: a cleared 0619E due-date day shows blank, never zero; the draft keeps
   expect(s.valueOf(day)).toBe("00");
   expect(s.shownOf(day)).toBe("");
   expect(s.box(day).value()).toBe("");
-  // The row says the host's own required sentence for the date.
+  // The row says the host's own required sentence for the date — on its box now (B3/B4).
   const row = s.itemIdForKey(day);
   expect(row).toBeTruthy();
-  expect(s.messageOf(row!)).toContain("Item 2");
+  const partMsgs = (s.item(row!)?.f || []).map((f) => s.boxMessageOf(f.k)).join(" ");
+  expect(partMsgs).toContain("Item 2");
   s.saveNow();
   await s.idle();
   s.dispose();

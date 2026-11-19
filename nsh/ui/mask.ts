@@ -520,4 +520,4 @@ export function shownDate(text: string): string {
 }
 
 /** The message under a date box that holds no date. */
-export const DATE_ERROR = "Enter a valid date as MM/DD/YYYY (e.g. 12/01/2020 or 12012020)";
+export const DATE_ERROR = "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023";
