@@ -94,6 +94,23 @@ test("Android system preview refuses requests behind the lock", () => {
   w.state.chrome = false;
   w.host.hear(w.event("open", "2551Q", 1));
   expect(calls).toBe(0);
+  expect(w.closedKeys).toEqual(["2551Q"]);
+});
+
+test("closing all previews cancels an Android job after native opening has settled", async () => {
+  const w = world(async () => {});
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual([]);
+  w.host.hear(w.event("open", "2551Q", 1));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  w.state.chrome = false;
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  expect(w.toasts).toEqual([]);
 });
 
 test("closing all previews cancels an Android preview that is still loading", async () => {
@@ -114,6 +131,9 @@ test("Android system preview reports a native failure without deleting its sheet
   await Promise.resolve();
   expect(w.toasts).toEqual(["Print preview could not open: Activity lookup blocked"]);
   expect(w.closedKeys.length).toBe(0);
+  w.state.chrome = false;
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
 });
 
 test("the window belongs to the return it was asked on, and asking again for that return focuses it", () => {

@@ -2,10 +2,9 @@
 //!
 //! ActivityThread/mActivities/ActivityClientRecord are hidden Android APIs: OEM or
 //! Android changes may deny this lookup. Fail rather than guess an Activity.
-//! One WebView and Activity are retained until the next preview (or process exit),
+//! One WebView, Activity and PrintJob are retained until the preview is closed,
 //! because PrintDocumentAdapter can still read the WebView while the spooler is up.
-//! Called only by an async native module operation: UI scheduling needs the graph,
-//! which is not entered in the synchronous print hook.
+//! UI work runs in async native tasks; revocation happens in the synchronous call.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -24,6 +23,68 @@ static PREVIEW: Mutex<Option<Preview>> = Mutex::new(None);
 struct Preview {
     view: GlobalRef,
     activity: GlobalRef,
+    job: Option<GlobalRef>,
+}
+
+impl Preview {
+    fn dispose(self, env: &mut JNIEnv<'_>) {
+        let mut calls = vec![
+            (self.view.as_obj(), "stopLoading"),
+            (self.view.as_obj(), "destroy"),
+        ];
+        if let Some(job) = &self.job {
+            calls.insert(0, (job.as_obj(), "cancel"));
+        }
+        for (object, method) in calls {
+            if let Err(error) = env.call_method(object, method, "()V", &[]) {
+                let _ = env.exception_clear();
+                tracing::warn!(%error, method, "Android print: could not dispose of preview");
+            }
+        }
+        if let Some(job) = &self.job
+            && let Err(error) = self.dismiss_created_job(env, job)
+        {
+            let _ = env.exception_clear();
+            tracing::warn!(%error, "Android print: could not dismiss preview");
+        }
+    }
+
+    fn dismiss_created_job(&self, env: &mut JNIEnv<'_>, job: &GlobalRef) -> Result<()> {
+        let info = java(env.call_method(job.as_obj(), "getInfo", "()Landroid/print/PrintJobInfo;", &[]))?
+            .l()
+            .map_err(|error| error.to_string())?;
+        let state = java(env.call_method(info, "getState", "()I", &[]))?
+            .i()
+            .map_err(|error| error.to_string())?;
+        // cancel() ignores STATE_CREATED (the preview). Pop that sheet off this Activity's task
+        // without recreating the app; a dismissed/queued/completed job must not change navigation.
+        const STATE_CREATED: i32 = 1;
+        if state != STATE_CREATED {
+            return Ok(());
+        }
+        let class = java(env.call_method(self.activity.as_obj(), "getClass", "()Ljava/lang/Class;", &[]))?
+            .l()
+            .map_err(|error| error.to_string())?;
+        let intent = java(env.new_object(
+            "android/content/Intent",
+            "(Landroid/content/Context;Ljava/lang/Class;)V",
+            &[JValue::Object(self.activity.as_obj()), JValue::Object(&class)],
+        ))?;
+        const CLEAR_TOP_SINGLE_TOP: i32 = 0x04000000 | 0x20000000;
+        java(env.call_method(
+            &intent,
+            "addFlags",
+            "(I)Landroid/content/Intent;",
+            &[JValue::Int(CLEAR_TOP_SINGLE_TOP)],
+        ))?;
+        java(env.call_method(
+            self.activity.as_obj(),
+            "startActivity",
+            "(Landroid/content/Intent;)V",
+            &[JValue::Object(&intent)],
+        ))?;
+        Ok(())
+    }
 }
 
 fn java<T>(value: jni::errors::Result<T>) -> Result<T> {
@@ -145,19 +206,41 @@ pub(crate) fn invalidate() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
 }
 
+pub(crate) fn generation() -> u64 {
+    GENERATION.load(Ordering::SeqCst)
+}
+
+/// Revokes synchronously, before the returned Java cleanup task is started.
+pub(crate) fn close() -> impl Future<Output = ()> {
+    invalidate();
+    let old = {
+        let mut kept = PREVIEW.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        kept.take()
+    };
+    async move {
+        let Some(old) = old else {
+            return;
+        };
+        if let Err(error) = ui(move |env| {
+            old.dispose(env);
+            Ok(())
+        })
+        .await
+        {
+            tracing::warn!(%error, "Android print: could not close preview");
+        }
+    }
+}
+
 /// Loads a static snapshot, then opens Android's A4 system print preview.
-pub(crate) async fn preview(url: String, title: String) -> Result<()> {
-    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+pub(crate) async fn preview(url: String, title: String, generation: u64) -> Result<()> {
     let view = ui(move |env| {
+        let mut kept = PREVIEW.lock().map_err(|_| "Android print state is poisoned.")?;
         if GENERATION.load(Ordering::SeqCst) != generation {
             return Err("Android print preview was superseded or closed.".into());
         }
-        if let Some(old) = PREVIEW
-            .lock()
-            .map_err(|_| "Android print state is poisoned.")?
-            .take()
-        {
-            java(env.call_method(old.view.as_obj(), "destroy", "()V", &[]))?;
+        if let Some(old) = kept.take() {
+            old.dispose(env);
         }
         let activity = foreground_activity(env)?;
         let view = java(env.new_object(
@@ -185,11 +268,10 @@ pub(crate) async fn preview(url: String, title: String) -> Result<()> {
         ))?;
         let view = java(env.new_global_ref(view))?;
         let activity = java(env.new_global_ref(activity))?;
-        *PREVIEW
-            .lock()
-            .map_err(|_| "Android print state is poisoned.")? = Some(Preview {
+        *kept = Some(Preview {
             view: view.clone(),
             activity,
+            job: None,
         });
         Ok(view)
     })
@@ -204,6 +286,9 @@ pub(crate) async fn preview(url: String, title: String) -> Result<()> {
         }
         let current = view.clone();
         let progress = ui(move |env| {
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return Err("Android print preview was superseded or closed.".into());
+            }
             java(env.call_method(current.as_obj(), "getProgress", "()I", &[]))?
                 .i()
                 .map_err(|e| e.to_string())
@@ -219,11 +304,12 @@ pub(crate) async fn preview(url: String, title: String) -> Result<()> {
         }
     }
     ui(move |env| {
+        // A job already starting must be retained before close() can take it.
+        let mut kept = PREVIEW.lock().map_err(|_| "Android print state is poisoned.")?;
         if GENERATION.load(Ordering::SeqCst) != generation {
             return Err("Android print preview was superseded or closed.".into());
         }
-        let kept = PREVIEW.lock().map_err(|_| "Android print state is poisoned.")?;
-        let kept = kept.as_ref().ok_or("Android print WebView is no longer available.")?;
+        let kept = kept.as_mut().ok_or("Android print WebView is no longer available.")?;
         let title = JObject::from(java(env.new_string(title))?);
         let adapter = java(env.call_method(view.as_obj(), "createPrintDocumentAdapter", "(Ljava/lang/String;)Landroid/print/PrintDocumentAdapter;", &[JValue::Object(&title)]))?.l().map_err(|e| e.to_string())?;
         let service = JObject::from(java(env.new_string("print"))?);
@@ -232,10 +318,14 @@ pub(crate) async fn preview(url: String, title: String) -> Result<()> {
         let a4 = java(env.get_static_field("android/print/PrintAttributes$MediaSize", "ISO_A4", "Landroid/print/PrintAttributes$MediaSize;"))?.l().map_err(|e| e.to_string())?;
         java(env.call_method(&builder, "setMediaSize", "(Landroid/print/PrintAttributes$MediaSize;)Landroid/print/PrintAttributes$Builder;", &[JValue::Object(&a4)]))?;
         let attributes = java(env.call_method(builder, "build", "()Landroid/print/PrintAttributes;", &[]))?.l().map_err(|e| e.to_string())?;
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            return Err("Android print preview was superseded or closed.".into());
+        }
         let job = java(env.call_method(manager, "print", "(Ljava/lang/String;Landroid/print/PrintDocumentAdapter;Landroid/print/PrintAttributes;)Landroid/print/PrintJob;", &[JValue::Object(&title), JValue::Object(&adapter), JValue::Object(&attributes)]))?.l().map_err(|e| e.to_string())?;
         if job.is_null() {
             return Err("Android print manager returned no print job.".into());
         }
+        kept.job = Some(java(env.new_global_ref(job))?);
         Ok(())
     }).await
 }

@@ -2084,12 +2084,9 @@ impl Print {
     }
 
     /// The window of the form code `key` closed (or could not open): forgets its preview and deletes its files.
-    pub fn closed(key: String) {
-        if cfg!(target_os = "android") {
-            #[cfg(target_os = "android")]
-            crate::print_android::invalidate();
-            return;
-        }
+    pub fn closed(key: String, _cx: nsh_core::prelude::CallCx<'_>) {
+        #[cfg(target_os = "android")]
+        _cx.start(crate::print_android::close());
         forget(&key);
     }
 
@@ -2108,8 +2105,9 @@ impl Print {
     pub async fn open_native(key: String, title: String) -> Result<(), String> {
         #[cfg(target_os = "android")]
         {
+            let generation = crate::print_android::generation();
             let (_, _, dir) = snapshot(&key).ok_or("The print preview is no longer available.")?;
-            crate::print_android::preview(url_for(&dir.join(SHEET)), title).await
+            crate::print_android::preview(url_for(&dir.join(SHEET)), title, generation).await
         }
         #[cfg(not(target_os = "android"))]
         {
@@ -2737,7 +2735,7 @@ mod tests {
 
     #[cfg(target_os = "android")]
     #[test]
-    fn android_keeps_a_snapshot_until_the_next_request_or_shutdown() {
+    fn android_keeps_a_snapshot_until_closed_the_next_request_or_shutdown() {
         let folder = tempfile::tempdir().unwrap();
         let recorder = host(&folder.path().join("previews"));
         let first = key();
@@ -2745,8 +2743,13 @@ mod tests {
         let first_path = STATE.with(|state| state.borrow().sheet_path(&first));
         assert!(first_path.exists());
         assert!(!has_live(&first));
-        Print::closed(first);
-        assert!(first_path.exists(), "system preview may still be reading");
+        let generation = crate::print_android::generation();
+        let cleanup = crate::print_android::close();
+        forget(&first);
+        assert_ne!(crate::print_android::generation(), generation, "revoked before Java cleanup runs");
+        assert!(!first_path.exists());
+        assert!(futures::executor::block_on(Print::open_native(first, "Closed".into())).is_err());
+        drop(cleanup);
 
         let second = key();
         request(sheet_file(folder.path(), &["b"]), "Second".into(), second.clone());

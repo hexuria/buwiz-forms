@@ -62,7 +62,7 @@ interface Owner {
 export function createPreviewHost(deps: HostDeps) {
   /** The preview of each form code, as the Rust side holds it. */
   const owners = new Map<string, Owner>();
-  const androidPending = new Map<string, object>();
+  const androidPreviews = new Map<string, object>();
   let hooked = false;
 
   /** The preview of `key` is over: the host forgets it and the Rust side deletes its files. */
@@ -110,17 +110,18 @@ export function createPreviewHost(deps: HostDeps) {
   function open(event: PrintEvent): void {
     if (!deps.available && deps.nativePreview) return openNative(event, deps.nativePreview);
     if (deps.androidPreview) {
-      if (!deps.chromeVisible()) return;
+      if (!deps.chromeVisible()) {
+        deps.print.closed(event.key);
+        return;
+      }
       const identity = formIdentity(deps.route());
       const title = `${previewTitle(event.title, deps.period())} ${identity?.split("|").slice(0, 4).join(" ") ?? event.key}`;
       const pending = {};
-      androidPending.set(event.key, pending);
+      androidPreviews.set(event.key, pending);
       deps.androidPreview(event.key, title).catch((error) => {
-        if (androidPending.get(event.key) === pending && deps.chromeVisible()) {
+        if (androidPreviews.get(event.key) === pending && deps.chromeVisible()) {
           deps.toast(`Print preview could not open: ${deps.errorText(error)}`, "triangle-alert");
         }
-      }).finally(() => {
-        if (androidPending.get(event.key) === pending) androidPending.delete(event.key);
       });
       return;
     }
@@ -177,8 +178,8 @@ export function createPreviewHost(deps: HostDeps) {
     },
     /** Every preview ends: a lock, a sign-out, the main window closing. */
     closeAll(): void {
-      for (const key of androidPending.keys()) deps.print.closed(key);
-      androidPending.clear();
+      for (const key of androidPreviews.keys()) deps.print.closed(key);
+      androidPreviews.clear();
       for (const key of [...owners.keys()]) end(key);
     },
     /** The page on screen is now `here` (a return's identity, or null): the previews of other returns end. */
