@@ -2749,7 +2749,7 @@ mod tests {
         assert_ne!(crate::print_android::generation(), generation, "revoked before Java cleanup runs");
         assert!(!first_path.exists());
         assert!(futures::executor::block_on(Print::open_native(first, "Closed".into())).is_err());
-        drop(cleanup);
+        futures::executor::block_on(cleanup);
 
         let second = key();
         request(sheet_file(folder.path(), &["b"]), "Second".into(), second.clone());

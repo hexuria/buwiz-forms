@@ -38,25 +38,28 @@ impl Preview {
                 tracing::warn!(%error, method, "Android print: could not dispose of preview");
             }
         }
-        if revoked
-            && let Some(job) = &self.job
-            && let Err(error) = self.dismiss_created_job(env, job)
+        if let Some(job) = &self.job
+            && let Err(error) = self.dismiss_created_job(env, job, revoked)
         {
             let _ = env.exception_clear();
             tracing::warn!(%error, "Android print: could not dismiss preview");
         }
     }
 
-    fn dismiss_created_job(&self, env: &mut JNIEnv<'_>, job: &GlobalRef) -> Result<()> {
-        let info = java(env.call_method(job.as_obj(), "getInfo", "()Landroid/print/PrintJobInfo;", &[]))?
-            .l()
-            .map_err(|error| error.to_string())?;
-        let state = java(env.call_method(info, "getState", "()I", &[]))?
-            .i()
-            .map_err(|error| error.to_string())?;
-        // Submitted jobs belong to the spooler. Only the unsubmitted preview may be dismissed.
-        const STATE_CREATED: i32 = 1;
-        if state != STATE_CREATED {
+    fn dismiss_created_job(&self, env: &mut JNIEnv<'_>, job: &GlobalRef, revoked: bool) -> Result<()> {
+        let state = if revoked {
+            let info = java(env.call_method(job.as_obj(), "getInfo", "()Landroid/print/PrintJobInfo;", &[]))?
+                .l()
+                .map_err(|error| error.to_string())?;
+            Some(
+                java(env.call_method(info, "getState", "()I", &[]))?
+                    .i()
+                    .map_err(|error| error.to_string())?,
+            )
+        } else {
+            None
+        };
+        if !crate::print_android_policy::should_dismiss(revoked, state) {
             return Ok(());
         }
         let class = java(env.call_method(self.activity.as_obj(), "getClass", "()Ljava/lang/Class;", &[]))?

@@ -18,6 +18,8 @@ mod hooks;
 mod print;
 #[cfg(target_os = "android")]
 mod print_android;
+#[cfg(any(test, target_os = "android"))]
+mod print_android_policy;
 #[cfg(any(windows, target_os = "linux"))]
 mod sheets;
 

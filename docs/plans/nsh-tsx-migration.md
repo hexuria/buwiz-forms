@@ -115,9 +115,13 @@ This is the Android print ownership/cancellation model for the anti-drift rule i
   nor lock/sign-out calls `PrintJob.cancel()` or dismisses these jobs. In particular,
   printing a second return must not cancel the first return's submitted print job.
 
-**Verification boundary:** controller tests cover closed/hidden requests and
+**Verification boundary:** host Rust tests in `nsh/src/print_android_policy.rs`
+cover dismissal versus leaving a job alone for replacement/revocation across all
+job states, including missing/unknown states. Cancellation is not a policy action.
+The Android snapshot test awaits cleanup after asserting synchronous revocation
+and snapshot deletion. Controller tests cover closed/hidden requests and
 revocation before and after native opening settles; Android-target compilation
-checks JNI calls. Neither proves system spooler or Activity behavior. Device
+checks JNI calls. These do not prove system spooler or Activity behavior. Device
 acceptance must cover lock during loading (no late sheet), lock while previewing
 (sheet closes), and submitting a job followed by either a new preview or lock
 (submitted job continues). No separate formal Android print model exists here;
