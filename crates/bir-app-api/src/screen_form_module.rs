@@ -6796,6 +6796,9 @@ mod tests {
     // Tax facts a return asks for, Queue's rule, "Save to profile too" and
     // a filed return's profile line (decisions 3, 5 and 8).
     mod fact_asks;
+    // Form fields PR 1: 0605's split dates and official code picks on a
+    // new return (bugs B1 and B2).
+    mod fields_0605;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;
@@ -15527,6 +15530,14 @@ mod tests {
         // refuses on a fresh return (no joint return yet), each by hand.
         let mut gated = Vec::new();
         let mut closed_2552: Vec<String> = Vec::new();
+        // Split month/day/year groups — the plain split items and the
+        // `one_date` items alike — take each part on the blank draft a new
+        // return opens with, judged as the one date they print (B1: 0605's
+        // Items 4 and 7 bind whole numbers into `Option` dates that start
+        // null, which the generic path write cannot create).
+        let mut split_typed = 0;
+        let mut split_0605 = 0;
+        let mut split_refused: Vec<String> = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -15586,6 +15597,87 @@ mod tests {
                 }
                 typed += 1;
             }
+            // The part bindings that share a path (Text date parts) or a
+            // parent object (0605's whole-number parts into /due_date,
+            // /return_period): one group per draft date.
+            let mut groups: std::collections::BTreeMap<String, [Option<&str>; 3]> =
+                std::collections::BTreeMap::new();
+            for (key, bound) in &def.bindings {
+                let (group, slot) = match &bound.binding {
+                    Binding::Text {
+                        path,
+                        date: Some(_),
+                        part: Some(part),
+                        ..
+                    } => {
+                        let slot = match part {
+                            bir_core::forms::agent::DatePart::Month => 0,
+                            bir_core::forms::agent::DatePart::Day => 1,
+                            bir_core::forms::agent::DatePart::Year => 2,
+                        };
+                        (path.clone(), slot)
+                    }
+                    Binding::Whole { path, .. } => {
+                        let Some((parent, leaf)) = path.rsplit_once('/') else {
+                            continue;
+                        };
+                        // Only date-ish parents: /due_date, /return_period.
+                        if !(parent.contains("date") || parent.contains("period")) {
+                            continue;
+                        }
+                        let slot = match leaf {
+                            "month" => 0,
+                            "day" => 1,
+                            "year" => 2,
+                            _ => continue,
+                        };
+                        (parent.to_string(), slot)
+                    }
+                    _ => continue,
+                };
+                groups.entry(group).or_default()[slot] = Some(key.as_str());
+            }
+            for (_group, slots) in groups {
+                let (Some(month), Some(day), Some(year)) = (slots[0], slots[1], slots[2])
+                else {
+                    continue;
+                };
+                let keys = [month, day, year];
+                if keys
+                    .iter()
+                    .any(|key| opened["locks"][*key].as_str().is_some())
+                {
+                    continue;
+                }
+                let mut edits = Map::new();
+                for (key, value) in [(month, "07"), (day, "19"), (year, "2031")] {
+                    edits.insert(key.to_string(), json!(value));
+                }
+                let filled = fill(code, &opened["draft"], Value::Object(edits));
+                for key in keys {
+                    if let Some(reason) = filled["rejected"][key].as_str() {
+                        if !rows_annual_individual::is_gate_refusal(code, reason) {
+                            split_refused
+                                .push(format!("{code} {key}: {reason}"));
+                        }
+                    }
+                }
+                let landed = keys.iter().all(|key| {
+                    filled["rejected"][*key].as_str().is_none()
+                        && !filled["values"][*key].as_str().unwrap_or("").is_empty()
+                });
+                if landed {
+                    split_typed += 1;
+                    if code == "0605" {
+                        split_0605 += 1;
+                    }
+                } else {
+                    split_refused.push(format!(
+                        "{code} {month}/{day}/{year}: parts did not land: {:?}",
+                        filled["rejected"]
+                    ));
+                }
+            }
         }
         assert!(typed > 90, "{typed} date boxes typed");
         assert!(
@@ -15630,6 +15722,14 @@ mod tests {
                 format!("1701MS frm1701MS:txtTaxpayerNo16b1: {joint_first}"),
                 format!("1701MS frm1701MS:txtTaxpayerNo16b: {joint_first}"),
             ]
+        );
+        assert!(split_typed > 20, "{split_typed} split-date groups typed");
+        // 0605's two Items are the ones this guards: both must be exercised.
+        assert_eq!(split_0605, 2, "0605 Items 4 and 7 typed part by part");
+        assert!(
+            split_refused.is_empty(),
+            "split-date parts refused on the blank seed:\n{}",
+            split_refused.join("\n")
         );
     }
 

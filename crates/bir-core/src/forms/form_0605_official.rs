@@ -1449,4 +1449,38 @@ mod tests {
             "a three-decimal amount must still be refused"
         );
     }
+
+    /// The field map shows what the three boxes hold: a complete date as
+    /// zero-padded parts, an empty date as three blanks, and typed parts of
+    /// an unfinished date as the entered parts with the rest blank (B1).
+    #[test]
+    fn the_date_boxes_show_complete_empty_and_partial_dates() {
+        // Complete: the official padding.
+        let mut draft = sample();
+        draft.due_date = Form0605Date::new(2023, 8, 7).ok();
+        draft.return_period = None;
+        let fields = draft.to_official_field_map();
+        assert_eq!(fields["frm0605:txtDueDateMonth"], "08");
+        assert_eq!(fields["frm0605:txtDueDateDay"], "07");
+        assert_eq!(fields["frm0605:txtDueDateYear"], "2023");
+        for key in [
+            "frm0605:txtReturnPeriodMonth",
+            "frm0605:txtReturnPeriodDay",
+            "frm0605:txtReturnPeriodYear",
+        ] {
+            assert_eq!(fields[key], "", "{key} blank on an empty date");
+        }
+
+        // Partial: only the month typed — it shows, the rest stay blank.
+        // The typed parts ride the draft's serde shape, so the state is
+        // built as stored JSON and read back as the typed draft.
+        let mut partial = serde_json::to_value(sample()).unwrap();
+        partial["due_date"] = serde_json::Value::Null;
+        partial["due_date_typed"] = serde_json::json!({"month": 8});
+        let draft: Form0605Draft = serde_json::from_value(partial).unwrap();
+        let fields = draft.to_official_field_map();
+        assert_eq!(fields["frm0605:txtDueDateMonth"], "08");
+        assert_eq!(fields["frm0605:txtDueDateDay"], "");
+        assert_eq!(fields["frm0605:txtDueDateYear"], "");
+    }
 }
