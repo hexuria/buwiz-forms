@@ -1034,14 +1034,15 @@ function watchUpdate(): void {
 
 /** How often the lists are read again while a return is Queued (instead of the events poll's 30 s). */
 export const QUEUED_POLL_MS = 3000;
-/** How long after the Queued set last changed (or a queue action) the watch keeps its pace; after that the normal 30 s events poll is enough. */
+/** How long after the Queued set last changed (or a queue action) the watch keeps its fast pace. */
 export const QUEUED_FAST_MS = 30_000;
 
-/** The watch's pace: the wait before its first look, between two looks, and how long the fast phase lasts. A test shortens them. */
+/** The watch's pace: first look, tick, fast phase duration and slow re-read interval. A test shortens them. */
 export interface QueuedTiming {
   firstMs: number;
   tickMs: number;
   fastMs: number;
+  slowMs: number;
 }
 
 /** The ids of the Queued returns in the cached filed list (read now when it was dropped), as one sorted text; "" for none. Always "" behind a lock: nothing is read for nobody. */
@@ -1058,37 +1059,42 @@ function queuedKey(): string {
  * One look of the Queued watch. It does nothing until the frame is shown (booted, the account gate open, first-run setup done, no
  * sign-in in front). With a return Queued it reads the worker's lists (WORKER_KEYS) on each look for fastMs after the Queued set last
  * changed or a queue action was made; a return that stays Queued (the worker is off, SFTP is down, the computer is offline) is then
- * left to the 30 s events poll instead of dropping every mounted screen's reads every 3 s for good. A change in the set, a new queue
+ * read every slowMs even when the normal events poll is disabled. A change in the set, a new queue
  * action, or the frame coming back from a lock starts the fast phase again.
  */
-function queuedLook(fastMs: number): () => void {
+function queuedLook(fastMs: number, slowMs: number): () => void {
   let seen = "";
   let changedAt = 0;
+  let lastReadAt = 0;
   return () => {
     if (!chromeVisible()) {
       seen = "";
       return;
     }
     const queued = queuedKey();
+    const now = Date.now();
     if (queued !== seen) {
       seen = queued;
-      changedAt = Date.now();
+      changedAt = now;
     }
     changedAt = Math.max(changedAt, store.lastQueueAction());
-    if (queued !== "" && Date.now() - changedAt < fastMs) pollEvents(WORKER_KEYS);
+    if (queued !== "" && (now - changedAt < fastMs || now - lastReadAt >= slowMs)) {
+      lastReadAt = now;
+      pollEvents(WORKER_KEYS);
+    }
   };
 }
 
 /**
  * The submission worker sends a Queued return within a second or two and tells nobody, so Filings and Home would say Queued until
  * something else moved the cache (the old app relied on its 30 s events poll, and a refused Cancel queue). While any return is Queued
- * the worker's lists are read every 3 s (for about 30 s after the Queued set last changed, then the 30 s events poll alone), in the dev
+ * the worker's lists are read every 3 s (for about 30 s after the Queued set last changed, then every 30 s), in the dev
  * environment too (where the other polls wait for BIR_SHELL_POLL=1). The root starts it and calls the returned function on unmount.
  */
 export function startQueuedWatch(timing: Partial<QueuedTiming> = {}): () => void {
-  const t: QueuedTiming = { firstMs: 1000, tickMs: QUEUED_POLL_MS, fastMs: QUEUED_FAST_MS, ...timing };
+  const t: QueuedTiming = { firstMs: 1000, tickMs: QUEUED_POLL_MS, fastMs: QUEUED_FAST_MS, slowMs: POLL.events, ...timing };
   return startPolls(
-    [{ name: "queued", every: t.tickMs, first: t.firstMs, run: queuedLook(t.fastMs) }],
+    [{ name: "queued", every: t.tickMs, first: t.firstMs, run: queuedLook(t.fastMs, t.slowMs) }],
     (name, error) => store.logScreen("warn", `poll ${name}: ${errorText(error)}`),
   );
 }
