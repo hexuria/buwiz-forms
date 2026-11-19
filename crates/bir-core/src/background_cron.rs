@@ -772,6 +772,7 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
             // amendment can later snapshot what BIR received.
             draft.submitted_payload = Some(xml_payload);
             draft.transition_to_submitted(filename, session_source.is_dry_run());
+            draft.submitted_via_relay = session_source.is_relay();
             if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_1601c_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -813,17 +814,27 @@ async fn process_queued_1601c_with_transport<T: SubmissionTransport>(
                 }
             }
         }
+        Err(error) if error.relay_did_not_accept() => {
+            let (tin, year, month) = (draft.tin.clone(), draft.taxable_year, draft.month);
+            release_unaccepted(
+                "1601C",
+                &draft.period_code(),
+                &error,
+                &db,
+                |db_guard, note, refused| {
+                    db_guard.release_unaccepted_claimed_1601c_submission(
+                        &tin,
+                        year,
+                        month,
+                        &claim_token,
+                        note,
+                        refused,
+                    )
+                },
+            );
+        }
         Err(error) => {
-            let error_category = match error {
-                crate::transport::TransportError::Sftp(_) => "sftp",
-                crate::transport::TransportError::Ssh(_) => "ssh",
-                crate::transport::TransportError::Dispatcher(_) => "dispatcher",
-                crate::transport::TransportError::Crypto(_) => "crypto",
-                crate::transport::TransportError::Http(_) => "http",
-                crate::transport::TransportError::Io(_) => "io",
-                crate::transport::TransportError::Config(_) => "config",
-                crate::transport::TransportError::Rejected => "rejected",
-            };
+            let error_category = error.category();
             warn!(
                 error_category,
                 "Cron: 1601C PUT ended after the network claim; outcome is unknown and support-assisted manual reconciliation is required"
@@ -1168,6 +1179,7 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
             draft
                 .lifecycle_mut()
                 .transition_to_submitted(filename, session_source.is_dry_run());
+            draft.lifecycle_mut().submitted_via_relay = session_source.is_relay();
             if let Ok(db_guard) = lock_timing::lock(&db) {
                 match db_guard.finish_claimed_queueable_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -1212,6 +1224,29 @@ async fn process_queued_queueable<F: QueueableForm, T: SubmissionTransport>(
                     ),
                 }
             }
+        }
+        Err(error) if error.relay_did_not_accept() => {
+            let (tin, year, period) = (
+                draft.tin().to_string(),
+                draft.taxable_year(),
+                draft.period_column(),
+            );
+            release_unaccepted(
+                F::FORM_CODE,
+                &draft.period_code(),
+                &error,
+                &db,
+                |db_guard, note, refused| {
+                    db_guard.release_unaccepted_claimed_queueable::<F>(
+                        &tin,
+                        year,
+                        period,
+                        &claim_token,
+                        note,
+                        refused,
+                    )
+                },
+            );
         }
         Err(_) => {
             warn!(
@@ -1544,6 +1579,7 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
             // Keep the exact bytes that were encrypted for PUT.
             draft.submitted_payload = Some(xml_payload);
             draft.transition_to_submitted(filename.clone(), session_source.is_dry_run());
+            draft.submitted_via_relay = session_source.is_relay();
             if let Ok(db_guard) = lock_timing::lock(&db_clone) {
                 match db_guard.finish_claimed_2551q_submission(&draft, &claim_token) {
                     Ok(_) => {
@@ -1581,17 +1617,27 @@ async fn process_queued_2551q_with_transport<T: SubmissionTransport>(
                 }
             }
         }
+        Err(error) if error.relay_did_not_accept() => {
+            let (tin, year, quarter) = (draft.tin.clone(), draft.taxable_year, draft.quarter);
+            release_unaccepted(
+                "2551Q",
+                &draft.period_code(),
+                &error,
+                &db_clone,
+                |db_guard, note, refused| {
+                    db_guard.release_unaccepted_claimed_2551q_submission(
+                        &tin,
+                        year,
+                        quarter,
+                        &claim_token,
+                        note,
+                        refused,
+                    )
+                },
+            );
+        }
         Err(error) => {
-            let error_category = match error {
-                crate::transport::TransportError::Sftp(_) => "sftp",
-                crate::transport::TransportError::Ssh(_) => "ssh",
-                crate::transport::TransportError::Dispatcher(_) => "dispatcher",
-                crate::transport::TransportError::Crypto(_) => "crypto",
-                crate::transport::TransportError::Http(_) => "http",
-                crate::transport::TransportError::Io(_) => "io",
-                crate::transport::TransportError::Config(_) => "config",
-                crate::transport::TransportError::Rejected => "rejected",
-            };
+            let error_category = error.category();
             // Once PUT has started, an error does not prove that BIR
             // received no bytes. Keep the durable claim just like a
             // process crash: retrying could duplicate a return.
@@ -1844,6 +1890,35 @@ pub fn schedule_email_poll(
         };
         let _ = db_guard.save_job(new_job);
     }
+}
+
+/// The relay proved it did not take the file after the claim (it refused it, or was unavailable): the claim is let go
+/// through `release` (refused: back to Draft with the reason; unavailable: retried after the back-off). Any other
+/// failure after the upload started keeps the claim.
+fn release_unaccepted(
+    form_code: &str,
+    period: &str,
+    error: &crate::transport::TransportError,
+    db: &Arc<Mutex<Database>>,
+    release: impl FnOnce(&Database, String, bool) -> Result<bool, crate::db::DbError>,
+) {
+    let refused = matches!(error, crate::transport::TransportError::RelayRefused(_));
+    warn!(
+        category = error.category(),
+        "Cron: the relay did not take {form_code} {period}: {error}"
+    );
+    if let Ok(db_guard) = lock_timing::lock(db) {
+        match release(&db_guard, error.to_string(), refused) {
+            Ok(true) => {}
+            Ok(false) => info!(
+                "Cron: {form_code} {period} was canceled or superseded before the relay's answer was recorded"
+            ),
+            Err(db_error) => warn!(
+                "Cron: could not record the relay's answer for {form_code} {period}: {db_error}"
+            ),
+        }
+    }
+    crate::ipc::post_db_changed();
 }
 
 fn fail_draft_2551q(
@@ -2477,6 +2552,10 @@ mod tests {
         Success,
         PreStore,
         UnknownIo,
+        /// The relay answered 4xx after the claim: it kept nothing.
+        RelayRefused,
+        /// The relay answered 503 (or was not there) after the claim: it kept nothing.
+        RelayUnavailable,
     }
 
     struct RecordingSubmissionTransport {
@@ -2491,6 +2570,14 @@ mod tests {
                 calls: Mutex::new(Vec::new()),
                 outcome,
                 source: crate::transport::SftpEndpointSource::Env,
+            }
+        }
+
+        fn relay(outcome: TestTransportOutcome) -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                outcome,
+                source: crate::transport::SftpEndpointSource::Relay,
             }
         }
 
@@ -2538,9 +2625,10 @@ mod tests {
                             "simulated sftp connect timeout",
                         )))
                     }
-                    TestTransportOutcome::Success | TestTransportOutcome::UnknownIo => {
-                        Ok(form_type)
-                    }
+                    TestTransportOutcome::Success
+                    | TestTransportOutcome::UnknownIo
+                    | TestTransportOutcome::RelayRefused
+                    | TestTransportOutcome::RelayUnavailable => Ok(form_type),
                 }
             })
         }
@@ -2570,6 +2658,12 @@ mod tests {
                             "simulated unknown network outcome",
                         )))
                     }
+                    TestTransportOutcome::RelayRefused => Err(
+                        crate::transport::TransportError::RelayRefused("422: bad filename".into()),
+                    ),
+                    TestTransportOutcome::RelayUnavailable => Err(
+                        crate::transport::TransportError::RelayUnavailable("503: down".into()),
+                    ),
                     TestTransportOutcome::PreStore => {
                         panic!("PUT must not run after a pre-store SFTP failure")
                     }
@@ -3419,6 +3513,238 @@ mod tests {
         )
         .await;
         assert!(retry.calls().is_empty());
+    }
+
+    /// The back-off after a failure ends now: the stored return's `next_retry_at` moves into the past.
+    fn make_retry_due(db: &Arc<Mutex<Database>>, form_code: &str, tin: &str) {
+        let mut value: serde_json::Value =
+            serde_json::from_str(&stored_json(db, form_code, tin)).unwrap();
+        let past = json_retry_past();
+        if value.get("lifecycle").is_some() {
+            value["lifecycle"]["next_retry_at"] = past;
+        } else {
+            value["next_retry_at"] = past;
+        }
+        db.lock()
+            .unwrap()
+            .conn
+            .execute(
+                "UPDATE form_drafts SET data_json = ?1 WHERE form_code = ?2 AND tin = ?3",
+                rusqlite::params![value.to_string(), form_code, tin],
+            )
+            .unwrap();
+    }
+
+    fn json_retry_past() -> serde_json::Value {
+        serde_json::Value::String((Utc::now() - chrono::Duration::minutes(1)).to_rfc3339())
+    }
+
+    fn stored_queued_1601c(
+        profile: &TaxpayerProfile,
+    ) -> (Arc<Mutex<Database>>, Form1601CDraft, FormDraftSummary) {
+        let queued = queued_1601c_draft(profile);
+        let db = Arc::new(Mutex::new(Database::open_in_memory_for_tests().unwrap()));
+        let id = db.lock().unwrap().save_queued_1601c_draft(&queued).unwrap();
+        let summary = queued_1601c_summary(id, &queued);
+        (db, queued, summary)
+    }
+
+    /// A 503 from the relay after the claim: it kept nothing, so the claim goes, the return stays Queued with a
+    /// back-off, and once the relay is back it is sent and remembered as sent through the relay.
+    #[tokio::test]
+    async fn process_queued_1601c_relay_unavailable_releases_the_claim_and_retries() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let down = RecordingSubmissionTransport::relay(TestTransportOutcome::RelayUnavailable);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &down).await;
+        assert_eq!(down.calls().len(), 1);
+        let stored = || {
+            db.lock()
+                .unwrap()
+                .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+                .unwrap()
+                .unwrap()
+        };
+        let waiting = stored();
+        assert_eq!(waiting.status, FilingStatus::Queued);
+        assert!(waiting.submission_claim_token.is_none());
+        assert!(waiting.submission_put_started_at.is_none());
+        assert_eq!(waiting.submission_attempts, 1);
+        assert!(waiting.next_retry_at.as_deref() > Some(Utc::now().to_rfc3339().as_str()));
+        assert!(
+            waiting
+                .submission_error
+                .as_deref()
+                .is_some_and(|e| e.contains("unavailable")),
+            "{:?}",
+            waiting.submission_error
+        );
+
+        make_retry_due(&db, "1601C", &queued.tin);
+        let back = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &back).await;
+        assert_eq!(back.calls().len(), 1);
+        let sent = stored();
+        assert_eq!(sent.status, FilingStatus::Submitted);
+        assert!(sent.submitted_via_relay);
+        assert!(!sent.submitted_dry_run);
+    }
+
+    /// A 4xx from the relay: the same file would be refused again, so the return goes back to Draft with the reason.
+    #[tokio::test]
+    async fn process_queued_1601c_relay_refusal_returns_it_to_draft_with_the_reason() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let refusing = RecordingSubmissionTransport::relay(TestTransportOutcome::RelayRefused);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &refusing).await;
+        let draft = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(draft.submission_claim_token.is_none());
+        assert!(draft.submitted_at.is_none());
+        assert!(
+            draft
+                .submission_error
+                .as_deref()
+                .is_some_and(|e| e.contains("refused")),
+            "{:?}",
+            draft.submission_error
+        );
+    }
+
+    /// A send that did not go through the relay is not remembered as one.
+    #[tokio::test]
+    async fn process_queued_1601c_direct_send_is_not_marked_as_relay() {
+        let profile = test_profile();
+        let (db, queued, summary) = stored_queued_1601c(&profile);
+        let direct = RecordingSubmissionTransport::new(TestTransportOutcome::Success);
+        process_queued_1601c_with_transport(&summary, &profile, db.clone(), &direct).await;
+        let sent = db
+            .lock()
+            .unwrap()
+            .get_1601c_draft(&queued.tin, queued.taxable_year, queued.month)
+            .unwrap()
+            .unwrap();
+        assert_eq!(sent.status, FilingStatus::Submitted);
+        assert!(!sent.submitted_via_relay);
+        assert!(!stored_json(&db, "1601C", &queued.tin).contains("submitted_via_relay"));
+    }
+
+    #[tokio::test]
+    async fn process_queued_2551q_relay_unavailable_releases_the_claim_and_retries() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let down = RecordingSubmissionTransport::relay(TestTransportOutcome::RelayUnavailable);
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &down).await;
+        let stored = || {
+            db.lock()
+                .unwrap()
+                .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+                .unwrap()
+                .unwrap()
+        };
+        let waiting = stored();
+        assert_eq!(waiting.status, FilingStatus::Queued);
+        assert!(waiting.submission_claim_token.is_none());
+        assert!(waiting.submission_put_started_at.is_none());
+        assert_eq!(waiting.submission_attempts, 1);
+        assert!(
+            waiting
+                .last_error
+                .as_deref()
+                .is_some_and(|e| e.contains("unavailable"))
+        );
+
+        make_retry_due(&db, "2551Q", &queued.tin);
+        let back = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &back).await;
+        let sent = stored();
+        assert_eq!(sent.status, FilingStatus::Submitted);
+        assert!(sent.submitted_via_relay);
+    }
+
+    #[tokio::test]
+    async fn process_queued_2551q_relay_refusal_returns_it_to_draft_with_the_reason() {
+        let db = test_db();
+        let (queued, summary) = stored_queued_2551q(&db);
+        let refusing = RecordingSubmissionTransport::relay(TestTransportOutcome::RelayRefused);
+        process_queued_2551q_with_transport(&summary, &reviewed_profile(), db.clone(), &refusing)
+            .await;
+        let draft = db
+            .lock()
+            .unwrap()
+            .get_2551q_draft(&queued.tin, queued.taxable_year, queued.quarter)
+            .unwrap()
+            .unwrap();
+        assert_eq!(draft.status, FilingStatus::Draft);
+        assert!(draft.submission_claim_token.is_none());
+        assert!(
+            draft
+                .last_error
+                .as_deref()
+                .is_some_and(|e| e.contains("refused"))
+        );
+    }
+
+    #[tokio::test]
+    async fn generic_worker_relay_unavailable_releases_the_claim_and_a_refusal_returns_to_draft() {
+        let profile = test_profile();
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let down = RecordingSubmissionTransport::relay(TestTransportOutcome::RelayUnavailable);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &down,
+            allow_test_form,
+        )
+        .await;
+        let waiting = stored_test_form(&db, &queued);
+        assert_eq!(waiting.lifecycle.status, FilingStatus::Queued);
+        assert!(waiting.lifecycle.is_unclaimed());
+        assert!(waiting.lifecycle.submission_put_started_at.is_none());
+        assert_eq!(waiting.lifecycle.submission_attempts, 1);
+
+        make_retry_due(&db, TestForm::FORM_CODE, queued.tin());
+        let back = RecordingSubmissionTransport::relay(TestTransportOutcome::Success);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &back,
+            allow_test_form,
+        )
+        .await;
+        let sent = stored_test_form(&db, &queued);
+        assert_eq!(sent.lifecycle.status, FilingStatus::Submitted);
+        assert!(sent.lifecycle.submitted_via_relay);
+
+        let db = test_db();
+        let (queued, summary) = queued_test_form(&db);
+        let refusing = RecordingSubmissionTransport::relay(TestTransportOutcome::RelayRefused);
+        process_queued_queueable::<TestForm, _>(
+            &summary,
+            &profile,
+            db.clone(),
+            &refusing,
+            allow_test_form,
+        )
+        .await;
+        let draft = stored_test_form(&db, &queued);
+        assert_eq!(draft.lifecycle.status, FilingStatus::Draft);
+        assert!(draft.lifecycle.is_unclaimed());
+        assert!(
+            draft
+                .lifecycle
+                .submission_error
+                .as_deref()
+                .is_some_and(|e| e.contains("refused"))
+        );
     }
 
     #[tokio::test]

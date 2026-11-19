@@ -1733,6 +1733,20 @@ mod ios_print {
         });
         rx.recv_timeout(Duration::from_secs(20)).map_err(|_| "The print sheet did not open in time.".to_owned())?
     }
+
+    /// Dismisses the shared print controller's sheet, if it is up; returns at once.
+    pub(super) fn dismiss() {
+        DispatchQueue::main().exec_async(|| {
+            // SAFETY: UIKit's documented API, on the main thread; dismissing a controller that shows nothing does nothing.
+            unsafe {
+                let Some(class) = AnyClass::get(c"UIPrintInteractionController") else { return };
+                let controller: Option<Retained<AnyObject>> = msg_send![class, sharedPrintController];
+                if let Some(controller) = controller {
+                    let _: () = msg_send![&controller, dismissAnimated: true];
+                }
+            }
+        });
+    }
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -2055,6 +2069,13 @@ impl Print {
         previews_natively()
     }
 
+    /// Takes down the system print sheet if one is up (iOS; elsewhere nothing): a lock or sign-out must not leave a
+    /// taxpayer's return on screen.
+    pub fn dismiss_native() {
+        #[cfg(target_os = "ios")]
+        ios_print::dismiss();
+    }
+
     /// Whether this system draws the preview's sheets itself, as pictures (Windows and Linux: on the CPU, see
     /// `sheets.rs`), in place of a web view showing the sheet's page (macOS).
     pub fn draws_sheets() -> bool {
@@ -2095,6 +2116,11 @@ impl Print {
         #[cfg(not(any(all(windows, target_env = "msvc"), target_os = "linux")))]
         {
             let (pdf, title, dir) = pdf_of(&key).await?;
+            // The PDF takes a moment: a lock (or leaving the return) in that time forgets the preview, and then no sheet
+            // may show the taxpayer's return over the sign-in screen.
+            if snapshot(&key).is_none() {
+                return Err("The preview is closed.".to_owned());
+            }
             let path = write_pdf(&dir, &title, &pdf).map_err(|error| format!("Could not write the PDF: {error}"))?;
             blocking(move || platform_print(&path)).await.map_err(|error| error.to_string())?
         }

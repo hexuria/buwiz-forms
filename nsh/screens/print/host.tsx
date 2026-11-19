@@ -55,7 +55,9 @@ const host = createPreviewHost({
     // with it, or they would keep the app alive.
     onFirstOpen: () => void Window.get("main")?.on("close", () => host.closeAll()),
   },
-  ...(Print.previewsNatively() ? { nativePreview: (key: string) => Print.print(key) } : {}),
+  ...(Print.previewsNatively()
+    ? { nativePreview: (key: string) => Print.print(key), dismissNative: () => Print.dismissNative() }
+    : {}),
   print: { closed: (key) => Print.closed(key) },
   previews,
   route: () => untracked(() => app.route()),

@@ -202,3 +202,82 @@ test("a window that cannot open says so and leaves nothing behind; a device with
   expect(w.toasts[w.toasts.length - 1]).toBe("Print preview is not available on this device.");
   expect(w.closedKeys[w.closedKeys.length - 1]).toBe("1601C");
 });
+
+/** A phone: no second window; the system print sheet shows the PDF once `show` settles. */
+function phone() {
+  const closedKeys: string[] = [];
+  const toasts: string[] = [];
+  const state = { chrome: true, dismissed: 0, sheetUp: false };
+  let settle: { resolve: () => void; reject: (error: Error) => void } | null = null;
+  const host = createPreviewHost({
+    available: false,
+    windows: { get: () => null, open: () => { throw new Error("no window on a phone"); } },
+    nativePreview: () =>
+      new Promise<void>((resolve, reject) => {
+        settle = { resolve: () => { state.sheetUp = true; resolve(); }, reject };
+      }),
+    dismissNative: () => {
+      state.dismissed++;
+      state.sheetUp = false;
+    },
+    print: { closed: (key) => void closedKeys.push(key) },
+    previews: { apply: () => {}, get: () => undefined, remove: () => {} },
+    route: () => returnOf(3),
+    period: () => null,
+    chromeVisible: () => state.chrome,
+    toast: (message) => void toasts.push(message),
+    errorText: (error) => String((error as Error).message ?? error),
+  });
+  const open = (key: string) =>
+    host.hear({ kind: "open", key, title: `BIR Form ${key}`, url: "", script: "", revision: 1, pages: 2, paper: "A4", sheet: "Folio", zoom: 1, message: null } as PrintEvent);
+  const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  return { host, closedKeys, toasts, state, open, settle: () => settle!, tick };
+}
+
+test("phone: the system print sheet shows the PDF, then the Rust side forgets the preview", async () => {
+  const p = phone();
+  p.open("1601C");
+  expect(p.toasts).toEqual(["Preparing the print preview..."]);
+  p.settle().resolve();
+  await p.tick();
+  expect(p.state.sheetUp).toBe(true);
+  expect(p.state.dismissed).toBe(0);
+  expect(p.closedKeys).toEqual(["1601C"]);
+});
+
+test("phone: a lock while the PDF is made forgets the preview at once, and a sheet that comes up anyway is taken down", async () => {
+  const p = phone();
+  p.open("1601C");
+  p.state.chrome = false;
+  p.host.closeAll();
+  // The Rust side forgets it now, so its print call refuses to show the sheet.
+  expect(p.closedKeys).toEqual(["1601C"]);
+  p.settle().resolve();
+  await p.tick();
+  expect(p.state.sheetUp).toBe(false);
+  expect(p.state.dismissed).toBeGreaterThan(0);
+});
+
+test("phone: the refusal after a lock is quiet; a lock with the sheet up takes it down; nothing is asked while locked", async () => {
+  const p = phone();
+  p.open("1601C");
+  p.state.chrome = false;
+  p.host.closeAll();
+  p.settle().reject(new Error("The preview is closed."));
+  await p.tick();
+  expect(p.toasts).toEqual(["Preparing the print preview..."]);
+
+  p.state.chrome = true;
+  p.open("2551Q");
+  p.settle().resolve();
+  await p.tick();
+  expect(p.state.sheetUp).toBe(true);
+  p.state.chrome = false;
+  p.host.closeAll();
+  expect(p.state.sheetUp).toBe(false);
+
+  const before = p.toasts.length;
+  p.open("0619E");
+  expect(p.toasts.length).toBe(before);
+  expect(p.closedKeys.at(-1)).toBe("0619E");
+});

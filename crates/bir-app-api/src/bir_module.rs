@@ -1554,7 +1554,7 @@ fn keep_stored_trigger_flag(
     Ok(())
 }
 
-/// `submitted_dry_run` is the submission worker's (bir-core
+/// `submitted_dry_run` and `submitted_via_relay` are the submission worker's (bir-core
 /// `background_cron`, at the moment it marks a return Submitted): a save
 /// never stores a client's. Whatever this save writes did not come from
 /// the worker's send (a stored return that left Draft cannot be saved over).
@@ -1563,12 +1563,14 @@ pub(crate) fn drop_client_dry_run(data: &mut serde_json::Value) {
         return;
     };
     object.remove("submitted_dry_run");
+    object.remove("submitted_via_relay");
     // The shapes that keep their lifecycle in a `lifecycle` object.
     if let Some(lifecycle) = object
         .get_mut("lifecycle")
         .and_then(serde_json::Value::as_object_mut)
     {
         lifecycle.remove("submitted_dry_run");
+        lifecycle.remove("submitted_via_relay");
     }
 }
 
