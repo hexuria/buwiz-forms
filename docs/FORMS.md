@@ -6,7 +6,7 @@ how far each one is proven. The source of truth for the form list is
 [`support_level.rs`](../crates/bir-core/src/forms/support_level.rs). If this
 page and that file disagree, the code wins.
 
-Counts: 43 forms, 39 can be queued for submission, 4 cannot, 78 official
+Counts: 43 forms, 39 can be queued for submission, 4 cannot, 79 official
 samples in total, 0 forms marked `release_ready`.
 
 ## How parity is proven
@@ -51,7 +51,7 @@ Columns:
 | 1701Q | Quarterly Income Tax Return for Individuals, Estates and Trusts | 2018 | `1701Qv2018` | yes | 1 | `1701q-2018` |
 | 2550Q | Quarterly Value-Added Tax Return | 2024 | `2550Qv2024` | yes | 3 | `2550q-2024` |
 | 1701 | Annual Income Tax Return for Individuals, Estates and Trusts | 2018 | `1701v2018` | yes | 2 | `1701-2018` |
-| 1702RT | Annual Income Tax Return — Regular Taxable | 2018C | `1702RTv2018C` | yes | 2 | `1702rt-2018c` |
+| 1702RT | Annual Income Tax Return — Regular Taxable | 2018C | `1702RTv2018C` | yes | 3 | `1702rt-2018c` |
 | 1702MX | Annual Income Tax Return — Mixed Income | 2018C | `1702MXv2018C` | yes | 3 | `1702mx-2018c` |
 | 1606 | Withholding Tax Remittance Return for Onerous Transfer of Real Property Other Than Capital Asset (Including Taxable and Exempt) | 2018 | `1606` | yes | 1 | `1606-2018` |
 | 1600VT | Monthly Remittance Return of Value-Added Tax Withheld | 2018 | `1600VTv2018` | yes | 3 | `1600-vt-2018` |
