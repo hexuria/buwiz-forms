@@ -17,9 +17,9 @@ use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0605::{
-    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft,
-    Form0605FilingBasis, Form0605IndexedCode, Form0605MannerOfPayment,
-    Form0605TaxpayerClassification, Form0605TypeOfPayment,
+    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft, Form0605FilingBasis,
+    Form0605IndexedCode, Form0605MannerOfPayment, Form0605TaxpayerClassification,
+    Form0605TypeOfPayment,
 };
 use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};

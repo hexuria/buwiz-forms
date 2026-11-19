@@ -632,7 +632,9 @@ impl Form0605Draft {
     ) -> Result<(), String> {
         use crate::forms::agent::DatePart;
         for (index, value) in parts.iter().enumerate() {
-            let Some(value) = value else { continue };
+            let Some(value) = value else {
+                continue;
+            };
             let part = [DatePart::Month, DatePart::Day, DatePart::Year][index];
             Self::check_date_part(part, *value)?;
         }
@@ -648,10 +650,7 @@ impl Form0605Draft {
 
     /// The range rule both split-date writers share: months 1–12, days
     /// 1–31, four-digit years; `None` (a cleared box) is always fine.
-    fn check_date_part(
-        part: crate::forms::agent::DatePart,
-        value: u16,
-    ) -> Result<(), String> {
+    fn check_date_part(part: crate::forms::agent::DatePart, value: u16) -> Result<(), String> {
         use crate::forms::agent::DatePart;
         let ok = match part {
             DatePart::Month => (1..=12).contains(&value),

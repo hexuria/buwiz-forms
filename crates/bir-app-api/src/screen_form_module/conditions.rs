@@ -140,7 +140,12 @@ pub(super) fn cleared(kind: AgentFormKind, draft: &Value, key: &str, shown: &str
 /// one key a write is about (B16). Boxes a module gates keep their own
 /// refusal reasons, so they are left out here as `off_boxes` leaves them
 /// out of the trial.
-pub(super) fn off_now(kind: AgentFormKind, draft: &Value, values: &Value, key: &str) -> Option<String> {
+pub(super) fn off_now(
+    kind: AgentFormKind,
+    draft: &Value,
+    values: &Value,
+    key: &str,
+) -> Option<String> {
     let code = kind.form_code();
     let list = conditions()[code].as_object()?;
     let condition = list.get(key)?;

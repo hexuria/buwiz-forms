@@ -8,9 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::FormValidator;
 use super::form_0605::{
-    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft,
-    Form0605FilingBasis, Form0605IndexedCode, Form0605MannerOfPayment, Form0605PaymentDetails,
-    Form0605SignatureDetails, Form0605TaxpayerClassification, Form0605TypeOfPayment,
+    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft, Form0605FilingBasis,
+    Form0605IndexedCode, Form0605MannerOfPayment, Form0605PaymentDetails, Form0605SignatureDetails,
+    Form0605TaxpayerClassification, Form0605TypeOfPayment,
 };
 
 const ATC_INDEX_COUNT: u16 = 142;

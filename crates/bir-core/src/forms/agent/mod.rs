@@ -1527,13 +1527,27 @@ fn write_bound_box(
         use crate::forms::form_0605::Form0605DateField as Which;
         match key {
             "frm0605:txtDueDateMonth" => {
-                return write_0605_date_part(kind, draft, key, &text, Which::DueDate, DatePart::Month)
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::DueDate,
+                    DatePart::Month,
+                );
             }
             "frm0605:txtDueDateDay" => {
-                return write_0605_date_part(kind, draft, key, &text, Which::DueDate, DatePart::Day)
+                return write_0605_date_part(kind, draft, key, &text, Which::DueDate, DatePart::Day);
             }
             "frm0605:txtDueDateYear" => {
-                return write_0605_date_part(kind, draft, key, &text, Which::DueDate, DatePart::Year)
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::DueDate,
+                    DatePart::Year,
+                );
             }
             "frm0605:txtReturnPeriodMonth" => {
                 return write_0605_date_part(
@@ -1543,7 +1557,7 @@ fn write_bound_box(
                     &text,
                     Which::ReturnPeriod,
                     DatePart::Month,
-                )
+                );
             }
             "frm0605:txtReturnPeriodDay" => {
                 return write_0605_date_part(
@@ -1553,7 +1567,7 @@ fn write_bound_box(
                     &text,
                     Which::ReturnPeriod,
                     DatePart::Day,
-                )
+                );
             }
             "frm0605:txtReturnPeriodYear" => {
                 return write_0605_date_part(
@@ -1563,7 +1577,7 @@ fn write_bound_box(
                     &text,
                     Which::ReturnPeriod,
                     DatePart::Year,
-                )
+                );
             }
             // Item 6's ATC and Item 8's tax type are picks from the
             // official lists, stored as the whole indexed code (B2).

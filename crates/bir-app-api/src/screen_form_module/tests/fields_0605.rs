@@ -80,8 +80,7 @@ fn date_parts_in_one_batch_land_the_whole_dates() {
     let draft = &filled["draft"];
     assert_eq!(date_of(draft, "due_date"), Some((2023, 8, 17)));
     assert_eq!(date_of(draft, "return_period"), Some((2023, 12, 31)));
-    let map = agent::field_map(kind_of("0605").expect("0605 kind"), draft)
-        .expect("0605 field map");
+    let map = agent::field_map(kind_of("0605").expect("0605 kind"), draft).expect("0605 field map");
     assert_eq!(map["frm0605:txtDueDateMonth"], "08");
     assert_eq!(map["frm0605:txtDueDateDay"], "17");
     assert_eq!(map["frm0605:txtDueDateYear"], "2023");
@@ -290,8 +289,8 @@ fn atc_and_tax_type_are_picked_from_the_official_lists() {
     assert_eq!(draft["tax_type"]["xml_index"], 4);
 
     // The official map files the picks as their popup radios.
-    let map = agent::field_map(kind_of("0605").expect("0605 kind"), &draft)
-        .expect("0605 field map");
+    let map =
+        agent::field_map(kind_of("0605").expect("0605 kind"), &draft).expect("0605 field map");
     assert_eq!(map["txtATCCode"], "FP010");
     assert_eq!(map["AtcCode1"], "true");
     assert_eq!(map["txtTaxTypeCode"], "DO");
@@ -396,8 +395,8 @@ fn an_imported_atc_still_shows_its_code() {
     let filled = fill("0605", &draft, json!({ "txtTaxTypeCode": "DO" }));
     draft = filled["draft"].clone();
     draft["atc"]["evidence"] = json!("ImportedExact");
-    let map = agent::field_map(kind_of("0605").expect("0605 kind"), &draft)
-        .expect("0605 field map");
+    let map =
+        agent::field_map(kind_of("0605").expect("0605 kind"), &draft).expect("0605 field map");
     assert_eq!(map["txtATCCode"], "FP010");
     assert_eq!(map["AtcCode1"], "true");
 }
@@ -434,7 +433,9 @@ fn the_official_lists_reach_the_page_as_options() {
         .expect("txtATCCode options under PT");
     assert!(!atc_options.is_empty());
     assert!(
-        atc_options.iter().all(|o| o["value"].as_str().is_some_and(|v| v.starts_with("PT"))),
+        atc_options
+            .iter()
+            .all(|o| o["value"].as_str().is_some_and(|v| v.starts_with("PT"))),
         "only PT ATCs under PT: {atc_options:?}"
     );
     // And a PT ATC is on it.
@@ -449,7 +450,7 @@ fn the_line_of_business_prints_in_capitals() {
     setup();
     let mut draft = open("0605", 1)["draft"].clone();
     draft["line_of_business"] = json!("Retail");
-    let map = agent::field_map(kind_of("0605").expect("0605 kind"), &draft)
-        .expect("0605 field map");
+    let map =
+        agent::field_map(kind_of("0605").expect("0605 kind"), &draft).expect("0605 field map");
     assert_eq!(map["frm0605:txtLineBus"], "RETAIL");
 }

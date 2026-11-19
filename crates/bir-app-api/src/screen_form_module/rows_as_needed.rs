@@ -305,10 +305,7 @@ pub(super) fn split_date_groups(
         return Vec::new();
     }
     let sent_text = |key: &str| -> Option<String> {
-        edits
-            .iter()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| text(v))
+        edits.iter().find(|(k, _)| k == key).map(|(_, v)| text(v))
     };
     let shown_part = |key: &str| -> Option<u16> {
         let shown = shown[key].as_str().unwrap_or_default().trim();

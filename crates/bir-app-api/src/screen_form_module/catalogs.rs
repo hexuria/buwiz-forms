@@ -4,9 +4,8 @@
 use bir_core::forms::agent::{self, AgentFormKind, Binding};
 use bir_core::forms::queueable::QueueableKind;
 use bir_core::forms::{
-    excise_places, form_1600wp, form_1601c, form_1601eq, form_1601fq, form_1701a,
-    form_1702mx_official, form_1702q, form_2000, form_2200s, form_2550m, form_2551q,
-    form_0605_official,
+    excise_places, form_0605_official, form_1600wp, form_1601c, form_1601eq, form_1601fq,
+    form_1701a, form_1702mx_official, form_1702q, form_2000, form_2200s, form_2550m, form_2551q,
 };
 use bir_core::reference;
 use serde_json::{Map, Value, json};
@@ -810,7 +809,9 @@ pub(super) fn sel_judged(kind: AgentFormKind, key: &str, draft: &Value) -> Optio
         };
         let bound: Vec<&str> = options.iter().map(|o| o.value.as_str()).collect();
         let same = bound.len() == listed.len()
-            && bound.iter().all(|value| listed.iter().any(|code| code == value));
+            && bound
+                .iter()
+                .all(|value| listed.iter().any(|code| code == value));
         return same.then_some(listed);
     }
     Some(listed)

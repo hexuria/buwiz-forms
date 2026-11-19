@@ -77,8 +77,7 @@ fn form_2551q_item12_specify_takes_a_write_only_after_yes() {
         "2551Q item 12 specify while item 12 is unanswered"
     );
     assert_eq!(
-        refused["draft"]["tax_relief_specification"],
-        opened["draft"]["tax_relief_specification"],
+        refused["draft"]["tax_relief_specification"], opened["draft"]["tax_relief_specification"],
         "a refused write leaves the draft as it was"
     );
     // A blank write is a clear, never refused.

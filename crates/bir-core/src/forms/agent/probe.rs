@@ -3083,13 +3083,9 @@ mod blank_seed_tests {
             "txtTaxTypeCode" => return Some(json!("DO")),
             // 0605's date parts are whole-number bindings, but a year box
             // wants a four-digit year, not the whole-number probe.
-            "frm0605:txtDueDateMonth" | "frm0605:txtReturnPeriodMonth" => {
-                return Some(json!("07"))
-            }
+            "frm0605:txtDueDateMonth" | "frm0605:txtReturnPeriodMonth" => return Some(json!("07")),
             "frm0605:txtDueDateDay" | "frm0605:txtReturnPeriodDay" => return Some(json!("19")),
-            "frm0605:txtDueDateYear" | "frm0605:txtReturnPeriodYear" => {
-                return Some(json!("2031"))
-            }
+            "frm0605:txtDueDateYear" | "frm0605:txtReturnPeriodYear" => return Some(json!("2031")),
             _ => {}
         }
         match &bound.binding {
@@ -3162,8 +3158,7 @@ mod blank_seed_tests {
             let profile_box = matches!(verdict, Some(Gate::Lock(Lock::Profile)));
             let writable = matches!(
                 verdict,
-                None
-                    | Some(Gate::HostWritten)
+                None | Some(Gate::HostWritten)
                     | Some(Gate::Lock(Lock::Election))
                     | Some(Gate::Lock(Lock::Profile))
             );
@@ -3184,9 +3179,7 @@ mod blank_seed_tests {
                 Err(reason) => Some(reason),
                 // A write that returns Ok but leaves the draft as it was is
                 // the same dead end as a refusal.
-                Ok(()) if draft == before => {
-                    Some("the write left the draft unchanged".to_string())
-                }
+                Ok(()) if draft == before => Some("the write left the draft unchanged".to_string()),
                 Ok(()) => None,
             };
             if let Some(reason) = failed {
