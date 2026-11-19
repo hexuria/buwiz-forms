@@ -92,3 +92,76 @@ SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=
 
 Queue a validated demo return (Juana Santos): the relay prints the file, the
 mock BIR prints the upload, and Filings shows the return as Submitted.
+
+## On a physical iPhone
+
+Not run on a device yet (none attached to the build machine). `nsh run --target ios`
+only boots a simulator, so a device needs a signed package:
+
+1. Apple side: an Apple Developer team (a free personal team works, but its
+   profiles expire after 7 days). Get these from the team, or let Xcode create
+   them (Xcode > Settings > Accounts, then any project with automatic signing):
+   - an **Apple Development** certificate in the login keychain. Check with
+     `security find-identity -v -p codesigning`, which prints
+     `Apple Development: Name (TEAMID)`;
+   - an App ID for `dev.goldcoders.bir.nsh`, the `id` in `nsh/nsh.json`;
+   - the iPhone registered by its UDID (`xcrun devicectl list devices`);
+   - a **development provisioning profile** for that App ID, certificate and
+     device (`.mobileprovision`).
+2. On the iPhone: Settings > Privacy & Security > Developer Mode on (iOS 16+),
+   and trust the Mac when you connect it.
+3. Build and install (from `nsh/`, with `PATH` and `CARGO_TARGET_DIR` as the
+   `nsh-*` recipes set them):
+
+   ```sh
+   nsh package --target ios --sign "Apple Development: Name (TEAMID)" \
+     --profile ~/Downloads/buwiz_dev.mobileprovision        # writes .nsh/out/<name>.ipa
+   xcrun devicectl device install app --device <UDID> .nsh/out/<name>.ipa
+   xcrun devicectl device process launch --device <UDID> \
+     -e '{"EBIR_TEST_ENV":"1","BIR_AUTH_BYPASS":"1","BIR_SFTP_DRY_RUN":"1"}' dev.goldcoders.bir.nsh
+   ```
+
+   Without `--sign` and `--profile` you get an unsigned `.app` that a device
+   refuses. `-e` (or `DEVICECTL_CHILD_<name>` variables) is the device's
+   version of the simulator's `SIMCTL_CHILD_<name>`. The Rust side reads these
+   variables from the process environment.
+4. A device build is a release build, so `BUWIZ_NO_KEYCHAIN` is not forced:
+   the app uses the iOS keychain unless you pass `BUWIZ_NO_KEYCHAIN=1`.
+
+## Mock relay vs a real relay
+
+| | Mock (today) | Real relay |
+| --- | --- | --- |
+| URL | `BIR_RELAY_URL=http://127.0.0.1:8787` | e.g. `https://relay.example.com` |
+| Allowed by the app | yes | **refused**: the worker does not start |
+| From a device | no: `127.0.0.1` is the phone itself, not the Mac | needs the changes below |
+
+What refuses it today, on purpose:
+
+- `bir_core::transport::loopback_relay_url` (`crates/bir-core/src/transport.rs`)
+  accepts only an `http://` origin on `127.0.0.1`, `::1` or `localhost`, with
+  no user, path, query or fragment. Anything else is a `Config` error, and the
+  upload never starts.
+- `relay_target` in `nsh/src/guards.rs` then requires that loopback port to
+  answer. Otherwise the send mode is `Refused`.
+
+To test a real relay (a deliberate, reviewed change), you need:
+
+1. Relay origin allowlist: replace the loopback-only rule with an explicit
+   list. For example, accept `https://<host>` only when it equals an origin
+   compiled into the build (`option_env!("BUWIZ_RELAY_ORIGIN")`), and keep
+   refusing every other origin. Keep `http://` loopback for the mock.
+2. In `relay_target`, the reachability probe dials the URL's host and port.
+   For `https://` without a port, use 443, not 80.
+3. Authentication: the v1 contract has none. Add a header, e.g.
+   `authorization: Bearer …`, read from the keychain and never from a file
+   in the repository.
+4. App Transport Security: iOS blocks plain `http://` to anything but
+   loopback. Use `https://`. A LAN `http://` mock needs
+   `NSAllowsLocalNetworking` and `NSLocalNetworkUsageDescription` under
+   `ios.infoPlist` in `nsh/nsh.json`.
+5. The relay decides where returns go. Point a test relay at a mock or test
+   BIR endpoint: the app cannot tell what the relay forwards to.
+
+Until those changes land, the closest device test is the dry run (no relay
+URL), or the mock relay from the simulator.
