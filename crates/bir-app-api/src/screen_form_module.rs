@@ -15632,13 +15632,12 @@ mod tests {
         let mut split_typed = 0;
         let mut split_0605 = 0;
         let mut split_seen = 0;
+        // Open split groups another answer keeps shut: every refused part
+        // carries its gate's reason (a module gate's sentence or the
+        // corpus condition's "Needs ..." tag, B16), so the group is gated,
+        // not a gap.
+        let mut split_gated = 0;
         let mut split_refused: Vec<String> = Vec::new();
-        // Open split groups whose parts cannot land today, each named with
-        // its reason — none is this change's to fix (PR 1 covers 0605):
-        // - 1604C's refund_date parts write through a string-typed draft
-        //   path the date-part writer cannot merge into, so the typed
-        //   parts never reach the page (pre-existing, same class as B1).
-        let mut split_known: Vec<String> = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -15756,9 +15755,13 @@ mod tests {
                     edits.insert(key.to_string(), json!(value));
                 }
                 let filled = fill(code, &opened["draft"], Value::Object(edits));
+                let is_gate = |reason: &str| {
+                    reason.starts_with("Needs ")
+                        || rows_annual_individual::is_gate_refusal(code, reason)
+                };
                 for key in keys {
                     if let Some(reason) = filled["rejected"][key].as_str() {
-                        if !rows_annual_individual::is_gate_refusal(code, reason) {
+                        if !is_gate(reason) {
                             split_refused
                                 .push(format!("{code} {key}: {reason}"));
                         }
@@ -15768,13 +15771,22 @@ mod tests {
                     filled["rejected"][*key].as_str().is_none()
                         && !filled["values"][*key].as_str().unwrap_or("").is_empty()
                 });
+                // Every refused part gated (and at least one was): the
+                // group is shut by another answer, not broken.
+                let gated = !landed
+                    && keys.iter().any(|key| filled["rejected"][*key].is_string())
+                    && keys.iter().all(|key| {
+                        filled["rejected"][*key]
+                            .as_str()
+                            .is_none_or(|reason| is_gate(reason))
+                    });
                 if landed {
                     split_typed += 1;
                     if code == "0605" {
                         split_0605 += 1;
                     }
-                } else if code == "1604C" {
-                    split_known.push(format!("{code} {month}/{day}/{year}"));
+                } else if gated {
+                    split_gated += 1;
                 } else {
                     split_refused.push(format!(
                         "{code} {month}/{day}/{year}: parts did not land: {:?}",
@@ -15828,17 +15840,14 @@ mod tests {
             ]
         );
         assert_eq!(
-            split_typed + split_known.len(),
+            split_typed + split_gated,
             split_seen,
-            "every open split-date group lands or is a named exception"
+            "every open split-date group lands or is gated"
         );
         // 0605's two Items are the ones this guards: both must be exercised.
         assert_eq!(split_0605, 2, "0605 Items 4 and 7 typed part by part");
-        assert_eq!(
-            split_known,
-            vec!["1604C frm1604c:txtRefMonth/frm1604c:txtRefDate/frm1604c:txtRefYear"],
-            "the one known split-date gap"
-        );
+        // 1604C's refund date parts are gated on item 11 (B16), not a gap.
+        assert!(split_gated > 0, "a gated split-date group was exercised");
         assert!(
             split_refused.is_empty(),
             "split-date parts refused on the blank seed:\n{}",
