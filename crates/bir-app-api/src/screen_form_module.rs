@@ -5067,6 +5067,19 @@ fn apply_screen_edits_here(
         {
             continue;
         }
+        // B16: a non-blank write to a box the corpus condition keeps shut is
+        // refused with the box's own tag, judged on the draft as this batch
+        // has made it so far (an opening answer earlier in the batch counts).
+        // A blank or untick write is a clear and is never refused.
+        if let Some(value) = sent.get(&key)
+            && !value.is_null()
+            && value.as_str().is_none_or(|text| !text.trim().is_empty())
+            && !is_unticked(value)
+            && let Some(tag) = conditions::off_now(kind, draft, &shown, &key)
+        {
+            rejected.insert(key.clone(), json!(tag));
+            continue;
+        }
         let mut next = draft.clone();
         // A computed penalty takes an amount only once its group is opened
         // with Edit (sent as unlocked) or already edited; a blank clears the
@@ -6872,6 +6885,9 @@ mod tests {
     // Form fields PR 1: 0605's split dates and official code picks on a
     // new return (bugs B1 and B2).
     mod fields_0605;
+    // Form fields PR 1 handoff 2: writes to shut boxes are refused with
+    // the box's own tag (bug B16).
+    mod shut_writes;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;

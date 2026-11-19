@@ -5,6 +5,9 @@
    "Other manner is selected.": "Needs item 17 = Others",
    "Assessment/deficiency-tax manner is selected.": "Needs item 17 = Preliminary/Final Assessment or Accounts Receivable"
   },
+  "0619E": {
+   "Item 4 Yes.": "Needs item 4 = Yes"
+  },
   "0619F": {
    "Tax type code is WB.": "Needs item 4 = Yes and item 5 tax type WB",
    "Tax type code is WF.": "Needs item 4 = Yes and item 5 tax type WF"
@@ -135,6 +138,9 @@
   },
   "2200T": {
    "Amended return Yes is selected.": "Needs Amended Return = Yes"
+  },
+  "2551Q": {
+   "Item 12 Yes.": "Needs item 12 = Yes"
   },
   "2553": {
    "Item 13 Yes is selected.": "Needs item 13 = Yes",

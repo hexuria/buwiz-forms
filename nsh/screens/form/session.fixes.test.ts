@@ -284,3 +284,18 @@ test("F3-10: one definition of an empty schedule cell, the host's (blank text, a
   expect(emptyCell("RENT", "sel")).toBe(false);
 });
 
+
+test("B16: a box another answer keeps shut shows its reason, and a write that reaches the host is refused with it", async () => {
+  const s = await opened(at("0619E", 2025, 3));
+  const k = "frm0619E:txtTax14";
+  // Item 4 "Any Taxes Withheld?" is unanswered: the box is off, faded and
+  // locked, and its own tag says what turns it on.
+  expect(s.box(k).off()).toBe("Needs item 4 = Yes");
+  expect(s.box(k).locked()).toBe(true);
+  // A write that still reaches the host (a stale page, an agent) is
+  // refused, and the box says the same thing in the filer's words.
+  s.edit(k, "100");
+  await s.idle();
+  expect(s.boxMessageOf(k)).toContain("used when Item 4 is Yes");
+  s.dispose();
+});
