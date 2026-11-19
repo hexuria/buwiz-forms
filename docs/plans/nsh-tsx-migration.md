@@ -88,6 +88,42 @@ nsh/                    The new app. Its own cargo workspace (like crates/bir-sh
 - **Dev run:** `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BIR_DATABASE_PATH=~/BuwizNsh/agents/<track>.db`. **Mock run:** unset `EBIR_TEST_ENV` and `BIR_SFTP_DRY_RUN`, then source `target/mock-bir/app.env` (`docs/mock-bir.md`).
 - Export and import cannot use `sqlcipher_export` in the plain build; they need a plain path (for example `VACUUM INTO`).
 
+## Android print session lifecycle
+
+This is the Android print ownership/cancellation model for the anti-drift rule in
+`CONTRIBUTING.md`. The desktop preview contract is unchanged. Implementation:
+`nsh/screens/print/controller.ts`, `nsh/src/print.rs`, `nsh/src/print_android.rs`.
+
+- **Open/loading:** the controller retains the Android key even after the native
+  open promise settles. Rust captures the revocation generation before reading
+  the private snapshot. A single native slot owns the WebView, Activity and,
+  after `PrintManager.print`, the returned PrintJob. Loading polls WebView progress;
+  generation checks run on the UI thread, including immediately before `print`.
+- **Revoke:** lock/sign-out reaches `closeAll` through the session-change hook
+  (hidden chrome also closes previews). Synchronous `Print.closed` increments
+  the generation, takes the native slot and forgets the snapshot before returning;
+  WebView/Activity work is posted asynchronously to the Android UI thread. A queued
+  open cannot revive a forgotten snapshot. The slot mutex covers the final print
+  call and job retention, so cleanup owns a job that already started opening.
+- **Dispose:** both replacement by another preview and revocation stop loading,
+  destroy the old WebView and release its retained references. Only revocation
+  checks the PrintJob state and, for `STATE_CREATED` (unsubmitted system preview),
+  brings the existing app Activity forward with `CLEAR_TOP | SINGLE_TOP` to dismiss
+  the sheet. No job or an already dismissed sheet requires no navigation.
+- **Submitted:** queued, started, blocked, failed, completed and cancelled jobs
+  belong to the system spooler, not the app's preview session. Neither replacement
+  nor lock/sign-out calls `PrintJob.cancel()` or dismisses these jobs. In particular,
+  printing a second return must not cancel the first return's submitted print job.
+
+**Verification boundary:** controller tests cover closed/hidden requests and
+revocation before and after native opening settles; Android-target compilation
+checks JNI calls. Neither proves system spooler or Activity behavior. Device
+acceptance must cover lock during loading (no late sheet), lock while previewing
+(sheet closes), and submitting a job followed by either a new preview or lock
+(submitted job continues). No separate formal Android print model exists here;
+these transitions document this boundary without duplicating the native state
+machine in an unrelated model.
+
 ## Waves
 
 **Parallel work in one worktree.** Agents share this worktree and one cargo build cache, so builds queue on a lock: that is normal, wait for it. A compile error in a file you do not own is probably another agent's edit in flight: wait a few minutes and retry before reporting it. Ownership in wave 1a: A3 alone edits root `Cargo.toml` (except the `members` line), `crates/bir-core/**` and `crates/bir-print/Cargo.toml`. A1 owns `crates/bir-host-shim/**`, `crates/bir-app-api/**`, `crates/bir-shell/**` with its `Cargo.lock`, the root `members` line and the root `Cargo.lock`. A2 owns `nsh/**` and `justfile`, and builds with `CARGO_TARGET_DIR=~/BuwizNsh/target-nsh`.
