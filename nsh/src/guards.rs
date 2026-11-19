@@ -167,7 +167,8 @@ fn mock_health(host: &str, port: u16) -> bool {
         let mut stream = TcpStream::connect_timeout(&SocketAddr::new(ip, port), LISTEN_TIMEOUT).ok()?;
         stream.set_read_timeout(Some(LISTEN_TIMEOUT)).ok()?;
         stream.set_write_timeout(Some(LISTEN_TIMEOUT)).ok()?;
-        write!(stream, "GET /v1/health HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n").ok()?;
+        let request = format!("GET /v1/health HTTP/1.0\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
+        stream.write_all(request.as_bytes()).ok()?;
         let mut response = Vec::new();
         stream.take(8193).read_to_end(&mut response).ok()?;
         if response.len() > 8192 {
@@ -751,8 +752,13 @@ mod tests {
             let server = std::thread::spawn(move || {
                 let (mut stream, _) = listener.accept().unwrap();
                 stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
-                let mut request = [0; 1024];
-                let _ = stream.read(&mut request).unwrap();
+                let mut request = Vec::new();
+                while !request.windows(4).any(|part| part == b"\r\n\r\n") {
+                    let mut chunk = [0; 1024];
+                    let read = stream.read(&mut chunk).unwrap();
+                    assert!(read > 0, "connection closed before the request headers ended");
+                    request.extend_from_slice(&chunk[..read]);
+                }
                 write!(stream, "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
             });
             assert_eq!(mock_health("127.0.0.1", port), expected);
