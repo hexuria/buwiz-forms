@@ -11526,12 +11526,14 @@ mod tests {
         // a hidden copy of the printed item 5 box) and plus 1 for 1707 (PR 9:
         // its item 5 RDO list, now a box of its printed item), less 3 for
         // 2200C, 2200M and 2200P (PR 11: their second RDO select,
-        // rdoPg1Pt1I6RDO, repeats the item's RDO box and is not drawn):
-        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3.
+        // rdoPg1Pt1I6RDO, repeats the item's RDO box and is not drawn), and
+        // plus 2 for 0605's Items 6 and 8 (form-fields PR 1, B2: the ATC and
+        // tax type picks from the official lists):
+        // 82 - 6 - 10 - 2 - 3 + 1 + 3 + 4 + 4 - 1 + 1 - 3 + 2.
         // Table cells are counted apart: the 36 2550M Schedule 1 ATC lists
         // (N03), 1601EQ's 30 and 1601FQ's 41 Part II ATC rows, 1601FQ
         // Schedule 1's ten lists, 2551Q's six, and the other forms' tables.
-        assert_eq!(supplied, 70);
+        assert_eq!(supplied, 72);
         assert_eq!(cells, CATALOG_TABLE_CELLS);
         let atc = catalogs::options(AgentFormKind::Form2551Q, &Value::Null);
         for row in 1..=6 {
