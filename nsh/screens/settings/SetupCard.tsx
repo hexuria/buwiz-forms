@@ -1,7 +1,7 @@
 // Settings > Computer > Computer setup (old SetupCard; admin only): who this computer is set up for, and the steps to change it.
 import { View } from "nsh";
 import { app } from "../../shell";
-import { AppButton, Card, Code, PinCells, SettingRow } from "../../ui";
+import { AppButton, Card, Code, PinCells, SettingRow, TOUCH } from "../../ui";
 import { StackRow } from "./parts";
 import {
   candidates, confirmChange, finishChange, goStep, pickHelpdeskPin, pickOwner, resetSetup, setupChange, setupSummary, toggleCode,
@@ -21,7 +21,7 @@ function Choose() {
       hint={
         helpdesk()
           ? "Make one of the taxpayers the owner. They become the admin and sign in with their own PIN."
-          : "Hand the computer to another taxpayer, or use it to help other taxpayers."
+          : `Hand the ${TOUCH ? "device" : "computer"} to another taxpayer, or use it to help other taxpayers.`
       }
     >
       <AppButton testID="setup-change-owner" label={helpdesk() ? "An owner" : "Another owner"} size="sm" onPress={() => goStep("owner")} />
@@ -36,7 +36,7 @@ function Choose() {
 function PickOwner() {
   return (
     <>
-      <SettingRow testID="setup-change-owner-head" title="New owner" hint="The owner is the admin of this computer. Only a taxpayer with a PIN or authenticator can be chosen.">
+      <SettingRow testID="setup-change-owner-head" title="New owner" hint={`The owner is the admin of this ${TOUCH ? "device" : "computer"}. Only a taxpayer with a PIN or authenticator can be chosen.`}>
         <Cancel />
       </SettingRow>
       <If when={candidates().length === 0}>

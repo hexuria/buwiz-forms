@@ -41,6 +41,7 @@ import {
   Spinner,
   Text,
   TextField,
+  TOUCH,
   toast as kitToast,
   dismissToast as kitDismissToast,
 } from "../../ui";
@@ -82,6 +83,7 @@ export interface FormPageProps {
 }
 
 const PILL_W = 488;
+const NARROW_PILL_HEIGHT = 60;
 /** The old shell's cap on a form page's column, padding included (app/main.js layout(): 1120 for "form"). */
 const FORM_COLUMN_MAX = 1120;
 
@@ -272,6 +274,9 @@ export function FormPage(props: FormPageProps) {
                 <Text tone="danger">{s.header().error}</Text>
               </View>
             </If>
+            <If when={narrow()}>
+              <View testID="fp-pager-clearance" class="shrink-0" style={{ height: NARROW_PILL_HEIGHT + 16 + 16 }} />
+            </If>
           </View>
         </Scroll>
         <If when={schema && !s.header().error && !s.header().loading}>
@@ -394,7 +399,7 @@ function Notes(props: { s: FormSession }) {
   return (
     <View class="gap-4" classList={{ "mb-4": Boolean(h()) }}>
       <If when={h().sample}>
-        <Text variant="meta" tone="fg2">{SAMPLE_NOTE}</Text>
+        <Text testID="fp-sample-note" variant="meta" tone="fg2">{TOUCH ? SAMPLE_NOTE.replace("the + button or Cmd/Ctrl+N", "the + button") : SAMPLE_NOTE}</Text>
       </If>
       <If when={h().profileUpdates.length}>
         <Text variant="meta" tone="fg2">{profileUpdatesNote(h().profileUpdates)}</Text>
@@ -778,7 +783,7 @@ function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor
       class="absolute bottom-4 items-center px-4"
       classList={{ "inset-x-0": !props.box() }}
     >
-      <View testID="fp-pill" class="w-full flex-row items-center gap-1.5 rounded-[22px] border border-border-strong bg-raised p-1.5 shadow-lg" style={{ maxWidth: PILL_W, height: props.narrow() ? 60 : 56 }}>
+      <View testID="fp-pill" class="w-full flex-row items-center gap-1.5 rounded-[22px] border border-border-strong bg-raised p-1.5 shadow-lg" style={{ maxWidth: PILL_W, height: props.narrow() ? NARROW_PILL_HEIGHT : 56 }}>
         <IconButton testID="fp-pill-prev" icon="chevron-left" tooltip={stepLabel(-1)} disabled={!target(-1)} onPress={() => s.step(-1)} />
         <If
           when={props.wide()}
