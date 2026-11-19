@@ -161,7 +161,9 @@ test("F3-5: a queue refusal shows every message; a radio pick marks its row touc
     await s.idle();
   }
   expect(s.status()).toBe("Draft");
-  expect(s.row("2:6")().message).not.toBe("");
+  // B3/B4: the message may sit on its box now; it shows somewhere on the row.
+  const refusedRow = s.row("2:6")();
+  expect(refusedRow.message || refusedRow.boxMessages.map((b) => b.sentence).join(" ")).not.toBe("");
   s.dispose();
 });
 
@@ -192,16 +194,33 @@ test("F3-7: a Form library sample keeps what is typed while it reopens as its re
   s.dispose();
 });
 
-test("F3-8: a rejected edit goes back to the host's value and its message stays until that box is edited again", async () => {
-  const s = await opened(at("2551Q", 2025, 1));
+test("B19/F3-8: a rejected edit keeps what was typed, its sentence sits on the box, and it clears on the next edit", async () => {
+  const said: string[] = [];
+  createDemoTaxpayer();
+  const s = new FormSession(at("2551Q", 2025, 1), { toast: (message) => (said.push(message), "t") });
+  expect(await s.open()).toBe(null);
+  await s.idle();
   const id = s.itemIdForKey("txtATCAmt1")!;
   s.edit("txtATCAmt1", "abc");
   await s.idle();
-  expect(s.shownOf("txtATCAmt1")).not.toBe("abc");
-  expect(s.row(id)().message).toContain("must be an amount");
+  // B19: the box keeps what was typed; the draft never took it; the sentence is the box's own.
+  expect(s.shownOf("txtATCAmt1")).toBe("abc");
+  expect(s.valueOf("txtATCAmt1")).not.toBe("abc");
+  expect(s.boxMessageOf("txtATCAmt1")).toContain("type an amount");
+  expect(s.row(id)().message).not.toContain("must be an amount");
+  // The refused edit is still unsaved work: the save line says so and Queue refuses.
+  expect(s.isDirty()).toBe(true);
+  s.saveNow();
+  await s.idle();
+  expect(s.isDirty()).toBe(true);
+  expect(s.saveState().state).toBe("unsaved");
+  s.queue();
+  await s.idle();
+  expect(s.status()).not.toBe("Queued");
+  expect(said.length).toBeGreaterThan(0);
   s.edit("txtATCAmt1", "100");
   await s.idle();
-  expect(s.row(id)().message).not.toContain("must be an amount");
+  expect(s.boxMessageOf("txtATCAmt1")).toBe("");
   expect(s.valueOf("txtATCAmt1")).toBe("100.00");
   s.dispose();
 });

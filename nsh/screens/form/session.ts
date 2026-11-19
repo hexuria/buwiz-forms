@@ -1148,7 +1148,7 @@ export class FormSession {
         if (note) s.lockNotes[k] = note;
       }
     }
-    this.syncShown(before, edits);
+    this.syncShown(before, edits, r.rejected);
     this.livePreview();
     this.sayYearEndPutBack(edits);
     // A refused box shows its own sentence under it; its message shows (its row is touched) until it is edited again.
@@ -1162,7 +1162,7 @@ export class FormSession {
       }
       s.rejected[k] = msg;
       s.touched.add(id);
-      if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
+      // B19: what was typed stays in the box; the draft never took it.
     }
     // An emptied number box the host holds as zero shows the zero (the box selects it, so the next digit replaces it).
     for (const k of r.cleared || []) if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
@@ -1466,10 +1466,13 @@ export class FormSession {
   }
 
   /** Shut boxes follow the draft; a box the user can type keeps its text unless the host changed it (old syncChanged). */
-  private syncShown(before: Record<string, string>, edits: Record<string, string>) {
+  private syncShown(before: Record<string, string>, edits: Record<string, string>, rejected?: Record<string, string>) {
     const s = this.st;
     for (const k of this.allKeys) {
       if (k in edits) {
+        // A refused edit keeps what was typed (B19); only an accepted write the host
+        // changed to something other than what was typed shows the host's value.
+        if (rejected && k in rejected) continue;
         // A box the host changed to something other than what was typed (a schedule row moved up into a cleared
         // row) shows the host's value, unless typed again since.
         if (!(k in s.pending) && !this.pools.has(k) && this.hostChanged(k, edits[k])) this.sValue.get(k).set(this.shownText(k));
@@ -2298,7 +2301,9 @@ export class FormSession {
       if (r.status) s.status = r.status;
       s.dirty = false;
       s.saved = true;
-      s.saveState = { state: "saved" };
+      // B19: a refused edit was never in the draft; the return still has it unsaved.
+      if (Object.keys(s.rejected).length) s.dirty = true;
+      s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
       const profiled = s.toProfile.size ? this.saveToProfile() : null;
       if (profiled) this.toast(`Draft saved. ${profiled}`, "save");
@@ -2405,6 +2410,13 @@ export class FormSession {
   queue() {
     const s = this.st;
     if (s.sample) return this.saveSample(() => this.queue());
+    // B19: a refused edit is still unsaved work; Queue waits for it to be fixed or cleared.
+    if (Object.keys(s.rejected).length) {
+      s.showAll = true;
+      this.publish();
+      const first = Object.keys(s.rejected)[0];
+      return this.toast(this.refusalText(first, s.rejected[first]), "triangle-alert");
+    }
     if (!this.ensureSaved()) return this.publish();
     let check: { blocks: ScreenFormError[]; warns: string[] } | null = null;
     try {

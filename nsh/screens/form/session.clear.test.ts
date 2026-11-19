@@ -154,7 +154,7 @@ test("F7-1: a box the host holds blank stays blank: nothing is staged as zero", 
   s.dispose();
 });
 
-test("F7-1: a box the host refuses for another reason still goes back to the draft's value with the reason", async () => {
+test("B19/F7-1: a box the host refuses keeps what was typed, with the reason on the box", async () => {
   const K = "txtATCAmt1";
   const s = await opened(at("2551Q", 2023, 2));
   s.edit(K, "12");
@@ -162,7 +162,7 @@ test("F7-1: a box the host refuses for another reason still goes back to the dra
   expect(s.valueOf(K)).toBe("12.00");
   s.edit(K, "abc");
   await s.idle();
-  expect(s.box(K).value()).toBe("12.00");
-  expect(s.messageOf(s.itemIdForKey(K)!)).toContain("must be an amount");
+  expect(s.box(K).value()).toBe("abc");
+  expect(s.boxMessageOf(K)).toContain("type an amount");
   s.dispose();
 });
