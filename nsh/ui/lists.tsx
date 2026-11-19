@@ -129,8 +129,11 @@ export interface TabItem {
   count?: string | number | null;
 }
 
-/** Underlined tabs (Profile, Forms, Templates): 36 tall (44 on touch), a 2-point underline under the current one. */
-export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: string) => void; testID?: string }) {
+/**
+ * Underlined tabs (Profile, Forms, Templates): 36 tall (44 on touch), a 2-point underline under the current one.
+ * `fill`: the tabs share the row's width, each its count under its label, so five fit a 390 phone without scrolling.
+ */
+export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: string) => void; testID?: string; fill?: boolean }) {
   return (
     <BaseTabs
       testID={props.testID}
@@ -144,13 +147,14 @@ export function Tabs(props: { tabs: TabItem[]; value: string; onChange: (value: 
             onPress={() => props.onChange(t().value)}
             accessibilityLabel={t().label}
             class={cx(
-              "group flex-row items-center gap-1.5 rounded-t-(--radius-ctl) px-2.5 hover:bg-hover focus-visible:bg-hover",
+              "group items-center rounded-t-(--radius-ctl) hover:bg-hover focus-visible:bg-hover",
+              props.fill ? "grow justify-center gap-0.5 px-1" : "flex-row gap-1.5 px-2.5",
               // The underline is drawn under the tab: a fill over the chosen tab would hide it (hover and focus beat selected:, so say so).
               "selected:hover:bg-transparent selected:focus-visible:bg-transparent",
-              TOUCH ? "h-11" : "h-9",
+              props.fill ? "h-12" : TOUCH ? "h-11" : "h-9",
             )}
           >
-            <Text variant="control" tone="fg2" class="group-selected:text-foreground">{t().label}</Text>
+            <Text variant="control" tone="fg2" lines={1} class="group-selected:text-foreground">{t().label}</Text>
             <If when={t().count !== undefined && t().count !== null && t().count !== ""}>
               <View class="rounded-full bg-hover px-1.5">
                 <Text variant="cap" tone="fg2" class="tabular-nums">{String(t().count)}</Text>
