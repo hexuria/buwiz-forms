@@ -66,6 +66,7 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
 /// starts (bir-app-api's latch), so no route can start it, whatever host function it comes through. The name check in
 /// [`permitted`] stays, for the clear message.
 fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
+    #[cfg(not(target_os = "android"))]
     switch_off_keychain(cfg!(debug_assertions));
     let _ = bir_app_api::install_hooks(NshHooks);
     let send = send_guard();
@@ -76,6 +77,7 @@ fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
 }
 
 /// Set up the process now. The native module's registration calls it (see [`process`]).
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn prepare_process() {
     process();
 }
@@ -90,8 +92,8 @@ pub(crate) fn process_prepared() -> bool {
 /// in bir-core runs. So does any build running in a test environment (`EBIR_TEST_ENV`, read as bir-core reads
 /// it): a release build under a test must not reach the keychain either. A release build outside a test
 /// environment leaves the variable to the caller.
+#[cfg(any(not(target_os = "android"), test))]
 fn switch_off_keychain(debug_build: bool) {
-    #[cfg(not(target_os = "android"))]
     if debug_build || test_environment() {
         // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
         unsafe { std::env::set_var(bir_core::platform::NO_KEYCHAIN_ENV, "1") };
