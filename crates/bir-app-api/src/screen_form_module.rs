@@ -269,7 +269,7 @@ export function screen_form_filed_original(form_code: string, snapshot_id: numbe
 export function screen_form_sample_period(tin: string, form_code: string, parts: Record<string, string>): Promise<ScreenFormSamplePeriod>;
 /** `unlocked`: profile boxes the page has open (opened with Edit, or left blank by the profile); their edits stay on this return and never reach the profile. */
 export function screen_form_fill(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): ScreenFormFilled;
-/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; the boxes they fill take the answer. Nothing is saved; save the draft. `asks`: the cards still asked. */
+/** "Use profile values" on a draft that differs from the tax profile (`profile_differs`), and "Update from tax profile": every profile box the filer did not edit takes the profile's value, and they follow later profile changes. `facts`: facts just answered from the return's cards; then only the boxes they fill move, and one the filer typed or picked on this return keeps its value. Nothing is saved; save the draft. `asks`: the cards still asked. */
 export function screen_form_use_profile(form_code: string, year: number, period: number, draft: object, facts?: ScreenFormFact[]): ScreenFormFilled & { asks: ScreenFormAsk[] };
 export function screen_form_validate(form_code: string, draft: object): Promise<ScreenFormValidated>;
 /** Save a draft. A Form library sample saves only once its period is set, never over a stored return of that period (answering the offer instead); an entry-numbered form takes its next free entry. */
@@ -4640,7 +4640,8 @@ fn existing_return(db: &Database, kind: AgentFormKind, stored: &Value) -> Result
 
 /// "Use profile values" (see [`use_profile_values`]): the draft the page
 /// holds with every unedited profile box at the profile's value, answered
-/// like a fill. Nothing is saved: the page saves it. A 2551Q also takes
+/// like a fill. With `facts` (a card's Save), only the fields those facts
+/// fill move ([`fact_asks::take_facts`]). Nothing is saved: the page saves it. A 2551Q also takes
 /// the profile's annual income-tax election for its taxable year
 /// (`Form2551QDraft::sync_with_profile`): the page's Item 13 question calls
 /// this right after `record_income_tax_election` writes it.
@@ -4679,8 +4680,14 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         let facts = fact_asks::context_of(db, kind, &draft);
         Ok((profile, from_profile, facts))
     })?;
-    use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
-    fact_asks::take_facts(&mut draft, &from_profile, &answered);
+    // A card's Save brings only its own fact onto the return (B6); "Use
+    // profile values" brings every profile box the filer did not edit.
+    if answered.is_empty() {
+        use_profile_values(kind, &mut draft, &from_profile).map_err(host_error)?;
+    } else {
+        let kept = edited_profile_paths(kind, &draft);
+        fact_asks::take_facts(kind, &mut draft, &from_profile, &answered, &kept);
+    }
     if kind == AgentFormKind::Form2551Q {
         draft = out_of_line(|| {
             let mut typed: bir_core::forms::form_2551q::Form2551QDraft =
@@ -5198,9 +5205,12 @@ fn apply_screen_edits_here(
             Ok(()) => {
                 // A profile box edited here keeps the edit when the profile
                 // changes later (`follow_profile`).
+                // A category pick on 0619E or 0619F is the filer's answer
+                // for this return (B8), recorded the same way.
                 if def
                     .box_def(&key)
                     .is_some_and(|entry| agent::is_profile_box(def, entry))
+                    || fact_asks::answers_on_return(kind, &key)
                 {
                     mark_profile_edit(&mut next, &key);
                 }
@@ -8373,8 +8383,8 @@ mod tests {
     /// year's EOPT tier is not set (decision 3: the tier sets its penalty
     /// rates), and then while nobody has said whether the taxpayer is a
     /// government withholding agent (the form's category box is required,
-    /// and its "Private" is only the page's guess). Answer both, and Queue
-    /// goes on.
+    /// and its "Private" is only the page's guess until the filer picks it
+    /// or the profile answers). Answer both, and Queue goes on.
     fn set_eopt_tier_for_a_late_queue(draft: &Value) {
         let refused = call(
             "screen_form_queue",
@@ -8407,7 +8417,7 @@ mod tests {
         assert!(
             refused
                 .message()
-                .contains("Government withholding agent is not set"),
+                .contains("Category of withholding agent is not set"),
             "{}",
             refused.message()
         );

@@ -10,8 +10,9 @@
 //!   and 1701Q and 1701 choose it on their own rate item.
 //! - **Queue.** A fact not set BLOCKS Queue when it changes what this
 //!   return files ([`checks`]): a box the form requires and the fact fills
-//!   is empty (the government category of 0619E and 0619F counts as empty,
-//!   since the page only guessed Private), it decides the penalty rates of
+//!   is empty (the government category of 0619E and 0619F counts as empty
+//!   until the filer picks it on the return, since the page only guessed
+//!   Private), it decides the penalty rates of
 //!   a return that computes penalties (late, or penalty amounts entered),
 //!   it fills 2550Q's required taxpayer classification, or the year's rate a
 //!   2551Q must record needs it (the income type). Otherwise Queue warns
@@ -465,6 +466,7 @@ pub(crate) fn checks(
     values: &Value,
     errors: &BTreeSet<String>,
 ) -> Vec<Check> {
+    let picked = super::profile_edits(draft);
     unset(kind, ctx)
         .into_iter()
         .map(|fact| {
@@ -473,8 +475,14 @@ pub(crate) fn checks(
                 .as_ref()
                 .is_some_and(|placed| placed.fills && placed.required);
             let blocks = match fact {
-                // The page's Private is a guess, not an answer.
-                Fact::IsGovernmentWithholdingEntity => fills_required,
+                // The page's Private is a guess, not an answer; the filer's
+                // own pick on this return is one (B8).
+                Fact::IsGovernmentWithholdingEntity => {
+                    fills_required
+                        && !placed
+                            .as_ref()
+                            .is_some_and(|placed| placed.keys.iter().any(|key| picked.contains(key)))
+                }
                 Fact::EoptTier => {
                     computes_penalties(kind, draft)
                         || (fills_required
@@ -502,6 +510,9 @@ pub(crate) fn checks(
                 match fact {
                     Fact::EoptTier if computes_penalties(kind, draft) => format!(
                         "EOPT tier is not set in the tax profile, and it sets the penalty rates on this return. Answer it in the card {at}, then queue."
+                    ),
+                    Fact::IsGovernmentWithholdingEntity => format!(
+                        "Category of withholding agent is not set in the tax profile, and this return needs it. Pick Private or Government {at}, then queue."
                     ),
                     _ => format!(
                         "{name} is not set in the tax profile, and this return needs it. Answer it in the card {at}, then queue."
@@ -551,13 +562,80 @@ pub(crate) fn error_fields(errors: &Value) -> BTreeSet<String> {
         .collect()
 }
 
-/// A Draft just answered `facts` from its cards: the draft fields those
-/// facts fill take what the profile makes now (`from_profile`).
-pub(super) fn take_facts(draft: &mut Value, from_profile: &Value, facts: &[Fact]) {
-    for path in facts.iter().flat_map(|fact| fills(*fact).iter()) {
-        if let (Some(want), Some(_)) = (from_profile.pointer(path), draft.pointer(path)) {
-            agent::set_draft_path(draft, path, want.clone());
+/// Whether a draft field holds nothing.
+fn blank(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::String(text) => text.trim().is_empty(),
+        Value::Array(list) => list.is_empty(),
+        _ => false,
+    }
+}
+
+/// Whether `key` is a box whose pick answers a fact for this return alone:
+/// the category radios of 0619E and 0619F (B8), which no binding names and
+/// [`place`] finds by their caption. The fill records the pick
+/// (`profile_edits`), so the page's opening Private is told from an answer.
+pub(super) fn answers_on_return(kind: AgentFormKind, key: &str) -> bool {
+    let fact = Fact::IsGovernmentWithholdingEntity;
+    facts_used_by(kind.form_code()).contains(&fact)
+        && place(kind, fact)
+            .is_some_and(|placed| placed.fills && placed.keys.iter().any(|k| k == key))
+}
+
+/// The draft fields the filer answered by a pick on this return
+/// ([`answers_on_return`]).
+fn picked_paths(kind: AgentFormKind, draft: &Value) -> BTreeSet<&'static str> {
+    if super::profile_edits(draft)
+        .iter()
+        .any(|key| answers_on_return(kind, key))
+    {
+        fills(Fact::IsGovernmentWithholdingEntity)
+            .iter()
+            .copied()
+            .collect()
+    } else {
+        BTreeSet::new()
+    }
+}
+
+/// A Draft just answered `facts` from its cards (B6): each draft field
+/// those facts fill takes what the profile makes now (`from_profile`) when
+/// the return holds nothing there, or still holds what the profile made
+/// (its `profile_baseline`; with none, the category the page only guessed).
+/// What the filer typed or picked there on this return stays (`kept`: the
+/// draft fields of the profile boxes edited on it). No other field moves,
+/// and the baseline follows for these fields only.
+pub(super) fn take_facts(
+    kind: AgentFormKind,
+    draft: &mut Value,
+    from_profile: &Value,
+    facts: &[Fact],
+    kept: &BTreeSet<&str>,
+) {
+    let pointer = lifecycle_pointer(draft, "profile_baseline");
+    let mut baseline = draft.pointer(&pointer).and_then(Value::as_object).cloned();
+    let picked = picked_paths(kind, draft);
+    for fact in facts {
+        for path in fills(*fact) {
+            let (Some(want), Some(here)) = (from_profile.pointer(path), draft.pointer(path)) else {
+                continue;
+            };
+            let untouched = match baseline.as_ref().and_then(|baseline| baseline.get(*path)) {
+                Some(was) => was == here,
+                None => *fact == Fact::IsGovernmentWithholdingEntity,
+            };
+            let free = !kept.contains(path) && !picked.contains(path);
+            if free && (blank(here) || untouched) && here != want {
+                agent::set_draft_path(draft, path, want.clone());
+            }
+            if let Some(baseline) = baseline.as_mut() {
+                baseline.insert(path.to_string(), want.clone());
+            }
         }
+    }
+    if let Some(baseline) = baseline {
+        agent::set_draft_path(draft, &pointer, Value::Object(baseline));
     }
 }
 

@@ -834,3 +834,160 @@ fn a_filed_1601c_says_the_profile_changed_and_keeps_what_was_filed() {
     assert_eq!(other["draft"]["rdo_code"], "043");
     assert_eq!(other["profile_changed"], json!([]));
 }
+
+/// The page's "Use profile values" call after a card's Save (`facts`).
+fn use_profile(code: &str, period: i64, draft: &Value, facts: &[&str]) -> Value {
+    call(
+        "screen_form_use_profile",
+        vec![
+            code.into(),
+            2026i64.into(),
+            period.into(),
+            json(draft.clone()),
+            json(json!(facts)),
+        ],
+    )
+    .unwrap_or_else(|error| panic!("{code} uses the profile: {}", error.message()))
+}
+
+/// B6: a date the filer typed on the return stays when the card of that
+/// fact is saved with another one.
+#[test]
+fn a_card_save_keeps_what_the_filer_typed_in_the_facts_own_box() {
+    setup_juana();
+    let opened = open_as(JUANA, "1701Q", 1);
+    let filled = fill(
+        "1701Q",
+        &opened["draft"],
+        json!({
+            "frm1701q:txtBirthMonth": "05",
+            "frm1701q:txtBirthDay": "06",
+            "frm1701q:txtBirthYear": "1975",
+        }),
+    );
+    assert_eq!(filled["rejected"], json!({}), "{}", filled["rejected"]);
+    assert_eq!(filled["draft"]["date_of_birth"], "05/06/1975");
+    set_birth_date("1980-02-03");
+    let used = use_profile("1701Q", 1, &filled["draft"], &["birth_date"]);
+    assert_eq!(
+        used["draft"]["date_of_birth"], "05/06/1975",
+        "the typed date stays"
+    );
+    assert!(ask(&used, "birth_date").is_none(), "the card goes");
+    // A blank box takes the answer, as before.
+    let used = use_profile("1701Q", 1, &opened["draft"], &["birth_date"]);
+    assert_eq!(used["draft"]["date_of_birth"], "02/03/1980");
+}
+
+/// B6: a card save brings only that fact's fields onto the return. A draft
+/// with no baseline keeps its other profile boxes, typed or not.
+#[test]
+fn a_card_save_touches_only_the_fields_of_its_own_fact() {
+    setup_juana();
+    let opened = open_as(JUANA, "1601C", 2);
+    let line = key_for("/line_of_business");
+    let filled = fill_unlocked(
+        "1601C",
+        &opened["draft"],
+        json!({ line.clone(): "Retail" }),
+        &[&line],
+    );
+    assert_eq!(filled["rejected"], json!({}), "{}", filled["rejected"]);
+    let mut draft = filled["draft"].clone();
+    // A return made before baselines existed, whose RDO is not the profile's.
+    draft.as_object_mut().unwrap().remove("profile_baseline");
+    draft["rdo_code"] = json!("043");
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            eopt_tier: Some(Some(bir_core::profile::EoptTier::Micro)),
+            ..YearFactsPatch::default()
+        },
+    );
+    let used = use_profile("1601C", 2, &draft, &["eopt_tier"]);
+    assert_eq!(
+        used["draft"]["rdo_code"], "043",
+        "another profile box is not re-synced"
+    );
+    assert_eq!(used["draft"]["line_of_business"], "Retail");
+    assert!(ask(&used, "eopt_tier").is_none(), "the card goes");
+    assert!(
+        used["draft"].get("profile_baseline").is_none(),
+        "no baseline is made by a card save"
+    );
+    // "Use profile values" (no fact named) still brings every unedited box.
+    let used = use_profile("1601C", 2, &draft, &[]);
+    assert_eq!(used["draft"]["rdo_code"], "039");
+    assert_eq!(used["draft"]["line_of_business"], "Retail");
+}
+
+/// B8: on 0619E and 0619F the filer's own pick of Private or Government
+/// answers the category for this return; the page's opening Private does not.
+#[test]
+fn a_category_pick_on_the_return_lifts_the_withholding_block() {
+    setup_juana();
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            is_government_withholding_entity: Some(None),
+            eopt_tier: Some(Some(bir_core::profile::EoptTier::Micro)),
+            line_of_business: Some(Some("Bookkeeping services".into())),
+            ..YearFactsPatch::default()
+        },
+    );
+    at((2026, 8, 1), || {
+        for (code, item) in [("0619E", "12"), ("0619F", "11")] {
+            let opened = open_as(JUANA, code, 7);
+            let check = queue_check(code, &opened["draft"]);
+            let block = blocks_on(&check, "is_government_withholding_entity")
+                .unwrap_or_else(|| panic!("{code}: no pick blocks: {check}"));
+            assert_eq!(
+                block["message"],
+                format!(
+                    "Category of withholding agent is not set in the tax profile, and this return needs it. Pick Private or Government at Item {item}, then queue."
+                ),
+                "{code}"
+            );
+            for letter in ["P", "G"] {
+                let radio = format!("frm{code}:optCategory:{letter}");
+                let filled = fill(code, &opened["draft"], json!({ radio.clone(): "true" }));
+                assert_eq!(filled["rejected"], json!({}), "{code} {radio}");
+                let want = if letter == "G" {
+                    "Government"
+                } else {
+                    "Private"
+                };
+                assert_eq!(filled["draft"]["withholding_agent_category"], want);
+                let check = queue_check(code, &filled["draft"]);
+                assert!(
+                    blocks_on(&check, "is_government_withholding_entity").is_none(),
+                    "{code} {letter}: a pick answers it: {check}"
+                );
+                // The pick is the return's own: it is still an answer after a save and a reopen.
+                if letter == "P" {
+                    continue;
+                }
+                save(code, &filled["draft"]);
+                let reopened = open_as(JUANA, code, 7);
+                assert_eq!(reopened["draft"]["withholding_agent_category"], want);
+                let check = queue_check(code, &reopened["draft"]);
+                assert!(
+                    blocks_on(&check, "is_government_withholding_entity").is_none(),
+                    "{code} {letter}: reopened: {check}"
+                );
+            }
+            // The profile is not written by a pick.
+            let facts = with_database(|db| {
+                db.effective_year_facts(JUANA, 2026)
+                    .map_err(|error| HostError::new(error.to_string()))
+            })
+            .unwrap();
+            assert!(
+                !facts
+                    .facts
+                    .is_set(bir_core::tax_profile::Fact::IsGovernmentWithholdingEntity),
+                "{code}: the profile stays unset"
+            );
+        }
+    });
+}

@@ -1537,7 +1537,14 @@ fn write_bound_box(
                 );
             }
             "frm0605:txtDueDateDay" => {
-                return write_0605_date_part(kind, draft, key, &text, Which::DueDate, DatePart::Day);
+                return write_0605_date_part(
+                    kind,
+                    draft,
+                    key,
+                    &text,
+                    Which::DueDate,
+                    DatePart::Day,
+                );
             }
             "frm0605:txtDueDateYear" => {
                 return write_0605_date_part(
