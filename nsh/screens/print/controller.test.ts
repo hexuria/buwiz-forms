@@ -96,6 +96,18 @@ test("Android system preview refuses requests behind the lock", () => {
   expect(calls).toBe(0);
 });
 
+test("closing all previews cancels an Android preview that is still loading", async () => {
+  let reject!: (error: Error) => void;
+  const w = world(() => new Promise<void>((_, no) => { reject = no; }));
+  w.host.hear(w.event("open", "2551Q", 1));
+  w.state.chrome = false;
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  reject(new Error("Android print preview was superseded or closed."));
+  await Promise.resolve();
+  expect(w.toasts).toEqual([]);
+});
+
 test("Android system preview reports a native failure without deleting its sheet", async () => {
   const w = world(async () => { throw new Error("Activity lookup blocked"); });
   w.host.hear(w.event("open", "2551Q", 1));

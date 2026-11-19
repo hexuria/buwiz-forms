@@ -2080,6 +2080,8 @@ impl Print {
     /// The window of the form code `key` closed (or could not open): forgets its preview and deletes its files.
     pub fn closed(key: String) {
         if cfg!(target_os = "android") {
+            #[cfg(target_os = "android")]
+            crate::print_android::invalidate();
             return;
         }
         forget(&key);
