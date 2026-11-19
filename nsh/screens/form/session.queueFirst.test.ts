@@ -144,6 +144,27 @@ test("a second Queue with the same list goes to the host, which decides: the pag
   }
 });
 
+test("a host refusal not listed on the page stays visible even when the page has other items", async () => {
+  const { said, h } = hooks();
+  const s = await opened(at("1604C", 2019, 0), h, said);
+  const message = "tin: The stored taxpayer needs attention.";
+  const spy = spyQueue(message);
+  try {
+    s.queue();
+    await until(() => said.toasts.length === 1, "the page's list");
+    expect(s.todo().length).toBeGreaterThan(0);
+    s.queue();
+    await until(() => s.overlay()?.kind === "queue-confirm", "the question");
+    s.confirmQueue();
+    await until(() => said.toasts.length === 2, "the host's refusal");
+    expect(said.toasts[1]).toBe(message);
+    expect(s.status()).toBe("Draft");
+  } finally {
+    spy.restore();
+    s.dispose();
+  }
+});
+
 test("nothing to fix and the tier warning: Queue asks once; Cancel queues nothing, Continue queues it", async () => {
   const { said, h } = hooks();
   bir.set_year_facts(DEMO.tin, 2024, ANSWERED);

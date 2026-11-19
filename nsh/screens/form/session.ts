@@ -41,7 +41,7 @@ import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, isPageNotice, isTinItem, keysOf, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -2396,7 +2396,15 @@ export class FormSession {
     } catch (e) {
       s.showAll = true;
       this.publish();
-      this.toast(errorText(e), "triangle-alert");
+      const message = errorText(e);
+      const refusal = plainRefusal(message);
+      const count = listedFields(refusal);
+      const shown = new Set(s.errors
+        .filter((error) => !error.dismiss && !isPageNotice(s.target.formCode, error.field)
+          && Object.values(s.messages).some((text) => text.includes(error.message)))
+        .map((error) => `${error.field}: ${error.message}`));
+      const alreadyShown = count > 0 && refusal.split(/;\s+(?=[a-z][a-z0-9_.]*: )/).every((entry) => shown.has(entry));
+      this.toast(alreadyShown ? attentionText(count) : message, "triangle-alert");
     }
   }
 
