@@ -2071,7 +2071,13 @@ impl Print {
                 .join("tmp").join(format!("ebirforms-print-{}", std::process::id()));
         });
         // Where a process cannot be asked (neither unix nor Windows), nothing is swept: see process_alive.
-        #[cfg(any(unix, all(windows, target_env = "msvc")))]
+        #[cfg(target_os = "android")]
+        STATE.with(|state| {
+            if let Some(root) = state.borrow().root.parent() {
+                sweep_stale(root, process_alive);
+            }
+        });
+        #[cfg(all(not(target_os = "android"), any(unix, all(windows, target_env = "msvc"))))]
         sweep_stale(&std::env::temp_dir(), process_alive);
         let id = install(Rc::new(HostBackend { listener }));
         Stop::new(move || uninstall(id))
