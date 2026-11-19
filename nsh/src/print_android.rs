@@ -27,21 +27,19 @@ struct Preview {
 }
 
 impl Preview {
-    fn dispose(self, env: &mut JNIEnv<'_>) {
-        let mut calls = vec![
+    fn dispose(self, env: &mut JNIEnv<'_>, revoked: bool) {
+        let calls = [
             (self.view.as_obj(), "stopLoading"),
             (self.view.as_obj(), "destroy"),
         ];
-        if let Some(job) = &self.job {
-            calls.insert(0, (job.as_obj(), "cancel"));
-        }
         for (object, method) in calls {
             if let Err(error) = env.call_method(object, method, "()V", &[]) {
                 let _ = env.exception_clear();
                 tracing::warn!(%error, method, "Android print: could not dispose of preview");
             }
         }
-        if let Some(job) = &self.job
+        if revoked
+            && let Some(job) = &self.job
             && let Err(error) = self.dismiss_created_job(env, job)
         {
             let _ = env.exception_clear();
@@ -56,8 +54,7 @@ impl Preview {
         let state = java(env.call_method(info, "getState", "()I", &[]))?
             .i()
             .map_err(|error| error.to_string())?;
-        // cancel() ignores STATE_CREATED (the preview). Pop that sheet off this Activity's task
-        // without recreating the app; a dismissed/queued/completed job must not change navigation.
+        // Submitted jobs belong to the spooler. Only the unsubmitted preview may be dismissed.
         const STATE_CREATED: i32 = 1;
         if state != STATE_CREATED {
             return Ok(());
@@ -222,7 +219,7 @@ pub(crate) fn close() -> impl Future<Output = ()> {
             return;
         };
         if let Err(error) = ui(move |env| {
-            old.dispose(env);
+            old.dispose(env, true);
             Ok(())
         })
         .await
@@ -240,7 +237,7 @@ pub(crate) async fn preview(url: String, title: String, generation: u64) -> Resu
             return Err("Android print preview was superseded or closed.".into());
         }
         if let Some(old) = kept.take() {
-            old.dispose(env);
+            old.dispose(env, false);
         }
         let activity = foreground_activity(env)?;
         let view = java(env.new_object(
