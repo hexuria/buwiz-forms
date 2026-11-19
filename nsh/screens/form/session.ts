@@ -148,6 +148,8 @@ export interface RowInfo {
   message: string;
   /** The box-home sentences of this row's split date parts and TIN boxes, in box order (B3/B4). */
   boxMessages: { key: string; sentence: string }[];
+  /** A box of the row shows its own sentence, under the box or in `boxMessages`: the row then keeps no empty line for its own message. */
+  boxSaid: boolean;
   /** Why the row's shut blank boxes show blank. */
   notes: string[];
   /** What turns the row's faded boxes on ("Needs item 13 = Yes"). */
@@ -3101,6 +3103,7 @@ export class FormSession {
     return {
       message: shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
+      boxSaid: keys.some((k) => Boolean(this.shownBoxMsg(k))),
       notes: this.lockNotesFor(it),
       needs: [...new Set(keys.map((k) => s.off[k]).filter(Boolean))],
       kept: kept.includes("template") ? "template" : kept.includes("last") ? "last" : "",

@@ -483,7 +483,7 @@ export function ItemRow(props: RowProps) {
         <Each of={info().boxMessages} key={(b: { key: string; sentence: string }) => b.key}>
           {(b) => <Text variant="meta" tone="danger" testID={`fp-boxmsg-${b().key}`}>{b().sentence}</Text>}
         </Each>
-        <View class="mt-1 min-h-4.5">
+        <View class={info().message || !info().boxSaid ? "mt-1 min-h-4.5" : "mt-1"}>
           <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
         </View>
         <Each of={info().asks} key={(a: AskCard) => a.fact}>

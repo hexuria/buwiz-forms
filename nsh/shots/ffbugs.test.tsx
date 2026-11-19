@@ -85,6 +85,11 @@ test("check-dates: Check pressed, items 4-8 and their messages", async () => {
     await app.waitFor("id:fp-msg-0:3", { timeout: 30_000 });
     await app.wait(800);
     await shoot(app, `check-dates-${look.name}`);
+    // The toast gone and the page scrolled: items 4 to 8 with each box's own sentence.
+    await app.waitFor("text:/items? need attention/", { state: "gone", timeout: 15_000 });
+    await app.scroll("id:form-scroll", look.width < 600 ? 420 : 200);
+    await app.wait(600);
+    await shoot(app, `check-dates-rows-${look.name}`);
   });
 }, 300_000);
 
@@ -124,6 +129,15 @@ test("2200s-fold: after Check, the line-of-business row inside folded Part I", a
     await app.waitFor("text:/not in the tax profile/", { timeout: 15_000 });
     await app.wait(500);
     await shoot(app, `2200s-fold-${look.name}`);
+    // The row itself, clear of the toast: the box, its card and the sentence.
+    await app.waitFor("text:/items? need attention/", { state: "gone", timeout: 15_000 });
+    for (let step = 0; step < 12 && !app.shows("id:fp-frm2200S:txtLineBus"); step++) {
+      await app.scroll("id:form-scroll", 250);
+      await app.wait(250);
+    }
+    await app.scroll("id:form-scroll", 200);
+    await app.wait(600);
+    await shoot(app, `2200s-fold-row-${look.name}`);
   });
 }, 300_000);
 
