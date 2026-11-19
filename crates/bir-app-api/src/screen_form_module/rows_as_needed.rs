@@ -319,8 +319,8 @@ pub(super) fn split_date_groups(
         .map(|(which, keys)| SplitDateGroup {
             which: *which,
             keys: *keys,
-            sent: keys.map(|key| sent_text(key)),
-            current: keys.map(|key| shown_part(key)),
+            sent: keys.map(&sent_text),
+            current: keys.map(&shown_part),
         })
         .filter(|group| group.sent.iter().any(Option::is_some))
         .collect()
