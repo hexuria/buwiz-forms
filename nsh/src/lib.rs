@@ -27,8 +27,8 @@ use nsh_core::prelude::*;
 /// The crate's UI set (`nsh.json` `"rust"`): everything TSX can import from `ebirforms/native`.
 #[native_module("ebirforms/native")]
 fn native(registry: &mut Registry) {
-    // The earliest single point: the generated hosts build the registry before NSH starts, so the door's
-    // one change to the process environment happens before any other thread exists (see `door::process`).
+    // Desktop hosts register before NSH starts. Android waits for injected System.data_dir and
+    // uses in-process configuration rather than changing the environment (see `door::process`).
     #[cfg(not(target_os = "android"))]
     door::prepare_process();
     // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).

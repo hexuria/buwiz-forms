@@ -18,7 +18,7 @@ pub const NO_KEYCHAIN_ENV: &str = "BUWIZ_NO_KEYCHAIN";
 /// `no` or `off` switches the keychain off, so a typo cannot reach the OS.
 pub fn keychain_disabled() -> bool {
     cfg!(target_os = "android")
-        || keychain_switch_is_on(std::env::var(NO_KEYCHAIN_ENV).ok().as_deref())
+        || keychain_switch_is_on(crate::config::var(NO_KEYCHAIN_ENV).ok().as_deref())
 }
 
 pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {

@@ -214,7 +214,7 @@ pub fn saved_value(key: &str) -> Option<String> {
 }
 
 fn env_value(name: &str) -> Option<String> {
-    std::env::var(name)
+    crate::config::var(name)
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())

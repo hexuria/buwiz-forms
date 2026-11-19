@@ -83,7 +83,8 @@ const LISTEN_TIMEOUT: Duration = Duration::from_millis(400);
 /// loopback `BIR_SFTP_HOST` leaves the environment as the `mock-bir-app` recipe made it. An explicit
 /// `BIR_RELAY_URL` must instead pass the loopback/health guard and never falls back to SFTP.
 ///
-/// Call it once, before the database opens (the process boot does).
+/// Android enforces these switches through in-process configuration; desktop registration
+/// changes the environment. Call it once, before the database opens (the process boot does).
 pub fn send_guard() -> SendMode {
     send_guard_with(port_is_listening)
 }
@@ -97,15 +98,23 @@ fn send_guard_with_health(
     listening: impl Fn(&str, u16) -> bool,
     healthy: impl Fn(&str, u16) -> bool,
 ) -> SendMode {
-    // SAFETY: the guard runs once, from `door::process` (called when the native module registers, before any
-    // thread of ours or of NSH's app exists; see there), before the database and the worker exist; the
-    // environment is only read by the transport afterwards. A test calls it directly under `temp_env`.
-    unsafe { std::env::remove_var("BIR_SFTP_LIVE") };
+    #[cfg(target_os = "android")]
+    bir_core::config::force("BIR_SFTP_LIVE", None);
+    #[cfg(not(target_os = "android"))]
+    // SAFETY: desktop registration runs before NSH threads, database and worker startup.
+    unsafe {
+        std::env::remove_var("BIR_SFTP_LIVE")
+    };
     let relay = relay_target(&listening, &healthy);
     let mock = mock_target(&listening);
     if !matches!(relay, Some(Ok(_))) && mock.is_none() {
+        #[cfg(target_os = "android")]
+        bir_core::config::force("BIR_SFTP_DRY_RUN", Some("1"));
+        #[cfg(not(target_os = "android"))]
         // SAFETY: as above.
-        unsafe { std::env::set_var("BIR_SFTP_DRY_RUN", "1") };
+        unsafe {
+            std::env::set_var("BIR_SFTP_DRY_RUN", "1")
+        };
     }
     let panel = bir_core::dev_mode::panel_submission_mode();
     relay_verdict(relay, panel)
@@ -135,8 +144,12 @@ fn relay_target(
     healthy: &impl Fn(&str, u16) -> bool,
 ) -> Option<Result<String, String>> {
     let url = match bir_core::transport::relay_url().or_else(|| {
-        std::env::var_os(bir_core::transport::RELAY_URL_ENV)
-            .map(|_| Err(bir_core::transport::TransportError::Config("Empty or invalid BIR_RELAY_URL".into())))
+        match bir_core::config::var(bir_core::transport::RELAY_URL_ENV) {
+            Err(std::env::VarError::NotPresent) => None,
+            _ => Some(Err(bir_core::transport::TransportError::Config(
+                "Empty or invalid BIR_RELAY_URL".into(),
+            ))),
+        }
     })? {
         Ok(url) => url,
         Err(error) => return Some(Err(error.to_string())),
@@ -210,7 +223,7 @@ pub(crate) fn verdict(
 
 /// `BIR_SFTP_HOST` when it is `127.0.0.1` or `::1` and its port (`BIR_SFTP_PORT`, 22 when unset) answers.
 fn mock_target(listening: &impl Fn(&str, u16) -> bool) -> Option<(String, u16)> {
-    let host = std::env::var("BIR_SFTP_HOST").ok()?;
+    let host = bir_core::config::var("BIR_SFTP_HOST").ok()?;
     let host = host.trim();
     if host != "127.0.0.1" && host != "::1" {
         return None;

@@ -20,6 +20,7 @@ pub mod bir_xml;
 pub mod calendar_ics;
 pub mod calendar_rules;
 pub mod cloud_account;
+pub mod config;
 pub mod crypto;
 pub mod db;
 pub mod dev_mode;

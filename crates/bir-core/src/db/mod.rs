@@ -631,7 +631,7 @@ impl DatabasePathOverride {
 /// decides on a dry run (a test checks that the two agree), so a host that asks
 /// gets the answer bir-core acts on.
 pub fn test_environment() -> bool {
-    std::env::var("EBIR_TEST_ENV").is_ok_and(|value| {
+    crate::config::var("EBIR_TEST_ENV").is_ok_and(|value| {
         matches!(
             value.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"

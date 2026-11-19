@@ -30,7 +30,7 @@ pub fn bypass_from_flags(test_env: bool, auth_bypass: bool) -> bool {
 /// calls: this one guards the sign-in bypass, so it is not loosened to that list.
 #[cfg(debug_assertions)]
 fn env_flag(name: &str) -> bool {
-    std::env::var(name).ok().as_deref() == Some("1")
+    bir_core::config::var(name).ok().as_deref() == Some("1")
 }
 
 #[cfg(debug_assertions)]

@@ -24,6 +24,12 @@ const BAKED: Option<&str> = {
     }
 };
 
+pub(crate) fn load(path: &Path) -> Result<(), String> {
+    let values = read(path)?;
+    bir_core::config::set_many(values.into_iter().map(|(key, value)| (key, Some(value))));
+    Ok(())
+}
+
 pub(crate) fn read(path: &Path) -> Result<Vec<(String, String)>, String> {
     merge(BAKED, read_file(path)?)
 }
@@ -96,6 +102,78 @@ fn parse(text: &str) -> Result<Vec<(String, String)>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn android_load_reaches_core_and_account_gate_without_changing_the_environment() {
+        const CHILD: &str = "BIR_CONFIG_LOAD_CHILD";
+        const TEST: &str = "dev_env::tests::android_load_reaches_core_and_account_gate_without_changing_the_environment";
+        if std::env::var_os(CHILD).is_none() {
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args(["--exact", TEST, "--nocapture"])
+                .env(CHILD, "1")
+                .env("BIR_SFTP_LIVE", "1");
+            for key in ALLOWED {
+                command.env_remove(key);
+            }
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let before: Vec<_> = ALLOWED.iter().map(|key| std::env::var_os(key)).collect();
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("dev.env");
+        std::fs::write(&path, "EBIR_TEST_ENV=1\nBIR_AUTH_BYPASS=1\nBUWIZ_NO_KEYCHAIN=1\nBIR_SFTP_DRY_RUN=1\nBIR_RELAY_URL=http://127.0.0.1:8787").unwrap();
+        load(&path).unwrap();
+        assert!(bir_core::db::test_environment());
+        #[cfg(debug_assertions)]
+        assert!(bir_app_api::account_gate::auth_bypass_enabled());
+        assert!(bir_core::platform::keychain_disabled());
+        assert!(bir_core::transport::is_sftp_dry_run());
+        assert_eq!(
+            bir_core::transport::relay_url().unwrap().unwrap(),
+            "http://127.0.0.1:8787"
+        );
+        #[cfg(debug_assertions)]
+        assert!(matches!(
+            bir_core::dev_mode::submission().source,
+            bir_core::dev_mode::Source::Env(_)
+        ));
+        assert_eq!(
+            ALLOWED
+                .iter()
+                .map(|key| std::env::var_os(key))
+                .collect::<Vec<_>>(),
+            before
+        );
+        std::fs::write(&path, "EBIR_TEST_ENV=0\nPATH=/bad").unwrap();
+        assert!(load(&path).is_err());
+        assert!(bir_core::db::test_environment());
+        assert_eq!(
+            ALLOWED
+                .iter()
+                .map(|key| std::env::var_os(key))
+                .collect::<Vec<_>>(),
+            before
+        );
+        bir_core::config::force("BIR_SFTP_LIVE", None);
+        bir_core::config::force("BIR_SFTP_DRY_RUN", Some("1"));
+        assert!(bir_core::config::var("BIR_SFTP_LIVE").is_err());
+        assert_eq!(std::env::var("BIR_SFTP_LIVE").as_deref(), Ok("1"));
+        assert!(bir_core::transport::is_sftp_dry_run());
+        assert_eq!(
+            ALLOWED
+                .iter()
+                .map(|key| std::env::var_os(key))
+                .collect::<Vec<_>>(),
+            before
+        );
+    }
 
     #[test]
     fn parses_only_allowlisted_values_without_shell_expansion() {

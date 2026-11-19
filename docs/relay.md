@@ -68,6 +68,13 @@ its entries override baked defaults per key; omitted keys retain their baked
 values. Both sources must validate before any configuration is applied.
 A missing file is fine: the baked defaults still apply.
 
+Android installs these values in bir-core's process-wide configuration store
+before the door starts its database or workers; it does not modify the process
+environment. Core, account-gate and transport readers consult that store before
+the launch environment. The Android send guard also clears the live-send
+acknowledgement and, unless a mock is selected, forces dry-run mode through the
+store, not OS environment writes.
+
 Both build-time values use `option_env!`; Cargo tracks their changes
 automatically (the app has no `build.rs`). Setting them only at app runtime
 does not enable or change the loader. Production release builds without the

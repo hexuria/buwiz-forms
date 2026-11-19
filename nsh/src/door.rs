@@ -29,15 +29,11 @@ static PROCESS: OnceLock<Process> = OnceLock::new();
 
 /// Set up the process, once: the keychain switch, the hooks and the send guard.
 ///
-/// **This is the only place the door changes the process environment** (`BUWIZ_NO_KEYCHAIN`,
-/// `BIR_SFTP_DRY_RUN`, `BIR_SFTP_LIVE`; the database a test run opens is named with
-/// `bir_core::db::set_database_path_override`, not the environment). It runs at the registration of the native
-/// module (`lib.rs`): both generated hosts (`nsh/.nsh/rust/macos-host/main.rs`, `.../test/main.rs`) build the
-/// registry as the first statement of `main`, before NSH starts any thread, and the database, the submission
-/// worker and every reader thread of ours come later still. So no thread of ours can be reading the
-/// environment while it changes (NSH's own startup follows the registry, and it reads nothing named `BIR_*`),
-/// and every later reader sees the finished values. Should the registry ever be built later (or never), the
-/// first host call runs this instead, before it opens anything.
+/// Desktop registration sets the keychain and send-guard environment switches before NSH starts
+/// threads. Android instead installs in-process configuration overrides at its first Door call,
+/// when the injected private data directory is available, before database or worker startup.
+/// Neither Android development settings nor its send guard mutate the process environment.
+/// Test databases are named with `bir_core::db::set_database_path_override` on every platform.
 fn process() -> &'static Process {
     PROCESS.get_or_init(|| set_up(guards::send_guard))
 }
@@ -48,15 +44,9 @@ pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
     bir_core::platform::set_data_dir(path.clone()).map_err(|error| error.to_string())?;
     if cfg!(debug_assertions) || matches!(option_env!("BUWIZ_ANDROID_DEV"), Some("1")) {
         static DEV_ENV: OnceLock<Result<(), String>> = OnceLock::new();
-        DEV_ENV.get_or_init(|| {
-            let values = crate::dev_env::read(&path.join("dev.env"))?;
-            for (key, value) in values {
-                // SAFETY: serialized by DEV_ENV, before the door starts any database or worker.
-                // Only the allowlisted app configuration is written; NSH does not consume these keys.
-                unsafe { std::env::set_var(key, value) };
-            }
-            Ok(())
-        }).clone()?;
+        DEV_ENV
+            .get_or_init(|| crate::dev_env::load(&path.join("dev.env")))
+            .clone()?;
     }
     Ok(())
 }
@@ -92,7 +82,7 @@ pub(crate) fn process_prepared() -> bool {
 /// in bir-core runs. So does any build running in a test environment (`EBIR_TEST_ENV`, read as bir-core reads
 /// it): a release build under a test must not reach the keychain either. A release build outside a test
 /// environment leaves the variable to the caller.
-#[cfg(any(not(target_os = "android"), test))]
+#[cfg(not(target_os = "android"))]
 fn switch_off_keychain(debug_build: bool) {
     if debug_build || test_environment() {
         // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
@@ -871,6 +861,7 @@ mod tests {
     /// A debug build switches the keychain off whatever the caller set and whether or not this is a test
     /// run; a release build leaves the caller's variable alone.
     #[test]
+    #[cfg(not(target_os = "android"))]
     fn a_debug_build_always_switches_the_keychain_off_and_a_release_build_leaves_it() {
         for caller in [None, Some(""), Some("0"), Some("false"), Some("1")] {
             temp_env::with_vars(
@@ -1088,6 +1079,7 @@ mod tests {
     /// the keychain off too: before, only a debug build did, so a release-build test run could reach the OS
     /// keychain. Outside a test environment a release build still leaves the caller's variable alone.
     #[test]
+    #[cfg(not(target_os = "android"))]
     fn a_release_build_in_a_test_environment_switches_the_keychain_off() {
         for caller in [None, Some(""), Some("0"), Some("false"), Some("1")] {
             for test_run in ["1", "true", "yes", "on", " YES "] {
