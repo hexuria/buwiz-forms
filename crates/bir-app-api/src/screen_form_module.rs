@@ -6888,6 +6888,9 @@ mod tests {
     // Form fields PR 1 handoff 2: writes to shut boxes are refused with
     // the box's own tag (bug B16).
     mod shut_writes;
+    // Form fields PR 1 handoff 2: a code off a select's list is refused
+    // on every form (bug B17).
+    mod sel_lists;
 
     const TIN: &str = "12345678800000";
     const YEAR: i64 = 2026;

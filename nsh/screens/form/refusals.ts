@@ -66,8 +66,9 @@ export function refusalSentence(ctx: RefusalContext): string {
     return `${subject(ctx)} is set by the return's period.`;
   }
 
-  // A pick off the box's list (the official-list writers, B2/B17).
-  if (/pick an ATC|pick a tax type|not one of the listed|not in the box's list|is not an Item \d+A choice|Choose an ATC/i.test(raw)) {
+  // A pick off the box's list (the official-list writers, B2/B17; the
+  // binding's own "must be one of ..." answers the same way).
+  if (/pick an ATC|pick a tax type|not one of the listed|not in the box's list|must be one of|is not an Item \d+A choice|Choose an ATC/i.test(raw)) {
     return `${at} pick one of the listed choices.`;
   }
 

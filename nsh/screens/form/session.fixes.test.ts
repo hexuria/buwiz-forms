@@ -299,3 +299,26 @@ test("B16: a box another answer keeps shut shows its reason, and a write that re
   expect(s.boxMessageOf(k)).toContain("used when Item 4 is Yes");
   s.dispose();
 });
+
+test("B17: a code off a select's list is refused on the box without a host call", async () => {
+  const s = await opened(at("1701Q", 2025, 1));
+  const rdo = "frm1701q:txtRDOCode";
+  // The RDO box comes from the tax profile; Edit opens it for this return.
+  s.startProfileEdit(s.itemIdForKey(rdo)!);
+  const before = s.valueOf(rdo);
+  s.choose({ [rdo]: "ZZ" });
+  // Refused at once, on the box, with the stored value untouched and
+  // nothing staged: no host call was needed to say so.
+  expect(s.boxMessageOf(rdo)).toBe("RDO Code: pick one of the listed choices.");
+  expect(s.valueOf(rdo)).toBe(before);
+  expect(s.isDirty()).toBe(false);
+  s.dispose();
+  const q = await opened(at("1702Q", 2025, 1));
+  const atc = "frm1702q:cbATC_2";
+  const beforeAtc = q.valueOf(atc);
+  q.choose({ [atc]: "ZZ" });
+  expect(q.boxMessageOf(atc)).toBe("ATC: pick one of the listed choices.");
+  expect(q.valueOf(atc)).toBe(beforeAtc);
+  expect(q.isDirty()).toBe(false);
+  q.dispose();
+});

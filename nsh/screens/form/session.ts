@@ -954,6 +954,25 @@ export class FormSession {
       edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !(k in period)));
       if (!Object.keys(edits).length) return;
     }
+    // B17: a sel box with a known list takes only a listed code; an
+    // unlisted one is refused on the box without a host call, and the
+    // stored value stays.
+    const offList = new Set<string>();
+    for (const [k, v] of Object.entries(edits)) {
+      // A shut box (locked, computed, off) keeps its own refusal.
+      if (this.kindOf.get(k) !== "sel" || !String(v).trim() || this.isShut(k)) continue;
+      const listed = this.listedOptions(k);
+      if (listed.length > 0 && !listed.some((o) => o.value === String(v))) {
+        s.rejected[k] = "not one of the listed choices";
+        offList.add(k);
+      }
+    }
+    if (offList.size) {
+      edits = Object.fromEntries(Object.entries(edits).filter(([k]) => !offList.has(k)));
+      this.setErrors(s.errors);
+      this.publish();
+      if (!Object.keys(edits).length) return;
+    }
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
@@ -1442,11 +1461,17 @@ export class FormSession {
     return raw;
   }
 
+  /** A select's listed choices, without the shown value appended for display. */
+  private listedOptions(k: string): ChoiceOption[] {
+    const s = this.st;
+    const f = this.fieldOf.get(k);
+    return (s.options[k] || f?.o || []).map(optionOf).filter((o): o is ChoiceOption => Boolean(o));
+  }
+
   /** A select's shown value and choices (old selectBox). */
   private selShown(k: string): { value: string; options: ChoiceOption[] } {
     const s = this.st;
-    const f = this.fieldOf.get(k);
-    const listed = (s.options[k] || f?.o || []).map(optionOf).filter((o): o is ChoiceOption => Boolean(o));
+    const listed = this.listedOptions(k);
     const value = String(s.values[k] ?? "");
     const selected = listed.find((o) => o.selected);
     const known = listed.some((o) => o.value === value);

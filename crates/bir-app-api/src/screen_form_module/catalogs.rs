@@ -123,6 +123,18 @@ pub(super) fn fill(
                 .to_string(),
         );
     }
+    // B17: every `sel` with a known list takes only a listed code, judged
+    // on the page's own list (the schema's `o`, else `field_options`)
+    // before any binding arm runs, so every select answers alike. A list
+    // that is empty until a parent is chosen is not judged, and a blank
+    // write clears.
+    if let Some(list) = sel_list(kind, key, draft)
+        && !list.is_empty()
+        && let Some(code) = value.as_str().filter(|code| !code.trim().is_empty())
+        && !list.iter().any(|listed| listed == code)
+    {
+        return Err(format!("`{key}` is not one of the listed choices"));
+    }
     if let Some(done) = rows_withholding::fill(kind, draft, key, value, |draft| {
         agent::fill_as_user(kind, draft, key, value)
     }) {
@@ -710,6 +722,66 @@ fn fill_2550m_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
     }
     *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// The codes a `sel` box's list offers, as the page knows them (B17):
+/// the schema's own `o` when it has one, else the host's `field_options`
+/// for the draft as it stands. `None` when the box is not a select or has
+/// no list to judge by.
+pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<String>> {
+    let form = schema_entry(kind.form_code())?;
+    let mut field = None;
+    'walk: for part in form["parts"].as_array().into_iter().flatten() {
+        for item in part["items"].as_array().into_iter().flatten() {
+            for f in item["f"].as_array().into_iter().flatten() {
+                if f["k"].as_str() == Some(key) {
+                    field = Some(f.clone());
+                    break 'walk;
+                }
+            }
+            for row in item["keys"].as_array().into_iter().flatten() {
+                for (col, k) in row.as_array().into_iter().flatten().enumerate() {
+                    if k.as_str() == Some(key) {
+                        field = Some(item["cols"][col].clone());
+                        break 'walk;
+                    }
+                }
+            }
+        }
+    }
+    let field = field?;
+    if field["t"] != "sel" {
+        return None;
+    }
+    if let Some(o) = field["o"].as_array().filter(|o| !o.is_empty()) {
+        return Some(o.iter().filter_map(sel_option_value).collect());
+    }
+    field_options(kind, key, draft).map(|rows| {
+        rows.iter()
+            .filter_map(|row| row["value"].as_str().map(str::to_string))
+            .collect()
+    })
+}
+
+/// One schema `o` entry's code, as the page's `optionOf` reads it: an
+/// object gives `value`; a "CODE - Label" string gives CODE; any other
+/// string is its own code; template text (`"...`) is no option.
+fn sel_option_value(o: &Value) -> Option<String> {
+    if o.is_object() {
+        return o["value"].as_str().map(str::to_string);
+    }
+    let text = o.as_str()?;
+    if text.starts_with('"') {
+        return None;
+    }
+    if let Some((code, label)) = text.split_once(" - ")
+        && !code.is_empty()
+        && !code.chars().any(char::is_whitespace)
+        && !label.is_empty()
+    {
+        return Some(code.to_string());
+    }
+    Some(text.to_string())
 }
 
 fn field_options(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<Value>> {
