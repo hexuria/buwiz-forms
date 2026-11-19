@@ -135,8 +135,9 @@ queue-admission checks still apply.
   `GET /v1/health` answers HTTP 200 with `{"mock":true}`. A set
   but bad or silent relay is `Refused`: the worker does not start. `BIR_SFTP_LIVE`
   is still removed and the Dev Mode test server still refuses.
-- The phone app gets `BIR_RELAY_URL` (and the dev variables) from the launch
-  environment. `nsh/nsh.json` declares no `capabilities` on purpose: any
+- The iOS app gets `BIR_RELAY_URL` (and the dev variables) from the launch
+  environment; Android uses the baked/private configuration described above.
+  `nsh/nsh.json` declares no `capabilities` on purpose: any
   declaration denies everything it does not list, and the desktop print
   preview's web view shows a `file:` page that no grant covers. In the iOS
   simulator, `xcrun simctl launch` hands the app every `SIMCTL_CHILD_<name>`
@@ -196,3 +197,80 @@ Authentication is out of scope for this local mock. Use synthetic taxpayer data
 only. A real relay needs TLS, authenticated clients, taxpayer authorization,
 durable idempotency and custody records, audited access, rate limits, protected
 storage, retention/deletion policy, and reconciliation of ambiguous hand-offs.
+
+## On a physical iPhone
+
+Not run on a device yet (none attached to the build machine). `nsh run --target ios`
+only boots a simulator, so a device needs a signed package:
+
+1. Apple side: an Apple Developer team (a free personal team works, but its
+   profiles expire after 7 days). Get these from the team, or let Xcode create
+   them (Xcode > Settings > Accounts, then any project with automatic signing):
+   - an **Apple Development** certificate in the login keychain. Check with
+     `security find-identity -v -p codesigning`, which prints
+     `Apple Development: Name (TEAMID)`;
+   - an App ID for `dev.goldcoders.bir.nsh`, the `id` in `nsh/nsh.json`;
+   - the iPhone registered by its UDID (`xcrun devicectl list devices`);
+   - a **development provisioning profile** for that App ID, certificate and
+     device (`.mobileprovision`).
+2. On the iPhone: Settings > Privacy & Security > Developer Mode on (iOS 16+),
+   and trust the Mac when you connect it.
+3. Build and install (from `nsh/`, with `PATH` and `CARGO_TARGET_DIR` as the
+   `nsh-*` recipes set them):
+
+   ```sh
+   nsh package --target ios --sign "Apple Development: Name (TEAMID)" \
+     --profile ~/Downloads/buwiz_dev.mobileprovision        # writes .nsh/out/<name>.ipa
+   xcrun devicectl device install app --device <UDID> .nsh/out/<name>.ipa
+   xcrun devicectl device process launch --device <UDID> \
+     -e '{"EBIR_TEST_ENV":"1","BIR_AUTH_BYPASS":"1","BIR_SFTP_DRY_RUN":"1"}' dev.goldcoders.bir.nsh
+   ```
+
+   Without `--sign` and `--profile` you get an unsigned `.app` that a device
+   refuses. `-e` (or `DEVICECTL_CHILD_<name>` variables) is the device's
+   version of the simulator's `SIMCTL_CHILD_<name>`. The Rust side reads these
+   variables from the process environment.
+4. A device build is a release build, so `BUWIZ_NO_KEYCHAIN` is not forced:
+   the app uses the iOS keychain unless you pass `BUWIZ_NO_KEYCHAIN=1`.
+
+## Mock relay vs a real relay
+
+| | Mock (today) | Real relay |
+| --- | --- | --- |
+| URL | `BIR_RELAY_URL=http://127.0.0.1:8787` | e.g. `https://relay.example.com` |
+| Allowed by the app | yes | **refused**: the worker does not start |
+| From a device | iPhone: not directly; Android: `adb reverse tcp:8787 tcp:8787` reaches the host mock | needs the changes below |
+
+What refuses it today, on purpose:
+
+- `bir_core::transport::loopback_relay_url` (`crates/bir-core/src/transport.rs`)
+  accepts only an `http://` origin on `127.0.0.1`, `::1` or `localhost`, with
+  no user, path, query or fragment. Anything else is a `Config` error, and the
+  upload never starts.
+- `relay_target` in `nsh/src/guards.rs` then requires that loopback port to
+  answer and `mock_health` requires HTTP 200 from `/v1/health` with JSON
+  containing `"mock":true`. Otherwise the send mode is `Refused`.
+
+To test a real relay (a deliberate, reviewed change), you need:
+
+1. Relay origin allowlist: replace the loopback-only rule with an explicit
+   list. For example, accept `https://<host>` only when it equals an origin
+   compiled into the build (`option_env!("BUWIZ_RELAY_ORIGIN")`), and keep
+   refusing every other origin. Keep `http://` loopback for the mock.
+2. In `relay_target`, adapt the URL parsing and reachability probe for the
+   production origin (HTTPS defaults to port 443, not 80). Replace
+   `mock_health`'s plain-HTTP, `"mock":true` check with an explicit production
+   health/authentication policy while retaining the mock checks for loopback.
+3. Authentication: the v1 contract has none. Add a header, e.g.
+   `authorization: Bearer …`, read from the keychain and never from a file
+   in the repository.
+4. App Transport Security: iOS blocks plain `http://` to anything but
+   loopback. Use `https://`. A LAN `http://` mock needs
+   `NSAllowsLocalNetworking` and `NSLocalNetworkUsageDescription` under
+   `ios.infoPlist` in `nsh/nsh.json`.
+5. The relay decides where returns go. Point a test relay at a mock or test
+   BIR endpoint: the app cannot tell what the relay forwards to.
+
+Until those changes land, the closest physical iPhone test is the dry run
+(no relay URL), or the mock relay from the simulator. Physical Android phones
+can use the host mock relay through `adb reverse`, as described above.
