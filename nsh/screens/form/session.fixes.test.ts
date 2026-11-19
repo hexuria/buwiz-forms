@@ -323,3 +323,14 @@ test("B17: a code off a select's list is refused on the box without a host call"
   q.dispose();
 });
 
+test("B14: a fact card's date saves as the ISO day and the form's box shows the long month", async () => {
+  const s = await opened(at("1701", 2025, 0));
+  // The demo profile has no birth date, so 1701 asks for it in a card; the card's box is a DateField,
+  // which hands on MM/DD/YYYY — saveAsk reads it back as the ISO day the profile keeps.
+  s.typeAsk("birth_date", "08/17/1988");
+  s.saveAsk("birth_date");
+  await s.idle();
+  const box = "frm1701:txtPg1I10BirthDate";
+  expect(s.shownOf(box)).toBe("August 17, 1988");
+  s.dispose();
+});

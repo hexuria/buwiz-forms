@@ -165,13 +165,13 @@ for (const size of SIZES) {
 
   test(`${size.name}: a date takes typed text in any old format and reports MM/DD/YYYY`, async () => {
     const app = await gallery(size.options);
-    expect(app.value("id:fp-date")).toBe("Dec 10, 2020");
+    expect(app.value("id:fp-date")).toBe("December 10, 2020");
     await app.clear("id:fp-date");
     await app.type("id:fp-date", "12012020");
     expect(edit(app, "date")).toBe("12/01/2020");
     await app.type("id:fp-name", " ");
     expect(blurs(app, "date")).toBe(1);
-    expect(app.value("id:fp-date")).toBe("Dec 1, 2020");
+    expect(app.value("id:fp-date")).toBe("December 1, 2020");
     await app.clear("id:fp-date");
     await app.type("id:fp-date", "Mar 5 2021");
     expect(edit(app, "date")).toBe("03/05/2021");

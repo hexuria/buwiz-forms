@@ -521,7 +521,7 @@ function CalendarPicker(props: CalendarPickerProps) {
         <View
           testID={props.triggerID}
           role="button"
-          accessibilityLabel="Open the calendar"
+          accessibilityLabel={props.label}
           class={cx("items-center justify-center rounded-(--radius-ctl) hover:bg-hover active:bg-selected", TOUCH ? "-mr-2 size-11" : "-mr-1.5 size-6")}
         >
           <Icon name="calendar" size={14} tone="fg3" />
@@ -583,6 +583,7 @@ export function DateField(props: DateFieldProps) {
   const focused = signal(false);
   const edited = signal(false);
   const open = signal(false);
+  let box: InputRef | undefined;
   const long = (v: string) => {
     const d = parseTypedDate(v);
     return d ? formatLongDate(d) : v;
@@ -613,19 +614,32 @@ export function DateField(props: DateFieldProps) {
       autoFocus={props.autoFocus}
       returnKeyType={props.returnKeyType}
       onSubmit={props.onSubmit}
-      inputRef={(r) => props.inputRef?.(r)}
+      inputRef={(r) => {
+        box = r;
+        props.inputRef?.(r);
+      }}
       tabular
       value={text()}
       error={bad() ? DATE_ERROR : props.error}
       keyboardType="numbers-and-punctuation"
       onChange={(raw) => {
-        text.set(raw);
         edited.set(true);
+        text.set(raw);
         const d = parseTypedDate(raw);
-        props.onChange(d ? formatMDY(d) : raw);
+        const answer = d ? formatMDY(d) : raw;
+        // Eight digits (08171988) rewrite to MM/DD/YYYY at once, the caret at the end (pitfall 23:
+        // the signal takes the raw text and then the answer in the same handler).
+        if (d && /^\d{8}$/.test(raw.trim())) {
+          text.set(answer);
+          box?.setSelection(answer.length, answer.length);
+        }
+        props.onChange(answer);
       }}
       onFocus={() => {
         focused.set(true);
+        // The long form becomes the numeric date while the box has the keys.
+        const d = parseTypedDate(text());
+        if (d) text.set(formatMDY(d));
         props.onFocus?.();
       }}
       onBlur={() => {
@@ -644,7 +658,7 @@ export function DateField(props: DateFieldProps) {
             onPick={(iso) => {
               const v = parseTypedDate(iso);
               if (!v) return;
-              text.set(formatLongDate(v));
+              text.set(focused() ? formatMDY(v) : formatLongDate(v));
               edited.set(true);
               props.onChange(formatMDY(v));
             }}

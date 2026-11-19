@@ -68,7 +68,7 @@ test("readText: a read-only box shows an amount grouped (0.00 when blank and com
   expect(readText({ field: money, box: box("", [], true) })).toBe("0.00");
   expect(readText({ field: money, box: box("") })).toBe("");
   expect(readText({ field: { t: "money", w: 1, k: "a", l: "A" } as never, box: box("48000") })).toBe("48,000");
-  expect(readText({ field: { t: "date", k: "d", l: "D" } as never, box: box("12/01/2020") })).toBe("Dec 1, 2020");
+  expect(readText({ field: { t: "date", k: "d", l: "D" } as never, box: box("12/01/2020") })).toBe("December 1, 2020");
   const sel = { t: "sel", k: "s", l: "S", o: ["01 - January"] } as never;
   expect(readText({ field: sel, box: box("01") })).toBe("01 - January");
   expect(readText({ field: sel, box: box("") })).toBe("");

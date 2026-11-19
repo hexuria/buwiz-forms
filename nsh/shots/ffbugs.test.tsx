@@ -1,7 +1,7 @@
 // BEFORE pictures for the form-fields bug fixes (PR 1): Form 0605's typed due date, calendar pick, Check messages and
 // Line of Business card; a cleared date part on 0619E; 2200S's folded Line of Business; 1601C item 8; a `date` field.
 // `just nsh-shots ffbugs` saves ~/BuwizNsh/evidence/ffbugs/*.png; headless (plain nsh test) it takes none and still passes.
-import { open, test } from "nsh/test";
+import { expect, open, test } from "nsh/test";
 import type { App } from "nsh/test";
 import { shoot } from "./shoot";
 
@@ -166,7 +166,15 @@ test("datefield: a kind-date box on 1701, blurred then focused", async () => {
     }
     await app.waitFor(box, { timeout: 15_000 });
     await app.waitFor(ask, { timeout: 15_000 });
-    await app.type(box, "03/15/1990");
+    // B14: eight digits rewrite to MM/DD/YYYY with the caret at the end — one more key lands after the year.
+    await app.clear(box);
+    await app.type(box, "03151990");
+    await app.type(box, "1");
+    expect(app.value(box)).toBe("03/15/19901");
+    await app.clear(box);
+    // September 30 is the widest long date a box can hold: the blurred shot
+    // must show it unclipped inside the 140 pt width (B14's width check).
+    await app.type(box, "09301988");
     await app.wait(600);
     // Inputs take focus through the text steps, not press: clearing the
     // ask card's own (empty) date input turns it on and blurs the box.
@@ -175,7 +183,7 @@ test("datefield: a kind-date box on 1701, blurred then focused", async () => {
     await app.wait(500);
     await shoot(app, `datefield-blurred-${look.name}`);
     await app.clear(box);
-    await app.type(box, "03/15/1990");
+    await app.type(box, "09301988");
     await app.wait(500);
     await shoot(app, `datefield-focused-${look.name}`);
   });

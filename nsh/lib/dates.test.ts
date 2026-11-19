@@ -200,18 +200,19 @@ describe("formatMDY", () => {
 });
 
 describe("formatLongDate", () => {
-  test("Mon D, YYYY with no zero before the day", () => {
-    expect(formatLongDate({ y: 2020, m: 12, d: 10 })).toBe("Dec 10, 2020");
-    expect(formatLongDate({ y: 2020, m: 12, d: 1 })).toBe("Dec 1, 2020");
-    expect(formatLongDate({ y: 2026, m: 1, d: 1 })).toBe("Jan 1, 2026");
+  test("the full month name, Mon D, YYYY with no zero before the day", () => {
+    expect(formatLongDate({ y: 2020, m: 12, d: 10 })).toBe("December 10, 2020");
+    expect(formatLongDate({ y: 2020, m: 12, d: 1 })).toBe("December 1, 2020");
+    expect(formatLongDate({ y: 2026, m: 1, d: 1 })).toBe("January 1, 2026");
+    expect(formatLongDate({ y: 1988, m: 8, d: 17 })).toBe("August 17, 1988");
   });
 });
 
 describe("shownDate", () => {
-  test("a date reads Mon D, YYYY whatever form it was typed in", () => {
-    expect(shownDate("12/10/2020")).toBe("Dec 10, 2020");
-    expect(shownDate("2020-12-10")).toBe("Dec 10, 2020");
-    expect(shownDate("3/31/2026")).toBe("Mar 31, 2026");
+  test("a date reads as the full month name whatever form it was typed in", () => {
+    expect(shownDate("12/10/2020")).toBe("December 10, 2020");
+    expect(shownDate("2020-12-10")).toBe("December 10, 2020");
+    expect(shownDate("3/31/2026")).toBe("March 31, 2026");
   });
   test("empty is empty", () => {
     expect(shownDate("")).toBe("");

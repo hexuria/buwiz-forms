@@ -3,7 +3,7 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
-import { AppButton, CalendarButton, Code, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
+import { AppButton, CalendarButton, Code, DateField, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
 import { choiceLabel, controlWidth, dateParts, type DateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
@@ -272,17 +272,29 @@ function FactCard(props: { s: FormSession; ask: Accessor<AskCard>; narrow: Acces
         <If
           when={props.ask().control === "choice"}
           else={
-            <TextField
-              testID={`fp-ask-${fact()}-input`}
-              accessibilityLabel={props.ask().label}
-              value={text()}
-              width={props.narrow() ? undefined : props.ask().control === "date" ? 140 : 320}
-              placeholder={props.ask().control === "date" ? "MM/DD/YYYY" : undefined}
-              onChange={(v) => {
-                text.set(v);
-                props.s.typeAsk(fact(), v);
-              }}
-            />
+            <If when={props.ask().control === "date"} else={
+              <TextField
+                testID={`fp-ask-${fact()}-input`}
+                accessibilityLabel={props.ask().label}
+                value={text()}
+                width={props.narrow() ? undefined : 320}
+                onChange={(v) => {
+                  text.set(v);
+                  props.s.typeAsk(fact(), v);
+                }}
+              />
+            }>
+              <DateField
+                testID={`fp-ask-${fact()}-input`}
+                accessibilityLabel={props.ask().label}
+                value={text()}
+                width={props.narrow() ? undefined : controlWidth({ t: "date" }, 320)}
+                onChange={(v) => {
+                  text.set(v);
+                  props.s.typeAsk(fact(), v);
+                }}
+              />
+            </If>
           }
         >
           <Each of={props.ask().choices}>

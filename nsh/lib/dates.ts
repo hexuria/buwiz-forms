@@ -119,9 +119,14 @@ export function formatMDY({ y, m, d }: YMD): string {
   return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${y}`;
 }
 
-/** How a date box shows a parsed date: Dec 10, 2020 (rule 4). */
+/** How a date box shows a parsed date: December 10, 2020 (the full month name, everywhere a box stands). */
 export function formatLongDate({ y, m, d }: YMD): string {
-  return `${MONTHS[m - 1]} ${d}, ${y}`;
+  return `${MONTHS_LONG[m - 1]} ${d}, ${y}`;
+}
+
+/** An ISO day, "2020-12-01", as the calendar speaks. */
+export function formatIso({ y, m, d }: YMD): string {
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 /**

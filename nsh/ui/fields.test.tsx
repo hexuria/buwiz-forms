@@ -65,7 +65,7 @@ for (const size of SIZES) {
     await app.type("id:kit-date", "12102020");
     expect(readout(app, "Stored:")).toBe("Stored: 12/10/2020");
     await app.type("id:kit-name", " ");
-    expect(app.value("id:kit-date")).toBe("Dec 10, 2020");
+    expect(app.value("id:kit-date")).toBe("December 10, 2020");
     await app.clear("id:kit-date");
     await app.type("id:kit-date", "13/45");
     expect(app.texts().some((t) => t.startsWith("Type the date as MM/DD/YYYY"))).toBe(false);
@@ -75,6 +75,32 @@ for (const size of SIZES) {
     expect(readout(app, "PIN digits:")).toBe("PIN digits: 0 | Code complete: 123456");
     await app.type("id:kit-pin", "4321");
     expect(readout(app, "PIN digits:")).toBe("PIN digits: 4 | Code complete: 123456");
+  });
+
+  test(`${size.name}: a date box is MM/DD/YYYY while typed, the full month when left, and its calendar is named for it`, async () => {
+    const app = await openKit("../BasePreview.tsx", size.options);
+    // The calendar trigger is named for the box, not a fixed "Open the calendar"
+    // (the picker's trigger is a combobox to assistive tech).
+    expect(app.shows("role:combobox[Pick Date of birth]")).toBe(true);
+    await app.clear("id:kit-date");
+    // Eight digits rewrite to MM/DD/YYYY while the box has the keys.
+    await app.type("id:kit-date", "12102020");
+    expect(app.value("id:kit-date")).toBe("12/10/2020");
+    expect(readout(app, "Stored:")).toBe("Stored: 12/10/2020");
+    // Other shapes stay as typed while typing and take the long form on blur.
+    await app.clear("id:kit-date");
+    await app.type("id:kit-date", "12-10-2020");
+    expect(app.value("id:kit-date")).toBe("12-10-2020");
+    await app.type("id:kit-name", " ");
+    expect(app.value("id:kit-date")).toBe("December 10, 2020");
+    await app.clear("id:kit-date");
+    await app.type("id:kit-date", "Dec 10 2020");
+    await app.type("id:kit-name", " ");
+    expect(app.value("id:kit-date")).toBe("December 10, 2020");
+    // Focusing the long text shows the numeric date (an empty type takes the keys).
+    await app.type("id:kit-date", "");
+    await app.wait(200);
+    expect(app.value("id:kit-date")).toBe("12/10/2020");
   });
 }
 

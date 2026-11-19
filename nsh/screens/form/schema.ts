@@ -121,7 +121,9 @@ export function choiceLabel(f: SchemaField): string {
 export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, available: number): number {
   if (f.t === "money") return Math.min(230, available);
   if (f.t === "pct") return 88;
-  if (f.t === "date") return 140;
+  // "September 30, 1988" is the widest long date: 126 pt of text plus the box's padding, gap and
+  // calendar button needs about 174, so the smallest multiple of 4 that holds it is 176 (B14).
+  if (f.t === "date") return 176;
   if (f.t === "int") return f.m && f.m <= 4 ? 88 : 140;
   if (f.t === "sel") return Math.min(260, available);
   if (f.t === "text" && f.m && f.m <= 4) return 88;
