@@ -161,9 +161,10 @@ test("F3-5: a queue refusal shows every message; a radio pick marks its row touc
     await s.idle();
   }
   expect(s.status()).toBe("Draft");
-  // B3/B4: the message may sit on its box now; it shows somewhere on the row.
-  const refusedRow = s.row("2:6")();
-  expect(refusedRow.message || refusedRow.boxMessages.map((b) => b.sentence).join(" ")).not.toBe("");
+  // B3/B4: a one-box message sits on its box now, not in the row's line;
+  // the row still counts it and the box carries the sentence.
+  expect(s.todo().map((r) => r.id)).toContain("2:6");
+  expect(Object.values(s.boxMessages()).some(Boolean)).toBe(true);
   s.dispose();
 });
 
@@ -282,3 +283,4 @@ test("F3-10: one definition of an empty schedule cell, the host's (blank text, a
   expect(emptyCell("true", "chk")).toBe(false);
   expect(emptyCell("RENT", "sel")).toBe(false);
 });
+
