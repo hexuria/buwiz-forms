@@ -2981,7 +2981,7 @@ export class FormSession {
       ...keys.filter((k) => ["sel", "chk", "radio"].includes(this.kindOf.get(k) ?? "") || isTinItem(it)),
     ]);
     // A split date's parts are one date: its sentence shows once, on the month box.
-    const dateMsgs = date ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => Boolean(pk) && Boolean(s.boxMessages[pk])) : [];
+    const dateMsgs = date ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => pk !== undefined && Boolean(s.boxMessages[pk])) : [];
     const shownKeys = date && dateMsgs.length ? [dateMsgs[0]] : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
     return {
       message: shown[id] || "",
