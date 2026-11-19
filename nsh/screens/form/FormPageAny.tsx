@@ -34,6 +34,7 @@ async function seedParity(tin: string) {
 }
 
 const toasts = signal<string[]>([]);
+const sessionFields = signal("");
 let count = 0;
 
 function Fixture() {
@@ -58,6 +59,7 @@ function Fixture() {
           dismissToast={(id) => toasts.set([...toasts(), `dismissed ${id}`])}
           onSession={(s) =>
             void s.ready().then(() => {
+              sessionFields.set(String(s.fieldCount()));
               for (const [k, v] of Object.entries(p.edits || {})) s.edit(k, v);
             })
           }
@@ -65,6 +67,7 @@ function Fixture() {
       </If>
       <View testID="fx-toasts" class="absolute top-0 left-0" style={{ pointerEvents: "none", opacity: 0 }}>
         <Text>{`saved returns ${store.savedReturns().length}`}</Text>
+        <Text testID="fx-session-fields">{`session fields ${sessionFields()}`}</Text>
         <Each of={toasts()}>{(t) => <Text>{t()}</Text>}</Each>
       </View>
     </View>
