@@ -4939,7 +4939,9 @@ fn apply_screen_edits_here(
         // the draft's current part stands in for it.
         let mut parts = group.current;
         for (index, (key, sent)) in group.keys.iter().zip(group.sent.iter()).enumerate() {
-            let Some(text) = sent else { continue };
+            let Some(text) = sent else {
+                continue;
+            };
             if text.trim().is_empty() {
                 parts[index] = None;
                 continue;
@@ -4957,7 +4959,9 @@ fn apply_screen_edits_here(
                         let what = ["month (01-12)", "day (01-31)", "four-digit year"][index];
                         rejected.insert(
                             key.to_string(),
-                            json!(format!("`{key}` must be the {what} of a date (got `{text}`)")),
+                            json!(format!(
+                                "`{key}` must be the {what} of a date (got `{text}`)"
+                            )),
                         );
                     }
                 }
@@ -11623,6 +11627,260 @@ mod tests {
         }
     }
 
+    /// B13 (pick Q13): on the built page schema — what the page draws after
+    /// `withoutHidden` — a line-of-business row holds only line-of-business
+    /// boxes, a name row is never titled for the line of business, no
+    /// developer caption reaches a drawn row, box or column, a line-of-
+    /// business box sits only under a line-of-business title, and the
+    /// date-of-birth and email rows hold their own boxes. It names every
+    /// broken row at once.
+    #[test]
+    fn every_drawn_row_keeps_its_printed_title() {
+        /// The fields a row draws: the page's `withoutHidden` drops the rest.
+        fn drawn_fields(item: &Value) -> Vec<&Value> {
+            item["f"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|field| field["t"].as_str() != Some("hidden"))
+                .collect()
+        }
+        /// Whether the page draws the item: a table with a drawn column, a
+        /// drawn field, or a printed note that takes no box.
+        fn drawn(item: &Value) -> bool {
+            if item.get("rows").is_some() {
+                return item["cols"]
+                    .as_array()
+                    .is_some_and(|cols| cols.iter().any(|c| c["t"].as_str() != Some("hidden")));
+            }
+            !drawn_fields(item).is_empty() || item.get("note").is_some()
+        }
+        /// A developer caption the overrides were meant to retire
+        /// (/Current UI page|ATC (selector|catalog) slot|Item Schedule \d|^Container$/i).
+        fn dev_caption(label: &str) -> bool {
+            let label = label.trim().to_lowercase();
+            if label == "container"
+                || label.contains("current ui page")
+                || label.contains("atc selector slot")
+                || label.contains("atc catalog slot")
+            {
+                return true;
+            }
+            label.match_indices("item schedule ").any(|(at, _)| {
+                label[at + "item schedule ".len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_digit())
+            })
+        }
+        /// A box's caption words as a reader sees them: its label and its key's tail.
+        fn words(field: &Value) -> (String, String) {
+            let label = field["l"].as_str().unwrap_or_default().to_lowercase();
+            let key = field["k"].as_str().unwrap_or_default();
+            let tail = key.rsplit(':').next().unwrap_or(key).to_lowercase();
+            (label, tail)
+        }
+        /// A line-of-business box (txtLOB, txtLineBus, "Line of business (profile)").
+        fn lob_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            label.contains("line of business")
+                || label.contains("line bus")
+                || tail.contains("lineofbusiness")
+                || tail.contains("linebus")
+                || tail.contains("txtlob")
+                || tail.starts_with("lob")
+        }
+        /// A withholding-agent/taxpayer name box.
+        fn name_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            (label.contains("name")
+                && [
+                    "withholding agent",
+                    "taxpayer",
+                    "seller",
+                    "buyer",
+                    "spouse",
+                    "registered",
+                ]
+                .iter()
+                .any(|who| label.contains(who)))
+                || tail.contains("taxpayername")
+                || tail.contains("withholdingagentsname")
+                || tail.contains("registeredname")
+                || tail.contains("sellername")
+                || tail.contains("buyername")
+                || tail.contains("spousename")
+        }
+        /// A date box: a whole-date control or a month/day/year part.
+        fn date_field(field: &Value) -> bool {
+            if field["t"].as_str() == Some("date") {
+                return true;
+            }
+            let (label, tail) = words(field);
+            label.contains("birth")
+                || label.contains("date of birth")
+                || tail.contains("birth")
+                || label
+                    .split(|c: char| !c.is_alphabetic())
+                    .any(|w| matches!(w, "month" | "day" | "year"))
+                || tail.contains("month")
+                || tail.contains("day")
+                || tail.contains("year")
+        }
+        /// An email box.
+        fn email_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            field["t"].as_str() == Some("email")
+                || label.contains("email")
+                || label.contains("e-mail")
+                || tail.contains("email")
+        }
+        /// An address box (an "Email Address" caption is not one).
+        fn address_field(field: &Value) -> bool {
+            let (label, tail) = words(field);
+            tail.contains("address")
+                || tail.contains("addr")
+                || (label.contains("address")
+                    && !label.starts_with("email")
+                    && !label.starts_with("e-mail"))
+        }
+        /// Collects every broken row, so one run names them all.
+        macro_rules! flag {
+            ($bad:ident, $ok:expr, $($why:tt)+) => {
+                if !$ok {
+                    $bad.push(format!($($why)+));
+                }
+            };
+        }
+        let mut bad: Vec<String> = Vec::new();
+        let forms = parse_form_schemas();
+        assert_eq!(forms.len(), 43);
+        for form in &forms {
+            let code = form.code.as_deref().unwrap_or("?");
+            for (pi, part) in form.built()["parts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
+            {
+                for (ii, item) in part["items"].as_array().into_iter().flatten().enumerate() {
+                    if !drawn(item) {
+                        continue;
+                    }
+                    let title = item["l"].as_str().unwrap_or_default();
+                    let title_l = title.to_lowercase();
+                    let at = format!("{code} part {pi} item {ii} \"{title}\"");
+                    flag!(bad, !dev_caption(title), "{at}: developer caption on a row");
+                    let fields = drawn_fields(item);
+                    for field in &fields {
+                        flag!(
+                            bad,
+                            !dev_caption(field["l"].as_str().unwrap_or_default()),
+                            "{at}: developer caption on box {}",
+                            field["k"].as_str().unwrap_or_default()
+                        );
+                    }
+                    // A drawn table's columns are its box captions.
+                    if item.get("rows").is_some() {
+                        for col in item["cols"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter(|c| c["t"].as_str() != Some("hidden"))
+                        {
+                            flag!(
+                                bad,
+                                !dev_caption(col["l"].as_str().unwrap_or_default()),
+                                "{at}: developer caption on a column"
+                            );
+                        }
+                    }
+                    // (1) A line-of-business row holds only line-of-business boxes.
+                    if title_l.contains("line of business") {
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                lob_field(field),
+                                "{at} holds {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                    // A line-of-business box sits only under a line-of-business
+                    // title (tables' cells are schedule values, not rows).
+                    if item.get("rows").is_none() {
+                        for field in &fields {
+                            if lob_field(field) {
+                                flag!(
+                                    bad,
+                                    title_l.contains("line of business"),
+                                    "{at} holds line-of-business box {} \"{}\"",
+                                    field["k"].as_str().unwrap_or_default(),
+                                    field["l"].as_str().unwrap_or_default()
+                                );
+                            }
+                        }
+                    }
+                    // (2) A row holding a name box is not titled for the line of business.
+                    if fields.iter().any(|field| name_field(field)) {
+                        flag!(
+                            bad,
+                            !title_l.contains("line of business"),
+                            "{at} is a name row titled for the line of business"
+                        );
+                    }
+                    // (4) A "Date of Birth" row holds a date box and no address
+                    // box; an "Email" row holds no date box.
+                    let dob = title_l.contains("date of birth")
+                        || title_l
+                            .split(|c: char| !c.is_alphabetic())
+                            .any(|w| w == "dob");
+                    if dob {
+                        flag!(
+                            bad,
+                            fields.iter().any(|field| date_field(field)),
+                            "{at} holds no date box"
+                        );
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                !address_field(field),
+                                "{at} holds address box {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                    if title_l.contains("email") || title_l.contains("e-mail") {
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                !date_field(field),
+                                "{at} holds date box {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                    // A row titled for the email address alone holds only email boxes.
+                    if title_l.starts_with("email") || title_l.starts_with("e-mail") {
+                        for field in &fields {
+                            flag!(
+                                bad,
+                                email_field(field),
+                                "{at} holds {} \"{}\"",
+                                field["k"].as_str().unwrap_or_default(),
+                                field["l"].as_str().unwrap_or_default()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(bad.is_empty(), "{} rows:\n{}", bad.len(), bad.join("\n"));
+    }
+
     /// Opening one form builds that form and no other.
     #[test]
     fn a_form_is_built_on_its_first_use_and_alone() {
@@ -15743,8 +16001,7 @@ mod tests {
                 groups.entry(group).or_default()[slot] = Some(key.as_str());
             }
             for (_group, slots) in groups {
-                let (Some(month), Some(day), Some(year)) = (slots[0], slots[1], slots[2])
-                else {
+                let (Some(month), Some(day), Some(year)) = (slots[0], slots[1], slots[2]) else {
                     continue;
                 };
                 let keys = [month, day, year];
@@ -15767,8 +16024,7 @@ mod tests {
                 for key in keys {
                     if let Some(reason) = filled["rejected"][key].as_str() {
                         if !is_gate(reason) {
-                            split_refused
-                                .push(format!("{code} {key}: {reason}"));
+                            split_refused.push(format!("{code} {key}: {reason}"));
                         }
                     }
                 }
@@ -17386,9 +17642,7 @@ mod tests {
                 .flat_map(|f| f["o"].as_array().cloned().unwrap_or_default())
                 .filter_map(|o| match &o {
                     Value::Object(_) => o["value"].as_str().map(|v| json!(v)),
-                    Value::String(text) => {
-                        Some(json!(text.split(" - ").next().unwrap_or(text)))
-                    }
+                    Value::String(text) => Some(json!(text.split(" - ").next().unwrap_or(text))),
                     _ => None,
                 }),
         );
