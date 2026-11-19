@@ -170,6 +170,8 @@ export interface RowInfo {
   penalty: "edit" | "computed" | null;
   /** Folded into its part's "From tax profile" group right now. */
   tucked: boolean;
+  /** The "Additional details" fold is open: the filer opened it, or a shown message, fact card or to-do step points inside (B10). */
+  moreOpen: boolean;
   /** Fact cards on this row. */
   asks: AskCard[];
   askSaved: string;
@@ -3073,6 +3075,22 @@ export class FormSession {
       return true;
     });
     const shownKeys = msgOpen ? (date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k))) : [];
+    const asks =
+      s.editable && !s.sample
+        ? (s.askAt.get(id) || []).map((a) => ({
+            fact: a.fact,
+            label: a.label,
+            note: a.note,
+            control: a.control,
+            choices: a.choices || [],
+            pick: a.fact in s.askPick ? JSON.stringify(s.askPick[a.fact]) : null,
+          }))
+        : [];
+    // B10: an "Additional details" fold stays open while the filer opened it or a shown message,
+    // fact card or to-do step points inside; it folds back when nothing does.
+    const pointed =
+      it.l === "Additional details" &&
+      (Boolean(shown[id]) || keys.some((k) => Boolean(this.shownBoxMsg(k))) || asks.length > 0 || s.stepAt === id);
     return {
       message: shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
@@ -3097,17 +3115,8 @@ export class FormSession {
           : null,
       penalty: penalty ? (penaltyOpen ? "computed" : "edit") : null,
       tucked,
-      asks:
-        s.editable && !s.sample
-          ? (s.askAt.get(id) || []).map((a) => ({
-              fact: a.fact,
-              label: a.label,
-              note: a.note,
-              control: a.control,
-              choices: a.choices || [],
-              pick: a.fact in s.askPick ? JSON.stringify(s.askPick[a.fact]) : null,
-            }))
-          : [],
+      moreOpen: s.moreOpen.has(id) || pointed,
+      asks,
       askSaved: s.askSavedAt.get(id) || "",
       election: s.editable && s.electionAt === id ? this.electionCard() : null,
       electionSaved: s.electionSavedAt === id && s.electionAt !== id ? `Saved to the tax profile for ${this.taxYear()}. Later returns reuse it.` : "",

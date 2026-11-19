@@ -7,7 +7,7 @@ import { AppButton, CalendarButton, Code, DateField, Icon, type IconName, ListRo
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
 import { choiceLabel, controlWidth, dateParts, type DateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
-import type { AskCard, ElectionCard, FormSession } from "./session";
+import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
 
 export interface RowProps {
   s: FormSession;
@@ -149,7 +149,7 @@ export function dateRange(s: FormSession, split: DateParts): { min?: string; max
 }
 
 /** What a row draws for its boxes: a schedule, a note, a fold of extra fields, one date, a TIN, or its boxes. */
-function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean> }) {
+function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean>; info: Accessor<RowInfo> }) {
   const s = props.s;
   const it = props.it;
   const fs = it.f || [];
@@ -199,7 +199,9 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
     </View>
   );
   if (it.l !== "Additional details") return body;
-  const open = signal(s.moreOpen(props.id));
+  // B10: the row's own moreOpen is the open state — the filer's flag or a shown message, fact card
+  // or to-do step pointing inside — read live, so attention opens the fold and clears it again.
+  const open = () => props.info().moreOpen;
   return (
     <View class="gap-2.5">
       <AppButton
@@ -208,10 +210,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         icon={open() ? "chevron-down" : "chevron-right"}
         label={`${fs.length} more field${fs.length > 1 ? "s" : ""} not yet placed on the paper layout`}
         testID={`fp-more-${props.id}`}
-        onPress={() => {
-          s.toggleMore(props.id);
-          open.set(!open());
-        }}
+        onPress={() => s.toggleMore(props.id)}
       />
       <If when={open()}>{body}</If>
     </View>
@@ -463,7 +462,7 @@ export function ItemRow(props: RowProps) {
             </View>
           )}
         </Each>
-        <Controls s={s} id={id} it={it} narrow={props.narrow} />
+        <Controls s={s} id={id} it={it} narrow={props.narrow} info={info} />
         <If when={info().toProfile}>
           {(tp) => (
             <View testID={`fp-to-profile-${id}`} class="mt-2 gap-0.5">

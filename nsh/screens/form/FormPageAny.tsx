@@ -15,6 +15,8 @@ interface Params {
   mode?: FormTarget["mode"];
   /** Typed into the page once it opened (key -> text), as the filer would. */
   edits?: Record<string, string>;
+  /** A row a step lands on once the page opened ("part:item"), as the sections list's jumpTo does. */
+  stepRow?: string;
   /** The parity world first (nsh/verify/parity/seed.test.tsx): tax year 2026 with 1601C and 2551Q, and four saved
    * drafts in this order: 2551Q Q3, 1601C Sep, 1601C Oct, 2551Q Q1 (each opened and saved, as the old app saved them). */
   seed?: boolean;
@@ -61,6 +63,7 @@ function Fixture() {
             void s.ready().then(() => {
               sessionFields.set(String(s.fieldCount()));
               for (const [k, v] of Object.entries(p.edits || {})) s.edit(k, v);
+              if (p.stepRow) s.jumpTo(Number(p.stepRow.split(":")[0]), p.stepRow);
             })
           }
         />
