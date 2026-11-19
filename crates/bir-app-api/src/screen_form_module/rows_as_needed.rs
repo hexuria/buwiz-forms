@@ -47,7 +47,7 @@
 //! unchanged.
 
 use bir_core::forms::agent::AgentFormKind;
-use bir_core::forms::form_0605::Form0605Draft;
+use bir_core::forms::form_0605::{Form0605DateField, Form0605Draft};
 use bir_core::forms::form_1606::Form1606Draft;
 use bir_core::forms::form_1706::Form1706Draft;
 use bir_core::forms::form_1707::{
@@ -253,6 +253,77 @@ pub(super) fn refuse_dates(
         }
     }
     out
+}
+
+/// 0605's Items 4 and 7 keep three month/day/year boxes on a draft whose
+/// dates start empty (B1): the parts are whole-number bindings into
+/// `Option` dates, so a batch touching a group is judged as one date and
+/// written whole — an impossible complete date refuses every part it
+/// sent, a partial one lands its parts.
+pub(super) struct SplitDateGroup {
+    /// Which draft date the group writes.
+    pub which: Form0605DateField,
+    /// The (month, day, year) box keys, in part order.
+    pub keys: [&'static str; 3],
+    /// What the batch sends per part; `None` = the batch does not touch it.
+    pub sent: [Option<String>; 3],
+    /// What each box shows now (the draft's parts), `None` = blank.
+    pub current: [Option<u16>; 3],
+}
+
+/// The two split dates of Form 0605: `(which, [month, day, year] keys)`.
+const SPLIT_DATES_0605: [(Form0605DateField, [&str; 3]); 2] = [
+    (
+        Form0605DateField::DueDate,
+        [
+            "frm0605:txtDueDateMonth",
+            "frm0605:txtDueDateDay",
+            "frm0605:txtDueDateYear",
+        ],
+    ),
+    (
+        Form0605DateField::ReturnPeriod,
+        [
+            "frm0605:txtReturnPeriodMonth",
+            "frm0605:txtReturnPeriodDay",
+            "frm0605:txtReturnPeriodYear",
+        ],
+    ),
+];
+
+/// The split-date groups of this batch: only 0605 has them, and only a
+/// group the batch actually writes is returned.
+pub(super) fn split_date_groups(
+    kind: AgentFormKind,
+    shown: &Value,
+    edits: &[(String, Value)],
+) -> Vec<SplitDateGroup> {
+    if kind.form_code() != "0605" {
+        return Vec::new();
+    }
+    let sent_text = |key: &str| -> Option<String> {
+        edits
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| text(v))
+    };
+    let shown_part = |key: &str| -> Option<u16> {
+        let shown = shown[key].as_str().unwrap_or_default().trim();
+        if shown.is_empty() || shown.chars().all(|c| c == '0') {
+            return None;
+        }
+        shown.parse::<u16>().ok()
+    };
+    SPLIT_DATES_0605
+        .iter()
+        .map(|(which, keys)| SplitDateGroup {
+            which: *which,
+            keys: *keys,
+            sent: keys.map(|key| sent_text(key)),
+            current: keys.map(|key| shown_part(key)),
+        })
+        .filter(|group| group.sent.iter().any(Option::is_some))
+        .collect()
 }
 
 /// What a stored one-date box holding only part of a date (a month with

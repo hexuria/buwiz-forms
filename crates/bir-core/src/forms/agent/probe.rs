@@ -3081,6 +3081,15 @@ mod blank_seed_tests {
         match key {
             "txtATCCode" => return Some(json!("FP010")),
             "txtTaxTypeCode" => return Some(json!("DO")),
+            // 0605's date parts are whole-number bindings, but a year box
+            // wants a four-digit year, not the whole-number probe.
+            "frm0605:txtDueDateMonth" | "frm0605:txtReturnPeriodMonth" => {
+                return Some(json!("07"))
+            }
+            "frm0605:txtDueDateDay" | "frm0605:txtReturnPeriodDay" => return Some(json!("19")),
+            "frm0605:txtDueDateYear" | "frm0605:txtReturnPeriodYear" => {
+                return Some(json!("2031"))
+            }
             _ => {}
         }
         match &bound.binding {

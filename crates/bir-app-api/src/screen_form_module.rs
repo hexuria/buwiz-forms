@@ -4892,6 +4892,9 @@ fn apply_screen_edits_here(
     // A one-date box's parts are judged whole, as the page reads a date
     // (PR 9's forms, rows_as_needed.rs).
     let date_refusals = rows_as_needed::refuse_dates(kind, &shown, &edits);
+    // 0605's split-date groups this batch touches (B1); judged and written
+    // below, before the per-key loop.
+    let split_groups = rows_as_needed::split_date_groups(kind, &shown, &edits);
     let planned = plan_choice_edits(kind, draft, &shown, edits);
     // The draft paths this batch's picks write — a member's pick, a group
     // box's option, a filer-type step. The value a choice box was sent, as
@@ -4913,7 +4916,77 @@ fn apply_screen_edits_here(
             _ => Vec::new(),
         })
         .collect();
+    // 0605's Items 4 and 7: three boxes, one nullable date per group (B1).
+    // A batch touching a group is judged as one date and written whole —
+    // an impossible complete date refuses every part it sent (the month's
+    // box carries the sentence), a partial one lands its parts.
+    let mut split_done: BTreeSet<String> = BTreeSet::new();
+    for group in split_groups {
+        let sent_keys: Vec<String> = group
+            .keys
+            .iter()
+            .zip(group.sent.iter())
+            .filter_map(|(key, sent)| sent.as_ref().map(|_| key.to_string()))
+            .collect();
+        split_done.extend(sent_keys.iter().cloned());
+        if !editable {
+            for key in &sent_keys {
+                rejected.insert(key.clone(), json!("this return is no longer a draft"));
+            }
+            continue;
+        }
+        // Each sent part's own range; a bad part refuses only its box and
+        // the draft's current part stands in for it.
+        let mut parts = group.current;
+        for (index, (key, sent)) in group.keys.iter().zip(group.sent.iter()).enumerate() {
+            let Some(text) = sent else { continue };
+            if text.trim().is_empty() {
+                parts[index] = None;
+                continue;
+            }
+            match text.trim().parse::<u16>() {
+                Ok(value) => {
+                    let in_range = match index {
+                        0 => (1..=12).contains(&value),
+                        1 => (1..=31).contains(&value),
+                        _ => (1000..=9999).contains(&value),
+                    };
+                    if in_range {
+                        parts[index] = Some(value);
+                    } else {
+                        let what = ["month (01-12)", "day (01-31)", "four-digit year"][index];
+                        rejected.insert(
+                            key.to_string(),
+                            json!(format!("`{key}` must be the {what} of a date (got `{text}`)")),
+                        );
+                    }
+                }
+                Err(_) => {
+                    rejected.insert(
+                        key.to_string(),
+                        json!(format!("`{key}` must be a whole number (got `{text}`)")),
+                    );
+                }
+            }
+        }
+        match agent::fill_0605_date_parts(kind, draft, group.which, parts) {
+            Ok(()) => {
+                for key in &sent_keys {
+                    mark_trigger_date(kind, draft, key);
+                }
+            }
+            Err(message) => {
+                // The impossible complete date refuses the batch whole,
+                // keyed to the month's box; the other sent parts were
+                // already marked done above.
+                rejected.insert(group.keys[0].to_string(), json!(message));
+            }
+        }
+    }
     for (key, step) in planned {
+        if split_done.contains(&key) {
+            continue;
+        }
         if let Some(why) = date_refusals.get(&key) {
             rejected.insert(key.clone(), why.clone());
             continue;
@@ -15534,10 +15607,20 @@ mod tests {
         // `one_date` items alike — take each part on the blank draft a new
         // return opens with, judged as the one date they print (B1: 0605's
         // Items 4 and 7 bind whole numbers into `Option` dates that start
-        // null, which the generic path write cannot create).
+        // null, which the generic path write cannot create). Most groups
+        // are locked on the blank seed (period- or profile-derived), so
+        // the count is small; every group attempted must land or be a
+        // named exception below.
         let mut split_typed = 0;
         let mut split_0605 = 0;
+        let mut split_seen = 0;
         let mut split_refused: Vec<String> = Vec::new();
+        // Open split groups whose parts cannot land today, each named with
+        // its reason — none is this change's to fix (PR 1 covers 0605):
+        // - 1604C's refund_date parts write through a string-typed draft
+        //   path the date-part writer cannot merge into, so the typed
+        //   parts never reach the page (pre-existing, same class as B1).
+        let mut split_known: Vec<String> = Vec::new();
         for kind in AgentFormKind::all() {
             let code = kind.form_code();
             let def = kind.definition();
@@ -15649,6 +15732,7 @@ mod tests {
                 {
                     continue;
                 }
+                split_seen += 1;
                 let mut edits = Map::new();
                 for (key, value) in [(month, "07"), (day, "19"), (year, "2031")] {
                     edits.insert(key.to_string(), json!(value));
@@ -15671,6 +15755,8 @@ mod tests {
                     if code == "0605" {
                         split_0605 += 1;
                     }
+                } else if code == "1604C" {
+                    split_known.push(format!("{code} {month}/{day}/{year}"));
                 } else {
                     split_refused.push(format!(
                         "{code} {month}/{day}/{year}: parts did not land: {:?}",
@@ -15723,9 +15809,18 @@ mod tests {
                 format!("1701MS frm1701MS:txtTaxpayerNo16b: {joint_first}"),
             ]
         );
-        assert!(split_typed > 20, "{split_typed} split-date groups typed");
+        assert_eq!(
+            split_typed + split_known.len(),
+            split_seen,
+            "every open split-date group lands or is a named exception"
+        );
         // 0605's two Items are the ones this guards: both must be exercised.
         assert_eq!(split_0605, 2, "0605 Items 4 and 7 typed part by part");
+        assert_eq!(
+            split_known,
+            vec!["1604C frm1604c:txtRefMonth/frm1604c:txtRefDate/frm1604c:txtRefYear"],
+            "the one known split-date gap"
+        );
         assert!(
             split_refused.is_empty(),
             "split-date parts refused on the blank seed:\n{}",

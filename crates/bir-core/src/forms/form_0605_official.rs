@@ -17,9 +17,9 @@ use super::penalty_items::PenaltyItems;
 use std::collections::BTreeMap;
 
 use super::form_0605::{
-    Form0605ApprovalSelection, Form0605Date, Form0605Draft, Form0605FilingBasis,
-    Form0605IndexedCode, Form0605MannerOfPayment, Form0605TaxpayerClassification,
-    Form0605TypeOfPayment,
+    Form0605ApprovalSelection, Form0605Date, Form0605DateParts, Form0605Draft,
+    Form0605FilingBasis, Form0605IndexedCode, Form0605MannerOfPayment,
+    Form0605TaxpayerClassification, Form0605TypeOfPayment,
 };
 use super::official_inputs::has_cent_precision;
 use super::queueable::{QueueableForm, SubmissionLifecycle};
@@ -818,13 +818,22 @@ impl Form0605Draft {
             fields.insert(key.to_string(), value);
         };
         let flag = |on: bool| on.to_string();
-        let date_parts = |date: Option<Form0605Date>| match date {
-            Some(d) => (
-                format!("{:02}", d.month),
-                format!("{:02}", d.day),
-                format!("{:04}", d.year),
-            ),
-            None => Default::default(),
+        // A split date shows its real date's parts, or the parts the filer
+        // typed so far while the date is still incomplete (B1).
+        let date_parts = |date: Option<Form0605Date>, typed: &Form0605DateParts| {
+            if let Some(d) = date {
+                (
+                    format!("{:02}", d.month),
+                    format!("{:02}", d.day),
+                    format!("{:04}", d.year),
+                )
+            } else {
+                (
+                    typed.month.map(|m| format!("{m:02}")).unwrap_or_default(),
+                    typed.day.map(|d| format!("{d:02}")).unwrap_or_default(),
+                    typed.year.map(|y| format!("{y:04}")).unwrap_or_default(),
+                )
+            }
         };
 
         let calendar = self.filing_basis == Form0605FilingBasis::Calendar;
@@ -836,7 +845,7 @@ impl Form0605Draft {
                 flag(self.quarter == quarter),
             );
         }
-        let (m, d, y) = date_parts(self.due_date);
+        let (m, d, y) = date_parts(self.due_date, &self.due_date_typed);
         put("frm0605:txtDueDateMonth", m);
         put("frm0605:txtDueDateDay", d);
         put("frm0605:txtDueDateYear", y);
@@ -853,7 +862,7 @@ impl Form0605Draft {
             format!("{:02}", self.year_end_month),
         );
         put("frm0605:txtYearEnded", self.taxable_year.to_string());
-        let (m, d, y) = date_parts(self.return_period);
+        let (m, d, y) = date_parts(self.return_period, &self.return_period_typed);
         put("frm0605:txtReturnPeriodMonth", m);
         put("frm0605:txtReturnPeriodDay", d);
         put("frm0605:txtReturnPeriodYear", y);
