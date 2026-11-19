@@ -88,6 +88,21 @@ nsh/                    The new app. Its own cargo workspace (like crates/bir-sh
 - **Dev run:** `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BIR_DATABASE_PATH=~/BuwizNsh/agents/<track>.db`. **Mock run:** unset `EBIR_TEST_ENV` and `BIR_SFTP_DRY_RUN`, then source `target/mock-bir/app.env` (`docs/mock-bir.md`).
 - Export and import cannot use `sqlcipher_export` in the plain build; they need a plain path (for example `VACUUM INTO`).
 
+## Worker-driven filing refresh
+
+Filings, Home and the form page share the cached `store.returns` lists. Worker
+completion posts `bir_core::ipc::post_db_changed`, but the NSH UI does not consume
+that signal; invalidation is owned by the shell polls, not by screen navigation.
+`startQueuedWatch` runs independently of the ordinary events poll, including in
+development builds where that poll is disabled. While unlocked and a cached return
+is Queued, it invalidates `WORKER_KEYS` every 3 seconds for the first 30 seconds
+after the set/queue action changes, then every 30 seconds until no return is Queued.
+A long relay retry must not outlive all cache invalidation. Lock stops reads and
+unlock restarts the fast phase. No queued returns means no periodic invalidation
+from this watch. `shell/queuedWatch.test.ts` verifies the pacing and a late worker
+submission with no ordinary events poll; this is cache/timer verification, not a
+device or relay transport test.
+
 ## Waves
 
 **Parallel work in one worktree.** Agents share this worktree and one cargo build cache, so builds queue on a lock: that is normal, wait for it. A compile error in a file you do not own is probably another agent's edit in flight: wait a few minutes and retry before reporting it. Ownership in wave 1a: A3 alone edits root `Cargo.toml` (except the `members` line), `crates/bir-core/**` and `crates/bir-print/Cargo.toml`. A1 owns `crates/bir-host-shim/**`, `crates/bir-app-api/**`, `crates/bir-shell/**` with its `Cargo.lock`, the root `members` line and the root `Cargo.lock`. A2 owns `nsh/**` and `justfile`, and builds with `CARGO_TARGET_DIR=~/BuwizNsh/target-nsh`.
