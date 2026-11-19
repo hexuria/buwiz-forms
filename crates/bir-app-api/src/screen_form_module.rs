@@ -5073,7 +5073,9 @@ fn apply_screen_edits_here(
         // A blank or untick write is a clear and is never refused.
         if let Some(value) = sent.get(&key)
             && !value.is_null()
-            && value.as_str().is_none_or(|text| !text.trim().is_empty())
+            && value
+                .as_str()
+                .is_none_or(|text| !agent::carry::is_blank_value(text))
             && !is_unticked(value)
             && let Some(tag) = conditions::off_now(kind, draft, &shown, &key)
         {
@@ -17382,9 +17384,12 @@ mod tests {
                 .into_iter()
                 .filter(|f| f["k"] == key)
                 .flat_map(|f| f["o"].as_array().cloned().unwrap_or_default())
-                .filter_map(|o| {
-                    o.as_str()
-                        .map(|o| json!(o.split(" - ").next().unwrap_or(o)))
+                .filter_map(|o| match &o {
+                    Value::Object(_) => o["value"].as_str().map(|v| json!(v)),
+                    Value::String(text) => {
+                        Some(json!(text.split(" - ").next().unwrap_or(text)))
+                    }
+                    _ => None,
                 }),
         );
         probes.retain(|v| !shows_nothing(v) && v != "-");
@@ -17671,6 +17676,8 @@ mod tests {
             BTreeMap::from([
                 // Plus 1 for 0605 (PR 9): item 17's Others (Specify) box.
                 ("0605", 4),
+                // B16: 0619E item 14 waits for item 4 Yes (CORPUS_GAPS_B16).
+                ("0619E", 1),
                 ("0619F", 2),
                 // PR 3: Schedule 1.1's TIN, payee, ATC and amount, ten rows,
                 // wait for item 4 Yes (the host refuses them until then).
@@ -17734,6 +17741,9 @@ mod tests {
                 ("2200P", 3),
                 ("2200S", 94),
                 ("2200T", 3),
+                // B16: 2551Q item 12's specify select waits for Item 12 Yes
+                // (CORPUS_GAPS_B16).
+                ("2551Q", 1),
                 // 10 for 2552 (PR 9): items 12A and 12B and Part IV rows
                 // 2-5's two boxes, which the official runtime keeps shut.
                 ("2552", 10),

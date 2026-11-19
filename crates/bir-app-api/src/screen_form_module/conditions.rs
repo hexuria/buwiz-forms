@@ -66,7 +66,20 @@ fn binding_of(kind: AgentFormKind, key: &str) -> Option<&'static Binding> {
 
 /// The values tried on a box, in order, to see whether the form keeps one:
 /// the first one the box takes decides. The tests use the same list.
-pub(super) fn probes(kind: AgentFormKind, key: &str, shown: &str) -> Vec<Value> {
+/// A select's probes are its listed codes (B17 refuses an unlisted code
+/// before the binding sees it, so a generic probe would never land).
+pub(super) fn probes(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> Vec<Value> {
+    if let Some(list) = super::catalogs::sel_list(kind, key, draft) {
+        let listed: Vec<Value> = list
+            .iter()
+            .filter(|code| code.as_str() != shown && !is_blank(code.as_str()))
+            .take(2)
+            .map(|code| json!(code))
+            .collect();
+        if !listed.is_empty() {
+            return listed;
+        }
+    }
     let grouped = kind
         .definition()
         .box_def(key)
@@ -182,7 +195,7 @@ fn trial(
 
 /// Whether one box is off: the first probe it takes is cleared by the form.
 fn off_alone(kind: AgentFormKind, draft: &Value, key: &str, shown: &str) -> bool {
-    for probe in probes(kind, key, shown) {
+    for probe in probes(kind, draft, key, shown) {
         if let Some(Some(after)) = trial(kind, draft, &[(key.to_string(), probe)]).remove(key) {
             return is_blank(&after);
         }
@@ -260,7 +273,7 @@ pub(super) fn off_boxes(kind: AgentFormKind, draft: &Value, values: &Value) -> M
         .iter()
         .filter(|(key, _, _)| !matches!(binding_of(kind, key), Some(Binding::Choice { .. })))
         .filter_map(|(key, _, shown)| {
-            probes(kind, key, shown)
+            probes(kind, draft, key, shown)
                 .into_iter()
                 .next()
                 .map(|probe| (key.to_string(), probe))

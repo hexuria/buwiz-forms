@@ -2576,6 +2576,15 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                         }
                         continue;
                     }
+                    // B16: a box another answer keeps shut refuses with
+                    // its condition's tag; its choices are taken once the
+                    // gate opens (tests::as_needed sends them then).
+                    if reason
+                        .as_str()
+                        .is_some_and(|reason| reason.starts_with("Needs "))
+                    {
+                        continue;
+                    }
                     refused.push(format!("{code} {key} {value:?}: {reason}"));
                 }
             }

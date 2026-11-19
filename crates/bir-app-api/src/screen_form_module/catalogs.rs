@@ -123,18 +123,6 @@ pub(super) fn fill(
                 .to_string(),
         );
     }
-    // B17: every `sel` with a known list takes only a listed code, judged
-    // on the page's own list (the schema's `o`, else `field_options`)
-    // before any binding arm runs, so every select answers alike. A list
-    // that is empty until a parent is chosen is not judged, and a blank
-    // write clears.
-    if let Some(list) = sel_list(kind, key, draft)
-        && !list.is_empty()
-        && let Some(code) = value.as_str().filter(|code| !code.trim().is_empty())
-        && !list.iter().any(|listed| listed == code)
-    {
-        return Err(format!("`{key}` is not one of the listed choices"));
-    }
     if let Some(done) = rows_withholding::fill(kind, draft, key, value, |draft| {
         agent::fill_as_user(kind, draft, key, value)
     }) {
@@ -278,6 +266,20 @@ pub(super) fn fill(
         current.recompute();
         *draft = serde_json::to_value(typed).map_err(|e| e.to_string())?;
         return Ok(());
+    }
+    // B17: every `sel` with a known list takes only a listed code, judged
+    // on the page's own list (the schema's `o`, else `field_options`)
+    // before the generic write runs, so every select answers alike. It
+    // sits after the module fills so a box another answer keeps shut is
+    // refused with its own tag first (B16's reason, not this sentence).
+    // A list that is empty until a parent is chosen is not judged, and a
+    // blank write clears.
+    if let Some(list) = sel_judged(kind, key, draft)
+        && !list.is_empty()
+        && let Some(code) = value.as_str().filter(|code| !code.trim().is_empty())
+        && !list.iter().any(|listed| listed == code)
+    {
+        return Err(format!("`{key}` is not one of the listed choices"));
     }
     let loc = location(kind, key);
     let before = loc.and_then(|(base, _)| draft.pointer(base).cloned());
@@ -724,11 +726,8 @@ fn fill_2550m_atc(draft: &mut Value, row: usize, value: &Value) -> Result<(), St
     Ok(())
 }
 
-/// The codes a `sel` box's list offers, as the page knows them (B17):
-/// the schema's own `o` when it has one, else the host's `field_options`
-/// for the draft as it stands. `None` when the box is not a select or has
-/// no list to judge by.
-pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<String>> {
+/// The `sel` schema field for `key`, from `f` or a row's `cols`.
+fn sel_field(kind: AgentFormKind, key: &str) -> Option<Value> {
     let form = schema_entry(kind.form_code())?;
     let mut field = None;
     'walk: for part in form["parts"].as_array().into_iter().flatten() {
@@ -749,10 +748,35 @@ pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<
             }
         }
     }
-    let field = field?;
-    if field["t"] != "sel" {
+    field.filter(|field| field["t"] == "sel")
+}
+
+/// The codes a `sel` box's list offers, as the page knows them (B17):
+/// the schema's own `o` when it has one, else the host's `field_options`
+/// for the draft as it stands. `None` when the box is not a select or has
+/// no list to judge by.
+pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<String>> {
+    let code = kind.form_code();
+    // 0605's Item 6 ATC and Item 8 tax type have dedicated official-list
+    // writers (B2) whose refusals say which list was missed; they judge
+    // themselves, ahead of the generic sentence.
+    if code == "0605" && matches!(key, "txtATCCode" | "txtTaxTypeCode") {
         return None;
     }
+    // An RDO code's dropdown is a subset of what the box takes (the
+    // profile and older codes write through the same text path): the
+    // list is for picking, not for judging writes.
+    if matches!(
+        kind.definition().bindings.get(key).map(|b| &b.binding),
+        Some(Binding::Text { path, .. })
+            if path
+                .rsplit('/')
+                .next()
+                .is_some_and(|leaf| leaf == "rdo_code" || leaf.ends_with("_rdo_code"))
+    ) {
+        return None;
+    }
+    let field = sel_field(kind, key)?;
     if let Some(o) = field["o"].as_array().filter(|o| !o.is_empty()) {
         return Some(o.iter().filter_map(sel_option_value).collect());
     }
@@ -761,6 +785,35 @@ pub(super) fn sel_list(kind: AgentFormKind, key: &str, draft: &Value) -> Option<
             .filter_map(|row| row["value"].as_str().map(str::to_string))
             .collect()
     })
+}
+
+/// The list a `sel` write is judged by (B17): the page's own list, but
+/// only where the write path enforces that same list — a `Choice` binding
+/// (it refuses off-list codes itself) whose options are the listed codes,
+/// or a catalog-backed `field_options` list (the form's writer checks the
+/// same catalog). A static schema list on a free text/whole binding is a
+/// pick list, not the write domain — names and official codes also write
+/// through (1601C's selTreaty, 2551Q's specify, 1604C's select13) — so it
+/// does not judge.
+pub(super) fn sel_judged(kind: AgentFormKind, key: &str, draft: &Value) -> Option<Vec<String>> {
+    let field = sel_field(kind, key)?;
+    let listed = sel_list(kind, key, draft)?;
+    if field["o"].as_array().is_some_and(|o| !o.is_empty()) {
+        // A schema list judges only when the binding is the same list.
+        let Some(Binding::Choice { options }) = kind
+            .definition()
+            .bindings
+            .get(key)
+            .map(|bound| &bound.binding)
+        else {
+            return None;
+        };
+        let bound: Vec<&str> = options.iter().map(|o| o.value.as_str()).collect();
+        let same = bound.len() == listed.len()
+            && bound.iter().all(|value| listed.iter().any(|code| code == value));
+        return same.then_some(listed);
+    }
+    Some(listed)
 }
 
 /// One schema `o` entry's code, as the page's `optionOf` reads it: an
