@@ -18,7 +18,7 @@
 //   need attention" and the pill's red count take every message, shown or not (the old page's todo() and partErrors).
 import { batch, signal, untracked, type Accessor, type Signal } from "nsh";
 import { isAvailable as hasSecondWindow } from "nsh/desktop";
-import { Print } from "../print/native";
+import { hasNativePreview, Print } from "../print/native";
 import {
   bir,
   type IncomeTaxElectionReadiness,
@@ -41,7 +41,7 @@ import { formatMoney, wholePesosOf } from "../../lib/money";
 import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { dateParts, isPageNotice, isTinItem, keysOf, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -54,7 +54,7 @@ type Filled = ScreenFormFilled & { cleared?: string[] };
 /** What a device with no second window says for Print preview (screens/print/host.tsx and src/print.rs say the same). */
 const NO_PREVIEW = "Print preview is not available on this device.";
 
-/** What Check, and a Queue the host refused, say of the items that need attention. */
+/** What Check says of the items that need attention. */
 const attentionText = (n: number) => `${n} item${n > 1 ? "s need" : " needs"} attention.`;
 
 /** Why a month other than December is not taken for a calendar year's end (a calendar pick says it; so does a month chosen from the list that the fill put back). */
@@ -2394,12 +2394,9 @@ export class FormSession {
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
-      // Refused: every message shows, so what blocks it is on screen. The host lists what it refused as "field: message; ..." (its own
-      // names for the boxes): the rows and the pill carry the messages, and the toast counts them as Check does.
       s.showAll = true;
       this.publish();
-      const listed = listedFields(errorText(e));
-      this.toast(listed ? attentionText(listed) : errorText(e), "triangle-alert");
+      this.toast(errorText(e), "triangle-alert");
     }
   }
 
@@ -2460,11 +2457,11 @@ export class FormSession {
   print() {
     const s = this.st;
     if (!s.draft) return;
-    if (!hasSecondWindow && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
+    if (!hasSecondWindow && !hasNativePreview && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
     if (s.sample) {
       try {
         bir.screen_form_print_sample(s.target.formCode, s.draft, s.pending, this.unlockedFor(s.pending));
-        s.previewOpen = true;
+        s.previewOpen = !hasNativePreview;
         if (hasSecondWindow) this.toast("Print preview opened. It follows your edits live.", "printer");
       } catch (e) {
         this.toast(errorText(e), "triangle-alert");
@@ -2475,7 +2472,7 @@ export class FormSession {
     else if (s.editable && !this.ensureSaved()) return;
     try {
       bir.screen_form_print(s.target.formCode, s.draft!);
-      s.previewOpen = true;
+      s.previewOpen = !hasNativePreview;
       if (hasSecondWindow) this.toast("Print preview opened. It follows your edits live.", "printer");
     } catch (e) {
       this.toast(errorText(e), "triangle-alert");

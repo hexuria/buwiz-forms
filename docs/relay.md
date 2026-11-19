@@ -30,7 +30,7 @@ Answers (JSON):
 | --- | --- | --- |
 | `202` | `{"status":"accepted","receipt_id":"relay-…","sha256":"…","forwarded":"mock-bir"\|"none",…}` | the return is **Submitted** |
 | `4xx` | `{"status":"rejected","error":"…"}` | rejected (`TransportError::Rejected`), not retried as sent |
-| `5xx` | `{"status":"failed","error":"…"}` | transport error (`TransportError::Http`), the queue retries |
+| `5xx` | `{"status":"failed","error":"…"}` | transport error (`TransportError::Http`); after PUT-start the claim stays pending for manual reconciliation |
 
 `202` means the relay holds the file. Confirmation from the BIR (the email
 receipt) stays outside this contract, as on the desktop.
@@ -39,6 +39,80 @@ receipt) stays outside this contract, as on the desktop.
 
 `200 {"ok":true,"mock":true}`.
 
+### Android development APK: private dev.env
+
+**Debug builds or compile-time opt-in only**: before the door and its guards
+run, the Android app reads `<engine data_dir>/dev.env` once per process when
+`debug_assertions` is enabled or it was compiled with `BUWIZ_ANDROID_DEV=1`.
+`nsh package` builds release APKs; opt in from `nsh/` with:
+
+```sh
+BUWIZ_ANDROID_DEV=1 nsh package --target android --abi x86_64
+```
+
+Packaged APKs are not debuggable, so `adb shell run-as` cannot write their
+private configuration. Bake synthetic-test defaults into the opted-in APK instead:
+
+```sh
+BUWIZ_ANDROID_DEV=1 BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BIR_RELAY_URL=http://127.0.0.1:8787' nsh package --target android --abi x86_64
+```
+
+`BUWIZ_ANDROID_DEV_ENV` accepts the same allowlisted `KEY=VALUE` entries,
+separated by semicolons or newlines, with the same validation and 16 KiB limit.
+Duplicate keys within either source are rejected. If a private `dev.env` exists,
+its entries override baked defaults per key; omitted keys retain their baked
+values. Both sources must validate before any configuration is applied.
+A missing file is fine: the baked defaults still apply.
+
+Both build-time values use `option_env!`; Cargo tracks their changes
+automatically (the app has no `build.rs`). Setting them only at app runtime
+does not enable or change the loader. Production release builds without the
+opt-in neither embed the baked configuration nor read the file, even when
+`run-as` is available. Do not distribute opted-in APKs as production builds
+or put secrets in baked configuration.
+With the current NSH host this is normally
+`files/nsh/dev.goldcoders.bir.nsh/dev.env` relative to `run-as`'s working
+directory (NSH uses `getFilesDir()/nsh/<app id>`). The file must exist before
+the first native Door call. Restart the app after changing it.
+
+Only these keys are accepted:
+`EBIR_TEST_ENV`, `BIR_AUTH_BYPASS`, `BUWIZ_NO_KEYCHAIN`, `BIR_SFTP_DRY_RUN`,
+`BIR_RELAY_URL`. The format is literal `KEY=VALUE`, with surrounding whitespace
+trimmed; blank lines and full-line `#` comments are allowed. No `export`,
+quoting, variable expansion or inline comments. Unknown/duplicate keys,
+malformed lines, invalid UTF-8 or files over 16 KiB refuse startup. A missing
+file is fine. No partial configuration is applied on parse failure.
+
+Create a local file named `dev.env` containing:
+
+```dotenv
+EBIR_TEST_ENV=1
+BIR_AUTH_BYPASS=1
+BUWIZ_NO_KEYCHAIN=1
+BIR_SFTP_DRY_RUN=1
+BIR_RELAY_URL=http://127.0.0.1:8787
+```
+
+For a debuggable development APK (not a normal `nsh package` APK), the optional
+private-file override can be installed as follows:
+
+```sh
+adb shell am force-stop dev.goldcoders.bir.nsh
+adb shell run-as dev.goldcoders.bir.nsh mkdir -p files/nsh/dev.goldcoders.bir.nsh
+adb shell run-as dev.goldcoders.bir.nsh sh -c '"cat > files/nsh/dev.goldcoders.bir.nsh/dev.env"' < dev.env
+adb reverse tcp:8787 tcp:8787
+# Start both mocks, then launch the app normally.
+```
+
+For a packaged APK with baked defaults, skip the `run-as` commands and use
+`adb reverse tcp:8787 tcp:8787` before launching with both mocks running.
+
+The `run-as` path is app-private, not shared external storage. Verify the actual
+engine data path if using a different host/app ID. `EBIR_TEST_ENV=1` gives
+each engine a fresh scratch database: this configuration is for synthetic
+phone tests, not persistent real taxpayer work. The normal Final Copy and
+queue-admission checks still apply.
+
 ## Where the app decides
 
 - `bir-core/src/transport.rs`: `resolve_sftp_endpoint` returns
@@ -46,7 +120,8 @@ receipt) stays outside this contract, as on the desktop.
   setting it is the ask to use the relay), and the upload goes to the relay
   instead of SFTP. The source logs as `relay`.
 - `nsh/src/guards.rs`: the send guard answers `SendMode::Relay` (`doorStatus().sending
-  === "relay"`) only when the relay URL is loopback and its port answers. A set
+  === "relay"`) only when the relay URL is loopback, its port answers, and
+  `GET /v1/health` answers HTTP 200 with `{"mock":true}`. A set
   but bad or silent relay is `Refused`: the worker does not start. `BIR_SFTP_LIVE`
   is still removed and the Dev Mode test server still refuses.
 - The phone app gets `BIR_RELAY_URL` (and the dev variables) from the launch
@@ -92,3 +167,21 @@ SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=
 
 Queue a validated demo return (Juana Santos): the relay prints the file, the
 mock BIR prints the upload, and Filings shows the return as Submitted.
+
+## Submission safety and mock limitations
+
+The worker persists PUT-start before posting. A 202 accepted response marks the
+return Submitted, including inbox-only mode (`forwarded: "none"`); it does not
+mean BIR confirmation. A failed, rejected, disconnected, or timed-out operation
+after PUT-start leaves the claim pending for manual reconciliation, without
+automatic retry or SFTP fallback. Pre-upload failures retain the existing retry
+behavior. The client timeout is 60 seconds.
+
+This contract has no idempotency key or status endpoint. Repeating a POST writes
+the inbox file again and can forward it again, even though its hash-derived
+receipt ID is unchanged. Receipt-file writes are best-effort.
+
+Authentication is out of scope for this local mock. Use synthetic taxpayer data
+only. A real relay needs TLS, authenticated clients, taxpayer authorization,
+durable idempotency and custody records, audited access, rate limits, protected
+storage, retention/deletion policy, and reconciliation of ambiguous hand-offs.

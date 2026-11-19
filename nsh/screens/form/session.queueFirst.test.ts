@@ -193,7 +193,7 @@ test("nothing to fix and no warning: Queue queues straight away, once, even when
   }
 });
 
-test("Check clean and the host still refuses: the question, then the refusal counted as Check counts (the present behaviour)", async () => {
+test("Check clean and the host still refuses: Continue reveals the host message instead of only a count", async () => {
   const { said, h } = hooks();
   bir.set_year_facts(DEMO.tin, 2024, ANSWERED);
   const s = await opened(at("0619E", 2024, 6), h, said);
@@ -204,7 +204,7 @@ test("Check clean and the host still refuses: the question, then the refusal cou
     await until(() => s.overlay()?.kind === "queue-confirm", "the question");
     expect(said.toasts).toEqual([]);
     s.confirmQueue();
-    expect(said.toasts).toEqual(["1 item needs attention."]);
+    expect(said.toasts).toEqual(["agent_category: Please select an option for Item 8."]);
     expect(spy.calls.n).toBe(1);
     expect(s.status()).toBe("Draft");
   } finally {

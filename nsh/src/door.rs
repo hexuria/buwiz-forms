@@ -42,6 +42,25 @@ fn process() -> &'static Process {
     PROCESS.get_or_init(|| set_up(guards::send_guard))
 }
 
+#[cfg(target_os = "android")]
+pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
+    let path = path.ok_or("The Android engine has no private data directory.")?;
+    bir_core::platform::set_data_dir(path.clone()).map_err(|error| error.to_string())?;
+    if cfg!(debug_assertions) || matches!(option_env!("BUWIZ_ANDROID_DEV"), Some("1")) {
+        static DEV_ENV: OnceLock<Result<(), String>> = OnceLock::new();
+        DEV_ENV.get_or_init(|| {
+            let values = crate::dev_env::read(&path.join("dev.env"))?;
+            for (key, value) in values {
+                // SAFETY: serialized by DEV_ENV, before the door starts any database or worker.
+                // Only the allowlisted app configuration is written; NSH does not consume these keys.
+                unsafe { std::env::set_var(key, value) };
+            }
+            Ok(())
+        }).clone()?;
+    }
+    Ok(())
+}
+
 /// The set-up [`process`] runs, with the send guard given (production passes `guards::send_guard`; a test passes one
 /// that refuses, which the environment alone cannot make). A refused send guard holds where the submission worker
 /// starts (bir-app-api's latch), so no route can start it, whatever host function it comes through. The name check in
@@ -72,6 +91,7 @@ pub(crate) fn process_prepared() -> bool {
 /// it): a release build under a test must not reach the keychain either. A release build outside a test
 /// environment leaves the variable to the caller.
 fn switch_off_keychain(debug_build: bool) {
+    #[cfg(not(target_os = "android"))]
     if debug_build || test_environment() {
         // SAFETY: called from [`process`], once, before NSH or this crate starts a thread (see there).
         unsafe { std::env::set_var(bir_core::platform::NO_KEYCHAIN_ENV, "1") };
@@ -122,7 +142,10 @@ fn choose_database() -> Result<(), String> {
     if !scratch_database_wanted() {
         return Ok(());
     }
+    #[cfg(not(target_os = "android"))]
     let root = std::env::temp_dir().join("ebirforms-door");
+    #[cfg(target_os = "android")]
+    let root = bir_core::platform::temp_dir().join("ebirforms-door");
     SWEPT.call_once(|| forget_old_scratch(&root, SCRATCH_LIFETIME));
     let folder = fresh_scratch_folder(&root, std::process::id(), SCRATCH_SEQUENCE.fetch_add(1, Ordering::SeqCst))
         .map_err(|error| format!("Cannot make a scratch database folder: {error}"))?;

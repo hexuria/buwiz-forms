@@ -576,6 +576,30 @@ pub(crate) fn request(path: PathBuf, title: String, key: String) {
         tracing::warn!(path = %path.display(), "the print preview has no window host (screens/print/host is not loaded)");
         return;
     };
+    #[cfg(target_os = "android")]
+    if Print::native_preview() {
+        let result = read.map_err(|error| format!("Could not read the print sheet: {error}"))
+            .and_then(|html| {
+                if !has_sheets(&html) {
+                    return Err("The print sheet is empty or has no pages.".to_owned());
+                }
+                crate::print_android::invalidate();
+                STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.close_all();
+                    state.request(&key, title.clone(), bir_app_api::static_html::staticize_if_needed(html))
+                })
+            });
+        match result {
+            Ok(events) => events.into_iter().for_each(|event| backend.emit(event)),
+            Err(error) => {
+                let mut said = event(PrintEventKind::Unavailable, &key, &title, "", String::new(), 0, "");
+                said.message = Some(error);
+                backend.emit(said);
+            }
+        }
+        return;
+    }
     if !device_has_windows() && !previews_natively() {
         let mut said = event(PrintEventKind::Unavailable, &key, &title, "", String::new(), 0, "");
         said.message = Some(UNAVAILABLE.to_owned());
@@ -610,6 +634,9 @@ fn previews_natively() -> bool {
 
 /// `print_preview_has_live`: a window is open for `key` and follows edits.
 pub(crate) fn has_live(key: &str) -> bool {
+    if cfg!(target_os = "android") {
+        return false;
+    }
     STATE.with(|state| {
         let state = state.borrow();
         state.backend.is_some() && state.previews.contains_key(key)
@@ -2036,7 +2063,13 @@ pub struct Print;
 impl Print {
     /// Hears every preview event until the returned function is called: a sheet to open (or to focus), a newer
     /// document for an open one, a device that has no window for it. One host listens at a time; the latest wins.
-    pub fn listen(#[args(event)] listener: Callback<PrintEvent>) -> Stop {
+    pub fn listen(#[args(event)] listener: Callback<PrintEvent>, _system: nsh_core::prelude::System) -> Stop {
+        #[cfg(target_os = "android")]
+        STATE.with(|state| {
+            state.borrow_mut().root = _system.data_dir
+                .expect("Android print needs the app's private data directory")
+                .join("tmp").join(format!("ebirforms-print-{}", std::process::id()));
+        });
         // Where a process cannot be asked (neither unix nor Windows), nothing is swept: see process_alive.
         #[cfg(any(unix, all(windows, target_env = "msvc")))]
         sweep_stale(&std::env::temp_dir(), process_alive);
@@ -2046,6 +2079,9 @@ impl Print {
 
     /// The window of the form code `key` closed (or could not open): forgets its preview and deletes its files.
     pub fn closed(key: String) {
+        if cfg!(target_os = "android") {
+            return;
+        }
         forget(&key);
     }
 
@@ -2053,6 +2089,25 @@ impl Print {
     /// [`Print::print`] when a preview opens, then [`Print::closed`].
     pub fn previews_natively() -> bool {
         previews_natively()
+    }
+
+    /// Android uses a native system preview instead of a desktop window.
+    pub fn native_preview() -> bool {
+        cfg!(target_os = "android")
+    }
+
+    /// Opens Android's system print preview for the retained sheet snapshot.
+    pub async fn open_native(key: String, title: String) -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        {
+            let (_, _, dir) = snapshot(&key).ok_or("The print preview is no longer available.")?;
+            crate::print_android::preview(url_for(&dir.join(SHEET)), title).await
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = (key, title);
+            Err("Native system preview is available on Android only.".to_owned())
+        }
     }
 
     /// Whether this system draws the preview's sheets itself, as pictures (Windows and Linux: on the CPU, see
@@ -2143,6 +2198,8 @@ fn forget(key: &str) {
 /// The app quits: every preview of this engine thread is forgotten and its folder (`ebirforms-print-<pid>`) deleted. The door's
 /// `shutdown` calls it; a quit that skips it leaves the folder to the next start's sweep.
 pub(crate) fn remove_all() {
+    #[cfg(target_os = "android")]
+    crate::print_android::invalidate();
     #[cfg(any(windows, target_os = "linux"))]
     crate::sheets::forget_all();
     let _ = STATE.try_with(|state| state.borrow_mut().close_all());
@@ -2569,6 +2626,7 @@ mod tests {
         path
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn the_hooks_open_one_preview_and_follow_edits() {
         let folder = tempfile::tempdir().unwrap();
@@ -2632,7 +2690,7 @@ mod tests {
         // A host that stops listening (the Stop) takes the preview's liveness with it.
         let recorder = host(folder.path());
         request(sheet_file(folder.path(), &["a"]), "t".to_owned(), key.clone());
-        assert!(has_live(&key));
+        assert_eq!(has_live(&key), !cfg!(target_os = "android"));
         let id = STATE.with(|state| state.borrow().backend.as_ref().unwrap().0);
         uninstall(id);
         assert!(!has_live(&key));
@@ -2650,6 +2708,7 @@ mod tests {
         assert!(backend().is_some());
     }
 
+    #[cfg(not(target_os = "android"))]
     #[test]
     fn the_hooks_of_the_app_reach_this_module() {
         use bir_app_api::hooks::Hooks;
@@ -2667,6 +2726,37 @@ mod tests {
     }
 
     // Saving ------------------------------------------------------------------------------------------------------
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_keeps_a_snapshot_until_the_next_request_or_shutdown() {
+        let folder = tempfile::tempdir().unwrap();
+        let recorder = host(&folder.path().join("previews"));
+        let first = key();
+        request(sheet_file(folder.path(), &["a"]), "First".into(), first.clone());
+        let first_path = STATE.with(|state| state.borrow().sheet_path(&first));
+        assert!(first_path.exists());
+        assert!(!has_live(&first));
+        Print::closed(first);
+        assert!(first_path.exists(), "system preview may still be reading");
+
+        let second = key();
+        request(sheet_file(folder.path(), &["b"]), "Second".into(), second.clone());
+        assert!(!first_path.exists());
+        let second_path = STATE.with(|state| state.borrow().sheet_path(&second));
+        assert!(second_path.exists());
+        assert_eq!(kinds(&recorder), vec![PrintEventKind::Open, PrintEventKind::Open]);
+
+        let empty = folder.path().join("empty.html");
+        std::fs::write(&empty, "").unwrap();
+        request(empty, "Empty".into(), key());
+        assert_eq!(recorder.events.borrow().last().unwrap().kind, PrintEventKind::Unavailable);
+        request(folder.path().join("missing.html"), "Missing".into(), key());
+        assert_eq!(recorder.events.borrow().last().unwrap().kind, PrintEventKind::Unavailable);
+        assert!(futures::executor::block_on(Print::open_native(key(), "Missing".into())).is_err());
+        remove_all();
+        assert!(!second_path.exists());
+    }
 
     #[test]
     fn a_save_path_is_only_honoured_in_a_test_environment() {

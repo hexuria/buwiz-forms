@@ -10,10 +10,14 @@
 pub mod agent;
 mod auth;
 mod desktop;
+#[cfg(any(test, target_os = "android"))]
+mod dev_env;
 pub mod door;
 pub mod guards;
 mod hooks;
 mod print;
+#[cfg(target_os = "android")]
+mod print_android;
 #[cfg(any(windows, target_os = "linux"))]
 mod sheets;
 
@@ -25,8 +29,10 @@ use nsh_core::prelude::*;
 fn native(registry: &mut Registry) {
     // The earliest single point: the generated hosts build the registry before NSH starts, so the door's
     // one change to the process environment happens before any other thread exists (see `door::process`).
+    #[cfg(not(target_os = "android"))]
     door::prepare_process();
     // One copy per database: a second launch asks the first to come forward and ends here (`desktop.rs`).
+    #[cfg(not(target_os = "android"))]
     desktop::prepare_process();
     registry.module::<Bridge>().module::<Door>().module::<agent::Agent>().module::<desktop::Desktop>().module::<print::Print>();
 }
@@ -88,13 +94,17 @@ pub struct Door;
 impl Door {
     /// Calls the synchronous host function `name` with `args` and answers its value. A host error is thrown
     /// as an Error with the host's message; an async function, or an unknown name, throws too.
-    pub fn call(name: String, args: Vec<JsonValue>) -> Result<JsonValue, String> {
+    pub fn call(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
+        #[cfg(target_os = "android")]
+        door::prepare_android(_system.data_dir)?;
         door::call(&name, args)
     }
 
     /// Calls the asynchronous host function `name` with `args`: a promise of its value, rejected with the
     /// host's message on a host error. A sync function, or an unknown name, rejects too.
-    pub async fn call_async(name: String, args: Vec<JsonValue>) -> Result<JsonValue, String> {
+    pub async fn call_async(name: String, args: Vec<JsonValue>, _system: System) -> Result<JsonValue, String> {
+        #[cfg(target_os = "android")]
+        door::prepare_android(_system.data_dir)?;
         door::call_async(name, args).await
     }
 
@@ -113,20 +123,24 @@ impl Door {
     }
 
     /// How sending stands and which database file is named, without opening it.
-    pub fn status() -> DoorStatus {
+    pub fn status(_system: System) -> Result<DoorStatus, String> {
+        #[cfg(target_os = "android")]
+        door::prepare_android(_system.data_dir)?;
         let mode = door::send_mode();
-        DoorStatus {
+        Ok(DoorStatus {
             sending: mode.label().to_owned(),
             sending_note: mode.note(),
             database_path: door::database_path().display().to_string(),
             test_environment: door::test_environment(),
             shell_poll: door::shell_poll(),
-        }
+        })
     }
 
     /// Names the database file this thread opens, before anything else is called (test environments only:
     /// `EBIR_TEST_ENV=1`). Answers the path. The database guard applies.
-    pub fn use_database(path: String) -> Result<String, String> {
+    pub fn use_database(path: String, _system: System) -> Result<String, String> {
+        #[cfg(target_os = "android")]
+        door::prepare_android(_system.data_dir)?;
         door::use_database(&path)
     }
 
@@ -146,6 +160,30 @@ mod tests {
     #[test]
     fn ping_answers_pong() {
         assert_eq!(Bridge::ping(), "pong");
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_status_uses_injected_directory_without_a_reactive_runtime() {
+        use super::{Door, System};
+
+        assert!(Door::status(System::default()).unwrap_err().contains("no private data directory"));
+        let mut system = System::default();
+        system.data_dir = Some("relative".into());
+        assert!(Door::status(system.clone()).unwrap_err().contains("must be absolute"));
+
+        let folder = tempfile::tempdir().expect("private data folder");
+        system.data_dir = Some(folder.path().to_path_buf());
+        temp_env::with_vars(
+            [("BIR_RELAY_URL", None), ("BIR_SFTP_DRY_RUN", Some("1"))],
+            || {
+                let first = Door::status(system.clone()).expect("status needs no reactive runtime");
+                let second = Door::status(system).expect("repeated status needs no reactive runtime");
+                assert_eq!(first.sending, "dry_run");
+                assert_eq!(second.database_path, first.database_path);
+                assert_eq!(crate::guards::account_home(), Some(folder.path().canonicalize().unwrap()));
+            },
+        );
     }
 
     /// The NSH app is plain SQLite: no database key, no keychain, its own data folder. Nothing else pins

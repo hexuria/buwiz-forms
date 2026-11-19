@@ -2122,8 +2122,15 @@ pub(crate) fn open_print_preview(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0);
+    #[cfg(not(target_os = "android"))]
     let path =
         std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
+    #[cfg(target_os = "android")]
+    let path = {
+        let root = bir_core::platform::temp_dir();
+        std::fs::create_dir_all(&root).map_err(|error| HostError::new(error.to_string()))?;
+        root.join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"))
+    };
     std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
     // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
     // one window per form, re-opening refreshes it in place.

@@ -4035,6 +4035,7 @@ dependencies = [
  "futures",
  "gpui-agent 0.1.0 (git+https://github.com/hexuria/gpui-agent?rev=dab85991d700b8f3410cbaacbc5d9f90568c7ee3)",
  "gtk4",
+ "jni",
  "libc",
  "lopdf",
  "nsh-core",

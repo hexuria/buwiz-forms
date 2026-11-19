@@ -23,6 +23,8 @@ export interface WindowLike {
 export interface HostDeps {
   /** This device can open a second window (a desktop). */
   available: boolean;
+  /** System preview instead of a second window (Android); the document is a snapshot. */
+  androidPreview?(key: string, title: string): Promise<void>;
   windows: {
     get(id: string): WindowLike | null;
     /** Opens the window of `id` showing the preview of `key`; throws when it cannot. */
@@ -106,6 +108,15 @@ export function createPreviewHost(deps: HostDeps) {
 
   function open(event: PrintEvent): void {
     if (!deps.available && deps.nativePreview) return openNative(event, deps.nativePreview);
+    if (deps.androidPreview) {
+      if (!deps.chromeVisible()) return;
+      const identity = formIdentity(deps.route());
+      const title = `${previewTitle(event.title, deps.period())} ${identity?.split("|").slice(0, 4).join(" ") ?? event.key}`;
+      deps.androidPreview(event.key, title).catch((error) => {
+        deps.toast(`Print preview could not open: ${deps.errorText(error)}`, "triangle-alert");
+      });
+      return;
+    }
     if (!deps.available) {
       deps.toast(UNAVAILABLE, "printer");
       deps.print.closed(event.key);
