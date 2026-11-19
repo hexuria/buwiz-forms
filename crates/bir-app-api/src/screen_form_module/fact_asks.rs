@@ -21,7 +21,9 @@
 //! - **Follow.** The draft fields facts fill follow a later change of the
 //!   facts on a Draft, like the profile boxes do ([`fact_fields`]).
 //! - **Save to profile too.** The profile boxes a return may write back,
-//!   each through the function that owns the field ([`profile_field`]).
+//!   each through the function that owns the field ([`profile_field`]), and
+//!   the boxes that show a fact ([`answer`]: the box's value as the profile
+//!   takes it).
 //! - **Filed.** A return past Queued says when the profile changed after it
 //!   was filed ([`filed_changes`]); nothing is rewritten.
 
@@ -355,8 +357,76 @@ fn control(fact: Fact) -> &'static str {
     }
 }
 
+/// The radio of `fact`'s item whose tick sets draft field `path` to `want`.
+fn ticking(kind: AgentFormKind, fact: Fact, path: &str, want: &str) -> Option<String> {
+    let def = kind.definition();
+    place(kind, fact)?.keys.into_iter().find(|key| {
+        matches!(
+            def.bindings.get(key).map(|bound| &bound.binding),
+            Some(agent::Binding::Choice { options }) if options.iter().any(|option| {
+                option.value == "true" && option.set.get(path).and_then(Value::as_str) == Some(want)
+            })
+        )
+    })
+}
+
+/// 1701's income-type card (B12). Item 6 is not made from the income type
+/// (the ATC decides it), so the card asks in Item 6's own terms and each
+/// answer carries both halves: `saves`, the income type the profile takes,
+/// and `fill`, the Item 6 radio it ticks on this return. A compensation
+/// earner has no radio on the page: the profile's answer makes the return's.
+fn choices_1701(kind: AgentFormKind) -> Value {
+    let rows = [
+        (
+            "single_proprietor",
+            "Single proprietor",
+            "SelfEmployed",
+            "SingleProprietor",
+        ),
+        (
+            "professional",
+            "Professional",
+            "SelfEmployed",
+            "Professional",
+        ),
+        (
+            "single_proprietor_with_compensation",
+            "Single proprietor with compensation income",
+            "MixedIncome",
+            "SingleProprietor",
+        ),
+        (
+            "professional_with_compensation",
+            "Professional with compensation income",
+            "MixedIncome",
+            "Professional",
+        ),
+        (
+            "compensation_earner",
+            "Compensation earner",
+            "PurelyCompensation",
+            "CompensationEarner",
+        ),
+    ];
+    Value::Array(
+        rows.into_iter()
+            .map(|(value, label, saves, item_6)| {
+                let mut choice = json!({ "value": value, "label": label, "saves": saves });
+                if let Some(key) = ticking(kind, Fact::TaxClassification, "/taxpayer_type", item_6)
+                {
+                    choice["fill"] = json!({ key: "true" });
+                }
+                choice
+            })
+            .collect(),
+    )
+}
+
 /// A choice card's answers: the value `set_year_facts` takes, and its label.
-fn choices(fact: Fact) -> Value {
+fn choices(kind: AgentFormKind, fact: Fact) -> Value {
+    if fact == Fact::TaxClassification && kind.form_code() == "1701" {
+        return choices_1701(kind);
+    }
     let pairs: Vec<(Value, &str)> = match fact {
         Fact::TaxClassification => vec![
             (json!("SelfEmployed"), "Self-employed or professional"),
@@ -406,7 +476,7 @@ pub(crate) fn asks(kind: AgentFormKind, ctx: &FactContext) -> Value {
                     "key": place(kind, fact).map(|placed| placed.key),
                     "label": label(fact, ctx),
                     "control": control(fact),
-                    "choices": choices(fact),
+                    "choices": choices(kind, fact),
                     "note": note(fact, ctx),
                 })
             })
@@ -648,6 +718,9 @@ pub(super) enum ProfileField {
     Name,
     Branch(BranchField),
     LineOfBusiness,
+    /// A fact the box shows (B9): the birth date, the start date, the EOPT
+    /// tier, the income type, the withholding category or the usual ATC.
+    Fact(Fact),
 }
 
 impl ProfileField {
@@ -660,6 +733,7 @@ impl ProfileField {
             Self::Branch(BranchField::Phone) => "phone",
             Self::Branch(BranchField::Email) => "email",
             Self::LineOfBusiness => "line_of_business",
+            Self::Fact(fact) => fact.key(),
         }
     }
 
@@ -672,10 +746,18 @@ impl ProfileField {
             Self::Branch(BranchField::Phone) => "Phone",
             Self::Branch(BranchField::Email) => "Email",
             Self::LineOfBusiness => "Line of business",
+            Self::Fact(Fact::BirthDate) => "Date of birth",
+            Self::Fact(Fact::BusinessStartDate) => "Business start date",
+            Self::Fact(Fact::EoptTier) => "EOPT tier",
+            Self::Fact(Fact::TaxClassification) => "Income type",
+            Self::Fact(Fact::IsGovernmentWithholdingEntity) => "Withholding category",
+            Self::Fact(Fact::AtcCodes) => "Usual ATC",
+            Self::Fact(Fact::LineOfBusiness) => "Line of business",
+            Self::Fact(Fact::IncomeTaxElection) => "Income-tax rate",
         }
     }
 
-    /// The draft field the box writes.
+    /// The draft field the box writes (a fact's: the first it may fill).
     pub fn path(self) -> &'static str {
         match self {
             Self::Name => "/taxpayer_name",
@@ -685,38 +767,221 @@ impl ProfileField {
             Self::Branch(BranchField::Phone) => "/contact_number",
             Self::Branch(BranchField::Email) => "/email",
             Self::LineOfBusiness => "/line_of_business",
+            Self::Fact(fact) => fills(fact).first().copied().unwrap_or_default(),
+        }
+    }
+}
+
+/// The facts a form box saves to the tax profile from the return (B9), the
+/// line of business aside (a profile box with its own route).
+const FACT_ROUTES: [Fact; 6] = [
+    Fact::BirthDate,
+    Fact::BusinessStartDate,
+    Fact::EoptTier,
+    Fact::TaxClassification,
+    Fact::IsGovernmentWithholdingEntity,
+    Fact::AtcCodes,
+];
+
+/// What the tax profile takes for a fact, read from the return's own box.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum Answer {
+    Date(NaiveDate),
+    Tier(bir_core::profile::EoptTier),
+    Classification(bir_core::profile::TaxClassification),
+    Government(bool),
+    Atc(String),
+}
+
+/// A date as a draft keeps it: `MM/DD/YYYY`, `YYYY-MM-DD`, or its parts.
+fn draft_date(value: &Value) -> Option<NaiveDate> {
+    match value {
+        Value::String(text) => {
+            let text = text.trim();
+            NaiveDate::parse_from_str(text, "%m/%d/%Y")
+                .or_else(|_| NaiveDate::parse_from_str(text, "%Y-%m-%d"))
+                .ok()
+        }
+        Value::Object(parts) => NaiveDate::from_ymd_opt(
+            i32::try_from(parts.get("year")?.as_i64()?).ok()?,
+            u32::try_from(parts.get("month")?.as_i64()?).ok()?,
+            u32::try_from(parts.get("day")?.as_i64()?).ok()?,
+        ),
+        _ => None,
+    }
+}
+
+/// The draft field of `fact` the return has, with what it holds.
+fn held(fact: Fact, draft: &Value) -> Option<(&'static str, &Value)> {
+    fills(fact)
+        .iter()
+        .find_map(|path| Some((*path, draft.pointer(path)?)))
+}
+
+/// What the profile takes for `fact` as the return's box has it, or `None`
+/// when the box holds nothing or an answer with no profile meaning (1701
+/// Item 6's Estate for an individual's income type). The choices are found
+/// through the profile's own way onto the form, never a second table:
+/// `made(profile)` is the draft a profile makes, and the answer is the one
+/// whose draft holds what this return holds. 1701's Item 6 is not made
+/// from the income type (the ATC decides it), so it is read in Item 6's own
+/// terms: a compensation earner, or a single proprietor or professional
+/// whose ATC says whether compensation income comes with it.
+pub(super) fn answer(
+    kind: AgentFormKind,
+    fact: Fact,
+    draft: &Value,
+    profile: &bir_core::profile::TaxpayerProfile,
+    made: &dyn Fn(&bir_core::profile::TaxpayerProfile) -> Option<Value>,
+) -> Option<Answer> {
+    use bir_core::profile::{EoptTier, TaxClassification};
+    let (path, here) = held(fact, draft)?;
+    if blank(here) {
+        return None;
+    }
+    let found = |candidates: Vec<Answer>| {
+        candidates.into_iter().find(|candidate| {
+            let mut profile = profile.clone();
+            candidate.clone().put(fact, &mut profile);
+            made(&profile).is_some_and(|draft| draft.pointer(path) == Some(here))
+        })
+    };
+    match fact {
+        Fact::BirthDate | Fact::BusinessStartDate => draft_date(here).map(Answer::Date),
+        Fact::EoptTier => found(
+            [
+                EoptTier::Micro,
+                EoptTier::Small,
+                EoptTier::Medium,
+                EoptTier::Large,
+            ]
+            .map(Answer::Tier)
+            .to_vec(),
+        ),
+        Fact::IsGovernmentWithholdingEntity => {
+            found([false, true].map(Answer::Government).to_vec())
+        }
+        Fact::AtcCodes => found(vec![Answer::Atc(here.as_str()?.trim().to_uppercase())]),
+        Fact::TaxClassification if kind.form_code() == "1701" => {
+            let mixed = draft
+                .pointer("/atc")
+                .and_then(Value::as_str)
+                .is_some_and(|atc| matches!(atc.to_uppercase().as_str(), "II013" | "II016"));
+            let now = profile.effective_classification();
+            Some(Answer::Classification(match here.as_str()? {
+                "CompensationEarner" => TaxClassification::PurelyCompensation,
+                "SingleProprietor" | "Professional" if mixed => TaxClassification::MixedIncome,
+                // No ATC says it: a profile that already holds one of the
+                // two keeps it.
+                "SingleProprietor" | "Professional" => match now {
+                    Some(TaxClassification::MixedIncome) => TaxClassification::MixedIncome,
+                    _ => TaxClassification::SelfEmployed,
+                },
+                _ => return None,
+            }))
+        }
+        Fact::TaxClassification => found(
+            [
+                TaxClassification::SelfEmployed,
+                TaxClassification::MixedIncome,
+                TaxClassification::PurelyCompensation,
+            ]
+            .map(Answer::Classification)
+            .to_vec(),
+        ),
+        Fact::IncomeTaxElection | Fact::LineOfBusiness => None,
+    }
+}
+
+/// Whether two ATC codes are of one kind (`II012` and `II014`: the same
+/// letters before the digits), so a usual ATC replaces only its own kind.
+pub(super) fn same_atc_family(a: &str, b: &str) -> bool {
+    let letters = |code: &str| -> String {
+        code.trim()
+            .chars()
+            .take_while(char::is_ascii_alphabetic)
+            .flat_map(char::to_uppercase)
+            .collect()
+    };
+    letters(a) == letters(b)
+}
+
+impl Answer {
+    /// The answer on a profile (a copy the search builds a draft from).
+    fn put(self, fact: Fact, profile: &mut bir_core::profile::TaxpayerProfile) {
+        match self {
+            Self::Date(date) if fact == Fact::BirthDate => profile.birth_date = Some(date),
+            Self::Date(date) => profile.business_start_date = Some(date),
+            Self::Tier(tier) => profile.eopt_tier = Some(tier),
+            Self::Classification(class) => profile.tax_classification = Some(class),
+            Self::Government(yes) => profile.is_government_withholding_entity = yes,
+            Self::Atc(code) => profile.atc_codes = vec![code],
         }
     }
 }
 
 pub(super) fn profile_field(kind: AgentFormKind, key: &str) -> Option<ProfileField> {
     let def = kind.definition();
-    let bound = def.bindings.get(key)?;
-    let agent::Binding::Text { path, .. } = &bound.binding else {
-        return None;
-    };
-    Some(match path.as_str() {
-        "/taxpayer_name" => ProfileField::Name,
-        "/rdo_code" => ProfileField::Branch(BranchField::RdoCode),
-        "/registered_address" => ProfileField::Branch(BranchField::RegisteredAddress),
-        "/zip_code" => ProfileField::Branch(BranchField::ZipCode),
-        "/contact_number" => ProfileField::Branch(BranchField::Phone),
-        "/email" | "/email_address" => ProfileField::Branch(BranchField::Email),
-        "/line_of_business" => ProfileField::LineOfBusiness,
-        _ => return None,
-    })
+    if let Some(agent::Binding::Text { path, .. }) = def.bindings.get(key).map(|b| &b.binding) {
+        match path.as_str() {
+            "/taxpayer_name" => return Some(ProfileField::Name),
+            "/rdo_code" => return Some(ProfileField::Branch(BranchField::RdoCode)),
+            "/registered_address" => {
+                return Some(ProfileField::Branch(BranchField::RegisteredAddress));
+            }
+            "/zip_code" => return Some(ProfileField::Branch(BranchField::ZipCode)),
+            "/contact_number" => return Some(ProfileField::Branch(BranchField::Phone)),
+            "/email" | "/email_address" => return Some(ProfileField::Branch(BranchField::Email)),
+            "/line_of_business" => return Some(ProfileField::LineOfBusiness),
+            _ => {}
+        }
+    }
+    fact_field(kind, key).map(ProfileField::Fact)
+}
+
+/// The fact a box shows, whatever its binding (a date's parts, a radio, a
+/// select, the unbound category radios): one of [`FACT_ROUTES`] the form
+/// reads, placed on the box's item by a draft field it fills.
+fn fact_field(kind: AgentFormKind, key: &str) -> Option<Fact> {
+    let used = facts_used_by(kind.form_code());
+    FACT_ROUTES
+        .into_iter()
+        .filter(|fact| used.contains(fact))
+        .find(|fact| {
+            place(kind, *fact)
+                .is_some_and(|placed| placed.fills && placed.keys.iter().any(|k| k == key))
+        })
+}
+
+/// The boxes of `kind` that show a fact with a route to the tax profile.
+fn fact_boxes(kind: AgentFormKind) -> Vec<(String, Fact)> {
+    let used = facts_used_by(kind.form_code());
+    FACT_ROUTES
+        .into_iter()
+        .filter(|fact| used.contains(fact))
+        .filter_map(|fact| Some((place(kind, fact).filter(|placed| placed.fills)?, fact)))
+        .flat_map(|(placed, fact)| placed.keys.into_iter().map(move |key| (key, fact)))
+        .collect()
 }
 
 /// The page's "Save to profile too" switches: for each profile box it may
 /// open with Edit that has a safe write path, the field and a note for the
 /// row (a branch field this branch takes from the head office says it
-/// gets its own).
+/// gets its own). The boxes that show a fact with a route are listed too
+/// (B9): they need no Edit, and the page offers the save on its own terms.
 pub(crate) fn profile_save(kind: AgentFormKind, edit_keys: &Value, ctx: &FactContext) -> Value {
     let mut out = serde_json::Map::new();
-    for key in edit_keys.as_array().into_iter().flatten() {
-        let Some(key) = key.as_str() else {
+    let facts = fact_boxes(kind);
+    let keys = edit_keys
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .chain(facts.iter().map(|(key, _)| key.as_str()));
+    for key in keys {
+        if out.contains_key(key) {
             continue;
-        };
+        }
         let Some(field) = profile_field(kind, key) else {
             continue;
         };
@@ -727,7 +992,8 @@ pub(crate) fn profile_save(kind: AgentFormKind, edit_keys: &Value, ctx: &FactCon
                 field.label()
             ),
             ProfileField::Branch(_) => "Saved for this branch.".to_string(),
-            ProfileField::LineOfBusiness => {
+            ProfileField::Fact(Fact::BirthDate) => "Saved for this taxpayer.".to_string(),
+            ProfileField::LineOfBusiness | ProfileField::Fact(_) => {
                 format!("Saved to this branch's tax facts for {}.", ctx.year)
             }
         };

@@ -60,3 +60,28 @@ test("B6 guard: a card's Save for another fact leaves a typed profile box as it 
   expect(s.valueOf(line)).toBe("RETAIL");
   s.dispose();
 });
+
+test("B12: 1701's income-type card asks in Item 6's own terms; its Save ticks Item 6 and the card goes", async () => {
+  createDemoTaxpayer();
+  bir.set_year_facts(DEMO.tin, 2025, { tax_classification: null } as never);
+  const s = await opened(at("1701", 2025, 0));
+  const professional = "frm1701:rdoPg1I6TaxpayerTypeP";
+  const row = () => s.row(s.itemIdForKey(professional)!)();
+  const card = row().asks.find((a) => a.fact === "tax_classification")!;
+  expect(card.choices.map((c) => c.label)).toEqual([
+    "Single proprietor",
+    "Professional",
+    "Single proprietor with compensation income",
+    "Professional with compensation income",
+    "Compensation earner",
+  ]);
+  expect(s.valueOf(professional)).toBe("false");
+  s.pickAsk("tax_classification", card.choices[3].value);
+  s.saveAsk("tax_classification");
+  await s.idle();
+  expect(s.valueOf(professional)).toBe("true");
+  expect(s.valueOf("frm1701:rdoPg1I6TaxpayerTypeS")).toBe("false");
+  expect(bir.year_facts(DEMO.tin, 2025).facts.tax_classification).toBe("MixedIncome");
+  expect(row().asks.some((a) => a.fact === "tax_classification")).toBe(false);
+  s.dispose();
+});

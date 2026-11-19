@@ -991,3 +991,287 @@ fn a_category_pick_on_the_return_lifts_the_withholding_block() {
         }
     });
 }
+
+fn year_facts() -> bir_core::tax_profile::YearFacts {
+    with_database(|db| {
+        db.effective_year_facts(JUANA, 2026)
+            .map(|effective| effective.facts)
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .unwrap()
+}
+
+fn birth_date() -> Option<chrono::NaiveDate> {
+    with_database(|db| {
+        db.get_profile_for_year(JUANA, 2026)
+            .map(|profile| profile.and_then(|profile| profile.birth_date))
+            .map_err(|error| HostError::new(error.to_string()))
+    })
+    .unwrap()
+}
+
+/// `edits` filled on a new `code` return, saved, then `keys` saved to the
+/// tax profile ("Save to profile too").
+fn fact_to_profile(code: &str, period: i64, edits: Value, keys: &[&str]) -> Result<Value, String> {
+    let opened = open_as(JUANA, code, period);
+    let filled = fill(code, &opened["draft"], edits);
+    assert_eq!(
+        filled["rejected"],
+        json!({}),
+        "{code}: {}",
+        filled["rejected"]
+    );
+    let saved = save(code, &filled["draft"]);
+    call(
+        "screen_form_save_to_profile",
+        vec![
+            code.into(),
+            2026i64.into(),
+            period.into(),
+            json(saved["draft"].clone()),
+            json(json!(keys)),
+        ],
+    )
+    .map_err(|error| error.message().to_string())
+}
+
+/// B9: every fact a form box fills goes to the tax profile from the return,
+/// through the function that owns it.
+#[test]
+fn each_fact_box_saves_to_the_tax_profile_through_its_own_route() {
+    setup_juana();
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            is_government_withholding_entity: Some(None),
+            ..YearFactsPatch::default()
+        },
+    );
+    use bir_core::profile::{EoptTier, TaxClassification};
+
+    // Birth date and the usual ATC, from 1701Q's Items 11 and 8.
+    let written = fact_to_profile(
+        "1701Q",
+        1,
+        json!({
+            "frm1701q:txtBirthMonth": "05",
+            "frm1701q:txtBirthDay": "06",
+            "frm1701q:txtBirthYear": "1975",
+            "frm1701q:optATC_2": "true",
+        }),
+        &["frm1701q:txtBirthMonth", "frm1701q:optATC_2"],
+    )
+    .unwrap();
+    // In the boxes' key order.
+    assert_eq!(written["saved"], json!(["Usual ATC", "Date of birth"]));
+    assert_eq!(birth_date(), "1975-05-06".parse().ok());
+    assert_eq!(year_facts().atc_codes, vec!["II014".to_string()]);
+    assert_eq!(written["draft"]["date_of_birth"], "05/06/1975");
+    // Another return of the year opens with them.
+    let annual = open_as(JUANA, "1701", 0);
+    assert_eq!(annual["draft"]["date_of_birth"], "05/06/1975");
+    assert_eq!(annual["values"]["frm1701:rdoPg1I7ATC_II014"], "true");
+    assert!(ask(&annual, "birth_date").is_none());
+    assert!(ask(&annual, "atc_codes").is_none());
+
+    // The income type, from 1701's Item 6.
+    assert_eq!(year_facts().tax_classification, None);
+    let written = fact_to_profile(
+        "1701",
+        0,
+        json!({ "frm1701:rdoPg1I6TaxpayerTypeS": "true" }),
+        &["frm1701:rdoPg1I6TaxpayerTypeS"],
+    )
+    .unwrap();
+    assert_eq!(written["saved"], json!(["Income type"]));
+    assert_eq!(
+        year_facts().tax_classification,
+        Some(TaxClassification::SelfEmployed)
+    );
+    assert_eq!(written["draft"]["taxpayer_type"], "SingleProprietor");
+
+    // The withholding category, from 0619E's Item 12.
+    let written = fact_to_profile(
+        "0619E",
+        7,
+        json!({ "frm0619E:optCategory:G": "true" }),
+        &["frm0619E:optCategory:G"],
+    )
+    .unwrap();
+    assert_eq!(written["saved"], json!(["Withholding category"]));
+    assert_eq!(year_facts().is_government_withholding_entity, Some(true));
+    assert_eq!(
+        open_as(JUANA, "0619F", 7)["draft"]["withholding_agent_category"],
+        "Government"
+    );
+
+    // The EOPT tier, from 2550Q's Item 13.
+    let written = fact_to_profile(
+        "2550Q",
+        1,
+        json!({ "frm2550qv2024:taxPayerClassification2": "true" }),
+        &["frm2550qv2024:taxPayerClassification2"],
+    )
+    .unwrap();
+    assert_eq!(written["saved"], json!(["EOPT tier"]));
+    assert_eq!(year_facts().eopt_tier, Some(EoptTier::Small));
+
+    // The start date, from 1702EX's Item 10.
+    let written = fact_to_profile(
+        "1702EX",
+        0,
+        json!({ "frm1702EX:txtPg1Pt1I10DateofIncorporation": "06/01/2015" }),
+        &["frm1702EX:txtPg1Pt1I10DateofIncorporation"],
+    )
+    .unwrap();
+    assert_eq!(written["saved"], json!(["Business start date"]));
+    assert_eq!(year_facts().business_start_date, "2015-06-01".parse().ok());
+}
+
+/// B9: an answer the profile has no meaning for is refused in plain words
+/// and nothing is written.
+#[test]
+fn a_fact_box_with_no_profile_meaning_is_refused() {
+    setup_juana();
+    const REFUSED: &str = "That answer cannot be saved to the tax profile.";
+    // 1701 Item 6 "Estate" is no income type of an individual.
+    let refused = fact_to_profile(
+        "1701",
+        0,
+        json!({ "frm1701:rdoPg1I6TaxpayerTypeE": "true" }),
+        &["frm1701:rdoPg1I6TaxpayerTypeE"],
+    )
+    .unwrap_err();
+    assert_eq!(refused, REFUSED);
+    assert_eq!(year_facts().tax_classification, None);
+    // A blank birth date, with a valid ATC beside it: neither is written.
+    let refused = fact_to_profile(
+        "1701Q",
+        1,
+        json!({ "frm1701q:optATC_1": "true" }),
+        &["frm1701q:optATC_1", "frm1701q:txtBirthMonth"],
+    )
+    .unwrap_err();
+    assert_eq!(refused, REFUSED);
+    assert!(year_facts().atc_codes.is_empty(), "nothing is written");
+    assert_eq!(birth_date(), None);
+}
+
+/// B9: the page is told which fact boxes have a route, and where it goes.
+#[test]
+fn the_page_knows_which_fact_boxes_save_to_the_profile() {
+    setup_juana();
+    let q = open_as(JUANA, "1701Q", 1);
+    let save = &q["profile_save"];
+    assert_eq!(save["frm1701q:txtBirthMonth"]["field"], "birth_date");
+    assert_eq!(
+        save["frm1701q:txtBirthMonth"]["note"],
+        "Saved for this taxpayer."
+    );
+    assert_eq!(save["frm1701q:optATC_3"]["field"], "atc_codes");
+    assert_eq!(
+        save["frm1701q:optATC_3"]["note"],
+        "Saved to this branch's tax facts for 2026."
+    );
+    let e = open_as(JUANA, "0619E", 7);
+    assert_eq!(
+        e["profile_save"]["frm0619E:optCategory:P"]["field"],
+        "is_government_withholding_entity"
+    );
+}
+
+/// B12: 1701's income-type card asks in Item 6's own terms. Each answer
+/// saves the income type the profile takes and ticks Item 6 on the return.
+#[test]
+fn the_1701_income_type_card_answers_item_6() {
+    use bir_core::profile::TaxClassification;
+    let rows = [
+        (
+            "Single proprietor",
+            TaxClassification::SelfEmployed,
+            "SingleProprietor",
+        ),
+        (
+            "Professional",
+            TaxClassification::SelfEmployed,
+            "Professional",
+        ),
+        (
+            "Single proprietor with compensation income",
+            TaxClassification::MixedIncome,
+            "SingleProprietor",
+        ),
+        (
+            "Professional with compensation income",
+            TaxClassification::MixedIncome,
+            "Professional",
+        ),
+        (
+            "Compensation earner",
+            TaxClassification::PurelyCompensation,
+            "CompensationEarner",
+        ),
+    ];
+    for (label, class, item_6) in rows.clone() {
+        setup_juana();
+        let opened = open_as(JUANA, "1701", 0);
+        assert_eq!(opened["draft"]["taxpayer_type"], Value::Null, "{label}");
+        let card = ask(&opened, "tax_classification")
+            .unwrap_or_else(|| panic!("1701 asks the income type: {}", opened["asks"]));
+        let labels: Vec<&str> = card["choices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|choice| choice["label"].as_str().unwrap())
+            .collect();
+        assert_eq!(labels, rows.clone().map(|row| row.0), "Item 6's own terms");
+        let choice = card["choices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|choice| choice["label"] == label)
+            .unwrap();
+        // The card's Save, as the page does it: the profile, the return's
+        // fields of that fact, then the answer's own boxes.
+        call(
+            "set_year_facts",
+            vec![
+                JUANA.into(),
+                2026i64.into(),
+                json(json!({ "tax_classification": choice["saves"] })),
+            ],
+        )
+        .unwrap();
+        let mut used = use_profile("1701", 0, &opened["draft"], &["tax_classification"]);
+        if let Some(boxes) = choice.get("fill") {
+            used = fill("1701", &used["draft"], boxes.clone());
+            assert_eq!(used["rejected"], json!({}), "{label}: {}", used["rejected"]);
+        }
+        assert_eq!(used["draft"]["taxpayer_type"], item_6, "{label}: Item 6");
+        assert_eq!(year_facts().tax_classification, Some(class), "{label}");
+        let saved = save("1701", &used["draft"]);
+        let reopened = open_as(JUANA, "1701", 0);
+        assert_eq!(saved["draft"]["taxpayer_type"], item_6, "{label}: saved");
+        assert_eq!(
+            reopened["draft"]["taxpayer_type"], item_6,
+            "{label}: reopened"
+        );
+        assert!(
+            ask(&reopened, "tax_classification").is_none(),
+            "{label}: the card goes"
+        );
+    }
+    // Another form's income-type card keeps its three answers, each the
+    // value the profile takes.
+    setup_juana();
+    let q = open_as(JUANA, "2551Q", 1);
+    let card = ask(&q, "tax_classification").unwrap();
+    assert_eq!(
+        card["choices"],
+        json!([
+            { "value": "SelfEmployed", "label": "Self-employed or professional" },
+            { "value": "MixedIncome", "label": "Mixed income (compensation and business)" },
+            { "value": "PurelyCompensation", "label": "Compensation only" },
+        ])
+    );
+}

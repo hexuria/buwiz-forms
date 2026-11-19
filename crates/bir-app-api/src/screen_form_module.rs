@@ -152,8 +152,8 @@ export interface ScreenFormOpened {
     fact_errors?: ScreenFormError[];
     /** A Draft's cards: one per fact its form reads that the tax profile has not set for its year. */
     asks?: ScreenFormAsk[];
-    /** The filled profile boxes Edit may open that "Save to profile too" can write back, with the field and a note for the row. */
-    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business"; label: string; note: string }>;
+    /** The filled profile boxes Edit may open that "Save to profile too" can write back, with the field and a note for the row; and the boxes that show a tax fact with a route to the profile (they need no Edit), under the fact's name. */
+    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string }>;
     /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
     profile_changed?: string[];
 }
@@ -165,8 +165,8 @@ export interface ScreenFormAsk {
     key: string | null;
     label: string;
     control: "date" | "choice" | "text";
-    /** A choice card's answers: `value` is what `set_year_facts` takes. */
-    choices: { value: unknown; label: string }[] | null;
+    /** A choice card's answers: `value` is what `set_year_facts` takes, unless `saves` is there: then `saves` is, and `value` only names the answer. `fill`: the boxes of this return the answer ticks besides (1701's income type: Item 6). */
+    choices: { value: unknown; label: string; saves?: unknown; fill?: Record<string, string> }[] | null;
     /** The card's sentence: what is asked, and that the answer goes to the tax profile for every later return. */
     note: string;
 }
@@ -282,7 +282,7 @@ export function screen_form_print_sample(form_code: string, draft: object, edits
 export function screen_form_preview_sync(form_code: string, draft: object, edits: Record<string, string | number | boolean | null>, unlocked?: string[]): boolean;
 /** What Queue does with the tax facts this return reads that are not set: `blocks` stop it (validation messages on the row of the fact's card), `warns` are said once in the Queue confirmation. Queue itself refuses while anything blocks. */
 export function screen_form_queue_check(form_code: string, draft: object): { blocks: ScreenFormError[]; warns: string[] };
-/** "Save to profile too": the profile boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the boxes equal the profile again and the return is saved. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
+/** "Save to profile too": the boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the profile boxes equal the profile again and the return is saved. A fact box's answer goes as the profile takes it; one with no profile meaning is refused ("That answer cannot be saved to the tax profile.") and nothing is written. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
 export function screen_form_save_to_profile(form_code: string, year: number, period: number, draft: object, keys: string[]): { draft: object; values: Record<string, string>; pools: Record<string, string>; saved: string[]; notes: string[] };
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
@@ -6614,8 +6614,13 @@ fn screen_form_queue_check(arguments: &HostArguments) -> HostResult {
 /// (the name: `update_taxpayer`; RDO, address, ZIP, phone, email:
 /// `update_branch`, as this branch's own value; the line of business:
 /// `set_year_facts`). Those boxes then equal the profile again: they are
-/// no longer edited on this return, and the return is saved. A box with no
-/// safe write path is refused, and nothing is written.
+/// no longer edited on this return, and the return is saved. A box that
+/// shows a fact (B9) goes the same way: the birth date through
+/// `update_taxpayer`; the start date, the EOPT tier, the income type, the
+/// withholding category and the usual ATC through `set_year_facts`, each as
+/// the profile takes the box's answer ([`fact_asks::answer`]). A box with
+/// no safe write path, or an answer with no profile meaning, is refused,
+/// and nothing is written.
 fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
     use bir_core::tax_profile::{BranchUpdate, FieldSetting, TaxpayerUpdate, YearFactsPatch};
     use fact_asks::ProfileField;
@@ -6660,6 +6665,7 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
     let address = ProfileField::Branch(bir_core::tax_profile::BranchField::RegisteredAddress);
     let writes: Vec<(ProfileField, String)> = fields
         .iter()
+        .filter(|(_, field)| !matches!(field, ProfileField::Fact(_)))
         .map(|(_, field)| {
             let first = text(field.path());
             let second = text("/registered_address_2");
@@ -6678,6 +6684,79 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         let inherited = fact_asks::context(db, &tin, year)
             .map(|facts| facts.inherited)
             .unwrap_or_default();
+        // B9: what the profile takes for each fact box, read before anything
+        // is written, so one refused answer leaves the profile as it was.
+        let facts: Vec<bir_core::tax_profile::Fact> = fields
+            .iter()
+            .filter_map(|(_, field)| match field {
+                ProfileField::Fact(fact) => Some(*fact),
+                _ => None,
+            })
+            .collect();
+        let mut answers = Vec::new();
+        if !facts.is_empty() {
+            let profile = db
+                .get_profile_for_year(&tin, year)
+                .map_err(|error| host_error(error.to_string()))?
+                .ok_or_else(|| host_error(format!("no taxpayer profile with TIN {tin}")))?;
+            let made = |profile: &TaxpayerProfile| {
+                load_draft(db, kind, profile, year, period, true, None).ok()
+            };
+            for fact in facts {
+                let answer = fact_asks::answer(kind, fact, &draft, &profile, &made)
+                    .ok_or_else(|| host_error("That answer cannot be saved to the tax profile."))?;
+                answers.push((fact, answer, profile.atc_codes.clone()));
+            }
+        }
+        for (fact, answer, atc_codes) in answers {
+            use bir_core::tax_profile::Fact;
+            use fact_asks::Answer;
+            let patch = match (fact, answer) {
+                (Fact::BirthDate, Answer::Date(date)) => {
+                    db.update_taxpayer(
+                        &tin[..tin.len().min(9)],
+                        TaxpayerUpdate {
+                            name: None,
+                            taxpayer_type: None,
+                            birth_date: Some(Some(date)),
+                        },
+                    )
+                    .map_err(|error| host_error(error.to_string()))?;
+                    continue;
+                }
+                (_, Answer::Date(date)) => YearFactsPatch {
+                    business_start_date: Some(Some(date)),
+                    ..YearFactsPatch::default()
+                },
+                (_, Answer::Tier(tier)) => YearFactsPatch {
+                    eopt_tier: Some(Some(tier)),
+                    ..YearFactsPatch::default()
+                },
+                (_, Answer::Classification(class)) => YearFactsPatch {
+                    tax_classification: Some(Some(class)),
+                    ..YearFactsPatch::default()
+                },
+                (_, Answer::Government(yes)) => YearFactsPatch {
+                    is_government_withholding_entity: Some(Some(yes)),
+                    ..YearFactsPatch::default()
+                },
+                // The usual ATC of this form's kind; the profile's other
+                // codes (another tax type's) stay.
+                (_, Answer::Atc(code)) => {
+                    let mut codes: Vec<String> = atc_codes
+                        .into_iter()
+                        .filter(|other| !fact_asks::same_atc_family(other, &code))
+                        .collect();
+                    codes.push(code);
+                    YearFactsPatch {
+                        atc_codes: Some(codes),
+                        ..YearFactsPatch::default()
+                    }
+                }
+            };
+            db.set_year_facts(&tin, year, &patch)
+                .map_err(|error| host_error(error.to_string()))?;
+        }
         for (field, value) in writes {
             match field {
                 ProfileField::Name => {
@@ -6708,6 +6787,8 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
                     db.set_year_facts(&tin, year, &patch)
                         .map_err(|error| host_error(error.to_string()))?;
                 }
+                // Written above, from the box's own answer.
+                ProfileField::Fact(_) => {}
             }
         }
         if !branch.is_empty() {
@@ -6729,7 +6810,13 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         let from_profile =
             load_draft(db, kind, &profile, year, period, true, None).map_err(host_error)?;
         let def = kind.definition();
-        let mut paths: BTreeSet<&str> = fields.iter().map(|(_, field)| field.path()).collect();
+        // A fact box keeps what the return holds (the profile now makes the
+        // same, or the form derives it its own way: 1701's Item 6).
+        let mut paths: BTreeSet<&str> = fields
+            .iter()
+            .filter(|(_, field)| !matches!(field, ProfileField::Fact(_)))
+            .map(|(_, field)| field.path())
+            .collect();
         if paths.contains("/registered_address") {
             paths.insert("/registered_address_2");
         }
@@ -6748,7 +6835,7 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
         };
         let edits: Vec<String> = profile_edits(&draft)
             .into_iter()
-            .filter(|key| !written(key))
+            .filter(|key| !written(key) && !keys.contains(key))
             .collect();
         let pointer = profile_edits_pointer(&draft);
         set_draft_path(&mut draft, &pointer, json!(edits));
