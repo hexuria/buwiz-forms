@@ -431,6 +431,8 @@ export class FormSession {
   private rowIds: string[] = [];
   private items = new Map<string, SchemaItem>();
   private oneDates = new Map<string, { date: OneDate; row: string }>();
+  /** Keys of the split month/day/year boxes (dateParts groups that are not one_date items): a host zero in one shows blank (B15). */
+  private datePartKeys = new Set<string>();
 
   // Published signals.
   private sValue = new SignalMap<string>("");
@@ -503,7 +505,19 @@ export class FormSession {
           this.allKeys.push(f.k);
         }
         const date = oneDate(it);
-        if (date) this.oneDates.set(date.oneKey, { date, row: id });
+        if (date) {
+          this.oneDates.set(date.oneKey, { date, row: id });
+        } else {
+          // The same groups rows.tsx draws as split date boxes: their zero
+          // parts are the host's blank, never a shown 0/00/0000 (B15).
+          const fs = it.f || [];
+          if (!fs.some((f) => f.t === "date")) {
+            const parts = dateParts(fs);
+            if (parts) {
+              for (const k of [parts.month.k, parts.day?.k, parts.year.k]) if (k) this.datePartKeys.add(k);
+            }
+          }
+        }
       }),
     );
   }
@@ -1345,6 +1359,9 @@ export class FormSession {
     }
     if (kind === "date") return shownDate(raw);
     if (kind === "sel") return this.selShown(k).value;
+    // A split date part the host holds as zero (its blank, e.g. 0619E's
+    // cleared day) shows blank, never 0/00/0000; the draft keeps the zero.
+    if (this.datePartKeys.has(k) && /^0+$/.test(raw)) return "";
     return raw;
   }
 
