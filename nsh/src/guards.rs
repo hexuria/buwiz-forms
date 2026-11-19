@@ -38,6 +38,9 @@ pub enum SendMode {
     /// The mock BIR server (`just mock-bir`) is listening on loopback and the transport sends there, and
     /// nowhere else: its host is `127.0.0.1` or `::1`.
     Mock { host: String, port: u16 },
+    /// The local mock relay (`just mock-relay`, docs/relay.md) is listening at `url`, a loopback `http://` origin,
+    /// and the transport sends there, and nowhere else. The relay may hand the file on to the mock BIR server.
+    Relay { url: String },
     /// Sending is not a dry run and not the mock: the submission worker does not start. Why.
     Refused(String),
 }
@@ -53,6 +56,7 @@ impl SendMode {
         match self {
             SendMode::DryRun => "dry_run",
             SendMode::Mock { .. } => "mock",
+            SendMode::Relay { .. } => "relay",
             SendMode::Refused(_) => "refused",
         }
     }
@@ -63,6 +67,9 @@ impl SendMode {
             SendMode::DryRun => None,
             SendMode::Mock { host, port } => Some(format!(
                 "Sending to the mock BIR server at {host}:{port}. Nothing reaches the BIR."
+            )),
+            SendMode::Relay { url } => Some(format!(
+                "Sending through the mock relay at {url}. Nothing reaches the BIR."
             )),
             SendMode::Refused(reason) => Some(reason.clone()),
         }
@@ -87,16 +94,53 @@ pub(crate) fn send_guard_with(listening: impl Fn(&str, u16) -> bool) -> SendMode
     // thread of ours or of NSH's app exists; see there), before the database and the worker exist; the
     // environment is only read by the transport afterwards. A test calls it directly under `temp_env`.
     unsafe { std::env::remove_var("BIR_SFTP_LIVE") };
+    let relay = relay_target(&listening);
     let mock = mock_target(&listening);
-    if mock.is_none() {
+    if !matches!(relay, Some(Ok(_))) && mock.is_none() {
         // SAFETY: as above.
         unsafe { std::env::set_var("BIR_SFTP_DRY_RUN", "1") };
     }
-    verdict(
-        mock,
-        bir_core::transport::is_sftp_dry_run(),
-        bir_core::dev_mode::panel_submission_mode(),
-    )
+    let panel = bir_core::dev_mode::panel_submission_mode();
+    relay_verdict(relay, panel)
+        .unwrap_or_else(|| verdict(mock, bir_core::transport::is_sftp_dry_run(), panel))
+}
+
+/// The decision when `BIR_RELAY_URL` is set (`relay`: its origin when it is a listening loopback one, else why
+/// not): the transport sends there before anything else, so it is the relay or nothing. `None` when it is unset.
+/// Pure, so every branch is tested.
+pub(crate) fn relay_verdict(
+    relay: Option<Result<String, String>>,
+    panel: Option<SubmissionMode>,
+) -> Option<SendMode> {
+    let relay = relay?;
+    if panel == Some(SubmissionMode::TestServer) {
+        return Some(verdict(None, false, panel));
+    }
+    Some(match relay {
+        Ok(url) => SendMode::Relay { url },
+        Err(why) => SendMode::Refused(why),
+    })
+}
+
+/// `BIR_RELAY_URL` when it is a loopback `http://` origin whose port answers; the refusal when it is set otherwise.
+fn relay_target(listening: &impl Fn(&str, u16) -> bool) -> Option<Result<String, String>> {
+    let url = match bir_core::transport::relay_url()? {
+        Ok(url) => url,
+        Err(error) => return Some(Err(error.to_string())),
+    };
+    let authority = url.trim_start_matches("http://");
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) if !host.ends_with(':') => (host, port.parse::<u16>().ok()),
+        _ => (authority, Some(80)),
+    };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let host = if host.eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { host };
+    Some(match port {
+        Some(port) if listening(host, port) => Ok(url),
+        _ => Err(format!(
+            "The mock relay at {url} is not listening, so the submission worker was not started."
+        )),
+    })
 }
 
 /// The decision, from what was observed. Pure, so every branch is tested.
@@ -158,7 +202,13 @@ pub fn protected_folders(home: &Path) -> [PathBuf; 3] {
 /// Windows itself (`GetUserProfileDirectoryW`), never from `USERPROFILE`: a process started with
 /// `USERPROFILE=C:\x` still protects the owner's real folders.
 pub fn account_home() -> Option<PathBuf> {
-    #[cfg(unix)]
+    // iOS: an app has no account entry of its own (the simulator's password database may not know the uid either);
+    // its home is the sandbox container the system sets as HOME at launch, where every folder it can name lives.
+    #[cfg(target_os = "ios")]
+    {
+        std::env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute())
+    }
+    #[cfg(all(unix, not(target_os = "ios")))]
     {
         use std::ffi::{CStr, OsStr};
         use std::os::unix::ffi::OsStrExt;
@@ -194,11 +244,11 @@ pub fn account_home() -> Option<PathBuf> {
 }
 
 /// Where the NSH app keeps its own data (bir-core's `platform::data_dir` of the plain build): the default under
-/// `home` (macOS `Library/Application Support`, Windows `AppData\Local`, elsewhere `.local/share`), and where the
+/// `home` (macOS and iOS `Library/Application Support`, Windows `AppData\Local`, elsewhere `.local/share`), and where the
 /// variable the app reads (`LOCALAPPDATA` on Windows, an absolute `XDG_DATA_HOME` elsewhere off macOS) moves it.
 pub fn app_data_folders(home: &Path) -> Vec<PathBuf> {
     let id = bir_core::platform::NSH_APP_ID;
-    let (default, moved) = if cfg!(target_os = "macos") {
+    let (default, moved) = if cfg!(any(target_os = "macos", target_os = "ios")) {
         (home.join("Library/Application Support"), None)
     } else if cfg!(windows) {
         (home.join("AppData/Local"), std::env::var_os("LOCALAPPDATA"))
@@ -584,6 +634,7 @@ mod tests {
             "BIR_SFTP_LIVE",
             "BIR_SFTP_HOST",
             "BIR_SFTP_PORT",
+            "BIR_RELAY_URL",
             "EBIR_TEST_ENV",
         ];
         let vars: Vec<(&str, Option<&str>)> = names
@@ -712,6 +763,38 @@ mod tests {
                 assert_eq!(dry_run(), None);
             },
         );
+    }
+
+    #[test]
+    fn a_relay_url_decides_alone_and_only_a_listening_loopback_one_sends() {
+        assert_eq!(relay_verdict(None, None), None);
+        assert_eq!(
+            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), None),
+            Some(SendMode::Relay { url: "http://127.0.0.1:8787".into() })
+        );
+        assert!(matches!(relay_verdict(Some(Err("no".into())), None), Some(SendMode::Refused(_))));
+        assert!(matches!(
+            relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), Some(SubmissionMode::TestServer)),
+            Some(SendMode::Refused(_))
+        ));
+    }
+
+    #[test]
+    fn a_listening_loopback_relay_is_the_relay_and_anything_else_refuses() {
+        sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
+            assert_eq!(
+                send_guard_with(|host, port| host == "127.0.0.1" && port == 8787),
+                SendMode::Relay { url: "http://127.0.0.1:8787".into() }
+            );
+            assert_eq!(dry_run(), None);
+        });
+        sending_env(&[("BIR_RELAY_URL", "http://127.0.0.1:8787")], || {
+            assert!(matches!(send_guard_with(|_, _| false), SendMode::Refused(_)));
+            assert_eq!(dry_run().as_deref(), Some("1"));
+        });
+        sending_env(&[("BIR_RELAY_URL", "https://relay.buwiz.com")], || {
+            assert!(matches!(send_guard_with(|_, _| true), SendMode::Refused(_)));
+        });
     }
 
     #[test]

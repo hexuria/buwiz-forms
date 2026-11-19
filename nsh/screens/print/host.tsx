@@ -4,7 +4,7 @@
 //
 //   a sheet was asked for     -> open the window, or focus the one open for that return (its title and sheet refreshed in place)
 //   a newer document          -> the store gets its script; the open page runs it (no reload: the scroll stays)
-//   no window on this device  -> a toast says so (a phone: no second window exists there)
+//   no window on this device  -> iOS: the system print sheet shows the PDF (Print.previewsNatively); elsewhere a toast says so
 //
 // A preview belongs to the return it was opened on: leaving that form, or opening another return, closes the window, and so does closing
 // the main window. So do a lock, a log out and a sign-out (the session changes), and whatever else takes the frame away (the Buwiz gate, the
@@ -55,6 +55,7 @@ const host = createPreviewHost({
     // with it, or they would keep the app alive.
     onFirstOpen: () => void Window.get("main")?.on("close", () => host.closeAll()),
   },
+  ...(Print.previewsNatively() ? { nativePreview: (key: string) => Print.print(key) } : {}),
   print: { closed: (key) => Print.closed(key) },
   previews,
   route: () => untracked(() => app.route()),

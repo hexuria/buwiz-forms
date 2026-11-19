@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
-use tracing::info;
+use tracing::{info, warn};
 use zeroize::Zeroizing;
 
 const DISPATCHER_PRIMARY: &str = "http://birgovph.com/tinDispatcherSFTP.php";
@@ -112,6 +112,8 @@ pub enum SftpEndpointSource {
     DryRun,
     Env,
     Dispatcher,
+    /// The local mock relay ([`RELAY_URL_ENV`], loopback only; docs/relay.md).
+    Relay,
 }
 
 impl SftpEndpointSource {
@@ -120,6 +122,7 @@ impl SftpEndpointSource {
             Self::DryRun => "dry-run",
             Self::Env => "env",
             Self::Dispatcher => "dispatcher",
+            Self::Relay => "relay",
         }
     }
 
@@ -138,6 +141,11 @@ pub enum ResolvedSftpTarget {
         endpoint: SftpEndpoint,
         source: SftpEndpointSource,
     },
+    /// The mock relay at `url` (a loopback `http://` origin) takes the file for `folder` (docs/relay.md).
+    Relay {
+        url: String,
+        folder: String,
+    },
 }
 
 impl ResolvedSftpTarget {
@@ -145,8 +153,80 @@ impl ResolvedSftpTarget {
         match self {
             Self::DryRun { .. } => SftpEndpointSource::DryRun,
             Self::Live { source, .. } => *source,
+            Self::Relay { .. } => SftpEndpointSource::Relay,
         }
     }
+}
+
+/// The relay the phone app sends through (docs/relay.md). Only the local mock relay exists: the URL must be a
+/// plain `http://` origin on `127.0.0.1`, `::1` or `localhost`; anything else is refused, never sent to.
+pub const RELAY_URL_ENV: &str = "BIR_RELAY_URL";
+
+/// [`RELAY_URL_ENV`] without a trailing slash when it is set, checked by [`loopback_relay_url`].
+pub fn relay_url() -> Option<Result<String, TransportError>> {
+    env_nonempty(RELAY_URL_ENV).map(|raw| loopback_relay_url(&raw))
+}
+
+/// `raw` as a relay origin, or why it is refused: only `http://` on a loopback host, no user, path, query or
+/// fragment. Pure, so every branch is tested.
+pub fn loopback_relay_url(raw: &str) -> Result<String, TransportError> {
+    let refuse = |why: &str| {
+        Err(TransportError::Config(format!(
+            "{RELAY_URL_ENV} must be the local mock relay (http://127.0.0.1:PORT): {why}"
+        )))
+    };
+    let Ok(url) = reqwest::Url::parse(raw.trim()) else {
+        return refuse("not a URL");
+    };
+    if url.scheme() != "http" {
+        return refuse("only http:// is accepted");
+    }
+    let host = url.host_str().unwrap_or_default().trim_start_matches('[').trim_end_matches(']');
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback());
+    if !loopback {
+        return refuse("the host is not loopback");
+    }
+    if !url.username().is_empty() || url.password().is_some() || url.query().is_some() || url.fragment().is_some() {
+        return refuse("no credentials, query or fragment");
+    }
+    if !matches!(url.path(), "" | "/") {
+        return refuse("no path");
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+/// `POST {url}/v1/submissions` with the encrypted IAF file as the body (docs/relay.md). `Ok` only on 202 with
+/// `{"status":"accepted"}`; a 4xx answer is [`TransportError::Rejected`].
+async fn relay_store(url: &str, folder: &str, filename: &str, payload: &[u8]) -> Result<(), TransportError> {
+    let name = iaf_basename(filename);
+    let digest = hex::encode(Sha256::digest(payload));
+    info!(source = "relay", relay = url, folder, filename = name, payload_len = payload.len(), "Relay PUT");
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(60))
+        .build()?;
+    let response = client
+        .post(format!("{url}/v1/submissions"))
+        .header("content-type", "application/octet-stream")
+        .header("x-relay-form", folder)
+        .header("x-relay-filename", name)
+        .header("x-relay-sha256", &digest)
+        .body(payload.to_vec())
+        .send()
+        .await?;
+    let status = response.status();
+    let body: serde_json::Value = serde_json::from_slice(&response.bytes().await?).unwrap_or_default();
+    if status.is_client_error() {
+        warn!(%status, ?body, "relay refused the submission");
+        return Err(TransportError::Rejected);
+    }
+    if status != reqwest::StatusCode::ACCEPTED || body["status"] != "accepted" {
+        return Err(TransportError::Http(format!("relay answered {status}: {body}")));
+    }
+    info!(receipt = %body["receipt_id"], "Relay accepted the submission");
+    Ok(())
 }
 
 fn env_nonempty(name: &str) -> Option<String> {
@@ -322,6 +402,13 @@ pub async fn resolve_sftp_endpoint(
             });
         }
         None => {}
+    }
+    // The mock relay (a loopback URL, or a refusal) comes before the dry run: setting it is the ask to send there.
+    if let Some(url) = relay_url() {
+        let url = url?;
+        let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
+        info!(source = "relay", relay = url.as_str(), folder = folder.as_str(), "Using the local mock relay");
+        return Ok(ResolvedSftpTarget::Relay { url, folder });
     }
     if sftp_dry_run_requested() {
         let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
@@ -631,6 +718,8 @@ pub(crate) struct IafSftpSession {
     remote_folder: String,
     source: SftpEndpointSource,
     dry_run_puts: Option<std::sync::Arc<std::sync::Mutex<Vec<DryRunPut>>>>,
+    /// The relay origin when `source` is [`SftpEndpointSource::Relay`].
+    relay: Option<String>,
 }
 
 impl IafSftpSession {
@@ -638,6 +727,9 @@ impl IafSftpSession {
         self.source
     }
     pub async fn store(mut self, filename: &str, payload: &[u8]) -> Result<(), TransportError> {
+        if let Some(url) = &self.relay {
+            return relay_store(url, &self.remote_folder, filename, payload).await;
+        }
         let path = remote_path(&self.remote_folder, filename);
         if self.source.is_dry_run() {
             let put = DryRunPut {
@@ -697,7 +789,7 @@ impl IafSftpSession {
 
     /// Authenticate and open SFTP without uploading. Used by the live-connect probe.
     pub async fn probe(mut self) -> Result<String, TransportError> {
-        if self.source.is_dry_run() {
+        if self.source.is_dry_run() || self.relay.is_some() {
             return Ok("/".to_string());
         }
         let handle = self
@@ -742,10 +834,22 @@ pub(crate) async fn open_iaf_session(
             remote_folder: folder,
             source: SftpEndpointSource::DryRun,
             dry_run_puts: None,
+            relay: None,
         }),
         ResolvedSftpTarget::Live { endpoint, source } => {
             open_iaf_session_with_source(form_type, endpoint, source).await
         }
+        ResolvedSftpTarget::Relay { url, folder } => Ok(relay_session(url, folder)),
+    }
+}
+
+fn relay_session(url: String, folder: String) -> IafSftpSession {
+    IafSftpSession {
+        handle: None,
+        remote_folder: folder,
+        source: SftpEndpointSource::Relay,
+        dry_run_puts: None,
+        relay: Some(url),
     }
 }
 
@@ -789,6 +893,7 @@ async fn open_iaf_session_with_source(
         },
         source,
         dry_run_puts: None,
+        relay: None,
     })
 }
 
@@ -829,6 +934,7 @@ pub async fn probe_sftp_target(
                 Ok(format!("/{folder}"))
             }
         }
+        ResolvedSftpTarget::Relay { url, .. } => Ok(format!("relay {url}")),
         ResolvedSftpTarget::Live { endpoint, source } => {
             let session = open_iaf_session_with_source(form_type, endpoint, source).await?;
             session.probe().await
@@ -872,9 +978,11 @@ pub async fn submit_sftp_target(
                 remote_folder: folder,
                 source: SftpEndpointSource::DryRun,
                 dry_run_puts: None,
+                relay: None,
             };
             session.store(filename, payload).await
         }
+        ResolvedSftpTarget::Relay { url, folder } => relay_session(url, folder).store(filename, payload).await,
         ResolvedSftpTarget::Live { endpoint, source } => {
             let session = open_iaf_session_with_source(form_type, endpoint, source).await?;
             session.store(filename, payload).await
@@ -884,6 +992,24 @@ pub async fn submit_sftp_target(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_a_loopback_http_origin_is_a_relay() {
+        assert_eq!(loopback_relay_url("http://127.0.0.1:8787/").unwrap(), "http://127.0.0.1:8787");
+        assert_eq!(loopback_relay_url("http://[::1]:8787").unwrap(), "http://[::1]:8787");
+        assert_eq!(loopback_relay_url("http://localhost:8787").unwrap(), "http://localhost:8787");
+        for refused in [
+            "https://127.0.0.1:8787",
+            "http://relay.buwiz.com",
+            "http://10.0.0.2:8787",
+            "http://127.0.0.1:8787/v1",
+            "http://user:pw@127.0.0.1:8787",
+            "http://127.0.0.1:8787?x=1",
+            "not a url",
+        ] {
+            assert!(matches!(loopback_relay_url(refused), Err(TransportError::Config(_))), "{refused}");
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -1115,6 +1241,7 @@ mod tests {
             remote_folder: "1601Cv2018".into(),
             source: SftpEndpointSource::DryRun,
             dry_run_puts: Some(log.clone()),
+            relay: None,
         };
         let payload = b"dummy-encrypted-iaf";
         tokio::runtime::Builder::new_current_thread()
@@ -1202,7 +1329,7 @@ mod tests {
                         assert_eq!(source, SftpEndpointSource::Env);
                         assert_eq!(endpoint.host, "127.0.0.1");
                     }
-                    ResolvedSftpTarget::DryRun { .. } => panic!("expected live env target"),
+                    other => panic!("expected live env target, got {other:?}"),
                 }
             },
         )

@@ -19,7 +19,7 @@ test("phone: the owner's TIN and PIN sign in; wrong ones say why and clear the c
   await app.type("id:auth-tin", "000111229");
   await app.waitFor("text:Type all 9 digits of the TIN.", { state: "gone" });
   await app.type("id:auth-tp-pin", "1234");
-  await app.waitFor("text:No taxpayer has that TIN on this computer.");
+  await app.waitFor("text:No taxpayer has that TIN on this device.");
   await app.clear("id:auth-tin");
   await app.type("id:auth-tin", "000123453");
   await app.press("id:auth-submit");

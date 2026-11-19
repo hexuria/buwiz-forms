@@ -127,10 +127,14 @@ export function controlWidth(f: { t: FieldType | "hidden"; m?: number }, availab
   return Math.min(320, available);
 }
 
-/** How a read-only return says it was sent: the worker's dry run ("Dry run Nov 18, 2026, not sent to BIR") or a real send ("Sent to BIR Nov 18, 2026"). */
-export function sentWords(submittedAt: string, dryRun: boolean): string {
+/**
+ * How a read-only return says it was sent: the worker's dry run ("Dry run Nov 18, 2026, not sent to BIR"), the local mock relay
+ * (`viaRelay`: the door sends through it, docs/relay.md) or a real send ("Sent to BIR Nov 18, 2026").
+ */
+export function sentWords(submittedAt: string, dryRun: boolean, viaRelay = false): string {
   const when = shortIsoDate(submittedAt);
-  return dryRun ? `Dry run ${when}, not sent to BIR` : `Sent to BIR ${when}`;
+  if (dryRun) return `Dry run ${when}, not sent to BIR`;
+  return viaRelay ? `Sent to the mock relay ${when}, not to BIR` : `Sent to BIR ${when}`;
 }
 
 /** The strip on an amended return's filed version, opened from its history. */

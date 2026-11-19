@@ -4040,6 +4040,7 @@ dependencies = [
  "nsh-core",
  "nsh-platform-macos",
  "objc2 0.6.5",
+ "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "peniko",
  "png 0.17.16",

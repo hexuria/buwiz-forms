@@ -70,6 +70,11 @@ pub mod mock_bir;
 #[cfg(test)]
 mod mock_bir_e2e;
 
+/// Local mock of the Buwiz relay (docs/relay.md). Tests and the `mock-relay`
+/// feature only; the shipped app never enables it.
+#[cfg(any(test, feature = "mock-relay"))]
+pub mod mock_relay;
+
 // Re-export core types
 pub use bir_rules::{
     BehaviorProfile, CompiledRuleSet, ContextFingerprint, ContextValueSnapshot, EvaluationResult,

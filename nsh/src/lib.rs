@@ -65,8 +65,8 @@ pub struct HostFunction {
 /// How the door stands.
 #[derive(Debug, Clone, PartialEq, JsObject)]
 pub struct DoorStatus {
-    /// `dry_run` (nothing is sent anywhere), `mock` (the local mock BIR server) or `refused` (the submission
-    /// worker did not start).
+    /// `dry_run` (nothing is sent anywhere), `mock` (the local mock BIR server), `relay` (the local mock relay,
+    /// docs/relay.md) or `refused` (the submission worker did not start).
     pub sending: String,
     /// A sentence about `sending` when there is something to say (the mock's address, why it was refused).
     pub sending_note: Option<String>,

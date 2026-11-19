@@ -30,6 +30,11 @@ export interface HostDeps {
     /** The first window opened: the main window closing must take the previews with it. */
     onFirstOpen?(): void;
   };
+  /**
+   * This device previews in the system's own print sheet (iOS) instead of a window: shows it for `key` (the Rust side makes the PDF
+   * first) and settles once the sheet is up. Absent where previews are windows.
+   */
+  nativePreview?(key: string): Promise<void>;
   /** The Rust side: the window of `key` is gone (it deletes the files). */
   print: { closed(key: string): void };
   previews: { apply(event: PrintEvent, title?: string): void; get(key: string): unknown; remove(key: string): void };
@@ -83,7 +88,24 @@ export function createPreviewHost(deps: HostDeps) {
     deps.windows.get(owner.id)?.close();
   }
 
+  /** A phone that previews in the system's print sheet: the sheet comes up with the PDF, then the Rust side forgets the preview. */
+  function openNative(event: PrintEvent, show: (key: string) => Promise<void>): void {
+    if (!deps.chromeVisible()) {
+      deps.print.closed(event.key);
+      return;
+    }
+    deps.toast("Preparing the print preview...", "printer");
+    show(event.key).then(
+      () => deps.print.closed(event.key),
+      (error: unknown) => {
+        deps.print.closed(event.key);
+        deps.toast(`Print preview could not open: ${deps.errorText(error)}`, "triangle-alert");
+      },
+    );
+  }
+
   function open(event: PrintEvent): void {
+    if (!deps.available && deps.nativePreview) return openNative(event, deps.nativePreview);
     if (!deps.available) {
       deps.toast(UNAVAILABLE, "printer");
       deps.print.closed(event.key);

@@ -44,6 +44,11 @@ mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::*;
 
+#[cfg(target_os = "ios")]
+mod ios;
+#[cfg(target_os = "ios")]
+pub use ios::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;

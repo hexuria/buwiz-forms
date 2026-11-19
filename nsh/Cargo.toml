@@ -69,11 +69,19 @@ robius-authentication = { version = "0.1.1", features = ["async"] }
 
 # Print preview on macOS (src/print.rs): the hidden WKWebView that makes the PDF and the system print panel, reached
 # through objc2 as the reference app and nsh do (same versions as nsh's workspace).
-[target.'cfg(target_os = "macos")'.dependencies]
+# The PDF of the print preview (src/print.rs): a hidden WKWebView on macOS and iOS; PDFKit (macOS) or
+# UIPrintInteractionController (iOS) prints it.
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 objc2 = "0.6.5"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSData", "NSArray", "NSGeometry"] }
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
+
+# CGRect for the hidden web view on iOS (objc2-foundation names it NSRect on macOS only). Already in the lock.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "objc2", "CFCGTypes"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
 # The window's own control plane (semantic tree, press, type, screenshot) is NSH's, in nsh-platform-macos: feature
 # `gpui-agent-server`, a second listener. Only under `agent`; see nsh/AGENTS.md "Agent remote control".
 nsh-platform-macos = { path = "../../nsh/crates/nsh-platform-macos", default-features = false, optional = true }

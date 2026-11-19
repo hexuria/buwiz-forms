@@ -34,11 +34,19 @@ test-support = []
 # on in a build that ships: the app does not enable it, so no listening code
 # is linked into it.
 mock-bir = []
+# The local mock relay (`mock_relay` binary, `just mock-relay`, docs/relay.md).
+# Never on in a build that ships, like `mock-bir`.
+mock-relay = []
 
 [[bin]]
 name = "mock_bir"
 path = "src/bin/mock_bir.rs"
 required-features = ["mock-bir"]
+
+[[bin]]
+name = "mock_relay"
+path = "src/bin/mock_relay.rs"
+required-features = ["mock-relay"]
 
 [dependencies]
 bir-rules = { path = "../bir-rules", version = "0.2.0" }
@@ -117,6 +125,11 @@ keyring = { workspace = true, features = ["windows-native"] }
 # db::get_or_create_master_key_keyring falls back to bir_key.txt.
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust"] }
+
+# apple-native covers the iOS keychain too. Dev and test runs set
+# BUWIZ_NO_KEYCHAIN=1 and never reach it.
+[target.'cfg(target_os = "ios")'.dependencies]
+keyring = { workspace = true, features = ["apple-native"] }
 
 [dev-dependencies]
 insta = "1"

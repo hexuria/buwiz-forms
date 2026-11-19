@@ -30,7 +30,7 @@ export function Setup() {
 function Choose() {
   return (
     <AuthCard testID="setup-card">
-      <Heading icon="users" title="Who will use eBIRForms on this computer?" line="This decides who the admin is. Nobody can lock the others out." />
+      <Heading icon="users" title="Who will use eBIRForms on this device?" line="This decides who the admin is. Nobody can lock the others out." />
       <ChoiceTile
         testID="setup-solo"
         icon="user"

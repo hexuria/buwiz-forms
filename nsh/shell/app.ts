@@ -83,7 +83,7 @@ const KEYS = {
 export const FRESH_HINT = "Add a taxpayer first, then open a form for them.";
 
 /**
- * First-run setup ("Who will use eBIRForms on this computer?") stands in front of the frame while the database has no access
+ * First-run setup ("Who will use eBIRForms on this device?") stands in front of the frame while the database has no access
  * mode. The shipped app turns it on (App.tsx: Shell's `firstRun`); the test fixtures leave it off, so their fresh databases
  * open straight into the frame as before (screens/auth's fixture turns it on).
  */

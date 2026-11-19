@@ -52,7 +52,7 @@ function Welcome() {
     <View testID="home-welcome" class="w-full">
       <PageHeader
         title="Welcome to eBIRForms"
-        lede="Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this computer."
+        lede="Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this device."
       />
       <View class="mt-7">
         <ListGroup testID="welcome-steps">

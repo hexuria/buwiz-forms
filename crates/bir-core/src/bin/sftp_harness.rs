@@ -43,6 +43,10 @@ fn print_target(target: &ResolvedSftpTarget) {
         ResolvedSftpTarget::DryRun { folder } => {
             println!("folder={folder}");
         }
+        ResolvedSftpTarget::Relay { url, folder } => {
+            println!("relay={url}");
+            println!("folder={folder}");
+        }
         ResolvedSftpTarget::Live { endpoint, .. } => {
             println!("host={}", endpoint.host);
             println!("port={}", endpoint.port);

@@ -18,6 +18,7 @@
 //   need attention" and the pill's red count take every message, shown or not (the old page's todo() and partErrors).
 import { batch, signal, untracked, type Accessor, type Signal } from "nsh";
 import { isAvailable as hasSecondWindow } from "nsh/desktop";
+import { Print } from "../print/native";
 import {
   bir,
   type IncomeTaxElectionReadiness,
@@ -32,6 +33,7 @@ import {
   type ScreenFormSamplePeriod,
   type ScreenFormStatus,
 } from "../../bir";
+import { doorStatus } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
@@ -2458,12 +2460,12 @@ export class FormSession {
   print() {
     const s = this.st;
     if (!s.draft) return;
-    if (!hasSecondWindow) return void this.toast(NO_PREVIEW, "printer");
+    if (!hasSecondWindow && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
     if (s.sample) {
       try {
         bir.screen_form_print_sample(s.target.formCode, s.draft, s.pending, this.unlockedFor(s.pending));
         s.previewOpen = true;
-        this.toast("Print preview opened. It follows your edits live.", "printer");
+        if (hasSecondWindow) this.toast("Print preview opened. It follows your edits live.", "printer");
       } catch (e) {
         this.toast(errorText(e), "triangle-alert");
       }
@@ -2474,7 +2476,7 @@ export class FormSession {
     try {
       bir.screen_form_print(s.target.formCode, s.draft!);
       s.previewOpen = true;
-      this.toast("Print preview opened. It follows your edits live.", "printer");
+      if (hasSecondWindow) this.toast("Print preview opened. It follows your edits live.", "printer");
     } catch (e) {
       this.toast(errorText(e), "triangle-alert");
     }
@@ -2895,7 +2897,7 @@ export class FormSession {
       this.sAllOpen.set(this.schema.parts.every((_p, i) => s.openParts.has(i)));
     }
     const sent: string[] = [];
-    if (s.submittedAt) sent.push(sentWords(s.submittedAt, s.submittedDryRun));
+    if (s.submittedAt) sent.push(sentWords(s.submittedAt, s.submittedDryRun, doorStatus().sending === "relay"));
     if (s.confirmedAt) sent.push(`confirmed ${shortIsoDate(s.confirmedAt)}`);
     this.sHeader.set({
       loading: s.loading,
