@@ -26,6 +26,31 @@ function subject(ctx: RefusalContext): string {
   return ctx.item ? `Item ${ctx.item}` : ctx.label;
 }
 
+/** The printed item number with leading zeros dropped ("04" -> "4"); null when the item prints none. */
+export function refusalItem(no: string | undefined): string | null {
+  const n = String(no ?? "").trim().replace(/^0+/, "");
+  return n || null;
+}
+
+/** What a sentence calls the box when it has no item number: the field's label, else the row's, else "This box". A draft key never reaches the page. */
+export function refusalLabel(field: string | undefined, row: string | undefined, key: string): string {
+  const l = String(field || row || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  return l && !l.includes(key) ? l : "This box";
+}
+
+/** A refusal retyping cannot fix: the box is shut by another answer, or locked/computed. */
+export function unfixableRefusal(raw: string): boolean {
+  const r = String(raw ?? "").trim();
+  return (
+    /^needs\b/i.test(r) ||
+    /^item\s+\S+\s+is checked\.?$/i.test(r) ||
+    /comes from the (taxpayer )?profile/i.test(r) ||
+    /computed by BIR|is computed by the form/i.test(r) ||
+    /reopen the form for another TIN|set by the return's period|the return's period/i.test(r) ||
+    /cannot be filled (here|from here)/i.test(r)
+  );
+}
+
 /** "Item 4: ..." / "TIN: ..." — the colon form for typed-answer refusals. */
 function colon(ctx: RefusalContext): string {
   return `${subject(ctx)}:`;
@@ -78,22 +103,27 @@ export function refusalSentence(ctx: RefusalContext): string {
   // An amount.
   if (/must be an amount|an amount such as/i.test(raw)) return `${at} type an amount, for example 1234.50.`;
 
-  // A date, as typed or as a part out of range.
+  // A date, as typed.
   if (/must be a date as|valid date as|date as MM\/DD\/YYYY/i.test(raw)) {
     return `${at} type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.`;
   }
-  if (ctx.part === "month" || /month \(01-12\)|month must be 01-12|the month of a date/i.test(raw)) {
-    return `${at} the month is 1 to 12.`;
-  }
-  if (ctx.part === "day" || /day \(01-31\)|day must be 01-31|the day of a date/i.test(raw)) {
-    return `${at} the day is 1 to 31.`;
-  }
-  if (ctx.part === "year" || /four-digit year|year must be a four-digit/i.test(raw)) {
-    return `${at} type the four-digit year.`;
-  }
-  if (/not a real date|no such date|there is no such|impossible date|date does not exist/i.test(raw)) {
+  // An impossible complete date is judged before the part ranges (bir-core's "Date is not a real calendar date").
+  if (/not a real (calendar )?date|no such date|there is no such|impossible date|date does not exist/i.test(raw)) {
     return `${at} there is no such date. Check the day.`;
   }
+  // A date part out of range: the raw must say it is a range problem; the part only picks which sentence.
+  const named =
+    /month \(01-12\)|month must be 01-12|the month of a date|the month is 1 to 12/i.test(raw) ? "month"
+    : /day \(01-31\)|day must be 01-31|the day of a date|the day is 1 to 31/i.test(raw) ? "day"
+    : /four-digit year|year must be a four-digit|the year is four digits/i.test(raw) ? "year"
+    : null;
+  const rangeSays = /\b(range|between|out of)\b|01-12|01-31|1 to 12|1 to 31|four-digit/i.test(raw);
+  const part =
+    named ??
+    (rangeSays && (ctx.part === "month" || ctx.part === "day" || ctx.part === "year") ? ctx.part : null);
+  if (part === "month") return `${at} the month is 1 to 12.`;
+  if (part === "day") return `${at} the day is 1 to 31.`;
+  if (part === "year") return `${at} type the four-digit year.`;
 
   // Rows and paths the draft cannot take.
   if (/draft has no|cannot be added here|past the last row|could not be saved/i.test(raw)) {
@@ -112,8 +142,8 @@ const FORM_0605_ERRORS: Record<string, string> = {
   tax_type: "Item 8: pick the tax type code.",
 };
 
-/** What still must never reach the page: a key, a JSON path, a host prefix. */
-const LEAK = /`|frm\w+:|\/\w|draft has no|Other error:|\.rs\b|\{\s*"/;
+/** What still must never reach the page: a key, a JSON path, a host prefix. A path is a slash before a lowercase name ("/due_date/month"), so official "MM/DD/YYYY" and "and/or" pass. */
+const LEAK = /`|frm\w+:|(^|[\s"'(`=])\/[a-z_][a-z0-9_]*|draft has no|Other error:|\.rs\b|\{\s*"/;
 
 /**
  * A host validation message as the page shows it: the official program's alerts stay as
@@ -123,7 +153,8 @@ const LEAK = /`|frm\w+:|\/\w|draft has no|Other error:|\.rs\b|\{\s*"/;
 export function hostSentence(ctx: RefusalContext, field?: string): string {
   const raw = String(ctx.raw ?? "").trim();
   if (ctx.form === "0605" && field && FORM_0605_ERRORS[field]) return FORM_0605_ERRORS[field];
-  if (LEAK.test(raw)) return refusalSentence(ctx);
+  // A validation message that still leaks a key or a path falls back to the plain needs-a-valid-answer sentence.
+  if (LEAK.test(raw)) return `${subject(ctx)} needs a valid answer.`;
   return raw;
 }
 

@@ -22,6 +22,23 @@ test("B4: every refusal kind becomes a plain sentence on the item", () => {
   expect(refusalSentence(ctx("`k` is not one of the listed choices"))).toBe("Item 6: pick one of the listed choices.");
 });
 
+test("R2: an impossible complete date beats the part rules; a non-range raw keeps its own sentence", () => {
+  expect(refusalSentence(ctx("Date is not a real calendar date", { part: "year", item: "4" }))).toBe("Item 4: there is no such date. Check the day.");
+  expect(refusalSentence(ctx("date is not a real calendar date", { part: "month" }))).toBe("Item 6: there is no such date. Check the day.");
+  // A part box refused for a reason that is not a range problem does not get a range sentence.
+  expect(refusalSentence(ctx("the draft cannot take this", { part: "month" }))).toBe("Item 6: that was not accepted. Check it and type it again.");
+  expect(refusalSentence(ctx("the draft cannot take this", { part: "day" }))).toBe("Item 6: that was not accepted. Check it and type it again.");
+});
+
+test("R3/R4: official messages with slashes pass through; a real leak becomes 'needs a valid answer'", () => {
+  expect(hostSentence(ctx("Please enter a valid date (MM/DD/YYYY) on Item 4.", { form: "0619E" }), "due_date")).toBe("Please enter a valid date (MM/DD/YYYY) on Item 4.");
+  expect(hostSentence(ctx("File it and/or amend it.", { form: "0619E" }), "x")).toBe("File it and/or amend it.");
+  expect(hostSentence(ctx("draft has no `/foo`"), "foo")).toBe("Item 6 needs a valid answer.");
+  expect(hostSentence(ctx("draft has no `/foo`", { item: null, label: "ZIP code" }), "foo")).toBe("ZIP code needs a valid answer.");
+  expect(hostSentence(ctx("set /atc/code first", { form: "0619E" }), "x")).toBe("Item 6 needs a valid answer.");
+  expect(hostSentence(ctx("at /schedule/0/amount", { form: "0619E" }), "x")).toBe("Item 6 needs a valid answer.");
+});
+
 test("B16/B4: a gate tag becomes the used-when sentence", () => {
   expect(refusalSentence(ctx("Needs item 4 = Yes", { item: "14", label: "Amount of remittance", kind: "money" })))
     .toBe("Item 14 is used when Item 4 is Yes.");
@@ -47,6 +64,6 @@ test("B4: host validation keeps official alerts, rewrites 0605's four, nets leak
   expect(hostSentence(ctx("Please enter a valid ATC on Item 6.", { form: "0605" }), "atc")).toBe("Item 6: pick the ATC, for example FP010.");
   expect(hostSentence(ctx("Please select Tax Type Code on Item 8.", { form: "0605" }), "tax_type")).toBe("Item 8: pick the tax type code.");
   expect(hostSentence(ctx("Taxes withheld is required."), "taxes_withheld")).toBe("Taxes withheld is required.");
-  expect(hostSentence(ctx("draft has no `/foo`"), "foo")).toBe("Item 6: this answer could not be saved here.");
+  expect(hostSentence(ctx("draft has no `/foo`"), "foo")).toBe("Item 6 needs a valid answer.");
   expect(stripOtherError("Other error: nope")).toBe("nope");
 });

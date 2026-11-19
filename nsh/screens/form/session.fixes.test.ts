@@ -309,7 +309,7 @@ test("B17: a code off a select's list is refused on the box without a host call"
   s.choose({ [rdo]: "ZZ" });
   // Refused at once, on the box, with the stored value untouched and
   // nothing staged: no host call was needed to say so.
-  expect(s.boxMessageOf(rdo)).toBe("RDO Code: pick one of the listed choices.");
+  expect(s.boxMessageOf(rdo)).toBe("Item 6: pick one of the listed choices.");
   expect(s.valueOf(rdo)).toBe(before);
   expect(s.isDirty()).toBe(false);
   s.dispose();
@@ -317,8 +317,9 @@ test("B17: a code off a select's list is refused on the box without a host call"
   const atc = "frm1702q:cbATC_2";
   const beforeAtc = q.valueOf(atc);
   q.choose({ [atc]: "ZZ" });
-  expect(q.boxMessageOf(atc)).toBe("ATC: pick one of the listed choices.");
+  expect(q.boxMessageOf(atc)).toBe("Item 5: pick one of the listed choices.");
   expect(q.valueOf(atc)).toBe(beforeAtc);
   expect(q.isDirty()).toBe(false);
   q.dispose();
 });
+

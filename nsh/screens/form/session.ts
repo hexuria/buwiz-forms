@@ -40,7 +40,7 @@ import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, sho
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
 import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
-import { hostSentence, refusalSentence, type RefusalContext } from "./refusals";
+import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
 const NUMBER_KINDS = new Set(["money", "pct", "int"]);
@@ -314,6 +314,10 @@ interface St {
   messageCounts: Record<string, number>;
   /** Boxes the host refused at the last fill, with its message (kept until the box is edited again). */
   rejected: Record<string, string>;
+  /** Refused keys whose refusal retyping cannot fix (shut/locked): they restore the stored value and do not hold Save or Queue. */
+  unfixable: Set<string>;
+  /** `dirty` as it was before the pending batch opened, so an all-unfixable batch can give it back. */
+  dirtyBatch: boolean | null;
   /** The plain sentence under each refused box, keyed by draft key (B3/B4's box home). */
   boxMessages: Record<string, string>;
   formErrors: string[];
@@ -357,7 +361,7 @@ function freshState(target: FormTarget): St {
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
-    messageKeys: {}, messageCounts: {}, rejected: {}, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
+    messageKeys: {}, messageCounts: {}, rejected: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
     touched: new Set(), showAll: false, previewOpen: false, overlay: null, saveState: { state: "idle" },
@@ -919,11 +923,13 @@ export class FormSession {
 
   private stage(edits: Record<string, string>) {
     const s = this.st;
+    if (!Object.keys(s.pending).length) s.dirtyBatch = s.dirty;
     for (const [k, v] of Object.entries(edits)) {
       s.pending[k] = v;
       if (s.opened.has(k) && s.profileSave[k]) s.profileEdited.add(k);
       delete s.kept[k];
       delete s.rejected[k];
+      s.unfixable.delete(k);
       delete s.boxMessages[k];
     }
     s.dirty = true;
@@ -973,12 +979,14 @@ export class FormSession {
       this.publish();
       if (!Object.keys(edits).length) return;
     }
+    if (!Object.keys(s.pending).length) s.dirtyBatch = s.dirty;
     Object.assign(s.pending, edits);
     s.dirty = true;
     this.unquiet(Object.keys(edits));
     for (const k of Object.keys(edits)) {
       delete s.kept[k];
       delete s.rejected[k];
+      s.unfixable.delete(k);
     }
     s.chosenFrom = Object.fromEntries(Object.keys(edits).map((k) => [k, s.values[k] ?? ""]));
     for (const [k, v] of Object.entries(edits)) {
@@ -1170,8 +1178,14 @@ export class FormSession {
     this.syncShown(before, edits, r.rejected);
     this.livePreview();
     this.sayYearEndPutBack(edits);
+    const rej = r.rejected || {};
+    // A batch the host refused whole for shut/locked boxes changed nothing: give `dirty` back (R7).
+    const heldDirty = s.dirtyBatch;
+    s.dirtyBatch = null;
+    const allUnfixable =
+      Object.keys(edits).length > 0 && Object.keys(edits).every((k) => k in rej && unfixableRefusal(rej[k]));
     // A refused box shows its own sentence under it; its message shows (its row is touched) until it is edited again.
-    for (const [k, msg] of Object.entries(r.rejected || {})) {
+    for (const [k, msg] of Object.entries(rej)) {
       const sentence = this.refusalText(k, msg);
       s.boxMessages[k] = s.boxMessages[k] ? `${s.boxMessages[k]} ${sentence}` : sentence;
       const id = this.keyIndex.get(k);
@@ -1181,10 +1195,34 @@ export class FormSession {
       }
       s.rejected[k] = msg;
       s.touched.add(id);
-      // B19: what was typed stays in the box; the draft never took it.
+      if (unfixableRefusal(msg)) {
+        // R7: retyping cannot fix a shut/locked box: it goes back to the stored value, keeps its
+        // sentence, and does not hold Save at "Unsaved" or block Queue.
+        s.unfixable.add(k);
+        this.sValue.get(k).set(this.shownText(k));
+      }
+      // B19: a fixable refusal keeps what was typed; the draft never took it.
+    }
+    if (allUnfixable && heldDirty !== null) {
+      s.dirty = heldDirty;
+      s.saveState = this.restingSaveState();
+      this.sSave.set(s.saveState);
     }
     // An emptied number box the host holds as zero shows the zero (the box selects it, so the next digit replaces it).
     for (const k of r.cleared || []) if (!(k in s.pending)) this.sValue.get(k).set(this.shownText(k));
+  }
+
+  /** A shut box whose gate opened since its refusal drops the stale sentence (R7). */
+  private liftOpenGates() {
+    const s = this.st;
+    for (const k of [...s.unfixable]) {
+      if (this.isShut(k)) continue;
+      delete s.rejected[k];
+      delete s.boxMessages[k];
+      s.unfixable.delete(k);
+      const id = this.keyIndex.get(k);
+      if (id) s.messageKeys[id] = (s.messageKeys[id] || []).filter((x) => x !== k);
+    }
   }
 
   /**
@@ -1324,6 +1362,7 @@ export class FormSession {
         st.values = this.shown({ ...st.values, ...r.values });
         st.options = (r.options || {}) as Record<string, unknown[]>;
         st.off = r.off || {};
+        this.liftOpenGates();
         if (Array.isArray(r.penalties)) st.penalties = r.penalties;
         if (r.pools) st.poolTexts = r.pools;
         st.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
@@ -1347,9 +1386,9 @@ export class FormSession {
     const s = this.st;
     const id = this.keyIndex.get(k);
     const it = id ? this.items.get(id) : undefined;
-    const item = it ? /^(\d+[A-Z]?)\b/.exec(String(it.l).trim())?.[1] ?? null : null;
+    const item = refusalItem(it?.no);
     const f = this.fieldOf.get(k);
-    const label = (f?.l || it?.l || k).replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const label = refusalLabel(f?.l, it?.l, k);
     return {
       raw, key: k, item, label,
       kind: this.kindOf.get(k) ?? "", form: s.target.formCode,
@@ -2335,8 +2374,9 @@ export class FormSession {
       if (r.status) s.status = r.status;
       s.dirty = false;
       s.saved = true;
-      // B19: a refused edit was never in the draft; the return still has it unsaved.
-      if (Object.keys(s.rejected).length) s.dirty = true;
+      // B19: a refused edit was never in the draft; the return still has it unsaved. An unfixable
+      // one (shut/locked) put the stored value back, so it does not count (R7).
+      if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
       s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
       const profiled = s.toProfile.size ? this.saveToProfile() : null;
@@ -2444,12 +2484,14 @@ export class FormSession {
   queue() {
     const s = this.st;
     if (s.sample) return this.saveSample(() => this.queue());
-    // B19: a refused edit is still unsaved work; Queue waits for it to be fixed or cleared.
-    if (Object.keys(s.rejected).length) {
+    // B19: a refused edit is still unsaved work; Queue waits for it to be fixed or cleared. An
+    // unfixable one (shut/locked) put the stored value back, so it does not hold Queue (R7).
+    if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) {
       s.showAll = true;
       this.publish();
-      const first = Object.keys(s.rejected)[0];
-      return this.toast(this.refusalText(first, s.rejected[first]), "triangle-alert");
+      // R6: Queue refuses like a failed Check — the count of refused boxes and messages, not one sentence.
+      const n = Object.values(this.shownCounts()).reduce((a, b) => a + b, 0);
+      return this.toast(attentionText(n), "triangle-alert");
     }
     if (!this.ensureSaved()) return this.publish();
     let check: { blocks: ScreenFormError[]; warns: string[] } | null = null;
@@ -3000,7 +3042,15 @@ export class FormSession {
       msgOpen && date
         ? [date.month.k, date.day?.k, date.year.k].filter((pk): pk is string => pk !== undefined && Boolean(s.boxMessages[pk]))
         : [];
-    const shownKeys = msgOpen ? (date && dateMsgs.length ? [dateMsgs[0]] : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k))) : [];
+    // R5: a split date shows every part's sentence in box order, dropping exact duplicates.
+    const seenDate = new Set<string>();
+    const dateShown = dateMsgs.filter((k) => {
+      const sentence = s.boxMessages[k];
+      if (seenDate.has(sentence)) return false;
+      seenDate.add(sentence);
+      return true;
+    });
+    const shownKeys = msgOpen ? (date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k))) : [];
     return {
       message: shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
