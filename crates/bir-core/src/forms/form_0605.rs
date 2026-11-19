@@ -611,18 +611,7 @@ impl Form0605Draft {
     ) -> Result<(), String> {
         use crate::forms::agent::DatePart;
         if let Some(value) = value {
-            let ok = match part {
-                DatePart::Month => (1..=12).contains(&value),
-                DatePart::Day => (1..=31).contains(&value),
-                DatePart::Year => (1000..=9999).contains(&value),
-            };
-            if !ok {
-                return Err(match part {
-                    DatePart::Month => "month must be 01-12".to_string(),
-                    DatePart::Day => "day must be 01-31".to_string(),
-                    DatePart::Year => "year must be a four-digit year".to_string(),
-                });
-            }
+            Self::check_date_part(part, value)?;
         }
         let mut parts = self.typed_parts(which);
         match part {
@@ -645,18 +634,7 @@ impl Form0605Draft {
         for (index, value) in parts.iter().enumerate() {
             let Some(value) = value else { continue };
             let part = [DatePart::Month, DatePart::Day, DatePart::Year][index];
-            let ok = match part {
-                DatePart::Month => (1..=12).contains(value),
-                DatePart::Day => (1..=31).contains(value),
-                DatePart::Year => (1000..=9999).contains(value),
-            };
-            if !ok {
-                return Err(match part {
-                    DatePart::Month => "month must be 01-12".to_string(),
-                    DatePart::Day => "day must be 01-31".to_string(),
-                    DatePart::Year => "year must be a four-digit year".to_string(),
-                });
-            }
+            Self::check_date_part(part, *value)?;
         }
         self.settle_date_parts(
             which,
@@ -666,6 +644,28 @@ impl Form0605Draft {
                 year: parts[2],
             },
         )
+    }
+
+    /// The range rule both split-date writers share: months 1–12, days
+    /// 1–31, four-digit years; `None` (a cleared box) is always fine.
+    fn check_date_part(
+        part: crate::forms::agent::DatePart,
+        value: u16,
+    ) -> Result<(), String> {
+        use crate::forms::agent::DatePart;
+        let ok = match part {
+            DatePart::Month => (1..=12).contains(&value),
+            DatePart::Day => (1..=31).contains(&value),
+            DatePart::Year => (1000..=9999).contains(&value),
+        };
+        if !ok {
+            return Err(match part {
+                DatePart::Month => "month must be 01-12".to_string(),
+                DatePart::Day => "day must be 01-31".to_string(),
+                DatePart::Year => "year must be a four-digit year".to_string(),
+            });
+        }
+        Ok(())
     }
 
     /// Store `parts` as this date's state, deciding before mutating: all
