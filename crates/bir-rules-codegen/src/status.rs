@@ -1,8 +1,9 @@
 //! Machine-checkable status of the validation-rules library, anchored by the
 //! 2550Q v2 candidate while aggregate coverage expands to all 43 forms.
 //!
-//! One command whose exit code answers "is the active library objective
-//! finished?" without anyone having to read prose and believe it.
+//! This is the validation-rules analogue of `scripts/wave_status.py`: one
+//! command whose exit code answers "is the active library objective finished?"
+//! without anyone having to read prose and believe it.
 //!
 //! It reports three kinds of criterion:
 //!
