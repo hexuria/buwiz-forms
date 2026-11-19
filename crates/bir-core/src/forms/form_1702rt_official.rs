@@ -320,9 +320,23 @@ impl Form1702RTDraft {
         let ordinary = self.schedule_1.item_18_total;
         p4.item_34_ordinary_itemized_deductions = ordinary;
 
-        // Schedule III (computeItem18and33, fillNetOperatingLossItems).
+        // Schedule III (computeItem18and33, fillNetOperatingLossItems;
+        // calculations.json 1702rt-schedule1-copy-and-loss).
+        // getValAmount leaves comma-free field values as strings —
+        // "(500)" parses to "-500", still comma-free — so the page's
+        // `totalItem18 > totalItem33` is a lexicographic compare only
+        // when both totals are inside ±1,000: "150" <= "29" drops a real
+        // 121 NOL. The phantom direction ("99" > "100") fills and is then
+        // re-zeroed by fillNetOperatingLossItems, so the NOL lands only
+        // when the string and numeric orders agree.
         let s3 = &mut self.schedule_3;
-        if itemized && ordinary.0 > gross.0 {
+        let page_compare_holds =
+            if ordinary.0.unsigned_abs() < 1000 && gross.0.unsigned_abs() < 1000 {
+                ordinary.0.to_string() > gross.0.to_string()
+            } else {
+                true
+            };
+        if itemized && ordinary.0 > gross.0 && page_compare_holds {
             s3.item_1_gross_income = gross;
             s3.item_2_ordinary_deductions = ordinary;
             s3.item_3_net_operating_loss = WholePeso(gross.0 - ordinary.0);
@@ -1625,6 +1639,68 @@ mod tests {
         assert_eq!(loss.schedule_3.rows[0].amount, WholePeso(1_289_999));
         assert_eq!(loss.part_iv.item_41_normal_income_tax_due, WholePeso(0));
         assert_eq!(loss.part_iv.item_43_tax_due, WholePeso(59_000));
+    }
+
+    #[test]
+    fn net_operating_loss_uses_the_pages_lexicographic_compare() {
+        // Deductions 150, gross 29: BIR's string compare reads "150" <= "29"
+        // and drops a real 121 NOL.
+        let mut dropped = sample();
+        let p4 = &mut dropped.part_iv;
+        p4.item_27_sales = WholePeso(100);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(71);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        dropped.schedule_1.salaries_wages_allowances = WholePeso(0);
+        dropped.schedule_1.rental = WholePeso(150);
+        dropped.recompute();
+        assert_eq!(dropped.schedule_3.item_3_net_operating_loss, ZERO);
+        assert_eq!(dropped.schedule_3.rows[0].amount, ZERO);
+
+        // Deductions 99, gross 100: "99" > "100" fires, then
+        // fillNetOperatingLossItems zeroes the positive Item 3 back out.
+        let mut phantom = sample();
+        let p4 = &mut phantom.part_iv;
+        p4.item_27_sales = WholePeso(100);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        phantom.schedule_1.salaries_wages_allowances = WholePeso(0);
+        phantom.schedule_1.rental = WholePeso(99);
+        phantom.recompute();
+        assert_eq!(phantom.schedule_3.item_1_gross_income, ZERO);
+        assert_eq!(phantom.schedule_3.item_2_ordinary_deductions, ZERO);
+        assert_eq!(phantom.schedule_3.item_3_net_operating_loss, ZERO);
+        assert_eq!(phantom.schedule_3.rows[0].amount, ZERO);
+
+        // Deductions 500, gross 499: string and numeric orders agree, the
+        // one-peso NOL lands.
+        let mut recorded = sample();
+        let p4 = &mut recorded.part_iv;
+        p4.item_27_sales = WholePeso(499);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        recorded.schedule_1.salaries_wages_allowances = WholePeso(0);
+        recorded.schedule_1.rental = WholePeso(500);
+        recorded.recompute();
+        assert_eq!(recorded.schedule_3.item_3_net_operating_loss, WholePeso(-1));
+        assert_eq!(recorded.schedule_3.rows[0].amount, WholePeso(1));
+
+        // Deductions -29, gross -500: both comma-free strings on the
+        // page ("-29" vs "-500"), so '2' < '5' drops the loss the way
+        // the numeric order (-29 > -500) would record it.
+        let mut negative = sample();
+        let p4 = &mut negative.part_iv;
+        p4.item_27_sales = WholePeso(0);
+        p4.item_28_sales_returns = WholePeso(500);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        negative.schedule_1.salaries_wages_allowances = WholePeso(0);
+        negative.schedule_1.rental = WholePeso(-29);
+        negative.recompute();
+        assert_eq!(negative.schedule_3.item_3_net_operating_loss, ZERO);
+        assert_eq!(negative.schedule_3.rows[0].amount, ZERO);
     }
 
     #[test]
