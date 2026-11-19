@@ -116,6 +116,12 @@ for (const platform of ["ios", "android"] as const) {
     expect(app.shows("id:settings-hotkey-recorder")).toBe(false);
     expect(app.shows("id:settings-quit-key")).toBe(false);
     await app.press("id:settings-back");
+    await app.type("id:settings-search", "device");
+    await app.waitFor("id:settings-nav-computer");
+    await goSection(app, "computer", "id:settings-files");
+    expect(app.shows("id:settings-setup")).toBe(true);
+    await app.press("id:settings-back");
+    await app.clear("id:settings-search");
     await app.type("id:settings-search", "hotkey");
     await app.waitFor("id:settings-nav-empty");
   });

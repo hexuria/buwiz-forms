@@ -114,16 +114,18 @@ function visibleRows(query: string | null | undefined, sectionSearch: string, ro
 /**
  * The sections and rows the search keeps for this role. isAdmin is the signed-in admin (or an unlocked computer with no PIN).
  */
-export function settingsView(query: string | null | undefined, isAdmin: boolean): SettingsViewSection[] {
+export function settingsView(query: string | null | undefined, isAdmin: boolean, touch = false): SettingsViewSection[] {
   const out: SettingsViewSection[] = [];
   for (const section of SETTINGS_SECTIONS) {
     if (section.adminOnly && !isAdmin) continue;
     const rows = (SETTINGS_ROWS[section.id] || []).filter((row) => isAdmin || !row.adminOnly);
-    const shown = visibleRows(query, section.search, rows);
+    const label = touch && section.id === "computer" ? "Device" : section.label;
+    const search = touch && section.id === "computer" ? section.search.replaceAll("computer", "device") : section.search;
+    const shown = visibleRows(query, search, rows);
     if (shown.length) {
       out.push({
         id: section.id,
-        label: section.label,
+        label,
         icon: section.icon,
         group: section.group,
         rows: shown.map((row) => row.id),

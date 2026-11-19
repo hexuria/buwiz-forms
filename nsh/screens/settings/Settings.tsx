@@ -29,12 +29,12 @@ const keyOnly = (): boolean => setupChange.step() === "key";
 /** The sections and rows the search keeps for this person. */
 const view = () => {
   if (keyOnly()) return [];
-  const sections = settingsView(nav.query(), app.isAdmin());
+  const sections = settingsView(nav.query(), app.isAdmin(), TOUCH);
   if (!TOUCH) return sections;
   return sections
     .filter((section) => section.id !== "keyboard")
     .map((section) => section.id === "computer"
-      ? { ...section, label: "Device", rows: section.rows.filter((row) => row !== "hotkey") }
+      ? { ...section, rows: section.rows.filter((row) => row !== "hotkey") }
       : section)
     .filter((section) => section.rows.length > 0);
 };
