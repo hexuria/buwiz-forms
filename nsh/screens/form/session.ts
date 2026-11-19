@@ -2950,7 +2950,7 @@ export class FormSession {
       this.sHint.get(k).set(shut && !oneDateText(s.values, date) ? parts.map((f) => this.reasonFor(f.k)).find(Boolean) || "" : "");
       const open = s.showAll || s.touched.has(row);
       const boxMsg = open && parts.some((f) => Boolean(s.boxMessages[f.k]));
-      const rowMsg = open && (s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
+      const rowMsg = open && Boolean(s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
       this.sInvalid.get(k).set(boxMsg || rowMsg);
     }
   }

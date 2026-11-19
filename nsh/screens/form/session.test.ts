@@ -114,7 +114,7 @@ test("touched-only errors: a message shows after its row was left, all of them a
   const eoptKey = Object.keys(s.boxMessages()).find((k) => s.boxMessageOf(k).includes("EOPT tier"))!;
   expect(s.itemIdForKey(eoptKey)).toBe("2:6");
   expect(s.box(eoptKey).invalid()).toBe(true);
-  const eoptShown = s.box(eoptKey).message() || s.row("2:6")().boxMessages.map((b) => b.sentence).join(" ");
+  const eoptShown = s.box(eoptKey).message?.() || s.row("2:6")().boxMessages.map((b) => b.sentence).join(" ");
   expect(eoptShown).toContain("EOPT tier");
   // A part's badge counts its rows with a message, as the old page's partErrors did (F9-1: two messages on one row are one).
   const items = s.schema!.parts.flatMap((p, pi) => p.items.map((it, ii) => ({ id: `${pi}:${ii}`, it })));
@@ -134,7 +134,7 @@ test("the to-do list (lib/todo): required-empty boxes and messages count at once
     Object.fromEntries(
       Object.keys(s.boxMessages())
         .map((k) => s.itemIdForKey(k))
-        .filter((id): id is string => Boolean(id) && !s.messages()[id])
+        .filter((id): id is string => id !== undefined && !s.messages()[id])
         .map((id) => [id, " "])
     );
   expect(s.todo().map((r) => r.id)).toEqual(todoRows({ parts, messages: { ...s.messages(), ...boxRowsOf() }, values: valuesOf(), blocked: (k) => s.box(k).locked() }).map((r) => r.id));
