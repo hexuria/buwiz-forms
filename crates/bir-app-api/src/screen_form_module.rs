@@ -5839,8 +5839,7 @@ fn screen_form_validate(
             let fact_errors = match &facts {
                 Some(facts) if status == FilingStatus::Draft => {
                     let fields = fact_asks::error_fields(&errors);
-                    let checks =
-                        fact_asks::checks(kind, facts, &draft, &values, &fields);
+                    let checks = fact_asks::checks(kind, facts, &draft, &values, &fields);
                     fact_asks::covered_errors(&mut errors, &checks);
                     fact_asks::block_errors(&checks)
                 }

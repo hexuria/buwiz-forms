@@ -181,8 +181,7 @@ fn each_fact_not_set_is_boxed_or_asked_at_the_item_that_uses_it() {
     // A boxed fact's box carries its profile_save entry at the same item.
     let save = &q["profile_save"];
     assert_eq!(
-        save["frm1701q:txtBirthMonth"]["field"],
-        "birth_date",
+        save["frm1701q:txtBirthMonth"]["field"], "birth_date",
         "the birth date's box saves to the profile"
     );
     for code in ["1700", "1701", "1701A"] {
@@ -199,10 +198,7 @@ fn each_fact_not_set_is_boxed_or_asked_at_the_item_that_uses_it() {
     assert!(ask(&e, "is_government_withholding_entity").is_none());
     assert_eq!(placed_at("0619E", "is_government_withholding_entity"), "12");
     assert!(is_boxed("0619F", "is_government_withholding_entity"));
-    assert_eq!(
-        placed_at("0619F", "is_government_withholding_entity"),
-        "11"
-    );
+    assert_eq!(placed_at("0619F", "is_government_withholding_entity"), "11");
     assert!(is_boxed("0619E", "line_of_business"));
     assert!(
         ask(&e, "line_of_business").is_none(),
@@ -321,7 +317,11 @@ fn an_answer_saved_from_a_box_brings_the_return_up_to_date() {
     // 1701Q's birth date is boxed (Item 11, Q1 P1b): typed in its boxes and
     // saved to the profile, a later return of the year opens with it.
     let opened = open_as(JUANA, "1701Q", 1);
-    assert!(ask(&opened, "birth_date").is_none(), "no card: {}", opened["asks"]);
+    assert!(
+        ask(&opened, "birth_date").is_none(),
+        "no card: {}",
+        opened["asks"]
+    );
     assert_eq!(opened["values"]["frm1701q:txtBirthYear"], "");
     let written = fact_to_profile(
         "1701Q",
@@ -439,7 +439,9 @@ fn queue_blocks_a_1701q_without_a_birth_date() {
         )
         .unwrap_err();
         assert!(
-            refused.message().contains("Date of birth is not in the tax profile"),
+            refused
+                .message()
+                .contains("Date of birth is not in the tax profile"),
             "{}",
             refused.message()
         );
@@ -1219,13 +1221,7 @@ fn the_1701_income_type_is_boxed_and_saves_through_item_6() {
     let radio = "frm1701:rdoPg1I6TaxpayerTypeS";
     assert_eq!(save[radio]["field"], "tax_classification", "{save}");
     // Pick Single proprietor on the return and save it to the profile.
-    let written = fact_to_profile(
-        "1701",
-        0,
-        json!({ radio: "true" }),
-        &[radio],
-    )
-    .unwrap();
+    let written = fact_to_profile("1701", 0, json!({ radio: "true" }), &[radio]).unwrap();
     assert_eq!(written["saved"], json!(["Income type"]));
     assert_eq!(
         year_facts().tax_classification,
@@ -1335,11 +1331,18 @@ fn a_blank_required_boxed_fact_says_it_once() {
             .iter()
             .filter(|error| {
                 error["keys"].as_array().is_some_and(|own| {
-                    !own.is_empty() && own.iter().all(|key| keys.contains(&key.as_str().unwrap().to_string()))
+                    !own.is_empty()
+                        && own
+                            .iter()
+                            .all(|key| keys.contains(&key.as_str().unwrap().to_string()))
                 })
             })
             .count();
-        assert_eq!(doubled, 0, "{code}: one sentence, not two: {}", opened["errors"]);
+        assert_eq!(
+            doubled, 0,
+            "{code}: one sentence, not two: {}",
+            opened["errors"]
+        );
     }
 }
 
@@ -1365,7 +1368,12 @@ fn the_profile_ask_answer_is_remembered_per_tin_year_and_field() {
     // A second answer for another field joins it.
     call(
         "screen_form_profile_asked",
-        vec![JUANA.into(), 2026i64.into(), "rdo_code".into(), "save".into()],
+        vec![
+            JUANA.into(),
+            2026i64.into(),
+            "rdo_code".into(),
+            "save".into(),
+        ],
     )
     .unwrap();
     let reopened = open_as(JUANA, "0605", 1);
@@ -1376,7 +1384,11 @@ fn the_profile_ask_answer_is_remembered_per_tin_year_and_field() {
         .map(|field| field.as_str().unwrap().to_string())
         .collect();
     asked.sort();
-    assert_eq!(asked, vec!["line_of_business", "rdo_code"], "both remembered");
+    assert_eq!(
+        asked,
+        vec!["line_of_business", "rdo_code"],
+        "both remembered"
+    );
     // Another tax year asks again.
     let other_year = call_async(
         "screen_form_open",
@@ -1398,7 +1410,12 @@ fn the_profile_ask_answer_is_remembered_per_tin_year_and_field() {
     assert!(
         call(
             "screen_form_profile_asked",
-            vec![JUANA.into(), 2026i64.into(), "line_of_business".into(), "maybe".into()],
+            vec![
+                JUANA.into(),
+                2026i64.into(),
+                "line_of_business".into(),
+                "maybe".into()
+            ],
         )
         .is_err()
     );

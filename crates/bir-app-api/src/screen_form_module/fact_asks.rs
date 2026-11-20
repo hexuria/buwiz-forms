@@ -499,20 +499,28 @@ fn choices(fact: Fact) -> Value {
                 "Medium: ₱20 million to under ₱1 billion",
                 "Medium",
             ),
-            (
-                json!("Large"),
-                "Large: ₱1 billion or more",
-                "Large",
-            ),
+            (json!("Large"), "Large: ₱1 billion or more", "Large"),
         ],
         Fact::IsGovernmentWithholdingEntity => vec![
             (json!(false), "Private", "Private"),
             (json!(true), "Government office", "Government"),
         ],
         Fact::AtcCodes => vec![
-            (json!(["II012"]), "II012 Business income, graduated rates", "II012"),
-            (json!(["II014"]), "II014 Profession, graduated rates", "II014"),
-            (json!(["II013"]), "II013 Mixed income, graduated rates", "II013"),
+            (
+                json!(["II012"]),
+                "II012 Business income, graduated rates",
+                "II012",
+            ),
+            (
+                json!(["II014"]),
+                "II014 Profession, graduated rates",
+                "II014",
+            ),
+            (
+                json!(["II013"]),
+                "II013 Mixed income, graduated rates",
+                "II013",
+            ),
             (json!(["II015"]), "II015 Business income, 8%", "II015"),
             (json!(["II017"]), "II017 Profession, 8%", "II017"),
             (json!(["II016"]), "II016 Mixed income, 8%", "II016"),
@@ -522,9 +530,7 @@ fn choices(fact: Fact) -> Value {
     Value::Array(
         pairs
             .into_iter()
-            .map(|(value, label, short)| {
-                json!({ "value": value, "label": label, "short": short })
-            })
+            .map(|(value, label, short)| json!({ "value": value, "label": label, "short": short }))
             .collect(),
     )
 }
