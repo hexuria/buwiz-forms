@@ -152,8 +152,10 @@ export interface ScreenFormOpened {
     fact_errors?: ScreenFormError[];
     /** A Draft's cards: one per fact its form reads that the tax profile has not set for its year. */
     asks?: ScreenFormAsk[];
-    /** The filled profile boxes Edit may open that "Save to profile too" can write back, with the field and a note for the row; and the boxes that show a tax fact with a route to the profile (they need no Edit), under the fact's name. */
-    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string }>;
+    /** The filled profile boxes Edit may open, and the boxes that answer a fact with a writable box of its own (Q1 P1b), that "Save to profile" can write back, with the field, a note for the row, and `profile`: the value the profile makes for the box (the page asks only when the answer differs). */
+    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string; profile?: string }>;
+    /** The profile field ids (`profile_save`'s `field`) whose "Save to profile?" answer is already remembered for this return's taxpayer and tax year (Q1·a): the page does not ask them again. */
+    profile_asked?: string[];
     /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
     profile_changed?: string[];
 }
@@ -165,8 +167,8 @@ export interface ScreenFormAsk {
     key: string | null;
     label: string;
     control: "date" | "choice" | "text";
-    /** A choice card's answers: `value` is what `set_year_facts` takes, unless `saves` is there: then `saves` is, and `value` only names the answer. `fill`: the boxes of this return the answer ticks besides (1701's income type: Item 6). */
-    choices: { value: unknown; label: string; saves?: unknown; fill?: Record<string, string> }[] | null;
+    /** A choice card's answers: `value` is what `set_year_facts` takes, `short` its chip label (F2). */
+    choices: { value: unknown; label: string; short?: string }[] | null;
     /** The card's sentence: what is asked, and that the answer goes to the tax profile for every later return. */
     note: string;
 }
@@ -284,6 +286,8 @@ export function screen_form_preview_sync(form_code: string, draft: object, edits
 export function screen_form_queue_check(form_code: string, draft: object): { blocks: ScreenFormError[]; warns: string[] };
 /** "Save to profile too": the boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the profile boxes equal the profile again and the return is saved. A fact box's answer goes as the profile takes it; one with no profile meaning is refused ("That answer cannot be saved to the tax profile.") and nothing is written. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
 export function screen_form_save_to_profile(form_code: string, year: number, period: number, draft: object, keys: string[]): { draft: object; values: Record<string, string>; pools: Record<string, string>; saved: string[]; notes: string[] };
+/** Remember the "Save to profile?" answer for a taxpayer, tax year and profile field (`ProfileField::id()`, e.g. "line_of_business", "birth_date", "rdo_code"): `profile_ask:<tin>:<year>:<field>` in the host settings, so the page asks each field once (Q1·a). `answer` is "save" or "only"; the return itself is not changed and a later tax year asks again. */
+export function screen_form_profile_asked(tin: string, year: number, field: string, answer: "save" | "only"): null;
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
@@ -312,6 +316,7 @@ pub fn register(module: HostModule) -> HostModule {
         .function("screen_form_preview_sync", screen_form_preview_sync)
         .function("screen_form_queue_check", screen_form_queue_check)
         .function("screen_form_save_to_profile", screen_form_save_to_profile)
+        .function("screen_form_profile_asked", screen_form_profile_asked)
         .function("screen_form_queue", screen_form_queue)
         .function("screen_form_cancel_queue", screen_form_cancel_queue)
         .function("screen_form_notes_seen", screen_form_notes_seen)
@@ -3491,12 +3496,20 @@ fn open_screen_form(
                 consumed,
             ))
         })?;
-    // The tax facts this return reads that are not set (decision 3): read
-    // apart from the open above, and never in the way of opening.
-    let facts = if sample {
-        None
+    // The tax facts this return reads that are not set (decision 3), and
+    // the "Save to profile?" answers already remembered for its taxpayer
+    // and year (Q1·a): read apart from the open above, and never in the
+    // way of opening.
+    let (facts, profile_asked) = if sample {
+        (None, Vec::new())
     } else {
-        with_database(|db| Ok(fact_asks::context_of(db, kind, &draft))).unwrap_or(None)
+        with_database(|db| {
+            Ok((
+                fact_asks::context_of(db, kind, &draft),
+                fact_asks::profile_asked(db, kind, &draft),
+            ))
+        })
+        .unwrap_or((None, Vec::new()))
     };
     Ok(async move {
         let mut opened = on_large_stack(move || {
@@ -3514,24 +3527,48 @@ fn open_screen_form(
         for (field, value) in carried {
             opened[field] = value;
         }
-        // The cards, the blocking messages and the "Save to profile too"
-        // switches of a Draft (decisions 3 and 8).
+        // The cards, the blocking messages and the "Save to profile"
+        // entries of a Draft (decisions 3, 5 and 8; Q1 P1b, Q1a).
         let (asks, fact_errors, profile_save) = match &facts {
             Some(facts) if opened["status"] == "Draft" => {
                 let fields = fact_asks::error_fields(&opened["errors"]);
                 let checks =
                     fact_asks::checks(kind, facts, &opened["draft"], &opened["values"], &fields);
+                // A boxed fact's own sentence replaces the form's for the
+                // same box (B5/B7): one message, not two.
+                fact_asks::covered_errors(&mut opened["errors"], &checks);
+                let mut profile_save =
+                    fact_asks::profile_save(kind, &opened["profile_edit"], facts);
+                // Each entry carries what the profile makes for its box, so
+                // the page asks only when the answer differs (Q1 P1b).
+                if let (Some(entries), Some(values)) = (
+                    profile_save.as_object_mut(),
+                    opened["profile_values"].as_object(),
+                ) {
+                    for (key, entry) in entries.iter_mut() {
+                        if let Some(value) = values.get(key) {
+                            entry["profile"] = value.clone();
+                        }
+                    }
+                }
                 (
                     fact_asks::asks(kind, facts),
                     fact_asks::block_errors(&checks),
-                    fact_asks::profile_save(kind, &opened["profile_edit"], facts),
+                    profile_save,
                 )
             }
             _ => (json!([]), json!([]), json!({})),
         };
+        if let Some(opened) = opened.as_object_mut() {
+            opened.remove("profile_values");
+        }
         opened["asks"] = asks;
         opened["fact_errors"] = fact_errors;
         opened["profile_save"] = profile_save;
+        opened["profile_asked"] = match &facts {
+            Some(_) if opened["status"] == "Draft" => json!(profile_asked),
+            _ => json!([]),
+        };
         Ok(json(opened))
     })
 }
@@ -3705,6 +3742,20 @@ fn opened_json(
     agent::draft_locks(kind, &draft, &mut locks);
     let profile = agent::profile_keys(kind, &from_profile);
     let profile_edit = agent::profile_edit_keys(kind, &from_profile);
+    // The value the profile makes for each box "Save to profile" may ask
+    // about (Q1 P1b): the profile boxes opened with Edit, and the boxes
+    // that answer a fact with a writable box of its own. The page compares
+    // the box's value to it to tell a new answer from the profile's own.
+    let profile_values: Map<String, Value> = profile_edit
+        .iter()
+        .chain(fact_asks::boxed_boxes(kind).iter().map(|(key, _)| key))
+        .filter_map(|key| {
+            from_profile
+                .values
+                .get(key.as_str())
+                .map(|value| (key.clone(), value.clone()))
+        })
+        .collect();
     let parts = if sample.is_some() {
         sample_period_parts(kind)
     } else {
@@ -3833,6 +3884,7 @@ fn opened_json(
         "notes_always": noted,
         "profile": profile,
         "profile_edit": profile_edit,
+        "profile_values": Value::Object(profile_values),
         "sample": sample.is_some(),
         "blank": blank,
         "needs": needs,
@@ -5782,13 +5834,15 @@ fn screen_form_validate(
                 blank_sample(&mark.blank, &mut values, &mut errors);
             }
             // A fact not set that changes what this return files: a message
-            // on the row its card is on (decision 3).
+            // on the row its card or box is on (decision 3); a boxed fact's
+            // own sentence replaces the form's for the same box (B5/B7).
             let fact_errors = match &facts {
                 Some(facts) if status == FilingStatus::Draft => {
                     let fields = fact_asks::error_fields(&errors);
-                    fact_asks::block_errors(&fact_asks::checks(
-                        kind, facts, &draft, &values, &fields,
-                    ))
+                    let checks =
+                        fact_asks::checks(kind, facts, &draft, &values, &fields);
+                    fact_asks::covered_errors(&mut errors, &checks);
+                    fact_asks::block_errors(&checks)
                 }
                 _ => json!([]),
             };
@@ -6642,6 +6696,29 @@ fn screen_form_queue_check(arguments: &HostArguments) -> HostResult {
     })))
 }
 
+/// Remember the "Save to profile?" answer for a taxpayer, year and field
+/// (Q1·a): `profile_ask:<tin>:<year>:<field>` in the host settings, so the
+/// page asks each field once. The return itself is not changed; a field
+/// of a later tax year asks again.
+fn screen_form_profile_asked(arguments: &HostArguments) -> HostResult {
+    let tin = arguments.string(0)?.to_owned();
+    let year =
+        u16::try_from(arguments.integer(1)?).map_err(|_| host_error("year is out of range"))?;
+    let field = arguments.string(2)?.to_owned();
+    let answer = arguments.string(3)?;
+    if !matches!(answer, "save" | "only") {
+        return Err(host_error("answer must be \"save\" or \"only\""));
+    }
+    if field.is_empty() || field.contains(':') {
+        return Err(host_error("field is not a profile field id"));
+    }
+    with_database(|db| {
+        fact_asks::remember_profile_asked(db, &tin, year, &field, answer)
+            .map_err(|error| host_error(error.to_string()))
+    })?;
+    Ok(json(Value::Null))
+}
+
 /// "Save to profile too" (decision 8): the profile boxes `keys` of a saved
 /// Draft go to the tax profile through the function that owns each field
 /// (the name: `update_taxpayer`; RDO, address, ZIP, phone, email:
@@ -6676,6 +6753,14 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
     if draft["id"].is_null() {
         return Err(host_error("Save the return first."));
     }
+    // A fact box is a save path only when the filer can write it (Q1 P1b):
+    // a derived or read-only box that shows the fact is not one.
+    let boxed = fact_asks::boxed_boxes(kind);
+    let boxed_fact_keys: BTreeSet<&str> = boxed
+        .iter()
+        .filter(|(_, field)| matches!(field, ProfileField::Fact(_)))
+        .map(|(key, _)| key.as_str())
+        .collect();
     let mut fields: Vec<(String, ProfileField)> = Vec::new();
     for key in &keys {
         let field = fact_asks::profile_field(kind, key).ok_or_else(|| {
@@ -6683,6 +6768,11 @@ fn screen_form_save_to_profile(arguments: &HostArguments) -> HostResult {
                 "{key} cannot be saved to the tax profile from here"
             ))
         })?;
+        if matches!(field, ProfileField::Fact(_)) && !boxed_fact_keys.contains(key.as_str()) {
+            return Err(host_error(format!(
+                "{key} cannot be saved to the tax profile from here"
+            )));
+        }
         if !fields.iter().any(|(_, known)| *known == field) {
             fields.push((key.clone(), field));
         }

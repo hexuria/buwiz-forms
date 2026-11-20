@@ -5,9 +5,12 @@
 //!   not set for the return's year ([`asks`]). Where the fact goes on the
 //!   form is read from the page's schema and the form package ([`place`]):
 //!   the box bound to the draft field the fact fills, else the item the
-//!   fact decides; with no such box, the top of the first part. The 8% or
-//!   graduated choice is never a card: 2551Q's Item 13 asks it on its own,
-//!   and 1701Q and 1701 choose it on their own rate item.
+//!   fact decides; with no such box, the top of the first part. A fact with
+//!   a writable box of its own gets no card (Q1 P1b): the filer answers it
+//!   in the box, and once a complete value is left the page asks once
+//!   whether to keep it on the tax profile. The 8% or graduated choice is
+//!   never a card: 2551Q's Item 13 asks it on its own, and 1701Q and 1701
+//!   choose it on their own rate item.
 //! - **Queue.** A fact not set BLOCKS Queue when it changes what this
 //!   return files ([`checks`]): a box the form requires and the fact fills
 //!   is empty (the government category of 0619E and 0619F counts as empty
@@ -20,10 +23,12 @@
 //!   card is on.
 //! - **Follow.** The draft fields facts fill follow a later change of the
 //!   facts on a Draft, like the profile boxes do ([`fact_fields`]).
-//! - **Save to profile too.** The profile boxes a return may write back,
+//! - **Save to profile.** The profile boxes a return may write back,
 //!   each through the function that owns the field ([`profile_field`]), and
 //!   the boxes that show a fact ([`answer`]: the box's value as the profile
-//!   takes it).
+//!   takes it). A boxed fact's box is one of them too (Q1 P1b): its value
+//!   is offered to the profile once, after the filer leaves a complete
+//!   answer ([`boxed_boxes`]).
 //! - **Filed.** A return past Queued says when the profile changed after it
 //!   was filed ([`filed_changes`]); nothing is rewritten.
 
@@ -38,7 +43,8 @@ use chrono::NaiveDate;
 use serde_json::{Value, json};
 
 use super::{
-    NoteStyle, bound_paths, lifecycle_pointer, penalties, profile_notes, schema_entry, schema_keys,
+    NoteStyle, bound_paths, lifecycle_pointer, penalties, profile_notes, schema_computed,
+    schema_entry, schema_keys,
 };
 
 /// What the asks and the queue checks know about the return's taxpayer and
@@ -300,6 +306,105 @@ fn shows_nothing(placed: &Placed, values: &Value) -> bool {
     })
 }
 
+/// Whether `placed`'s boxes already answer the fact for this return (Q1
+/// P1b): a radio or select pick (one box ticked), or every text or date
+/// box of it filled — a split date counts only when all its parts are.
+fn box_answered(placed: &Placed, values: &Value) -> bool {
+    let shown = |key: &str| values[key].as_str().unwrap_or_default().trim();
+    if placed.keys.iter().any(|key| shown(key) == "true") {
+        return true;
+    }
+    !placed.keys.is_empty()
+        && placed.keys.iter().all(|key| {
+            let value = shown(key);
+            !value.is_empty() && value != "false"
+        })
+}
+
+/// Whether `key` is a box the filer can write on `kind`'s page: bound (or
+/// one of the unbound 0619E/F category radios the filer picks), never
+/// computed or hidden, and not a box the host writes through its own
+/// editors — except the category radios, which the page still lets the
+/// filer pick (`answers_on_return`).
+fn writable_key(kind: AgentFormKind, key: &str) -> bool {
+    let def = kind.definition();
+    let pick = answers_on_return(kind, key);
+    (def.bindings.contains_key(key) || pick)
+        && !schema_computed(kind.form_code(), key)
+        && (!agent::host_writes(kind, key) || pick)
+        && !def
+            .box_def(key)
+            .is_some_and(|entry| entry.computed || entry.required == "computed")
+}
+
+/// Whether `placed` is a writable box the fact is answered in (Q1 P1b):
+/// at least one of its boxes is writable and the fact has a route to the
+/// profile through one of them. A computed or derived box (1702RT's
+/// incorporation date) and an unbound one (1700's `lobContainer`) do not
+/// count, so those facts keep their card.
+fn boxed_placed(kind: AgentFormKind, placed: &Placed) -> bool {
+    placed.fills
+        && placed.keys.iter().any(|key| writable_key(kind, key))
+        && placed
+            .keys
+            .iter()
+            .any(|key| profile_field(kind, key).is_some())
+}
+
+/// The placement of `fact` when it has a writable box of its own (Q1 P1b),
+/// `None` when it stays a card.
+pub(super) fn boxed(kind: AgentFormKind, fact: Fact) -> Option<Placed> {
+    place(kind, fact).filter(|placed| boxed_placed(kind, placed))
+}
+
+/// Whether `placed`'s boxes are pick controls (radio, select, checkbox):
+/// its message says "pick it" rather than "type it".
+fn pick_box(kind: AgentFormKind, placed: &Placed) -> bool {
+    let Some(form) = schema_entry(kind.form_code()) else {
+        return false;
+    };
+    let mut picks = 0;
+    let mut others = 0;
+    for field in form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        .flat_map(|item| item["f"].as_array().into_iter().flatten())
+    {
+        let Some(key) = field["k"].as_str() else {
+            continue;
+        };
+        if !placed.keys.iter().any(|placed_key| placed_key == key) {
+            continue;
+        }
+        match field["t"].as_str() {
+            Some("radio") | Some("sel") | Some("chk") => picks += 1,
+            _ => others += 1,
+        }
+    }
+    picks > 0 && others == 0
+}
+
+/// Every box of `kind` that answers a fact with a writable box of its own
+/// (Q1 P1b), with the profile field each writes back through: the
+/// "Save to profile" entries of a boxed fact's box.
+pub(super) fn boxed_boxes(kind: AgentFormKind) -> Vec<(String, ProfileField)> {
+    facts_used_by(kind.form_code())
+        .into_iter()
+        .filter(|fact| *fact != Fact::IncomeTaxElection)
+        .filter_map(|fact| boxed(kind, fact))
+        .flat_map(|placed| {
+            placed
+                .keys
+                .into_iter()
+                .filter(|key| writable_key(kind, key))
+                .filter_map(|key| profile_field(kind, &key).map(|field| (key, field)))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
 /// The fact's name in a sentence's subject and in a message.
 fn label(fact: Fact, ctx: &FactContext) -> &'static str {
     match fact {
@@ -357,126 +462,88 @@ fn control(fact: Fact) -> &'static str {
     }
 }
 
-/// The radio of `fact`'s item whose tick sets draft field `path` to `want`.
-fn ticking(kind: AgentFormKind, fact: Fact, path: &str, want: &str) -> Option<String> {
-    let def = kind.definition();
-    place(kind, fact)?.keys.into_iter().find(|key| {
-        matches!(
-            def.bindings.get(key).map(|bound| &bound.binding),
-            Some(agent::Binding::Choice { options }) if options.iter().any(|option| {
-                option.value == "true" && option.set.get(path).and_then(Value::as_str) == Some(want)
-            })
-        )
-    })
-}
-
-/// 1701's income-type card (B12). Item 6 is not made from the income type
-/// (the ATC decides it), so the card asks in Item 6's own terms and each
-/// answer carries both halves: `saves`, the income type the profile takes,
-/// and `fill`, the Item 6 radio it ticks on this return. A compensation
-/// earner has no radio on the page: the profile's answer makes the return's.
-fn choices_1701(kind: AgentFormKind) -> Value {
-    let rows = [
-        (
-            "single_proprietor",
-            "Single proprietor",
-            "SelfEmployed",
-            "SingleProprietor",
-        ),
-        (
-            "professional",
-            "Professional",
-            "SelfEmployed",
-            "Professional",
-        ),
-        (
-            "single_proprietor_with_compensation",
-            "Single proprietor with compensation income",
-            "MixedIncome",
-            "SingleProprietor",
-        ),
-        (
-            "professional_with_compensation",
-            "Professional with compensation income",
-            "MixedIncome",
-            "Professional",
-        ),
-        (
-            "compensation_earner",
-            "Compensation earner",
-            "PurelyCompensation",
-            "CompensationEarner",
-        ),
-    ];
-    Value::Array(
-        rows.into_iter()
-            .map(|(value, label, saves, item_6)| {
-                let mut choice = json!({ "value": value, "label": label, "saves": saves });
-                if let Some(key) = ticking(kind, Fact::TaxClassification, "/taxpayer_type", item_6)
-                {
-                    choice["fill"] = json!({ key: "true" });
-                }
-                choice
-            })
-            .collect(),
-    )
-}
-
-/// A choice card's answers: the value `set_year_facts` takes, and its label.
-fn choices(kind: AgentFormKind, fact: Fact) -> Value {
-    if fact == Fact::TaxClassification && kind.form_code() == "1701" {
-        return choices_1701(kind);
-    }
-    let pairs: Vec<(Value, &str)> = match fact {
+/// A choice card's answers: the value `set_year_facts` takes, its label,
+/// and a `short` label for the inline chips (F2).
+fn choices(fact: Fact) -> Value {
+    let pairs: Vec<(Value, &str, &str)> = match fact {
         Fact::TaxClassification => vec![
-            (json!("SelfEmployed"), "Self-employed or professional"),
+            (
+                json!("SelfEmployed"),
+                "Self-employed or professional",
+                "Self-employed",
+            ),
             (
                 json!("MixedIncome"),
                 "Mixed income (compensation and business)",
+                "Mixed income",
             ),
-            (json!("PurelyCompensation"), "Compensation only"),
+            (
+                json!("PurelyCompensation"),
+                "Compensation only",
+                "Compensation only",
+            ),
         ],
         Fact::EoptTier => vec![
-            (json!("Micro"), "Micro: under ₱3 million gross sales"),
-            (json!("Small"), "Small: ₱3 million to under ₱20 million"),
-            (json!("Medium"), "Medium: ₱20 million to under ₱1 billion"),
-            (json!("Large"), "Large: ₱1 billion or more"),
+            (
+                json!("Micro"),
+                "Micro: under ₱3 million gross sales",
+                "Micro",
+            ),
+            (
+                json!("Small"),
+                "Small: ₱3 million to under ₱20 million",
+                "Small",
+            ),
+            (
+                json!("Medium"),
+                "Medium: ₱20 million to under ₱1 billion",
+                "Medium",
+            ),
+            (
+                json!("Large"),
+                "Large: ₱1 billion or more",
+                "Large",
+            ),
         ],
         Fact::IsGovernmentWithholdingEntity => vec![
-            (json!(false), "Private"),
-            (json!(true), "Government office"),
+            (json!(false), "Private", "Private"),
+            (json!(true), "Government office", "Government"),
         ],
         Fact::AtcCodes => vec![
-            (json!(["II012"]), "II012 Business income, graduated rates"),
-            (json!(["II014"]), "II014 Profession, graduated rates"),
-            (json!(["II013"]), "II013 Mixed income, graduated rates"),
-            (json!(["II015"]), "II015 Business income, 8%"),
-            (json!(["II017"]), "II017 Profession, 8%"),
-            (json!(["II016"]), "II016 Mixed income, 8%"),
+            (json!(["II012"]), "II012 Business income, graduated rates", "II012"),
+            (json!(["II014"]), "II014 Profession, graduated rates", "II014"),
+            (json!(["II013"]), "II013 Mixed income, graduated rates", "II013"),
+            (json!(["II015"]), "II015 Business income, 8%", "II015"),
+            (json!(["II017"]), "II017 Profession, 8%", "II017"),
+            (json!(["II016"]), "II016 Mixed income, 8%", "II016"),
         ],
         _ => return Value::Null,
     };
     Value::Array(
         pairs
             .into_iter()
-            .map(|(value, label)| json!({ "value": value, "label": label }))
+            .map(|(value, label, short)| {
+                json!({ "value": value, "label": label, "short": short })
+            })
             .collect(),
     )
 }
 
-/// The cards a return shows: one per fact not set, in [`Fact::ALL`] order.
-/// `key` is the box the card sits at (null: the top of the first part).
+/// The cards a return shows: one per fact not set that has no writable box
+/// of its own (Q1 P1b), in [`Fact::ALL`] order. `key` is the box the card
+/// sits at (null: the top of the first part).
 pub(crate) fn asks(kind: AgentFormKind, ctx: &FactContext) -> Value {
     Value::Array(
         unset(kind, ctx)
             .into_iter()
+            .filter(|fact| boxed(kind, *fact).is_none())
             .map(|fact| {
                 json!({
                     "fact": fact.key(),
                     "key": place(kind, fact).map(|placed| placed.key),
                     "label": label(fact, ctx),
                     "control": control(fact),
-                    "choices": choices(kind, fact),
+                    "choices": choices(fact),
                     "note": note(fact, ctx),
                 })
             })
@@ -488,7 +555,12 @@ pub(crate) fn asks(kind: AgentFormKind, ctx: &FactContext) -> Value {
 #[derive(Debug, Clone)]
 pub(crate) struct Check {
     pub fact: Fact,
-    pub key: Option<String>,
+    /// Every box the fact is answered in (a split date's parts, a radio
+    /// group): the form's own message on these keys is the fact's to say.
+    pub keys: Vec<String>,
+    /// The fact has a writable box of its own (Q1 P1b): its message says
+    /// "type it"/"pick it" there instead of "answer it in the card".
+    pub boxed: bool,
     pub blocks: bool,
     pub message: String,
 }
@@ -539,21 +611,35 @@ pub(crate) fn checks(
     let picked = super::profile_edits(draft);
     unset(kind, ctx)
         .into_iter()
-        .map(|fact| {
+        .filter_map(|fact| {
             let placed = place(kind, fact);
+            let boxed = placed.as_ref().is_some_and(|p| boxed_placed(kind, p));
+            // A boxed fact the box already answers for this return raises
+            // no warning and no block (Q1 P1b). The government category is
+            // the exception: the page's Private is a guess, so only the
+            // filer's own pick counts (B8).
+            let answered = boxed
+                && placed.as_ref().is_some_and(|p| {
+                    if fact == Fact::IsGovernmentWithholdingEntity {
+                        p.keys.iter().any(|key| picked.contains(key))
+                    } else {
+                        box_answered(p, values)
+                    }
+                });
+            if answered {
+                return None;
+            }
             let fills_required = placed
                 .as_ref()
                 .is_some_and(|placed| placed.fills && placed.required);
             let blocks = match fact {
-                // The page's Private is a guess, not an answer; the filer's
-                // own pick on this return is one (B8).
                 Fact::IsGovernmentWithholdingEntity => {
                     fills_required
                         && !placed
                             .as_ref()
                             .is_some_and(|placed| placed.keys.iter().any(|key| picked.contains(key)))
                 }
-                Fact::EoptTier => {
+                Fact::EoptTier if !boxed => {
                     computes_penalties(kind, draft)
                         || (fills_required
                             && placed
@@ -563,6 +649,12 @@ pub(crate) fn checks(
                 // The year's rate a 2551Q must record needs the income type.
                 Fact::TaxClassification if kind == AgentFormKind::Form2551Q => {
                     errors.contains("annual_income_tax_election")
+                }
+                _ if boxed => {
+                    fills_required
+                        && placed
+                            .as_ref()
+                            .is_some_and(|placed| !box_answered(placed, values))
                 }
                 _ => {
                     fills_required
@@ -577,16 +669,31 @@ pub(crate) fn checks(
                 .map(|placed| format!("at {}", placed.at))
                 .unwrap_or_else(|| "at the top of the form".to_string());
             let message = if blocks {
-                match fact {
-                    Fact::EoptTier if computes_penalties(kind, draft) => format!(
-                        "EOPT tier is not set in the tax profile, and it sets the penalty rates on this return. Answer it in the card {at}, then queue."
-                    ),
-                    Fact::IsGovernmentWithholdingEntity => format!(
-                        "Category of withholding agent is not set in the tax profile, and this return needs it. Pick Private or Government {at}, then queue."
-                    ),
-                    _ => format!(
-                        "{name} is not set in the tax profile, and this return needs it. Answer it in the card {at}, then queue."
-                    ),
+                if boxed {
+                    if placed
+                        .as_ref()
+                        .is_some_and(|placed| pick_box(kind, placed))
+                    {
+                        format!(
+                            "{name} is not in the tax profile, and this return needs it. Pick it {at}."
+                        )
+                    } else {
+                        format!(
+                            "{name} is not in the tax profile, and this return needs it. Type it {at}."
+                        )
+                    }
+                } else {
+                    match fact {
+                        Fact::EoptTier if computes_penalties(kind, draft) => format!(
+                            "EOPT tier is not set in the tax profile, and it sets the penalty rates on this return. Answer it {at}, then queue."
+                        ),
+                        Fact::IsGovernmentWithholdingEntity => format!(
+                            "Category of withholding agent is not set in the tax profile, and this return needs it. Pick Private or Government {at}, then queue."
+                        ),
+                        _ => format!(
+                            "{name} is not set in the tax profile, and this return needs it. Answer it {at}, then queue."
+                        ),
+                    }
                 }
             } else {
                 match fact {
@@ -594,18 +701,23 @@ pub(crate) fn checks(
                     _ => format!("{name} is not set in the tax profile. This return can go without it."),
                 }
             };
-            Check {
+            let keys = placed
+                .as_ref()
+                .map(|placed| placed.keys.clone())
+                .unwrap_or_default();
+            Some(Check {
                 fact,
-                key: placed.map(|placed| placed.key),
+                keys,
+                boxed,
                 blocks,
                 message,
-            }
+            })
         })
         .collect()
 }
 
 /// The blocking checks as the page's validation messages, on the row the
-/// card is on.
+/// card or box is on.
 pub(crate) fn block_errors(checks: &[Check]) -> Value {
     Value::Array(
         checks
@@ -615,11 +727,36 @@ pub(crate) fn block_errors(checks: &[Check]) -> Value {
                 json!({
                     "field": format!("tax_profile.{}", check.fact.key()),
                     "message": check.message,
-                    "keys": check.key.iter().collect::<Vec<_>>(),
+                    "keys": check.keys.iter().collect::<Vec<_>>(),
                 })
             })
             .collect(),
     )
+}
+
+/// The form's own messages a blocking boxed fact already says (Q1 P1b,
+/// B5/B7): an error whose every named box is one the fact is answered in
+/// is dropped, so the filer reads one sentence, not two.
+pub(crate) fn covered_errors(errors: &mut Value, checks: &[Check]) {
+    let covered: BTreeSet<&str> = checks
+        .iter()
+        .filter(|check| check.blocks && check.boxed)
+        .flat_map(|check| check.keys.iter().map(String::as_str))
+        .collect();
+    if covered.is_empty() {
+        return;
+    }
+    if let Value::Array(list) = errors {
+        list.retain(|error| {
+            let keys: Vec<&str> = error["keys"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .collect();
+            keys.is_empty() || !keys.iter().all(|key| covered.contains(key))
+        });
+    }
 }
 
 /// The fields of the form's own messages (an `errors_json` array).
@@ -953,31 +1090,22 @@ fn fact_field(kind: AgentFormKind, key: &str) -> Option<Fact> {
         })
 }
 
-/// The boxes of `kind` that show a fact with a route to the tax profile.
-fn fact_boxes(kind: AgentFormKind) -> Vec<(String, Fact)> {
-    let used = facts_used_by(kind.form_code());
-    FACT_ROUTES
-        .into_iter()
-        .filter(|fact| used.contains(fact))
-        .filter_map(|fact| Some((place(kind, fact).filter(|placed| placed.fills)?, fact)))
-        .flat_map(|(placed, fact)| placed.keys.into_iter().map(move |key| (key, fact)))
-        .collect()
-}
-
-/// The page's "Save to profile too" switches: for each profile box it may
-/// open with Edit that has a safe write path, the field and a note for the
-/// row (a branch field this branch takes from the head office says it
-/// gets its own). The boxes that show a fact with a route are listed too
-/// (B9): they need no Edit, and the page offers the save on its own terms.
+/// The page's "Save to profile" entries (Q1 P1b, Q1a): for each profile
+/// box it may open with Edit that has a safe write path, and for each box
+/// that answers a fact with a writable box of its own ([`boxed_boxes`]),
+/// the field and a note for the row (a branch field this branch takes from
+/// the head office says it gets its own). The page asks once per field
+/// whether to keep a typed answer on the profile; the host remembers the
+/// answer per taxpayer, year and field.
 pub(crate) fn profile_save(kind: AgentFormKind, edit_keys: &Value, ctx: &FactContext) -> Value {
     let mut out = serde_json::Map::new();
-    let facts = fact_boxes(kind);
+    let boxed = boxed_boxes(kind);
     let keys = edit_keys
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(Value::as_str)
-        .chain(facts.iter().map(|(key, _)| key.as_str()));
+        .chain(boxed.iter().map(|(key, _)| key.as_str()));
     for key in keys {
         if out.contains_key(key) {
             continue;
@@ -1003,6 +1131,37 @@ pub(crate) fn profile_save(kind: AgentFormKind, edit_keys: &Value, ctx: &FactCon
         );
     }
     Value::Object(out)
+}
+
+/// The "Save to profile?" answers remembered for this return's taxpayer
+/// and year (Q1·a): the field ids of the `profile_ask:<tin>:<year>:*`
+/// settings, so the page asks each field once. A field of a later tax
+/// year asks again.
+pub(crate) fn profile_asked(db: &Database, kind: AgentFormKind, draft: &Value) -> Vec<String> {
+    let Ok(identity) = agent::identity(kind, draft) else {
+        return Vec::new();
+    };
+    let prefix = format!("profile_ask:{}:{}:", identity.tin, identity.taxable_year);
+    db.settings_with_prefix(&prefix)
+        .map(|rows| {
+            rows.into_iter()
+                .filter_map(|(key, _)| key.strip_prefix(&prefix).map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Remember the "Save to profile?" answer for this return's taxpayer,
+/// year and field (Q1·a): `profile_ask:<tin>:<year>:<field>` holds `save`
+/// or `only`. The return itself is not changed.
+pub(crate) fn remember_profile_asked(
+    db: &Database,
+    tin: &str,
+    year: u16,
+    field: &str,
+    answer: &str,
+) -> Result<(), bir_core::db::DbError> {
+    db.set_setting(&format!("profile_ask:{tin}:{year}:{field}"), answer)
 }
 
 /// What a return past Queued (Submitted, Confirmed, Paid) shows when the
