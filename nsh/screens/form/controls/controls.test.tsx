@@ -163,6 +163,24 @@ for (const size of SIZES) {
     expect(edit(app, "tin2")).toBe("987");
   });
 
+  test(`${size.name}: a TIN grid cell takes digits only, at most its box's max (PR 8)`, async () => {
+    if (size.name !== "phone") return; // the grid is the under-600 pt layout; the gallery draws it only there
+    const app = await gallery(size.options);
+    // The phone grid's cells: same digit rules as the TIN boxes, centred (the look is in the shots).
+    expect(app.count("id:fp-gtin1")).toBe(1);
+    expect(app.value("id:fp-gtin1")).toBe("000");
+    await app.clear("id:fp-gtin1");
+    await app.type("id:fp-gtin1", "12a45");
+    expect(app.value("id:fp-gtin1")).toBe("124");
+    await app.clear("id:fp-gbranch");
+    await app.type("id:fp-gbranch", "0000-1x");
+    expect(app.value("id:fp-gbranch")).toBe("00001");
+    // A locked cell draws read-only (a ReadBox, not an input): it keeps its label and its value as text.
+    expect(app.count("id:fp-gtinL")).toBe(1);
+    expect(app.value("id:fp-gtinL")).toBe(null);
+    expect(app.count("label:/Taxpayer TIN/")).toBeGreaterThan(0);
+  });
+
   test(`${size.name}: a date takes typed text in any old format and reports MM/DD/YYYY`, async () => {
     const app = await gallery(size.options);
     expect(app.value("id:fp-date")).toBe("December 10, 2020");

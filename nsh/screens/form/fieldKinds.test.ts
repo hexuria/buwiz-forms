@@ -595,3 +595,75 @@ test("PR5: 0605 Item 17 Manner of Payment unticks on a re-pick and survives a sa
   expect(again.valueOf(mop(5))).toBe("false");
   again.dispose();
 });
+
+// ---------------------------------------------------------------- PR 8 (Q8): typed TINs and the profile line
+// 1801 item 11's executor TIN is typed_tin: four separate boxes the filer types (the draft joins them into
+// administrator_tin's nine digits and administrator_branch_code). The "From the tax profile" line belongs to a
+// TIN the profile holds locked — a typed TIN, an editable other-party TIN and a TIN opened for Edit have none.
+
+const TIN_E = ["frm1801v2018:txtTINE1", "frm1801v2018:txtTINE2", "frm1801v2018:txtTINE3", "frm1801v2018:txtBranchCodeE"];
+
+async function openedSample(formCode: string): Promise<FormSession> {
+  createDemoTaxpayer();
+  const s = new FormSession({ tin: DEMO.tin, formCode, year: 0, period: 0, mode: "sample" });
+  expect(await s.open()).toBe(null);
+  await s.idle();
+  return s;
+}
+
+test("PR8: the profile line is on a locked profile TIN and off a typed one", async () => {
+  const locked = await opened(at("0605", 2025, 1));
+  expect(locked.row("1:0")().tinLine).toBe(true);
+  locked.dispose();
+  const typed = await openedSample("1801");
+  expect(typed.row("1:6")().tinLine).toBe(false);
+  typed.dispose();
+  const other = await opened({ tin: DEMO.tin, formCode: "1706", year: 2025, period: 0, mode: "return" });
+  expect(other.row("1:6")().tinLine).toBe(false); // 1706's buyer TIN (row 1:6 in the built schema)
+  other.dispose();
+});
+
+test("PR8: a typed TIN's four boxes stay four keys and join the draft as administrator_tin + branch", async () => {
+  const s = await openedSample("1801");
+  s.edit(TIN_E[0], "000");
+  s.edit(TIN_E[1], "123");
+  s.edit(TIN_E[2], "453");
+  s.edit(TIN_E[3], "00001");
+  await s.idle();
+  // The four boxes are still four keys on the page...
+  for (const [i, k] of TIN_E.entries()) {
+    expect(s.valueOf(k)).toBe(["000", "123", "453", "00001"][i]);
+  }
+  // ...and the draft keeps the mapping the print and the upload already use: nine digits + the branch code.
+  const draft = s.draft() as { administrator_tin?: string; administrator_branch_code?: string } | null;
+  expect(draft?.administrator_tin).toBe("000123453");
+  expect(draft?.administrator_branch_code).toBe("00001");
+  // Clearing the last box (the branch code) clears its own key and its draft part.
+  s.edit(TIN_E[3], "");
+  await s.idle();
+  expect(s.valueOf(TIN_E[3])).toBe("");
+  expect((s.draft() as { administrator_branch_code?: string } | null)?.administrator_branch_code ?? "").toBe("");
+  expect(s.valueOf(TIN_E[0])).toBe("000");
+  s.dispose();
+});
+
+test("PR8: typed TIN digits survive a save and a reopen, box for box", async () => {
+  const target = { tin: DEMO.tin, formCode: "1801", year: 2025, period: 0, mode: "return" } as const;
+  const s = await opened(target);
+  s.edit(TIN_E[0], "987");
+  s.edit(TIN_E[1], "654");
+  s.edit(TIN_E[2], "321");
+  s.edit(TIN_E[3], "00042");
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  const again = await opened(target);
+  for (const [i, k] of TIN_E.entries()) {
+    expect(again.valueOf(k)).toBe(["987", "654", "321", "00042"][i]);
+  }
+  const draft = again.draft() as { administrator_tin?: string; administrator_branch_code?: string } | null;
+  expect(draft?.administrator_tin).toBe("987654321");
+  expect(draft?.administrator_branch_code).toBe("00042");
+  again.dispose();
+});
