@@ -2311,7 +2311,7 @@ fn pr2_old_shell_one_date_marks_remain_unchanged() {
         ("0619E", "2", false),
         ("1604C", "11A", false),
         ("1606", "1", false),
-        ("1706", "1", true),
+        ("1706", "1", false),
         ("1706", "7", true),
         ("1707", "1", true),
         ("2552", "1", true),
@@ -2331,7 +2331,6 @@ fn pr2_old_shell_one_date_marks_remain_unchanged() {
     }
     let expected = [
         ("1701Q", "11"),
-        ("1706", "1"),
         ("1706", "7"),
         ("1707", "1"),
         ("1801", "1"),

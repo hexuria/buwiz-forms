@@ -219,8 +219,7 @@ pub(super) const ONE_DATES: &[OneDate] = &[
             "frm1706:txtDateDay",
             "frm1706:txtDateYear",
         ],
-    )
-    .old_shell(),
+    ),
     OneDate::new(
         "1706",
         [
