@@ -8,7 +8,7 @@
 //             `Test: open the 2551Q` and `Test: open the Q2 return` open the two returns the frame shows
 // Under the frame (a line the window shows, so a test reads what the preview did):
 //   `preview ${code}: revision N`  while a preview of that form code is open
-//   test-only buttons in the corner: `Test: go Home` (the window's own layout can change once a second window opens: headless, the
+//   test-only buttons in the corner: `Test: switch to the second taxpayer` (Sample Trading Corp, added on first use), `Test: go Home` (the window's own layout can change once a second window opens: headless, the
 //   frame reads a 0 x 0 surface then), `Test: save PDF` saves the open preview's PDF to savePath (the toolbar's own button
 //   opens a panel a test cannot press), `Test: read PDF` reads that file back (pages, bytes, drawing, text).
 import { host, mount, signal, Text, View, windowSize } from "nsh";
@@ -19,7 +19,7 @@ import { createDemoTaxpayer, DEMO, warmForms } from "./bir/testing";
 import { Print, REAL_ACTIONS, testing } from "./screens/print/native";
 import { previews } from "./screens/print/store";
 import "./screens/print/host";
-import { app, go } from "./shell";
+import { app, go, store } from "./shell";
 import { Shell } from "./shell/Shell";
 
 // A start route that opens a form builds every form's schema in the frame's first render (the host does it lazily, once per process): more than the
@@ -31,6 +31,9 @@ interface Params {
   savePath?: string;
   pin?: boolean;
 }
+
+/** A second taxpayer (`Test: switch to the second taxpayer` adds it and switches the frame to it). */
+const OTHER_ROOT = "000111229";
 
 const saved = signal("no pdf yet");
 const read = signal("pdf not read");
@@ -77,6 +80,17 @@ function Demo() {
           </Button>
           <Button testID="px-open-q2" onPress={() => app.openReturn({ tin: DEMO.tin, code: "2551Q", year: 2026, period: 2 })}>
             <Text>Test: open the Q2 return</Text>
+          </Button>
+          <Button
+            testID="px-switch"
+            onPress={() => {
+              if (!store.taxpayers().some((t) => t.tin_root === OTHER_ROOT)) {
+                store.write("create_taxpayer", { tin_root: "000-111-229", name: "Sample Trading Corp", taxpayer_type: "Corporation", head_office: { rdo_code: "039" } });
+              }
+              app.selectTaxpayer(OTHER_ROOT);
+            }}
+          >
+            <Text>Test: switch to the second taxpayer</Text>
           </Button>
           <Button
             testID="px-save"

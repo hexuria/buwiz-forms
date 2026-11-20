@@ -103,6 +103,18 @@ test("F8-1 desktop: Lock app closes the preview window, and signing in again doe
   expect(app.shows("text:no preview of 2551Q")).toBe(true);
 }, 120_000);
 
+test("desktop: switching to another taxpayer closes the preview window, so nothing of the last taxpayer stays up", async () => {
+  const app = await open(DEMO, { ...WIDE, host: { params: START } });
+  await ready(app);
+  await app.press("id:fp-print");
+  await app.waitFor("text:preview 2551Q: revision 1", { timeout: 20_000 });
+  expect(app.window(WINDOW).state()).not.toBeNull();
+
+  await app.press("id:px-switch");
+  await app.waitUntil(() => app.window(WINDOW).state() === null, { timeout: 5000 });
+  await app.waitFor("text:no preview of 2551Q");
+}, 120_000);
+
 test("F8-10 desktop: a quick switch to another return of the same form gets its own window, which survives the old one's close", async () => {
   const app = await open(DEMO, { ...WIDE, host: { params: START } });
   await ready(app);
