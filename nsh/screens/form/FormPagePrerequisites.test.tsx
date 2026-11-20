@@ -59,8 +59,12 @@ for (const look of [{}, { width: 1440, height: 900, platform: "macos" as const }
     await app.press("id:fp-set-profile-income_tax_election");
     await app.waitFor("id:tp-fact-income_tax_election-choice");
     expect(app.texts()).toContain("Save for 2026");
-    // No tap on a choice: the linked editor must already have keyboard focus.
-    await app.keyboard.press("space");
+    if (Object.keys(look).length) {
+      // Desktop controls accept keyboard focus; phones choose by touch.
+      await app.keyboard.press("space");
+    } else {
+      await app.press("id:tp-fact-income_tax_election-choice >> label:8%");
+    }
     await app.press("id:tp-fact-income_tax_election-save");
     await app.waitFor("text:BIR Form 2551Q");
     await app.waitFor("id:fp-set-profile-income_tax_election", { state: "gone" });
