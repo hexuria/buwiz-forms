@@ -135,7 +135,7 @@ export interface AskCard {
   label: string;
   note: string;
   control: ScreenFormAsk["control"];
-  choices: { value: unknown; label: string }[];
+  choices: { value: unknown; label: string; short?: string }[];
   /** The picked choice's value as JSON, or null. */
   pick: string | null;
 }
@@ -2275,15 +2275,9 @@ export class FormSession {
     const ask = s.asks.find((a) => a.fact === fact);
     if (!s.draft || !s.editable || s.sample || !ask) return;
     let value: unknown;
-    // B12: a choice may name its answer (`value`) apart from what the profile takes (`saves`), and tick boxes of this return (`fill`).
-    let fill: Record<string, string> = {};
     if (ask.control === "choice") {
       if (!(fact in s.askPick)) return;
       value = s.askPick[fact];
-      const picked = JSON.stringify(value);
-      const choice = (ask.choices ?? []).find((c) => JSON.stringify(c.value) === picked);
-      if (choice?.saves !== undefined) value = choice.saves;
-      fill = choice?.fill ?? {};
     } else {
       const raw = (s.askText[fact] ?? "").trim();
       if (ask.control === "date") {
@@ -2310,7 +2304,6 @@ export class FormSession {
     }
     s.electionReady = undefined;
     const r = this.applyUseProfile([fact]);
-    for (const [k, v] of Object.entries(fill)) if (v === "true" && s.values[k] !== "true") this.pickRadio(k);
     this.takeAsks(r && Array.isArray(r.asks) ? r.asks : s.asks.filter((a) => a !== ask));
     delete s.askPick[fact];
     s.factErrors = s.factErrors.filter((e) => e.field !== `tax_profile.${fact}`);
