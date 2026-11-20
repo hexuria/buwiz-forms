@@ -37,6 +37,10 @@ test("0605 registered date uses the same unrestricted calendar as its parts", as
     await s.idle();
     expect(s.shownOf(date.oneKey)).toBe("August 17, 2023");
     expect([s.valueOf(date.month.k), s.valueOf(date.day!.k), s.valueOf(date.year.k)]).toEqual(["08", "17", "2023"]);
+    s.edit(date.oneKey, "1900-02-28");
+    s.blur(date.oneKey);
+    await s.idle();
+    expect(splitDay(s, date)).toBe("1900-02-28");
   } finally {
     s.dispose();
   }

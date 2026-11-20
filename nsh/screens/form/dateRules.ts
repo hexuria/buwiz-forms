@@ -12,7 +12,7 @@ export function splitDay(s: FormSession, date: DateParts): string {
   const month = Number(String(s.box(date.month.k).value() || "").slice(0, 2));
   const year = boxYear(s, date);
   const day = date.day ? Number(s.box(date.day.k).value() || "") : 1;
-  if (!(month >= 1 && month <= 12 && year > 1900)) return "";
+  if (!(month >= 1 && month <= 12 && year >= 1900)) return "";
   return `${year}-${String(month).padStart(2, "0")}-${String(day >= 1 && day <= 31 ? day : 1).padStart(2, "0")}`;
 }
 
