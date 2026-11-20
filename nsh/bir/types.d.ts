@@ -582,8 +582,10 @@ export interface ScreenFormOpened {
     fact_errors?: ScreenFormError[];
     /** A Draft's cards: one per fact its form reads that the tax profile has not set for its year. */
     asks?: ScreenFormAsk[];
-    /** The filled profile boxes Edit may open that "Save to profile too" can write back, with the field and a note for the row; and the boxes that show a tax fact with a route to the profile (they need no Edit), under the fact's name. */
-    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string }>;
+    /** The filled profile boxes Edit may open, and the boxes that answer a fact with a writable box of its own (Q1 P1b), that "Save to profile" can write back, with the field, a note for the row, and `profile`: the value the profile makes for the box (the page asks only when the answer differs). */
+    profile_save?: Record<string, { field: "name" | "rdo_code" | "registered_address" | "zip_code" | "phone" | "email" | "line_of_business" | ScreenFormFact; label: string; note: string; profile?: string }>;
+    /** The profile field ids (`profile_save`'s `field`) whose "Save to profile?" answer is already remembered for this return's taxpayer and tax year (Q1·a): the page does not ask them again. */
+    profile_asked?: string[];
     /** A return past Queued: what the tax profile changed after it was filed ("RDO 039 (profile now 043)", "EOPT tier"). The return keeps what was filed. */
     profile_changed?: string[];
 }
@@ -595,8 +597,8 @@ export interface ScreenFormAsk {
     key: string | null;
     label: string;
     control: "date" | "choice" | "text";
-    /** A choice card's answers: `value` is what `set_year_facts` takes, unless `saves` is there: then `saves` is, and `value` only names the answer. `fill`: the boxes of this return the answer ticks besides (1701's income type: Item 6). */
-    choices: { value: unknown; label: string; saves?: unknown; fill?: Record<string, string> }[] | null;
+    /** A choice card's answers: `value` is what `set_year_facts` takes, `short` its chip label (F2). */
+    choices: { value: unknown; label: string; short?: string }[] | null;
     /** The card's sentence: what is asked, and that the answer goes to the tax profile for every later return. */
     note: string;
 }
@@ -714,6 +716,8 @@ export function screen_form_preview_sync(form_code: string, draft: object, edits
 export function screen_form_queue_check(form_code: string, draft: object): { blocks: ScreenFormError[]; warns: string[] };
 /** "Save to profile too": the boxes `keys` (`ScreenFormOpened.profile_save`) of a saved Draft go to the tax profile through the function owning each field; the profile boxes equal the profile again and the return is saved. A fact box's answer goes as the profile takes it; one with no profile meaning is refused ("That answer cannot be saved to the tax profile.") and nothing is written. `saved`: the fields' labels; `notes`: a branch that followed the head office now has its own value. */
 export function screen_form_save_to_profile(form_code: string, year: number, period: number, draft: object, keys: string[]): { draft: object; values: Record<string, string>; pools: Record<string, string>; saved: string[]; notes: string[] };
+/** Remember the "Save to profile?" answer for a taxpayer, tax year and profile field (`ProfileField::id()`, e.g. "line_of_business", "birth_date", "rdo_code"): `profile_ask:<tin>:<year>:<field>` in the host settings, so the page asks each field once (Q1·a). `answer` is "save" or "only"; the return itself is not changed and a later tax year asks again. */
+export function screen_form_profile_asked(tin: string, year: number, field: string, answer: "save" | "only"): null;
 /** Queue a saved draft; 1601C and 2551Q use queue_form_draft instead. */
 export function screen_form_queue(form_code: string, draft: object): number;
 /** Take a queued draft out of the queue; 1601C and 2551Q use cancel_queued. */
