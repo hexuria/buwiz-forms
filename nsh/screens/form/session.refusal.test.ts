@@ -18,7 +18,7 @@ async function refusing(message: string) {
   s.saveNow();
   await s.idle();
   said.length = 0;
-  const fake = bir as unknown as Pick<typeof bir, "queue_form_draft" | "screen_form_queue_check">;
+  const fake = bir as unknown as { queue_form_draft: typeof bir.queue_form_draft; screen_form_queue_check: typeof bir.screen_form_queue_check };
   const queue = fake.queue_form_draft;
   const check = fake.screen_form_queue_check;
   fake.queue_form_draft = () => { throw new Error(message); };
