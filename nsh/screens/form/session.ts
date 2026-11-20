@@ -2245,6 +2245,19 @@ export class FormSession {
     return out;
   }
 
+  /**
+   * Whether the row prints this box's sentence on a line of its own, at the row's width, instead of the box under itself: date
+   * parts, a TIN's segments and the pick kinds (their controls have no message line), a whole-date box (its control is cut to
+   * the box's height), and a box alone in its row (nothing sits beside it, so its sentence need not wrap at the box's width).
+   * Boxes side by side keep their sentences under themselves.
+   */
+  private rowPrints(k: string): boolean {
+    const id = this.keyIndex.get(k);
+    const it = id ? this.items.get(id) : undefined;
+    if (["sel", "chk", "radio", "date"].includes(this.kindOf.get(k) ?? "") || this.datePartKeys.has(k)) return true;
+    return Boolean(it && !it.rows && (isTinItem(it) || (it.f || []).length === 1));
+  }
+
   /** A box's sentence as it shows: its row's after it was touched, every one after Check (a refusal touches its row as it lands). */
   private shownBoxMsg(k: string): string {
     const s = this.st;
@@ -3012,11 +3025,8 @@ export class FormSession {
       // edit's row is touched when the refusal lands, so its sentence still shows at once).
       const boxMsg = this.shownBoxMsg(k);
       this.sInvalid.get(k).set(shownMsgKeys.has(k) || Boolean(boxMsg));
-      // Grouped boxes (date parts, TIN segments, picks) draw their sentences above the row line.
-      const kid = this.keyIndex.get(k);
-      const kit = kid ? this.items.get(kid) : undefined;
-      const grouped = ["sel", "chk", "radio"].includes(kind ?? "") || this.datePartKeys.has(k) || Boolean(kit && isTinItem(kit));
-      this.sBoxMsg.get(k).set(grouped ? "" : boxMsg);
+      // A box whose sentence the row prints draws none of its own.
+      this.sBoxMsg.get(k).set(this.rowPrints(k) ? "" : boxMsg);
     }
     for (const [k, { date, row }] of this.oneDates) {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
@@ -3062,12 +3072,8 @@ export class FormSession {
       if (pesos) from = `${it.from.l}: ₱${formatMoney(String(pesos.amount), true)}${pesos.rounded ? " (rounded to whole pesos)" : ""}`;
     }
     const date = it.f ? dateParts(it.f) : null;
-    // Side-by-side date parts, a TIN's segments and the pick kinds (their controls have no
-    // message line of their own) show their sentences as lines above the row's message.
-    const groupKeys = new Set<string>([
-      ...(date ? [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[] : []),
-      ...keys.filter((k) => ["sel", "chk", "radio"].includes(this.kindOf.get(k) ?? "") || isTinItem(it)),
-    ]);
+    // The boxes whose sentences the row prints as lines above its own message (rowPrints).
+    const groupKeys = new Set<string>(keys.filter((k) => this.rowPrints(k)));
     // A split date's parts are one date: its sentence shows once, on the month box. Box sentences show
     // under the same rule as the row's own: after the row was left, or after Check.
     const msgOpen = s.showAll || s.touched.has(id);

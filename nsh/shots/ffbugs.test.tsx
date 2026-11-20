@@ -101,6 +101,11 @@ test("lob: after Check, Item 12 Line of Business and its card", async () => {
     // draws the profile card in the row (no pressable box): open the part,
     // the card is the evidence.
     await app.press("id:fp-part-1-toggle");
+    // A real window's press scrolls the part into view; headless the page stays where it was.
+    for (let step = 0; step < 12 && !app.shows("text:/not in the tax profile/"); step++) {
+      await app.scroll("id:form-scroll", 250);
+      await app.wait(250);
+    }
     await app.waitFor("text:/not in the tax profile/", { timeout: 15_000 });
     await app.wait(500);
     await shoot(app, `lob-${look.name}`);
