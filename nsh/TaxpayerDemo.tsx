@@ -54,7 +54,8 @@ function Demo() {
     const calls = signal(0);
     if (p.exportDownload) {
       const download = p.exportDownload;
-      bir.export_profile = async () => {
+      const fake = bir as unknown as { export_profile: typeof bir.export_profile };
+      fake.export_profile = async () => {
         calls.set(calls() + 1);
         if (download.error) throw new Error(download.error);
         if (download.cancelled) return { kind: "cancelled" };
