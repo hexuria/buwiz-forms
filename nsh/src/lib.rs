@@ -165,14 +165,15 @@ impl Door {
         #[cfg(target_os = "android")]
         {
             if !crate::dev_env::ENABLED {
-                return Ok(None);
+                Ok(None)
+            } else {
+                door::prepare_android(_system.data_dir)?;
+                crate::dev_command::consume(
+                    &bir_core::platform::data_dir(),
+                    dev_command_enabled(),
+                )
+                .map(|command| command.map(str::to_owned))
             }
-            door::prepare_android(_system.data_dir)?;
-            return crate::dev_command::consume(
-                &bir_core::platform::data_dir(),
-                dev_command_enabled(),
-            )
-            .map(|command| command.map(str::to_owned));
         }
         #[cfg(not(target_os = "android"))]
         Ok(None)
