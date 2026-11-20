@@ -115,6 +115,31 @@ test("items to fix and the tier warning: Queue says what Check says, shows every
   }
 });
 
+test("a second Queue takes the refusal toast down before its question opens: the toast's Show item must not float over the dialog", async () => {
+  const { said, h } = hooks();
+  const dismissed: string[] = [];
+  h.dismissToast = (id) => dismissed.push(id);
+  const s = await opened(at("1604C", 2022, 0), h, said);
+  const spy = spyQueue();
+  try {
+    s.queue();
+    await until(() => said.toasts.length === 1, "the refusal");
+    expect(dismissed).toEqual([]);
+    s.queue();
+    await until(() => s.overlay()?.kind === "queue-confirm", "the question");
+    expect(dismissed).toEqual(["t1"]);
+    s.confirmQueue();
+    await until(() => said.toasts.length === 2, "the host's refusal");
+    // The host's refusal is the toast now; the next refusal replaces it.
+    s.queue();
+    await until(() => said.toasts.length === 3, "the third toast");
+    expect(dismissed).toEqual(["t1", "t2"]);
+  } finally {
+    spy.restore();
+    s.dispose();
+  }
+});
+
 test("a second Queue with the same list goes to the host, which decides: the page's reading never keeps a return from being queued", async () => {
   const { said, h } = hooks();
   const s = await opened(at("1604C", 2022, 0), h, said);

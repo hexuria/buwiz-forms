@@ -2326,7 +2326,7 @@ export class FormSession {
       s.showAll = true;
       this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
       this.publish();
-      return this.toast(check.blocks[0].message, "triangle-alert", this.refusalAction(check.blocks));
+      return this.refuse(check.blocks[0].message, this.refusalAction(check.blocks));
     }
     const warns = check?.warns ?? [];
     if (!this.looksFirst()) return this.askQueue(warns);
@@ -2340,7 +2340,7 @@ export class FormSession {
       const listed = n > 0 ? this.refusalList() : "";
       if (listed && listed !== this.toldRefusal) {
         this.toldRefusal = listed;
-        return void this.toast(attentionText(n), "triangle-alert", this.refusalAction(s.errors));
+        return void this.refuse(attentionText(n), this.refusalAction(s.errors));
       }
       this.toldRefusal = "";
       this.askQueue(warns);
@@ -2349,6 +2349,26 @@ export class FormSession {
 
   /** The list a Queue was last told of instead of being asked ("" when none): the same list again goes to the host. */
   private toldRefusal = "";
+
+  /** The refusal toast still up (its Show item / Open tax profile), if any. */
+  private refusalToast: string | null = null;
+
+  /** A Queue refusal: its toast replaces the last one, whose action would point at the old list. */
+  private refuse(message: string, action: ToastAction | undefined): string | null {
+    this.retireRefusal();
+    this.refusalToast = this.toast(message, "triangle-alert", action);
+    return this.refusalToast;
+  }
+
+  /**
+   * Queue goes on (the question or the host): the refusal toast goes. Left up, it would float over the question's dialog,
+   * whose scrim takes a press on its Show item and closes the dialog instead (seen on iOS).
+   */
+  private retireRefusal() {
+    const id = this.refusalToast;
+    this.refusalToast = null;
+    if (id) this.hooks.dismissToast?.(id);
+  }
 
   /**
    * Whether Queue looks before it asks. 2551Q's Queue does not judge the draft the page holds: it reads the stored return again and reconciles
@@ -2376,6 +2396,7 @@ export class FormSession {
   /** Nothing left to fix: the tier warning is asked once, else the return is queued. */
   private askQueue(warns: string[]) {
     const s = this.st;
+    this.retireRefusal();
     if (warns.length) {
       s.queueWarn = { warns };
       s.overlay = { kind: "queue-confirm", warns };
@@ -2430,7 +2451,7 @@ export class FormSession {
       const fields = new Set(mapped.map((error) => error.field));
       this.setErrors([...s.errors.filter((old) => !fields.has(old.field) && !s.factErrors.includes(old)), ...mapped]);
       this.publish();
-      this.toast(alreadyShown ? attentionText(count) : message, "triangle-alert", this.refusalAction(errors));
+      this.refuse(alreadyShown ? attentionText(count) : message, this.refusalAction(errors));
     }
   }
 
