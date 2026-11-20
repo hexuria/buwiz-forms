@@ -601,9 +601,11 @@ export function ItemRow(props: RowProps) {
             </View>
           )}
         </Each>
-        <View ref={(ref: ViewRef) => { if (messageRefs.size) rowMessageRef.set(ref); }} class={info().message || !info().boxSaid ? "mt-1 min-h-4.5" : "mt-1"}>
-          <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
-        </View>
+        <If when={info().message}>
+          <View ref={(ref: ViewRef) => { if (messageRefs.size) rowMessageRef.set(ref); }} class="mt-1">
+            <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
+          </View>
+        </If>
         <Each of={info().asks} key={(a: AskCard) => a.fact}>
           {(ask) => <FactCard s={s} ask={ask} narrow={props.narrow} />}
         </Each>

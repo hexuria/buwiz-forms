@@ -16,7 +16,8 @@ for (const width of WIDTHS) {
     await app.wait(800);
     await shoot(app, `rows-open-${width}`);
     await app.press("id:fp-check");
-    await app.waitFor("id:fp-msg-0:3", { timeout: 30_000 });
+    // The page checked once Item 4's sentence is on its row (the fp-msg view mounts only with a message now).
+    await app.waitFor("text:Item 4 needs a due date.", { timeout: 30_000 });
     await app.waitFor("text:/items? need attention/", { state: "gone", timeout: 15_000 });
     await app.wait(500);
     await shoot(app, `rows-checked-${width}`);

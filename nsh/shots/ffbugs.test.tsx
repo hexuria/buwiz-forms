@@ -90,7 +90,8 @@ test("calendar-pick: Item 4's calendar opens, a day is picked, settled", async (
 test("check-dates: Check pressed, items 4-8 and their messages", async () => {
   await eachLook(async (app, look) => {
     await app.press("id:fp-check");
-    await app.waitFor("id:fp-msg-0:3", { timeout: 30_000 });
+    // The page checked once Item 4's sentence is on its row (the fp-msg view mounts only with a message now).
+    await app.waitFor("text:Item 4 needs a due date.", { timeout: 30_000 });
     await app.wait(800);
     await shoot(app, `check-dates-${look.name}`);
     // The toast gone and the page scrolled: items 4 to 8 with each box's own sentence.
@@ -104,7 +105,7 @@ test("check-dates: Check pressed, items 4-8 and their messages", async () => {
 test("lob: after Check, Item 12 Line of Business and its card", async () => {
   await eachLook(async (app, look) => {
     await app.press("id:fp-check");
-    await app.waitFor("id:fp-msg-0:3", { timeout: 30_000 });
+    await app.waitFor("text:Item 4 needs a due date.", { timeout: 30_000 });
     // Item 12 sits in folded Part I, and its unset profile line of business
     // draws the profile card in the row (no pressable box): open the part,
     // the card is the evidence. Wide layouts reach it through the "On this
