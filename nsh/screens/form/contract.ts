@@ -129,6 +129,8 @@ export interface ChoiceOption {
   value: string;
   label: string;
   selected?: boolean;
+  /** The choice takes no pick (a locked box); it still shows, dimmed and unpressable. */
+  disabled?: boolean;
 }
 
 /** One box's live state. Every accessor is its own signal: reading one subscribes to that box only. */
@@ -204,6 +206,12 @@ export interface RadioGroupProps {
   hint: Accessor<string>;
   off: Accessor<string>;
   narrow: Accessor<boolean>;
+  /** The width the group may use, in points, for the one-line fit of a segmented bar (a stacked bar when the labels
+   *  cannot hold it). Unset: the control guesses from `narrow`. */
+  room?: Accessor<number>;
+  /** The group may be cleared back to unanswered (optional and the session unticks it): a segmented bar of three or
+   *  more shows a Clear, a dropdown a "None" entry, a search list its clear row. */
+  clearable?: Accessor<boolean>;
   /** A pick. The session applies the group rules (untick in groups of 3+, pairs keep one answer, grp siblings). */
   onPick(key: string): void;
   focusRef?(focus: () => void): void;

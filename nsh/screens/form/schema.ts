@@ -313,3 +313,19 @@ export function emptyCell(value: string, type: string): boolean {
   if (type === "chk" || type === "radio") return !(v === "true" || v === "1" || v === "Y");
   return false;
 }
+
+/** An item's radios as the host's one-answer groups: the same `grp` together, in the order they first appear; radios the
+ *  host left ungrouped form the item's own group (the period's Quarter picks, a lone choice). */
+export function radioGroups(radios: SchemaField[]): SchemaField[][] {
+  const order: string[] = [];
+  const byKey = new Map<string, SchemaField[]>();
+  for (const f of radios) {
+    const key = f.grp || "";
+    if (!byKey.has(key)) {
+      byKey.set(key, []);
+      order.push(key);
+    }
+    (byKey.get(key) as SchemaField[]).push(f);
+  }
+  return order.map((key) => byKey.get(key) as SchemaField[]);
+}

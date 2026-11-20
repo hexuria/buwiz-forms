@@ -1,10 +1,9 @@
 // Choice controls: Switch, Checkbox, CheckboxLabel, RadioGroup, Segmented, Dropdown (a select), ComboField
 // (type-to-filter single choice for long lists: RDO, ZIP), MultiCombo (a multi-select filter in a popover).
-import type { JSX, ViewRef } from "nsh";
+import type { Accessor, JSX, ViewRef } from "nsh";
 import { Scroll, signal, View } from "nsh";
 import {
   Checkbox as BaseCheckbox, Combobox, Radio, RadioGroup as BaseRadioGroup, Select, type SelectEntry, Switch as BaseSwitch,
-  Toggle, ToggleGroup,
 } from "nsh/base";
 import { AppButton } from "./buttons";
 import { TextField } from "./fields";
@@ -197,6 +196,10 @@ export interface SegmentOption {
   value: string;
   label: string;
   icon?: IconName;
+  /** The segment's own testID (a form radio's "fp-<key>"). */
+  testID?: string;
+  /** A segment that takes no pick (one choice of the group locked); a value or an accessor of it. */
+  disabled?: boolean | Accessor<boolean>;
 }
 
 /** Props of Segmented. */
@@ -204,40 +207,64 @@ export interface SegmentedProps {
   options: SegmentOption[];
   value: string;
   onChange: (value: string) => void;
-  /** What the choice is about, for screen readers. */
+  /** What the choice is about: the set's name for screen readers. */
   label: string;
   /** A long row (twelve months) wraps in a narrow window. */
   wrap?: boolean;
+  /** Full-width segments in a column: the labels cannot hold one line (long labels, a narrow room). */
+  stacked?: boolean;
   testID?: string;
+  /** Receives a focus function for the group's keyboard entry (the checked segment, else the first free one). */
+  focusRef?: (focus: () => void) => void;
 }
 
-/** A segmented choice: a 2-point track on the hover fill, 24-point segments, the chosen one raised. */
+/**
+ * A segmented choice: a 2-point track on the hover fill, 24-point segments, the chosen one raised. It is a one-of set,
+ * so it is nsh/base's RadioGroup of Radios (role radiogroup named by `label`, each segment a radio with its checked
+ * state; the arrow keys move through the set and check as they go, Space checks the focused one) — not a ToggleGroup,
+ * whose toolbar pattern only moves focus and presses on Space/Return. A checked segment reports nothing (a radio cannot
+ * uncheck itself): picking another segment is the only pick, as a radio group's is.
+ */
 export function Segmented(props: SegmentedProps) {
+  const refs = new Map<string, ViewRef>();
+  const off = (d: SegmentOption["disabled"]) => (typeof d === "function" ? d() : !!d);
+  props.focusRef?.(() => {
+    const on = props.options.find((o) => o.value === props.value && !off(o.disabled)) ?? props.options.find((o) => !off(o.disabled));
+    if (on) refs.get(on.value)?.focus();
+  });
   return (
-    <ToggleGroup
+    <BaseRadioGroup
       testID={props.testID}
-      class={cx("shrink-0 flex-row gap-0.5 self-start rounded-(--radius-row) bg-hover p-0.5", props.wrap && "flex-wrap")}
+      accessibilityLabel={props.label}
+      class={cx(
+        "gap-0.5 self-start rounded-(--radius-row) bg-hover p-0.5",
+        props.stacked ? "w-full flex-col" : cx("shrink-0 flex-row", props.wrap && "flex-wrap"),
+      )}
     >
       <Each of={props.options} key={(o) => o.value}>
         {(o) => (
-          <Toggle
-            pressed={o().value === props.value}
+          <Radio
+            ref={(r: ViewRef) => refs.set(o().value, r)}
+            testID={o().testID}
+            checked={o().value === props.value}
+            disabled={off(o().disabled)}
             accessibilityLabel={o().label}
             hitSlop={TOUCH ? { top: 10, bottom: 10 } : 0}
             onChange={() => props.onChange(o().value)}
             class={cx(
-              "group h-6 flex-row items-center gap-1.5 rounded-(--radius-ctl) px-2.5 aria-pressed:bg-raised aria-pressed:shadow-xs",
+              "group flex-row items-center gap-1.5 rounded-(--radius-ctl) px-2.5 checked:bg-raised checked:shadow-xs disabled:opacity-50",
+              props.stacked ? (TOUCH ? "min-h-11 w-full" : "h-8 w-full") : "h-6",
               FOCUS_RING,
             )}
           >
             <If when={o().icon}>
-              <Icon name={o().icon as IconName} size={14} class="group-aria-pressed:tint-foreground" />
+              <Icon name={o().icon as IconName} size={14} class="group-checked:tint-foreground" />
             </If>
-            <Text variant="metaStrong" tone="fg2" class="group-hover:text-foreground group-aria-pressed:text-foreground">{o().label}</Text>
-          </Toggle>
+            <Text variant="metaStrong" tone="fg2" class="group-hover:text-foreground group-checked:text-foreground">{o().label}</Text>
+          </Radio>
         )}
       </Each>
-    </ToggleGroup>
+    </BaseRadioGroup>
   );
 }
 

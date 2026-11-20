@@ -146,6 +146,24 @@ function ChoiceSection(props: { log: Reports }) {
   const regime = mockRadios(props.log, "regime", ["Graduated income tax rate", "8% flat rate", "Mixed income"]);
   const pair = mockRadios(props.log, "amended", ["Yes", "No"], { selected: "amended2" });
   const shut = mockRadios(props.log, "taxType", ["Individual", "Corporation"], { locked: true, hint: "Set by the taxpayer type" });
+  // Five to twelve choices draw as a dropdown, more as a search list, and a bar whose labels cannot hold one line stacks.
+  const payment = mockRadios(props.log, "payment", [
+    "Self-Assessment",
+    "Penalties",
+    "Tax Deposit/Advance Payment",
+    "Income Tax Second Installment",
+    "Preliminary/Final Assessment/Deficiency Tax",
+    "Accounts Receivable/Delinquent Account",
+    "Others (Specify)",
+  ]);
+  const codes = mockRadios(props.log, "codes", Array.from({ length: 13 }, (_, i) => `Code ${i + 1} — a longer descriptive label`));
+  const longrate = mockRadios(props.log, "longrate", [
+    "Graduated Rates per Tax Table",
+    "8% on gross sales/receipts and other non-operating income",
+    "Special/Preferential Rate under a special law or international tax treaty",
+  ]);
+  const taxpayer = mockRadios(props.log, "taxpayer", ["Itemized Deduction", "Optional Standard Deduction (OSD)"]);
+  const spouse = mockRadios(props.log, "spouse", ["Itemized Deduction", "Optional Standard Deduction (OSD)"]);
   return (
     <Section title="Choices" testID="controls-choices">
       <Row log={props.log} field={month.field} hint="A few choices"><FieldControl {...month} /></Row>
@@ -156,7 +174,7 @@ function ChoiceSection(props: { log: Reports }) {
       <Row log={props.log} field={waits.field} hint="Locked and blank"><FieldControl {...waits} /></Row>
       <Row log={props.log} field={chk.field} title="Declaration"><FieldControl {...chk} /></Row>
       <Row log={props.log} field={lockedChk.field} title="Return type" hint="Locked, with its reason"><FieldControl {...lockedChk} /></Row>
-      <FieldRow label="Income tax rate" hint="A group of three: press the ticked one to clear it" narrow={narrowNow}>
+      <FieldRow label="Income tax rate" hint="A group of three: Clear returns it to unanswered" narrow={narrowNow}>
         <RadioGroupControl {...regime} focusRef={(focus) => (focusRegime = focus)} />
         <AppButton testID="gallery-focus-regime" size="sm" label="Focus the rate group" onPress={() => focusRegime?.()} />
         <Text variant="cap" tone="fg3" class="mt-1">{`edit regime: ${picked(props.log, "regime")}`}</Text>
@@ -168,6 +186,31 @@ function ChoiceSection(props: { log: Reports }) {
       <FieldRow label="Taxpayer type" hint="Locked group" narrow={narrowNow}>
         <RadioGroupControl {...shut} />
         <Text variant="cap" tone="fg3" class="mt-1">{`edit taxType: ${picked(props.log, "taxType")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Manner of payment" hint="Seven choices: a dropdown, None clears it" narrow={narrowNow}>
+        <RadioGroupControl {...payment} />
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit payment: ${picked(props.log, "payment")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Tax codes" hint="Thirteen choices: a search list" narrow={narrowNow}>
+        <RadioGroupControl {...codes} />
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit codes: ${picked(props.log, "codes")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Tax rate" hint="Long labels stack one under another" narrow={narrowNow}>
+        <RadioGroupControl {...longrate} />
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit longrate: ${picked(props.log, "longrate")}`}</Text>
+      </FieldRow>
+      <FieldRow label="Method of deduction" hint="Two one-answer groups in one item" narrow={narrowNow}>
+        <View class="flex-row flex-wrap gap-x-6 gap-y-3">
+          <View class="gap-1">
+            <Text variant="meta" tone="fg2">Taxpayer</Text>
+            <RadioGroupControl {...taxpayer} />
+          </View>
+          <View class="gap-1">
+            <Text variant="meta" tone="fg2">Spouse</Text>
+            <RadioGroupControl {...spouse} />
+          </View>
+        </View>
+        <Text variant="cap" tone="fg3" class="mt-1">{`edit taxpayer: ${picked(props.log, "taxpayer")} | spouse: ${picked(props.log, "spouse")}`}</Text>
       </FieldRow>
     </Section>
   );

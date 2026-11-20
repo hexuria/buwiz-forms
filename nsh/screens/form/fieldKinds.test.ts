@@ -524,3 +524,74 @@ test("PR3: Calendar over a saved Fiscal month asks before clearing it, then hold
   expect(again.shownOf(EX_PERIOD)).toBe("12/2024");
   again.dispose();
 });
+
+// PR 5: the one-answer groups now draw as a segmented bar, a dropdown or a search list by size, but the draft keys and
+// the untick rules are the session's own, unchanged.
+test("PR5: 0605 Item 1 Calendar/Fiscal is a pair — one answer, picking the other moves it", async () => {
+  const s = await opened(at("0605", 2024, 1));
+  const cal = "frm0605:itemFiscalStartMonth:_1";
+  const fis = "frm0605:itemFiscalStartMonth:_2";
+  s.pickRadio(cal);
+  await s.idle();
+  if (s.overlay()?.kind === "removal") s.confirmRemoval();
+  await s.idle();
+  expect(s.valueOf(cal)).toBe("true");
+  expect(s.valueOf(fis)).not.toBe("true");
+  // A pair keeps one answer: re-picking the ticked one reports but changes nothing.
+  s.pickRadio(cal);
+  await s.idle();
+  expect(s.valueOf(cal)).toBe("true");
+  s.pickRadio(fis);
+  await s.idle();
+  if (s.overlay()?.kind === "removal") s.confirmRemoval();
+  await s.idle();
+  expect(s.valueOf(fis)).toBe("true");
+  expect(s.valueOf(cal)).toBe("false");
+  s.dispose();
+});
+
+test("PR5: 0605 Item 3 Quarter picks one of four and moves the answer", async () => {
+  const s = await opened(at("0605", 2024, 1));
+  const q = ["itemQuarter_1", "itemQuarter_2", "itemQuarter_3", "itemQuarter_4"];
+  s.pickRadio(q[1]);
+  await s.idle();
+  if (s.overlay()?.kind === "removal") s.confirmRemoval();
+  await s.idle();
+  expect(s.valueOf(q[1])).toBe("true");
+  s.pickRadio(q[2]);
+  await s.idle();
+  if (s.overlay()?.kind === "removal") s.confirmRemoval();
+  await s.idle();
+  expect(s.valueOf(q[2])).toBe("true");
+  expect(s.valueOf(q[1])).not.toBe("true");
+  s.dispose();
+});
+
+test("PR5: 0605 Item 17 Manner of Payment unticks on a re-pick and survives a save and reopen", async () => {
+  const target = at("0605", 2024, 1);
+  const s = await opened(target);
+  const mop = (n: number) => `frm0605:itemMannerOfPayment:_${n}`;
+  const others = "frm0605:itemMannerOfPaymentB:_1";
+  // A group of seven: picking one unticks the last, a re-pick of the ticked one clears it (rg >= 3).
+  s.pickRadio(mop(1));
+  await s.idle();
+  expect(s.valueOf(mop(1))).toBe("true");
+  s.pickRadio(mop(5));
+  await s.idle();
+  expect(s.valueOf(mop(5))).toBe("true");
+  expect(s.valueOf(mop(1))).toBe("false");
+  s.pickRadio(mop(5));
+  await s.idle();
+  expect(s.valueOf(mop(5))).toBe("false");
+  // The Others choice and its specify box are the same draft keys as before.
+  s.pickRadio(others);
+  await s.idle();
+  expect(s.valueOf(others)).toBe("true");
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  const again = await opened(target);
+  expect(again.valueOf(others)).toBe("true");
+  expect(again.valueOf(mop(5))).toBe("false");
+  again.dispose();
+});

@@ -638,6 +638,11 @@ export class FormSession {
     return () => sigs.find(([, s]) => s() === "true")?.[0] ?? null;
   }
 
+  /** Whether the box is one of the return period's own parts: a pick there sets the period, never an untick. */
+  isPeriodBox(k: string): boolean {
+    return this.st.periodParts.has(k);
+  }
+
   row(id: string): Accessor<RowInfo> {
     const s = this.sRow.get(id);
     return () => s();

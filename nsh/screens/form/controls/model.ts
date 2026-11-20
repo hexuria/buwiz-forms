@@ -45,6 +45,11 @@ export function selectModel(listed: ChoiceOption[], value: string): { options: C
 /** A list long enough to want a search box. */
 export const SEARCH_FROM = 12;
 
+/** How a one-answer group of `count` choices draws: a segmented bar (2–4), a dropdown (5–12), a search list (more). */
+export function radioKind(count: number): "segmented" | "dropdown" | "search" {
+  return count <= 4 ? "segmented" : count <= SEARCH_FROM ? "dropdown" : "search";
+}
+
 /** A tick box reads as ticked. */
 export const isOn = (value: string): boolean => value === "true" || value === "1" || value === "Y";
 

@@ -6,7 +6,7 @@ import { signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, type OneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, type OneDate } from "./schema";
 import { PeriodField, RangeField } from "./periodField";
 import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
 import { dateRange, periodDay, splitDay } from "./dateRules";
@@ -40,10 +40,15 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
   };
 }
 
-/** The props of an item's radio group (exported for tests). */
-export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>): RadioGroupProps {
+/** The props of one radio group — `radios` is one host one-answer group of the item (see radioGroups), `id` its row id
+ *  (exported for tests). `room` is the row's width in points, for the segmented bar's one-line fit. */
+export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>, room?: Accessor<number>): RadioGroupProps {
   const keys = radios.map((f) => f.k);
   const boxes = keys.map((k) => s.box(k));
+  // The way back to unanswered is the session's untick: a re-pick clears a group of three or more (rg >= 3) that is not the
+  // period's own part. Only an optional group (no member required) shows it.
+  const untickable = radios.some((f) => (f.rg || 0) >= 3) && !radios.some((f) => s.isPeriodBox(f.k));
+  const optional = !radios.some((f) => f.r);
   return {
     label: it.l,
     testID: `fp-radio-${id}`,
@@ -55,9 +60,21 @@ export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: S
     hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
     off: () => boxes.map((b) => b.off()).find(Boolean) || "",
     narrow,
+    room,
+    clearable: () => untickable && optional,
     onPick: (k) => s.pickRadio(k),
     focusRef: (focus) => s.registerFocus(`radio:${id}`, focus),
   };
+}
+
+/** A group's caption when an item draws several one-answer groups: the short marker its choices share ("A.", "B."), else
+ *  none — the choice labels carry it already. */
+function groupCaption(fields: SchemaField[]): string {
+  const labels = fields.map((f) => choiceLabel(f));
+  const dot = (labels[0] ?? "").indexOf(".");
+  if (dot < 0) return "";
+  const prefix = (labels[0] as string).slice(0, dot + 1).trim();
+  return prefix.length > 0 && prefix.length <= 4 && labels.every((l) => l.startsWith(prefix)) ? prefix : "";
 }
 
 function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Accessor<boolean>): ScheduleProps {
@@ -212,7 +229,17 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   }
   const radios = fs.filter((f) => f.t === "radio");
   const boxes = fs.filter((f) => f.t !== "radio");
+  const groups = radioGroups(radios);
   const multi = fs.length > 1;
+  // The row's width in points, for a segmented bar's one-line fit (a stacked bar when its labels cannot hold it).
+  const rowW = signal(0);
+  // An "Others (Specify)" box — the item's one plain box beside an Others choice — sits full width under the group.
+  const othersPick = radios.some((f) => /others|specify/i.test(choiceLabel(f)));
+  const standalone = boxes.filter(
+    (f) => !grouped.has(f.k) && !dates.some((d) => [d.month.k, d.day?.k, d.year.k].includes(f.k)) && f.t !== "chk" && f.t !== "date",
+  );
+  const depBox = othersPick && standalone.length === 1 && (standalone[0].t === "text" || standalone[0].t === "int") ? standalone[0] : null;
+  const depSub = multi && depBox !== null && depBox.l && depBox.l !== it.l && !/^\d+[A-Z]?$/.test(depBox.l);
   // A date printed in split boxes (Year Ended MM and YYYY) gets a calendar button beside them, as the old page: a day picked
   // fills the parts that are open. Not when the item has a date box of its own (that box carries its calendar).
   const split = dates.length || periods.length || ranges.length || fs.some((f) => f.t === "date") ? null : dateParts(fs);
@@ -223,8 +250,25 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   // What the calendar may offer: nothing outside the year (and month) that is locked.
   const splitRange = () => (split ? dateRange(s, split) : {});
   const body = (
-    <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3">
-      {radios.length ? <RadioGroupControl {...radioProps(s, props.id, it, radios, props.narrow)} /> : null}
+    <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3" onLayout={(e) => rowW.set(e.bounds.size.width)}>
+      {groups.map((g, i) => {
+        // The first group keeps the item's own ids ("fp-radio-<id>", "radio:<id>"); further groups of a multi-group item
+        // take a "-g<i>" suffix, with a caption when their choices share a marker ("A.", "B.").
+        const gid = groups.length > 1 && i > 0 ? `${props.id}-g${i}` : props.id;
+        const cap = groups.length > 1 ? groupCaption(g) : "";
+        return (
+          <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
+            {cap ? <Text variant="meta" tone="fg2">{cap}</Text> : null}
+            <RadioGroupControl {...radioProps(s, gid, it, g, props.narrow, () => rowW())} />
+          </View>
+        );
+      })}
+      {depBox ? (
+        <View class="min-w-0 gap-1" style={{ width: "100%" }}>
+          {depSub ? <Text variant="meta" tone="fg2">{depBox.l}</Text> : null}
+          <FieldControl {...fieldProps(s, depBox, props.narrow, depBox.l, depBox.t === "text" ? 480 : controlWidth(depBox, 480))} />
+        </View>
+      ) : null}
       {periods.map((p) => {
         const message = props.info().boxMessages.find((entry) => entry.key === p.month.k || entry.key === p.year.k)?.sentence || "";
         return (
@@ -239,6 +283,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         </View>
       ))}
       {boxes.map((f) => {
+        if (depBox !== null && f.k === depBox.k) return null;
         if (grouped.has(f.k)) return null;
         const date = dates.find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(f.k));
         if (date && date.month.k !== f.k) return null;

@@ -91,8 +91,8 @@ export function mockField(log: Reports, f: SchemaField, init: BoxInit = {}, over
   };
 }
 
-/** A radio group of the given choices, one ticked at most; a pick reports and ticks (a pair keeps one answer, a group of three or more unticks). */
-export function mockRadios(log: Reports, name: string, labels: string[], init: { selected?: string | null; locked?: boolean; hint?: string } = {}): RadioGroupProps & { selectedSignal: Signal<string | null> } {
+/** A radio group of the given choices, one ticked at most; a pick reports and ticks (a pair keeps one answer, a group of three or more unticks). `required` and `room` stand in for the page's optionality and row width. */
+export function mockRadios(log: Reports, name: string, labels: string[], init: { selected?: string | null; locked?: boolean; hint?: string; required?: boolean; room?: number } = {}): RadioGroupProps & { selectedSignal: Signal<string | null> } {
   const keys = labels.map((_l, i) => `${name}${i + 1}`);
   const selected = signal<string | null>(init.selected ?? null);
   const locked = signal(init.locked ?? false);
@@ -107,6 +107,8 @@ export function mockRadios(log: Reports, name: string, labels: string[], init: {
     hint: () => (locked() && selected() === null ? init.hint ?? "" : ""),
     off: () => "",
     narrow: narrowNow,
+    room: init.room === undefined ? undefined : () => init.room ?? 0,
+    clearable: () => keys.length >= 3 && !init.required && !locked(),
     onPick: (key) => {
       log.edit(key, selected() === key && keys.length >= 3 ? "false" : "true");
       selected.set(selected() === key && keys.length >= 3 ? null : key);

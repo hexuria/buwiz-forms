@@ -228,22 +228,20 @@ for (const size of SIZES) {
     expect(edit(app, "lockedChk")).toBe("");
   });
 
-  test(`${size.name}: a radio group picks, a group of three unticks, a locked group takes nothing`, async () => {
+  test(`${size.name}: a radio group picks, a group of three clears, a locked group takes nothing`, async () => {
     const app = await gallery(size.options);
+    // A group of three is a segmented bar: a segment picks, Clear returns it to unanswered.
     await app.press("id:fp-regime2");
     expect(edit(app, "regime")).toBe("regime2=true");
-    // Pressing the ticked one again is reported as a pick of that key: the session decides (a group of three unticks).
-    await app.press("id:fp-regime2");
+    await app.press("id:fp-radio-regime-clear");
     expect(edit(app, "regime")).toBe("regime2=false");
     await app.press("id:fp-regime1");
     expect(edit(app, "regime")).toBe("regime2=false regime1=true");
-    // A pair keeps its answer: pressing "No" again reports a pick, never an untick.
-    await app.press("id:fp-amended2");
-    expect(edit(app, "amended")).toBe("amended2=true");
-    // Pressing "Yes" on the pair reports that pick.
+    // A pair keeps its answer: no Clear, and a checked segment takes no second press.
     await app.press("id:fp-amended1");
-    expect(edit(app, "amended")).toBe("amended2=true amended1=true");
-    // A locked group: disabled boxes and the reason it is shut.
+    expect(edit(app, "amended")).toBe("amended1=true");
+    expect(app.shows("id:fp-radio-amended-clear")).toBe(false);
+    // A locked group: disabled segments and the reason it is shut.
     expect(app.enabled("id:fp-taxType1")).toBe(false);
     expect(app.texts()).toContain("Set by the taxpayer type");
   });
