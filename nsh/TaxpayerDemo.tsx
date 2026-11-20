@@ -7,14 +7,14 @@
 //   pin     the demo taxpayer has the profile PIN 1234    start  the dev route ("view=profile")
 //   card    "export": only the Export this profile card and a toaster (Settings draws it)
 // It sits at the nsh root because a real-window run serves assets (fonts, icons) from the entry's folder down.
-import { host, mount, View } from "nsh";
+import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer } from "./bir/testing";
 import { ProfileExportCard } from "./screens/taxpayer";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
-import { Toaster } from "./ui";
+import { Text, Toaster } from "./ui";
 
 interface Params {
   demo?: boolean;
@@ -26,6 +26,7 @@ interface Params {
   pin?: boolean;
   start?: string;
   card?: "export";
+  exportDownload?: { name?: string; error?: string; cancelled?: boolean };
 }
 
 function seed(p: Params) {
@@ -50,11 +51,24 @@ function Demo() {
   const p = host.params as Params;
   if (p.demo !== false) seed(p);
   if (p.card === "export") {
+    const calls = signal(0);
+    if (p.exportDownload) {
+      const download = p.exportDownload;
+      bir.export_profile = async () => {
+        calls.set(calls() + 1);
+        if (download.error) throw new Error(download.error);
+        if (download.cancelled) return { kind: "cancelled" };
+        return { kind: "exported", path: `Downloads/eBIRForms/${download.name}` };
+      };
+    }
     // No Shell, so no boot: what was read before the seed is read again.
     store.bump();
     return (
       <View class="flex-1 bg-background p-6">
         <ProfileExportCard />
+        <If when={p.exportDownload !== undefined}>
+          <Text testID="export-calls">{`Export requests: ${calls()}`}</Text>
+        </If>
         <Toaster />
       </View>
     );

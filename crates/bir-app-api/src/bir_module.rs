@@ -2453,6 +2453,19 @@ fn export_profile(
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0);
     let file_name = format!("BIR_Profile_{}_{}.zip", tin, timestamp);
+    if let Some(download) = crate::hooks::hooks().export_profile_download(&file_name, &mut |path| {
+        export_profile_to(&tin, pin.as_deref(), path)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }) {
+        return Ok(Box::pin(async move {
+            let path = download.await.map_err(HostError::new)?;
+            Ok(HostObject::new()
+                .field("kind", "exported")
+                .field("path", path)
+                .into())
+        }));
+    }
     let directory = std::env::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
     after_path_prompt(
         move |answer| crate::hooks::hooks().prompt_for_save_path(&directory, &file_name, answer),

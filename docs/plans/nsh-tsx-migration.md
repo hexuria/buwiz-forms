@@ -149,6 +149,36 @@ from this watch. `shell/queuedWatch.test.ts` verifies the pacing and a late work
 submission with no ordinary events poll; this is cache/timer verification, not a
 device or relay transport test.
 
+## Android profile export
+
+`export_profile` keeps its PIN/rate-limit gate and existing Settings/taxpayer card.
+Android's `NshHooks::export_profile_download` writes the authorized ZIP synchronously
+on the database-owning engine thread, through `export_profile_to` →
+`export_profile_data` → `write_profile_zip`. It never opens the unsupported save
+panel. Other platforms retain that panel unchanged.
+
+Staging is a unique 0700 directory beneath `bir_core::platform::temp_dir()` (Android:
+the injected app-private data directory's `tmp`), removed on drop, including writer,
+JNI and copy failures and dropped futures. A running blocking copy owns the stage
+until it completes even if its caller goes away. Process abort/kill can leave a
+private stage; this is not a public Downloads copy. Publication uses MediaStore
+Downloads on API 29+: `relative_path=Download/eBIRForms`, `is_pending=1`, close the
+output stream, then `is_pending=0`. Errors delete the pending row; cleanup failures
+are logged. The provider chooses collision suffixes; its queried `_display_name`
+is returned as `Downloads/eBIRForms/<name>` and shown in the success toast.
+
+NSH's share API exists but Android's outcome only reports selection of a target,
+not completion of its file read. It cannot establish a saved Downloads path or a
+safe point to delete this private ZIP, so this flow uses MediaStore, not sharing.
+No framework or manifest changes, storage permission or Activity result are needed.
+The existing print JNI VM/UI/foreground-Activity helpers are reused.
+
+Verification boundary: host-compilable Rust tests cover staging isolation,
+writer-failure cleanup and returned-name validation. `taxpayer/export.test.tsx`
+mocks the host download result to cover no-dialog UI success, collision copy,
+failure and cancellation; it does not exercise MediaStore. Android compilation
+and actual device export/opening of the ZIP are separate native acceptance checks.
+
 ## Waves
 
 **Parallel work in one worktree.** Agents share this worktree and one cargo build cache, so builds queue on a lock: that is normal, wait for it. A compile error in a file you do not own is probably another agent's edit in flight: wait a few minutes and retry before reporting it. Ownership in wave 1a: A3 alone edits root `Cargo.toml` (except the `members` line), `crates/bir-core/**` and `crates/bir-print/Cargo.toml`. A1 owns `crates/bir-host-shim/**`, `crates/bir-app-api/**`, `crates/bir-shell/**` with its `Cargo.lock`, the root `members` line and the root `Cargo.lock`. A2 owns `nsh/**` and `justfile`, and builds with `CARGO_TARGET_DIR=~/BuwizNsh/target-nsh`.

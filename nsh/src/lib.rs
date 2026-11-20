@@ -13,6 +13,10 @@ mod desktop;
 #[cfg(any(test, target_os = "android"))]
 mod dev_env;
 pub mod door;
+#[cfg(target_os = "android")]
+mod export_android;
+#[cfg(any(test, target_os = "android"))]
+mod export_archive;
 pub mod guards;
 mod hooks;
 mod print;

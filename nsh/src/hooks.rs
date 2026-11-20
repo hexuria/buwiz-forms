@@ -114,6 +114,20 @@ impl Hooks for NshHooks {
         true
     }
 
+    #[cfg(target_os = "android")]
+    fn export_profile_download(
+        &self,
+        file_name: &str,
+        write: &mut bir_app_api::hooks::ArchiveWriter<'_>,
+    ) -> Option<bir_app_api::hooks::DownloadExport> {
+        let staged = crate::export_archive::Archive::write(&bir_core::platform::temp_dir(), write);
+        let file_name = file_name.to_owned();
+        Some(Box::pin(async move {
+            let staged = staged?;
+            crate::export_android::save(staged, file_name).await
+        }))
+    }
+
     // Touch ID and the account password (admin recovery): `auth.rs` (false in a test environment).
     fn os_authenticate(&self, reason: &str) -> bool {
         crate::auth::os_authenticate(reason)

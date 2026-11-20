@@ -1,5 +1,5 @@
 // "Export this profile" (old profileExportCard), drawn in Settings > Import / Export: a credential-free archive saved
-// through the host's save dialog. A taxpayer with a PIN types it in the cells, which clear after every attempt.
+// through the host's save dialog (Android: Downloads/eBIRForms). A profile PIN clears after every attempt.
 import { signal, View } from "nsh";
 import { app, store } from "../../shell";
 import { AppButton, Card, PinCells, SettingRow } from "../../ui";

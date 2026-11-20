@@ -55,6 +55,13 @@ pub enum PathChoice {
 /// database slot and outside any UI borrow.
 pub type PathAnswer = Box<dyn FnOnce(PathChoice) + 'static>;
 
+/// A platform-owned download, answering with its user-visible destination.
+pub type DownloadExport =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send>>;
+
+/// Writes an authorized archive synchronously on the database's owning thread.
+pub type ArchiveWriter<'a> = dyn FnMut(&Path) -> Result<(), String> + 'a;
+
 /// Everything the host functions ask of a UI. Every method has a default
 /// that does nothing (or answers "no"), which is what runs without a host.
 pub trait Hooks: Send + Sync + 'static {
@@ -124,6 +131,17 @@ pub trait Hooks: Send + Sync + 'static {
         _answer: PathAnswer,
     ) -> bool {
         false
+    }
+
+    /// Platforms without a save panel may stage the archive using `write`, then
+    /// publish it asynchronously. `write` must run before this method returns.
+    /// `None` keeps the ordinary save-panel flow.
+    fn export_profile_download(
+        &self,
+        _file_name: &str,
+        _write: &mut ArchiveWriter<'_>,
+    ) -> Option<DownloadExport> {
+        None
     }
 
     /// Ask the OS to confirm the signed-in user (Touch ID, Windows Hello).

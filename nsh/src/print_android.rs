@@ -87,11 +87,11 @@ impl Preview {
     }
 }
 
-fn java<T>(value: jni::errors::Result<T>) -> Result<T> {
+pub(crate) fn java<T>(value: jni::errors::Result<T>) -> Result<T> {
     value.map_err(|error| error.to_string())
 }
 
-fn vm() -> Result<&'static JavaVM> {
+pub(crate) fn vm() -> Result<&'static JavaVM> {
     VM.get_or_init(|| {
         type GetVms = unsafe extern "system" fn(
             *mut *mut jni::sys::JavaVM,
@@ -130,7 +130,7 @@ fn vm() -> Result<&'static JavaVM> {
     .map_err(Clone::clone)
 }
 
-async fn ui<R: Send + 'static>(
+pub(crate) async fn ui<R: Send + 'static>(
     work: impl FnOnce(&mut JNIEnv<'_>) -> Result<R> + Send + 'static,
 ) -> Result<R> {
     run_on_main_thread(move || {
@@ -160,7 +160,7 @@ async fn ui<R: Send + 'static>(
     .map_err(|error| error.to_string())?
 }
 
-fn foreground_activity<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>> {
+pub(crate) fn foreground_activity<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>> {
     let thread = java(env.call_static_method(
         "android/app/ActivityThread",
         "currentActivityThread",
