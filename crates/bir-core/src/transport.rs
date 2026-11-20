@@ -199,7 +199,20 @@ pub const RELAY_URL_ENV: &str = "BIR_RELAY_URL";
 
 /// [`RELAY_URL_ENV`] without a trailing slash when it is set, checked by [`loopback_relay_url`].
 pub fn relay_url() -> Option<Result<String, TransportError>> {
-    env_nonempty(RELAY_URL_ENV).map(|raw| loopback_relay_url(&raw))
+    env_nonempty(RELAY_URL_ENV).map(|raw| {
+        require_mock_relay(cfg!(any(debug_assertions, feature = "mock-relay")))?;
+        loopback_relay_url(&raw)
+    })
+}
+
+fn require_mock_relay(enabled: bool) -> Result<(), TransportError> {
+    if enabled {
+        Ok(())
+    } else {
+        Err(TransportError::Config(
+            "The mock relay is disabled in release builds.".into(),
+        ))
+    }
 }
 
 /// `raw` as a relay origin, or why it is refused: only `http://` on a loopback host, no user, path, query or
@@ -242,7 +255,7 @@ pub fn loopback_relay_url(raw: &str) -> Result<String, TransportError> {
 }
 
 /// `POST {url}/v1/submissions` with the encrypted IAF file as the body (docs/relay.md). `Ok` only on 202 with
-/// `{"status":"accepted"}`. A 4xx answer is [`TransportError::RelayRefused`]; no connection or a 503 answer is
+/// `{"status":"accepted"}`. A 4xx answer except 408/429 is [`TransportError::RelayRefused`]; no connection or 408/429/503 is
 /// [`TransportError::RelayUnavailable`] (the relay took nothing). Anything else (a timeout, a 502 from a failed hand-off,
 /// a 202 that does not say accepted) leaves the outcome unknown: [`TransportError::Http`].
 async fn relay_store(
@@ -251,6 +264,7 @@ async fn relay_store(
     filename: &str,
     payload: &[u8],
 ) -> Result<(), TransportError> {
+    require_mock_relay(cfg!(any(debug_assertions, feature = "mock-relay")))?;
     let name = iaf_basename(filename);
     let digest = hex::encode(Sha256::digest(payload));
     info!(
@@ -290,13 +304,13 @@ async fn relay_store(
             .as_str()
             .map_or_else(|| status.to_string(), |error| format!("{status}: {error}"))
     };
+    if matches!(status.as_u16(), 408 | 429 | 503) {
+        warn!(%status, ?body, "relay is unavailable");
+        return Err(TransportError::RelayUnavailable(said()));
+    }
     if status.is_client_error() {
         warn!(%status, ?body, "relay refused the submission");
         return Err(TransportError::RelayRefused(said()));
-    }
-    if status == reqwest::StatusCode::SERVICE_UNAVAILABLE {
-        warn!(%status, ?body, "relay is unavailable");
-        return Err(TransportError::RelayUnavailable(said()));
     }
     if status != reqwest::StatusCode::ACCEPTED || body["status"] != "accepted" {
         return Err(TransportError::Http(format!(
@@ -932,6 +946,7 @@ pub(crate) async fn open_iaf_session(
 /// `GET {url}/v1/health` before a return is claimed: a relay that is down fails here, where the worker can retry
 /// later, instead of after the claim.
 async fn relay_health(url: &str) -> Result<(), TransportError> {
+    require_mock_relay(cfg!(any(debug_assertions, feature = "mock-relay")))?;
     let client = reqwest::Client::builder()
         .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
@@ -1042,7 +1057,10 @@ pub async fn probe_sftp_target(
                 Ok(format!("/{folder}"))
             }
         }
-        ResolvedSftpTarget::Relay { url, .. } => Ok(format!("relay {url}")),
+        ResolvedSftpTarget::Relay { url, .. } => {
+            relay_health(&url).await?;
+            Ok(format!("relay {url}"))
+        }
         ResolvedSftpTarget::Live { endpoint, source } => {
             let session = open_iaf_session_with_source(form_type, endpoint, source).await?;
             session.probe().await
@@ -1102,6 +1120,100 @@ pub async fn submit_sftp_target(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_dev_or_explicit_mock_builds_allow_the_relay() {
+        assert!(require_mock_relay(true).is_ok());
+        assert!(matches!(
+            require_mock_relay(false),
+            Err(TransportError::Config(_))
+        ));
+    }
+
+    async fn http_reply(status: u16, body: &str, probe: bool) -> Result<(), TransportError> {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let body = body.to_owned();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0; 8192];
+            let count = socket.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..count]);
+            assert!(request.starts_with(if probe {
+                "GET /v1/health "
+            } else {
+                "POST /v1/submissions "
+            }));
+            write!(
+                socket,
+                "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+        });
+        let result = if probe {
+            probe_sftp_target(
+                "1601C",
+                ResolvedSftpTarget::Relay {
+                    url,
+                    folder: "1601C".into(),
+                },
+            )
+            .await
+            .map(|_| ())
+        } else {
+            relay_store(&url, "1601C", "test.xml", b"").await
+        };
+        server.join().unwrap();
+        result
+    }
+
+    #[tokio::test]
+    async fn relay_response_classification() {
+        for status in [408, 429, 503] {
+            assert!(matches!(
+                http_reply(status, "{}", false).await,
+                Err(TransportError::RelayUnavailable(_))
+            ));
+        }
+        assert!(matches!(
+            http_reply(400, "{}", false).await,
+            Err(TransportError::RelayRefused(_))
+        ));
+        assert!(
+            http_reply(202, r#"{"status":"accepted"}"#, false)
+                .await
+                .is_ok()
+        );
+        assert!(matches!(
+            http_reply(202, "", false).await,
+            Err(TransportError::Http(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn relay_probe_checks_health() {
+        assert!(http_reply(200, "{}", true).await.is_ok());
+        assert!(matches!(
+            http_reply(503, "{}", true).await,
+            Err(TransportError::RelayUnavailable(_))
+        ));
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        drop(listener);
+        assert!(matches!(
+            probe_sftp_target(
+                "1601C",
+                ResolvedSftpTarget::Relay {
+                    url,
+                    folder: "1601C".into()
+                }
+            )
+            .await,
+            Err(TransportError::RelayUnavailable(_))
+        ));
+    }
+
     #[test]
     fn only_a_loopback_http_origin_is_a_relay() {
         assert_eq!(

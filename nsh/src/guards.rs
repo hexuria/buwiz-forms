@@ -113,6 +113,9 @@ pub(crate) fn relay_verdict(
     panel: Option<SubmissionMode>,
 ) -> Option<SendMode> {
     let relay = relay?;
+    if panel == Some(SubmissionMode::DryRun) {
+        return Some(SendMode::DryRun);
+    }
     if panel == Some(SubmissionMode::TestServer) {
         return Some(verdict(None, false, panel));
     }
@@ -768,6 +771,9 @@ mod tests {
     #[test]
     fn a_relay_url_decides_alone_and_only_a_listening_loopback_one_sends() {
         assert_eq!(relay_verdict(None, None), None);
+        for relay in [Ok("http://127.0.0.1:8787".into()), Err("not listening".into())] {
+            assert_eq!(relay_verdict(Some(relay), Some(SubmissionMode::DryRun)), Some(SendMode::DryRun));
+        }
         assert_eq!(
             relay_verdict(Some(Ok("http://127.0.0.1:8787".into())), None),
             Some(SendMode::Relay { url: "http://127.0.0.1:8787".into() })

@@ -203,7 +203,7 @@ test("a window that cannot open says so and leaves nothing behind; a device with
   expect(w.closedKeys[w.closedKeys.length - 1]).toBe("1601C");
 });
 
-/** A phone: no second window; the system print sheet shows the PDF once `show` settles. */
+/** A phone: no second window; the system print sheet settles when dismissed or finished. */
 function phone() {
   const closedKeys: string[] = [];
   const toasts: string[] = [];
@@ -214,7 +214,7 @@ function phone() {
     windows: { get: () => null, open: () => { throw new Error("no window on a phone"); } },
     nativePreview: () =>
       new Promise<void>((resolve, reject) => {
-        settle = { resolve: () => { state.sheetUp = true; resolve(); }, reject };
+        settle = { resolve: () => { state.sheetUp = false; resolve(); }, reject };
       }),
     dismissNative: () => {
       state.dismissed++;
@@ -234,13 +234,16 @@ function phone() {
   return { host, closedKeys, toasts, state, open, settle: () => settle!, tick };
 }
 
-test("phone: the system print sheet shows the PDF, then the Rust side forgets the preview", async () => {
+test("phone: a finished or dismissed sheet is forgotten and later locks leave it alone", async () => {
   const p = phone();
   p.open("1601C");
   expect(p.toasts).toEqual(["Preparing the print preview..."]);
   p.settle().resolve();
   await p.tick();
-  expect(p.state.sheetUp).toBe(true);
+  expect(p.state.sheetUp).toBe(false);
+  expect(p.state.dismissed).toBe(0);
+  expect(p.closedKeys).toEqual(["1601C"]);
+  p.host.closeAll();
   expect(p.state.dismissed).toBe(0);
   expect(p.closedKeys).toEqual(["1601C"]);
 });
@@ -269,15 +272,29 @@ test("phone: the refusal after a lock is quiet; a lock with the sheet up takes i
 
   p.state.chrome = true;
   p.open("2551Q");
-  p.settle().resolve();
-  await p.tick();
+  p.state.sheetUp = true;
   expect(p.state.sheetUp).toBe(true);
   p.state.chrome = false;
   p.host.closeAll();
   expect(p.state.sheetUp).toBe(false);
+  p.settle().resolve();
+  await p.tick();
 
   const before = p.toasts.length;
   p.open("0619E");
   expect(p.toasts.length).toBe(before);
   expect(p.closedKeys.at(-1)).toBe("0619E");
+});
+
+test("phone: no sheet or a failed sheet leaves nothing for a later lock to close", async () => {
+  const p = phone();
+  p.host.closeAll();
+  expect(p.state.dismissed).toBe(0);
+  p.open("1601C");
+  p.settle().reject(new Error("Printer unavailable"));
+  await p.tick();
+  expect(p.toasts.at(-1)).toBe("Print preview could not open: Printer unavailable");
+  p.host.closeAll();
+  expect(p.state.dismissed).toBe(0);
+  expect(p.closedKeys).toEqual(["1601C"]);
 });

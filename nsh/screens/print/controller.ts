@@ -32,7 +32,7 @@ export interface HostDeps {
   };
   /**
    * This device previews in the system's own print sheet (iOS) instead of a window: shows it for `key` (the Rust side makes the PDF
-   * first) and settles once the sheet is up. Absent where previews are windows.
+   * first) and settles once the sheet is dismissed or finished. Absent where previews are windows.
    */
   nativePreview?(key: string): Promise<void>;
   /** Takes down the system's print sheet if it is up (with `nativePreview`). */
@@ -93,7 +93,7 @@ export function createPreviewHost(deps: HostDeps) {
   }
 
   /**
-   * A phone that previews in the system's print sheet: the sheet comes up with the PDF, then the Rust side forgets the preview. A lock
+   * A phone that previews in the system's print sheet: once the sheet ends, the Rust side forgets the preview. A lock
    * while the PDF is made ends it: the Rust side forgets it (so it refuses to show the sheet), and a sheet that came up anyway is taken down.
    */
   function openNative(event: PrintEvent, show: (key: string) => Promise<void>): void {
@@ -107,6 +107,7 @@ export function createPreviewHost(deps: HostDeps) {
     show(event.key).then(
       () => {
         if (ended()) deps.dismissNative?.();
+        natives.delete(event.key);
         deps.print.closed(event.key);
       },
       (error: unknown) => {
@@ -120,7 +121,7 @@ export function createPreviewHost(deps: HostDeps) {
 
   /** Every system print sheet ends: the ones being prepared never show, the one up is taken down. */
   function endNative(): void {
-    if (!deps.nativePreview) return;
+    if (!deps.nativePreview || natives.size === 0) return;
     for (const key of [...natives]) {
       natives.delete(key);
       deps.print.closed(key);

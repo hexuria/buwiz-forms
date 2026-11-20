@@ -922,8 +922,7 @@ fn platform_print(path: &Path) -> Result<(), String> {
     mac::print_pdf(path)
 }
 
-/// The system print sheet (UIPrintInteractionController) for the PDF at `path`, with its page previews: up when this
-/// returns.
+/// The system print sheet (UIPrintInteractionController) for the PDF at `path`, until it is dismissed or finished.
 #[cfg(target_os = "ios")]
 fn platform_print(path: &Path) -> Result<(), String> {
     let pdf = std::fs::read(path).map_err(|error| format!("Could not read the PDF: {error}"))?;
@@ -1675,15 +1674,12 @@ mod windows_print {
 }
 
 
-/// The macOS half: WebKit and PDFKit through objc2, on the main thread (every AppKit call is posted to the main
-/// queue and waited for; callers are worker threads, never the main thread and never the engine's).
 /// The iOS print sheet: UIKit's UIPrintInteractionController with the preview's PDF (the PDF the `mac` half's hidden
 /// WKWebView makes, as on macOS) as its printing item, so the system shows its own page previews, printer choice and
 /// copies. UIKit is linked by the NSH host; its classes are looked up at run time.
 #[cfg(target_os = "ios")]
 mod ios_print {
     use std::sync::mpsc;
-    use std::time::Duration;
 
     use block2::RcBlock;
     use dispatch2::DispatchQueue;
@@ -1695,7 +1691,7 @@ mod ios_print {
     /// `UIPrintInfoOutputGeneral`: text and graphics.
     const OUTPUT_GENERAL: isize = 0;
 
-    /// Presents the print sheet for `pdf` on the main thread; returns once it is up (or could not come up).
+    /// Presents the print sheet for `pdf` on the main thread; returns once it closes (or could not come up).
     pub(super) fn present(pdf: Vec<u8>, title: String) -> Result<(), String> {
         let (tx, rx) = mpsc::channel::<Result<(), String>>();
         DispatchQueue::main().exec_async(move || {
@@ -1718,20 +1714,24 @@ mod ios_print {
                     let _: () = msg_send![&controller, setPrintInfo: &*info];
                     let data = NSData::with_bytes(&pdf);
                     let _: () = msg_send![&controller, setPrintingItem: &*data];
-                    let done = RcBlock::new(|_: *mut AnyObject, completed: Bool, error: *mut AnyObject| {
+                    let finished = tx.clone();
+                    let done = RcBlock::new(move |_: *mut AnyObject, completed: Bool, error: *mut AnyObject| {
                         let error = error.as_ref().map(|error| {
                             let text: Option<Retained<NSString>> = msg_send![error, localizedDescription];
                             text.map(|text| text.to_string()).unwrap_or_default()
                         });
                         tracing::info!(completed = completed.as_bool(), ?error, "print preview: the iOS print sheet closed");
+                        let _ = finished.send(error.map_or(Ok(()), Err));
                     });
                     let shown: Bool = msg_send![&controller, presentAnimated: true, completionHandler: &*done];
                     if shown.as_bool() { Ok(()) } else { Err("The print sheet could not open.".to_owned()) }
                 })()
             };
-            let _ = tx.send(answer);
+            if let Err(error) = answer {
+                let _ = tx.send(Err(error));
+            }
         });
-        rx.recv_timeout(Duration::from_secs(20)).map_err(|_| "The print sheet did not open in time.".to_owned())?
+        rx.recv().map_err(|_| "The print sheet closed without a result.".to_owned())?
     }
 
     /// Dismisses the shared print controller's sheet, if it is up; returns at once.
@@ -1749,6 +1749,8 @@ mod ios_print {
     }
 }
 
+/// The macOS half: WebKit and PDFKit through objc2, on the main thread (every AppKit call is posted to the main
+/// queue and waited for; callers are worker threads, never the main thread and never the engine's).
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod mac {
     use std::cell::RefCell;
@@ -2101,7 +2103,7 @@ impl Print {
     /// scaling) as a sheet of the front window, and resolves once the panel is up. Windows: shows the system print
     /// dialog, then prints the document by the PDF's page rule, and resolves once the job is with the printer (or the
     /// dialog was cancelled). iOS: makes the same PDF, then shows the system print sheet with its page previews, and
-    /// resolves once the sheet is up. Rejects with a sentence.
+    /// resolves once the sheet is dismissed or finished. Rejects with a sentence.
     pub async fn print(key: String) -> Result<(), String> {
         #[cfg(all(windows, target_env = "msvc"))]
         {
