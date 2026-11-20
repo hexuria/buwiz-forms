@@ -26,8 +26,8 @@ test("R2: an impossible complete date beats the part rules; a non-range raw keep
   expect(refusalSentence(ctx("Date is not a real calendar date", { part: "year", item: "4" }))).toBe("Item 4: there is no such date. Check the day.");
   expect(refusalSentence(ctx("date is not a real calendar date", { part: "month" }))).toBe("Item 6: there is no such date. Check the day.");
   // A part box refused for a reason that is not a range problem does not get a range sentence.
-  expect(refusalSentence(ctx("the draft cannot take this", { part: "month" }))).toBe("Item 6: that was not accepted. Check it and type it again.");
-  expect(refusalSentence(ctx("the draft cannot take this", { part: "day" }))).toBe("Item 6: that was not accepted. Check it and type it again.");
+  expect(refusalSentence(ctx("the draft cannot take this", { part: "month" }))).toBe("The draft cannot take this.");
+  expect(refusalSentence(ctx("the draft cannot take this", { part: "day" }))).toBe("The draft cannot take this.");
 });
 
 test("R3/R4: official messages with slashes pass through; a real leak becomes 'needs a valid answer'", () => {
@@ -54,8 +54,27 @@ test("B4: locks become their three sentences", () => {
 
 test("B4: no box with an item number falls back to the label; the fallback never leaks", () => {
   expect(refusalSentence(ctx("something odd `with/key`", { item: null, label: "ZIP code" }))).toBe("ZIP code: that was not accepted. Check it and type it again.");
-  expect(refusalSentence(ctx("`k` cannot be filled from here: it is written through the form's own editors: the ATC popup")))
+  expect(refusalSentence(ctx("`k` = `-5` does not fit this box: not a 0605 draft: invalid value: integer `-5`, expected u16", { kind: "text" })))
     .toBe("Item 6: that was not accepted. Check it and type it again.");
+  expect(refusalSentence(ctx("at /schedule/0/amount"))).toBe("Item 6: that was not accepted. Check it and type it again.");
+});
+
+test("B4: the host's own plain sentence shows as it is, without the key in front of it", () => {
+  // Said whole by the host: no key, no path.
+  expect(refusalSentence(ctx("Enter the month as MM/YYYY.", { item: null, label: "1 Previous Month/s" }))).toBe("Enter the month as MM/YYYY.");
+  expect(refusalSentence(ctx("Selecting an ATC is not necessary when item no. 4 is set to ' NO '", { item: "13" })))
+    .toBe("Selecting an ATC is not necessary when item no. 4 is set to ' NO '.");
+  expect(refusalSentence(ctx("Fill Items 1 to 3 first; row 4_1 is Item 4.", { item: "4" }))).toBe("Fill Items 1 to 3 first; row 4_1 is Item 4.");
+  // Keyed by the host: the key goes, the item number takes its place.
+  expect(refusalSentence(ctx("`frm2551Qv2018:txt20`: Penalties are not filled on an 8% return.", { item: "20" })))
+    .toBe("Item 20: penalties are not filled on an 8% return.");
+  expect(refusalSentence(ctx("`k` is computed from the days late; press Edit penalties to type it", { item: "20A" })))
+    .toBe("Item 20A is computed from the days late; press Edit penalties to type it.");
+  expect(refusalSentence(ctx("`k` cannot be filled from here: it is written through the form's own editors: the ATC popup")))
+    .toBe("Item 6: cannot be filled from here: it is written through the form's own editors: the ATC popup.");
+  // A value the box's type cannot hold names the kind, never the type.
+  expect(refusalSentence(ctx("`k` = `-5` does not fit this box: not a 0605 draft: invalid value: integer `-5`, expected u16", { kind: "int" })))
+    .toBe("Item 6: type a whole number, for example 3.");
 });
 
 test("B4: host validation keeps official alerts, rewrites 0605's four, nets leaks", () => {

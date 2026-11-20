@@ -130,8 +130,30 @@ export function refusalSentence(ctx: RefusalContext): string {
     return `${at} this answer could not be saved here.`;
   }
 
+  // A value the box's type cannot hold ("= `-5` does not fit this box: … expected u16").
+  if (/does not fit this box/i.test(raw)) {
+    if (ctx.kind === "int") return `${at} type a whole number, for example 3.`;
+    if (ctx.kind === "money" || ctx.kind === "pct") return `${at} type an amount, for example 1234.50.`;
+  }
+
+  // The host's own plain sentence ("Enter the month as MM/YYYY.", "Selecting an ATC is not necessary when item no. 4
+  // is set to ' NO '") says more than any fallback: it shows as it is once the box's key is taken off its front,
+  // unless what is left still names a key or a path.
+  const own = ownSentence(ctx, raw);
+  if (own) return own;
+
   // The safety net: anything the table does not name still never leaks a key or a path.
   return `${at} that was not accepted. Check it and type it again.`;
+}
+
+/** The host's sentence without the key it starts with ("`k`: …", "`k` is …"), or "" when it would leak or says nothing. */
+function ownSentence(ctx: RefusalContext, raw: string): string {
+  const keyed = /^`[^`]*`\s*(:|is\b)?\s*/.exec(raw);
+  const rest = (keyed ? raw.slice(keyed[0].length) : raw).trim();
+  if (rest.length < 8 || !/\s/.test(rest) || LEAK.test(rest)) return "";
+  const said = /[.!?]$/.test(rest) ? rest : `${rest}.`;
+  if (!keyed) return `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+  return keyed[1] === "is" ? `${subject(ctx)} is ${said}` : `${colon(ctx)} ${said.charAt(0).toLowerCase()}${said.slice(1)}`;
 }
 
 /** The four 0605 host-validation sentences the picked mockup rewrites, keyed by the error's field. */
