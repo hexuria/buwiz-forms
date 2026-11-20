@@ -93,10 +93,18 @@ export interface OneDate extends DateParts {
   oneKey: string;
 }
 
+export function oneDates(it: SchemaItem): OneDate[] {
+  const fields = it.f || [];
+  return (it.one_dates || []).flatMap(([m, d, y]) => {
+    const month = fields.find((field) => field.k === m);
+    const day = fields.find((field) => field.k === d);
+    const year = fields.find((field) => field.k === y);
+    return month && day && year ? [{ month, day, year, oneKey: `${month.k}#date` }] : [];
+  });
+}
+
 export function oneDate(it: SchemaItem): OneDate | null {
-  if (!it.one_date) return null;
-  const date = dateParts(it.f || []);
-  return date ? { ...date, oneKey: `${date.month.k}#date` } : null;
+  return oneDates(it)[0] || null;
 }
 
 /** BIR's own words for the income-tax ATCs the forms list as bare codes. */

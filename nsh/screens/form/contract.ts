@@ -81,6 +81,8 @@ export interface SchemaItem {
   note?: string;
   /** Month, day and year boxes shown as one date box. */
   one_date?: boolean | 1;
+  /** Registered month/day/year keys, in screen order. */
+  one_dates?: [string, string, string][];
   /** A hint offering another item's amount for this item's box ("Use it"). */
   from?: { k: string; to: string; l: string };
   /** A schedule's preprinted row captions. */

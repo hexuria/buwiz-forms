@@ -36,10 +36,11 @@ import { errorText } from "../../lib/errors";
 import { cancelQueueMessage } from "../../lib/queue_message";
 import { effectiveStops, nextRow, stopCall, todoRows, type TodoPart, type TodoRow } from "../../lib/todo";
 import { formatMoney, wholePesosOf } from "../../lib/money";
-import { DATE_ERROR, formatLongDate, formatMDY, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
+import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDateText, parseTypedDate, shortIsoDate, shownDate } from "../../lib/dates";
+import { dateRange } from "./dateRules";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDate, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDates, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
 import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
@@ -518,9 +519,12 @@ export class FormSession {
           if (f.pool) this.pools.set(f.k, f.pool);
           this.allKeys.push(f.k);
         }
-        const date = oneDate(it);
-        if (date) {
-          this.oneDates.set(date.oneKey, { date, row: id });
+        const dates = oneDates(it);
+        if (dates.length) {
+          for (const date of dates) {
+            this.oneDates.set(date.oneKey, { date, row: id });
+            for (const key of [date.month.k, date.day?.k, date.year.k]) if (key) this.datePartKeys.add(key);
+          }
         } else {
           // The same groups rows.tsx draws as split date boxes: their zero
           // parts are the host's blank, never a shown 0/00/0000 (B15).
@@ -641,7 +645,7 @@ export class FormSession {
   }
   /** How many boxes the form binds (every key of the schema, schedule cells included). */
   fieldCount(): number {
-    return this.allKeys.length;
+    return this.allKeys.length - this.oneDates.size * 2;
   }
   rowCount(): number {
     return this.rowIds.length;
@@ -868,14 +872,68 @@ export class FormSession {
   }
 
   private editOneDate(date: OneDate, text: string) {
+    const s = this.st;
+    const keys = [date.month.k, date.day?.k, date.year.k].filter((key): key is string => Boolean(key));
     this.sValue.get(date.oneKey).set(text);
     const typed = parseTypedDate(text);
-    if (typed || !text.trim()) this.setDateError(date.month.k, "");
-    if (!typed && text.trim()) return;
+    const reject = (reason: string) => {
+      for (const key of keys) {
+        delete s.pending[key];
+        delete s.rejected[key];
+        delete s.boxMessages[key];
+        s.unfixable.delete(key);
+      }
+      s.rejected[date.month.k] = reason;
+      s.boxMessages[date.month.k] = this.refusalText(date.month.k, reason);
+      s.dirty = true;
+      this.cancelAutosave();
+      this.markUnsaved();
+      this.publish();
+    };
+    const problem = this.oneDateRefusal(date, text);
+    if (problem) return reject(problem);
+    this.setDateError(date.month.k, "");
+    for (const key of keys) {
+      delete s.rejected[key];
+      delete s.boxMessages[key];
+      s.unfixable.delete(key);
+    }
     const [m, d, y] = typed ? formatMDY(typed).split("/") : ["", "", ""];
-    const edits: Record<string, string> = { [date.month.k]: m, [date.year.k]: y };
-    if (date.day) edits[date.day.k] = d;
+    const edits: Record<string, string> = {};
+    for (const [field, value] of [[date.month, m], [date.day, d], [date.year, y]] as const) {
+      if (!field || this.isShut(field.k)) continue;
+      const listed = field.t === "sel" ? this.listedOptions(field.k) : [];
+      const match = listed.find((option) => option.value === value || option.value === String(Number(value)) || (field === date.year && option.label === String(Number(value))));
+      if (value && listed.length && !match) {
+        reject("not one of the listed choices");
+        return;
+      }
+      edits[field.k] = value && match ? match.value : value;
+    }
     this.stage(edits);
+    this.publish();
+  }
+
+  private oneDateRefusal(date: OneDate, text: string): string {
+    const typed = parseTypedDate(text);
+    if (!typed) return text.trim() ? isTwoDigitDate(text) ? "two-digit date year" : DATE_ERROR : "";
+    if (this.calendarYearEnd(date) && typed.m !== 12 && !this.isShut(date.month.k)) return "calendar year ends in December";
+    const iso = formatIso(typed);
+    const { min, max } = dateRange(this, date);
+    if (min && max && (iso < min || iso > max)) return `date outside allowed span ${min} ${max}`;
+    for (const [field, number] of [[date.month, typed.m], [date.day, typed.d], [date.year, typed.y]] as const) {
+      if (!field || !this.isShut(field.k)) continue;
+      const raw = String(this.st.values[field.k] ?? "");
+      const held = field === date.year && /^\d{1,2}$/.test(raw) ? 2000 + Number(raw) : Number(raw.slice(0, field === date.month ? 2 : undefined));
+      if (held !== number) return "date conflicts with a locked part";
+    }
+    return "";
+  }
+
+  /** A tentative sheet edit uses the same rules without changing the draft. */
+  oneDateProblem(date: OneDate, text: string): string {
+    const reason = this.oneDateRefusal(date, text);
+    return reason ? this.refusalText(date.month.k, reason) : "";
   }
 
   /**
@@ -1050,10 +1108,10 @@ export class FormSession {
     if (kind === "money" && !this.isShut(k)) v.set(formatMoney(raw, this.wholeKeys.has(k)));
     else if (kind === "date" && !this.isShut(k)) {
       const date = parseTypedDate(raw);
-      if (date) {
+      if (date && !(baseKey in s.rejected)) {
         v.set(formatLongDate(date));
         this.setDateError(baseKey, "");
-      } else this.setDateError(baseKey, raw.trim() && (one || s.datesEdited.has(k)) ? DATE_ERROR : "");
+      } else if (!one) this.setDateError(baseKey, raw.trim() && s.datesEdited.has(k) ? DATE_ERROR : "");
     }
     if (id) s.touched.add(id);
     const editKeys = this.itemEditKeys(baseKey);
@@ -1508,7 +1566,11 @@ export class FormSession {
   private shownText(k: string): string {
     const s = this.st;
     const one = this.oneDates.get(k);
-    if (one) return shownDate(oneDateText(s.values, one.date));
+    if (one) {
+      const parts = [one.date.month, one.date.day, one.date.year].filter((field): field is SchemaField => Boolean(field));
+      if (parts.some((field) => !String(s.values[field.k] ?? "").trim() || /^0+$/.test(String(s.values[field.k]).trim()))) return "";
+      return shownDate(oneDateText(s.values, one.date));
+    }
     const pool = this.pools.get(k);
     if (pool) return String(s.poolTexts[pool.keys[0]] ?? "");
     const kind = this.kindOf.get(k);
@@ -1572,6 +1634,7 @@ export class FormSession {
     }
     for (const [k, { date }] of this.oneDates) {
       const parts = [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[];
+      if (parts.some((p) => p in s.rejected) || s.focusKey === k) continue;
       if (parts.some((p) => p in edits)) continue;
       if (oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
     }
@@ -2226,7 +2289,7 @@ export class FormSession {
     const empty = (f: SchemaField) => (f.t === "radio" || f.t === "chk" ? s.values[f.k] !== "true" : !String(s.values[f.k] ?? "").trim());
     const pick = fs.find((f) => entry?.stops.includes(f.k)) || fs.find((f) => f.r && empty(f)) || fs[0];
     if (!pick) return false;
-    const date = oneDate(it);
+    const date = oneDates(it).find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(pick.k));
     const key = date ? date.oneKey : pick.t === "radio" ? `radio:${row}` : pick.k;
     const focus = this.focusers.get(key);
     if (!focus) return false;
@@ -2254,7 +2317,8 @@ export class FormSession {
   private rowPrints(k: string): boolean {
     const id = this.keyIndex.get(k);
     const it = id ? this.items.get(id) : undefined;
-    if (["sel", "chk", "radio", "date"].includes(this.kindOf.get(k) ?? "") || this.datePartKeys.has(k)) return true;
+    if (["sel", "chk", "radio", "date"].includes(this.kindOf.get(k) ?? "") || this.datePartKeys.has(k)
+      || (it && oneDates(it).some((date) => [date.month.k, date.day?.k, date.year.k].includes(k)))) return true;
     return Boolean(it && !it.rows && (isTinItem(it) || (it.f || []).length === 1));
   }
 
@@ -2282,7 +2346,9 @@ export class FormSession {
     const out: Record<string, number> = {};
     const ids = new Set([...Object.keys(shown), ...this.rowIds.filter((id) => this.boxCountFor(id) > 0)]);
     for (const id of ids) {
-      const row = shown[id] ? Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1) : 0;
+      const it = this.items.get(id);
+      const dateSaid = it && oneDates(it).some((date) => [date.month.k, date.day?.k, date.year.k].some((key) => key && this.shownBoxMsg(key)));
+      const row = shown[id] && !dateSaid ? Math.max(s.dateErrors[id] ? 1 : 0, s.messageCounts[id] || 0, 1) : 0;
       const n = row + this.boxCountFor(id);
       if (n) out[id] = n;
     }
@@ -3089,7 +3155,19 @@ export class FormSession {
       seenDate.add(sentence);
       return true;
     });
-    const shownKeys = msgOpen ? (date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k))) : [];
+    const registered = oneDates(it);
+    const grouped = new Set(registered.flatMap((d) => [d.month.k, d.day?.k, d.year.k].filter((k): k is string => Boolean(k))));
+    const oneDateShown = registered.flatMap((d) => {
+      const seen = new Set<string>();
+      return [d.month.k, d.day?.k, d.year.k].filter((k): k is string => {
+        if (!k || !s.boxMessages[k] || seen.has(s.boxMessages[k])) return false;
+        seen.add(s.boxMessages[k]);
+        return true;
+      });
+    });
+    const shownKeys = !msgOpen ? [] : registered.length
+      ? [...oneDateShown, ...keys.filter((k) => !grouped.has(k) && s.boxMessages[k] && groupKeys.has(k))]
+      : date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
     const asks =
       s.editable && !s.sample
         ? (s.askAt.get(id) || []).map((a) => ({
@@ -3107,7 +3185,7 @@ export class FormSession {
       it.l === "Additional details" &&
       (Boolean(shown[id]) || keys.some((k) => Boolean(this.shownBoxMsg(k))) || asks.length > 0 || s.stepAt === id);
     return {
-      message: shown[id] || "",
+      message: oneDateShown.length ? "" : shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
       boxSaid: keys.some((k) => Boolean(this.shownBoxMsg(k))),
       notes: this.lockNotesFor(it),

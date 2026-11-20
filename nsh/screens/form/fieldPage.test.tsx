@@ -9,28 +9,63 @@ warmForms();
 
 const ENTRY = "./FormPageAny.tsx";
 const MONTH = "frm0605:txtDueDateMonth";
-const box = `id:fp-${MONTH}`;
+const box = `id:fp-${MONTH}#date`;
+
+for (const width of [390, 640, 1440]) {
+  test(`PR 2: 0605 Item 4 is one date control at ${width} points`, async () => {
+    const app = await open(ENTRY, {
+      width, height: 900, platform: width < 600 ? "ios" : "macos",
+      host: { params: { formCode: "0605", year: 2023, period: 1, mode: "return" } },
+    });
+    await app.waitFor("id:fp-item-0:3");
+    expect(app.shows(`id:fp-${MONTH}#date`)).toBe(true);
+    expect(app.shows(`id:fp-${MONTH}`)).toBe(false);
+    expect(app.shows("id:fp-frm0605:txtDueDateDay")).toBe(false);
+    expect(app.shows("id:fp-frm0605:txtDueDateYear")).toBe(false);
+  });
+}
+
+test("PR 2: phone date row opens its sheet and Done stores the chosen date", async () => {
+  const app = await open(ENTRY, { host: { params: { formCode: "0605", year: 2023, period: 1, mode: "return" } } });
+  await app.waitFor("id:fp-item-0:3");
+  const id = `fp-${MONTH}#date`;
+  expect(app.shows(`id:${id}`)).toBe(true);
+  await app.press(`id:${id}`);
+  await app.waitFor(`id:${id}-sheet-input`);
+  await app.type(`id:${id}-sheet-input`, "08172023");
+  await app.press(`id:${id}-sheet-done`);
+  await app.waitFor(`id:${id}-sheet-input`, { state: "gone" });
+  expect(app.texts()).toContain("August 17, 2023");
+});
 
 // Typing shows at once; the host's answer lands after the 300 ms flush. The
 // wait covers the flush and the fill's round trip, then the box must still
 // hold the digits — a refused write puts the shown value back.
-async function typeAndHold(app: Awaited<ReturnType<typeof open>>) {
+async function typeAndHold(app: Awaited<ReturnType<typeof open>>, phone: boolean) {
   await app.waitFor(box);
-  await app.type(box, "08");
-  await app.waitUntil(() => (app.value(box) ?? "") === "08", { timeout: 5000 });
-  await new Promise((resolve) => setTimeout(resolve, 900));
-  expect(app.value(box) ?? "").toBe("08");
+  if (phone) {
+    await app.press(box);
+    await app.type(`${box}-sheet-input`, "08172023");
+    await app.press(`${box}-sheet-done`);
+    await app.waitFor(`${box}-sheet-input`, { state: "gone" });
+    expect(app.texts()).toContain("August 17, 2023");
+  } else {
+    await app.type(box, "08172023");
+    await app.waitUntil(() => (app.value(box) ?? "") === "08/17/2023", { timeout: 5000 });
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(app.value(box) ?? "").toBe("08/17/2023");
+  }
   expect(app.texts().some((t) => t.includes("draft has no"))).toBe(false);
 }
 
-test("phone: a new 0605's Item 4 month box keeps a typed 08", async () => {
+test("phone: a new 0605's Item 4 date takes a typed date", async () => {
   const app = await open(ENTRY, { host: { params: { formCode: "0605", year: 2023, period: 1, mode: "return" } } });
-  await typeAndHold(app);
+  await typeAndHold(app, true);
 });
 
-test("desktop: a new 0605's Item 4 month box keeps a typed 08", async () => {
+test("desktop: a new 0605's Item 4 date takes a typed date", async () => {
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", host: { params: { formCode: "0605", year: 2023, period: 2, mode: "return" } } });
-  await typeAndHold(app);
+  await typeAndHold(app, false);
 });
 
 // B21: the header's "N fields" chip counts the drawn boxes (the session's

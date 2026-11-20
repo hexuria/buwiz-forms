@@ -3,11 +3,13 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
-import { AppButton, CalendarButton, Code, DateField, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
+import { AppButton, CalendarButton, Code, DateField, DateTouchField, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, type DateParts, emptyCell, isTinItem, needsText, oneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, emptyCell, isTinItem, needsText, oneDates, type OneDate } from "./schema";
 import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
+import { dateRange, periodDay, splitDay } from "./dateRules";
+export { dateRange, splitDay } from "./dateRules";
 
 export interface RowProps {
   s: FormSession;
@@ -113,50 +115,70 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
   };
 }
 
-/** The year a split date's year box holds: one printed as 20YY (1702Q Year Ended) holds its last two digits, read as 20YY. 0 when it holds none. */
-function boxYear(s: FormSession, split: DateParts): number {
-  const typed = String(s.box(split.year.k).value() || "");
-  return /^\d{1,2}$/.test(typed) ? 2000 + Number(typed) : Number(typed || "");
-}
-
-/** What the boxes of a split date hold, as the calendar's own day ("" until the month and the year read as one): the month the calendar opens on. */
-export function splitDay(s: FormSession, split: DateParts): string {
-  const m = Number(String(s.box(split.month.k).value() || "").slice(0, 2));
-  const y = boxYear(s, split);
-  const d = split.day ? Number(s.box(split.day.k).value() || "") : 1;
-  if (!(m >= 1 && m <= 12 && y > 1900)) return "";
-  return `${y}-${String(m).padStart(2, "0")}-${String(d >= 1 && d <= 31 ? d : 1).padStart(2, "0")}`;
-}
-
-/**
- * The days the calendar beside a split date may offer, given the parts that are shut (locked or computed): a shut year limits it to that
- * year (a 2551Q's year is locked at the return's), a shut year and month to that month. session.pickDate skips a shut part, so a day
- * from another year would fill the open parts and leave the shut one: half a date. A month the form fixes (a calendar year's December,
- * session.calendarYearEnd) limits it like a shut month. Reads the boxes (reactive). A shut month alone limits nothing (min and max cannot
- * say "June of any year"), nor does a year that is not a plain number.
- */
-export function dateRange(s: FormSession, split: DateParts): { min?: string; max?: string } {
-  const shut = (f: SchemaField) => f.c || s.box(f.k).locked();
-  const year = boxYear(s, split);
-  if (!shut(split.year) || !Number.isInteger(year) || year < 1900 || year > 9999) return {};
-  // A month the form fixes counts as shut: a calendar year ends in December, whatever the month box shows (the form puts it back).
-  const month = s.calendarYearEnd(split) ? 12 : shut(split.month) ? Number(String(s.box(split.month.k).value() || "").slice(0, 2)) : 0;
-  if (month >= 1 && month <= 12) {
-    const mm = String(month).padStart(2, "0");
-    return { min: `${year}-${mm}-01`, max: `${year}-${mm}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}` };
-  }
-  return { min: `${year}-01-01`, max: `${year}-12-31` };
-}
-
 /** What a row draws for its boxes: a schedule, a note, a fold of extra fields, one date, a TIN, or its boxes. */
+function OneDateBox(props: { s: FormSession; date: OneDate; label: string; narrow: Accessor<boolean> }) {
+  const s = props.s;
+  const date = props.date;
+  const key = date.oneKey;
+  const box = s.box(key);
+  const label = props.label.replace(/\s*\(MM\/DD\/YYYY\)\s*$/i, "").trim();
+  const range = () => dateRange(s, date);
+  const start = () => {
+    const base = splitDay(s, date) || periodDay(s);
+    return range().min && base < range().min! ? range().min! : range().max && base > range().max! ? range().max! : base;
+  };
+  const field = { k: key, l: label, t: "date" as const };
+  return (
+    <If
+      when={!box.locked()}
+      else={<FieldControl {...fieldProps(s, field, props.narrow, label, 200)} />}
+    >
+      <If
+        when={props.narrow()}
+        else={
+          <View class="h-8 min-w-0 overflow-hidden" style={{ width: 200 }}>
+            <DateField
+              testID={`fp-${key}`}
+              accessibilityLabel={label}
+              value={box.value()}
+              error={box.invalid()}
+              calendarStart={start()}
+              min={range().min}
+              max={range().max}
+              onChange={(text) => s.edit(key, text)}
+              onFocus={() => s.focus(key)}
+              onBlur={() => s.blur(key)}
+              onPick={(iso) => { s.edit(key, iso); s.blur(key); }}
+              inputRef={(ref) => s.registerFocus(key, () => ref.focus())}
+            />
+          </View>
+        }
+      >
+        <DateTouchField
+          testID={`fp-${key}`}
+          label={label}
+          value={box.value()}
+          error={box.invalid()}
+          start={start()}
+          min={range().min}
+          max={range().max}
+          validate={(value) => s.oneDateProblem(date, value)}
+          onChange={(text) => s.edit(key, text)}
+          onFocus={() => s.focus(key)}
+          onBlur={() => s.blur(key)}
+        />
+      </If>
+    </If>
+  );
+}
+
 function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean>; info: Accessor<RowInfo> }) {
   const s = props.s;
   const it = props.it;
   const fs = it.f || [];
   if (it.rows) return <ScheduleControl {...scheduleProps(s, props.id, it, props.narrow)} />;
   if (!fs.length && it.note) return <Text variant="meta" tone="fg3" testID={`fp-note-${props.id}`}>{it.note}</Text>;
-  const date = oneDate(it);
-  if (date) return <FieldControl {...fieldProps(s, { k: date.oneKey, l: it.l, t: "date" }, props.narrow, it.l, controlWidth({ t: "date" }, 320))} />;
+  const dates = oneDates(it);
   if (isTinItem(it)) {
     return (
       <View class="flex-row flex-wrap items-center gap-1.5">
@@ -174,7 +196,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   const multi = fs.length > 1;
   // A date printed in split boxes (Year Ended MM and YYYY) gets a calendar button beside them, as the old page: a day picked
   // fills the parts that are open. Not when the item has a date box of its own (that box carries its calendar).
-  const split = fs.some((f) => f.t === "date") ? null : dateParts(fs);
+  const split = dates.length || fs.some((f) => f.t === "date") ? null : dateParts(fs);
   const splitParts = split ? [split.month, split.day, split.year].filter((f): f is SchemaField => f !== null) : [];
   const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked());
   // What the boxes hold now, as the calendar's own day: the popup opens on its month.
@@ -185,6 +207,13 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
     <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3">
       {radios.length ? <RadioGroupControl {...radioProps(s, props.id, it, radios, props.narrow)} /> : null}
       {boxes.map((f) => {
+        const date = dates.find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(f.k));
+        if (date && date.month.k !== f.k) return null;
+        if (date) return (
+          <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+            <OneDateBox s={s} date={date} label={it.l} narrow={props.narrow} />
+          </View>
+        );
         const sub = multi && f.l && f.l !== it.l && !/^\d+[A-Z]?$/.test(f.l);
         return (
           <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
