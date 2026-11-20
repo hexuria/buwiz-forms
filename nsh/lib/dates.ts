@@ -37,6 +37,12 @@ export const MONTHS_LONG: readonly string[] = [
 /** What a date box says when its text is not a date. */
 export const DATE_ERROR = "Type the date as MM/DD/YYYY, for example 08/17/2023 or 08172023.";
 
+/** Whether the text has a two-digit year, which must not be guessed. */
+export function isTwoDigitDate(text: string | null | undefined): boolean {
+  const value = String(text ?? "").trim();
+  return /^\d{6}$/.test(value) || /^\d{1,2}\s*[\/.\- ]\s*\d{1,2}\s*[\/.\- ]\s*\d{2}$/.test(value);
+}
+
 /** ISO date (YYYY-MM-DD) in local time. */
 export function isoDate(date: Date): string {
   const y = date.getFullYear();
@@ -92,7 +98,7 @@ export function parseTypedDate(text: string | null | undefined): YMD | null {
   const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   const compact = /^(\d{2})(\d{2})(\d{4})$/.exec(v);
   const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v);
-  const slashed = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v);
+  const slashed = /^(\d{1,2})\s*[\/.\- ]\s*(\d{1,2})\s*[\/.\- ]\s*(\d{4})$/.exec(v);
   const named = /^([a-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})$/i.exec(v);
   let y = 0;
   let m = 0;

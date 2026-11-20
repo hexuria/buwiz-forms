@@ -8,6 +8,7 @@ import {
   formatLongDate,
   formatMDY,
   isoDate,
+  isTwoDigitDate,
   oneDateText,
   parseTypedDate,
   shortDate,
@@ -20,6 +21,15 @@ const mdy = (text: string) => {
   const parsed = parseTypedDate(text);
   return parsed ? formatMDY(parsed) : null;
 };
+
+test("PR 2: pasted numeric dates accept spaces around separators", () => {
+  expect(mdy(" 08 - 17 - 1988 ")).toBe("08/17/1988");
+});
+
+test("PR 2: two-digit years are detected without guessing a century", () => {
+  for (const text of ["08/17/88", "081788", "8-17-88", " 08 / 17 / 88 "]) expect(isTwoDigitDate(text)).toBe(true);
+  for (const text of ["08/17/1988", "08171988", "08/17/1", "1988-08-17", ""]) expect(isTwoDigitDate(text)).toBe(false);
+});
 
 describe("isoDate", () => {
   test("writes the local day as YYYY-MM-DD, padded", () => {

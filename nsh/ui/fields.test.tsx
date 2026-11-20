@@ -3,6 +3,35 @@ import { expect, open, test } from "nsh/test";
 import { openKit, readout, SIZES } from "./harness";
 
 for (const size of SIZES) {
+  test(`${size.name}: touch date sheet validates Done, discards dismissal and clears`, async () => {
+    const app = await openKit("../BasePreview.tsx", size.options);
+    expect(app.shows("id:kit-one-date")).toBe(true);
+    await app.press("id:kit-one-date");
+    await app.waitFor("id:kit-one-date-sheet-input");
+    await app.type("id:kit-one-date-sheet-input", "08/17/88");
+    await app.press("id:kit-one-date-sheet-done");
+    expect(app.shows("id:kit-one-date-sheet-input")).toBe(true);
+    expect(app.texts()).toContain("Type the four-digit year, for example 08/17/1988.");
+    await app.clear("id:kit-one-date-sheet-input");
+    await app.type("id:kit-one-date-sheet-input", "08171988");
+    await app.press("id:kit-one-date-sheet-done");
+    await app.waitFor("id:kit-one-date-sheet-input", { state: "gone" });
+    expect(app.texts()).toContain("August 17, 1988");
+    await app.press("id:kit-one-date");
+    expect(app.value("id:kit-one-date-sheet-input")).toBe("08/17/1988");
+    await app.clear("id:kit-one-date-sheet-input");
+    await app.type("id:kit-one-date-sheet-input", "01/01/2000");
+    await app.press("role:button[Close]");
+    await app.waitFor("id:kit-one-date-sheet-input", { state: "gone" });
+    expect(app.texts()).toContain("August 17, 1988");
+    await app.press("id:kit-one-date");
+    await app.press("id:kit-one-date-sheet-clear");
+    await app.waitFor("id:kit-one-date-sheet-input", { state: "gone" });
+    expect(app.texts()).not.toContain("August 17, 1988");
+  });
+}
+
+for (const size of SIZES) {
   test(`${size.name}: text field types, TIN groups while typing`, async () => {
     const app = await openKit("../BasePreview.tsx", size.options);
     await app.clear("id:kit-name");
