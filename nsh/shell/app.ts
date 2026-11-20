@@ -281,7 +281,15 @@ const branch = computed<Branch | null>(() => {
 const isFresh = () => taxpayer() === null;
 const years = computed(() => {
   const b = branch();
-  return b ? store.taxYears(b.tin) : [];
+  if (!b) return [];
+  const listed = store.taxYears(b.tin);
+  const r = route();
+  const requested = r.view === "profile" && r.params.fromForm === true ? r.params.year : undefined;
+  if (typeof requested !== "number" || !Number.isInteger(requested) || listed.includes(requested)) return listed;
+  const bounds = store.yearBounds();
+  if (requested < bounds.min || requested > bounds.max) return listed;
+  // A return can exist before its year is added to the profile's forms list.
+  return [...listed, requested].sort((a, b) => a - b);
 });
 /** The selected year, kept valid: this year if the branch has it, else its latest. */
 const year = computed<number | null>(() => {

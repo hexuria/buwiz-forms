@@ -10,7 +10,7 @@
 import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
-import { createDemoTaxpayer, warmForms } from "./bir/testing";
+import { createDemoTaxpayer, DEMO, warmForms } from "./bir/testing";
 import { ProfileExportCard } from "./screens/taxpayer";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
@@ -31,6 +31,7 @@ interface Params {
   year?: number;
   selfEmployed?: boolean;
   savedReturn?: { formCode: string; year: number; period: number };
+  elections?: Record<number, "GraduatedUnspecified" | "EightPercent" | null>;
 }
 
 if (/form=/.test(String((host.params as Params)?.start ?? ""))) warmForms();
@@ -44,6 +45,9 @@ function seed(p: Params) {
     bir.set_yearly_forms(head.tin, year, p.conflict ? ["1601C", "2551Q", "1701", "1701A"] : ["1601C", "2551Q"]);
   }
   if (p.selfEmployed) bir.set_year_facts(head.tin, year, { tax_classification: "SelfEmployed" });
+  for (const [y, election] of Object.entries(p.elections ?? {})) {
+    bir.set_year_facts(head.tin, Number(y), { income_tax_election: election });
+  }
   if (p.branch && !taxpayer.branches.some((b) => b.code === "00001")) bir.create_branch(taxpayer.tin_root, { branch_code: "00001", name: "Cebu branch" });
   if (p.peer && !bir.list_taxpayers().some((t) => t.tin_root === "000111237")) {
     const peer = bir.create_taxpayer({ tin_root: "000-111-237", name: "Sample Person", taxpayer_type: "Individual", head_office: { rdo_code: "050", registered_address: "Makati City", zip_code: "1226" } });
@@ -99,6 +103,11 @@ function Demo() {
   return (
     <View class="flex-1">
       <If when={ready()}><Shell start={p.start} polling={false} /></If>
+      <View class="absolute top-0 left-0" style={{ pointerEvents: "none", opacity: 0 }}>
+        <Each of={Object.keys(p.elections ?? {})} key={(y) => y}>
+          {(y) => <Text>{`Election ${y()}: ${store.yearFacts(DEMO.tin, Number(y()))?.facts.income_tax_election ?? "Not set"}`}</Text>}
+        </Each>
+      </View>
     </View>
   );
 }

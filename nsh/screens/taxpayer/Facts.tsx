@@ -11,7 +11,7 @@ import type { PageState } from "./page";
 /** The facts the year's forms read. */
 function shownFacts(s: PageState): FactName[] {
   const view = s.yearFacts();
-  return view ? ROW_FACTS.filter((f) => (view.used_by[f] || []).length) : [];
+  return view ? ROW_FACTS.filter((f) => (view.used_by[f] || []).length || s.factEdit()?.fact === f) : [];
 }
 
 /** Whether a row is flagged "Not set": the rate only when the taxpayer chooses one. */
