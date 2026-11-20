@@ -16152,10 +16152,10 @@ mod tests {
                         || rows_annual_individual::is_gate_refusal(code, reason)
                 };
                 for key in keys {
-                    if let Some(reason) = filled["rejected"][key].as_str() {
-                        if !is_gate(reason) {
-                            split_refused.push(format!("{code} {key}: {reason}"));
-                        }
+                    if let Some(reason) = filled["rejected"][key].as_str()
+                        && !is_gate(reason)
+                    {
+                        split_refused.push(format!("{code} {key}: {reason}"));
                     }
                 }
                 let landed = keys.iter().all(|key| {
@@ -16166,11 +16166,9 @@ mod tests {
                 // group is shut by another answer, not broken.
                 let gated = !landed
                     && keys.iter().any(|key| filled["rejected"][*key].is_string())
-                    && keys.iter().all(|key| {
-                        filled["rejected"][*key]
-                            .as_str()
-                            .is_none_or(|reason| is_gate(reason))
-                    });
+                    && keys
+                        .iter()
+                        .all(|key| filled["rejected"][*key].as_str().is_none_or(is_gate));
                 if landed {
                     split_typed += 1;
                     if code == "0605" {

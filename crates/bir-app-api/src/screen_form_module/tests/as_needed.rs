@@ -2508,18 +2508,18 @@ fn pr3_periods_are_registered_pairs_on_one_item() {
         let marked = items
             .iter()
             .filter(|item| {
-                item["one_periods"].as_array().is_some_and(|marks| {
-                    marks.iter().any(|mark| *mark == json!([month, year]))
-                })
+                item["one_periods"]
+                    .as_array()
+                    .is_some_and(|marks| marks.iter().any(|mark| *mark == json!([month, year])))
             })
             .count();
         assert_eq!(marked, 1, "{}: one_periods [{month}, {year}]", period.form);
         let item = items
             .iter()
             .find(|item| {
-                item["one_periods"].as_array().is_some_and(|marks| {
-                    marks.iter().any(|mark| *mark == json!([month, year]))
-                })
+                item["one_periods"]
+                    .as_array()
+                    .is_some_and(|marks| marks.iter().any(|mark| *mark == json!([month, year])))
             })
             .unwrap();
         let keys: Vec<&str> = item["f"]
@@ -2571,10 +2571,7 @@ fn pr3_ranges_are_registered_pairs_on_one_item() {
                     .is_some_and(|marks| marks.iter().any(|mark| *mark == json!(range.ends)))
             })
             .unwrap_or_else(|| {
-                panic!(
-                    "{}: no item marks date_ranges {:?}",
-                    range.form, range.ends
-                )
+                panic!("{}: no item marks date_ranges {:?}", range.form, range.ends)
             });
         let keys: Vec<&str> = item["f"]
             .as_array()
@@ -2693,7 +2690,11 @@ fn pr3_period_year_forms() {
     let opened = open("0619E", 1);
     let month = "frm0619E:txtMonth";
     let year = "frm0619E:txtYear";
-    let refused = fill("0619E", &opened["draft"], json!({ month: "06", year: "25" }));
+    let refused = fill(
+        "0619E",
+        &opened["draft"],
+        json!({ month: "06", year: "25" }),
+    );
     assert_eq!(
         refused["rejected"][month],
         json!(rows_as_needed::PERIOD_ERROR),

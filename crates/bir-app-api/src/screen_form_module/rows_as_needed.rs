@@ -188,10 +188,7 @@ impl OnePeriod {
 
 /// Every enumerated month+year pair (briefs/pr3-enumeration.md, P3a).
 pub(super) const ONE_PERIODS: &[OnePeriod] = &[
-    OnePeriod::new(
-        "0605",
-        ["frm0605:itemYearEndMonth", "frm0605:txtYearEnded"],
-    ),
+    OnePeriod::new("0605", ["frm0605:itemYearEndMonth", "frm0605:txtYearEnded"]),
     OnePeriod::new("0619E", ["frm0619E:txtMonth", "frm0619E:txtYear"]),
     OnePeriod::new("0619F", ["frm0619F:txtMonth", "frm0619F:txtYear"]),
     OnePeriod::new(
@@ -205,30 +202,17 @@ pub(super) const ONE_PERIODS: &[OnePeriod] = &[
     )
     .two_digit(),
     OnePeriod::new("1601C", ["frm1601c:txtMonth", "frm1601c:txtYear"]),
-    OnePeriod::new(
-        "1701",
-        ["frm1701:txtPg1I1Month", "frm1701:txtPg1I1Year"],
-    )
-    .year_item(),
+    OnePeriod::new("1701", ["frm1701:txtPg1I1Month", "frm1701:txtPg1I1Year"]).year_item(),
     OnePeriod::new("1701A", ["frm1701A:txtMonth", "frm1701A:txtYear"]),
-    OnePeriod::new(
-        "1701MS",
-        ["frm1701MS:txtMonthNo1", "frm1701MS:txtYearNo1"],
-    ),
+    OnePeriod::new("1701MS", ["frm1701MS:txtMonthNo1", "frm1701MS:txtYearNo1"]),
     OnePeriod::new("2000", ["frm2000:txtMonth", "frm2000:txtYear"]),
     OnePeriod::new("2550M", ["frm2550m:RtnYear", "frm2550m:txtYear"]),
     OnePeriod::new(
         "2550Q",
         ["frm2550qv2024:selectedMonthNo2", "frm2550qv2024:txtYearNo2"],
     ),
-    OnePeriod::new(
-        "2551Q",
-        ["frm2551Qv2018:rtnMonth", "frm2551Qv2018:txtYear"],
-    ),
-    OnePeriod::new(
-        "2553",
-        ["frm2553:itemYearEndMonth", "frm2553:txtYearEnded"],
-    ),
+    OnePeriod::new("2551Q", ["frm2551Qv2018:rtnMonth", "frm2551Qv2018:txtYear"]),
+    OnePeriod::new("2553", ["frm2553:itemYearEndMonth", "frm2553:txtYearEnded"]),
     OnePeriod::new(
         "1702EX",
         ["frm1702EX:ddlPg1I2Date", "frm1702EX:txtPg1I2YearEnd"],
@@ -239,11 +223,7 @@ pub(super) const ONE_PERIODS: &[OnePeriod] = &[
         ["frm1702MX:ddlPg1I2Date", "frm1702MX:txtPg1I2YearEnd"],
     )
     .two_digit(),
-    OnePeriod::new(
-        "1702Q",
-        ["frm1702q:rbYrEndMonth", "frm1702q:txtYrEndYear"],
-    )
-    .two_digit(),
+    OnePeriod::new("1702Q", ["frm1702q:rbYrEndMonth", "frm1702q:txtYrEndYear"]).two_digit(),
     OnePeriod::new(
         "1702RT",
         ["frm1702RT:ddlPg1I2Month", "frm1702RT:txtPg1I2Year"],
@@ -285,17 +265,11 @@ pub(super) const DATE_RANGES: &[DateRange] = &[
     },
     DateRange {
         form: "1701MS",
-        ends: [
-            "frm1701MS:txtTaxpayerNo16a",
-            "frm1701MS:txtTaxpayerNo16a1",
-        ],
+        ends: ["frm1701MS:txtTaxpayerNo16a", "frm1701MS:txtTaxpayerNo16a1"],
     },
     DateRange {
         form: "1701MS",
-        ends: [
-            "frm1701MS:txtTaxpayerNo16b",
-            "frm1701MS:txtTaxpayerNo16b1",
-        ],
+        ends: ["frm1701MS:txtTaxpayerNo16b", "frm1701MS:txtTaxpayerNo16b1"],
     },
     DateRange {
         form: "2551Q",
@@ -304,8 +278,7 @@ pub(super) const DATE_RANGES: &[DateRange] = &[
 ];
 
 /// The page's own message for a month+year that is not one (PR 3, P3a).
-pub(super) const PERIOD_ERROR: &str =
-    "Type the month and year as MM/YYYY, for example 12/2023.";
+pub(super) const PERIOD_ERROR: &str = "Type the month and year as MM/YYYY, for example 12/2023.";
 
 /// The page's own message for a from-to pair whose end precedes its start
 /// (PR 3, R1): the To end carries it.
@@ -567,12 +540,7 @@ pub(super) fn mark_one_date(form: &mut Value, code: &str) {
 /// Where each drawn field of the form sits: key -> (part, item).
 fn field_places(form: &Value) -> std::collections::BTreeMap<String, (usize, usize)> {
     let mut out = std::collections::BTreeMap::new();
-    for (pi, part) in form["parts"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .enumerate()
-    {
+    for (pi, part) in form["parts"].as_array().into_iter().flatten().enumerate() {
         for (ii, item) in part["items"].as_array().into_iter().flatten().enumerate() {
             for field in item["f"].as_array().into_iter().flatten() {
                 if let Some(key) = field["k"].as_str() {
@@ -611,10 +579,7 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
     // (home key, the keys that join its item)
     let mut moves: Vec<(&'static str, Vec<&'static str>)> = Vec::new();
     for period in ONE_PERIODS.iter().filter(|p| p.form == code) {
-        moves.push((
-            period.keys[period.at],
-            vec![period.keys[1 - period.at]],
-        ));
+        moves.push((period.keys[period.at], vec![period.keys[1 - period.at]]));
     }
     for range in DATE_RANGES.iter().filter(|r| r.form == code) {
         let mut keys = range_end_keys(code, range.ends[0]);
@@ -629,18 +594,20 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
     if !moves.is_empty() {
         let places = field_places(form);
         for (home, keys) in moves {
-            let Some(&at) = places.get(home) else { continue };
+            let Some(&at) = places.get(home) else {
+                continue;
+            };
             for key in keys {
-                let Some(&from) = places.get(key) else { continue };
+                let Some(&from) = places.get(key) else {
+                    continue;
+                };
                 if from == at {
                     continue;
                 }
-                if let Some(field) = take_field(form, from, key) {
-                    if let Some(fields) =
-                        form["parts"][at.0]["items"][at.1]["f"].as_array_mut()
-                    {
-                        fields.push(field);
-                    }
+                if let Some(field) = take_field(form, from, key)
+                    && let Some(fields) = form["parts"][at.0]["items"][at.1]["f"].as_array_mut()
+                {
+                    fields.push(field);
                 }
             }
         }
@@ -660,9 +627,7 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
         let keys: Vec<&str> = fields.iter().map(|(k, _)| *k).collect();
         let periods: Vec<[&str; 2]> = ONE_PERIODS
             .iter()
-            .filter(|p| {
-                p.form == code && keys.contains(&p.keys[0]) && keys.contains(&p.keys[1])
-            })
+            .filter(|p| p.form == code && keys.contains(&p.keys[0]) && keys.contains(&p.keys[1]))
             .map(|p| p.keys)
             .collect();
         let ranges: Vec<[&str; 2]> = DATE_RANGES
@@ -677,11 +642,12 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
                 range.ends.iter().all(|anchor| {
                     // A whole-date box, or a date kept in a text box
                     // (2550Q's From), or a one-date's month key.
-                    fields.iter().any(|(k, t)| {
-                        k == anchor && matches!(*t, "date" | "text")
-                    }) || ONE_DATES
+                    fields
                         .iter()
-                        .any(|date| date.form == code && date.keys[0] == *anchor)
+                        .any(|(k, t)| k == anchor && matches!(*t, "date" | "text"))
+                        || ONE_DATES
+                            .iter()
+                            .any(|date| date.form == code && date.keys[0] == *anchor)
                 })
             })
             .map(|range| range.ends)
@@ -817,7 +783,9 @@ fn period_year_ok(value: &str, two_digit: bool) -> bool {
         return false;
     }
     match value.len() {
-        4 => value.parse::<u32>().is_ok_and(|y| (1900..=2100).contains(&y)),
+        4 => value
+            .parse::<u32>()
+            .is_ok_and(|y| (1900..=2100).contains(&y)),
         1..=2 if two_digit => value.parse::<u32>().is_ok_and(|n| n <= 99),
         _ => false,
     }
@@ -835,10 +803,7 @@ pub(super) fn refuse_periods(
     edits: &[(String, Value)],
 ) -> std::collections::BTreeMap<String, String> {
     let mut out = std::collections::BTreeMap::new();
-    for period in ONE_PERIODS
-        .iter()
-        .filter(|p| p.form == kind.form_code())
-    {
+    for period in ONE_PERIODS.iter().filter(|p| p.form == kind.form_code()) {
         let [month_key, year_key] = period.keys;
         if !edits
             .iter()
@@ -903,7 +868,11 @@ fn range_end_date(
     }
     let raw = match edits.iter().find(|(k, _)| k == anchor) {
         Some((_, v)) => text(v),
-        None => shown[anchor].as_str().unwrap_or_default().trim().to_string(),
+        None => shown[anchor]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_string(),
     };
     shown_ymd(&raw)
 }
@@ -943,7 +912,7 @@ pub(super) fn refuse_ranges(
         let ends: Vec<Vec<&str>> = range
             .ends
             .iter()
-            .map(|anchor| range_end_keys(kind.form_code(), *anchor))
+            .map(|anchor| range_end_keys(kind.form_code(), anchor))
             .collect();
         let touched = |key: &str| ends.iter().flatten().any(|end| *end == key);
         if !edits.iter().any(|(key, _)| touched(key)) {

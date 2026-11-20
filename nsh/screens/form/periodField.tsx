@@ -4,7 +4,7 @@
 // boxes' own BoxState, and a refusal sentence arrives on the period's month box / the To end's box.
 import type { Accessor } from "nsh";
 import { effect, signal, untracked, View } from "nsh";
-import { MONTHS_LONG } from "../../lib/dates";
+import { isoDate, MONTHS_LONG } from "../../lib/dates";
 import { DateField, DateTouchField, MonthPicker, Text, TextField } from "../../ui";
 import type { DateRange, OneDate, OnePeriod, RangeEnd } from "./schema";
 import type { FormSession } from "./session";
@@ -267,7 +267,7 @@ export function RangeField(props: RangeFieldProps) {
         narrow={props.narrow}
         min={which === "To" ? fromDay() || undefined : undefined}
         max={which === "From" ? toDay() || undefined : undefined}
-        start={(which === "To" ? toDay() : fromDay()) || (which === "To" ? fromDay() : toDay())}
+        start={(which === "To" ? toDay() : fromDay()) || (which === "To" ? fromDay() : toDay()) || isoDate(new Date())}
       />
     </View>
   );

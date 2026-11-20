@@ -439,9 +439,14 @@ test("PR3: a typed period survives a save and a reopen", async () => {
 test("PR3 R1: a reversed range is refused on the To end only, and clears when the end is fixed", async () => {
   const s = await opened(at("1702EX", 2024, 0));
   // An earlier test saved this return Fiscal (year-end August); the host's effectivity rule wants
-  // dates inside the taxable year, so put it back on Calendar (December) first.
+  // dates inside the taxable year, so put it back on Calendar (December) first. A saved Fiscal month
+  // would be cleared by the switch, so the host asks first (the removal guard): Continue it.
   s.pickRadio("frm1702EX:rdoPg1I1Calendar");
   await s.idle();
+  if (s.overlay()?.kind === "removal") {
+    s.confirmRemoval();
+    await s.idle();
+  }
   const from = "frm1702EX:txtPg1Pt1I17EffectivityFrom";
   const to = "frm1702EX:txtPg1Pt1I17EffectivityTo";
   // The host wants the effectivity inside the taxable year (2024): from <= Dec 2024, to >= Dec 2024.
@@ -483,4 +488,39 @@ test("PR3 R1: a locked range refuses edits on either end", async () => {
   await s.idle();
   expect([s.valueOf(from), s.valueOf(to)]).toEqual(before);
   s.dispose();
+});
+
+test("PR3: Calendar over a saved Fiscal month asks before clearing it, then holds December", async () => {
+  const target = at("1702EX", 2024, 0);
+  // Put the return on Fiscal with a typed year-end month and save it.
+  const s = await opened(target);
+  s.pickRadio(EX_FISCAL);
+  await s.idle();
+  if (s.overlay()?.kind === "removal") {
+    s.confirmRemoval();
+    await s.idle();
+  }
+  s.edit(EX_PERIOD, "08/2024");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  // Reopened Fiscal with month 08: Calendar would clear that month, so the host asks first and the
+  // pick waits for Continue (the removal guard).
+  const again = await opened(target);
+  expect(again.valueOf(EX_FISCAL)).toBe("true");
+  again.pickRadio("frm1702EX:rdoPg1I1Calendar");
+  await again.idle();
+  expect(again.overlay()?.kind).toBe("removal");
+  // Still Fiscal while the question is open.
+  expect(again.valueOf(EX_FISCAL)).toBe("true");
+  again.confirmRemoval();
+  await again.idle();
+  expect(again.valueOf("frm1702EX:rdoPg1I1Calendar")).toBe("true");
+  expect(again.valueOf(EX_FISCAL)).toBe("false");
+  // Calendar holds the year-end at December.
+  expect(again.valueOf(EX_MONTH)).toBe("12");
+  expect(again.shownOf(EX_PERIOD)).toBe("12/2024");
+  again.dispose();
 });

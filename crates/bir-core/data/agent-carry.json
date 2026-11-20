@@ -741,6 +741,7 @@
     ],
     "page_writes": [],
     "period": [
+      "frm1701:txtPg1I1Month",
       "frm1701:txtPg1I1Year"
     ]
   },

@@ -1254,12 +1254,17 @@ fn form_1600wp_item_11_and_the_period_follow_the_sheet() {
         .filter(|d| d.item == page[0].1)
         .map(|d| d.key)
         .collect();
+    // PR 3: the pair is one range row on the From item — both triples draw there; the To item's
+    // label heads no boxes of its own.
     assert_eq!(
         from,
         [
             "frm1600WP:DateWithholdingMonth",
             "frm1600WP:DateWithholdingDay",
-            "frm1600WP:DateWithholdingYear"
+            "frm1600WP:DateWithholdingYear",
+            "frm1600WP:DateWithholdingToMonth",
+            "frm1600WP:DateWithholdingToDay",
+            "frm1600WP:DateWithholdingToYear"
         ]
     );
     let to: Vec<String> = drawn("1600WP")
@@ -1267,14 +1272,7 @@ fn form_1600wp_item_11_and_the_period_follow_the_sheet() {
         .filter(|d| d.item == page[1].1)
         .map(|d| d.key)
         .collect();
-    assert_eq!(
-        to,
-        [
-            "frm1600WP:DateWithholdingToMonth",
-            "frm1600WP:DateWithholdingToDay",
-            "frm1600WP:DateWithholdingToYear"
-        ]
-    );
+    assert!(to.is_empty(), "the To end draws on the range row: {to:?}");
     // Schedule 1.1 is its own part after Part II, one table of ten rows
     // with the printed columns (manual-0, R3.0, R5.0).
     let parts: Vec<String> = schema_entry("1600WP").unwrap()["parts"]
