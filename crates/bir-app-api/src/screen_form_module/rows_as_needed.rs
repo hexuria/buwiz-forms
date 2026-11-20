@@ -101,26 +101,77 @@ pub(super) enum DatePart {
     Year,
 }
 
-/// The month, day and year keys of each one-date box (PR 5's page box,
-/// form_page.js `oneDate`): `(form, [month, day, year])`.
-pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
-    (
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DateWriter {
+    /// Ordinary bindings; blank whole-number parts are written as zero.
+    Ordinary,
+    /// The date-part writer validates each part.
+    Parts,
+    /// The date-part writer also stores a cleared whole-number part as zero.
+    WholeParts,
+    /// The nullable 0605 date is judged and written by its own batch writer.
+    Nullable,
+    /// The estate date's own writer handles blank parts.
+    Estate,
+    /// The date identifies the return and cannot be edited.
+    Identity,
+}
+
+pub(super) struct OneDate {
+    pub(super) form: &'static str,
+    pub(super) keys: [&'static str; 3],
+    /// The old shell already drew this triple as one date.
+    old_shell: bool,
+    writer: DateWriter,
+    /// A zero month or day hides all three shown parts, retaining the draft.
+    hide_zero_parts: bool,
+}
+
+impl OneDate {
+    const fn new(form: &'static str, keys: [&'static str; 3]) -> Self {
+        Self {
+            form,
+            keys,
+            old_shell: false,
+            writer: DateWriter::Ordinary,
+            hide_zero_parts: false,
+        }
+    }
+    const fn old_shell(mut self) -> Self {
+        self.old_shell = true;
+        self
+    }
+    const fn writer(mut self, writer: DateWriter) -> Self {
+        self.writer = writer;
+        self
+    }
+    const fn hide_zero_parts(mut self) -> Self {
+        self.hide_zero_parts = true;
+        self
+    }
+}
+
+/// The month, day and year keys and their host and old-shell behavior.
+pub(super) const ONE_DATES: &[OneDate] = &[
+    OneDate::new(
         "0605",
         [
             "frm0605:txtDueDateMonth",
             "frm0605:txtDueDateDay",
             "frm0605:txtDueDateYear",
         ],
-    ),
-    (
+    )
+    .writer(DateWriter::Nullable),
+    OneDate::new(
         "0605",
         [
             "frm0605:txtReturnPeriodMonth",
             "frm0605:txtReturnPeriodDay",
             "frm0605:txtReturnPeriodYear",
         ],
-    ),
-    (
+    )
+    .writer(DateWriter::Nullable),
+    OneDate::new(
         "0619E",
         [
             "frm0619E:txtDueMonth",
@@ -128,7 +179,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm0619E:txtDueYear",
         ],
     ),
-    (
+    OneDate::new(
         "0619F",
         [
             "frm0619F:txtDueMonth",
@@ -136,7 +187,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm0619F:txtDueYear",
         ],
     ),
-    (
+    OneDate::new(
         "1604C",
         [
             "frm1604c:txtRefMonth",
@@ -144,7 +195,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm1604c:txtRefYear",
         ],
     ),
-    (
+    OneDate::new(
         "1606",
         [
             "frm1606:txtDateMonth",
@@ -152,47 +203,58 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm1606:txtDateYear",
         ],
     ),
-    (
+    OneDate::new(
         "1701Q",
         [
             "frm1701q:txtBirthMonth",
             "frm1701q:txtBirthDay",
             "frm1701q:txtBirthYear",
         ],
-    ),
-    (
+    )
+    .old_shell(),
+    OneDate::new(
         "1706",
         [
             "frm1706:txtDateMonth",
             "frm1706:txtDateDay",
             "frm1706:txtDateYear",
         ],
-    ),
-    (
+    )
+    .old_shell(),
+    OneDate::new(
         "1706",
         [
             "frm1706:txtDateMonthI",
             "frm1706:txtDateDayI",
             "frm1706:txtDateYearI",
         ],
-    ),
-    (
+    )
+    .old_shell()
+    .writer(DateWriter::Parts)
+    .hide_zero_parts(),
+    OneDate::new(
         "1707",
         [
             "frm1707:txtPg1I1Month",
             "frm1707:txtPg1I1Day",
             "frm1707:txtPg1I1Year",
         ],
-    ),
-    (
+    )
+    .old_shell()
+    .writer(DateWriter::WholeParts)
+    .hide_zero_parts(),
+    OneDate::new(
         "2552",
         [
             "frm2552:txtPg1I1Month",
             "frm2552:txtPg1I1Day",
             "frm2552:txtPg1I1Year",
         ],
-    ),
-    (
+    )
+    .old_shell()
+    .writer(DateWriter::Identity)
+    .hide_zero_parts(),
+    OneDate::new(
         "1707A",
         [
             "frm1707Av2021:txtI1YearEndMonth",
@@ -200,7 +262,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm1707Av2021:txtI1YearEndYear",
         ],
     ),
-    (
+    OneDate::new(
         "1800",
         [
             "frm1800v2018:txtMonth",
@@ -208,15 +270,17 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm1800v2018:txtYear",
         ],
     ),
-    (
+    OneDate::new(
         "1801",
         [
             "frm1801v2018:txtDateMonth",
             "frm1801v2018:txtDateDay",
             "frm1801v2018:txtDateYear",
         ],
-    ),
-    (
+    )
+    .old_shell()
+    .writer(DateWriter::Estate),
+    OneDate::new(
         "2200A",
         [
             "frm2200Av2020:txtDateMonth",
@@ -224,7 +288,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm2200Av2020:txtDateYear",
         ],
     ),
-    (
+    OneDate::new(
         "2200AN",
         [
             "frm2200ANv2018:txtMonth",
@@ -232,7 +296,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm2200ANv2018:txtYear",
         ],
     ),
-    (
+    OneDate::new(
         "2200C",
         [
             "frm2200C:txtPg1I1Month",
@@ -240,7 +304,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm2200C:txtPg1I1Year",
         ],
     ),
-    (
+    OneDate::new(
         "2200M",
         [
             "frm2200M:txtPg1I1Month",
@@ -248,7 +312,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm2200M:txtPg1I1Year",
         ],
     ),
-    (
+    OneDate::new(
         "2200P",
         [
             "frm2200P:txtPg1I1Month",
@@ -256,7 +320,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm2200P:txtPg1I1Year",
         ],
     ),
-    (
+    OneDate::new(
         "2200S",
         [
             "frm2200S:txtMonth1",
@@ -264,7 +328,7 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
             "frm2200S:txtForYr",
         ],
     ),
-    (
+    OneDate::new(
         "2200T",
         [
             "frm2200Tv2020:txtDateMonth",
@@ -274,25 +338,27 @@ pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
     ),
 ];
 
-pub(super) fn registered_date_part(code: &str, key: &str) -> bool {
+fn registered_date(code: &str, key: &str) -> Option<&'static OneDate> {
     ONE_DATES
         .iter()
-        .any(|(form, keys)| *form == code && keys.contains(&key))
+        .find(|date| date.form == code && date.keys.contains(&key))
+}
+
+pub(super) fn clear_date_part_as_zero(code: &str, key: &str) -> bool {
+    registered_date(code, key).is_some_and(|date| date.writer == DateWriter::Ordinary)
 }
 
 fn date_part(code: &str, key: &str) -> Option<DatePart> {
-    let (_, keys) = ONE_DATES.iter().find(|(form, keys)| {
-        *form == code
-            && keys.contains(&key)
-            && ((*form == "1706" && keys[0] == "frm1706:txtDateMonthI") || *form == "1707")
-    })?;
-    let at = keys.iter().position(|k| *k == key)?;
+    let date = registered_date(code, key)?;
+    if !matches!(date.writer, DateWriter::Parts | DateWriter::WholeParts) {
+        return None;
+    }
+    let at = date.keys.iter().position(|k| *k == key)?;
     Some([DatePart::Month, DatePart::Day, DatePart::Year][at])
 }
 
-/// Rule 4 for the one-date boxes: their item is marked `one_date`, so the
-/// page shows the three boxes as one date ("Mar 15, 2026"), typed or picked,
-/// and sends the three parts together; the draft keeps them split.
+/// The NSH page reads triples from `one_dates`; the old shell keeps only
+/// the `one_date` marks it already used.
 pub(super) fn mark_one_date(form: &mut Value, code: &str) {
     let items = form["parts"]
         .as_array_mut()
@@ -306,16 +372,16 @@ pub(super) fn mark_one_date(form: &mut Value, code: &str) {
             .flatten()
             .filter_map(|field| field["k"].as_str())
             .collect();
-        let triples: Vec<_> = ONE_DATES
+        let dates: Vec<_> = ONE_DATES
             .iter()
-            .filter(|(form, keys)| *form == code && keys.iter().all(|key| fields.contains(key)))
-            .map(|(_, keys)| *keys)
+            .filter(|date| date.form == code && date.keys.iter().all(|key| fields.contains(key)))
             .collect();
-        if !triples.is_empty() {
-            if triples.len() == 1 && fields.len() == 3 {
+        if !dates.is_empty() {
+            if dates.len() == 1 && dates[0].old_shell && fields.len() == 3 {
                 item["one_date"] = Value::Bool(true);
             }
-            item["one_dates"] = serde_json::json!(triples);
+            item["one_dates"] =
+                serde_json::json!(dates.iter().map(|date| date.keys).collect::<Vec<_>>());
         }
     }
 }
@@ -377,26 +443,17 @@ pub(super) fn refuse_dates(
     edits: &[(String, Value)],
 ) -> std::collections::BTreeMap<String, String> {
     let mut out = std::collections::BTreeMap::new();
-    // 2552 is skipped on purpose: its item 1 date picks which return this is
-    // (the identity lock refuses its writes before a date is judged), so a
-    // date sentence would only ever pre-empt the lock's own reason.
-    if matches!(kind.form_code(), "2552" | "0605") {
-        return out;
-    }
-    for (_, keys) in ONE_DATES
+    for date in ONE_DATES
         .iter()
-        .filter(|(form, _)| *form == kind.form_code())
+        .filter(|date| date.form == kind.form_code())
     {
-        if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
+        // An identity lock must answer before a date check; nullable dates
+        // are judged by their own batch writer.
+        if matches!(date.writer, DateWriter::Identity | DateWriter::Nullable) {
             continue;
         }
-        let legacy = (kind.form_code() == "1706" && keys[0] == "frm1706:txtDateMonthI")
-            || kind.form_code() == "1707";
-        if !legacy
-            && !keys
-                .iter()
-                .all(|key| edits.iter().any(|(sent, _)| sent == key))
-        {
+        let keys = date.keys;
+        if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
             continue;
         }
         // A typed part is missing only when empty; a shown one also when it
@@ -535,10 +592,10 @@ pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
     };
     ONE_DATES
         .iter()
-        .filter(|(form, _)| *form == kind.form_code())
-        .filter_map(|(_, keys)| {
-            partial_date(*keys, &map)
-                .map(|message| serde_json::json!({ "field": "one_date", "message": message, "keys": keys }))
+        .filter(|date| date.form == kind.form_code())
+        .filter_map(|date| {
+            partial_date(date.keys, &map)
+                .map(|message| serde_json::json!({ "field": "one_date", "message": message, "keys": date.keys }))
         })
         .collect()
 }
@@ -601,10 +658,7 @@ pub(super) fn part_iv_tag(row: usize) -> String {
 }
 
 pub(super) fn cell(kind: AgentFormKind, key: &str) -> Option<Cell> {
-    // 2552's item 1 is the return's identity: its fill keeps that lock.
-    if kind.form_code() != "2552"
-        && let Some(part) = date_part(kind.form_code(), key)
-    {
+    if let Some(part) = date_part(kind.form_code(), key) {
         return Some(Cell::DatePart(part));
     }
     let tin_part = |suffix: &str| match suffix {
@@ -808,9 +862,10 @@ pub(super) fn fill(
         }
         Cell::DatePart(part) => match date_part_refusal(part, value) {
             Some(why) => Err(why),
-            // 1707's parts are whole numbers: a cleared part is the official
-            // blank 0 (`00`), which the page shows as no date.
-            None if kind.form_code() == "1707" && text(value).is_empty() => {
+            None if registered_date(kind.form_code(), key)
+                .is_some_and(|date| date.writer == DateWriter::WholeParts)
+                && text(value).is_empty() =>
+            {
                 fill_whole_zero(kind, draft, key)
             }
             None => ordinary(draft),
@@ -1302,17 +1357,17 @@ pub(super) fn values(
 ) {
     // A one-date box whose month and day are both still the official blank
     // `00` (a return not yet dated) shows no date at all, never "00/00/2026".
-    if let Some((_, [month, day, year])) = ONE_DATES.iter().find(|(form, keys)| {
-        *form == kind.form_code()
-            && ((*form == "1706" && keys[0] == "frm1706:txtDateMonthI")
-                || matches!(*form, "1707" | "2552"))
-    }) {
+    for date in ONE_DATES
+        .iter()
+        .filter(|date| date.form == kind.form_code() && date.hide_zero_parts)
+    {
+        let [month, day, year] = date.keys;
         // Nor one holding only part of a date (03/00/2026): blank, with a
         // notice saying what is stored (`notices`, `waits`).
         let unset = |key: &str| map.get(key).is_some_and(|v| v.trim() == "00");
         if unset(month) || unset(day) {
             for key in [month, day, year] {
-                map.insert((*key).to_string(), String::new());
+                map.insert(key.to_string(), String::new());
             }
         }
     }
@@ -1458,6 +1513,22 @@ pub(super) const LSE_RATE_WAITS: &str = "Schedule 1's rate is 6/10 of 1%.";
 /// blank (the page shows it in the box).
 pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
     let mut out = Map::new();
+    for date in ONE_DATES
+        .iter()
+        .filter(|date| date.form == kind.form_code() && date.writer == DateWriter::Identity)
+    {
+        for key in date.keys {
+            out.insert(key.to_string(), Value::from(DATE_FROM_NEW_RETURN));
+        }
+        if let Some(why) = bir_core::forms::agent::field_map(kind, draft)
+            .ok()
+            .and_then(|map| partial_date(date.keys, &map))
+        {
+            for key in date.keys {
+                out.insert(key.to_string(), Value::from(why.clone()));
+            }
+        }
+    }
     let fmv_boxes = |prefix: &str| {
         [
             ("A", "FMV of Land per Tax Declaration"),
@@ -1494,23 +1565,6 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
             }
         }
         "2552" => {
-            // Item 1 is the return's identity, set where it is started.
-            let keys = ONE_DATES
-                .iter()
-                .find(|(form, _)| *form == "2552")
-                .expect("2552 date")
-                .1;
-            for key in keys {
-                out.insert(key.to_string(), Value::from(DATE_FROM_NEW_RETURN));
-            }
-            if let Some(why) = bir_core::forms::agent::field_map(kind, draft)
-                .ok()
-                .and_then(|map| partial_date(keys, &map))
-            {
-                for key in keys {
-                    out.insert(key.to_string(), Value::from(why.clone()));
-                }
-            }
             for n in 1..=9 {
                 out.insert(
                     format!("frm2552:txtPg2Pt5Sch1_{n}Col7"),

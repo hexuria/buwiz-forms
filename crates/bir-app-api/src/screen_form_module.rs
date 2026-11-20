@@ -5185,9 +5185,7 @@ fn apply_screen_edits_here(
             }
             ChoiceStep::Fill(value) => {
                 let numeric_date_clear = value.as_str().is_some_and(|s| s.trim().is_empty())
-                    && kind.form_code() != "1707"
-                    && kind.form_code() != "1801"
-                    && rows_as_needed::registered_date_part(kind.form_code(), &key)
+                    && rows_as_needed::clear_date_part_as_zero(kind.form_code(), &key)
                     && def
                         .bindings
                         .get(&key)

@@ -2304,6 +2304,133 @@ fn pr2_0605_dates_are_independent_registered_triples() {
 }
 
 #[test]
+fn pr2_old_shell_one_date_marks_remain_unchanged() {
+    for (code, number, old_mark) in [
+        ("0605", "4", false),
+        ("0605", "7", false),
+        ("0619E", "2", false),
+        ("1604C", "11A", false),
+        ("1606", "1", false),
+        ("1706", "1", true),
+        ("1706", "7", true),
+        ("1707", "1", true),
+        ("2552", "1", true),
+        ("1701Q", "11", true),
+        ("1801", "1", true),
+    ] {
+        let items = items_numbered(code, number);
+        let item = items
+            .iter()
+            .find(|item| {
+                item["one_dates"]
+                    .as_array()
+                    .is_some_and(|dates| !dates.is_empty())
+            })
+            .unwrap_or_else(|| panic!("{code} item {number} has no registered date"));
+        assert_eq!(item["one_date"] == true, old_mark, "{code} item {number}");
+    }
+    let expected = [
+        ("1701Q", "11"),
+        ("1706", "1"),
+        ("1706", "7"),
+        ("1707", "1"),
+        ("1801", "1"),
+        ("2552", "1"),
+    ];
+    let mut actual = Vec::new();
+    for form in parse_form_schemas() {
+        let code = form.code.expect("form code");
+        let built = schema_entry(&code).unwrap();
+        for item in built["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+        {
+            if item["one_date"] == true {
+                actual.push((code.clone(), item["no"].as_str().unwrap_or("").to_string()));
+            }
+        }
+    }
+    actual.sort();
+    assert_eq!(
+        actual,
+        expected.map(|(code, no)| (code.to_string(), no.to_string()))
+    );
+}
+
+#[test]
+fn pr2_0619e_day_only_is_judged_with_locked_month_and_year() {
+    setup();
+    let opened = open("0619E", 3);
+    let before = &opened["draft"];
+    let month = "frm0619E:txtDueMonth";
+    let day = "frm0619E:txtDueDay";
+    let year = "frm0619E:txtDueYear";
+    assert_eq!(opened["values"][month], "04");
+    assert_eq!(opened["values"][year], YEAR.to_string());
+    let bad = fill("0619E", before, json!({ day: "31" }));
+    assert_eq!(bad["rejected"][month], rows_as_needed::DATE_ERROR);
+    assert_eq!(&bad["draft"], before);
+    let good = fill("0619E", before, json!({ day: "30" }));
+    assert!(
+        good["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        good["rejected"]
+    );
+    assert_eq!(good["values"][day], "30");
+}
+
+#[test]
+fn pr2_1606_single_parts_judge_the_date_when_the_last_part_arrives() {
+    setup();
+    let keys = [
+        "frm1606:txtDateMonth",
+        "frm1606:txtDateDay",
+        "frm1606:txtDateYear",
+    ];
+    let opened = open("1606", 1);
+    let cleared = fill(
+        "1606",
+        &opened["draft"],
+        json!({ keys[0]: "", keys[1]: "", keys[2]: "" }),
+    );
+    assert!(
+        cleared["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        cleared["rejected"]
+    );
+    let month = fill("1606", &cleared["draft"], json!({ keys[0]: "04" }));
+    assert!(
+        month["rejected"].as_object().unwrap().is_empty(),
+        "{}",
+        month["rejected"]
+    );
+    for (day, valid) in [("30", true), ("31", false)] {
+        let partial = fill("1606", &month["draft"], json!({ keys[1]: day }));
+        assert!(
+            partial["rejected"].as_object().unwrap().is_empty(),
+            "{}",
+            partial["rejected"]
+        );
+        let complete = fill("1606", &partial["draft"], json!({ keys[2]: "2026" }));
+        if valid {
+            assert!(
+                complete["rejected"].as_object().unwrap().is_empty(),
+                "{}",
+                complete["rejected"]
+            );
+            assert_eq!(complete["values"][keys[0]], "04");
+            assert_eq!(complete["values"][keys[1]], "30");
+            assert_eq!(complete["values"][keys[2]], "2026");
+        } else {
+            assert_eq!(complete["rejected"][keys[0]], rows_as_needed::DATE_ERROR);
+            assert_eq!(complete["draft"], partial["draft"]);
+        }
+    }
+}
+
+#[test]
 fn pr2_1606_rejects_an_impossible_transaction_date_as_one_batch() {
     setup();
     let opened = open("1606", 1);
@@ -2328,7 +2455,9 @@ fn pr2_1606_rejects_an_impossible_transaction_date_as_one_batch() {
 #[test]
 fn pr2_registered_date_keys_are_drawn_and_impossible_batches_do_not_land() {
     setup();
-    for &(code, keys) in rows_as_needed::ONE_DATES {
+    for date in rows_as_needed::ONE_DATES {
+        let code = date.form;
+        let keys = date.keys;
         let form = schema_entry(code).expect("registered form");
         let items = form["parts"]
             .as_array()

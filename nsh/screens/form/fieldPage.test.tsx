@@ -58,6 +58,18 @@ test("PR 2: a phone date row includes its required-date error in its accessible 
   expect(app.shows("label:Due Date, not set, Item 4 needs a due date.")).toBe(true);
 });
 
+for (const width of [390, 1280]) {
+  test(`PR 2: a locked one-date hint is shown whole at ${width} points`, async () => {
+    const app = await open(ENTRY, {
+      width, height: 900, platform: width < 600 ? "ios" : "macos",
+      host: { params: { formCode: "2552", year: 2025, period: 1, mode: "return" } },
+    });
+    await app.waitFor("id:fp-frm2552:txtPg1I1Month#date");
+    expect(app.shows("id:fp-frm2552:txtPg1I1Month#date-hint")).toBe(true);
+    expect(app.texts()).toContain("Set by the date of transaction you start this return with (New return).");
+  });
+}
+
 // Typing shows at once; the host's answer lands after the 300 ms flush. The
 // wait covers the flush and the fill's round trip, then the box must still
 // hold the digits — a refused write puts the shown value back.

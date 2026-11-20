@@ -51,8 +51,8 @@ function ReadBox(props: { p: FieldInput }) {
   // The narrow boxes of a TIN (58, 76 wide) have no room for a lock: they read as the old page's locked boxes did, centred.
   const small = () => !p.narrow() && p.width < 100;
   // A hint is never cut mid-word (F9-4: "Shows once the period is set" in an 88-wide year box read "Shows o…"): while it
-  // shows, the box is at least its own width and grows to the hint, up to the row's width, where the hint wraps.
-  const grows = () => Boolean(hint()) && !p.narrow();
+  // shows, the box grows to the hint, up to the row's width, where the hint wraps.
+  const grows = () => Boolean(hint());
   return (
     <View
       testID={p.testID}

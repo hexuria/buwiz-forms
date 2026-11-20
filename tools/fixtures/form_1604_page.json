@@ -352,7 +352,6 @@
                 }
               ],
               "cols": null,
-              "one_date": true,
               "one_dates": [
                 [
                   "frm1604c:txtRefMonth",
