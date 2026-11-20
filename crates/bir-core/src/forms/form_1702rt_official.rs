@@ -320,9 +320,23 @@ impl Form1702RTDraft {
         let ordinary = self.schedule_1.item_18_total;
         p4.item_34_ordinary_itemized_deductions = ordinary;
 
-        // Schedule III (computeItem18and33, fillNetOperatingLossItems).
+        // Schedule III (computeItem18and33, fillNetOperatingLossItems;
+        // calculations.json 1702rt-schedule1-copy-and-loss).
+        // getValAmount leaves comma-free field values as strings —
+        // "(500)" parses to "-500", still comma-free — so the page's
+        // `totalItem18 > totalItem33` is a lexicographic compare only
+        // when both totals are inside ±1,000: "150" <= "29" drops a real
+        // 121 NOL. The phantom direction ("99" > "100") fills and is then
+        // re-zeroed by fillNetOperatingLossItems, so the NOL lands only
+        // when the string and numeric orders agree.
         let s3 = &mut self.schedule_3;
-        if itemized && ordinary.0 > gross.0 {
+        let page_compare_holds =
+            if ordinary.0.unsigned_abs() < 1000 && gross.0.unsigned_abs() < 1000 {
+                ordinary.0.to_string() > gross.0.to_string()
+            } else {
+                true
+            };
+        if itemized && ordinary.0 > gross.0 && page_compare_holds {
             s3.item_1_gross_income = gross;
             s3.item_2_ordinary_deductions = ordinary;
             s3.item_3_net_operating_loss = WholePeso(gross.0 - ordinary.0);
@@ -348,6 +362,13 @@ impl Form1702RTDraft {
                 row.amount.0
                     - (row.applied_previous_years.0 + row.expired.0 + row.applied_current_year.0),
             );
+        }
+        // With no loss recorded and gross income not above the deductions,
+        // the page leaves Item 4's unapplied balance at the deductions
+        // total: fillNetOperatingLossItems writes it, and only
+        // computeP2Pt4I39 clears it, when Item 33 is above Item 34.
+        if itemized && s3.item_3_net_operating_loss.0 >= 0 && ordinary.0 >= gross.0 {
+            s3.rows[0].unapplied_balance = ordinary;
         }
         s3.item_8_total_applied_current_year =
             sum(s3.rows.iter().map(|row| row.applied_current_year));
@@ -1625,6 +1646,106 @@ mod tests {
         assert_eq!(loss.schedule_3.rows[0].amount, WholePeso(1_289_999));
         assert_eq!(loss.part_iv.item_41_normal_income_tax_due, WholePeso(0));
         assert_eq!(loss.part_iv.item_43_tax_due, WholePeso(59_000));
+    }
+
+    #[test]
+    fn net_operating_loss_uses_the_pages_lexicographic_compare() {
+        // Deductions 150, gross 29: BIR's string compare reads "150" <= "29"
+        // and drops a real 121 NOL, leaving the deductions total as Item
+        // 4's unapplied balance.
+        let mut dropped = sample();
+        let p4 = &mut dropped.part_iv;
+        p4.item_27_sales = WholePeso(100);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(71);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        dropped.schedule_1.salaries_wages_allowances = WholePeso(0);
+        dropped.schedule_1.rental = WholePeso(150);
+        dropped.recompute();
+        assert_eq!(dropped.schedule_3.item_3_net_operating_loss, ZERO);
+        assert_eq!(dropped.schedule_3.rows[0].amount, ZERO);
+        assert_eq!(dropped.schedule_3.rows[0].unapplied_balance, WholePeso(150));
+
+        // Deductions 99, gross 100: "99" > "100" fires, then
+        // fillNetOperatingLossItems zeroes the positive Item 3 back out.
+        let mut phantom = sample();
+        let p4 = &mut phantom.part_iv;
+        p4.item_27_sales = WholePeso(100);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        phantom.schedule_1.salaries_wages_allowances = WholePeso(0);
+        phantom.schedule_1.rental = WholePeso(99);
+        phantom.recompute();
+        assert_eq!(phantom.schedule_3.item_1_gross_income, ZERO);
+        assert_eq!(phantom.schedule_3.item_2_ordinary_deductions, ZERO);
+        assert_eq!(phantom.schedule_3.item_3_net_operating_loss, ZERO);
+        assert_eq!(phantom.schedule_3.rows[0].amount, ZERO);
+        assert_eq!(phantom.schedule_3.rows[0].unapplied_balance, ZERO);
+
+        // Deductions 500, gross 499: string and numeric orders agree, the
+        // one-peso NOL lands.
+        let mut recorded = sample();
+        let p4 = &mut recorded.part_iv;
+        p4.item_27_sales = WholePeso(499);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        recorded.schedule_1.salaries_wages_allowances = WholePeso(0);
+        recorded.schedule_1.rental = WholePeso(500);
+        recorded.recompute();
+        assert_eq!(recorded.schedule_3.item_3_net_operating_loss, WholePeso(-1));
+        assert_eq!(recorded.schedule_3.rows[0].amount, WholePeso(1));
+        assert_eq!(recorded.schedule_3.rows[0].unapplied_balance, WholePeso(1));
+
+        // Deductions 1,000, gross 999: the comma makes the page read
+        // 1,000 as a number, so the compare is numeric and the loss lands.
+        let mut comma = sample();
+        let p4 = &mut comma.part_iv;
+        p4.item_27_sales = WholePeso(999);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        comma.schedule_1.salaries_wages_allowances = WholePeso(0);
+        comma.schedule_1.rental = WholePeso(1_000);
+        comma.recompute();
+        assert_eq!(comma.schedule_3.item_3_net_operating_loss, WholePeso(-1));
+        assert_eq!(comma.schedule_3.rows[0].amount, WholePeso(1));
+
+        // No deductions, gross -500: "0" sorts above "-500", as 0 is above
+        // -500, and the page records the 500 loss. (The page turns a
+        // negative deduction into 0, so Item 18 itself is never negative.)
+        let mut negative = sample();
+        let p4 = &mut negative.part_iv;
+        p4.item_27_sales = WholePeso(0);
+        p4.item_28_sales_returns = WholePeso(500);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        negative.schedule_1.salaries_wages_allowances = WholePeso(0);
+        negative.schedule_1.rental = WholePeso(0);
+        negative.recompute();
+        assert_eq!(negative.schedule_3.item_1_gross_income, WholePeso(-500));
+        assert_eq!(
+            negative.schedule_3.item_3_net_operating_loss,
+            WholePeso(-500)
+        );
+        assert_eq!(negative.schedule_3.rows[0].amount, WholePeso(500));
+
+        // Deductions 5,000, gross 5,000: no loss, and the page still leaves
+        // the deductions total as Item 4's unapplied balance.
+        let mut equal = sample();
+        let p4 = &mut equal.part_iv;
+        p4.item_27_sales = WholePeso(5_000);
+        p4.item_28_sales_returns = WholePeso(0);
+        p4.item_30_cost_of_sales_or_services = WholePeso(0);
+        p4.item_32_other_taxable_income = WholePeso(0);
+        equal.schedule_1.salaries_wages_allowances = WholePeso(0);
+        equal.schedule_1.rental = WholePeso(5_000);
+        equal.recompute();
+        assert_eq!(equal.schedule_3.item_3_net_operating_loss, ZERO);
+        assert_eq!(equal.schedule_3.rows[0].amount, ZERO);
+        assert!(equal.schedule_3.rows[0].year_incurred.is_empty());
+        assert_eq!(equal.schedule_3.rows[0].unapplied_balance, WholePeso(5_000));
     }
 
     #[test]

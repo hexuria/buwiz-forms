@@ -15,7 +15,7 @@ members = [
 version = "0.2.0"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/codeitlikemiley/ebirforms"
+repository = "https://github.com/hexuria/buwiz-forms"
 
 [workspace.dependencies]
 # Serialization
@@ -66,8 +66,8 @@ dotenvy = "0.15.7"
 # OS integration
 keyring = { version = "3" }
 
-# Cargo resolves 1042 packages here: 1036 external dependencies against 6
-# workspace crates. Full debuginfo on all of them is what made target/ grow to
+# Cargo resolves several hundred packages here, nearly all of them external
+# dependencies. Full debuginfo on all of them is what made target/ grow to
 # 90 GiB. "line-tables-only" keeps file/line in backtraces and panic messages -
 # what is actually read during development - and drops the rest.
 [profile.dev]

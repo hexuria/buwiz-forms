@@ -54,10 +54,6 @@ Desktop.ini
 # Generated PDF files
 *.pdf
 
-# Written by the gpui-shell runtime on every launch (set_editor_files); the
-# declarations always describe the engine actually running, never an editor's
-# stale copy.
-app/gpui-kit.d.ts
 *.lock
 !/Cargo.lock
 # bir-shell is a standalone workspace (gpui-kit-assets `links` conflict keeps
@@ -85,19 +81,10 @@ test_errors.txt
 **/__pycache__/
 *.py[cod]
 /.ruff_cache/
-/apps/form-calibration/dist/
 
 # Validation codegen transaction leftovers
 /crates/bir-rules/src/generated.bir-rules-codegen-backup-*/
 /crates/bir-rules/src/generated.bir-rules-codegen-staging-*/
-
-# Stray local command-output artifact
-/470
-
-# Reverse-engineering workspace artifacts
-strings_bir.txt
-symbols.txt
-objc_classes.txt
 
 # One-off scratch files
 scratch*.js
@@ -132,7 +119,6 @@ node_modules/
 # rules/agent-boundaries/ — see .stow-README.md.
 /.claude/
 /.codex/
-/docs/
 /AGENT.md
 /AGENTS.md
 /CLAUDE.md
