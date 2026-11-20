@@ -27,6 +27,7 @@ interface Params {
   start?: string;
   card?: "export";
   exportDownload?: { name?: string; error?: string; cancelled?: boolean };
+  exportLayout?: boolean;
   year?: number;
   selfEmployed?: boolean;
   savedReturn?: { formCode: string; year: number; period: number };
@@ -67,6 +68,7 @@ function Demo() {
   }
   if (p.card === "export") {
     const calls = signal(0);
+    const cardHeight = signal(0);
     if (p.exportDownload) {
       const download = p.exportDownload;
       const fake = bir as unknown as { export_profile: typeof bir.export_profile };
@@ -81,7 +83,12 @@ function Demo() {
     store.bump();
     return (
       <View class="flex-1 bg-background p-6">
-        <ProfileExportCard />
+        <View onLayout={(e) => cardHeight.set(e.bounds.size.height)}>
+          <ProfileExportCard />
+        </View>
+        <If when={p.exportLayout}>
+          <Text>{`Export card height: ${cardHeight()}`}</Text>
+        </If>
         <If when={p.exportDownload !== undefined}>
           <Text testID="export-calls">{`Export requests: ${calls()}`}</Text>
         </If>
