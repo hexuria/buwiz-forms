@@ -77,6 +77,10 @@ for (const width of [390, 1440]) {
     expect(app.value("id:fp-frm1801v2018:txtBranchCodeE")).toBe("00001");
     // No auto-advance: the next box stays empty until it is typed in.
     expect(app.value("id:fp-frm1801v2018:txtTINE2")).toBe("");
+    // A paste of dashes, spaces and letters lands as digits only, at most the box's max.
+    await app.clear("id:fp-frm1801v2018:txtBranchCodeE");
+    await app.paste("id:fp-frm1801v2018:txtBranchCodeE", { text: "ab 00-00 1x" });
+    expect(app.value("id:fp-frm1801v2018:txtBranchCodeE")).toBe("00001");
   });
 }
 

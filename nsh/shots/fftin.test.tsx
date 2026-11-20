@@ -42,6 +42,19 @@ for (const look of [
   }, 120_000);
 }
 
+// Row-height evidence (the brief's 420 and 640 pt): 0605 Item 9 (row 1:0) settled inside the viewport so its
+// top and bottom dividers are both in the picture; the heights are measured on the PNGs (shots/rowheights.py).
+for (const width of [420, 640]) {
+  test(`fftin 0605 TIN row height ${width}`, async () => {
+    const app = await openForm("0605", width, 1000, "light", { year: 2025, period: 1, mode: "return" });
+    await showRow(app, 1, "1:0");
+    // The row enters at the viewport's foot; one more scroll lifts it clear of the floating pill at the bottom.
+    await app.scroll("id:form-scroll", 200);
+    await app.wait(400);
+    await shoot(app, `tin-0605-rowh-${width}`);
+  }, 120_000);
+}
+
 // 1801's typed executor TIN: empty, then filled — the digits-only boxes with no profile line.
 for (const look of [
   { name: "390-light", width: 390, height: 844, scheme: "light" as const },
