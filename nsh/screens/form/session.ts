@@ -116,6 +116,7 @@ export interface SessionHooks {
   onRetarget?(target: FormTarget): void;
   /** The return was queued or taken out of the queue. */
   onQueueChanged?(target: FormTarget): void;
+  onOpenProfile?(section: string, year: number): void;
 }
 
 export type SaveState =
@@ -2315,7 +2316,7 @@ export class FormSession {
       s.showAll = true;
       this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
       this.publish();
-      return this.toast(check.blocks[0].message, "triangle-alert");
+      return this.toast(check.blocks[0].message, "triangle-alert", this.refusalAction(check.blocks));
     }
     const warns = check?.warns ?? [];
     if (!this.looksFirst()) return this.askQueue(warns);
@@ -2329,7 +2330,7 @@ export class FormSession {
       const listed = n > 0 ? this.refusalList() : "";
       if (listed && listed !== this.toldRefusal) {
         this.toldRefusal = listed;
-        return void this.toast(attentionText(n), "triangle-alert");
+        return void this.toast(attentionText(n), "triangle-alert", this.refusalAction(s.errors));
       }
       this.toldRefusal = "";
       this.askQueue(warns);
@@ -2398,8 +2399,6 @@ export class FormSession {
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
-      s.showAll = true;
-      this.publish();
       const message = errorText(e);
       const refusal = plainRefusal(message);
       const count = listedFields(refusal);
@@ -2408,8 +2407,43 @@ export class FormSession {
           && Object.values(s.messages).some((text) => text.includes(error.message)))
         .map((error) => `${error.field}: ${error.message}`));
       const alreadyShown = count > 0 && refusal.split(/;\s+(?=[a-z][a-z0-9_.]*: )/).every((entry) => shown.has(entry));
-      this.toast(alreadyShown ? attentionText(count) : message, "triangle-alert");
+      const errors = count ? refusal.split(/;\s+(?=[a-z][a-z0-9_.]*: )/).map((entry) => {
+        const at = entry.indexOf(": ");
+        const field = entry.slice(0, at);
+        const error = { field, message: entry.slice(at + 2), keys: s.errors.find((old) => old.field === field)?.keys || [field] };
+        const row = this.refusalRow(error);
+        if (row && !error.keys.some((key) => this.keyIndex.has(key))) error.keys = keysOf(this.items.get(row)!);
+        return error;
+      }) : [];
+      s.showAll = true;
+      const mapped = errors.filter((error) => this.refusalRow(error));
+      const fields = new Set(mapped.map((error) => error.field));
+      this.setErrors([...s.errors.filter((old) => !fields.has(old.field) && !s.factErrors.includes(old)), ...mapped]);
+      this.publish();
+      this.toast(alreadyShown ? attentionText(count) : message, "triangle-alert", this.refusalAction(errors));
     }
+  }
+
+  private refusalRow(error: ScreenFormError): string | null {
+    return bindError(error, this.rowIds.map((id) => ({ id, it: this.items.get(id)! })), (key) => this.keyIndex.get(key), false);
+  }
+
+  private refusalAction(errors: ScreenFormError[]): ToastAction | undefined {
+    for (const error of errors) {
+      const field = error.field.replace(/^tax_profile\./, "");
+      const profile = error.field.startsWith("tax_profile.") || field === "annual_income_tax_election"
+        || (error.keys.length > 0 && error.keys.every((key) => this.st.profile.has(key)));
+      if (profile && this.hooks.onOpenProfile) {
+        const section = field === "annual_income_tax_election" ? "income_tax_election"
+          : field === "business_start_date" || field === "line_of_business" || field === "rdo_code" ? "branch"
+          : field === "tin" || field === "taxpayer_type" || field === "name" || field === "birth_date" ? "taxpayer"
+          : error.field.startsWith("tax_profile.") ? field : "address";
+        return { label: "Open tax profile", onPress: () => this.hooks.onOpenProfile?.(section, this.taxYear()) };
+      }
+      const row = this.refusalRow(error);
+      if (row) return { label: "Show item", onPress: () => this.jumpTo(Number(row.split(":")[0]), row) };
+    }
+    return undefined;
   }
 
   cancelQueue() {
@@ -3010,7 +3044,7 @@ export class FormSession {
 }
 
 /** Where a validation message goes: by key, then item number, then a TIN item, then label words, else the first item. */
-export function bindError(e: ScreenFormError, items: { id: string; it: SchemaItem }[], idForKey: (k: string) => string | undefined): string | null {
+export function bindError(e: ScreenFormError, items: { id: string; it: SchemaItem }[], idForKey: (k: string) => string | undefined, fallback = true): string | null {
   const words = (t: string) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
   let id: string | null | undefined = null;
   for (const k of e.keys || []) {
@@ -3039,5 +3073,5 @@ export function bindError(e: ScreenFormError, items: { id: string; it: SchemaIte
       }
     }
   }
-  return id || (items[0] && items[0].id) || null;
+  return id || (fallback && items[0] && items[0].id) || null;
 }

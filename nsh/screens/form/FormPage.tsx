@@ -71,7 +71,7 @@ export interface FormPageProps {
   /** The page now shows another return (a sample became its return, an offer loaded one): the frame follows it. */
   onOpenReturn?: (target: FormTarget) => void;
   /** Open the taxpayer's profile (the frame's panel). */
-  onOpenProfile?: () => void;
+  onOpenProfile?: (section?: string, year?: number) => void;
   /** A toast; the kit's toast (needs a Toaster mounted) when not given. */
   toast?: (message: string, options?: { icon?: string; action?: ToastAction }) => string | void;
   /** Close a toast this page showed (with props.toast); the kit's dismissToast when not given. */
@@ -102,6 +102,7 @@ export function FormPage(props: FormPageProps) {
     afterWrite: (name) => store.bump(name),
     onSaved: (t) => props.onSaved?.(t),
     onRetarget: (t) => props.onOpenReturn?.(t),
+    onOpenProfile: (section, year) => props.onOpenProfile ? props.onOpenProfile(section, year) : app.go("profile", { edit: section, year, fromForm: true }),
     // A queue or a cancel-queue needs no hook of its own: the session tells afterWrite its host function's name and store.bump(name) starts the
     // frame's fast Queued watch over (the re-reads at once and after 1, 3 and 10 s, and the watch's 30 s of 3 s looks from store.lastQueueAction).
   };
