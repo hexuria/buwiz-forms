@@ -67,12 +67,12 @@ fn set_up(send_guard: impl FnOnce() -> SendMode) -> Process {
 }
 
 /// Set up the process now. The native module's registration calls it (see [`process`]).
-#[cfg(any(not(target_os = "android"), test))]
+#[cfg(not(target_os = "android"))]
 pub(crate) fn prepare_process() {
     process();
 }
 
-/// Whether [`prepare_process`] has run in this process.
+/// Whether [`process`] has run in this process.
 #[cfg(test)]
 pub(crate) fn process_prepared() -> bool {
     PROCESS.get().is_some()
@@ -114,6 +114,7 @@ static BOOT: Mutex<()> = Mutex::new(());
 
 thread_local! {
     /// The database this thread asked for with [`use_database`], until it boots.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static NAMED: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
 }
 
@@ -267,9 +268,11 @@ struct Booted {
 }
 
 thread_local! {
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static BOOTED: RefCell<Option<Booted>> = const { RefCell::new(None) };
     /// Dropped when the engine thread ends. Touched after the database slot exists, so it is destroyed
     /// before the slot is (thread locals go in reverse order of their first use).
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static ARMED: ShutdownGuard = const { ShutdownGuard };
 }
 

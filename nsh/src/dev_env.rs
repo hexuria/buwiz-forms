@@ -125,7 +125,7 @@ mod tests {
             );
             return;
         }
-        let before: Vec<_> = ALLOWED.iter().map(|key| std::env::var_os(key)).collect();
+        let before: Vec<_> = ALLOWED.iter().map(std::env::var_os).collect();
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("dev.env");
         std::fs::write(&path, "EBIR_TEST_ENV=1\nBIR_AUTH_BYPASS=1\nBUWIZ_NO_KEYCHAIN=1\nBIR_SFTP_DRY_RUN=1\nBIR_RELAY_URL=http://127.0.0.1:8787").unwrap();
@@ -147,7 +147,7 @@ mod tests {
         assert_eq!(
             ALLOWED
                 .iter()
-                .map(|key| std::env::var_os(key))
+                .map(std::env::var_os)
                 .collect::<Vec<_>>(),
             before
         );
@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(
             ALLOWED
                 .iter()
-                .map(|key| std::env::var_os(key))
+                .map(std::env::var_os)
                 .collect::<Vec<_>>(),
             before
         );
@@ -169,7 +169,7 @@ mod tests {
         assert_eq!(
             ALLOWED
                 .iter()
-                .map(|key| std::env::var_os(key))
+                .map(std::env::var_os)
                 .collect::<Vec<_>>(),
             before
         );

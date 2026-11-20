@@ -166,6 +166,7 @@ type Panel = (Spawned<()>, Rc<Cell<bool>>);
 
 thread_local! {
     /// The tasks waiting on a panel. A dropped task is cancelled, so each is kept until it has answered.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static PANELS: RefCell<Vec<Panel>> = const { RefCell::new(Vec::new()) };
 }
 

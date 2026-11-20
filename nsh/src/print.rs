@@ -520,6 +520,7 @@ thread_local! {
         std::env::temp_dir().join(format!("ebirforms-print-{}", std::process::id())),
     ));
     /// What ends the last `Print.listen` (to tell it from an older one).
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static NEXT_BACKEND: Cell<u64> = const { Cell::new(1) };
 }
 

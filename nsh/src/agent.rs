@@ -97,6 +97,7 @@ struct Access {
 
 thread_local! {
     /// The engine thread's access state (`Agent.setAccess`): locked until the frame says otherwise.
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static ACCESS: Cell<Access> = const { Cell::new(Access { locked: true, taxpayer_session: false }) };
 }
 

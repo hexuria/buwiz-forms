@@ -341,6 +341,7 @@ fn protected_folders_here() -> Option<Vec<PathBuf>> {
 thread_local! {
     /// Test seam: the protected folders of this thread, in place of the real account's (a test never
     /// reads the owner's real folders).
+    #[cfg_attr(target_os = "android", allow(clippy::missing_const_for_thread_local, reason = "already const; Clippy misreads Android's thread_local expansion"))]
     static TEST_PROTECTED: std::cell::RefCell<Option<Vec<PathBuf>>> = const { std::cell::RefCell::new(None) };
 }
 
