@@ -796,6 +796,8 @@ export interface ReturnRow {
     updated_at: string;
     /** The return's stored key (`screen_form_open`'s `key`): opens exactly this return. */
     return_key: number | null;
+    /** The worker sent it to the local mock relay, not to BIR (stored at submission; false for drafts and real sends). */
+    submitted_via_relay: boolean;
 }
 export function list_returns(which: "filed" | "saved" | "all"): ReturnRow[];
 
