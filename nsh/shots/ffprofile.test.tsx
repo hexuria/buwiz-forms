@@ -140,3 +140,35 @@ test("f2-income: 2551Q Item 13's income-type card with its Segmented choices", a
     await shoot(app, `f2-income-${look.name}`);
   }
 }, 300_000);
+
+// Row heights (shots/rowheights.py reads the divider distances): 0605 Item 12 and 1601C's penalties row,
+// at 420 and 640 points, before (card in the row) and after (boxed / the new card).
+const ROW_WIDTHS = [420, 640];
+test("rows: 0605 Item 12 and 1601C penalties at 420 and 640", async () => {
+  for (const w of ROW_WIDTHS) {
+    let app = await open(ANY, {
+      width: w,
+      height: 900,
+      platform: "macos",
+      colorScheme: "light",
+      host: { params: { formCode: "0605", year: 2025, period: 1, mode: "return" } },
+    });
+    await app.waitFor("id:fp-check", { timeout: 30_000 });
+    await app.press("id:fp-check");
+    await app.wait(800);
+    await reach(app, "id:fp-frm0605:txtLineBus");
+    await app.wait(400);
+    await shoot(app, `rows-0605-${w}`);
+    app = await open(ANY, {
+      width: w,
+      height: 900,
+      platform: "macos",
+      colorScheme: "light",
+      host: { params: { formCode: "1601C", year: 2025, period: 3, mode: "return" } },
+    });
+    await app.waitFor("id:fp-check", { timeout: 30_000 });
+    await reach(app, "id:fp-ask-eopt_tier");
+    await app.wait(400);
+    await shoot(app, `rows-1601c-${w}`);
+  }
+}, 300_000);
