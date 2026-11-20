@@ -107,6 +107,55 @@ export function oneDate(it: SchemaItem): OneDate | null {
   return oneDates(it)[0] || null;
 }
 
+/** An item the host marks one_periods: its month and year boxes are one MM/YYYY field, keyed "<month key>#period". */
+export interface OnePeriod {
+  month: SchemaField;
+  year: SchemaField;
+  periodKey: string;
+}
+
+export function onePeriods(it: SchemaItem): OnePeriod[] {
+  const fields = it.f || [];
+  return (it.one_periods || []).flatMap(([m, y]) => {
+    const month = fields.find((field) => field.k === m);
+    const year = fields.find((field) => field.k === y);
+    return month && year ? [{ month, year, periodKey: `${month.k}#period` }] : [];
+  });
+}
+
+/** One end of a date_ranges pair: a one-date's triple (1600WP) or a single date/text box. */
+export interface RangeEnd {
+  /** The key the range mark names (a one-date's month key, or the box's own). */
+  anchor: string;
+  /** A one-date end, or null for a whole-date box. */
+  date: OneDate | null;
+  /** The single box of a whole-date end. */
+  field: SchemaField | null;
+  /** The key edits go through ("<month key>#date" for a triple, the box's key else). */
+  editKey: string;
+}
+
+export interface DateRange {
+  from: RangeEnd;
+  to: RangeEnd;
+}
+
+export function dateRanges(it: SchemaItem): DateRange[] {
+  const fields = it.f || [];
+  const dates = oneDates(it);
+  const end = (anchor: string): RangeEnd | null => {
+    const date = dates.find((d) => d.month.k === anchor);
+    if (date) return { anchor, date, field: null, editKey: date.oneKey };
+    const field = fields.find((f) => f.k === anchor);
+    return field ? { anchor, date: null, field, editKey: anchor } : null;
+  };
+  return (it.date_ranges || []).flatMap(([f, t]) => {
+    const from = end(f);
+    const to = end(t);
+    return from && to ? [{ from, to }] : [];
+  });
+}
+
 /** BIR's own words for the income-tax ATCs the forms list as bare codes. */
 const ATC_TITLES: Record<string, string> = {
   II011: "Compensation Income",

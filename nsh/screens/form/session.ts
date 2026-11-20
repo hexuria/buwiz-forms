@@ -40,7 +40,8 @@ import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDa
 import { dateRange } from "./dateRules";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, isPageNotice, isTinItem, keysOf, listedFields, oneDates, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type OneDate } from "./schema";
+import { dateParts, dateRanges, isPageNotice, isTinItem, keysOf, listedFields, oneDates, onePeriods, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type DateRange, type OneDate, type OnePeriod } from "./schema";
+import { parsePeriod, periodLong, periodText, PERIOD_ERROR, PERIOD_TWO_DIGIT, periodYear4 } from "./periodRules";
 import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
 /** The boxes that hold a number: emptied, the host holds zero in them where it holds no blank (see FormSession.fill). */
@@ -446,6 +447,15 @@ export class FormSession {
   private items = new Map<string, SchemaItem>();
   private oneDates = new Map<string, { date: OneDate; row: string }>();
   private oneDateParts = new Set<string>();
+  /** Month+year pairs drawn as one MM/YYYY field, keyed "<month key>#period" (PR 3). */
+  private onePeriods = new Map<string, { period: OnePeriod; row: string }>();
+  private periodPartKeys = new Set<string>();
+  /** From/to pairs drawn as one row of two date controls, by each end's edit key (PR 3, R1). */
+  private dateRanges = new Map<string, { range: DateRange; row: string }>();
+  /** Range ends that are text boxes edited as dates (2550Q's From). */
+  private rangeTextKeys = new Set<string>();
+  /** The keys a range's refusal sits on (each end's anchor). */
+  private rangeAnchorKeys = new Set<string>();
   /** Keys of the split month/day/year boxes (dateParts groups that are not one_date items): a host zero in one shows blank (B15). */
   private datePartKeys = new Set<string>();
 
@@ -521,6 +531,8 @@ export class FormSession {
           this.allKeys.push(f.k);
         }
         const dates = oneDates(it);
+        const periods = onePeriods(it);
+        const ranges = dateRanges(it);
         if (dates.length) {
           for (const date of dates) {
             this.oneDates.set(date.oneKey, { date, row: id });
@@ -531,7 +543,7 @@ export class FormSession {
               }
             }
           }
-        } else {
+        } else if (!periods.length && !ranges.length) {
           // The same groups rows.tsx draws as split date boxes: their zero
           // parts are the host's blank, never a shown 0/00/0000 (B15).
           const fs = it.f || [];
@@ -540,6 +552,18 @@ export class FormSession {
             if (parts) {
               for (const k of [parts.month.k, parts.day?.k, parts.year.k]) if (k) this.datePartKeys.add(k);
             }
+          }
+        }
+        for (const period of periods) {
+          this.onePeriods.set(period.periodKey, { period, row: id });
+          this.periodPartKeys.add(period.month.k);
+          this.periodPartKeys.add(period.year.k);
+        }
+        for (const range of ranges) {
+          for (const end of [range.from, range.to]) {
+            this.dateRanges.set(end.editKey, { range, row: id });
+            this.rangeAnchorKeys.add(end.anchor);
+            if (end.field && end.field.t !== "date") this.rangeTextKeys.add(end.anchor);
           }
         }
       }),
@@ -651,7 +675,7 @@ export class FormSession {
   }
   /** How many boxes the form binds (every key of the schema, schedule cells included). */
   fieldCount(): number {
-    return this.allKeys.length - this.oneDates.size * 2;
+    return this.allKeys.length - this.oneDates.size * 2 - this.onePeriods.size;
   }
   rowCount(): number {
     return this.rowIds.length;
@@ -863,18 +887,21 @@ export class FormSession {
     if (!s.editable || !s.draft) return;
     const one = this.oneDates.get(k);
     if (one) return this.editOneDate(one.date, text);
+    const period = this.onePeriods.get(k);
+    if (period) return this.editPeriod(period.period, text);
     const kind = this.kindOf.get(k);
     if (kind === "sel" || kind === "chk" || kind === "radio") return this.choose({ [k]: text });
     this.sValue.get(k).set(text);
     if (s.periodParts.has(k)) return this.setPeriodPart({ [k]: text });
     let value = text;
-    if (kind === "date") {
+    if (kind === "date" || this.rangeTextKeys.has(k)) {
       const date = parseTypedDate(text);
       s.datesEdited.add(k);
       if (date || !text.trim()) this.setDateError(k, "");
       value = date ? formatMDY(date) : text;
     }
     this.stage({ [k]: value });
+    this.checkRangeOrders();
   }
 
   private editOneDate(date: OneDate, text: string) {
@@ -917,7 +944,173 @@ export class FormSession {
       edits[field.k] = value && match ? match.value : value;
     }
     this.stage(edits);
+    this.checkRangeOrders();
     this.publish();
+  }
+
+  /**
+   * A month+year pair typed as one MM/YYYY ("12/2023", "12-2023", "122023", "12 2023"): judged whole like a one-date —
+   * a bad period lands nothing, its sentence sits on the month box, and a blank batch clears both parts. A locked part
+   * is skipped (the calendar-year and listed-choice rules mirror oneDateRefusal/pickDate).
+   */
+  private editPeriod(period: OnePeriod, text: string) {
+    const s = this.st;
+    const keys = [period.month.k, period.year.k];
+    this.sValue.get(period.periodKey).set(text);
+    const typed = parsePeriod(text);
+    const reject = (reason: string) => {
+      for (const key of keys) {
+        delete s.pending[key];
+        delete s.rejected[key];
+        delete s.boxMessages[key];
+        s.unfixable.delete(key);
+      }
+      s.rejected[period.month.k] = reason;
+      s.boxMessages[period.month.k] = this.refusalText(period.month.k, reason);
+      s.dirty = true;
+      this.cancelAutosave();
+      this.markUnsaved();
+      this.publish();
+    };
+    const problem = this.periodRefusal(period, text);
+    if (problem) return reject(problem);
+    this.setDateError(period.month.k, "");
+    for (const key of keys) {
+      delete s.rejected[key];
+      delete s.boxMessages[key];
+      s.unfixable.delete(key);
+    }
+    const edits: Record<string, string> = {};
+    if (!typed) {
+      // A blank period clears both boxes in one batch.
+      for (const field of [period.month, period.year]) if (!this.isShut(field.k)) edits[field.k] = "";
+    } else {
+      const year4 = typed.yDigits <= 2 ? 2000 + typed.y : typed.y;
+      const store = (field: SchemaField, year: boolean): string | null => {
+        if (field.t !== "sel") {
+          if (year) return this.periodTwoDigit(period) ? String(year4 - 2000).padStart(2, "0") : String(year4);
+          return String(typed.m).padStart(2, "0");
+        }
+        const listed = this.listedOptions(field.k);
+        const want = year ? [String(year4), String(year4 - 2000), String(typed.y)] : [String(typed.m), String(typed.m).padStart(2, "0")];
+        const match = listed.find((o) => want.includes(o.value) || want.includes(String(Number(o.value))) || (year && o.label.includes(String(year4))));
+        if (listed.length && !match) return null;
+        return match ? match.value : year ? String(year4) : String(typed.m).padStart(2, "0");
+      };
+      for (const [field, year] of [[period.month, false], [period.year, true]] as const) {
+        if (this.isShut(field.k)) continue;
+        const value = store(field, year);
+        if (value === null) {
+          reject("not one of the listed choices");
+          return;
+        }
+        edits[field.k] = value;
+      }
+    }
+    this.stage(edits);
+    this.checkRangeOrders();
+    this.publish();
+  }
+
+  /** The period rules a typed text must pass before anything is staged ("" when it may land). */
+  private periodRefusal(period: OnePeriod, text: string): string {
+    const typed = parsePeriod(text);
+    if (!typed) return text.trim() ? PERIOD_ERROR : "";
+    if (typed.m < 1 || typed.m > 12) return "the month is 1 to 12";
+    const year4 = typed.yDigits <= 2 ? 2000 + typed.y : typed.y;
+    if (typed.yDigits <= 2 && !this.periodTwoDigit(period) && !this.isShut(period.year.k)) return PERIOD_TWO_DIGIT;
+    if (this.calendarYearEnd({ month: period.month, day: null, year: period.year }) && typed.m !== 12 && !this.isShut(period.month.k)) {
+      return "calendar year ends in December";
+    }
+    // A locked part keeps what it holds: the typed period must agree with it.
+    for (const [field, number, year] of [[period.month, typed.m, false], [period.year, year4, true]] as const) {
+      if (!this.isShut(field.k)) continue;
+      const raw = String(this.st.values[field.k] ?? "");
+      const held = year ? periodYear4(raw) : Number(String(raw).replace(/\D.*$/, ""));
+      if (Number.isFinite(held) && held !== number) return "date conflicts with a locked part";
+    }
+    return "";
+  }
+
+  /** Whether the period's year box stores two digits (a 20YY box or a two-digit select). */
+  private periodTwoDigit(period: OnePeriod): boolean {
+    const f = period.year;
+    if (f.t === "sel") return true;
+    if (f.m !== undefined && f.m <= 2) return true;
+    if (/two-digit|20YY/i.test(`${f.l} ${this.items.get(this.keyIndex.get(f.k) ?? "")?.l ?? ""}`)) return true;
+    return /^\d{1,2}$/.test(String(this.st.values[f.k] ?? ""));
+  }
+
+  /** A tentative sheet edit uses the same period rules without changing the draft. */
+  periodProblem(period: OnePeriod, text: string): string {
+    const reason = this.periodRefusal(period, text);
+    return reason ? this.refusalText(period.month.k, reason) : "";
+  }
+
+  /** A month picked on the period's grid (1-12), with the year it belongs to (the held one, or `year`). */
+  pickPeriodMonth(period: OnePeriod, month: number, year?: number) {
+    if (!this.st.editable || !this.st.draft) return;
+    const held = periodYear4(String(this.st.values[period.year.k] ?? ""));
+    const y = Number.isInteger(year) && (year as number) >= 1900 ? (year as number) : held >= 1900 ? held : new Date().getFullYear();
+    this.editPeriod(period, `${month}/${y}`);
+  }
+
+  /** The year the period's month grid stands on: the held one, else this one. */
+  periodYear(period: OnePeriod): number {
+    const y = periodYear4(String(this.st.values[period.year.k] ?? ""));
+    return Number.isInteger(y) && y >= 1900 && y <= 9999 ? y : new Date().getFullYear();
+  }
+
+  /** Judge every registered from/to pair: a reversed range is refused on its To end only, cleared when either end is fixed. */
+  private checkRangeOrders() {
+    const s = this.st;
+    let changed = false;
+    const seen = new Set<DateRange>();
+    for (const { range, row } of this.dateRanges.values()) {
+      if (seen.has(range)) continue;
+      seen.add(range);
+      const from = this.rangeEndDay(range.from);
+      const to = this.rangeEndDay(range.to);
+      const key = range.to.anchor;
+      const reversed = Boolean(from && to && from > to);
+      const held = s.rejected[key] === "end before start";
+      if (reversed && !held) {
+        s.rejected[key] = "end before start";
+        s.boxMessages[key] = this.refusalText(key, "end before start");
+        s.touched.add(row);
+        changed = true;
+      } else if (!reversed && held) {
+        delete s.rejected[key];
+        delete s.boxMessages[key];
+        s.unfixable.delete(key);
+        changed = true;
+      }
+    }
+    if (changed) {
+      s.dirty = true;
+      this.cancelAutosave();
+      this.markUnsaved();
+      this.publish();
+    }
+  }
+
+  /** A range end's day as an ISO date ("" while either part is blank or unparseable). Staged edits count. */
+  rangeEndDay(end: { anchor: string; date: OneDate | null; field: SchemaField | null }): string {
+    const s = this.st;
+    const value = (k: string) => String(s.pending[k] ?? s.values[k] ?? "");
+    if (end.date) {
+      const d = end.date;
+      const m = Number(value(d.month.k));
+      const y = periodYear4(value(d.year.k));
+      const day = d.day ? Number(value(d.day.k)) : 1;
+      if (!(m >= 1 && m <= 12) || !(y >= 1900) || !(day >= 1 && day <= 31)) return "";
+      return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    if (end.field) {
+      const date = parseTypedDate(value(end.field.k));
+      return date ? formatIso(date) : "";
+    }
+    return "";
   }
 
   private oneDateRefusal(date: OneDate, text: string): string {
@@ -1062,6 +1255,7 @@ export class FormSession {
       this.sValue.get(k).set(this.shownText(k));
     }
     for (const k of Object.keys(edits)) delete s.boxMessages[k];
+    this.checkRangeOrders();
     this.cancelAutosave();
     this.markUnsaved();
     this.flush();
@@ -1093,11 +1287,16 @@ export class FormSession {
     this.choose(edits);
   }
 
+  /** The draft key a synthetic control stands for (a one-date's or a period's month box). */
+  private anchorKey(k: string): string {
+    return this.oneDates.get(k)?.date.month.k ?? this.onePeriods.get(k)?.period.month.k ?? k;
+  }
+
   /** A box gained focus: an item still open with Edit elsewhere goes back to its profile look. */
   focus(k: string) {
     const s = this.st;
     s.focusKey = k;
-    const here = this.keyIndex.get(this.oneDates.get(k)?.date.month.k ?? k);
+    const here = this.keyIndex.get(this.anchorKey(k));
     if (this.endProfileEdit([...s.editing].filter((key) => this.keyIndex.get(key) !== here))) this.publish();
   }
 
@@ -1105,10 +1304,11 @@ export class FormSession {
   blur(k: string) {
     const s = this.st;
     const one = this.oneDates.get(k);
-    const baseKey = one ? one.date.month.k : k;
+    const period = this.onePeriods.get(k);
+    const baseKey = one ? one.date.month.k : period ? period.period.month.k : k;
     const id = this.keyIndex.get(baseKey);
     if (s.focusKey === k) s.focusKey = null;
-    const kind = one ? "date" : this.kindOf.get(k);
+    const kind = one || period ? "date" : this.kindOf.get(k);
     const v = this.sValue.get(k);
     const raw = untracked(() => v());
     if (kind === "money" && !this.isShut(k)) v.set(formatMoney(raw, this.wholeKeys.has(k)));
@@ -1146,7 +1346,7 @@ export class FormSession {
     if (!s.draft || this.reopening) return;
     const kind = this.kindOf.get(k);
     if (kind === "money" || kind === "pct" || kind === "int" || kind === "sel" || kind === "chk" || kind === "radio" || kind === "date") return;
-    if (this.oneDates.has(k) || this.datePartKeys.has(k) || this.pools.has(k)) return;
+    if (this.oneDates.has(k) || this.onePeriods.has(k) || this.datePartKeys.has(k) || this.periodPartKeys.has(k) || this.rangeTextKeys.has(k) || this.pools.has(k)) return;
     if (s.rejected[k] !== undefined || s.unfixable.has(k) || this.isShut(k)) return;
     const box = this.sValue.get(k);
     if (!box) return;
@@ -1159,7 +1359,7 @@ export class FormSession {
   /** The part whose box has the keyboard now, or null: the page keeps that part's rows drawn wherever it scrolls. */
   focusedPart(): number | null {
     const k = this.st.focusKey;
-    const id = k ? this.keyIndex.get(this.oneDates.get(k)?.date.month.k ?? k) : undefined;
+    const id = k ? this.keyIndex.get(this.anchorKey(k)) : undefined;
     return id ? Number(id.split(":")[0]) : null;
   }
 
@@ -1266,6 +1466,7 @@ export class FormSession {
       }
     }
     this.syncShown(before, edits, r.rejected);
+    this.checkRangeOrders();
     this.livePreview();
     this.sayYearEndPutBack(edits);
     const rej = r.rejected || {};
@@ -1577,6 +1778,13 @@ export class FormSession {
       if (parts.some((field) => !String(s.values[field.k] ?? "").trim() || /^0+$/.test(String(s.values[field.k]).trim()))) return "";
       return shownDate(oneDateText(s.values, one.date));
     }
+    const period = this.onePeriods.get(k);
+    if (period) {
+      const p = period.period;
+      const parts = [p.month, p.year];
+      if (parts.some((field) => !String(s.values[field.k] ?? "").trim() || /^0+$/.test(String(s.values[field.k]).trim()))) return "";
+      return periodText(String(s.values[p.month.k] ?? ""), String(s.values[p.year.k] ?? ""));
+    }
     const pool = this.pools.get(k);
     if (pool) return String(s.poolTexts[pool.keys[0]] ?? "");
     const kind = this.kindOf.get(k);
@@ -1621,6 +1829,10 @@ export class FormSession {
       if ([date.month.k, date.day?.k, date.year.k].some((p) => p && p in pending)) continue;
       this.sValue.get(k).set(this.shownText(k));
     }
+    for (const [k, { period }] of this.onePeriods) {
+      if ([period.month.k, period.year.k].some((p) => p in pending)) continue;
+      this.sValue.get(k).set(this.shownText(k));
+    }
   }
 
   /** Shut boxes follow the draft; a box the user can type keeps its text unless the host changed it (old syncChanged). */
@@ -1644,6 +1856,15 @@ export class FormSession {
       const changedByHost = parts.some((p) => p in edits && this.hostChanged(p, edits[p]));
       if (parts.some((p) => p in edits) && !changedByHost) continue;
       if (changedByHost || oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
+    }
+    for (const [k, { period }] of this.onePeriods) {
+      const parts = [period.month.k, period.year.k];
+      if (parts.some((p) => p in s.rejected) || s.focusKey === k) continue;
+      const changedByHost = parts.some((p) => p in edits && this.hostChanged(p, edits[p]));
+      if (parts.some((p) => p in edits) && !changedByHost) continue;
+      const beforeText = periodText(before[parts[0]] ?? "", before[parts[1]] ?? "");
+      const nowText = periodText(s.values[parts[0]] ?? "", s.values[parts[1]] ?? "");
+      if (changedByHost || beforeText !== nowText) this.sValue.get(k).set(this.shownText(k));
     }
   }
 
@@ -1690,6 +1911,11 @@ export class FormSession {
     const one = this.oneDates.get(k);
     if (one) {
       const parts = [one.date.month, one.date.day, one.date.year].filter(Boolean) as SchemaField[];
+      return !this.st.editable || parts.every((f) => f.c || this.isLocked(f.k));
+    }
+    const period = this.onePeriods.get(k);
+    if (period) {
+      const parts = [period.period.month, period.period.year];
       return !this.st.editable || parts.every((f) => f.c || this.isLocked(f.k));
     }
     return !this.st.editable || this.computedKeys.has(k) || this.isLocked(k);
@@ -1761,7 +1987,7 @@ export class FormSession {
   // ---------------------------------------------------------------- profile boxes
 
   private itemEditKeys(k: string): string[] {
-    const id = this.keyIndex.get(k);
+    const id = this.keyIndex.get(this.anchorKey(k));
     if (!id) return [k];
     return (this.items.get(id)!.f || []).map((f) => f.k).filter((key) => this.st.profileEdit.has(key));
   }
@@ -2324,7 +2550,8 @@ export class FormSession {
   private rowPrints(k: string): boolean {
     const id = this.keyIndex.get(k);
     const it = id ? this.items.get(id) : undefined;
-    if (["sel", "chk", "radio", "date"].includes(this.kindOf.get(k) ?? "") || this.datePartKeys.has(k)
+    if (["sel", "chk", "radio", "date"].includes(this.kindOf.get(k) ?? "") || this.datePartKeys.has(k) || this.periodPartKeys.has(k)
+      || this.rangeAnchorKeys.has(k)
       || (it && oneDates(it).some((date) => [date.month.k, date.day?.k, date.year.k].includes(k)))) return true;
     return Boolean(it && !it.rows && (isTinItem(it) || (it.f || []).length === 1));
   }
@@ -3111,6 +3338,16 @@ export class FormSession {
       const rowMsg = open && Boolean(s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
       this.sInvalid.get(k).set(boxMsg || rowMsg);
     }
+    for (const [k, { period, row }] of this.onePeriods) {
+      const parts = [period.month, period.year];
+      const shut = this.isShut(k);
+      this.sLocked.get(k).set(shut);
+      this.sHint.get(k).set(!periodText(String(s.values[period.month.k] ?? ""), String(s.values[period.year.k] ?? "")) ? parts.map((f) => this.sHint.get(f.k)()).find(Boolean) || "" : "");
+      const open = s.showAll || s.touched.has(row);
+      const boxMsg = open && parts.some((f) => Boolean(s.boxMessages[f.k]));
+      const rowMsg = open && Boolean(s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));
+      this.sInvalid.get(k).set(boxMsg || rowMsg);
+    }
   }
 
   private publishRows() {
@@ -3164,6 +3401,8 @@ export class FormSession {
     });
     const registered = oneDates(it);
     const grouped = new Set(registered.flatMap((d) => [d.month.k, d.day?.k, d.year.k].filter((k): k is string => Boolean(k))));
+    const periodRegistered = onePeriods(it);
+    const periodGrouped = new Set(periodRegistered.flatMap((p) => [p.month.k, p.year.k]));
     const oneDateShown = registered.flatMap((d) => {
       const seen = new Set<string>();
       return [d.month.k, d.day?.k, d.year.k].filter((k): k is string => {
@@ -3172,8 +3411,16 @@ export class FormSession {
         return true;
       });
     });
-    const shownKeys = !msgOpen ? [] : registered.length
-      ? [...oneDateShown, ...keys.filter((k) => !grouped.has(k) && s.boxMessages[k] && groupKeys.has(k))]
+    const periodShown = periodRegistered.flatMap((p) => {
+      const seen = new Set<string>();
+      return [p.month.k, p.year.k].filter((k) => {
+        if (!s.boxMessages[k] || seen.has(s.boxMessages[k])) return false;
+        seen.add(s.boxMessages[k]);
+        return true;
+      });
+    });
+    const shownKeys = !msgOpen ? [] : registered.length || periodRegistered.length
+      ? [...oneDateShown, ...periodShown, ...keys.filter((k) => !grouped.has(k) && !periodGrouped.has(k) && s.boxMessages[k] && groupKeys.has(k))]
       : date && dateShown.length ? dateShown : keys.filter((k) => s.boxMessages[k] && groupKeys.has(k));
     const asks =
       s.editable && !s.sample
@@ -3192,7 +3439,7 @@ export class FormSession {
       it.l === "Additional details" &&
       (Boolean(shown[id]) || keys.some((k) => Boolean(this.shownBoxMsg(k))) || asks.length > 0 || s.stepAt === id);
     return {
-      message: oneDateShown.length ? "" : shown[id] || "",
+      message: oneDateShown.length || periodShown.length ? "" : shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
       boxSaid: keys.some((k) => Boolean(this.shownBoxMsg(k))),
       notes: this.lockNotesFor(it),

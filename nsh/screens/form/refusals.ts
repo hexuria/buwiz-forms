@@ -84,6 +84,9 @@ export function refusalSentence(ctx: RefusalContext): string {
   const at = colon(ctx);
 
   if (/two-digit date year/i.test(raw)) return `${at} type the four-digit year, for example 08/17/1988.`;
+  if (/two-digit period year/i.test(raw)) return `${at} type the four-digit year, for example 12/2023.`;
+  if (/as MM\/YYYY|month and year as/i.test(raw)) return `${at} type the month and year as MM/YYYY, for example 12/2023.`;
+  if (/end date is before the start date|end before start/i.test(raw)) return `${at} the end date is before the start date.`;
   const span = /^date outside allowed span (\d{4}-\d{2}-\d{2}) (\d{4}-\d{2}-\d{2})$/.exec(raw);
   if (span) {
     const min = parseTypedDate(span[1]);

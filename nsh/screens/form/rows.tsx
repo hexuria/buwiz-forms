@@ -6,7 +6,8 @@ import { signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Code, DateField, DateTouchField, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, emptyCell, isTinItem, needsText, oneDates, type OneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, type OneDate } from "./schema";
+import { PeriodField, RangeField } from "./periodField";
 import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
 import { dateRange, periodDay, splitDay } from "./dateRules";
 export { dateRange, splitDay } from "./dateRules";
@@ -186,6 +187,17 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   if (it.rows) return <ScheduleControl {...scheduleProps(s, props.id, it, props.narrow)} />;
   if (!fs.length && it.note) return <Text variant="meta" tone="fg3" testID={`fp-note-${props.id}`}>{it.note}</Text>;
   const dates = oneDates(it);
+  const periods = onePeriods(it);
+  const ranges = dateRanges(it);
+  // The keys a period or a range draws itself: its boxes never render on their own.
+  const grouped = new Set<string>([
+    ...periods.flatMap((p) => [p.month.k, p.year.k]),
+    ...ranges.flatMap((r) => [
+      r.from.anchor, r.to.anchor,
+      ...(r.from.date ? [r.from.date.month.k, r.from.date.day?.k, r.from.date.year.k] : []),
+      ...(r.to.date ? [r.to.date.month.k, r.to.date.day?.k, r.to.date.year.k] : []),
+    ]),
+  ] as string[]);
   if (isTinItem(it)) {
     return (
       <View class="flex-row flex-wrap items-center gap-1.5">
@@ -203,7 +215,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   const multi = fs.length > 1;
   // A date printed in split boxes (Year Ended MM and YYYY) gets a calendar button beside them, as the old page: a day picked
   // fills the parts that are open. Not when the item has a date box of its own (that box carries its calendar).
-  const split = dates.length || fs.some((f) => f.t === "date") ? null : dateParts(fs);
+  const split = dates.length || periods.length || ranges.length || fs.some((f) => f.t === "date") ? null : dateParts(fs);
   const splitParts = split ? [split.month, split.day, split.year].filter((f): f is SchemaField => f !== null) : [];
   const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked());
   // What the boxes hold now, as the calendar's own day: the popup opens on its month.
@@ -213,7 +225,21 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   const body = (
     <View class="flex-row flex-wrap items-end gap-x-4 gap-y-3">
       {radios.length ? <RadioGroupControl {...radioProps(s, props.id, it, radios, props.narrow)} /> : null}
+      {periods.map((p) => {
+        const message = props.info().boxMessages.find((entry) => entry.key === p.month.k || entry.key === p.year.k)?.sentence || "";
+        return (
+          <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+            <PeriodField s={s} period={p} label={it.l} narrow={props.narrow} message={message} invalid={s.box(p.periodKey).invalid()} />
+          </View>
+        );
+      })}
+      {ranges.map((r) => (
+        <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+          <RangeField s={s} range={r} label={it.l} narrow={props.narrow} />
+        </View>
+      ))}
       {boxes.map((f) => {
+        if (grouped.has(f.k)) return null;
         const date = dates.find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(f.k));
         if (date && date.month.k !== f.k) return null;
         if (date) return (
