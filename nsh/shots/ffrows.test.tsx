@@ -7,9 +7,9 @@ import { decodePng, dividerYs, picture } from "./pixels";
 import { shoot } from "./shoot";
 
 const WIDTHS = [420, 640];
-// Item 5 ("No. of Sheets Attached", row 0:4) as it opens: 87 pt before PR 6's message line went conditional, 65 pt after —
+// Item 5 ("No. of Sheets Attached", row 0:4) as it opens: 109 pt before PR 6's message line went conditional, 87 pt after —
 // the 22 pt reserve (mt-1 + min-h-4.5) is gone.
-const ITEM5_PT = 65;
+const ITEM5_PT = 87;
 
 for (const width of WIDTHS) {
   test(`0605 rows at ${width} pt: as opened, and after Check`, async () => {

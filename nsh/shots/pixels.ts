@@ -105,6 +105,7 @@ export function dividerYs(raster: Raster, points: number): number[] {
   const x1 = points < 760 ? Math.floor(raster.width * 0.9) : Math.floor(raster.width * 0.88);
   const c = raster.channels;
   const ys: number[] = [];
+  let lastY = -Infinity;
   for (let y = 0; y < raster.rows; y++) {
     const line = raster.line(y);
     const i0 = x0 * c;
@@ -118,7 +119,10 @@ export function dividerYs(raster: Raster, points: number): number[] {
         break;
       }
     }
-    if (uniform && (!ys.length || y - ys[ys.length - 1] > 2)) ys.push(y / scale);
+    if (uniform && y - lastY > 2) {
+      ys.push(y / scale);
+      lastY = y;
+    }
   }
   return ys;
 }
