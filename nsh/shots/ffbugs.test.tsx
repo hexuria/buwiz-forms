@@ -107,12 +107,18 @@ test("lob: after Check, Item 12 Line of Business and its card", async () => {
     await app.waitFor("id:fp-msg-0:3", { timeout: 30_000 });
     // Item 12 sits in folded Part I, and its unset profile line of business
     // draws the profile card in the row (no pressable box): open the part,
-    // the card is the evidence.
-    await app.press("id:fp-part-1-toggle");
-    // A real window's press scrolls the part into view; headless the page stays where it was.
-    for (let step = 0; step < 12 && !app.shows("text:/not in the tax profile/"); step++) {
-      await app.scroll("id:form-scroll", 250);
-      await app.wait(250);
+    // the card is the evidence. Wide layouts reach it through the "On this
+    // form" navigator (a press on the far toggle can miss while the page
+    // settles); narrow through the part's own toggle, then scroll.
+    if (app.shows("id:fp-nav-1")) {
+      await app.press("id:fp-nav-1");
+    } else {
+      await app.press("id:fp-part-1-toggle");
+      // A real window's press scrolls the part into view; headless the page stays where it was.
+      for (let step = 0; step < 12 && !app.shows("text:/not in the tax profile/"); step++) {
+        await app.scroll("id:form-scroll", 250);
+        await app.wait(250);
+      }
     }
     await app.waitFor("text:/not in the tax profile/", { timeout: 15_000 });
     await app.wait(500);
