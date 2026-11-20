@@ -512,12 +512,19 @@ export interface ScreenFormError {
     dismiss_label?: string;
 }
 export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+export interface ScreenFormProfilePrerequisite {
+    field: "business_start_date" | "income_tax_election";
+    label: string;
+    message: string;
+}
 export interface ScreenFormOpened {
     form_code: string;
     year: number;
     period: number;
     status: ScreenFormStatus;
     editable: boolean;
+    /** Missing profile context, decided by the form's own rules; advisory, not new Queue blocks. */
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     /** The period column the draft is stored under: pass it to queue and print. */
     stored_period: number | null;
     draft: object;
@@ -641,6 +648,7 @@ export interface ScreenFormPenalties {
 }
 export interface ScreenFormFilled {
     draft: object;
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;

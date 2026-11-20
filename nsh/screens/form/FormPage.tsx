@@ -406,6 +406,16 @@ function Notes(props: { s: FormSession }) {
         <Text variant="meta" tone="fg2">{profileUpdatesNote(h().profileUpdates)}</Text>
       </If>
       <Each of={h().notes}>{(note) => <Text variant="meta" tone="fg2">{note()}</Text>}</Each>
+      <Each of={h().profilePrerequisites} key={(item) => item.field}>
+        {(item) => (
+          <View testID={`fp-profile-prerequisite-${item().field}`} class="gap-1 rounded-(--radius-row) border border-warning bg-warning-soft p-3">
+            <Text variant="meta" tone="fg2">{item().message}</Text>
+            <View class="flex-row">
+              <AppButton testID={`fp-set-profile-${item().field}`} size="sm" variant="ghost" label={`Set ${item().label.toLowerCase()}`} onPress={() => s.openProfilePrerequisite(item().field)} />
+            </View>
+          </View>
+        )}
+      </Each>
       <If when={h().profileDiffers.length}>
         <View class="flex-row flex-wrap items-center gap-2">
           <Text variant="meta" tone="fg2">{profileDiffersNote(h().profileDiffers)}</Text>

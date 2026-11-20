@@ -48,6 +48,7 @@ mod combs;
 mod conditions;
 pub(crate) mod fact_asks;
 mod penalties;
+mod profile_prerequisites;
 mod rows_1604;
 mod rows_1700;
 mod rows_2550m;
@@ -82,12 +83,19 @@ export interface ScreenFormError {
     dismiss_label?: string;
 }
 export type ScreenFormStatus = "Draft" | "Queued" | "Submitted" | "Confirmed" | "Paid";
+export interface ScreenFormProfilePrerequisite {
+    field: "business_start_date" | "income_tax_election";
+    label: string;
+    message: string;
+}
 export interface ScreenFormOpened {
     form_code: string;
     year: number;
     period: number;
     status: ScreenFormStatus;
     editable: boolean;
+    /** Missing profile context, decided by the form's own rules; advisory, not new Queue blocks. */
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     /** The period column the draft is stored under: pass it to queue and print. */
     stored_period: number | null;
     draft: object;
@@ -211,6 +219,7 @@ export interface ScreenFormPenalties {
 }
 export interface ScreenFormFilled {
     draft: object;
+    profile_prerequisites?: ScreenFormProfilePrerequisite[];
     values: Record<string, string>;
     options: Record<string, ScreenFormOption[]>;
     rejected: Record<string, string>;
@@ -3824,6 +3833,9 @@ fn opened_json(
         "period": period,
         "status": status_name(&status),
         "editable": status == FilingStatus::Draft,
+        "profile_prerequisites": if status == FilingStatus::Draft && sample.is_none() {
+            profile_prerequisites::of(kind, &draft)?
+        } else { json!([]) },
         "stored_period": stored_period,
         "draft": draft,
         "values": values,
@@ -4713,6 +4725,7 @@ fn screen_form_use_profile(arguments: &HostArguments) -> HostResult {
         "penalties": penalty_groups,
         "pools": pool_texts,
         "asks": asks,
+        "profile_prerequisites": profile_prerequisites::of(kind, &draft).map_err(host_error)?,
     })))
 }
 
@@ -4809,6 +4822,7 @@ fn screen_form_fill(arguments: &HostArguments) -> HostResult {
         "relocks": relocks,
         "relock_notes": relock_notes,
         "notes_always": noted,
+        "profile_prerequisites": profile_prerequisites::of(kind, &draft).map_err(host_error)?,
     })))
 }
 

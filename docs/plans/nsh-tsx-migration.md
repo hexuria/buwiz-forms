@@ -43,6 +43,12 @@ Rebuild every screen to look and behave like today's app (source of truth: `app/
 - **Frame:** three columns like today (sidebar 248, main, profile/notifications panel 320 from the context pill). Sidebar: Home, Form library, Calendar, Filings, then Recent returns. Settings stays in the account menu and Cmd/Ctrl+comma.
 - **Home:** dashboard like today.
 - **Form page:** keep parts, the side list, and the pill that walks what needs you. Add: autosave (no Save draft button; "Saving…" then "✓ Saved"), TIN and money masks while typing, amounts right-aligned in tabular figures, part titles that stick while scrolling, errors shown only after leaving a box, schedule rows that open in a drawer (a sheet when narrow) instead of a sideways table. Do **not** hide parts that do not apply.
+  Later-quarter 2551Q opening advice comes from the host's Item 13 applicability and annual-election validation,
+  not a second TS predicate. Open/fill/use-profile return the missing profile context; links select the form's year,
+  open the annual-election editor or focus the business start date, and return after a successful save. Reopening
+  and in-form profile saves replace the advice from host results. This adds no Queue requirement: a missing
+  commencement date remains advisory. Verification: `session.prerequisites`, `FormPagePrerequisites`, taxpayer
+  `yearEdit`, and the screen-form `fact_asks` Rust tests; native focus/scroll remains a device acceptance check.
 - **Print preview:** a second window on desktop, like today.
 - **Filings:** the board when wide (720 px and up), a list with status tabs when narrow.
 - **Calendar:** today's filter bar with List/Month when wide; month grid with due dots plus an upcoming list when narrow.

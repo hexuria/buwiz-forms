@@ -165,6 +165,7 @@ function EditText(props: { s: PageState; field: string; label: string; full?: bo
       <TextField
         testID={`tp-${e()?.sec}-${props.field}`}
         accessibilityLabel={props.label}
+        autoFocus={e()?.focusField === props.field}
         value={e()?.values[props.field] ?? ""}
         onChange={(v) => props.s.setValue(props.field, v)}
         onBlur={() => props.s.touch(props.field)}

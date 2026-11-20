@@ -71,6 +71,61 @@ fn open_as(tin: &str, code: &str, period: i64) -> Value {
     .unwrap_or_else(|error| panic!("{code} opens: {}", error.message()))
 }
 
+#[test]
+fn later_2551q_profile_prerequisites_are_host_derived_and_disappear_after_profile_updates() {
+    setup_juana();
+    for quarter in 2..=4 {
+        let opened = open_as(JUANA, "2551Q", quarter);
+        let missing = &opened["profile_prerequisites"];
+        assert_eq!(missing[0]["field"], "business_start_date");
+        assert_eq!(missing[1]["field"], "income_tax_election");
+        assert!(missing[1]["message"].as_str().unwrap().contains("2026"));
+    }
+    assert_eq!(
+        open_as(JUANA, "2551Q", 1)["profile_prerequisites"],
+        json!([])
+    );
+    assert_eq!(
+        open_as(JUANA, "1601C", 3)["profile_prerequisites"],
+        json!([])
+    );
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            tax_classification: Some(Some(bir_core::profile::TaxClassification::SelfEmployed)),
+            business_start_date: Some(Some("2020-01-01".parse().unwrap())),
+            income_tax_election: Some(Some(
+                bir_core::profile::IncomeTaxElection::GraduatedUnspecified,
+            )),
+            ..YearFactsPatch::default()
+        },
+    );
+    assert_eq!(
+        open_as(JUANA, "2551Q", 3)["profile_prerequisites"],
+        json!([])
+    );
+}
+
+#[test]
+fn profile_prerequisites_respect_commencement_pt010_and_taxpayer_applicability() {
+    setup_juana();
+    let kind = kind_of("2551Q").unwrap();
+    let draft = open_as(JUANA, "2551Q", 3)["draft"].clone();
+    for (field, value) in [
+        ("taxpayer_type", json!("Corporation")),
+        ("schedule_1", json!([])),
+        ("business_start_date", json!("2026-08-15")),
+    ] {
+        let mut changed = draft.clone();
+        changed[field] = value;
+        assert_eq!(
+            profile_prerequisites::of(kind, &changed).unwrap(),
+            json!([])
+        );
+    }
+    assert!(profile_prerequisites::of(kind, &json!({})).is_err());
+}
+
 fn at(day: (i32, u32, u32), run: impl FnOnce()) {
     bir_core::forms::penalty_items::with_clock(
         chrono::NaiveDate::from_ymd_opt(day.0, day.1, day.2).unwrap(),

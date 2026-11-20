@@ -30,6 +30,7 @@ import {
   type ScreenFormOpened,
   type ScreenFormPenalties,
   type ScreenFormPeriodPart,
+  type ScreenFormProfilePrerequisite,
   type ScreenFormSamplePeriod,
   type ScreenFormStatus,
 } from "../../bir";
@@ -213,6 +214,7 @@ export interface HeaderInfo {
   profileChanged: string[];
   notes: string[];
   formErrors: string[];
+  profilePrerequisites: ScreenFormProfilePrerequisite[];
 }
 
 export type Overlay =
@@ -286,6 +288,7 @@ interface St {
   filedOriginalView: { status: string; filed_on: string | null } | null;
   profileUpdates: string[];
   profileDiffers: string[];
+  profilePrerequisites: ScreenFormProfilePrerequisite[];
   notes: { key: string; text: string; recorded: boolean }[];
   saved: boolean;
   quiet: { field: string; keys: string[] } | null;
@@ -352,7 +355,7 @@ function freshState(target: FormTarget): St {
     typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodAsked: null,
     periodAnswered: null, periodComplete: false, periodSeq: 0, periodToken: 0, periodInFlight: null, opens: null,
     existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, submittedViaRelay: false, confirmedAt: null, amends: null, filedOriginal: null,
-    filedOriginalView: null, profileUpdates: [], profileDiffers: [], notes: [], saved: false, quiet: null, kept: {},
+    filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
@@ -741,6 +744,7 @@ export class FormSession {
     s.poolTexts = r.pools || {};
     s.profileUpdates = r.profile_updates || [];
     s.profileDiffers = r.profile_differs || [];
+    s.profilePrerequisites = r.profile_prerequisites || [];
     s.notes = (r.notes || []).map((n) => ({ key: n.key, text: n.text, recorded: false }));
     s.saved = Boolean(r.draft && (r.draft as { id?: number }).id);
     s.quiet = r.quiet || null;
@@ -1106,6 +1110,7 @@ export class FormSession {
     const before = s.values;
     s.draft = r.draft;
     s.values = this.shown(r.values);
+    s.profilePrerequisites = r.profile_prerequisites || [];
     s.options = (r.options || {}) as Record<string, unknown[]>;
     if (Array.isArray(r.penalties)) s.penalties = r.penalties;
     if (r.pools) s.poolTexts = r.pools;
@@ -1627,6 +1632,7 @@ export class FormSession {
       const r = bir.screen_form_use_profile(s.target.formCode, s.target.year, s.target.period, s.draft!, facts);
       s.draft = r.draft;
       s.values = this.shown(r.values);
+      s.profilePrerequisites = r.profile_prerequisites || [];
       s.options = (r.options || s.options) as Record<string, unknown[]>;
       if (r.pools) s.poolTexts = r.pools;
       if (Array.isArray(r.penalties)) s.penalties = r.penalties;
@@ -1641,6 +1647,10 @@ export class FormSession {
   }
 
   // ---------------------------------------------------------------- penalties, from, notices, stops, more
+
+  openProfilePrerequisite(field: ScreenFormProfilePrerequisite["field"]) {
+    this.hooks.onOpenProfile?.(field, this.taxYear());
+  }
 
   /** Edit penalties: the row's group opens together. */
   openPenalties(id: string) {
@@ -2959,6 +2969,7 @@ export class FormSession {
       profileChanged: !s.editable ? s.profileChanged : [],
       notes: s.notes.map((n) => n.text),
       formErrors: s.formErrors,
+      profilePrerequisites: s.editable ? s.profilePrerequisites : [],
     });
     this.sSave.set(s.saveState);
     this.sChecking.set(s.checking);
