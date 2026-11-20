@@ -84,21 +84,28 @@ test("P1b: a value equal to the profile's never asks", async () => {
 });
 
 test("Q1a: a different tax year asks again even after an answer", async () => {
-  // 2025 was answered "only" above; 2024 has no remembered answer for birth_date.
+  // birth_date is the taxpayer's, not a year's: once saved it is the profile's value on every year,
+  // so a year not yet answered asks on a different value. 2024 has no remembered answer.
   const s = await opened(at("1701", 2024, 0));
-  await askBirth(s, "08/17/1988");
+  s.edit(BIRTH, "03/04/1960");
+  s.blur(BIRTH);
+  await s.idle();
   expect(s.overlay()?.kind).toBe("profile-ask");
   s.dispose();
 });
 
 test("P1b: closing the ask (Escape/scrim) answers nothing and asks again on a changed leave", async () => {
   const s = await opened(at("1701", 2023, 0));
-  await askBirth(s, "08/17/1988");
+  await askBirth(s, "07/08/1955");
   expect(s.overlay()?.kind).toBe("profile-ask");
   s.dismissProfileAsk();
   await s.idle();
   expect(s.overlay()).toBe(null);
-  // Same value left again: still asks (nothing was remembered).
+  // The same value left again is not a changed value: no re-ask. A new value asks again.
+  s.blur(BIRTH);
+  await s.idle();
+  expect(s.overlay()).toBe(null);
+  s.edit(BIRTH, "09/10/1944");
   s.blur(BIRTH);
   await s.idle();
   expect(s.overlay()?.kind).toBe("profile-ask");
@@ -109,21 +116,32 @@ test("F2: a choice card's pick saves at once, shows one chip, and the card stays
   createDemoTaxpayer();
   bir.set_year_facts(DEMO.tin, 2025, { eopt_tier: null, line_of_business: "Bookkeeping services" } as never);
   const s = await opened(at("1601C", 2025, 3));
-  const row = s.row("1:7")();
-  const ask = row.asks.find((a) => a.fact === "eopt_tier");
-  expect(ask?.control).toBe("choice");
-  expect(ask?.done).toBe(false);
+  // Find the row carrying the eopt_tier card (its placement row is the host's, not a fixed index).
+  const askRow = () => {
+    const parts = s.schema!.parts;
+    for (let pi = 0; pi < parts.length; pi++) for (let i = 0; i < parts[pi].items.length; i++) {
+      const id = `${pi}:${i}`;
+      const a = s.row(id)().asks.find((x) => x.fact === "eopt_tier");
+      if (a) return { id, ask: a };
+    }
+    return null;
+  };
+  const found = askRow();
+  expect(found).not.toBe(null);
+  const ask = found!.ask;
+  expect(ask.control).toBe("choice");
+  expect(ask.done).toBe(false);
   // The pick is the explicit answer: it saves at once (no Save button for a choice card).
-  s.pickAsk("eopt_tier", ask!.choices[0].value);
+  const pick = ask.choices[0].value;
+  s.pickAsk("eopt_tier", pick);
   await s.idle();
-  expect(bir.year_facts(DEMO.tin, 2025).facts.eopt_tier).toBe(ask!.choices[0].value);
+  expect(bir.year_facts(DEMO.tin, 2025).facts.eopt_tier).toBe(pick);
   // One status chip now reads saved, and the card stays so a wrong pick can be corrected.
-  const after = s.row("1:7")();
-  const card = after.asks.find((a) => a.fact === "eopt_tier")!;
-  expect(card.done).toBe(true);
-  expect(card.pick).toBe(JSON.stringify(ask!.choices[0].value));
+  const after = s.row(found!.id)().asks.find((a) => a.fact === "eopt_tier")!;
+  expect(after.done).toBe(true);
+  expect(after.pick).toBe(JSON.stringify(pick));
   // A re-pick saves again.
-  const other = ask!.choices[1];
+  const other = ask.choices[1];
   if (other) {
     s.pickAsk("eopt_tier", other.value);
     await s.idle();
