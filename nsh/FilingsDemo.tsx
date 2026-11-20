@@ -55,7 +55,7 @@ function answerLegacy(only: "rows" | "second"): void {
 /** A generated queued return (not in the database): what a window shows for the moment the worker has not taken one. */
 const QUEUED: ReturnRow = {
   id: 9001, tin: DEMO.tin, tin_root: "000123453", branch_code: "00000", branch_name: "Head office", taxpayer_name: "Juana Santos", branch_count: 2,
-  form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10,
+  form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10, submitted_via_relay: false,
 };
 
 function Demo() {

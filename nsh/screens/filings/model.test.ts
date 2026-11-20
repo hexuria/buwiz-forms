@@ -17,7 +17,7 @@ const INDEX = [
 function row(over: Partial<ReturnRow>): ReturnRow {
   return {
     id: 1, tin: "00012345300000", tin_root: "000123453", branch_code: "00000", branch_name: "Head office", taxpayer_name: "Juana Santos", branch_count: 2,
-    form_code: "2551Q", taxable_year: 2026, period: 3, period_label: "Q3 2026", status: "Draft", updated_at: "2026-11-14 09:30:00", return_key: 3, ...over,
+    form_code: "2551Q", taxable_year: 2026, period: 3, period_label: "Q3 2026", status: "Draft", updated_at: "2026-11-14 09:30:00", return_key: 3, submitted_via_relay: false, ...over,
   };
 }
 

@@ -12,7 +12,7 @@ import { store } from "./store";
 const pause = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 const ROW: ReturnRow = {
   id: 9101, tin: DEMO.tin, tin_root: "000123453", branch_code: "00000", branch_name: "Head office", taxpayer_name: "Juana Santos", branch_count: 1,
-  form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10,
+  form_code: "1601C", taxable_year: 2026, period: 10, period_label: "October 2026", status: "Queued", updated_at: "2026-11-14 09:30:00", return_key: 10, submitted_via_relay: false,
 };
 
 let reads = 0;
