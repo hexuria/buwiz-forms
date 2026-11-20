@@ -323,14 +323,15 @@ test("B17: a code off a select's list is refused on the box without a host call"
   q.dispose();
 });
 
-test("B14: a fact card's date saves as the ISO day and the form's box shows the long month", async () => {
+test("B14: a boxed birth date shows the long month and asks once to save to the profile", async () => {
   const s = await opened(at("1701", 2025, 0));
-  // The demo profile has no birth date, so 1701 asks for it in a card; the card's box is a DateField,
-  // which hands on MM/DD/YYYY — saveAsk reads it back as the ISO day the profile keeps.
-  s.typeAsk("birth_date", "08/17/1988");
-  s.saveAsk("birth_date");
-  await s.idle();
+  // Q1 P1b: birth_date has a writable box on 1701, so it is typed in the box (no card). Leaving it with a
+  // new complete value asks "Save to profile?" once; the box still shows the long month.
   const box = "frm1701:txtPg1I10BirthDate";
+  s.edit(box, "08/17/1988");
+  s.blur(box);
+  await s.idle();
   expect(s.shownOf(box)).toBe("August 17, 1988");
+  expect(s.overlay()?.kind).toBe("profile-ask");
   s.dispose();
 });

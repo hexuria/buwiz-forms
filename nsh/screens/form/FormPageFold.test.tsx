@@ -33,7 +33,7 @@ test("phone: a step to 1602Q's fold row opens it and puts the keyboard in a fold
   expect(app.value(box) ?? "").toContain("7");
 });
 
-test("2200S at 390 and 1440: the line-of-business box and its fact card are visible after Check", async () => {
+test("2200S at 390 and 1440: the line-of-business box shows and its fact card does not (B5/B7)", async () => {
   for (const look of [{}, { width: 1440, height: 900, platform: "macos" as const }]) {
     const app = await open(PREVIEW, { ...look, host: { params: { form: "2200S", period: 1 } } });
     await app.waitFor("text:BIR Form 2200S");
@@ -43,6 +43,7 @@ test("2200S at 390 and 1440: the line-of-business box and its fact card are visi
     for (let i = 0; i < 15 && !app.shows("id:fp-frm2200S:txtLineBus"); i++) await app.scroll("id:form-scroll", 400).catch(() => {});
     await app.waitFor("id:fp-frm2200S:txtLineBus", { timeout: 15000 });
     expect(app.shows("id:fp-frm2200S:txtLineBus")).toBe(true);
-    expect(app.shows("id:fp-ask-line_of_business")).toBe(true);
+    // Q1 P1b: the box is the one input — no separate fact card for a boxed fact.
+    expect(app.shows("id:fp-ask-line_of_business")).toBe(false);
   }
 }, 120_000);

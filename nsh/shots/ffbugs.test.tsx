@@ -197,9 +197,8 @@ test("datefield: a kind-date box on 1701, blurred then focused", async () => {
     // input sits right under the box — the press that blurs it. The field
     // is typed a date first so both shots show one held.
     const box = "id:fp-frm1701:txtPg1I10BirthDate";
-    const ask = "id:fp-ask-birth_date-input";
-    // The pill's sections list jumps to Part I (index 1) and scrolls it
-    // into view on both layouts — surer than toggling and scrolling blind.
+    // Q1 P1b: the birth date is a writable box now (no fact card). The pill's sections list jumps to
+    // Part I (index 1) and scrolls it into view on both layouts — surer than toggling and scrolling blind.
     await app.press("id:fp-pill-open");
     await app.waitFor("id:fp-section-1", { timeout: 15_000 });
     await app.press("id:fp-section-1");
@@ -213,7 +212,6 @@ test("datefield: a kind-date box on 1701, blurred then focused", async () => {
       await app.wait(250);
     }
     await app.waitFor(box, { timeout: 15_000 });
-    await app.waitFor(ask, { timeout: 15_000 });
     // B14: eight digits rewrite to MM/DD/YYYY with the caret at the end — one more key lands after the year.
     await app.clear(box);
     await app.type(box, "03151990");
@@ -224,10 +222,9 @@ test("datefield: a kind-date box on 1701, blurred then focused", async () => {
     // must show it unclipped inside the 140 pt width (B14's width check).
     await app.type(box, "09301988");
     await app.wait(600);
-    // Inputs take focus through the text steps, not press: clearing the
-    // ask card's own (empty) date input turns it on and blurs the box.
+    // Tab moves the keyboard off the box: it blurs and shows the held date formatted.
     // Then the box is emptied and typed again — same held date, focused.
-    await app.clear(ask);
+    await app.keyboard.press("Tab");
     await app.wait(500);
     await shoot(app, `datefield-blurred-${look.name}`);
     await app.clear(box);
