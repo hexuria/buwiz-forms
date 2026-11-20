@@ -42,7 +42,7 @@ fn process() -> &'static Process {
 pub(crate) fn prepare_android(path: Option<PathBuf>) -> Result<(), String> {
     let path = path.ok_or("The Android engine has no private data directory.")?;
     bir_core::platform::set_data_dir(path.clone()).map_err(|error| error.to_string())?;
-    if cfg!(debug_assertions) || matches!(option_env!("BUWIZ_ANDROID_DEV"), Some("1")) {
+    if crate::dev_env::ENABLED {
         static DEV_ENV: OnceLock<Result<(), String>> = OnceLock::new();
         DEV_ENV
             .get_or_init(|| crate::dev_env::load(&path.join("dev.env")))

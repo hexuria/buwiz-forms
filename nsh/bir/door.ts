@@ -15,6 +15,11 @@ export function doorStatus(): DoorStatus {
   return Door.status();
 }
 
+/** Reads and deletes one command from the opt-in Android test mailbox; inert elsewhere. */
+export function devCommand(): string | null {
+  return Door.devCommand();
+}
+
 /** Every host function with its kind ("sync" or "async"), sorted by name. */
 export function hostFunctions(): HostFunction[] {
   return Door.functions();

@@ -134,6 +134,35 @@ acceptance must cover lock during loading (no late sheet), lock while previewing
 these transitions document this boundary without duplicating the native state
 machine in an unrelated model.
 
+## Android development command mailbox
+
+For emulator access-revocation checks, `Door.status().devCommandEnabled` is true
+only on Android with the shared `dev_env::ENABLED` compile-time gate (debug
+assertions or `BUWIZ_ANDROID_DEV=1`) and the exact in-process configuration value
+`EBIR_TEST_ENV=1`. Desktop and non-opted-in release builds return false and never
+consume a mailbox. This is development control, not a production IPC surface.
+
+Shell owns one 500 ms poll, separate from ordinary polls and independent of
+focus, lifecycle, visible chrome and sign-in state. Unmount stops the poll.
+`Door.devCommand()` rechecks the gate on every read, reads at most 65 bytes from
+`<engine data_dir>/dev-command` and removes it before returning an allowed
+command. A failed read/removal does not dispatch. Unknown, oversized and invalid
+UTF-8 commands are consumed and rejected; tracing records the receipt time in
+Unix milliseconds and warns on rejection. Producers should atomically rename
+a completed file into place rather than race a partially written command.
+
+The shell dispatches only `lock` to `app.lockApp()` and `logout` to
+`app.logOut()`: the same handlers as Ctrl+L and local Settings Sign out. The
+mailbox adds no Activity/focus operations. Existing print revocation/disposal
+above is unchanged, including its Activity navigation to dismiss an unsubmitted
+system preview; the mailbox itself does not first bring the app forward.
+
+Rust `dev_command` tests cover the complete gate matrix, parsing, private-root
+consumption, no replay, disabled reads, invalid commands and I/O failure.
+`shell/devCommand.test.ts` covers disabled scheduling, the 500 ms task and real
+session-handler effects, including sign-out after lock. These do not prove
+Android background timer execution or system-preview dismissal on a device.
+
 ## Worker-driven filing refresh
 
 Filings, Home and the form page share the cached `store.returns` lists. Worker

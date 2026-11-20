@@ -11,13 +11,14 @@ const ALLOWED: &[&str] = &[
     "BIR_RELAY_URL",
 ];
 
+pub(crate) const ENABLED: bool = cfg!(debug_assertions)
+    || match option_env!("BUWIZ_ANDROID_DEV") {
+        Some(value) => matches!(value.as_bytes(), [b'1']),
+        None => false,
+    };
+
 const BAKED: Option<&str> = {
-    let enabled = cfg!(debug_assertions)
-        || match option_env!("BUWIZ_ANDROID_DEV") {
-            Some(value) => matches!(value.as_bytes(), [b'1']),
-            None => false,
-        };
-    if enabled {
+    if ENABLED {
         option_env!("BUWIZ_ANDROID_DEV_ENV")
     } else {
         None

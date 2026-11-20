@@ -90,6 +90,33 @@ With the current NSH host this is normally
 directory (NSH uses `getFilesDir()/nsh/<app id>`). The file must exist before
 the first native Door call. Restart the app after changing it.
 
+### Android emulator access commands
+
+An opted-in Android dev build with the exact configured value `EBIR_TEST_ENV=1`
+also polls `<engine data_dir>/dev-command` every 500 ms, even with the ordinary
+shell polls disabled or Android PrintActivity in front. Commands are `lock`
+(the existing Ctrl+L handler) and `logout` (local Settings Sign out); the file is
+deleted before dispatch. Unknown commands are consumed, rejected and logged.
+No mailbox timer starts on desktop or when either gate is off.
+
+The current host supplies `getFilesDir()/nsh` as `EngineConfig.support_dir`, with
+no explicit `data_dir`; the engine appends the app ID. Thus the mailbox is
+`/data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh/dev-command`
+(`/data/user/0/...` is Android's equivalent path for user 0). On the rooted test
+emulator, atomically publish a complete command with:
+
+```sh
+adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh && printf lock > dev-command.next && mv dev-command.next dev-command'"
+adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh && printf logout > dev-command.next && mv dev-command.next dev-command'"
+```
+
+The app must already have started so its data directory exists. Receipt logs
+include a Unix-millisecond timestamp through tracing. The mailbox does not
+launch or activate an Activity; the existing print-revocation handler still
+dismisses an unsubmitted preview as documented in the migration lifecycle model.
+
+### Accepted dev.env keys
+
 Only these keys are accepted:
 `EBIR_TEST_ENV`, `BIR_AUTH_BYPASS`, `BUWIZ_NO_KEYCHAIN`, `BIR_SFTP_DRY_RUN`,
 `BIR_RELAY_URL`. The format is literal `KEY=VALUE`, with surrounding whitespace

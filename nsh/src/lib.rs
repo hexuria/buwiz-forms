@@ -11,6 +11,8 @@ pub mod agent;
 mod auth;
 mod desktop;
 #[cfg(any(test, target_os = "android"))]
+mod dev_command;
+#[cfg(any(test, target_os = "android"))]
 mod dev_env;
 pub mod door;
 #[cfg(target_os = "android")]
@@ -89,12 +91,27 @@ pub struct DoorStatus {
     /// `BIR_SHELL_POLL=1` in a test environment: the frame's polls run there as they do in the shipped app.
     /// Read here because a script under `nsh test` does not see the environment.
     pub shell_poll: bool,
+    /// The opt-in Android test mailbox may be polled, even while the app is not focused.
+    pub dev_command_enabled: bool,
 }
 
 /// The door to the Rust brain: the host functions the screens call, with the guards of the migration plan
 /// (a forced dry run, no database inside the owner's folders). Screens use `nsh/bir`, which types each call.
 #[module]
 pub struct Door;
+
+fn dev_command_enabled() -> bool {
+    #[cfg(target_os = "android")]
+    {
+        crate::dev_command::enabled(
+            true,
+            crate::dev_env::ENABLED,
+            bir_core::config::var("EBIR_TEST_ENV").ok().as_deref(),
+        )
+    }
+    #[cfg(not(target_os = "android"))]
+    false
+}
 
 #[module]
 impl Door {
@@ -139,7 +156,26 @@ impl Door {
             database_path: door::database_path().display().to_string(),
             test_environment: door::test_environment(),
             shell_poll: door::shell_poll(),
+            dev_command_enabled: dev_command_enabled(),
         })
+    }
+
+    /// Consumes one opt-in Android test command from the private data directory.
+    pub fn dev_command(_system: System) -> Result<Option<String>, String> {
+        #[cfg(target_os = "android")]
+        {
+            if !crate::dev_env::ENABLED {
+                return Ok(None);
+            }
+            door::prepare_android(_system.data_dir)?;
+            return crate::dev_command::consume(
+                &bir_core::platform::data_dir(),
+                dev_command_enabled(),
+            )
+            .map(|command| command.map(str::to_owned));
+        }
+        #[cfg(not(target_os = "android"))]
+        Ok(None)
     }
 
     /// Names the database file this thread opens, before anything else is called (test environments only:
