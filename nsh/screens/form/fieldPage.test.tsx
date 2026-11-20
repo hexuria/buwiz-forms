@@ -38,6 +38,26 @@ test("PR 2: phone date row opens its sheet and Done stores the chosen date", asy
   expect(app.texts()).toContain("August 17, 2023");
 });
 
+test("PR 2: a desktop date refusal is printed once beside the one field", async () => {
+  const app = await open(ENTRY, {
+    width: 1440, height: 900, platform: "macos",
+    host: { params: { formCode: "0605", year: 2023, period: 1, mode: "return" } },
+  });
+  await app.waitFor(box);
+  await app.type(box, "08/17/88");
+  await app.type("id:fp-frm0605:txtNoOfSheets", "");
+  await app.waitFor(`id:fp-boxmsg-${MONTH}`);
+  expect(app.texts().filter((text) => text === "Item 4: type the four-digit year, for example 08/17/1988.").length).toBe(1);
+});
+
+test("PR 2: a phone date row includes its required-date error in its accessible name", async () => {
+  const app = await open(ENTRY, { host: { params: { formCode: "0605", year: 2023, period: 1, mode: "return" } } });
+  await app.waitFor(box);
+  await app.press("id:fp-check");
+  await app.waitFor("text:Item 4 needs a due date.");
+  expect(app.shows("label:Due Date, not set, Item 4 needs a due date.")).toBe(true);
+});
+
 // Typing shows at once; the host's answer lands after the 300 ms flush. The
 // wait covers the flush and the fill's round trip, then the box must still
 // hold the digits — a refused write puts the shown value back.

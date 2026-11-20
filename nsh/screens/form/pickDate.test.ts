@@ -40,6 +40,8 @@ test("0605 registered date uses the same unrestricted calendar as its parts", as
     s.edit(date.oneKey, "1900-02-28");
     s.blur(date.oneKey);
     await s.idle();
+    expect([s.valueOf(date.month.k), s.valueOf(date.day!.k), s.valueOf(date.year.k), s.boxMessageOf(date.month.k)])
+      .toEqual(["02", "28", "1900", ""]);
     expect(splitDay(s, date)).toBe("1900-02-28");
   } finally {
     s.dispose();
@@ -62,7 +64,8 @@ test("1707A one-date rejects a typed non-December calendar year end", async () =
     s.edit(date.oneKey, "12/15/2025");
     s.blur(date.oneKey);
     await s.idle();
-    expect([s.valueOf(month), s.valueOf(date.day!.k), s.valueOf(date.year.k)].map(Number)).toEqual([12, 15, 2025]);
+    expect([s.valueOf(month), s.valueOf(date.day!.k), s.valueOf(date.year.k)].map(Number)).toEqual([12, 31, 2025]);
+    expect(s.shownOf(date.oneKey)).toBe("December 31, 2025");
   } finally {
     s.dispose();
   }

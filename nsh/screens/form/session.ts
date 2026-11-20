@@ -445,6 +445,7 @@ export class FormSession {
   private rowIds: string[] = [];
   private items = new Map<string, SchemaItem>();
   private oneDates = new Map<string, { date: OneDate; row: string }>();
+  private oneDateParts = new Set<string>();
   /** Keys of the split month/day/year boxes (dateParts groups that are not one_date items): a host zero in one shows blank (B15). */
   private datePartKeys = new Set<string>();
 
@@ -523,7 +524,12 @@ export class FormSession {
         if (dates.length) {
           for (const date of dates) {
             this.oneDates.set(date.oneKey, { date, row: id });
-            for (const key of [date.month.k, date.day?.k, date.year.k]) if (key) this.datePartKeys.add(key);
+            for (const key of [date.month.k, date.day?.k, date.year.k]) {
+              if (key) {
+                this.datePartKeys.add(key);
+                this.oneDateParts.add(key);
+              }
+            }
           }
         } else {
           // The same groups rows.tsx draws as split date boxes: their zero
@@ -1627,7 +1633,7 @@ export class FormSession {
         if (rejected && k in rejected) continue;
         // A box the host changed to something other than what was typed (a schedule row moved up into a cleared
         // row) shows the host's value, unless typed again since.
-        if (!(k in s.pending) && !this.pools.has(k) && this.hostChanged(k, edits[k])) this.sValue.get(k).set(this.shownText(k));
+        if (!(k in s.pending) && !this.pools.has(k) && (this.oneDateParts.has(k) || this.hostChanged(k, edits[k]))) this.sValue.get(k).set(this.shownText(k));
         continue;
       }
       if (this.isShut(k) || this.pools.has(k) || (before[k] ?? "") !== (s.values[k] ?? "")) this.sValue.get(k).set(this.shownText(k));
@@ -1635,8 +1641,9 @@ export class FormSession {
     for (const [k, { date }] of this.oneDates) {
       const parts = [date.month.k, date.day?.k, date.year.k].filter(Boolean) as string[];
       if (parts.some((p) => p in s.rejected) || s.focusKey === k) continue;
-      if (parts.some((p) => p in edits)) continue;
-      if (oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
+      const changedByHost = parts.some((p) => p in edits && this.hostChanged(p, edits[p]));
+      if (parts.some((p) => p in edits) && !changedByHost) continue;
+      if (changedByHost || oneDateText(before, date) !== oneDateText(s.values, date)) this.sValue.get(k).set(this.shownText(k));
     }
   }
 
@@ -3098,7 +3105,7 @@ export class FormSession {
       const parts = [date.month, date.day, date.year].filter(Boolean) as SchemaField[];
       const shut = this.isShut(k);
       this.sLocked.get(k).set(shut);
-      this.sHint.get(k).set(shut && !oneDateText(s.values, date) ? parts.map((f) => this.reasonFor(f.k)).find(Boolean) || "" : "");
+      this.sHint.get(k).set(!oneDateText(s.values, date) ? parts.map((f) => this.sHint.get(f.k)()).find(Boolean) || "" : "");
       const open = s.showAll || s.touched.has(row);
       const boxMsg = open && parts.some((f) => Boolean(s.boxMessages[f.k]));
       const rowMsg = open && Boolean(s.dateErrors[row] || parts.some((f) => shownMsgKeys.has(f.k)));

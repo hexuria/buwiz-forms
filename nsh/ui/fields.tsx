@@ -3,7 +3,7 @@
 // mask.ts (pure, tested); here they meet the input: the text is controlled, the caret is put back after a reformat, and
 // the selection the input reported before each edit goes to the mask so the edit is read exactly (NSH: onKeyPress comes
 // before the text changes, onSelectionChange has the selection; nsh/.nsh/types/nsh/types.d.ts InputHostProps).
-import type { InputRef, JSX } from "nsh";
+import type { InputRef, JSX, ViewRef } from "nsh";
 import { effect, signal, Text as NText, untracked, View } from "nsh";
 import { Calendar, type CalendarEntry, DatePicker, Input, OtpInput, type OtpInputRef } from "nsh/base";
 import { AppButton } from "./buttons";
@@ -29,6 +29,7 @@ export interface TextFieldProps {
   label?: string;
   /** What screen readers call it when there is no visible label. */
   accessibilityLabel?: string;
+  accessibilityDescribedBy?: ViewRef | null;
   /** A line under the box, 12 fg3. */
   hint?: string;
   /** An error: true for the danger border alone, a string for the message under the box too. */
@@ -83,6 +84,7 @@ export function TextField(props: TextFieldProps) {
   const sm = () => props.size === "sm";
   const message = () => (typeof props.error === "string" && props.error ? props.error : "");
   const flat = () => !!props.locked || !!props.disabled;
+  const messageRef = signal<ViewRef | null>(null);
   return (
     <View class="min-w-0 gap-1" style={{ width: props.width }}>
       <If when={props.label}>
@@ -125,6 +127,7 @@ export function TextField(props: TextFieldProps) {
           autoFocus={props.autoFocus}
           returnKeyType={props.returnKeyType}
           accessibilityLabel={props.label ?? props.accessibilityLabel}
+          accessibilityDescribedBy={props.accessibilityDescribedBy ?? (message() ? messageRef() : null)}
           onFocus={() => props.onFocus?.()}
           onBlur={() => props.onBlur?.()}
           onSubmit={() => props.onSubmit?.()}
@@ -147,7 +150,9 @@ export function TextField(props: TextFieldProps) {
         {props.trailing}
       </View>
       <If when={message()}>
-        <Text variant="meta" tone="danger">{message()}</Text>
+        <View ref={(ref: ViewRef) => messageRef.set(ref)}>
+          <Text variant="meta" tone="danger">{message()}</Text>
+        </View>
       </If>
       <If when={!message() && props.hint}>
         <Text variant="meta" tone="fg3">{props.hint}</Text>
@@ -636,6 +641,7 @@ export function DateField(props: DateFieldProps) {
     <TextField
       label={props.label}
       accessibilityLabel={props.accessibilityLabel}
+      accessibilityDescribedBy={props.accessibilityDescribedBy}
       hint={props.hint}
       placeholder={props.placeholder ?? "MM/DD/YYYY"}
       disabled={props.disabled}

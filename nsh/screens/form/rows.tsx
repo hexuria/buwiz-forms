@@ -1,7 +1,7 @@
 // The form page's rows: one item (number chip, label and marks, its controls from ./controls, the reserved 18-point
 // message line, fact cards, Item 13's card), and a part's "From tax profile" fold. Each row reads its own RowInfo
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
-import type { Accessor, JSX, ViewRef } from "nsh";
+import type { Accessor, JSX, Signal, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Code, DateField, DateTouchField, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
@@ -116,7 +116,7 @@ function scheduleProps(s: FormSession, id: string, it: SchemaItem, narrow: Acces
 }
 
 /** What a row draws for its boxes: a schedule, a note, a fold of extra fields, one date, a TIN, or its boxes. */
-function OneDateBox(props: { s: FormSession; date: OneDate; label: string; narrow: Accessor<boolean> }) {
+function OneDateBox(props: { s: FormSession; date: OneDate; label: string; narrow: Accessor<boolean>; describedBy: Accessor<ViewRef | null>; errorDescription: Accessor<string> }) {
   const s = props.s;
   const date = props.date;
   const key = date.oneKey;
@@ -133,46 +133,53 @@ function OneDateBox(props: { s: FormSession; date: OneDate; label: string; narro
       when={!box.locked()}
       else={<FieldControl {...fieldProps(s, field, props.narrow, label, 200)} />}
     >
-      <If
-        when={props.narrow()}
-        else={
-          <View class="h-8 min-w-0 overflow-hidden" style={{ width: 200 }}>
-            <DateField
-              testID={`fp-${key}`}
-              accessibilityLabel={label}
-              value={box.value()}
-              error={box.invalid()}
-              calendarStart={start()}
-              min={range().min}
-              max={range().max}
-              onChange={(text) => s.edit(key, text)}
-              onFocus={() => s.focus(key)}
-              onBlur={() => s.blur(key)}
-              onPick={(iso) => { s.edit(key, iso); s.blur(key); }}
-              inputRef={(ref) => s.registerFocus(key, () => ref.focus())}
-            />
-          </View>
-        }
-      >
-        <DateTouchField
-          testID={`fp-${key}`}
-          label={label}
-          value={box.value()}
-          error={box.invalid()}
-          start={start()}
-          min={range().min}
-          max={range().max}
-          validate={(value) => s.oneDateProblem(date, value)}
-          onChange={(text) => s.edit(key, text)}
-          onFocus={() => s.focus(key)}
-          onBlur={() => s.blur(key)}
-        />
-      </If>
+      <View class="gap-1">
+        <If
+          when={props.narrow()}
+          else={
+            <View class="h-8 min-w-0 overflow-hidden" style={{ width: 200 }}>
+              <DateField
+                testID={`fp-${key}`}
+                accessibilityLabel={label}
+                accessibilityDescribedBy={props.describedBy()}
+                value={box.value()}
+                error={box.invalid()}
+                calendarStart={start()}
+                min={range().min}
+                max={range().max}
+                onChange={(text) => s.edit(key, text)}
+                onFocus={() => s.focus(key)}
+                onBlur={() => s.blur(key)}
+                onPick={(iso) => { s.edit(key, iso); s.blur(key); }}
+                inputRef={(ref) => s.registerFocus(key, () => ref.focus())}
+              />
+            </View>
+          }
+        >
+          <DateTouchField
+            testID={`fp-${key}`}
+            label={label}
+            errorDescription={props.errorDescription()}
+            value={box.value()}
+            error={box.invalid()}
+            start={start()}
+            min={range().min}
+            max={range().max}
+            validate={(value) => s.oneDateProblem(date, value)}
+            onChange={(text) => s.edit(key, text)}
+            onFocus={() => s.focus(key)}
+            onBlur={() => s.blur(key)}
+          />
+        </If>
+        <If when={box.hint()}>
+          <Text testID={`fp-${key}-hint`} variant="meta" tone="fg3">{box.hint()}</Text>
+        </If>
+      </View>
     </If>
   );
 }
 
-function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean>; info: Accessor<RowInfo> }) {
+function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: Accessor<boolean>; info: Accessor<RowInfo>; describedBy: (date: OneDate) => ViewRef | null; errorDescription: (date: OneDate) => string }) {
   const s = props.s;
   const it = props.it;
   const fs = it.f || [];
@@ -211,7 +218,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         if (date && date.month.k !== f.k) return null;
         if (date) return (
           <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
-            <OneDateBox s={s} date={date} label={it.l} narrow={props.narrow} />
+            <OneDateBox s={s} date={date} label={it.l} narrow={props.narrow} describedBy={() => props.describedBy(date)} errorDescription={() => props.errorDescription(date)} />
           </View>
         );
         const sub = multi && f.l && f.l !== it.l && !/^\d+[A-Z]?$/.test(f.l);
@@ -431,6 +438,22 @@ export function ItemRow(props: RowProps) {
   const allCalc = !it.rows && fs.length > 0 && fs.every((x) => x.c);
   const req = fs.some((x) => x.r);
   const label = req ? `${it.l} *` : it.l;
+  const messageRefs = new Map<string, Signal<ViewRef | null>>();
+  for (const date of oneDates(it)) {
+    for (const field of [date.month, date.day, date.year]) {
+      if (field) messageRefs.set(field.k, signal<ViewRef | null>(null));
+    }
+  }
+  const rowMessageRef = signal<ViewRef | null>(null);
+  const boxMessage = (date: OneDate) => {
+    const keys = [date.month.k, date.day?.k, date.year.k];
+    return info().boxMessages.find((entry) => keys.includes(entry.key));
+  };
+  const describedBy = (date: OneDate) => {
+    const message = boxMessage(date);
+    return message ? messageRefs.get(message.key)?.() ?? null : info().message ? rowMessageRef() : null;
+  };
+  const errorDescription = (date: OneDate) => boxMessage(date)?.sentence || info().message;
   return (
     <View
       ref={(r: ViewRef) => props.onRef(id, r)}
@@ -491,7 +514,7 @@ export function ItemRow(props: RowProps) {
             </View>
           )}
         </Each>
-        <Controls s={s} id={id} it={it} narrow={props.narrow} info={info} />
+        <Controls s={s} id={id} it={it} narrow={props.narrow} info={info} describedBy={describedBy} errorDescription={errorDescription} />
         <If when={info().toProfile}>
           {(tp) => (
             <View testID={`fp-to-profile-${id}`} class="mt-2 gap-0.5">
@@ -510,9 +533,13 @@ export function ItemRow(props: RowProps) {
         </If>
         <Each of={info().notes}>{(note) => <Text variant="meta" tone="fg3" class="mt-1">{note()}</Text>}</Each>
         <Each of={info().boxMessages} key={(b: { key: string; sentence: string }) => b.key}>
-          {(b) => <Text variant="meta" tone="danger" testID={`fp-boxmsg-${b().key}`}>{b().sentence}</Text>}
+          {(b) => (
+            <View ref={(ref: ViewRef) => messageRefs.get(b().key)?.set(ref)}>
+              <Text variant="meta" tone="danger" testID={`fp-boxmsg-${b().key}`}>{b().sentence}</Text>
+            </View>
+          )}
         </Each>
-        <View class={info().message || !info().boxSaid ? "mt-1 min-h-4.5" : "mt-1"}>
+        <View ref={(ref: ViewRef) => { if (messageRefs.size) rowMessageRef.set(ref); }} class={info().message || !info().boxSaid ? "mt-1 min-h-4.5" : "mt-1"}>
           <Text variant="meta" tone="danger" testID={`fp-msg-${id}`}>{info().message}</Text>
         </View>
         <Each of={info().asks} key={(a: AskCard) => a.fact}>

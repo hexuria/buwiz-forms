@@ -126,10 +126,12 @@ test("0619e-day: Item 2 due-date day cleared, settled", async () => {
     await app.waitFor(key, { timeout: 30_000 });
     if (look.width < 600) {
       await app.press(key);
+      await app.clear(`${key}-sheet-input`);
       await app.type(`${key}-sheet-input`, "07/15/2025");
       await app.press(`${key}-sheet-done`);
       await app.waitFor(`${key}-sheet-input`, { state: "gone" });
     } else {
+      await app.clear(key);
       await app.type(key, "07/15/2025");
     }
     await app.wait(600);

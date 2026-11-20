@@ -9,6 +9,7 @@ import { Icon, Line } from "./text";
 
 export interface DateTouchFieldProps {
   label: string;
+  errorDescription?: string;
   value: string;
   onChange: (value: string) => void;
   start: string;
@@ -52,7 +53,7 @@ export function DateTouchField(props: DateTouchFieldProps) {
     <>
       <Button
         testID={props.testID}
-        accessibilityLabel={`${props.label}, ${show() || "not set"}`}
+        accessibilityLabel={`${props.label}, ${show() || "not set"}${props.errorDescription ? `, ${props.errorDescription}` : ""}`}
         disabled={props.disabled}
         class={cx("min-h-11 w-full flex-row items-center gap-2 rounded-(--radius-row) border bg-card px-2.5", FOCUS_RING,
           props.error ? "border-danger" : "border-border-strong")}

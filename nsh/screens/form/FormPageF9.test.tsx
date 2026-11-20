@@ -58,13 +58,12 @@ test("F9-3 desktop: the calendar beside a split date with a locked year (2551Q 2
   expect(app.texts()).not.toContain("02 - February");
 });
 
-test("F9-4 desktop: a locked box's hint is shown whole, in a box that grows to it (0619E Due Date MM and YYYY)", async () => {
+test("F9-4 desktop: a partially locked date shows its period hint whole (0619E Due Date)", async () => {
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "0619E", year: 0, period: 0, mode: "sample" } } });
   await app.waitFor("id:fp-parts-toggle");
-  // The hint is its own text (not a one-line cut), and the page says it in full.
-  expect(app.shows("id:fp-frm0619E:txtDueMonth-hint")).toBe(true);
-  expect(app.shows("id:fp-frm0619E:txtDueYear-hint")).toBe(true);
-  expect(app.texts().filter((t) => t === "Shows once the period is set").length).toBe(2);
+  expect(app.shows("id:fp-frm0619E:txtDueMonth#date")).toBe(true);
+  expect(app.shows("id:fp-frm0619E:txtDueMonth#date-hint")).toBe(true);
+  expect(app.texts().filter((t) => t === "Shows once the period is set").length).toBe(1);
 });
 
 test("F14 desktop: a calendar year (Calendar ticked, the default) has only December to pick: the days of another month are out of reach", async () => {
