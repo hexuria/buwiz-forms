@@ -22,7 +22,7 @@ test("F3-11 desktop: Cmd+Right inside a text box stays in the box; outside one i
   // Open and reveal Part II: Expand all need not mount its offscreen, virtualized amount rows.
   await app.press("id:fp-nav-2");
   await app.waitFor("id:fp-frm2551Qv2018:txt15");
-  await app.type("id:fp-frm2551Qv2018:txt15", "5");
+  await app.press("id:fp-frm2551Qv2018:txt15");
   await app.keyboard.press("mod+right");
   await app.wait(300);
   expect(app.texts().some((t) => /^Item \d+ · /.test(t))).toBe(false);
