@@ -2524,6 +2524,25 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
         };
         let locks = opened["locks"].as_object().cloned().unwrap_or_default();
         let kind = AgentFormKind::from_code(code).expect("schema form is an agent form");
+        // A select inside a registered one-date (PR 2's `one_dates`) is not
+        // an ordinary dropdown: the page's date control sends all three
+        // parts and the host judges them as one date, so each listed choice
+        // is sent with a valid day and year beside it.
+        let date_triples: Vec<[String; 3]> = form["parts"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|p| p["items"].as_array().into_iter().flatten())
+            .flat_map(|it| it["one_dates"].as_array().into_iter().flatten())
+            .filter_map(|triple| {
+                let keys: Vec<String> = triple
+                    .as_array()?
+                    .iter()
+                    .filter_map(|k| k.as_str().map(str::to_string))
+                    .collect();
+                <[String; 3]>::try_from(keys).ok()
+            })
+            .collect();
         let fields = form["parts"]
             .as_array()
             .into_iter()
@@ -2557,13 +2576,30 @@ fn every_listed_dropdown_choice_is_accepted_by_the_host() {
                     continue;
                 };
                 sent.insert(format!("{code} {key}"));
+                let edits = match date_triples
+                    .iter()
+                    .find(|triple| triple.iter().any(|part| part == key))
+                {
+                    Some(triple) => {
+                        let mut whole = serde_json::Map::new();
+                        for (at, part) in triple.iter().enumerate() {
+                            let part_value = if part == key {
+                                value.clone()
+                            } else {
+                                // A real date beside the choice: January
+                                // first, year 2023 (positions month, day,
+                                // year as `one_dates` lists them).
+                                ["01", "01", "2023"][at].to_string()
+                            };
+                            whole.insert(part.clone(), json!(part_value));
+                        }
+                        json!(whole)
+                    }
+                    None => json!({ key: value.clone() }),
+                };
                 let filled = call(
                     "screen_form_fill",
-                    vec![
-                        code.into(),
-                        json(opened["draft"].clone()),
-                        json(json!({ key: value })),
-                    ],
+                    vec![code.into(), json(opened["draft"].clone()), json(edits)],
                 )
                 .expect("fill runs");
                 if let Some(reason) = filled["rejected"].get(key) {
