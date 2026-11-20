@@ -8627,7 +8627,7 @@ mod tests {
         assert!(
             refused
                 .message()
-                .contains("Category of withholding agent is not set"),
+                .contains("Government withholding agent is not in the tax profile"),
             "{}",
             refused.message()
         );

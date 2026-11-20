@@ -106,11 +106,6 @@ fn ask<'a>(opened: &'a Value, fact: &str) -> Option<&'a Value> {
         .find(|ask| ask["fact"] == fact)
 }
 
-fn asked_at(opened: &Value, code: &str, fact: &str) -> String {
-    let ask = ask(opened, fact).unwrap_or_else(|| panic!("{code} asks {fact}: {}", opened["asks"]));
-    item_of(code, ask["key"].as_str().expect("placed"))
-}
-
 fn queue_check(code: &str, draft: &Value) -> Value {
     call(
         "screen_form_queue_check",
@@ -140,8 +135,26 @@ fn warns(check: &Value) -> Vec<String> {
 const EOPT_WARNING: &str =
     "EOPT tier is not set. It would set the penalty rates if this return were late.";
 
+/// The printed item a fact's placed box sits on, boxed or card (Q1 P1b).
+fn placed_at(code: &str, fact: &str) -> String {
+    let kind = kind_of(code).unwrap();
+    let fact: bir_core::tax_profile::Fact =
+        serde_json::from_value(json!(fact)).expect("a fact key");
+    let placed = crate::screen_form_module::fact_asks::place(kind, fact)
+        .unwrap_or_else(|| panic!("{code} places {fact:?}"));
+    item_of(code, &placed.key)
+}
+
+/// Whether `fact` has a writable box of its own on `code` (Q1 P1b).
+fn is_boxed(code: &str, fact: &str) -> bool {
+    let kind = kind_of(code).unwrap();
+    let fact: bir_core::tax_profile::Fact =
+        serde_json::from_value(json!(fact)).expect("a fact key");
+    crate::screen_form_module::fact_asks::boxed(kind, fact).is_some()
+}
+
 #[test]
-fn each_fact_not_set_is_asked_at_the_item_that_uses_it() {
+fn each_fact_not_set_is_boxed_or_asked_at_the_item_that_uses_it() {
     setup_juana();
     set_facts(
         JUANA,
@@ -151,66 +164,56 @@ fn each_fact_not_set_is_asked_at_the_item_that_uses_it() {
         },
     );
     let q = open_as(JUANA, "1701Q", 1);
-    assert_eq!(
-        asked_at(&q, "1701Q", "birth_date"),
-        "11",
-        "the date of birth"
-    );
-    assert_eq!(
-        asked_at(&q, "1701Q", "atc_codes"),
-        "8",
-        "the first ATC item"
-    );
+    // Boxed facts get no card: the box is the only input (Q1 P1b, B5).
+    for fact in ["birth_date", "atc_codes", "line_of_business"] {
+        assert!(is_boxed("1701Q", fact), "1701Q {fact} is boxed");
+        assert!(ask(&q, fact).is_none(), "1701Q {fact} has no card");
+    }
+    assert_eq!(placed_at("1701Q", "birth_date"), "11");
+    assert_eq!(placed_at("1701Q", "atc_codes"), "8");
+    // The EOPT tier has no writable box here: it stays a card.
+    assert!(!is_boxed("1701Q", "eopt_tier"));
     assert!(ask(&q, "eopt_tier").is_some(), "{}", q["asks"]);
     assert!(
         ask(&q, "income_tax_election").is_none(),
         "the rate is the form's own item"
     );
-    let birth = ask(&q, "birth_date").unwrap();
-    assert_eq!(birth["control"], "date");
+    // A boxed fact's box carries its profile_save entry at the same item.
+    let save = &q["profile_save"];
     assert_eq!(
-        birth["note"],
-        "Juana Santos's date of birth is not in the tax profile; what you save here goes there for every later return."
+        save["frm1701q:txtBirthMonth"]["field"],
+        "birth_date",
+        "the birth date's box saves to the profile"
     );
     for code in ["1700", "1701", "1701A"] {
+        assert!(is_boxed(code, "birth_date"), "{code} birth date boxed");
         let opened = open_as(JUANA, code, 1);
-        let key = ask(&opened, "birth_date")
-            .unwrap_or_else(|| panic!("{code}: {}", opened["asks"]))["key"]
-            .as_str()
-            .unwrap_or_else(|| panic!("{code}: the birth date is placed"))
-            .to_string();
         assert!(
-            box_paths_of(code, &key)
-                .iter()
-                .any(|path| path.ends_with("birth_date") || path.ends_with("date_of_birth")),
-            "{code}: {key}"
+            ask(&opened, "birth_date").is_none(),
+            "{code}: no birth-date card"
         );
     }
-    assert_eq!(
-        asked_at(&open_as(JUANA, "1701", 1), "1701", "atc_codes"),
-        "7"
-    );
+    assert_eq!(placed_at("1701", "atc_codes"), "7");
+    assert!(is_boxed("0619E", "is_government_withholding_entity"));
     let e = open_as(JUANA, "0619E", 7);
+    assert!(ask(&e, "is_government_withholding_entity").is_none());
+    assert_eq!(placed_at("0619E", "is_government_withholding_entity"), "12");
+    assert!(is_boxed("0619F", "is_government_withholding_entity"));
     assert_eq!(
-        asked_at(&e, "0619E", "is_government_withholding_entity"),
-        "12"
-    );
-    let gov = ask(&e, "is_government_withholding_entity").unwrap();
-    assert_eq!(gov["control"], "choice");
-    assert_eq!(gov["choices"][1]["value"], true);
-    assert_eq!(
-        asked_at(
-            &open_as(JUANA, "0619F", 7),
-            "0619F",
-            "is_government_withholding_entity"
-        ),
+        placed_at("0619F", "is_government_withholding_entity"),
         "11"
     );
-    assert_eq!(
-        ask(&e, "line_of_business").unwrap()["key"],
-        key_bound_to("0619E", "/line_of_business"),
-        "at its box"
+    assert!(is_boxed("0619E", "line_of_business"));
+    assert!(
+        ask(&e, "line_of_business").is_none(),
+        "the line of business is boxed at its box"
     );
+    assert_eq!(
+        e["profile_save"]["frm0619E:txtLineBus"]["field"],
+        "line_of_business"
+    );
+    // The EOPT tier on a penalty form has no writable box: a card.
+    assert!(!is_boxed("0619E", "eopt_tier"));
     let penalties = ask(&e, "eopt_tier").unwrap()["key"]
         .as_str()
         .unwrap()
@@ -221,36 +224,27 @@ fn each_fact_not_set_is_asked_at_the_item_that_uses_it() {
             .any(|group| group.keys.contains(&penalties)),
         "0619E: EOPT tier at its penalties, {penalties}"
     );
-    assert_eq!(
-        asked_at(&open_as(JUANA, "2550Q", 1), "2550Q", "eopt_tier"),
-        "13",
-        "2550Q's taxpayer classification"
-    );
+    assert_eq!(placed_at("2550Q", "eopt_tier"), "13");
+    assert!(is_boxed("2550Q", "eopt_tier"), "2550Q's classification box");
     let pt = open_as(JUANA, "2551Q", 1);
-    assert_eq!(asked_at(&pt, "2551Q", "tax_classification"), "13");
-    assert_eq!(asked_at(&pt, "2551Q", "business_start_date"), "13");
-    assert_eq!(
-        asked_at(
-            &open_as(JUANA, "1702RT", 12),
-            "1702RT",
-            "business_start_date"
-        ),
-        "10"
-    );
-    assert_eq!(
-        asked_at(
-            &open_as(JUANA, "1702EX", 12),
-            "1702EX",
-            "business_start_date"
-        ),
-        "10"
-    );
+    // 2551Q's Item 13 facts have no writable box: F2 cards.
+    for fact in ["tax_classification", "business_start_date", "eopt_tier"] {
+        assert!(!is_boxed("2551Q", fact), "2551Q {fact} is a card");
+        assert!(ask(&pt, fact).is_some(), "2551Q asks {fact}");
+    }
+    assert_eq!(placed_at("2551Q", "tax_classification"), "13");
+    assert_eq!(placed_at("2551Q", "business_start_date"), "13");
+    assert!(is_boxed("1702EX", "business_start_date"));
+    // 1702RT's incorporation date is derived: it stays a card.
+    assert!(!is_boxed("1702RT", "business_start_date"));
+    assert!(is_boxed("1702EX", "business_start_date"));
     let c = open_as(JUANA, "1601C", 2);
-    assert_eq!(
-        ask(&c, "line_of_business").unwrap()["key"],
-        key_bound_to("1601C", "/line_of_business")
-    );
+    assert!(is_boxed("1601C", "line_of_business"));
+    assert!(ask(&c, "line_of_business").is_none());
     assert!(ask(&c, "birth_date").is_none(), "1601C reads no birth date");
+    // 1700's line of business is unbound (lobContainer): card-only.
+    assert!(!is_boxed("1700", "line_of_business"));
+    assert!(is_boxed("1700", "birth_date"));
 
     // A head-office fact asked on a branch return is set for all branches.
     with_database(|db| {
@@ -267,29 +261,15 @@ fn each_fact_not_set_is_asked_at_the_item_that_uses_it() {
     })
     .unwrap();
     let branch = open_as(BRANCH, "1601C", 2);
+    // The EOPT tier is a card on 1601C: its note names the branches.
+    let note = ask(&branch, "eopt_tier").unwrap()["note"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert!(
-        ask(&branch, "eopt_tier").unwrap()["note"]
-            .as_str()
-            .unwrap()
-            .ends_with("for every later return and for all branches."),
-        "{}",
-        branch["asks"]
+        note.ends_with("for every later return and for all branches."),
+        "{note}"
     );
-    assert!(
-        ask(&branch, "line_of_business").unwrap()["note"]
-            .as_str()
-            .unwrap()
-            .ends_with("for every later return."),
-        "a branch's own fact"
-    );
-}
-
-fn box_paths_of(code: &str, key: &str) -> Vec<String> {
-    let def = kind_of(code).unwrap().definition();
-    bound_paths(def, key)
-        .into_iter()
-        .map(str::to_string)
-        .collect()
 }
 
 #[test]
@@ -336,41 +316,36 @@ fn nothing_is_asked_once_set_on_a_sample_or_on_a_filed_return() {
 }
 
 #[test]
-fn an_answer_saved_from_a_card_brings_the_return_up_to_date() {
+fn an_answer_saved_from_a_box_brings_the_return_up_to_date() {
     setup_juana();
+    // 1701Q's birth date is boxed (Item 11, Q1 P1b): typed in its boxes and
+    // saved to the profile, a later return of the year opens with it.
     let opened = open_as(JUANA, "1701Q", 1);
-    let month = ask(&opened, "birth_date").unwrap()["key"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(opened["values"][month.as_str()], "");
-    // The card's Save: the birth date goes to the taxpayer (update_taxpayer).
-    call(
-        "update_taxpayer",
-        vec![ROOT.into(), json(json!({ "birth_date": "1980-02-03" }))],
-    )
-    .unwrap();
-    let used = call(
-        "screen_form_use_profile",
-        vec![
-            "1701Q".into(),
-            2026i64.into(),
-            1i64.into(),
-            json(opened["draft"].clone()),
-            json(json!(["birth_date"])),
+    assert!(ask(&opened, "birth_date").is_none(), "no card: {}", opened["asks"]);
+    assert_eq!(opened["values"]["frm1701q:txtBirthYear"], "");
+    let written = fact_to_profile(
+        "1701Q",
+        1,
+        json!({
+            "frm1701q:txtBirthMonth": "05",
+            "frm1701q:txtBirthDay": "06",
+            "frm1701q:txtBirthYear": "1975",
+        }),
+        &[
+            "frm1701q:txtBirthMonth",
+            "frm1701q:txtBirthDay",
+            "frm1701q:txtBirthYear",
         ],
     )
     .unwrap();
-    assert_eq!(used["draft"]["date_of_birth"], "02/03/1980");
-    assert_eq!(used["values"]["frm1701q:txtBirthYear"], "1980");
-    assert!(
-        ask(&used, "birth_date").is_none(),
-        "the card goes: {}",
-        used["asks"]
-    );
-    assert!(ask(&used, "eopt_tier").is_some(), "the others stay");
+    assert_eq!(birth_date(), "1975-05-06".parse().ok());
+    let annual = open_as(JUANA, "1701", 0);
+    assert_eq!(annual["draft"]["date_of_birth"], "05/06/1975");
+    assert!(ask(&annual, "birth_date").is_none());
+    assert_eq!(written["draft"]["date_of_birth"], "05/06/1975");
 
-    // A box the page filled with a guess (0619E's Private) takes the answer.
+    // A box the page filled with a guess (0619E's Private) takes the
+    // profile's answer on a later open.
     set_facts(
         JUANA,
         YearFactsPatch {
@@ -409,7 +384,8 @@ fn queue_blocks_a_1701q_without_a_birth_date() {
     setup_juana();
     at((2026, 4, 1), || {
         let opened = open_as(JUANA, "1701Q", 1);
-        let key = ask(&opened, "birth_date").unwrap()["key"].clone();
+        // The birth date is boxed (Item 11): one sentence, "Type it", on
+        // its boxes — no card, and the form's own sentence is not doubled.
         let block = opened["fact_errors"]
             .as_array()
             .unwrap()
@@ -417,11 +393,31 @@ fn queue_blocks_a_1701q_without_a_birth_date() {
             .find(|error| error["field"] == "tax_profile.birth_date")
             .unwrap_or_else(|| panic!("a message on the row: {}", opened["fact_errors"]))
             .clone();
-        assert_eq!(block["keys"], json!([key]), "on the card's row");
+        assert_eq!(
+            block["keys"],
+            json!([
+                "frm1701q:txtBirthMonth",
+                "frm1701q:txtBirthDay",
+                "frm1701q:txtBirthYear"
+            ]),
+            "on the date's boxes"
+        );
         assert_eq!(
             block["message"],
-            "Date of birth is not set in the tax profile, and this return needs it. Answer it in the card at Item 11, then queue."
+            "Date of birth is not in the tax profile, and this return needs it. Type it at Item 11."
         );
+        // The form's own required sentence for the same boxes is dropped.
+        let own = opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|error| {
+                error["keys"]
+                    .as_array()
+                    .is_some_and(|keys| keys.iter().any(|key| key == "frm1701q:txtBirthMonth"))
+            })
+            .count();
+        assert_eq!(own, 0, "one sentence, not two: {}", opened["errors"]);
         let saved = save("1701Q", &opened["draft"]);
         let check = queue_check("1701Q", &saved["draft"]);
         assert!(blocks_on(&check, "birth_date").is_some(), "{check}");
@@ -443,10 +439,35 @@ fn queue_blocks_a_1701q_without_a_birth_date() {
         )
         .unwrap_err();
         assert!(
-            refused.message().contains("Date of birth is not set"),
+            refused.message().contains("Date of birth is not in the tax profile"),
             "{}",
             refused.message()
         );
+        // Typed in the box, the fact error lifts and the profile is untouched.
+        let filled = fill(
+            "1701Q",
+            &saved["draft"],
+            json!({
+                "frm1701q:txtBirthMonth": "05",
+                "frm1701q:txtBirthDay": "06",
+                "frm1701q:txtBirthYear": "1975",
+            }),
+        );
+        let validated = call_async(
+            "screen_form_validate",
+            vec!["1701Q".into(), json(filled["draft"].clone())],
+        )
+        .unwrap();
+        assert!(
+            validated["fact_errors"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|error| error["field"] != "tax_profile.birth_date"),
+            "a typed date answers it: {}",
+            validated["fact_errors"]
+        );
+        assert_eq!(birth_date(), None, "the profile is not written by typing");
     });
 }
 
@@ -545,7 +566,7 @@ fn the_0619e_government_answer_follows_the_forms_required_flag() {
         let check = queue_check("0619E", &saved["draft"]);
         let block = blocks_on(&check, "is_government_withholding_entity")
             .unwrap_or_else(|| panic!("{check}"));
-        assert_eq!(block["keys"], json!([placed.key]));
+        assert_eq!(block["keys"], json!(placed.keys), "on its radios");
         // Answered: Queue goes on.
         set_facts(
             JUANA,
@@ -944,7 +965,7 @@ fn a_category_pick_on_the_return_lifts_the_withholding_block() {
             assert_eq!(
                 block["message"],
                 format!(
-                    "Category of withholding agent is not set in the tax profile, and this return needs it. Pick Private or Government at Item {item}, then queue."
+                    "Government withholding agent is not in the tax profile, and this return needs it. Pick it at Item {item}."
                 ),
                 "{code}"
             );
@@ -1180,98 +1201,224 @@ fn the_page_knows_which_fact_boxes_save_to_the_profile() {
     );
 }
 
-/// B12: 1701's income-type card asks in Item 6's own terms. Each answer
-/// saves the income type the profile takes and ticks Item 6 on the return.
+/// Q1 P1b: 1701's income type is boxed — Item 6's radios are the only
+/// input, each a "Save to profile" box. Picking one and saving it writes
+/// the income type the profile takes.
 #[test]
-fn the_1701_income_type_card_answers_item_6() {
+fn the_1701_income_type_is_boxed_and_saves_through_item_6() {
     use bir_core::profile::TaxClassification;
-    let rows = [
-        (
-            "Single proprietor",
-            TaxClassification::SelfEmployed,
-            "SingleProprietor",
-        ),
-        (
-            "Professional",
-            TaxClassification::SelfEmployed,
-            "Professional",
-        ),
-        (
-            "Single proprietor with compensation income",
-            TaxClassification::MixedIncome,
-            "SingleProprietor",
-        ),
-        (
-            "Professional with compensation income",
-            TaxClassification::MixedIncome,
-            "Professional",
-        ),
-        (
-            "Compensation earner",
-            TaxClassification::PurelyCompensation,
-            "CompensationEarner",
-        ),
-    ];
-    for (label, class, item_6) in rows.clone() {
-        setup_juana();
-        let opened = open_as(JUANA, "1701", 0);
-        assert_eq!(opened["draft"]["taxpayer_type"], Value::Null, "{label}");
-        let card = ask(&opened, "tax_classification")
-            .unwrap_or_else(|| panic!("1701 asks the income type: {}", opened["asks"]));
-        let labels: Vec<&str> = card["choices"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|choice| choice["label"].as_str().unwrap())
-            .collect();
-        assert_eq!(labels, rows.clone().map(|row| row.0), "Item 6's own terms");
-        let choice = card["choices"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|choice| choice["label"] == label)
-            .unwrap();
-        // The card's Save, as the page does it: the profile, the return's
-        // fields of that fact, then the answer's own boxes.
-        call(
-            "set_year_facts",
-            vec![
-                JUANA.into(),
-                2026i64.into(),
-                json(json!({ "tax_classification": choice["saves"] })),
-            ],
-        )
-        .unwrap();
-        let mut used = use_profile("1701", 0, &opened["draft"], &["tax_classification"]);
-        if let Some(boxes) = choice.get("fill") {
-            used = fill("1701", &used["draft"], boxes.clone());
-            assert_eq!(used["rejected"], json!({}), "{label}: {}", used["rejected"]);
-        }
-        assert_eq!(used["draft"]["taxpayer_type"], item_6, "{label}: Item 6");
-        assert_eq!(year_facts().tax_classification, Some(class), "{label}");
-        let saved = save("1701", &used["draft"]);
-        let reopened = open_as(JUANA, "1701", 0);
-        assert_eq!(saved["draft"]["taxpayer_type"], item_6, "{label}: saved");
-        assert_eq!(
-            reopened["draft"]["taxpayer_type"], item_6,
-            "{label}: reopened"
-        );
-        assert!(
-            ask(&reopened, "tax_classification").is_none(),
-            "{label}: the card goes"
-        );
-    }
-    // Another form's income-type card keeps its three answers, each the
-    // value the profile takes.
+    setup_juana();
+    let opened = open_as(JUANA, "1701", 0);
+    assert!(
+        ask(&opened, "tax_classification").is_none(),
+        "boxed: no card: {}",
+        opened["asks"]
+    );
+    // Item 6's radios carry profile_save entries under the fact's name.
+    let save = &opened["profile_save"];
+    let radio = "frm1701:rdoPg1I6TaxpayerTypeS";
+    assert_eq!(save[radio]["field"], "tax_classification", "{save}");
+    // Pick Single proprietor on the return and save it to the profile.
+    let written = fact_to_profile(
+        "1701",
+        0,
+        json!({ radio: "true" }),
+        &[radio],
+    )
+    .unwrap();
+    assert_eq!(written["saved"], json!(["Income type"]));
+    assert_eq!(
+        year_facts().tax_classification,
+        Some(TaxClassification::SelfEmployed)
+    );
+    assert_eq!(written["draft"]["taxpayer_type"], "SingleProprietor");
+    // A later return of the year opens with Item 6 ticked.
+    let reopened = open_as(JUANA, "1701", 0);
+    assert_eq!(reopened["draft"]["taxpayer_type"], "SingleProprietor");
+    assert!(ask(&reopened, "tax_classification").is_none());
+
+    // 2551Q's Item 13 keeps its income-type card (F2): three answers, each
+    // the value the profile takes, with a `short` chip label.
     setup_juana();
     let q = open_as(JUANA, "2551Q", 1);
     let card = ask(&q, "tax_classification").unwrap();
     assert_eq!(
         card["choices"],
         json!([
-            { "value": "SelfEmployed", "label": "Self-employed or professional" },
-            { "value": "MixedIncome", "label": "Mixed income (compensation and business)" },
-            { "value": "PurelyCompensation", "label": "Compensation only" },
+            { "value": "SelfEmployed", "label": "Self-employed or professional", "short": "Self-employed" },
+            { "value": "MixedIncome", "label": "Mixed income (compensation and business)", "short": "Mixed income" },
+            { "value": "PurelyCompensation", "label": "Compensation only", "short": "Compensation only" },
         ])
     );
+}
+
+/// Q1 P1b: the boxed/card table — which facts answer in their own writable
+/// box and which keep a card, per form.
+#[test]
+fn the_boxed_card_table() {
+    let table: &[(&str, &str, bool)] = &[
+        ("0605", "line_of_business", true),
+        ("0605", "eopt_tier", false),
+        ("2200S", "line_of_business", true),
+        ("2200S", "eopt_tier", false),
+        ("1701Q", "birth_date", true),
+        ("1701Q", "atc_codes", true),
+        ("1701Q", "line_of_business", true),
+        ("1701Q", "eopt_tier", false),
+        ("1701Q", "income_tax_election", false),
+        ("2551Q", "tax_classification", false),
+        ("2551Q", "business_start_date", false),
+        ("2551Q", "eopt_tier", false),
+        ("2551Q", "income_tax_election", false),
+        ("0619E", "is_government_withholding_entity", true),
+        ("0619E", "line_of_business", true),
+        ("0619E", "eopt_tier", false),
+        ("0619F", "is_government_withholding_entity", true),
+        ("0619F", "line_of_business", true),
+        ("0619F", "eopt_tier", false),
+        ("1700", "birth_date", true),
+        ("1700", "line_of_business", false),
+        ("1700", "eopt_tier", false),
+        ("1701", "birth_date", true),
+        ("1701", "tax_classification", true),
+        ("1701", "atc_codes", true),
+        ("1701", "line_of_business", true),
+        ("1701", "eopt_tier", false),
+        ("1701A", "birth_date", true),
+        ("1702RT", "business_start_date", false),
+        ("1702EX", "business_start_date", true),
+        ("1702EX", "line_of_business", true),
+        ("1601C", "line_of_business", true),
+        ("1601C", "eopt_tier", false),
+        ("2550Q", "eopt_tier", true),
+    ];
+    for (code, fact, want) in table {
+        assert_eq!(is_boxed(code, fact), *want, "{code} {fact}");
+    }
+}
+
+/// Q1 P1b, B5/B7: a required boxed fact left blank shows ONE sentence —
+/// the fact's "Type it/Pick it at Item N" — and the form's own required
+/// sentence for the same box is dropped.
+#[test]
+fn a_blank_required_boxed_fact_says_it_once() {
+    setup_juana();
+    for (code, period, fact, at) in [
+        ("0605", 1i64, "line_of_business", "Item 12"),
+        ("2200S", 1i64, "line_of_business", "Item 9"),
+    ] {
+        let opened = open_as(JUANA, code, period);
+        let block = opened["fact_errors"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{code} fact_errors: {}", opened["fact_errors"]))
+            .iter()
+            .find(|error| error["field"] == format!("tax_profile.{fact}"))
+            .unwrap_or_else(|| panic!("{code} blocks {fact}: {}", opened["fact_errors"]))
+            .clone();
+        let message = block["message"].as_str().unwrap();
+        assert!(
+            message.contains("is not in the tax profile, and this return needs it.")
+                && (message.contains("Type it") || message.contains("Pick it")),
+            "{code}: {message}"
+        );
+        assert!(message.contains(at), "{code}: {message} names {at}");
+        // The form's own sentence for the same keys is gone.
+        let keys: Vec<String> = block["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|key| key.as_str().map(str::to_string))
+            .collect();
+        let doubled = opened["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|error| {
+                error["keys"].as_array().is_some_and(|own| {
+                    !own.is_empty() && own.iter().all(|key| keys.contains(&key.as_str().unwrap().to_string()))
+                })
+            })
+            .count();
+        assert_eq!(doubled, 0, "{code}: one sentence, not two: {}", opened["errors"]);
+    }
+}
+
+/// Q1·a: the "Save to profile?" answer is remembered per taxpayer TIN, tax
+/// year and field in a host setting; `profile_asked` lists it on open.
+#[test]
+fn the_profile_ask_answer_is_remembered_per_tin_year_and_field() {
+    setup_juana();
+    let opened = open_as(JUANA, "0605", 1);
+    assert_eq!(opened["profile_asked"], json!([]), "nothing remembered");
+    call(
+        "screen_form_profile_asked",
+        vec![
+            JUANA.into(),
+            2026i64.into(),
+            "line_of_business".into(),
+            "only".into(),
+        ],
+    )
+    .unwrap();
+    let reopened = open_as(JUANA, "0605", 1);
+    assert_eq!(reopened["profile_asked"], json!(["line_of_business"]));
+    // A second answer for another field joins it.
+    call(
+        "screen_form_profile_asked",
+        vec![JUANA.into(), 2026i64.into(), "rdo_code".into(), "save".into()],
+    )
+    .unwrap();
+    let reopened = open_as(JUANA, "0605", 1);
+    let mut asked: Vec<String> = reopened["profile_asked"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|field| field.as_str().unwrap().to_string())
+        .collect();
+    asked.sort();
+    assert_eq!(asked, vec!["line_of_business", "rdo_code"], "both remembered");
+    // Another tax year asks again.
+    let other_year = call_async(
+        "screen_form_open",
+        vec![JUANA.into(), "0605".into(), 2025i64.into(), 1i64.into()],
+    )
+    .unwrap();
+    assert_eq!(other_year["profile_asked"], json!([]), "2025 asks again");
+    // Another TIN asks again (the branch's own TIN).
+    let branch = call_async(
+        "screen_form_open",
+        vec![BRANCH.into(), "0605".into(), 2026i64.into(), 1i64.into()],
+    );
+    match branch {
+        Ok(opened) => assert_eq!(opened["profile_asked"], json!([]), "another TIN"),
+        // A branch with no profile of its own opens nothing to compare.
+        Err(_) => {}
+    }
+    // A bad answer is refused.
+    assert!(
+        call(
+            "screen_form_profile_asked",
+            vec![JUANA.into(), 2026i64.into(), "line_of_business".into(), "maybe".into()],
+        )
+        .is_err()
+    );
+}
+
+/// Q1b/F2: a card fact's Queue sentence reads "Answer it {at}, then queue."
+/// — no "in the card".
+#[test]
+fn a_card_facts_queue_sentence_names_the_item() {
+    setup_juana();
+    at((2026, 3, 1), || {
+        // 1601C's EOPT tier is a card; late, it blocks with the new wording.
+        let saved = save("1601C", &open_as(JUANA, "1601C", 1)["draft"]);
+        let check = queue_check("1601C", &saved["draft"]);
+        let block = blocks_on(&check, "eopt_tier").unwrap_or_else(|| panic!("{check}"));
+        let message = block["message"].as_str().unwrap();
+        assert!(
+            message.contains("Answer it at Item") && message.ends_with("then queue."),
+            "{message}"
+        );
+        assert!(!message.contains("in the card"), "{message}");
+    });
 }
