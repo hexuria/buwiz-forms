@@ -8,7 +8,10 @@ const WIDTHS = [420, 640];
 
 for (const width of WIDTHS) {
   test(`0605 rows at ${width} pt: as opened, and after Check`, async () => {
-    const app = await open("../Form0605Shot.tsx", { width, height: 1400, platform: "macos", colorScheme: "light" });
+    const app = await open("../FormAnyShot.tsx", {
+      width, height: width < 600 ? 2000 : 1400, platform: "macos", colorScheme: "light",
+      host: { params: { formCode: "0605", year: 2023, period: 1, mode: "return" } },
+    });
     await app.waitFor("id:fp-item-0:3", { timeout: 30_000 });
     await app.wait(800);
     await shoot(app, `rows-open-${width}`);

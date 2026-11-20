@@ -63,7 +63,13 @@ test("chip: the header's fields-count chip", async () => {
 
 test("typed-month: 08 typed into Item 4's month box, settled", async () => {
   await eachLook(async (app, look) => {
-    await app.type("id:fp-frm0605:txtDueDateMonth", "08");
+    const key = "id:fp-frm0605:txtDueDateMonth#date";
+    if (look.width < 600) {
+      await app.press(key);
+      await app.type(`${key}-sheet-input`, "08");
+    } else {
+      await app.type(key, "08");
+    }
     await app.wait(SETTLE);
     await shoot(app, `typed-month-${look.name}`);
   });
@@ -71,9 +77,11 @@ test("typed-month: 08 typed into Item 4's month box, settled", async () => {
 
 test("calendar-pick: Item 4's calendar opens, a day is picked, settled", async () => {
   await eachLook(async (app, look) => {
-    await app.press("id:fp-date-0:3");
+    const key = "id:fp-frm0605:txtDueDateMonth#date";
+    await app.press(look.width < 600 ? key : `${key}-calendar`);
     await app.waitFor("text:Su");
     await app.press("role:button >> text:15");
+    if (look.width < 600) await app.press(`${key}-sheet-done`);
     await app.wait(SETTLE);
     await shoot(app, `calendar-pick-${look.name}`);
   });
@@ -114,10 +122,23 @@ test("lob: after Check, Item 12 Line of Business and its card", async () => {
 
 test("0619e-day: Item 2 due-date day cleared, settled", async () => {
   await eachAnyLook({ formCode: "0619E", year: 2025, period: 6, mode: "return" }, async (app, look) => {
-    await app.waitFor("id:fp-frm0619E:txtDueDay", { timeout: 30_000 });
-    await app.type("id:fp-frm0619E:txtDueDay", "15");
+    const key = "id:fp-frm0619E:txtDueMonth#date";
+    await app.waitFor(key, { timeout: 30_000 });
+    if (look.width < 600) {
+      await app.press(key);
+      await app.type(`${key}-sheet-input`, "07/15/2025");
+      await app.press(`${key}-sheet-done`);
+      await app.waitFor(`${key}-sheet-input`, { state: "gone" });
+    } else {
+      await app.type(key, "07/15/2025");
+    }
     await app.wait(600);
-    await app.clear("id:fp-frm0619E:txtDueDay");
+    if (look.width < 600) {
+      await app.press(key);
+      await app.press(`${key}-sheet-clear`);
+    } else {
+      await app.clear(key);
+    }
     await app.wait(SETTLE);
     await shoot(app, `0619e-day-${look.name}`);
   });
