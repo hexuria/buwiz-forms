@@ -1957,8 +1957,14 @@ export class FormSession {
 
   /** Navigator and pill: open the chosen part and fold the others. row: the row a step goes to. */
   jumpTo(pi: number, row: string | null = null) {
+    this.st.openParts = new Set();
+    this.revealTarget(pi, row);
+  }
+
+  private revealTarget(pi: number, row: string | null) {
     const s = this.st;
-    s.openParts = new Set([pi]);
+    s.openParts.add(pi);
+    if (row && this.tuckedItems(pi).includes(Number(row.split(":")[1]))) s.profileOpen.add(pi);
     s.current = pi;
     s.stepAt = row;
     this.publish();
@@ -2019,11 +2025,7 @@ export class FormSession {
     if (s.stepAt && dir > 0) s.passed.add(s.stepAt);
     s.stepFromTop = false;
     // The target's part opens; the parts already open stay open (after Expand all a step folds nothing).
-    s.openParts.add(target.part);
-    s.current = target.part;
-    s.stepAt = target.row;
-    this.publish();
-    this.sReveal.set({ row: target.row, part: target.part, seq: ++this.revealSeq });
+    this.revealTarget(target.part, target.row);
   }
 
   /** The keyboard into a row's box: its first stop box, else its first empty required box, else its first open box. */
