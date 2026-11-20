@@ -44,7 +44,7 @@ for (const { name, size } of SIZES) {
   test(`${name}: who is signed in, the registered name and email with a pencil each, Sign out and Add account`, async () => {
     const app = await openSettings(size, { solo: true }, "account");
     await app.waitFor(ready);
-    expectTexts(app, ["Juana Santos", "juana@example.com", "Admin · this computer", "Registered name", "TIN 000-123-453", "Email", "Printed on this profile's returns"]);
+    expectTexts(app, ["Juana Santos", "juana@example.com", name === "phone" ? "Admin · this device" : "Admin · this computer", "Registered name", "TIN 000-123-453", "Email", "Printed on this profile's returns"]);
     // "Just me" with a taxpayer already: no Add account.
     expect(app.shows("id:settings-add-account")).toBe(false);
     await app.press("id:settings-profile-email-edit");
@@ -99,7 +99,7 @@ for (const { name, size } of SIZES) {
   test(`${name}: a first PIN signs the owner in as the admin, shows a recovery key once, and Change and Remove follow`, async () => {
     const app = await openSettings(size, { solo: true }, "account");
     await app.waitFor(ready);
-    expectTexts(app, ["My PIN", "Not set. Anyone at this computer can open this account", "Set PIN", "Recovery key", "Made when you set a PIN or authenticator"]);
+    expectTexts(app, ["My PIN", name === "phone" ? "Not set. Anyone using this device can open this account" : "Not set. Anyone using this computer can open this account", "Set PIN", "Recovery key", "Made when you set a PIN or authenticator"]);
     expect(app.shows("id:settings-pin-clear")).toBe(false);
 
     // Four digits are needed.
@@ -200,7 +200,7 @@ for (const { name, size } of SIZES) {
   test(`${name}: a taxpayer who signed in edits their own PIN and authenticator, and has no recovery key`, async () => {
     const app = await openSettings(size, { solo: true, signin: "taxpayer" }, "account");
     await app.waitFor(ready);
-    expectTexts(app, ["My PIN", "My authenticator", "Not set. Anyone at this computer can open this account"]);
+    expectTexts(app, ["My PIN", "My authenticator", name === "phone" ? "Not set. Anyone using this device can open this account" : "Not set. Anyone using this computer can open this account"]);
     expect(app.shows("id:settings-recovery")).toBe(false);
     await app.type("id:settings-pin-cells", "4321");
     await app.press("id:settings-pin-save");

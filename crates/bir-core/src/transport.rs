@@ -322,7 +322,7 @@ async fn relay_store(
 }
 
 fn env_nonempty(name: &str) -> Option<String> {
-    std::env::var(name)
+    crate::config::var(name)
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())

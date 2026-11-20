@@ -43,6 +43,15 @@ Rebuild every screen to look and behave like today's app (source of truth: `app/
 - **Frame:** three columns like today (sidebar 248, main, profile/notifications panel 320 from the context pill). Sidebar: Home, Form library, Calendar, Filings, then Recent returns. Settings stays in the account menu and Cmd/Ctrl+comma.
 - **Home:** dashboard like today.
 - **Form page:** keep parts, the side list, and the pill that walks what needs you. Add: autosave (no Save draft button; "Saving…" then "✓ Saved"), TIN and money masks while typing, amounts right-aligned in tabular figures, part titles that stick while scrolling, errors shown only after leaving a box, schedule rows that open in a drawer (a sheet when narrow) instead of a sideways table. Do **not** hide parts that do not apply.
+  Later-quarter 2551Q opening advice comes from the host's Item 13 applicability and annual-election validation,
+  not a second TS predicate. Open/fill/use-profile return the missing profile context; links select the form's year,
+  open the annual-election editor or focus the business start date, and return after a successful save. Reopening
+  refreshes editable 2551Q profile snapshots from that return's year before deriving advice; in-form profile
+  saves replace the advice from host results. Linked editors use native ref reveal before focus, including
+  the selected (or first unset) annual-election choice. Queued/filed snapshots are not refreshed by this path.
+  This adds no Queue requirement: a missing commencement date remains advisory.
+  Verification: `session.prerequisites`, `FormPagePrerequisites`, `ui/focus`, taxpayer
+  `yearEdit`, and the screen-form `fact_asks` Rust tests; native focus/scroll remains a device acceptance check.
 - **Print preview:** a second window on desktop, like today.
 - **Filings:** the board when wide (720 px and up), a list with status tabs when narrow.
 - **Calendar:** today's filter bar with List/Month when wide; month grid with due dots plus an upcoming list when narrow.
@@ -88,6 +97,75 @@ nsh/                    The new app. Its own cargo workspace (like crates/bir-sh
 - **Dev run:** `BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 BIR_DATABASE_PATH=~/BuwizNsh/agents/<track>.db`. **Mock run:** unset `EBIR_TEST_ENV` and `BIR_SFTP_DRY_RUN`, then source `target/mock-bir/app.env` (`docs/mock-bir.md`).
 - Export and import cannot use `sqlcipher_export` in the plain build; they need a plain path (for example `VACUUM INTO`).
 
+## Android print session lifecycle
+
+This is the Android print ownership/cancellation model for the anti-drift rule in
+`CONTRIBUTING.md`. The desktop preview contract is unchanged. Implementation:
+`nsh/screens/print/controller.ts`, `nsh/src/print.rs`, `nsh/src/print_android.rs`.
+
+- **Open/loading:** the controller retains the Android key even after the native
+  open promise settles. Rust captures the revocation generation before reading
+  the private snapshot. A single native slot owns the WebView, Activity and,
+  after `PrintManager.print`, the returned PrintJob. Loading polls WebView progress;
+  generation checks run on the UI thread, including immediately before `print`.
+- **Revoke:** lock/sign-out reaches `closeAll` through the session-change hook
+  (hidden chrome also closes previews). Synchronous `Print.closed` increments
+  the generation, takes the native slot and forgets the snapshot before returning;
+  WebView/Activity work is posted asynchronously to the Android UI thread. A queued
+  open cannot revive a forgotten snapshot. The slot mutex covers the final print
+  call and job retention, so cleanup owns a job that already started opening.
+- **Dispose:** both replacement by another preview and revocation stop loading,
+  destroy the old WebView and release its retained references. Only revocation
+  checks the PrintJob state and, for `STATE_CREATED` (unsubmitted system preview),
+  brings the existing app Activity forward with `CLEAR_TOP | SINGLE_TOP` to dismiss
+  the sheet. No job or an already dismissed sheet requires no navigation.
+- **Submitted:** queued, started, blocked, failed, completed and cancelled jobs
+  belong to the system spooler, not the app's preview session. Neither replacement
+  nor lock/sign-out calls `PrintJob.cancel()` or dismisses these jobs. In particular,
+  printing a second return must not cancel the first return's submitted print job.
+
+**Verification boundary:** host Rust tests in `nsh/src/print_android_policy.rs`
+cover dismissal versus leaving a job alone for replacement/revocation across all
+job states, including missing/unknown states. Cancellation is not a policy action.
+The Android snapshot test awaits cleanup after asserting synchronous revocation
+and snapshot deletion. Controller tests cover closed/hidden requests and
+revocation before and after native opening settles; Android-target compilation
+checks JNI calls. These do not prove system spooler or Activity behavior. Device
+acceptance must cover lock during loading (no late sheet), lock while previewing
+(sheet closes), and submitting a job followed by either a new preview or lock
+(submitted job continues). No separate formal Android print model exists here;
+these transitions document this boundary without duplicating the native state
+machine in an unrelated model.
+
+## Android development command mailbox
+
+For emulator access-revocation checks, `Door.status().devCommandEnabled` is true
+only on Android with the shared `dev_env::ENABLED` compile-time gate (debug
+assertions or `BUWIZ_ANDROID_DEV=1`) and the exact in-process configuration value
+`EBIR_TEST_ENV=1`. Desktop and non-opted-in release builds return false and never
+consume a mailbox. This is development control, not a production IPC surface.
+
+Shell owns one 500 ms poll, separate from ordinary polls and independent of
+focus, lifecycle, visible chrome and sign-in state. Unmount stops the poll.
+`Door.devCommand()` rechecks the gate on every read, reads at most 65 bytes from
+`<engine data_dir>/dev-command` and removes it before returning an allowed
+command. A failed read/removal does not dispatch. Unknown, oversized and invalid
+UTF-8 commands are consumed and rejected; tracing records the receipt time in
+Unix milliseconds and warns on rejection. Producers should atomically rename
+a completed file into place rather than race a partially written command.
+
+The shell dispatches only `lock` to `app.lockApp()` and `logout` to
+`app.logOut()`: the same handlers as Ctrl+L and local Settings Sign out. The
+mailbox adds no Activity/focus operations. Existing print revocation/disposal
+above is unchanged, including its Activity navigation to dismiss an unsubmitted
+system preview; the mailbox itself does not first bring the app forward.
+
+Rust `dev_command` tests cover the complete gate matrix, parsing, private-root
+consumption, no replay, disabled reads, invalid commands and I/O failure.
+`shell/devCommand.test.ts` covers disabled scheduling, the 500 ms task and real
+session-handler effects, including sign-out after lock. These do not prove
+Android background timer execution or system-preview dismissal on a device.
+
 ## Worker-driven filing refresh
 
 Filings, Home and the form page share the cached `store.returns` lists. Worker
@@ -102,6 +180,42 @@ unlock restarts the fast phase. No queued returns means no periodic invalidation
 from this watch. `shell/queuedWatch.test.ts` verifies the pacing and a late worker
 submission with no ordinary events poll; this is cache/timer verification, not a
 device or relay transport test.
+
+## Android profile export
+
+`export_profile` keeps its PIN/rate-limit gate and existing Settings/taxpayer card.
+Android's `NshHooks::export_profile_download` writes the authorized ZIP synchronously
+on the database-owning engine thread, through `export_profile_to` →
+`export_profile_data` → `write_profile_zip`. It never opens the unsupported save
+panel. Other platforms retain that panel unchanged.
+
+Staging is a unique 0700 directory beneath `bir_core::platform::temp_dir()` (Android:
+the injected app-private data directory's `tmp`), removed on drop, including writer,
+JNI and copy failures and dropped futures. A running blocking copy owns the stage
+until it completes even if its caller goes away. Process abort/kill can leave a
+private stage; this is not a public Downloads copy. Publication uses MediaStore
+Downloads on API 29+: `relative_path=Download/eBIRForms`, `is_pending=1`, close the
+output stream, then `is_pending=0`. Errors delete the pending row; cleanup failures
+are logged. The provider chooses collision suffixes; its queried `_display_name`
+is returned as `Downloads/eBIRForms/<name>` and shown in the success toast.
+
+iOS has no save panel either: `nsh/src/export_ios.rs` stages the same private archive, copies it
+to `<tmp>/profile-exports/<name>` and presents `UIDocumentPickerViewController` in export mode
+(as a copy: Files, iCloud Drive or another provider). The call resolves when the user saves
+(`Files: <name>`) or dismisses the sheet (an error, "Export cancelled: nothing was saved.");
+the staged copy is deleted after either answer.
+
+NSH's share API exists but Android's outcome only reports selection of a target,
+not completion of its file read. It cannot establish a saved Downloads path or a
+safe point to delete this private ZIP, so this flow uses MediaStore, not sharing.
+No framework or manifest changes, storage permission or Activity result are needed.
+The existing print JNI VM/UI/foreground-Activity helpers are reused.
+
+Verification boundary: host-compilable Rust tests cover staging isolation,
+writer-failure cleanup and returned-name validation. `taxpayer/export.test.tsx`
+mocks the host download result to cover no-dialog UI success, collision copy,
+failure and cancellation; it does not exercise MediaStore. Android compilation
+and actual device export/opening of the ZIP are separate native acceptance checks.
 
 ## Waves
 

@@ -71,7 +71,14 @@ fn root() -> PathBuf {
     if let Some(root) = ROOT.with(|slot| slot.borrow().clone()) {
         return root;
     }
-    std::env::temp_dir()
+    #[cfg(target_os = "android")]
+    {
+        crate::platform::temp_dir()
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        std::env::temp_dir()
+    }
 }
 
 /// A folder only this user can open, removed with its contents on drop.
@@ -85,6 +92,8 @@ impl PrivateTempDir {
     /// Leftovers of the same prefix are swept first (see the module notes).
     pub(crate) fn new(prefix: &str) -> io::Result<Self> {
         let root = root();
+        #[cfg(target_os = "android")]
+        fs::create_dir_all(&root)?;
         sweep_stale(&root, prefix, STALE_AFTER);
         let path = root.join(format!("{prefix}-{}", unique_name()));
         #[cfg(unix)]

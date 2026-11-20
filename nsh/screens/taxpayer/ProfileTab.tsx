@@ -9,6 +9,7 @@ import { shortDate } from "../../lib/dates";
 import { joinNames, readerChips, type FactName } from "../../lib/facts";
 import { formatTin } from "../../lib/format";
 import { app, go, store } from "../../shell";
+import { revealAndFocus } from "../../ui/focus";
 import {
   AppButton, Card, Chip, Code, DigitCells, Disclosure, DisclosureGroup, Dropdown, Field, FieldCell, FieldGrid, FormActions, Line,
   SectionTitle, Segmented, SettingRow, Sheet, Switch, Text, TextField,
@@ -165,6 +166,9 @@ function EditText(props: { s: PageState; field: string; label: string; full?: bo
       <TextField
         testID={`tp-${e()?.sec}-${props.field}`}
         accessibilityLabel={props.label}
+        inputRef={(r) => {
+          if (e()?.focusField === props.field) revealAndFocus(r);
+        }}
         value={e()?.values[props.field] ?? ""}
         onChange={(v) => props.s.setValue(props.field, v)}
         onBlur={() => props.s.touch(props.field)}

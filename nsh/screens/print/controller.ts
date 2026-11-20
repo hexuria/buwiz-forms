@@ -23,6 +23,8 @@ export interface WindowLike {
 export interface HostDeps {
   /** This device can open a second window (a desktop). */
   available: boolean;
+  /** System preview instead of a second window (Android); the document is a snapshot. */
+  androidPreview?(key: string, title: string): Promise<void>;
   windows: {
     get(id: string): WindowLike | null;
     /** Opens the window of `id` showing the preview of `key`; throws when it cannot. */
@@ -62,6 +64,7 @@ interface Owner {
 export function createPreviewHost(deps: HostDeps) {
   /** The preview of each form code, as the Rust side holds it. */
   const owners = new Map<string, Owner>();
+  const androidPreviews = new Map<string, object>();
   /** The forms whose system print sheet is being prepared or is up (a phone). A lock takes them away. */
   const natives = new Set<string>();
   let hooked = false;
@@ -131,6 +134,22 @@ export function createPreviewHost(deps: HostDeps) {
 
   function open(event: PrintEvent): void {
     if (!deps.available && deps.nativePreview) return openNative(event, deps.nativePreview);
+    if (deps.androidPreview) {
+      if (!deps.chromeVisible()) {
+        deps.print.closed(event.key);
+        return;
+      }
+      const identity = formIdentity(deps.route());
+      const title = `${previewTitle(event.title, deps.period())} ${identity?.split("|").slice(0, 4).join(" ") ?? event.key}`;
+      const pending = {};
+      androidPreviews.set(event.key, pending);
+      deps.androidPreview(event.key, title).catch((error) => {
+        if (androidPreviews.get(event.key) === pending && deps.chromeVisible()) {
+          deps.toast(`Print preview could not open: ${deps.errorText(error)}`, "triangle-alert");
+        }
+      });
+      return;
+    }
     if (!deps.available) {
       deps.toast(UNAVAILABLE, "printer");
       deps.print.closed(event.key);
@@ -184,6 +203,8 @@ export function createPreviewHost(deps: HostDeps) {
     },
     /** Every preview ends: a lock, a sign-out, the main window closing. */
     closeAll(): void {
+      for (const key of androidPreviews.keys()) deps.print.closed(key);
+      androidPreviews.clear();
       for (const key of [...owners.keys()]) end(key);
       endNative();
     },

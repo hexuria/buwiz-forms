@@ -22,19 +22,28 @@
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
+#[cfg(any(not(target_os = "android"), test))]
 use std::fs::{self, File, OpenOptions, TryLockError};
+#[cfg(any(not(target_os = "android"), test))]
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(any(not(target_os = "android"), test))]
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+#[cfg(any(not(target_os = "android"), test))]
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+#[cfg(any(not(target_os = "android"), test))]
+use std::sync::Arc;
+use std::sync::OnceLock;
+#[cfg(any(not(target_os = "android"), test))]
 use std::thread::JoinHandle;
+#[cfg(any(not(target_os = "android"), test))]
 use std::time::Duration;
 
 use bir_app_api::hooks::UpdateStatus;
 use bir_app_api::hotkey_combo;
 use nsh_core::prelude::*;
 
+#[cfg(any(not(target_os = "android"), test))]
 use crate::guards;
 
 // ------------------------------------------------------------------------------------------ the mailbox
@@ -384,16 +393,19 @@ fn key_name(word: &str) -> Option<String> {
 static ACTIVATE: AtomicBool = AtomicBool::new(false);
 
 /// The lock file of a database: `<database>.instance`.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn lock_path(database: &Path) -> PathBuf {
     sibling(database, ".instance")
 }
 
 /// The file the running copy writes its loopback port to: `<database>.instance.port`. It is a file of its own
 /// because Windows does not let another process read a file that is locked.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn port_path(database: &Path) -> PathBuf {
     sibling(database, ".instance.port")
 }
 
+#[cfg(any(not(target_os = "android"), test))]
 fn sibling(database: &Path, suffix: &str) -> PathBuf {
     let mut raw = database.as_os_str().to_owned();
     raw.push(suffix);
@@ -401,6 +413,7 @@ fn sibling(database: &Path, suffix: &str) -> PathBuf {
 }
 
 /// This process is the app for one database: it holds the lock, and listens for a second launch.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) struct InstanceLock {
     _lock: File,
     port_file: PathBuf,
@@ -409,6 +422,7 @@ pub(crate) struct InstanceLock {
     listener: Option<JoinHandle<()>>,
 }
 
+#[cfg(any(not(target_os = "android"), test))]
 impl InstanceLock {
     /// The loopback port a second launch writes "show" to.
     #[cfg(test)]
@@ -417,6 +431,7 @@ impl InstanceLock {
     }
 }
 
+#[cfg(any(not(target_os = "android"), test))]
 impl Drop for InstanceLock {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
@@ -433,6 +448,7 @@ impl Drop for InstanceLock {
 }
 
 /// What claiming a database found.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) enum Claim {
     /// Nobody else runs on it: this process is the app, for as long as the value lives.
     Primary(InstanceLock),
@@ -443,6 +459,7 @@ pub(crate) enum Claim {
 }
 
 /// Take the right to be the app for `database`, or find who has it.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn claim(database: &Path) -> Claim {
     let lock = lock_path(database);
     if let Some(parent) = lock.parent()
@@ -474,6 +491,7 @@ pub(crate) fn claim(database: &Path) -> Claim {
     }
 }
 
+#[cfg(any(not(target_os = "android"), test))]
 fn start_listening(lock: File, port_file: PathBuf) -> Result<InstanceLock, String> {
     // A port left by an earlier run is not ours to hand out.
     let _ = fs::remove_file(&port_file);
@@ -501,6 +519,7 @@ fn start_listening(lock: File, port_file: PathBuf) -> Result<InstanceLock, Strin
 }
 
 /// Answer second launches until told to stop: "show" asks the window to come forward.
+#[cfg(any(not(target_os = "android"), test))]
 fn listen(listener: TcpListener, stop: &AtomicBool) {
     for stream in listener.incoming() {
         if stop.load(Ordering::SeqCst) {
@@ -518,6 +537,7 @@ fn listen(listener: TcpListener, stop: &AtomicBool) {
 
 /// Send "show" to the copy that is running. It may still be starting (it holds the lock a moment before it
 /// writes its port), so this tries for about three seconds.
+#[cfg(any(not(target_os = "android"), test))]
 fn ask_to_show(port_file: &Path) -> bool {
     for _ in 0..30 {
         if let Some(port) = read_port(port_file)
@@ -535,6 +555,7 @@ fn ask_to_show(port_file: &Path) -> bool {
     false
 }
 
+#[cfg(any(not(target_os = "android"), test))]
 fn read_port(port_file: &Path) -> Option<u16> {
     fs::read_to_string(port_file)
         .ok()?
@@ -548,6 +569,7 @@ fn read_port(port_file: &Path) -> Option<u16> {
 /// How a launch decides whether the guard applies: `BIR_SINGLE_INSTANCE` says (`1`/`on`/`true`/`yes` forces it, even in a
 /// test environment; `0`/`off`/`false`/`no` turns it off); without it the guard applies to every run except a
 /// test environment (`EBIR_TEST_ENV`), where every test names a scratch database of its own.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn guard_wanted(setting: Option<&str>, test_environment: bool) -> bool {
     match setting.map(|value| value.trim().to_ascii_lowercase()).as_deref() {
         Some("1" | "on" | "true" | "yes") => true,
@@ -558,20 +580,25 @@ pub(crate) fn guard_wanted(setting: Option<&str>, test_environment: bool) -> boo
 
 /// What this process knows about the guard, for `Desktop.instance()`.
 static INSTANCE: OnceLock<(InstanceState, Option<String>)> = OnceLock::new();
+#[cfg(any(not(target_os = "android"), test))]
 static HELD: OnceLock<InstanceLock> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InstanceState {
+    #[cfg(any(not(target_os = "android"), test))]
     Held,
     NotNeeded,
+    #[cfg(any(not(target_os = "android"), test))]
     Unavailable,
 }
 
 impl InstanceState {
     fn word(self) -> &'static str {
         match self {
+            #[cfg(any(not(target_os = "android"), test))]
             InstanceState::Held => "held",
             InstanceState::NotNeeded => "not_needed",
+            #[cfg(any(not(target_os = "android"), test))]
             InstanceState::Unavailable => "unavailable",
         }
     }
@@ -579,6 +606,7 @@ impl InstanceState {
 
 /// Claim `database`. True: this process is the app (or no guard applies) and goes on. False: another copy
 /// has the database and was asked to come forward, so this process must end.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn prepare_process_at(database: &Path) -> bool {
     match claim(database) {
         Claim::Primary(held) => {
@@ -605,6 +633,7 @@ pub(crate) fn prepare_process_at(database: &Path) -> bool {
 /// scratch database of its own (a test environment with no `BIR_DATABASE_PATH`, even under `BIR_SINGLE_INSTANCE=1`: that
 /// database is made per engine thread, later, and two copies never share one; locking `app_database_path()` here was
 /// locking a file the process never opens); or the owner's data (never written beside, as the door refuses it).
+#[cfg(any(not(target_os = "android"), test))]
 fn guarded_database() -> Option<PathBuf> {
     let setting = std::env::var("BIR_SINGLE_INSTANCE").ok();
     if !guard_wanted(setting.as_deref(), bir_core::db::test_environment()) || crate::door::scratch_database_wanted() {
@@ -616,6 +645,7 @@ fn guarded_database() -> Option<PathBuf> {
 
 /// The launch's guard, from the registration of the native module (before any window opens): a second copy on
 /// the same database tells the first to come forward and ends here.
+#[cfg(any(not(target_os = "android"), test))]
 pub(crate) fn prepare_process() {
     let Some(database) = guarded_database() else {
         let _ = INSTANCE.set((InstanceState::NotNeeded, None));

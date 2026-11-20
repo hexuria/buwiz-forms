@@ -22,7 +22,7 @@ import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
-import { dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
+import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
@@ -281,7 +281,15 @@ const branch = computed<Branch | null>(() => {
 const isFresh = () => taxpayer() === null;
 const years = computed(() => {
   const b = branch();
-  return b ? store.taxYears(b.tin) : [];
+  if (!b) return [];
+  const listed = store.taxYears(b.tin);
+  const r = route();
+  const requested = r.view === "profile" && r.params.fromForm === true ? r.params.year : undefined;
+  if (typeof requested !== "number" || !Number.isInteger(requested) || listed.includes(requested)) return listed;
+  const bounds = store.yearBounds();
+  if (requested < bounds.min || requested > bounds.max) return listed;
+  // A return can exist before its year is added to the profile's forms list.
+  return [...listed, requested].sort((a, b) => a - b);
 });
 /** The selected year, kept valid: this year if the branch has it, else its latest. */
 const year = computed<number | null>(() => {
@@ -1221,7 +1229,7 @@ function logOut(): void {
 
 /** Computer setup changed (Settings): the admin moved, so the old session ends and nobody keeps their place. */
 function signOutAfterSetupChange(): void {
-  endSession("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN.");
+  endSession(deviceCopy("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN."));
   lockedFrom = null;
 }
 

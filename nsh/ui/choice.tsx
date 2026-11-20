@@ -8,6 +8,7 @@ import {
 } from "nsh/base";
 import { AppButton } from "./buttons";
 import { TextField } from "./fields";
+import { revealAndFocus } from "./focus";
 import type { IconName } from "./icons";
 import { Popover } from "./layers";
 import { NameCell } from "./lists";
@@ -208,6 +209,10 @@ export interface SegmentedProps {
   label: string;
   /** A long row (twelve months) wraps in a narrow window. */
   wrap?: boolean;
+  /** Reveals and focuses the selected choice (or the first when unset) on mount. */
+  autoFocus?: boolean;
+  /** Receives the selected choice's ref (or the first when unset). */
+  focusRef?: (ref: ViewRef) => void;
   testID?: string;
 }
 
@@ -221,6 +226,12 @@ export function Segmented(props: SegmentedProps) {
       <Each of={props.options} key={(o) => o.value}>
         {(o) => (
           <Toggle
+            ref={(r) => {
+              if (o().value === (props.value || props.options[0]?.value)) {
+                props.focusRef?.(r);
+                if (props.autoFocus) revealAndFocus(r);
+              }
+            }}
             pressed={o().value === props.value}
             accessibilityLabel={o().label}
             hitSlop={TOUCH ? { top: 10, bottom: 10 } : 0}

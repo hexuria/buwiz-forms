@@ -80,7 +80,8 @@ export function TaxpayerPage(props: { view: TaxpayerTab; params?: ViewParams }):
   untracked(() => {
     if (typeof params.year === "number" && app.years().includes(params.year)) app.selectYear(params.year);
     const edit = typeof params.edit === "string" ? params.edit : null;
-    if (edit && EDITABLE.includes(edit)) s.startEdit(edit as EditableSection);
+    if (edit === "business_start_date") s.startEdit("branch", { focusField: edit, fromForm: params.fromForm === true });
+    else if (edit && EDITABLE.includes(edit)) s.startEdit(edit as EditableSection);
     else if (edit && FACTS.includes(edit)) s.startFactEdit(edit as FactName, { fromForm: params.fromForm === true });
     if (params.editForms === true) s.editForms();
     if (params.addYear === true) s.addYear.set(true);

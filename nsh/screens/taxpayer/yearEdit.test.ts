@@ -65,3 +65,20 @@ test("a year switch closes an edit that holds the year's facts, and leaves one t
   expect(s.edit()?.values.name).toBe("Juana Santos Trading");
   s.cancelEdit();
 });
+
+test("a form's business-start-date link focuses the year's activity editor and retains it on a refused save", () => {
+  seed();
+  const s = createPageState();
+  s.startEdit("branch", { focusField: "business_start_date", fromForm: true });
+  expect(s.edit()?.focusField).toBe("business_start_date");
+  expect(s.edit()?.fromForm).toBe(true);
+  expect(s.edit()?.year).toBe(YEAR);
+  s.setValue("business_start_date", "not a date");
+  s.saveSection();
+  expect(s.edit()?.focusField).toBe("business_start_date");
+  expect(s.errors().business_start_date).not.toBe(undefined);
+  s.setValue("business_start_date", "2020-01-01");
+  s.saveSection();
+  expect(s.edit()).toBeNull();
+  expect(bir.year_facts(DEMO.tin, YEAR).facts.business_start_date).toBe("2020-01-01");
+});

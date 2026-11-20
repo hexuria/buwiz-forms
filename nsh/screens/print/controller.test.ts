@@ -37,7 +37,7 @@ class FakeWindow implements WindowLike {
   }
 }
 
-function world() {
+function world(nativePreview?: (key: string, title: string) => Promise<void>) {
   const windows = new Map<string, FakeWindow>();
   const opened: FakeWindow[] = [];
   const closedKeys: string[] = [];
@@ -45,7 +45,8 @@ function world() {
   const previews = new Map<string, { title: string; revision: number }>();
   const state = { route: returnOf(3) as { view: string; params: Record<string, unknown> }, chrome: true, refuseOpen: false, mainHooked: 0 };
   const host = createPreviewHost({
-    available: true,
+    available: !nativePreview,
+    androidPreview: nativePreview,
     windows: {
       get: (id) => windows.get(id) ?? null,
       open: (id, title) => {
@@ -73,6 +74,67 @@ function world() {
     ({ kind, key, title: `BIR Form ${key} — Juana Santos`, url: "file:///preview/sheet.html", script: kind === "update" ? "patch" : "", revision, pages: 2, paper: "A4", sheet: "Folio", zoom: 0.88, message: null }) as PrintEvent;
   return { host, windows, opened, closedKeys, toasts, previews, state, event };
 }
+
+test("Android system preview needs no second window and does not follow updates", async () => {
+  const calls: string[] = [];
+  const w = world(async (key, title) => { calls.push(`${key}: ${title}`); });
+  w.host.hear(w.event("open", "2551Q", 1));
+  w.host.hear(w.event("update", "2551Q", 2));
+  await Promise.resolve();
+  expect(calls.length).toBe(1);
+  expect(calls[0].includes(TIN)).toBe(true);
+  expect(w.opened.length).toBe(0);
+  expect(w.closedKeys.length).toBe(0);
+  expect(w.toasts.length).toBe(0);
+});
+
+test("Android system preview refuses requests behind the lock", () => {
+  let calls = 0;
+  const w = world(async () => { calls++; });
+  w.state.chrome = false;
+  w.host.hear(w.event("open", "2551Q", 1));
+  expect(calls).toBe(0);
+  expect(w.closedKeys).toEqual(["2551Q"]);
+});
+
+test("closing all previews cancels an Android job after native opening has settled", async () => {
+  const w = world(async () => {});
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual([]);
+  w.host.hear(w.event("open", "2551Q", 1));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  w.state.chrome = false;
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  expect(w.toasts).toEqual([]);
+});
+
+test("closing all previews cancels an Android preview that is still loading", async () => {
+  let reject!: (error: Error) => void;
+  const w = world(() => new Promise<void>((_, no) => { reject = no; }));
+  w.host.hear(w.event("open", "2551Q", 1));
+  w.state.chrome = false;
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+  reject(new Error("Android print preview was superseded or closed."));
+  await Promise.resolve();
+  expect(w.toasts).toEqual([]);
+});
+
+test("Android system preview reports a native failure without deleting its sheet", async () => {
+  const w = world(async () => { throw new Error("Activity lookup blocked"); });
+  w.host.hear(w.event("open", "2551Q", 1));
+  await Promise.resolve();
+  expect(w.toasts).toEqual(["Print preview could not open: Activity lookup blocked"]);
+  expect(w.closedKeys.length).toBe(0);
+  w.state.chrome = false;
+  w.host.closeAll();
+  expect(w.closedKeys).toEqual(["2551Q"]);
+});
 
 test("the window belongs to the return it was asked on, and asking again for that return focuses it", () => {
   const w = world();

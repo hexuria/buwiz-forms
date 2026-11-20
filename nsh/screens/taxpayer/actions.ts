@@ -198,7 +198,7 @@ export async function exportProfile(pin: string | null): Promise<void> {
   exportBusy.set(true);
   try {
     const r = await store.writeAsync("export_profile", b.tin, hasPin ? pin : null);
-    if (r.kind === "exported") toast("Profile exported.", "circle-check");
+    if (r.kind === "exported") toast(r.path?.startsWith("Downloads/eBIRForms/") ? `Saved to ${r.path}` : "Profile exported.", "circle-check");
   } catch (e) {
     fail(e);
   } finally {

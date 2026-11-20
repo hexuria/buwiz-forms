@@ -2124,8 +2124,15 @@ pub(crate) fn open_print_preview(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0);
+    #[cfg(not(target_os = "android"))]
     let path =
         std::env::temp_dir().join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"));
+    #[cfg(target_os = "android")]
+    let path = {
+        let root = bir_core::platform::temp_dir();
+        std::fs::create_dir_all(&root).map_err(|error| HostError::new(error.to_string()))?;
+        root.join(format!("bir-{form_code}-{year}-{timestamp}-preview.html"))
+    };
     std::fs::write(&path, html).map_err(|error| HostError::new(error.to_string()))?;
     // In-app preview window (Blitz view + hidden WebKit PDF for Print/Share);
     // one window per form, re-opening refreshes it in place.
@@ -2446,6 +2453,19 @@ fn export_profile(
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0);
     let file_name = format!("BIR_Profile_{}_{}.zip", tin, timestamp);
+    if let Some(download) = crate::hooks::hooks().export_profile_download(&file_name, &mut |path| {
+        export_profile_to(&tin, pin.as_deref(), path)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }) {
+        return Ok(Box::pin(async move {
+            let path = download.await.map_err(HostError::new)?;
+            Ok(HostObject::new()
+                .field("kind", "exported")
+                .field("path", path)
+                .into())
+        }));
+    }
     let directory = std::env::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
     after_path_prompt(
         move |answer| crate::hooks::hooks().prompt_for_save_path(&directory, &file_name, answer),

@@ -462,6 +462,7 @@ pub enum DbError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Keychain error: {0}")]
+    #[cfg(not(target_os = "android"))]
     Keychain(#[from] keyring::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
@@ -630,7 +631,7 @@ impl DatabasePathOverride {
 /// decides on a dry run (a test checks that the two agree), so a host that asks
 /// gets the answer bir-core acts on.
 pub fn test_environment() -> bool {
-    std::env::var("EBIR_TEST_ENV").is_ok_and(|value| {
+    crate::config::var("EBIR_TEST_ENV").is_ok_and(|value| {
         matches!(
             value.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
@@ -1055,8 +1056,12 @@ impl Database {
             #[cfg(target_os = "macos")]
             return Self::get_or_create_master_key_macos();
 
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
             return Self::get_or_create_master_key_keyring();
+            #[cfg(target_os = "android")]
+            return Err(DbError::KeychainCli(
+                "The OS keychain is not available on Android".into(),
+            ));
         }
     }
 
@@ -1074,8 +1079,12 @@ impl Database {
             #[cfg(target_os = "macos")]
             return Self::get_existing_master_key_macos();
 
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(all(not(target_os = "macos"), not(target_os = "android")))]
             return Self::get_existing_master_key_keyring();
+            #[cfg(target_os = "android")]
+            return Err(DbError::KeychainCli(
+                "The OS keychain is not available on Android".into(),
+            ));
         }
     }
 
@@ -1092,7 +1101,12 @@ impl Database {
         .map_err(DbError::KeychainCli)
     }
 
-    #[cfg(all(feature = "sqlcipher", not(target_os = "macos"), not(test)))]
+    #[cfg(all(
+        feature = "sqlcipher",
+        not(target_os = "macos"),
+        not(target_os = "android"),
+        not(test)
+    ))]
     fn get_existing_master_key_keyring() -> Result<String, DbError> {
         let keyring_error = match keyring::Entry::new("com.ebir.rust", "sqlcipher_master_key") {
             Ok(entry) => match entry.get_password() {
@@ -1154,7 +1168,11 @@ impl Database {
     /// database was encrypted with. On a headless Linux box with no Secret
     /// Service on D-Bus, `get_password` fails with `PlatformFailure`, which
     /// routes to the file fallback instead of refusing to start.
-    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+    #[cfg(all(
+        feature = "sqlcipher",
+        not(target_os = "macos"),
+        not(target_os = "android")
+    ))]
     fn get_or_create_master_key_keyring() -> Result<String, DbError> {
         use keyring::Entry;
         use tracing::info;
@@ -1811,7 +1829,11 @@ mod keychain_miss_tests {
 }
 
 /// Outcome of reading the SQLCipher master key from the OS credential store.
-#[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+#[cfg(all(
+    feature = "sqlcipher",
+    not(target_os = "macos"),
+    not(target_os = "android")
+))]
 #[derive(Debug, PartialEq, Eq)]
 enum KeyringRead {
     Found(String),
@@ -1820,7 +1842,11 @@ enum KeyringRead {
     Refuse(String),
 }
 
-#[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+#[cfg(all(
+    feature = "sqlcipher",
+    not(target_os = "macos"),
+    not(target_os = "android")
+))]
 fn classify_keyring_read(result: Result<String, keyring::Error>) -> KeyringRead {
     match result {
         Ok(hex_key) => KeyringRead::Found(hex_key),
@@ -1844,7 +1870,11 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(all(feature = "sqlcipher", not(target_os = "macos")))]
+    #[cfg(all(
+        feature = "sqlcipher",
+        not(target_os = "macos"),
+        not(target_os = "android")
+    ))]
     #[test]
     fn keyring_read_falls_back_only_when_store_is_unreachable() {
         use super::{KeyringRead, classify_keyring_read};

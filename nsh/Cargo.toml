@@ -33,6 +33,9 @@ gpui-agent = { version = "0.1.0", git = "https://github.com/hexuria/gpui-agent",
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
 # The database guard on Windows: the account's profile folder from its token (GetUserProfileDirectoryW), never
 # USERPROFILE, and a file or folder known by volume and file index (GetFileInformationByHandle). The version the lock
 # already holds.

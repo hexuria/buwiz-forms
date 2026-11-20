@@ -1,16 +1,17 @@
 // Facts your forms use (old factsBody, factRow): one row per fact a form on the year's list reads, with who reads it,
 // where the rate was chosen, why it cannot change; Set or Change opens the row's choices; a quiet line counts the rest.
-import { View } from "nsh";
+import { View, type ViewRef } from "nsh";
 import { ELECTION_CHOICES, EOPT_TIERS, electionSourceText, FACT_LABELS, factValue, incomeTypeChoices, readerChips, ROW_FACTS, type FactName } from "../../lib/facts";
 import { app, store } from "../../shell";
 import { AppButton, Chip, Field, FormActions, Segmented, Text, TextField } from "../../ui";
+import { revealAndFocus } from "../../ui/focus";
 import { factsMeta, hiddenFactsText } from "./logic";
 import type { PageState } from "./page";
 
 /** The facts the year's forms read. */
 function shownFacts(s: PageState): FactName[] {
   const view = s.yearFacts();
-  return view ? ROW_FACTS.filter((f) => (view.used_by[f] || []).length) : [];
+  return view ? ROW_FACTS.filter((f) => (view.used_by[f] || []).length || s.factEdit()?.fact === f) : [];
 }
 
 /** Whether a row is flagged "Not set": the rate only when the taxpayer chooses one. */
@@ -41,6 +42,8 @@ function choices(fact: FactName): [string, string][] {
 function FactRow(props: { s: PageState; fact: FactName }) {
   const s = props.s;
   const fact = props.fact;
+  let editorRef: ViewRef | undefined;
+  let choiceRef: ViewRef | undefined;
   const view = () => s.yearFacts();
   const year = () => view()?.year ?? 0;
   const edit = () => (s.factEdit()?.fact === fact ? s.factEdit() : null);
@@ -101,13 +104,23 @@ function FactRow(props: { s: PageState; fact: FactName }) {
         <Text variant="meta" tone="fg3" testID={`tp-fact-${fact}-owner`}>Held by the head office. A change here changes it for every branch.</Text>
       </If>
       <If when={edit()}>
-        <View class="mt-2 w-full">
+        <View
+          class="mt-2 w-full"
+          ref={(r) => { editorRef = r; }}
+          onLayout={() => {
+            if (editorRef && choiceRef) {
+              revealAndFocus(choiceRef, editorRef);
+              editorRef = undefined;
+            }
+          }}
+        >
           <If
             when={fact === "atc_codes"}
             else={
               <Segmented
                 testID={`tp-fact-${fact}-choice`}
                 label={FACT_LABELS[fact]}
+                focusRef={(r) => { choiceRef = r; }}
                 wrap
                 options={choices(fact).map(([v, label]) => ({ value: v, label }))}
                 value={selected()}

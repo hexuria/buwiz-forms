@@ -41,6 +41,7 @@ import {
   Spinner,
   Text,
   TextField,
+  TOUCH,
   toast as kitToast,
   dismissToast as kitDismissToast,
 } from "../../ui";
@@ -70,7 +71,7 @@ export interface FormPageProps {
   /** The page now shows another return (a sample became its return, an offer loaded one): the frame follows it. */
   onOpenReturn?: (target: FormTarget) => void;
   /** Open the taxpayer's profile (the frame's panel). */
-  onOpenProfile?: () => void;
+  onOpenProfile?: (section?: string, year?: number) => void;
   /** A toast; the kit's toast (needs a Toaster mounted) when not given. */
   toast?: (message: string, options?: { icon?: string; action?: ToastAction }) => string | void;
   /** Close a toast this page showed (with props.toast); the kit's dismissToast when not given. */
@@ -82,6 +83,7 @@ export interface FormPageProps {
 }
 
 const PILL_W = 488;
+const NARROW_PILL_HEIGHT = 60;
 /** The old shell's cap on a form page's column, padding included (app/main.js layout(): 1120 for "form"). */
 const FORM_COLUMN_MAX = 1120;
 
@@ -100,6 +102,7 @@ export function FormPage(props: FormPageProps) {
     afterWrite: (name) => store.bump(name),
     onSaved: (t) => props.onSaved?.(t),
     onRetarget: (t) => props.onOpenReturn?.(t),
+    onOpenProfile: (section, year) => props.onOpenProfile ? props.onOpenProfile(section, year) : app.go("profile", { edit: section, year, fromForm: true }),
     // A queue or a cancel-queue needs no hook of its own: the session tells afterWrite its host function's name and store.bump(name) starts the
     // frame's fast Queued watch over (the re-reads at once and after 1, 3 and 10 s, and the watch's 30 s of 3 s looks from store.lastQueueAction).
   };
@@ -272,6 +275,9 @@ export function FormPage(props: FormPageProps) {
                 <Text tone="danger">{s.header().error}</Text>
               </View>
             </If>
+            <If when={narrow()}>
+              <View testID="fp-pager-clearance" class="shrink-0" style={{ height: NARROW_PILL_HEIGHT + 16 + 16 }} />
+            </If>
           </View>
         </Scroll>
         <If when={schema && !s.header().error && !s.header().loading}>
@@ -394,12 +400,22 @@ function Notes(props: { s: FormSession }) {
   return (
     <View class="gap-4" classList={{ "mb-4": Boolean(h()) }}>
       <If when={h().sample}>
-        <Text variant="meta" tone="fg2">{SAMPLE_NOTE}</Text>
+        <Text testID="fp-sample-note" variant="meta" tone="fg2">{TOUCH ? SAMPLE_NOTE.replace("the + button or Cmd/Ctrl+N", "the + button") : SAMPLE_NOTE}</Text>
       </If>
       <If when={h().profileUpdates.length}>
         <Text variant="meta" tone="fg2">{profileUpdatesNote(h().profileUpdates)}</Text>
       </If>
       <Each of={h().notes}>{(note) => <Text variant="meta" tone="fg2">{note()}</Text>}</Each>
+      <Each of={h().profilePrerequisites} key={(item) => item.field}>
+        {(item) => (
+          <View testID={`fp-profile-prerequisite-${item().field}`} class="gap-1 rounded-(--radius-row) border border-warning bg-warning-soft p-3">
+            <Text variant="meta" tone="fg2">{item().message}</Text>
+            <View class="flex-row">
+              <AppButton testID={`fp-set-profile-${item().field}`} size="sm" variant="ghost" label={`Set ${item().label.toLowerCase()}`} onPress={() => s.openProfilePrerequisite(item().field)} />
+            </View>
+          </View>
+        )}
+      </Each>
       <If when={h().profileDiffers.length}>
         <View class="flex-row flex-wrap items-center gap-2">
           <Text variant="meta" tone="fg2">{profileDiffersNote(h().profileDiffers)}</Text>
@@ -778,7 +794,7 @@ function Pill(props: { s: FormSession; wide: Accessor<boolean>; narrow: Accessor
       class="absolute bottom-4 items-center px-4"
       classList={{ "inset-x-0": !props.box() }}
     >
-      <View testID="fp-pill" class="w-full flex-row items-center gap-1.5 rounded-[22px] border border-border-strong bg-raised p-1.5 shadow-lg" style={{ maxWidth: PILL_W, height: props.narrow() ? 60 : 56 }}>
+      <View testID="fp-pill" class="w-full flex-row items-center gap-1.5 rounded-[22px] border border-border-strong bg-raised p-1.5 shadow-lg" style={{ maxWidth: PILL_W, height: props.narrow() ? NARROW_PILL_HEIGHT : 56 }}>
         <IconButton testID="fp-pill-prev" icon="chevron-left" tooltip={stepLabel(-1)} disabled={!target(-1)} onPress={() => s.step(-1)} />
         <If
           when={props.wide()}

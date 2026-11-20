@@ -43,6 +43,118 @@ receipt) stays outside this contract, as on the desktop.
 The app asks it before it claims a queued return: a relay that does not answer
 there leaves the return Queued, unclaimed, and retried after the back-off.
 
+### Android development APK: private dev.env
+
+**Debug builds or compile-time opt-in only**: before the door and its guards
+run, the Android app reads `<engine data_dir>/dev.env` once per process when
+`debug_assertions` is enabled or it was compiled with `BUWIZ_ANDROID_DEV=1`.
+`nsh package` builds release APKs; opt in from `nsh/` with:
+
+```sh
+BUWIZ_ANDROID_DEV=1 nsh package --target android --abi x86_64
+```
+
+Packaged APKs are not debuggable, so `adb shell run-as` cannot write their
+private configuration. Bake synthetic-test defaults into the opted-in APK instead:
+
+```sh
+CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true BUWIZ_ANDROID_DEV=1 BUWIZ_ANDROID_DEV_ENV='EBIR_TEST_ENV=1;BIR_AUTH_BYPASS=1;BUWIZ_NO_KEYCHAIN=1;BIR_SFTP_DRY_RUN=1;BIR_RELAY_URL=http://127.0.0.1:8787' nsh package --target android --abi x86_64
+```
+
+The sign-in bypass (`BIR_AUTH_BYPASS`) only exists in builds with
+`debug_assertions`, hence `CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true`; without it
+the app shows the real Buwiz sign-in.
+
+`BUWIZ_ANDROID_DEV_ENV` accepts the same allowlisted `KEY=VALUE` entries,
+separated by semicolons or newlines, with the same validation and 16 KiB limit.
+Duplicate keys within either source are rejected. If a private `dev.env` exists,
+its entries override baked defaults per key; omitted keys retain their baked
+values. Both sources must validate before any configuration is applied.
+A missing file is fine: the baked defaults still apply.
+
+Android installs these values in bir-core's process-wide configuration store
+before the door starts its database or workers; it does not modify the process
+environment. Core, account-gate and transport readers consult that store before
+the launch environment. The Android send guard also clears the live-send
+acknowledgement and, unless a mock is selected, forces dry-run mode through the
+store, not OS environment writes.
+
+Both build-time values use `option_env!`; Cargo tracks their changes
+automatically (the app has no `build.rs`). Setting them only at app runtime
+does not enable or change the loader. Production release builds without the
+opt-in neither embed the baked configuration nor read the file, even when
+`run-as` is available. Do not distribute opted-in APKs as production builds
+or put secrets in baked configuration.
+With the current NSH host this is normally
+`files/nsh/dev.goldcoders.bir.nsh/dev.env` relative to `run-as`'s working
+directory (NSH uses `getFilesDir()/nsh/<app id>`). The file must exist before
+the first native Door call. Restart the app after changing it.
+
+### Android emulator access commands
+
+An opted-in Android dev build with the exact configured value `EBIR_TEST_ENV=1`
+also polls `<engine data_dir>/dev-command` every 500 ms, even with the ordinary
+shell polls disabled or Android PrintActivity in front. Commands are `lock`
+(the existing Ctrl+L handler) and `logout` (local Settings Sign out); the file is
+deleted before dispatch. Unknown commands are consumed, rejected and logged.
+No mailbox timer starts on desktop or when either gate is off.
+
+The current host supplies `getFilesDir()/nsh` as `EngineConfig.support_dir`, with
+no explicit `data_dir`; the engine appends the app ID. Thus the mailbox is
+`/data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh/dev-command`
+(`/data/user/0/...` is Android's equivalent path for user 0). On the rooted test
+emulator, atomically publish a complete command with:
+
+```sh
+adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh && printf lock > dev-command.next && mv dev-command.next dev-command'"
+adb shell "su 0 sh -c 'cd /data/data/dev.goldcoders.bir.nsh/files/nsh/dev.goldcoders.bir.nsh && printf logout > dev-command.next && mv dev-command.next dev-command'"
+```
+
+The app must already have started so its data directory exists. Receipt logs
+include a Unix-millisecond timestamp through tracing. The mailbox does not
+launch or activate an Activity; the existing print-revocation handler still
+dismisses an unsubmitted preview as documented in the migration lifecycle model.
+
+### Accepted dev.env keys
+
+Only these keys are accepted:
+`EBIR_TEST_ENV`, `BIR_AUTH_BYPASS`, `BUWIZ_NO_KEYCHAIN`, `BIR_SFTP_DRY_RUN`,
+`BIR_RELAY_URL`. The format is literal `KEY=VALUE`, with surrounding whitespace
+trimmed; blank lines and full-line `#` comments are allowed. No `export`,
+quoting, variable expansion or inline comments. Unknown/duplicate keys,
+malformed lines, invalid UTF-8 or files over 16 KiB refuse startup. A missing
+file is fine. No partial configuration is applied on parse failure.
+
+Create a local file named `dev.env` containing:
+
+```dotenv
+EBIR_TEST_ENV=1
+BIR_AUTH_BYPASS=1
+BUWIZ_NO_KEYCHAIN=1
+BIR_SFTP_DRY_RUN=1
+BIR_RELAY_URL=http://127.0.0.1:8787
+```
+
+For a debuggable development APK (not a normal `nsh package` APK), the optional
+private-file override can be installed as follows:
+
+```sh
+adb shell am force-stop dev.goldcoders.bir.nsh
+adb shell run-as dev.goldcoders.bir.nsh mkdir -p files/nsh/dev.goldcoders.bir.nsh
+adb shell run-as dev.goldcoders.bir.nsh sh -c '"cat > files/nsh/dev.goldcoders.bir.nsh/dev.env"' < dev.env
+adb reverse tcp:8787 tcp:8787
+# Start both mocks, then launch the app normally.
+```
+
+For a packaged APK with baked defaults, skip the `run-as` commands and use
+`adb reverse tcp:8787 tcp:8787` before launching with both mocks running.
+
+The `run-as` path is app-private, not shared external storage. Verify the actual
+engine data path if using a different host/app ID. `EBIR_TEST_ENV=1` gives
+each engine a fresh scratch database: this configuration is for synthetic
+phone tests, not persistent real taxpayer work. The normal Final Copy and
+queue-admission checks still apply.
+
 ## Where the app decides
 
 - `bir-core/src/transport.rs`: `resolve_sftp_endpoint` returns
@@ -50,11 +162,13 @@ there leaves the return Queued, unclaimed, and retried after the back-off.
   setting it is the ask to use the relay), and the upload goes to the relay
   instead of SFTP. The source logs as `relay`.
 - `nsh/src/guards.rs`: the send guard answers `SendMode::Relay` (`doorStatus().sending
-  === "relay"`) only when the relay URL is loopback and its port answers. A set
+  === "relay"`) only when the relay URL is loopback, its port answers, and
+  `GET /v1/health` answers HTTP 200 with `{"mock":true}`. A set
   but bad or silent relay is `Refused`: the worker does not start. `BIR_SFTP_LIVE`
   is still removed and the Dev Mode test server still refuses.
-- The phone app gets `BIR_RELAY_URL` (and the dev variables) from the launch
-  environment. `nsh/nsh.json` declares no `capabilities` on purpose: any
+- The iOS app gets `BIR_RELAY_URL` (and the dev variables) from the launch
+  environment; Android uses the baked/private configuration described above.
+  `nsh/nsh.json` declares no `capabilities` on purpose: any
   declaration denies everything it does not list, and the desktop print
   preview's web view shows a `file:` page that no grant covers. In the iOS
   simulator, `xcrun simctl launch` hands the app every `SIMCTL_CHILD_<name>`
@@ -97,6 +211,24 @@ SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=
 Queue a validated demo return (Juana Santos): the relay prints the file, the
 mock BIR prints the upload, and Filings shows the return as Submitted.
 
+## Submission safety and mock limitations
+
+The worker persists PUT-start before posting. A 202 accepted response marks the
+return Submitted, including inbox-only mode (`forwarded: "none"`); it does not
+mean BIR confirmation. A failed, rejected, disconnected, or timed-out operation
+after PUT-start leaves the claim pending for manual reconciliation, without
+automatic retry or SFTP fallback. Pre-upload failures retain the existing retry
+behavior. The client timeout is 60 seconds.
+
+This contract has no idempotency key or status endpoint. Repeating a POST writes
+the inbox file again and can forward it again, even though its hash-derived
+receipt ID is unchanged. Receipt-file writes are best-effort.
+
+Authentication is out of scope for this local mock. Use synthetic taxpayer data
+only. A real relay needs TLS, authenticated clients, taxpayer authorization,
+durable idempotency and custody records, audited access, rate limits, protected
+storage, retention/deletion policy, and reconciliation of ambiguous hand-offs.
+
 ## On a physical iPhone
 
 Not run on a device yet (none attached to the build machine). `nsh run --target ios`
@@ -138,7 +270,7 @@ only boots a simulator, so a device needs a signed package:
 | --- | --- | --- |
 | URL | `BIR_RELAY_URL=http://127.0.0.1:8787` | e.g. `https://relay.example.com` |
 | Allowed by the app | yes | **refused**: the worker does not start |
-| From a device | no: `127.0.0.1` is the phone itself, not the Mac | needs the changes below |
+| From a device | iPhone: not directly; Android: `adb reverse tcp:8787 tcp:8787` reaches the host mock | needs the changes below |
 
 What refuses it today, on purpose:
 
@@ -147,7 +279,8 @@ What refuses it today, on purpose:
   no user, path, query or fragment. Anything else is a `Config` error, and the
   upload never starts.
 - `relay_target` in `nsh/src/guards.rs` then requires that loopback port to
-  answer. Otherwise the send mode is `Refused`.
+  answer and `mock_health` requires HTTP 200 from `/v1/health` with JSON
+  containing `"mock":true`. Otherwise the send mode is `Refused`.
 
 To test a real relay (a deliberate, reviewed change), you need:
 
@@ -155,8 +288,10 @@ To test a real relay (a deliberate, reviewed change), you need:
    list. For example, accept `https://<host>` only when it equals an origin
    compiled into the build (`option_env!("BUWIZ_RELAY_ORIGIN")`), and keep
    refusing every other origin. Keep `http://` loopback for the mock.
-2. In `relay_target`, the reachability probe dials the URL's host and port.
-   For `https://` without a port, use 443, not 80.
+2. In `relay_target`, adapt the URL parsing and reachability probe for the
+   production origin (HTTPS defaults to port 443, not 80). Replace
+   `mock_health`'s plain-HTTP, `"mock":true` check with an explicit production
+   health/authentication policy while retaining the mock checks for loopback.
 3. Authentication: the v1 contract has none. Add a header, e.g.
    `authorization: Bearer …`, read from the keychain and never from a file
    in the repository.
@@ -167,5 +302,6 @@ To test a real relay (a deliberate, reviewed change), you need:
 5. The relay decides where returns go. Point a test relay at a mock or test
    BIR endpoint: the app cannot tell what the relay forwards to.
 
-Until those changes land, the closest device test is the dry run (no relay
-URL), or the mock relay from the simulator.
+Until those changes land, the closest physical iPhone test is the dry run
+(no relay URL), or the mock relay from the simulator. Physical Android phones
+can use the host mock relay through `adb reverse`, as described above.

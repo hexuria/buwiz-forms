@@ -17,7 +17,8 @@ pub const NO_KEYCHAIN_ENV: &str = "BUWIZ_NO_KEYCHAIN";
 /// test and agent runs always set it. Any value except empty, `0`, `false`,
 /// `no` or `off` switches the keychain off, so a typo cannot reach the OS.
 pub fn keychain_disabled() -> bool {
-    keychain_switch_is_on(std::env::var(NO_KEYCHAIN_ENV).ok().as_deref())
+    cfg!(target_os = "android")
+        || keychain_switch_is_on(crate::config::var(NO_KEYCHAIN_ENV).ok().as_deref())
 }
 
 pub(crate) fn keychain_switch_is_on(value: Option<&str>) -> bool {
@@ -49,6 +50,11 @@ mod ios;
 #[cfg(target_os = "ios")]
 pub use ios::*;
 
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_os = "android")]
+pub use android::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,6 +75,14 @@ mod tests {
     #[test]
     fn keychain_disabled_follows_buwiz_no_keychain() {
         temp_env::with_var(NO_KEYCHAIN_ENV, Some("1"), || {
+            assert!(keychain_disabled());
+        });
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_keychain_is_disabled_even_when_the_switch_is_off() {
+        temp_env::with_var(NO_KEYCHAIN_ENV, Some("0"), || {
             assert!(keychain_disabled());
         });
     }

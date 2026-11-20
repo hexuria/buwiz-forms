@@ -18,7 +18,7 @@
 //   need attention" and the pill's red count take every message, shown or not (the old page's todo() and partErrors).
 import { batch, signal, untracked, type Accessor, type Signal } from "nsh";
 import { isAvailable as hasSecondWindow } from "nsh/desktop";
-import { Print } from "../print/native";
+import { hasNativePreview, Print } from "../print/native";
 import {
   bir,
   type IncomeTaxElectionReadiness,
@@ -30,6 +30,7 @@ import {
   type ScreenFormOpened,
   type ScreenFormPenalties,
   type ScreenFormPeriodPart,
+  type ScreenFormProfilePrerequisite,
   type ScreenFormSamplePeriod,
   type ScreenFormStatus,
 } from "../../bir";
@@ -53,7 +54,7 @@ type Filled = ScreenFormFilled & { cleared?: string[] };
 /** What a device with no second window says for Print preview (screens/print/host.tsx and src/print.rs say the same). */
 const NO_PREVIEW = "Print preview is not available on this device.";
 
-/** What Check, and a Queue the host refused, say of the items that need attention. */
+/** What Check says of the items that need attention. */
 const attentionText = (n: number) => `${n} item${n > 1 ? "s need" : " needs"} attention.`;
 
 /** Why a month other than December is not taken for a calendar year's end (a calendar pick says it; so does a month chosen from the list that the fill put back). */
@@ -116,6 +117,7 @@ export interface SessionHooks {
   onRetarget?(target: FormTarget): void;
   /** The return was queued or taken out of the queue. */
   onQueueChanged?(target: FormTarget): void;
+  onOpenProfile?(section: string, year: number): void;
 }
 
 export type SaveState =
@@ -212,6 +214,7 @@ export interface HeaderInfo {
   profileChanged: string[];
   notes: string[];
   formErrors: string[];
+  profilePrerequisites: ScreenFormProfilePrerequisite[];
 }
 
 export type Overlay =
@@ -285,6 +288,7 @@ interface St {
   filedOriginalView: { status: string; filed_on: string | null } | null;
   profileUpdates: string[];
   profileDiffers: string[];
+  profilePrerequisites: ScreenFormProfilePrerequisite[];
   notes: { key: string; text: string; recorded: boolean }[];
   saved: boolean;
   quiet: { field: string; keys: string[] } | null;
@@ -351,7 +355,7 @@ function freshState(target: FormTarget): St {
     typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodAsked: null,
     periodAnswered: null, periodComplete: false, periodSeq: 0, periodToken: 0, periodInFlight: null, opens: null,
     existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, submittedViaRelay: false, confirmedAt: null, amends: null, filedOriginal: null,
-    filedOriginalView: null, profileUpdates: [], profileDiffers: [], notes: [], saved: false, quiet: null, kept: {},
+    filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
     profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
@@ -740,6 +744,7 @@ export class FormSession {
     s.poolTexts = r.pools || {};
     s.profileUpdates = r.profile_updates || [];
     s.profileDiffers = r.profile_differs || [];
+    s.profilePrerequisites = r.profile_prerequisites || [];
     s.notes = (r.notes || []).map((n) => ({ key: n.key, text: n.text, recorded: false }));
     s.saved = Boolean(r.draft && (r.draft as { id?: number }).id);
     s.quiet = r.quiet || null;
@@ -1105,6 +1110,7 @@ export class FormSession {
     const before = s.values;
     s.draft = r.draft;
     s.values = this.shown(r.values);
+    s.profilePrerequisites = r.profile_prerequisites || [];
     s.options = (r.options || {}) as Record<string, unknown[]>;
     if (Array.isArray(r.penalties)) s.penalties = r.penalties;
     if (r.pools) s.poolTexts = r.pools;
@@ -1626,6 +1632,7 @@ export class FormSession {
       const r = bir.screen_form_use_profile(s.target.formCode, s.target.year, s.target.period, s.draft!, facts);
       s.draft = r.draft;
       s.values = this.shown(r.values);
+      s.profilePrerequisites = r.profile_prerequisites || [];
       s.options = (r.options || s.options) as Record<string, unknown[]>;
       if (r.pools) s.poolTexts = r.pools;
       if (Array.isArray(r.penalties)) s.penalties = r.penalties;
@@ -1640,6 +1647,10 @@ export class FormSession {
   }
 
   // ---------------------------------------------------------------- penalties, from, notices, stops, more
+
+  openProfilePrerequisite(field: ScreenFormProfilePrerequisite["field"]) {
+    this.hooks.onOpenProfile?.(field, this.taxYear());
+  }
 
   /** Edit penalties: the row's group opens together. */
   openPenalties(id: string) {
@@ -1957,8 +1968,14 @@ export class FormSession {
 
   /** Navigator and pill: open the chosen part and fold the others. row: the row a step goes to. */
   jumpTo(pi: number, row: string | null = null) {
+    this.st.openParts = new Set();
+    this.revealTarget(pi, row);
+  }
+
+  private revealTarget(pi: number, row: string | null) {
     const s = this.st;
-    s.openParts = new Set([pi]);
+    s.openParts.add(pi);
+    if (row && this.tuckedItems(pi).includes(Number(row.split(":")[1]))) s.profileOpen.add(pi);
     s.current = pi;
     s.stepAt = row;
     this.publish();
@@ -2019,11 +2036,7 @@ export class FormSession {
     if (s.stepAt && dir > 0) s.passed.add(s.stepAt);
     s.stepFromTop = false;
     // The target's part opens; the parts already open stay open (after Expand all a step folds nothing).
-    s.openParts.add(target.part);
-    s.current = target.part;
-    s.stepAt = target.row;
-    this.publish();
-    this.sReveal.set({ row: target.row, part: target.part, seq: ++this.revealSeq });
+    this.revealTarget(target.part, target.row);
   }
 
   /** The keyboard into a row's box: its first stop box, else its first empty required box, else its first open box. */
@@ -2313,7 +2326,7 @@ export class FormSession {
       s.showAll = true;
       this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
       this.publish();
-      return this.toast(check.blocks[0].message, "triangle-alert");
+      return this.refuse(check.blocks[0].message, this.refusalAction(check.blocks));
     }
     const warns = check?.warns ?? [];
     if (!this.looksFirst()) return this.askQueue(warns);
@@ -2327,7 +2340,7 @@ export class FormSession {
       const listed = n > 0 ? this.refusalList() : "";
       if (listed && listed !== this.toldRefusal) {
         this.toldRefusal = listed;
-        return void this.toast(attentionText(n), "triangle-alert");
+        return void this.refuse(attentionText(n), this.refusalAction(s.errors));
       }
       this.toldRefusal = "";
       this.askQueue(warns);
@@ -2336,6 +2349,26 @@ export class FormSession {
 
   /** The list a Queue was last told of instead of being asked ("" when none): the same list again goes to the host. */
   private toldRefusal = "";
+
+  /** The refusal toast still up (its Show item / Open tax profile), if any. */
+  private refusalToast: string | null = null;
+
+  /** A Queue refusal: its toast replaces the last one, whose action would point at the old list. */
+  private refuse(message: string, action: ToastAction | undefined): string | null {
+    this.retireRefusal();
+    this.refusalToast = this.toast(message, "triangle-alert", action);
+    return this.refusalToast;
+  }
+
+  /**
+   * Queue goes on (the question or the host): the refusal toast goes. Left up, it would float over the question's dialog,
+   * whose scrim takes a press on its Show item and closes the dialog instead (seen on iOS).
+   */
+  private retireRefusal() {
+    const id = this.refusalToast;
+    this.refusalToast = null;
+    if (id) this.hooks.dismissToast?.(id);
+  }
 
   /**
    * Whether Queue looks before it asks. 2551Q's Queue does not judge the draft the page holds: it reads the stored return again and reconciles
@@ -2363,6 +2396,7 @@ export class FormSession {
   /** Nothing left to fix: the tier warning is asked once, else the return is queued. */
   private askQueue(warns: string[]) {
     const s = this.st;
+    this.retireRefusal();
     if (warns.length) {
       s.queueWarn = { warns };
       s.overlay = { kind: "queue-confirm", warns };
@@ -2396,13 +2430,76 @@ export class FormSession {
       this.hooks.onQueueChanged?.(s.target);
       void this.reload();
     } catch (e) {
-      // Refused: every message shows, so what blocks it is on screen. The host lists what it refused as "field: message; ..." (its own
-      // names for the boxes): the rows and the pill carry the messages, and the toast counts them as Check does.
+      const message = errorText(e);
+      const refusal = plainRefusal(message);
+      const count = listedFields(refusal);
+      const shown = new Set(s.errors
+        .filter((error) => !error.dismiss && !isPageNotice(s.target.formCode, error.field)
+          && Object.values(s.messages).some((text) => text.includes(error.message)))
+        .map((error) => `${error.field}: ${error.message}`));
+      const alreadyShown = count > 0 && refusal.split(/;\s+(?=[a-z][a-z0-9_.]*: )/).every((entry) => shown.has(entry));
+      const errors = count ? refusal.split(/;\s+(?=[a-z][a-z0-9_.]*: )/).map((entry) => {
+        const at = entry.indexOf(": ");
+        const field = entry.slice(0, at);
+        const error = { field, message: entry.slice(at + 2), keys: s.errors.find((old) => old.field === field)?.keys || [field] };
+        const row = this.refusalRow(error);
+        if (row && !error.keys.some((key) => this.keyIndex.has(key))) error.keys = keysOf(this.items.get(row)!);
+        return error;
+      }) : [];
       s.showAll = true;
+      const mapped = errors.filter((error) => this.refusalRow(error));
+      const fields = new Set(mapped.map((error) => error.field));
+      this.setErrors([...s.errors.filter((old) => !fields.has(old.field) && !s.factErrors.includes(old)), ...mapped]);
       this.publish();
-      const listed = listedFields(errorText(e));
-      this.toast(listed ? attentionText(listed) : errorText(e), "triangle-alert");
+      this.refuse(alreadyShown ? attentionText(count) : message, this.refusalAction(errors));
     }
+  }
+
+  private refusalRow(error: ScreenFormError): string | null {
+    return bindError(error, this.rowIds.map((id) => ({ id, it: this.items.get(id)! })), (key) => this.keyIndex.get(key), false);
+  }
+
+  private refusalAction(errors: ScreenFormError[]): ToastAction | undefined {
+    const sections: Record<string, string> = {
+      annual_income_tax_election: "income_tax_election",
+      income_tax_election: "income_tax_election",
+      tax_classification: "tax_classification",
+      eopt_tier: "eopt_tier",
+      is_government_withholding_entity: "is_government_withholding_entity",
+      atc_codes: "atc_codes",
+      business_start_date: "branch",
+      line_of_business: "branch",
+      rdo_code: "branch",
+      tin: "taxpayer",
+      taxpayer_type: "taxpayer",
+      name: "taxpayer",
+      taxpayer_name: "taxpayer",
+      registered_name: "taxpayer",
+      birth_date: "taxpayer",
+      registered_address: "address",
+      zip_code: "address",
+      phone: "address",
+      email: "address",
+    };
+    for (const error of errors) {
+      const field = error.field.replace(/^tax_profile\./, "");
+      const profileOnly = error.field.startsWith("tax_profile.") || field === "annual_income_tax_election";
+      const row = this.refusalRow(error);
+      if (!profileOnly && row && this.st.editable && keysOf(this.items.get(row)!).some((key) =>
+        !this.isShut(key) || (this.st.profileEdit.has(key) && !this.st.off[key]))) {
+        return { label: "Show item", onPress: () => this.jumpTo(Number(row.split(":")[0]), row) };
+      }
+      const profile = profileOnly
+        || (error.keys.length > 0 && error.keys.every((key) => this.st.profile.has(key)));
+      if (profile) {
+        const section = Object.prototype.hasOwnProperty.call(sections, field) ? sections[field] : undefined;
+        if (section && this.hooks.onOpenProfile)
+          return { label: "Open tax profile", onPress: () => this.hooks.onOpenProfile?.(section, this.taxYear()) };
+        continue;
+      }
+      if (row) return { label: "Show item", onPress: () => this.jumpTo(Number(row.split(":")[0]), row) };
+    }
+    return undefined;
   }
 
   cancelQueue() {
@@ -2462,11 +2559,11 @@ export class FormSession {
   print() {
     const s = this.st;
     if (!s.draft) return;
-    if (!hasSecondWindow && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
+    if (!hasSecondWindow && !hasNativePreview && !Print.previewsNatively()) return void this.toast(NO_PREVIEW, "printer");
     if (s.sample) {
       try {
         bir.screen_form_print_sample(s.target.formCode, s.draft, s.pending, this.unlockedFor(s.pending));
-        s.previewOpen = true;
+        s.previewOpen = !hasNativePreview;
         if (hasSecondWindow) this.toast("Print preview opened. It follows your edits live.", "printer");
       } catch (e) {
         this.toast(errorText(e), "triangle-alert");
@@ -2477,7 +2574,7 @@ export class FormSession {
     else if (s.editable && !this.ensureSaved()) return;
     try {
       bir.screen_form_print(s.target.formCode, s.draft!);
-      s.previewOpen = true;
+      s.previewOpen = !hasNativePreview;
       if (hasSecondWindow) this.toast("Print preview opened. It follows your edits live.", "printer");
     } catch (e) {
       this.toast(errorText(e), "triangle-alert");
@@ -2918,6 +3015,7 @@ export class FormSession {
       profileChanged: !s.editable ? s.profileChanged : [],
       notes: s.notes.map((n) => n.text),
       formErrors: s.formErrors,
+      profilePrerequisites: s.editable ? s.profilePrerequisites : [],
     });
     this.sSave.set(s.saveState);
     this.sChecking.set(s.checking);
@@ -3003,7 +3101,7 @@ export class FormSession {
 }
 
 /** Where a validation message goes: by key, then item number, then a TIN item, then label words, else the first item. */
-export function bindError(e: ScreenFormError, items: { id: string; it: SchemaItem }[], idForKey: (k: string) => string | undefined): string | null {
+export function bindError(e: ScreenFormError, items: { id: string; it: SchemaItem }[], idForKey: (k: string) => string | undefined, fallback = true): string | null {
   const words = (t: string) => String(t).toLowerCase().match(/[a-z]{4,}/g) || [];
   let id: string | null | undefined = null;
   for (const k of e.keys || []) {
@@ -3032,5 +3130,5 @@ export function bindError(e: ScreenFormError, items: { id: string; it: SchemaIte
       }
     }
   }
-  return id || (items[0] && items[0].id) || null;
+  return id || (fallback && items[0] && items[0].id) || null;
 }

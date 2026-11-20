@@ -17,7 +17,7 @@ import { frequencyOf, type Frequency, periodLabel } from "../../lib/periods";
 import { app, store, toast } from "../../shell";
 import type { FormTarget } from "../form/FormPage";
 import { createPreviewHost } from "./controller";
-import { Print } from "./native";
+import { hasNativePreview, Print } from "./native";
 import { PreviewWindow } from "./PreviewWindow";
 import { previews } from "./store";
 import { formIdentity } from "./titles";
@@ -41,6 +41,7 @@ function startSize(): { width: number; height: number } {
 
 const host = createPreviewHost({
   available: isAvailable,
+  ...(hasNativePreview ? { androidPreview: (key: string, title: string) => Print.openNative(key, title) } : {}),
   windows: {
     get: (id) => Window.get(id),
     open: (id, title, key) =>
