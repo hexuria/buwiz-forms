@@ -46,7 +46,7 @@ test("2551Q Queue refusal marks Item 13 like validation and offers a jump into i
 });
 
 test("profile Queue refusals link to the relevant profile editor and form year", async () => {
-  for (const [field, section] of [["annual_income_tax_election", "income_tax_election"], ["tax_profile.business_start_date", "branch"]]) {
+  for (const [field, section] of [["annual_income_tax_election", "income_tax_election"], ["tax_profile.business_start_date", "branch"], ["tax_profile.taxpayer_name", "taxpayer"], ["tax_profile.eopt_tier", "eopt_tier"]]) {
     const f = await refusing(`${field}: Set this in the tax profile before filing.`);
     try {
       f.s.queue();
@@ -58,8 +58,35 @@ test("profile Queue refusals link to the relevant profile editor and form year",
   }
 });
 
+test("a blank Item 8 name edited on the return offers Show item, not the unchanged taxpayer profile", async () => {
+  const f = await refusing("taxpayer_name: Item 8 Taxpayer Name is required.");
+  try {
+    const key = "frm2551Qv2018:registeredName";
+    const row = f.s.itemIdForKey(key)!;
+    const profileName = bir.list_taxpayers().find((t) => t.tin_root === DEMO.tinRoot.replaceAll("-", ""))!.name;
+    f.s.startProfileEdit(row);
+    expect(f.s.box(key).locked()).toBe(false);
+    f.s.edit(key, "");
+    await f.s.idle();
+    f.s.saveNow();
+    await f.s.idle();
+    expect(f.s.box(key).value()).toBe("");
+    expect(bir.list_taxpayers().find((t) => t.tin_root === DEMO.tinRoot.replaceAll("-", ""))!.name).toBe(profileName);
+    f.s.endProfileEdit([key]);
+    f.s.jumpTo(0);
+    f.said.length = 0;
+    f.s.queue();
+    expect(f.s.box(key).invalid()).toBe(true);
+    expect(f.said[0].action?.label).toBe("Show item");
+    f.said[0].action!.onPress();
+    expect(f.s.reveal()!.row).toBe(row);
+    expect(f.s.part(Number(row.split(":")[0]))().open).toBe(true);
+    expect(f.profiles).toEqual([]);
+  } finally { f.restore(); }
+});
+
 test("unknown keys and unstructured Queue failures keep their full reason, without an invented jump", async () => {
-  for (const message of ["unknown_key: Zyzzyva cannot proceed.", "The filing service is unavailable."]) {
+  for (const message of ["unknown_key: Zyzzyva cannot proceed.", "tax_profile.unknown_key: Zyzzyva cannot proceed.", "The filing service is unavailable."]) {
     const f = await refusing(message);
     try {
       const before = f.s.reveal();

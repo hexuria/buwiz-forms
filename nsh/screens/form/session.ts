@@ -2439,18 +2439,43 @@ export class FormSession {
   }
 
   private refusalAction(errors: ScreenFormError[]): ToastAction | undefined {
+    const sections: Record<string, string> = {
+      annual_income_tax_election: "income_tax_election",
+      income_tax_election: "income_tax_election",
+      tax_classification: "tax_classification",
+      eopt_tier: "eopt_tier",
+      is_government_withholding_entity: "is_government_withholding_entity",
+      atc_codes: "atc_codes",
+      business_start_date: "branch",
+      line_of_business: "branch",
+      rdo_code: "branch",
+      tin: "taxpayer",
+      taxpayer_type: "taxpayer",
+      name: "taxpayer",
+      taxpayer_name: "taxpayer",
+      registered_name: "taxpayer",
+      birth_date: "taxpayer",
+      registered_address: "address",
+      zip_code: "address",
+      phone: "address",
+      email: "address",
+    };
     for (const error of errors) {
       const field = error.field.replace(/^tax_profile\./, "");
-      const profile = error.field.startsWith("tax_profile.") || field === "annual_income_tax_election"
-        || (error.keys.length > 0 && error.keys.every((key) => this.st.profile.has(key)));
-      if (profile && this.hooks.onOpenProfile) {
-        const section = field === "annual_income_tax_election" ? "income_tax_election"
-          : field === "business_start_date" || field === "line_of_business" || field === "rdo_code" ? "branch"
-          : field === "tin" || field === "taxpayer_type" || field === "name" || field === "birth_date" ? "taxpayer"
-          : error.field.startsWith("tax_profile.") ? field : "address";
-        return { label: "Open tax profile", onPress: () => this.hooks.onOpenProfile?.(section, this.taxYear()) };
-      }
+      const profileOnly = error.field.startsWith("tax_profile.") || field === "annual_income_tax_election";
       const row = this.refusalRow(error);
+      if (!profileOnly && row && this.st.editable && keysOf(this.items.get(row)!).some((key) =>
+        !this.isShut(key) || (this.st.profileEdit.has(key) && !this.st.off[key]))) {
+        return { label: "Show item", onPress: () => this.jumpTo(Number(row.split(":")[0]), row) };
+      }
+      const profile = profileOnly
+        || (error.keys.length > 0 && error.keys.every((key) => this.st.profile.has(key)));
+      if (profile) {
+        const section = Object.prototype.hasOwnProperty.call(sections, field) ? sections[field] : undefined;
+        if (section && this.hooks.onOpenProfile)
+          return { label: "Open tax profile", onPress: () => this.hooks.onOpenProfile?.(section, this.taxYear()) };
+        continue;
+      }
       if (row) return { label: "Show item", onPress: () => this.jumpTo(Number(row.split(":")[0]), row) };
     }
     return undefined;
