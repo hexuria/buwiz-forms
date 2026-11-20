@@ -85,6 +85,8 @@ export interface SchemaItem {
   one_dates?: [string, string, string][];
   /** Registered month/year keys, in screen order: the pair is one MM/YYYY field ("<month key>#period"). */
   one_periods?: [string, string][];
+  /** The year keys of one_periods pairs whose box stores two digits (20YY, a two-digit select). */
+  one_period_two_digit?: string[];
   /** Registered from/to anchors: a whole-date box's key, or a one-date's month key (its triple is the end). */
   date_ranges?: [string, string][];
   /** A hint offering another item's amount for this item's box ("Use it"). */

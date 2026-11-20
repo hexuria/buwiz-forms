@@ -7,27 +7,28 @@ import { FormSession } from "./session";
 
 warmForms();
 
-type MarkedItem = SchemaItem & { one_dates?: string[][] };
+type MarkedItem = SchemaItem & { one_dates?: string[][]; date_ranges?: string[][] };
 
-test("every built three-part date is registered except the 1600WP range", () => {
+test("every built three-part date is registered; the 1600WP range ends are one-dates inside their date_ranges mark", () => {
   let registered = 0;
   let ranges = 0;
   for (const form of bir.screen_forms_index()) {
     const schema = withoutHidden(bir.screen_form_schema(form.c) as FormSchema);
     for (const part of schema.parts) for (const item of part.items) {
-      const date = dateParts(item.f || []);
-      if (!date?.day) continue;
-      if (form.c === "1600WP") {
-        ranges++;
+      // PR 3, R1: a date_ranges item's ends are one-date triples or whole-date boxes; the page draws the pair, not the parts.
+      if ((item as MarkedItem).date_ranges?.length) {
+        ranges += (item as MarkedItem).date_ranges!.length;
         continue;
       }
+      const date = dateParts(item.f || []);
+      if (!date?.day) continue;
       const triple = [date.month.k, date.day.k, date.year.k];
       const marked = (item as MarkedItem).one_dates || [];
       expect(`${form.c} ${item.no}: ${marked.some((keys) => keys.join("|") === triple.join("|"))}`).toBe(`${form.c} ${item.no}: true`);
       registered++;
     }
   }
-  expect(ranges).toBe(2);
+  expect(ranges).toBe(6);
   expect(registered).toBeGreaterThan(19);
 });
 

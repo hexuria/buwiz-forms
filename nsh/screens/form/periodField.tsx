@@ -61,10 +61,15 @@ export function PeriodField(props: PeriodFieldProps) {
     const y = periodYear4(String(yearBox.value() || ""));
     return Number.isInteger(y) && y >= 1900 ? String(y) : String(yearBox.value() || "");
   };
+  const calendarOnly = () => s.calendarYearEnd({ month: period.month, day: null, year: period.year });
   const picker = (id: string) => (
     <MonthPicker
       month={monthNum()}
       year={s.periodYear(period)}
+      // A locked year leaves the stepper nothing to reach; a calendar year leaves the grid December only.
+      minYear={yearLocked() ? s.periodYear(period) : undefined}
+      maxYear={yearLocked() ? s.periodYear(period) : undefined}
+      allowed={calendarOnly() ? (m) => m === 12 : undefined}
       label={`Pick the month for ${props.label}`}
       testID={id}
       disabled={box.locked() || !s.header().editable}
@@ -166,7 +171,7 @@ function RangeEndControl(props: { s: FormSession; end: RangeEnd; label: string; 
   const end = props.end;
   const key = end.editKey;
   const box = s.box(key);
-  if (end.date) return <RangeOneDate s={s} date={end.date} label={props.label} narrow={props.narrow} min={props.min} max={props.max} />;
+  if (end.date) return <RangeOneDate s={s} date={end.date} label={props.label} narrow={props.narrow} min={props.min} max={props.max} start={props.start} />;
   if (props.narrow()) {
     return (
       <DateTouchField
@@ -201,7 +206,7 @@ function RangeEndControl(props: { s: FormSession; end: RangeEnd; label: string; 
   );
 }
 
-function RangeOneDate(props: { s: FormSession; date: OneDate; label: string; narrow: Accessor<boolean>; min?: string; max?: string }) {
+function RangeOneDate(props: { s: FormSession; date: OneDate; label: string; narrow: Accessor<boolean>; min?: string; max?: string; start: string }) {
   const s = props.s;
   const date = props.date;
   const key = date.oneKey;
@@ -213,7 +218,7 @@ function RangeOneDate(props: { s: FormSession; date: OneDate; label: string; nar
         label={props.label}
         value={box.value()}
         error={box.invalid()}
-        start={props.min ?? ""}
+        start={props.start}
         min={props.min}
         max={props.max}
         validate={(v) => s.oneDateProblem(date, v)}
@@ -262,7 +267,7 @@ export function RangeField(props: RangeFieldProps) {
         narrow={props.narrow}
         min={which === "To" ? fromDay() || undefined : undefined}
         max={which === "From" ? toDay() || undefined : undefined}
-        start={which === "To" ? fromDay() : toDay()}
+        start={(which === "To" ? toDay() : fromDay()) || (which === "To" ? fromDay() : toDay())}
       />
     </View>
   );

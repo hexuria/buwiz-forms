@@ -1032,12 +1032,12 @@ export class FormSession {
     return "";
   }
 
-  /** Whether the period's year box stores two digits (a 20YY box or a two-digit select). */
+  /** Whether the period's year box stores two digits (the host's mark first, the box's own shape else). */
   private periodTwoDigit(period: OnePeriod): boolean {
+    if (period.twoDigit) return true;
     const f = period.year;
     if (f.t === "sel") return true;
     if (f.m !== undefined && f.m <= 2) return true;
-    if (/two-digit|20YY/i.test(`${f.l} ${this.items.get(this.keyIndex.get(f.k) ?? "")?.l ?? ""}`)) return true;
     return /^\d{1,2}$/.test(String(this.st.values[f.k] ?? ""));
   }
 
@@ -1078,6 +1078,11 @@ export class FormSession {
         s.rejected[key] = "end before start";
         s.boxMessages[key] = this.refusalText(key, "end before start");
         s.touched.add(row);
+        // The reversed ends never reach the host: their staged writes are dropped, so the page's
+        // own sentence is the one that shows (the host would refuse the batch whole and say less).
+        for (const end of [range.from, range.to]) {
+          for (const pk of this.rangeEndPendingKeys(end)) delete s.pending[pk];
+        }
         changed = true;
       } else if (!reversed && held) {
         delete s.rejected[key];
@@ -1092,6 +1097,14 @@ export class FormSession {
       this.markUnsaved();
       this.publish();
     }
+  }
+
+  /** The draft keys a range end's staged edit lives under (a triple's parts, else the box's own). */
+  private rangeEndPendingKeys(end: { anchor: string; date: OneDate | null; field: SchemaField | null }): string[] {
+    if (end.date) {
+      return [end.date.month.k, end.date.day?.k, end.date.year.k].filter((k): k is string => Boolean(k));
+    }
+    return end.field ? [end.field.k] : [end.anchor];
   }
 
   /** A range end's day as an ISO date ("" while either part is blank or unparseable). Staged edits count. */
@@ -3226,7 +3239,7 @@ export class FormSession {
         formErrors: s.formErrors, periodValues: { ...s.periodValues }, periodAsked: s.periodAsked, periodSet: s.periodSet,
         opens: s.opens, existing: s.existing,
       },
-      shown: Object.fromEntries([...this.allKeys, ...this.oneDates.keys()].map((k) => [k, this.shownOf(k)])),
+      shown: Object.fromEntries([...this.allKeys, ...this.oneDates.keys(), ...this.onePeriods.keys()].map((k) => [k, this.shownOf(k)])),
     };
   }
 

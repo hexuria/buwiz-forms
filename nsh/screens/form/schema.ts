@@ -112,14 +112,17 @@ export interface OnePeriod {
   month: SchemaField;
   year: SchemaField;
   periodKey: string;
+  /** The host's registry says the year box stores two digits (20YY or a two-digit select). */
+  twoDigit: boolean;
 }
 
 export function onePeriods(it: SchemaItem): OnePeriod[] {
   const fields = it.f || [];
+  const twoDigit = new Set(it.one_period_two_digit || []);
   return (it.one_periods || []).flatMap(([m, y]) => {
     const month = fields.find((field) => field.k === m);
     const year = fields.find((field) => field.k === y);
-    return month && year ? [{ month, year, periodKey: `${month.k}#period` }] : [];
+    return month && year ? [{ month, year, periodKey: `${month.k}#period`, twoDigit: twoDigit.has(y) }] : [];
   });
 }
 

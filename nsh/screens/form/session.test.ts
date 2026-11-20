@@ -21,7 +21,7 @@ async function opened(target: FormTarget = Q1): Promise<FormSession> {
 
 test("a 2551Q opens: its schema, the profile's locked boxes, a fresh Draft not saved yet", async () => {
   const s = await opened();
-  expect(s.fieldCount()).toBe(86);
+  expect(s.fieldCount()).toBe(85); // PR 3: the Year Ended month+year is one period field
   expect(s.status()).toBe("Draft");
   expect(s.header().editable).toBe(true);
   expect(s.valueOf("frm2551Qv2018:txtTIN1")).toBe("000");
@@ -240,5 +240,5 @@ test("the three heaviest forms build a session without error", async () => {
     counts[code] = s.fieldCount();
     s.dispose();
   }
-  expect(counts).toEqual({ "1702RT": 365, "1700": 289, "1701": 380 });
+  expect(counts).toEqual({ "1702RT": 364, "1700": 289, "1701": 379 }); // PR 3: each year-end pair is one period field
 });

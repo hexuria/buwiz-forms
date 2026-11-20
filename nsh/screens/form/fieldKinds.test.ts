@@ -13,7 +13,7 @@
 // does not have is refused without touching the draft.
 import { expect, test } from "nsh/test";
 import { DEMO, createDemoTaxpayer, warmForms } from "../../bir/testing";
-import { dateParts } from "./schema";
+import { dateParts, onePeriods } from "./schema";
 import { FormSession, type FormTarget } from "./session";
 
 // The first form call of a process builds every form's schema (the host does it lazily, once per process); a test's JS call has 2 s on the
@@ -261,4 +261,226 @@ test("B20: a box the host answers in capitals takes them on blur; one it does no
   await q.idle();
   expect(q.shownOf(qBox)).toBe("TaX TrEaTy ReLiEf");
   q.dispose();
+});
+
+
+
+// ---------------------------------------------------------------- PR 3: month+year pairs and from-to ranges
+//
+// P3a: an enumerated month/year pair is one MM/YYYY field ("<month key>#period"). The year is the
+// return's own and locked; the month is the filer's where the form asks a year-end month — under the
+// Fiscal basis on 1702EX/MX/RT and the quarterlies (Calendar holds it at December). A typed period
+// must agree with the locked year; a bad one lands nothing, keeps the typed text and its sentence.
+// R1: a from/to pair is one row of two date controls; a reversed pair is refused on the To end only
+// (1702EX's effectivity dates are the editable range).
+
+const periodKeyOf = (month: string) => `${month}#period`;
+const EX_MONTH = "frm1702EX:ddlPg1I2Date";
+const EX_YEAR = "frm1702EX:txtPg1I2YearEnd";
+const EX_PERIOD = periodKeyOf(EX_MONTH);
+const EX_FISCAL = "frm1702EX:rdoPg1I1Fiscal";
+
+async function openedFiscal(): Promise<FormSession> {
+  const s = await opened(at("1702EX", 2024, 0));
+  s.pickRadio(EX_FISCAL);
+  await s.idle();
+  return s;
+}
+
+test("PR3: a period takes every typed shape — 06/2024, 06-2024, 062024, 06 2024, 06/24 — and keeps it", async () => {
+  const shapes = ["06/2024", "06-2024", "062024", "06 2024", "06/24"];
+  for (const typed of shapes) {
+    const s = await openedFiscal();
+    s.edit(EX_PERIOD, typed);
+    s.blur(EX_PERIOD);
+    await s.idle();
+    expect(s.shownOf(EX_PERIOD)).toBe("06/2024");
+    expect(s.valueOf(EX_MONTH)).toBe("06");
+    expect(s.valueOf(EX_YEAR)).toBe("24");
+    expect(s.boxMessageOf(EX_MONTH)).toBe("");
+    s.dispose();
+  }
+});
+
+test("PR3: a bad period is refused whole on the month box and blocks Queue", async () => {
+  const messages: string[] = [];
+  createDemoTaxpayer();
+  const s = new FormSession(at("1702EX", 2024, 0), { toast: (t) => void messages.push(t) });
+  expect(await s.open()).toBe(null);
+  await s.idle();
+  const before = [s.valueOf(EX_MONTH), s.valueOf(EX_YEAR)];
+  s.edit(EX_PERIOD, "13/2024");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  expect(s.boxMessageOf(EX_MONTH)).toContain("the month is 1 to 12");
+  expect([s.valueOf(EX_MONTH), s.valueOf(EX_YEAR)]).toEqual(before);
+  expect(s.isDirty()).toBe(true);
+  s.queue();
+  await s.idle();
+  expect(messages[messages.length - 1]).toMatch(/needs? attention/);
+  s.dispose();
+});
+
+test("PR3: text that is no MM/YYYY is refused; the typed text stays with its sentence", async () => {
+  const s = await openedFiscal();
+  const before = [s.valueOf(EX_MONTH), s.valueOf(EX_YEAR)];
+  s.edit(EX_PERIOD, "not a period");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  expect(s.boxMessageOf(EX_MONTH)).toContain("type the month and year as MM/YYYY, for example 12/2023.");
+  expect(s.shownOf(EX_PERIOD)).toBe("not a period");
+  expect([s.valueOf(EX_MONTH), s.valueOf(EX_YEAR)]).toEqual(before);
+  s.dispose();
+});
+
+test("PR3: a blank period clears the open month and keeps the locked year", async () => {
+  const s = await openedFiscal();
+  s.edit(EX_PERIOD, "06/2024");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  expect(s.valueOf(EX_MONTH)).toBe("06");
+  s.edit(EX_PERIOD, "");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  expect(s.shownOf(EX_PERIOD)).toBe("");
+  // The sel's empty choice is the host's "00"; the period reads blank either way.
+  expect(s.valueOf(EX_MONTH)).toMatch(/^0*$/);
+  expect(s.valueOf(EX_YEAR)).toBe("24");
+  s.dispose();
+});
+
+test("PR3: the month picker fills the month with the held year; a wrong typed year is refused on the locked part", async () => {
+  const s = await openedFiscal();
+  const row = s.itemIdForKey(EX_MONTH)!;
+  const period = onePeriods(s.item(row)!)[0];
+  s.pickPeriodMonth(period, 9);
+  await s.idle();
+  expect(s.shownOf(EX_PERIOD)).toBe("09/2024");
+  expect(s.valueOf(EX_YEAR)).toBe("24");
+  // Another year than the return's is refused; the typed text stays with its sentence.
+  s.edit(EX_PERIOD, "10/2025");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  expect(s.boxMessageOf(EX_MONTH)).not.toBe("");
+  expect(s.shownOf(EX_PERIOD)).toBe("10/2025");
+  expect(s.valueOf(EX_MONTH)).toBe("09");
+  expect(s.valueOf(EX_YEAR)).toBe("24");
+  s.dispose();
+});
+
+test("PR3: 1702Q's 20YY year takes two digits or four and stores the held two; a wrong year is refused", async () => {
+  const s = await opened(at("1702Q", 2025, 1));
+  const month = "frm1702q:rbYrEndMonth";
+  const year = "frm1702q:txtYrEndYear";
+  const key = periodKeyOf(month);
+  // Fiscal basis, so a non-December month is allowed.
+  s.pickRadio("frm1702q:rbForClndrFscl_2");
+  await s.idle();
+  s.edit(key, "06/25");
+  s.blur(key);
+  await s.idle();
+  expect(s.valueOf(month)).toBe("06");
+  expect(s.valueOf(year)).toBe("25");
+  expect(s.shownOf(key)).toBe("06/2025");
+  // Four digits typed land the same; the two-digit box is untouched (locked).
+  s.edit(key, "09/2025");
+  s.blur(key);
+  await s.idle();
+  expect(s.valueOf(year)).toBe("25");
+  expect(s.shownOf(key)).toBe("09/2025");
+  s.edit(key, "10/2026");
+  s.blur(key);
+  await s.idle();
+  expect(s.boxMessageOf(month)).not.toBe("");
+  expect(s.shownOf(key)).toBe("10/2026");
+  expect(s.valueOf(month)).toBe("09");
+  s.dispose();
+});
+
+test("PR3: a calendar-year period refuses a non-December month and takes December", async () => {
+  const s = await opened(at("2550Q", 2025, 3));
+  const month = "frm2550qv2024:selectedMonthNo2";
+  const year = "frm2550qv2024:txtYearNo2";
+  const key = periodKeyOf(month);
+  s.pickRadio("frm2550qv2024:calendarNo1");
+  await s.idle();
+  const before = [s.valueOf(month), s.valueOf(year)];
+  s.edit(key, "06/2025");
+  s.blur(key);
+  await s.idle();
+  expect(s.boxMessageOf(month)).toMatch(/December/);
+  expect([s.valueOf(month), s.valueOf(year)]).toEqual(before);
+  s.edit(key, "12/2025");
+  s.blur(key);
+  await s.idle();
+  expect(s.valueOf(month)).toBe("12");
+  expect(s.boxMessageOf(month)).toBe("");
+  s.dispose();
+});
+
+test("PR3: a typed period survives a save and a reopen", async () => {
+  const target = at("1702EX", 2024, 0);
+  const s = await opened(target);
+  s.pickRadio(EX_FISCAL);
+  await s.idle();
+  s.edit(EX_PERIOD, "08/2024");
+  s.blur(EX_PERIOD);
+  await s.idle();
+  s.saveNow();
+  await s.idle();
+  s.dispose();
+  const again = await opened(target);
+  expect(again.shownOf(EX_PERIOD)).toBe("08/2024");
+  expect(again.valueOf(EX_MONTH)).toBe("08");
+  expect(again.valueOf(EX_YEAR)).toBe("24");
+  again.dispose();
+});
+
+test("PR3 R1: a reversed range is refused on the To end only, and clears when the end is fixed", async () => {
+  const s = await opened(at("1702EX", 2024, 0));
+  // An earlier test saved this return Fiscal (year-end August); the host's effectivity rule wants
+  // dates inside the taxable year, so put it back on Calendar (December) first.
+  s.pickRadio("frm1702EX:rdoPg1I1Calendar");
+  await s.idle();
+  const from = "frm1702EX:txtPg1Pt1I17EffectivityFrom";
+  const to = "frm1702EX:txtPg1Pt1I17EffectivityTo";
+  // The host wants the effectivity inside the taxable year (2024): from <= Dec 2024, to >= Dec 2024.
+  s.edit(from, "11/01/2024");
+  s.blur(from);
+  await s.idle();
+  expect(s.valueOf(from)).toBe("11/01/2024");
+  s.edit(to, "10/15/2024");
+  s.blur(to);
+  await s.idle();
+  expect(s.boxMessageOf(to)).toContain("the end date is before the start date");
+  expect(s.boxMessageOf(from)).toBe("");
+  // The draft keeps no end for the refused pick.
+  expect(s.valueOf(to)).toBe("");
+  // Fixing the end clears the sentence and lands.
+  s.edit(to, "12/15/2024");
+  s.blur(to);
+  await s.idle();
+  expect(s.boxMessageOf(to)).toBe("");
+  expect(s.valueOf(to)).toBe("12/15/2024");
+  // Reversing from the other side is refused the same way.
+  s.edit(from, "12/20/2024");
+  s.blur(from);
+  await s.idle();
+  expect(s.boxMessageOf(to)).toContain("the end date is before the start date");
+  expect(s.valueOf(from)).toBe("11/01/2024");
+  s.dispose();
+});
+
+test("PR3 R1: a locked range refuses edits on either end", async () => {
+  const s = await opened(at("2550Q", 2025, 4));
+  const from = "frm2550qv2024:RtnPeriodFromNo4";
+  const to = "frm2550qv2024:RtnPeriodToNo4";
+  expect(s.box(from).locked()).toBe(true);
+  expect(s.box(to).locked()).toBe(true);
+  const before = [s.valueOf(from), s.valueOf(to)];
+  s.edit(to, "01/01/2025");
+  s.blur(to);
+  await s.idle();
+  expect([s.valueOf(from), s.valueOf(to)]).toEqual(before);
+  s.dispose();
 });

@@ -122,3 +122,38 @@ test("desktop: the header chip counts the drawn boxes, not the raw schema count"
   const app = await open(ENTRY, { width: 1440, height: 900, platform: "macos", host: { params: { formCode: "0605", year: 2023, period: 2, mode: "return" } } });
   await chipCountsDrawn(app);
 });
+
+// PR 3: a registered month+year pair is one period control and a from/to pair one row of two date
+// controls — the underlying boxes never draw on their own. 2550Q's Item 2 period and Item 4 range
+// sit at the top of the form, so they mount without scrolling.
+const PERIOD = "frm2550qv2024:selectedMonthNo2#period";
+const RANGE_FROM = "frm2550qv2024:RtnPeriodFromNo4";
+const RANGE_TO = "frm2550qv2024:RtnPeriodToNo4";
+
+for (const width of [390, 640, 1440]) {
+  test(`PR 3: 2550Q draws its period and range as single controls at ${width} points`, async () => {
+    const app = await open(ENTRY, {
+      width, height: 900, platform: width < 600 ? "ios" : "macos",
+      host: { params: { formCode: "2550Q", year: 2025, period: 4, mode: "return" } },
+    });
+    await app.waitFor(`id:fp-${PERIOD}`);
+    // The pair's own boxes never render on their own (the year is locked: plain text beside the month).
+    expect(app.shows("id:fp-frm2550qv2024:selectedMonthNo2")).toBe(false);
+    expect(app.shows("id:fp-frm2550qv2024:txtYearNo2")).toBe(false);
+    // The range is two date controls with a plain "to" between them.
+    await app.waitFor(`id:fp-${RANGE_FROM}`);
+    expect(app.shows(`id:fp-${RANGE_TO}`)).toBe(true);
+    expect(app.texts()).toContain("to");
+  });
+}
+
+test("PR 3: phone period field opens its month sheet and a pick lands", async () => {
+  const app = await open(ENTRY, { host: { params: { formCode: "2550Q", year: 2025, period: 4, mode: "return" } } });
+  await app.waitFor(`id:fp-${PERIOD}`);
+  // Calendar basis holds the month at December; the month picker still opens on the held year.
+  const cal = "frm2550qv2024:selectedMonthNo2#period-calendar";
+  await app.press(`id:${cal}`);
+  await app.waitFor(`id:${cal}-m12`);
+  await app.press(`id:${cal}-m12`);
+  await app.waitFor(`id:${cal}-sheet`, { state: "gone" });
+});

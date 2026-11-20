@@ -686,8 +686,26 @@ pub(super) fn mark_periods(form: &mut Value, code: &str) {
             })
             .map(|range| range.ends)
             .collect();
+        // The registry's two_digit pairs, by year key: the page writes the
+        // box's own two-digit form without guessing from labels.
+        let two_digit: Vec<&str> = ONE_PERIODS
+            .iter()
+            .filter(|p| {
+                p.form == code
+                    && p.two_digit
+                    && keys.contains(&p.keys[0])
+                    && keys.contains(&p.keys[1])
+            })
+            .map(|p| p.keys[1])
+            .collect();
+        // All reads of `f` are done; write the marks now.
+        drop(fields);
+        drop(keys);
         if !periods.is_empty() {
             item["one_periods"] = serde_json::json!(periods);
+        }
+        if !two_digit.is_empty() {
+            item["one_period_two_digit"] = serde_json::json!(two_digit);
         }
         if !ranges.is_empty() {
             item["date_ranges"] = serde_json::json!(ranges);
