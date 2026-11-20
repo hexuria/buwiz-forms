@@ -7,7 +7,7 @@ import { app, store } from "../../shell";
 import { BREAK, SIZE } from "../../theme/tokens";
 import { AppButton, Code, PinCells, Text, TOUCH } from "../../ui";
 import { NewTaxpayerPage } from "../taxpayer";
-import { Actions, AuthCard, ChoiceTile, ErrorLine, Heading, Labelled } from "./parts";
+import { Actions, AuthCard, ChoiceTile, deviceCopy, ErrorLine, Heading, Labelled } from "./parts";
 import { auth } from "./state";
 
 /** The choice, the help desk's PIN, or its recovery key: the step app.setup() names. */
@@ -30,7 +30,7 @@ export function Setup() {
 function Choose() {
   return (
     <AuthCard testID="setup-card">
-      <Heading icon="users" title="Who will use eBIRForms on this device?" line="This decides who the admin is. Nobody can lock the others out." />
+      <Heading icon="users" title={deviceCopy("Who will use eBIRForms on this computer?")} line="This decides who the admin is. Nobody can lock the others out." />
       <ChoiceTile
         testID="setup-solo"
         icon="user"

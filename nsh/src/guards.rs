@@ -168,9 +168,9 @@ fn relay_target(
         }
     };
     let host = host.trim_start_matches('[').trim_end_matches(']');
-    let host = if host.eq_ignore_ascii_case("localhost") { "127.0.0.1" } else { host };
+    let hosts: &[&str] = if host.eq_ignore_ascii_case("localhost") { &["127.0.0.1", "::1"] } else { &[host] };
     Some(match port {
-        Some(port) if listening(host, port) && healthy(host, port) => Ok(url),
+        Some(port) if hosts.iter().any(|host| listening(host, port) && healthy(host, port)) => Ok(url),
         _ => Err(format!(
             "The mock relay at {url} is not listening or /v1/health did not identify a mock; the submission worker was not started."
         )),
@@ -266,7 +266,11 @@ pub fn account_home() -> Option<PathBuf> {
     {
         std::env::var_os("HOME").map(PathBuf::from).filter(|home| home.is_absolute())
     }
-    #[cfg(all(unix, not(target_os = "ios")))]
+    #[cfg(target_os = "android")]
+    {
+        Some(bir_core::platform::data_dir())
+    }
+    #[cfg(all(unix, not(any(target_os = "ios", target_os = "android"))))]
     {
         use std::ffi::{CStr, OsStr};
         use std::os::unix::ffi::OsStrExt;
@@ -781,6 +785,55 @@ mod tests {
             assert_eq!(mock_health("127.0.0.1", port), expected);
             server.join().unwrap();
         }
+    }
+
+    fn localhost_listener(host: &str) {
+        let listener = match std::net::TcpListener::bind((host, 0)) {
+            Ok(listener) => listener,
+            Err(error) if host == "::1" => {
+                eprintln!("IPv6 loopback is unavailable: {error}");
+                return;
+            }
+            Err(error) => panic!("IPv4 loopback is unavailable: {error}"),
+        };
+        let url = format!("http://localhost:{}", listener.local_addr().unwrap().port());
+        let server = std::thread::spawn(move || {
+            // The port check connects without sending; the health check sends a request.
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                let mut request = [0; 1024];
+                if stream.read(&mut request).unwrap() > 0 {
+                    let body = r#"{"ok":true,"mock":true}"#;
+                    write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+            }
+        });
+        sending_env(&[("BIR_RELAY_URL", &url)], || {
+            assert_eq!(relay_target(&port_is_listening, &mock_health), Some(Ok(url.clone())));
+        });
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn localhost_accepts_an_ipv4_only_relay() {
+        localhost_listener("127.0.0.1");
+    }
+
+    #[test]
+    fn localhost_accepts_an_ipv6_only_relay() {
+        localhost_listener("::1");
+    }
+
+    #[test]
+    fn localhost_checks_both_loopback_families_when_the_first_is_not_a_mock() {
+        sending_env(&[("BIR_RELAY_URL", "http://localhost:8787")], || {
+            let healthy = |host: &str, _: u16| {
+                assert!(matches!(host, "127.0.0.1" | "::1"));
+                host == "::1"
+            };
+            assert!(matches!(relay_target(&|_, _| true, &healthy), Some(Ok(_))));
+        });
     }
 
     #[test]

@@ -299,10 +299,7 @@ async fn serve(mut stream: TcpStream, config: &RelayConfig) -> Result<(), String
             serde_json::json!({ "status": "rejected", "error": "no such route" }),
         ),
     };
-    println!(
-        "[mock-relay] {} {} -> {status} {body}",
-        request.method, request.path
-    );
+    println!("[mock-relay] HTTP {status} ({} bytes)", request.body.len());
     respond(&mut stream, status, body).await
 }
 

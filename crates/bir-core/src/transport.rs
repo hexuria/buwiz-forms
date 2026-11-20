@@ -260,6 +260,7 @@ pub fn loopback_relay_url(raw: &str) -> Result<String, TransportError> {
 /// a 202 that does not say accepted) leaves the outcome unknown: [`TransportError::Http`].
 async fn relay_store(
     url: &str,
+    form_type: &str,
     folder: &str,
     filename: &str,
     payload: &[u8],
@@ -269,9 +270,7 @@ async fn relay_store(
     let digest = hex::encode(Sha256::digest(payload));
     info!(
         source = "relay",
-        relay = url,
-        folder,
-        filename = name,
+        form = form_type,
         payload_len = payload.len(),
         "Relay PUT"
     );
@@ -299,25 +298,24 @@ async fn relay_store(
     let status = response.status();
     let body: serde_json::Value =
         serde_json::from_slice(&response.bytes().await?).unwrap_or_default();
-    let said = || {
-        body["error"]
-            .as_str()
-            .map_or_else(|| status.to_string(), |error| format!("{status}: {error}"))
-    };
     if matches!(status.as_u16(), 408 | 429 | 503) {
-        warn!(%status, ?body, "relay is unavailable");
-        return Err(TransportError::RelayUnavailable(said()));
+        warn!(%status, "relay is unavailable");
+        return Err(TransportError::RelayUnavailable(status.to_string()));
     }
     if status.is_client_error() {
-        warn!(%status, ?body, "relay refused the submission");
-        return Err(TransportError::RelayRefused(said()));
+        warn!(%status, "relay refused the submission");
+        return Err(TransportError::RelayRefused(status.to_string()));
     }
     if status != reqwest::StatusCode::ACCEPTED || body["status"] != "accepted" {
         return Err(TransportError::Http(format!(
-            "relay answered {status}: {body}"
+            "relay answered {status} without accepting the submission"
         )));
     }
-    info!(receipt = %body["receipt_id"], "Relay accepted the submission");
+    info!(
+        form = form_type,
+        payload_len = payload.len(),
+        "Relay accepted the submission"
+    );
     Ok(())
 }
 
@@ -501,8 +499,7 @@ pub async fn resolve_sftp_endpoint(
         let folder = env_nonempty("BIR_SFTP_FOLDER").unwrap_or_else(|| form_type.to_string());
         info!(
             source = "relay",
-            relay = url.as_str(),
-            folder = folder.as_str(),
+            form = form_type,
             "Using the local mock relay"
         );
         return Ok(ResolvedSftpTarget::Relay { url, folder });
@@ -815,8 +812,8 @@ pub(crate) struct IafSftpSession {
     remote_folder: String,
     source: SftpEndpointSource,
     dry_run_puts: Option<std::sync::Arc<std::sync::Mutex<Vec<DryRunPut>>>>,
-    /// The relay origin when `source` is [`SftpEndpointSource::Relay`].
-    relay: Option<String>,
+    /// The relay origin and form code when `source` is [`SftpEndpointSource::Relay`].
+    relay: Option<(String, String)>,
 }
 
 impl IafSftpSession {
@@ -824,8 +821,8 @@ impl IafSftpSession {
         self.source
     }
     pub async fn store(mut self, filename: &str, payload: &[u8]) -> Result<(), TransportError> {
-        if let Some(url) = &self.relay {
-            return relay_store(url, &self.remote_folder, filename, payload).await;
+        if let Some((url, form_type)) = &self.relay {
+            return relay_store(url, form_type, &self.remote_folder, filename, payload).await;
         }
         let path = remote_path(&self.remote_folder, filename);
         if self.source.is_dry_run() {
@@ -938,7 +935,7 @@ pub(crate) async fn open_iaf_session(
         }
         ResolvedSftpTarget::Relay { url, folder } => {
             relay_health(&url).await?;
-            Ok(relay_session(url, folder))
+            Ok(relay_session(url, folder, form_type))
         }
     }
 }
@@ -966,13 +963,13 @@ async fn relay_health(url: &str) -> Result<(), TransportError> {
     Ok(())
 }
 
-fn relay_session(url: String, folder: String) -> IafSftpSession {
+fn relay_session(url: String, folder: String, form_type: &str) -> IafSftpSession {
     IafSftpSession {
         handle: None,
         remote_folder: folder,
         source: SftpEndpointSource::Relay,
         dry_run_puts: None,
-        relay: Some(url),
+        relay: Some((url, form_type.to_owned())),
     }
 }
 
@@ -1109,7 +1106,9 @@ pub async fn submit_sftp_target(
             session.store(filename, payload).await
         }
         ResolvedSftpTarget::Relay { url, folder } => {
-            relay_session(url, folder).store(filename, payload).await
+            relay_session(url, folder, form_type)
+                .store(filename, payload)
+                .await
         }
         ResolvedSftpTarget::Live { endpoint, source } => {
             let session = open_iaf_session_with_source(form_type, endpoint, source).await?;
@@ -1162,7 +1161,14 @@ mod tests {
             .await
             .map(|_| ())
         } else {
-            relay_store(&url, "1601C", "test.xml", b"").await
+            relay_store(
+                &url,
+                "1601C",
+                "1601C",
+                "000123453-1601C-2026#juana@example.com#.xml",
+                b"",
+            )
+            .await
         };
         server.join().unwrap();
         result
@@ -1189,6 +1195,64 @@ mod tests {
             http_reply(202, "", false).await,
             Err(TransportError::Http(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn relay_logs_form_and_length_without_iaf_names_or_reflected_pii() {
+        use std::io::Write;
+        use std::sync::Mutex;
+        use tracing::instrument::WithSubscriber;
+
+        #[derive(Clone)]
+        struct Capture(Arc<Mutex<Vec<u8>>>);
+        impl Write for Capture {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let captured = Capture(Arc::new(Mutex::new(Vec::new())));
+        let writer = captured.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::INFO)
+            .with_writer(move || writer.clone())
+            .finish();
+        async {
+            assert!(
+                http_reply(
+                    202,
+                    r#"{"status":"accepted","receipt_id":"juana@example.com"}"#,
+                    false
+                )
+                .await
+                .is_ok()
+            );
+            for status in [400, 408, 429, 503, 502, 202] {
+                let error = http_reply(
+                    status,
+                    r#"{"error":"000123453-1601C-202601#juana@example.com#.xml"}"#,
+                    false,
+                )
+                .await
+                .unwrap_err();
+                warn!(%error, "the worker can log the returned error safely");
+            }
+        }
+        .with_subscriber(subscriber)
+        .await;
+        let logs = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+        assert!(
+            logs.contains("1601C") && logs.contains("payload_len=0"),
+            "{logs}"
+        );
+        for private in ["000123453", "juana@example.com", ".xml"] {
+            assert!(!logs.contains(private), "{logs}");
+        }
     }
 
     #[tokio::test]

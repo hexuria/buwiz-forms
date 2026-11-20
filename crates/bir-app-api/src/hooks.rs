@@ -55,9 +55,9 @@ pub enum PathChoice {
 /// database slot and outside any UI borrow.
 pub type PathAnswer = Box<dyn FnOnce(PathChoice) + 'static>;
 
-/// A platform-owned download, answering with its user-visible destination.
+/// A platform-owned download, answering with its user-visible destination, or `None` when cancelled.
 pub type DownloadExport =
-    std::pin::Pin<Box<dyn std::future::Future<Output = Result<String, String>> + Send>>;
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Option<String>, String>> + Send>>;
 
 /// Writes an authorized archive synchronously on the database's owning thread.
 pub type ArchiveWriter<'a> = dyn FnMut(&Path) -> Result<(), String> + 'a;

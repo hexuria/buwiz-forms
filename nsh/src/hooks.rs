@@ -125,7 +125,7 @@ impl Hooks for NshHooks {
         Some(Box::pin(async move {
             let staged = staged?;
             #[cfg(target_os = "android")]
-            return crate::export_android::save(staged, file_name).await;
+            return crate::export_android::save(staged, file_name).await.map(Some);
             #[cfg(target_os = "ios")]
             return crate::export_ios::save(staged, file_name).await;
         }))

@@ -4,7 +4,7 @@ import { bir } from "../../bir";
 import { errorText } from "../../lib/errors";
 import { THEME_OPTIONS, type ThemeOption } from "../../lib/settings_model";
 import { app, store, toast } from "../../shell";
-import { Card, Dropdown, SettingRow, Switch } from "../../ui";
+import { Card, deviceCopy, Dropdown, SettingRow, Switch } from "../../ui";
 import { Labeled } from "./parts";
 
 /** What the person chose for automatic updates until the poll reports the host's own answer. */
@@ -36,7 +36,7 @@ export function GeneralSection(props: { rows: string[] }) {
       <Labeled label="Appearance">
         <Card testID="settings-appearance">
           <If when={has("theme")}>
-            <SettingRow testID="settings-theme-row" title="Theme" hint="System follows this device">
+            <SettingRow testID="settings-theme-row" title="Theme" hint={deviceCopy("System follows this computer")}>
               <Dropdown
                 testID="settings-theme"
                 label="Theme"

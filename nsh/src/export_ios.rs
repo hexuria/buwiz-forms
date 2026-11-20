@@ -16,7 +16,7 @@ use crate::export_archive::Archive;
 
 /// Copies the staged archive to `name` in the app's temporary folder (the sheet copies it from there, so the user
 /// sees the real file name), shows the export sheet and resolves once the user saved or dismissed it.
-pub(crate) async fn save(archive: Archive, name: String) -> Result<String, String> {
+pub(crate) async fn save(archive: Archive, name: String) -> Result<Option<String>, String> {
     if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." {
         return Err("The export has an invalid archive name.".into());
     }
@@ -45,8 +45,8 @@ pub(crate) async fn save(archive: Archive, name: String) -> Result<String, Strin
     // The sheet copies the file before it answers (export as a copy), so the staged copy can go now.
     let _ = std::fs::remove_file(&target);
     match saved? {
-        true => Ok(format!("Files: {name}")),
-        false => Err("Export cancelled: nothing was saved.".into()),
+        true => Ok(Some(format!("Files: {name}"))),
+        false => Ok(None),
     }
 }
 

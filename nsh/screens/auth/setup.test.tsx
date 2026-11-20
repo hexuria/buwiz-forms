@@ -37,6 +37,7 @@ test("phone: Just me types the first taxpayer with no chrome; Cancel goes back; 
 test("desktop: I help other taxpayers asks for 4 digits, shows the recovery key once, then signs the admin in", async () => {
   const app = await open(ENTRY, { ...WIDE, host: { params: { readout: true } } });
   await app.waitFor("id:setup-card");
+  expect(app.texts()).toContain("Who will use eBIRForms on this computer?");
   await app.press("id:setup-helpdesk");
   await app.waitFor("id:setup-pin-card");
   expect(app.texts()).toContain("Choose the admin PIN");
