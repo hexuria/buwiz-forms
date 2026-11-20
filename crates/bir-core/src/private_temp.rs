@@ -72,9 +72,13 @@ fn root() -> PathBuf {
         return root;
     }
     #[cfg(target_os = "android")]
-    { crate::platform::temp_dir() }
+    {
+        crate::platform::temp_dir()
+    }
     #[cfg(not(target_os = "android"))]
-    { std::env::temp_dir() }
+    {
+        std::env::temp_dir()
+    }
 }
 
 /// A folder only this user can open, removed with its contents on drop.

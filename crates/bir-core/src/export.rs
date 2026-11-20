@@ -554,7 +554,8 @@ mod tests {
         let temp = data_dir.join("tmp");
         fs::create_dir_all(&temp).unwrap();
         let db = Database::open(data_dir.join("live.db")).expect("private database");
-        db.set_setting("export_probe", "private Android backup").unwrap();
+        db.set_setting("export_probe", "private Android backup")
+            .unwrap();
         let archive = if fail_zip {
             directory.path().join("missing").join("backup.zip")
         } else {
@@ -581,7 +582,10 @@ mod tests {
             assert_eq!(result.is_err(), fail_zip);
             let (folder, copy) = staged.expect("the ZIP step saw a populated private stage");
             assert!(!copy.exists(), "plaintext copy survived the export");
-            assert!(!folder.exists(), "private staging folder survived the export");
+            assert!(
+                !folder.exists(),
+                "private staging folder survived the export"
+            );
             assert!(fs::read_dir(&temp).unwrap().next().is_none());
 
             let result = export_database_zip(&db, &archive);
