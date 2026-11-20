@@ -4,11 +4,9 @@
 import type { JSX } from "nsh";
 import { Scroll, View } from "nsh";
 import { Button } from "nsh/base";
-import { Icon, Text, TOUCH, type IconName } from "../../ui";
+import { deviceCopy, Icon, Text, TOUCH, type IconName } from "../../ui";
 
-export function deviceCopy(text: string): string {
-  return TOUCH ? text.replace(/\bthis computer\b/g, "this device") : text;
-}
+export { deviceCopy };
 
 /** The 400-wide card centred in the window (the full width less 16 on each side when narrower), scrolling when short. */
 export function AuthCard(props: { testID: string; shadow?: boolean; children?: JSX.Element }) {

@@ -22,7 +22,7 @@ import { POLL, startPolls } from "../lib/poll";
 import { addRecent, bumpRecent, loadRecent, recentEntry, recentOpenOptions, type RecentEntry, type RecentInput } from "../lib/recent";
 import type { FormTarget } from "../screens/form/FormPage";
 import { BREAK } from "../theme/tokens";
-import { dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
+import { deviceCopy, dismissToast, ICONS, toast as kitToast, type IconName } from "../ui";
 import { eventToast, takeFresh } from "./events";
 import { isViewName, ROUTES, type Route, type ViewName, type ViewParams } from "./routes";
 import { allowedStart, parseStart, parseStartForm } from "./start";
@@ -1229,7 +1229,7 @@ function logOut(): void {
 
 /** Computer setup changed (Settings): the admin moved, so the old session ends and nobody keeps their place. */
 function signOutAfterSetupChange(): void {
-  endSession("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN.");
+  endSession(deviceCopy("Computer setup changed. Sign in as the admin with the new owner's PIN or the help desk PIN."));
   lockedFrom = null;
 }
 

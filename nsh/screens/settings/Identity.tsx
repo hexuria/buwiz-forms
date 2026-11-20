@@ -3,12 +3,12 @@
 import { View } from "nsh";
 import { accountSummary } from "../../lib/settings_model";
 import { app, go } from "../../shell";
-import { AppButton, Avatar, Card, IconButton, Line, SettingRow } from "../../ui";
+import { AppButton, Avatar, Card, deviceCopy, IconButton, Line, SettingRow } from "../../ui";
 
 /** The account card's words (old accountSummary): read inside JSX, so it follows the session, the taxpayers and the branch. */
 function summary() {
   const session = app.session();
-  return accountSummary({
+  const card = accountSummary({
     isAdmin: app.isAdmin(),
     isHelpdesk: app.isHelpdesk(),
     adminRoot: app.authState().admin_root,
@@ -18,6 +18,7 @@ function summary() {
     branch: app.branch(),
     canAddTaxpayer: app.canAddTaxpayer(),
   });
+  return { ...card, detail: deviceCopy(card.detail) };
 }
 
 /** A value with a pencil: the profile editor opens on that section. */
