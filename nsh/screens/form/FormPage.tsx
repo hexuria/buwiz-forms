@@ -853,6 +853,22 @@ function Dialogs(props: { s: FormSession }) {
     const v = o();
     return v?.kind === "sample-period" ? v : null;
   };
+  const profileAsk = () => {
+    const v = o();
+    return v?.kind === "profile-ask" ? v.ask : null;
+  };
+  // Under 600 points the ask is a bottom sheet; from there up, a dialog (Q1 P1b).
+  const phone = () => windowSize().width < BREAK.phone;
+  const askTitle = () => {
+    const a = profileAsk();
+    return a ? `Save ${a.label.toLowerCase()} to the tax profile?` : "";
+  };
+  const askBody = () => {
+    const a = profileAsk();
+    if (!a) return "";
+    const who = a.personal ? a.name : `${a.name} for ${a.year}`;
+    return `“${a.value}” is saved for ${who}. Later returns use it. You can change it later under Profile.`;
+  };
   const fast = signal(false);
   // The period dialog's boxes and quarter, filled when it opens.
   const parts = signal<Record<string, string>>({});
@@ -965,6 +981,40 @@ function Dialogs(props: { s: FormSession }) {
           )}
         </If>
       </Dialog>
+      {/* Q1 P1b: "Save to profile?" — a dialog from 600 points up, a bottom sheet under it. Escape, the
+          scrim and a swipe-down are no answer: nothing saved, nothing remembered (asks again on a changed leave). */}
+      <Dialog testID="profile-ask" width={420} open={kind("profile-ask") && !phone()} onOpenChange={(open) => !open && s.dismissProfileAsk()}>
+        <If when={profileAsk()}>
+          {() => (
+            <View class="gap-3 p-5">
+              <View class="gap-0.5">
+                <Text variant="title">{askTitle()}</Text>
+                <Text variant="meta" tone="fg2">{askBody()}</Text>
+              </View>
+              <View class="flex-row justify-end gap-2">
+                <AppButton testID="profile-ask-only" label="Only this return" onPress={() => s.profileAskOnly()} />
+                <AppButton testID="profile-ask-save" variant="primary" label="Save to profile" onPress={() => s.profileAskSave()} />
+              </View>
+            </View>
+          )}
+        </If>
+      </Dialog>
+      <Sheet testID="profile-ask-sheet" open={kind("profile-ask") && phone()} onOpenChange={(open) => !open && s.dismissProfileAsk()}>
+        <If when={profileAsk()}>
+          {() => (
+            <View class="gap-3">
+              <View class="gap-0.5">
+                <Text variant="title">{askTitle()}</Text>
+                <Text variant="meta" tone="fg2">{askBody()}</Text>
+              </View>
+              <View class="gap-2">
+                <AppButton testID="profile-ask-save" variant="primary" block label="Save to profile" onPress={() => s.profileAskSave()} />
+                <AppButton testID="profile-ask-only" block label="Only this return" onPress={() => s.profileAskOnly()} />
+              </View>
+            </View>
+          )}
+        </If>
+      </Sheet>
     </>
   );
 }

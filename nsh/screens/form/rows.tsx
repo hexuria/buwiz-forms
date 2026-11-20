@@ -3,7 +3,7 @@
 // signal and its boxes' signals only, so an edit re-runs the rows it changed and nothing else.
 import type { Accessor, JSX, Signal, ViewRef } from "nsh";
 import { signal, untracked, View } from "nsh";
-import { AppButton, CalendarButton, Code, DateField, DateTouchField, Icon, type IconName, ListRow, Switch, Text, TextField, Tooltip } from "../../ui";
+import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
 import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, type OneDate } from "./schema";
@@ -287,100 +287,94 @@ function Mark(props: { icon: IconName; tip: string; id: string }) {
   );
 }
 
-/**
- * A fact card's choice. Wide: the kit's button. Narrow: a full-width pressable row whose label wraps, so a long choice
- * ("Mixed income (compensation and business)") stays inside the card at 390 points (the kit's button keeps one line).
- */
-function AskChoice(props: { testID: string; label: string; chosen: boolean; narrow: boolean; onPress: () => void }) {
-  return (
-    <If
-      when={props.narrow}
-      else={
-        <AppButton
-          testID={props.testID}
-          label={props.label}
-          selected={props.chosen}
-          accessibilityLabel={props.chosen ? `${props.label}, chosen` : props.label}
-          onPress={props.onPress}
-        />
-      }
-    >
-      <View
-        class="w-full overflow-hidden rounded-(--radius-ctl) border"
-        classList={{ "border-accent-blue bg-selected": props.chosen, "border-border-strong bg-card": !props.chosen }}
-      >
-        <ListRow testID={props.testID} accessibilityLabel={props.chosen ? `${props.label}, chosen` : props.label} onPress={props.onPress}>
-          <Text variant="control" class="min-w-0 flex-1">{props.label}</Text>
-          <If when={props.chosen}>
-            <Icon name="check" size={14} tone="fg" />
-          </If>
-        </ListRow>
-      </View>
-    </If>
-  );
-}
-
-/** A tax fact the profile has not set, asked where the form uses it. */
+/** A tax fact the profile has not set, asked where the form uses it (F2: inline choices, one status chip). */
 function FactCard(props: { s: FormSession; ask: Accessor<AskCard>; narrow: Accessor<boolean> }) {
   // Drawn again when its row comes back into view (the rows are recycled): it starts from what was typed.
   const text = signal(untracked(() => props.s.askTextOf(props.ask().fact)));
   const fact = () => props.ask().fact;
+  // A choice's value is opaque (a string, a number, a boolean): the pick is its JSON text.
+  const pickOf = (v: string) => props.ask().choices.find((c) => JSON.stringify(c.value) === v)?.value;
+  const commit = (v: string) => {
+    const c = pickOf(v);
+    if (c !== undefined) props.s.pickAsk(fact(), c);
+  };
+  const segments = () => props.ask().choices.map((c) => ({ value: JSON.stringify(c.value), label: c.short || c.label }));
   return (
     <View testID={`fp-ask-${fact()}`} class="mt-2 gap-1 rounded-(--radius-row) border border-border-strong bg-card px-3 py-2.5 shadow-xs">
-      <Text variant="control" class="font-semibold">{props.ask().label}</Text>
-      <Text variant="meta" tone="fg2">{props.ask().note}</Text>
-      <View class="mt-2 flex-row flex-wrap gap-2">
+      <View class="flex-row items-center justify-between gap-2">
+        <Text variant="control" class="min-w-0 flex-1 font-semibold">{props.ask().label}</Text>
+        <Chip
+          testID={`fp-ask-${fact()}-chip`}
+          label={props.ask().done ? "Saved to profile" : "Missing in tax profile"}
+          tone={props.ask().done ? "success" : "warning"}
+        />
+      </View>
+      <If when={props.ask().control !== "choice" || props.ask().pick === null}>
+        <Text variant="meta" tone="fg2">{props.ask().note}</Text>
+      </If>
+      <View class="mt-2">
         <If
           when={props.ask().control === "choice"}
           else={
-            <If when={props.ask().control === "date"} else={
-              <TextField
-                testID={`fp-ask-${fact()}-input`}
-                accessibilityLabel={props.ask().label}
-                value={text()}
-                width={props.narrow() ? undefined : 320}
-                onChange={(v) => {
-                  text.set(v);
-                  props.s.typeAsk(fact(), v);
-                }}
-              />
-            }>
-              <DateField
-                testID={`fp-ask-${fact()}-input`}
-                accessibilityLabel={props.ask().label}
-                value={text()}
-                width={props.narrow() ? undefined : controlWidth({ t: "date" }, 320)}
-                onChange={(v) => {
-                  text.set(v);
-                  props.s.typeAsk(fact(), v);
-                }}
-              />
-            </If>
+            <View class="flex-row flex-wrap items-end gap-2">
+              <If when={props.ask().control === "date"} else={
+                <TextField
+                  testID={`fp-ask-${fact()}-input`}
+                  accessibilityLabel={props.ask().label}
+                  value={text()}
+                  width={props.narrow() ? undefined : 320}
+                  onChange={(v) => {
+                    text.set(v);
+                    props.s.typeAsk(fact(), v);
+                  }}
+                />
+              }>
+                <DateField
+                  testID={`fp-ask-${fact()}-input`}
+                  accessibilityLabel={props.ask().label}
+                  value={text()}
+                  width={props.narrow() ? undefined : controlWidth({ t: "date" }, 320)}
+                  onChange={(v) => {
+                    text.set(v);
+                    props.s.typeAsk(fact(), v);
+                  }}
+                />
+              </If>
+            </View>
           }
         >
-          <Each of={props.ask().choices}>
-            {(choice, n) => (
-              <AskChoice
-                testID={`fp-ask-${fact()}-${n()}`}
-                label={choice().label}
-                chosen={props.ask().pick === JSON.stringify(choice().value)}
-                narrow={props.narrow()}
-                onPress={() => props.s.pickAsk(fact(), choice().value)}
-              />
-            )}
-          </Each>
+          <If when={props.ask().choices.length > 4} else={
+            <Segmented
+              testID={`fp-ask-${fact()}-choices`}
+              label={props.ask().label}
+              options={segments()}
+              value={props.ask().pick ?? ""}
+              wrap={props.narrow()}
+              onChange={commit}
+            />
+          }>
+            <Dropdown
+              testID={`fp-ask-${fact()}-choices`}
+              label={props.ask().label}
+              options={props.ask().choices.map((c) => ({ value: JSON.stringify(c.value), label: c.label }))}
+              value={props.ask().pick}
+              width={props.narrow() ? undefined : 320}
+              onChange={commit}
+            />
+          </If>
         </If>
       </View>
-      <View class="mt-3 flex-row justify-end">
-        <AppButton
-          testID={`fp-ask-${fact()}-save`}
-          variant="primary"
-          size="sm"
-          label="Save"
-          disabled={props.ask().control === "choice" && props.ask().pick === null}
-          onPress={() => props.s.saveAsk(fact())}
-        />
-      </View>
+      <If when={props.ask().control !== "choice"}>
+        <View class="mt-3 flex-row justify-end">
+          <AppButton
+            testID={`fp-ask-${fact()}-save`}
+            variant="primary"
+            size="sm"
+            label="Save"
+            onPress={() => props.s.saveAsk(fact())}
+          />
+        </View>
+      </If>
     </View>
   );
 }
@@ -541,14 +535,11 @@ export function ItemRow(props: RowProps) {
           )}
         </Each>
         <Controls s={s} id={id} it={it} narrow={props.narrow} info={info} describedBy={describedBy} errorDescription={errorDescription} />
-        <If when={info().toProfile}>
-          {(tp) => (
-            <View testID={`fp-to-profile-${id}`} class="mt-2 gap-0.5">
-              <Switch testID={`fp-to-profile-switch-${id}`} label="Save to profile too" checked={tp().on} onChange={(on) => s.setToProfile(id, on)}>
-                <Text variant="meta" tone="fg2">Save to profile too</Text>
-              </Switch>
-              <Text variant="meta" tone="fg3">{tp().note}</Text>
-            </View>
+        <If when={info().profileAsk}>
+          {(pa) => (
+            <If when={pa().ok} else={<Text variant="meta" tone="fg3" testID={`fp-profile-ask-${id}`}>{pa().text}</Text>}>
+              <Saved testID={`fp-profile-ask-${id}`} text={pa().text} />
+            </If>
           )}
         </If>
         <If when={info().from}>

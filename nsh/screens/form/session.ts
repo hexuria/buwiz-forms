@@ -40,7 +40,7 @@ import { DATE_ERROR, formatIso, formatLongDate, formatMDY, isTwoDigitDate, oneDa
 import { dateRange } from "./dateRules";
 import { sameAmount } from "../../ui/mask";
 import type { BoxState, ChoiceOption, FormSchema, SchemaField, SchemaItem } from "./contract";
-import { dateParts, dateRanges, isPageNotice, isTinItem, keysOf, listedFields, oneDates, onePeriods, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type DateRange, type OneDate, type OnePeriod } from "./schema";
+import { choiceLabel, dateParts, dateRanges, isPageNotice, isTinItem, keysOf, listedFields, oneDates, onePeriods, optionOf, plainRefusal, sentWords, withoutHidden, type DateParts, type DateRange, type OneDate, type OnePeriod } from "./schema";
 import { parsePeriod, periodLong, periodText, PERIOD_ERROR, PERIOD_TWO_DIGIT, periodYear4 } from "./periodRules";
 import { hostSentence, refusalItem, refusalLabel, refusalSentence, unfixableRefusal, type RefusalContext } from "./refusals";
 
@@ -138,6 +138,8 @@ export interface AskCard {
   choices: { value: unknown; label: string; short?: string }[];
   /** The picked choice's value as JSON, or null. */
   pick: string | null;
+  /** Answered on this return already (F2): the chip reads "Saved to profile" and a re-pick saves again. */
+  done: boolean;
 }
 
 export type ElectionCard =
@@ -168,8 +170,8 @@ export interface RowInfo {
   /** Edit is offered (profile boxes the filer may open), and they are open now. */
   canEdit: boolean;
   editing: boolean;
-  /** "Save to profile too": offered, on, and its note. */
-  toProfile: { on: boolean; note: string } | null;
+  /** The "Save to profile?" answer's line under the box: saved (ok) or kept on this return only (subtle). */
+  profileAsk: { text: string; ok: boolean } | null;
   /** Edit penalties / Use the computed amounts. */
   penalty: "edit" | "computed" | null;
   /** Folded into its part's "From tax profile" group right now. */
@@ -222,11 +224,29 @@ export interface HeaderInfo {
   formErrors: string[];
 }
 
+/** The "Save to profile?" ask for one profile-backed field (Q1 P1b / Q1·a). */
+export interface ProfileAsk {
+  /** The profile field id (`profile_save`'s `field`): what `screen_form_profile_asked` remembers. */
+  field: string;
+  /** The field's label, for the title ("Save {label, lower case} …"). */
+  label: string;
+  /** The value as the box shows it, for the body. */
+  value: string;
+  /** The `profile_save` keys of this field, for `screen_form_save_to_profile`. */
+  keys: string[];
+  /** The taxpayer's name and the return's tax year, for the body. */
+  name: string;
+  year: number;
+  /** The birth date and the name are the taxpayer's, not a year's: the body names no year. */
+  personal: boolean;
+}
+
 export type Overlay =
   | null
   | { kind: "removal"; message: string }
   | { kind: "existing"; existing: ScreenFormExisting }
   | { kind: "queue-confirm"; warns: string[] }
+  | { kind: "profile-ask"; ask: ProfileAsk }
   | { kind: "sample-period"; parts: { key: string; part: ScreenFormPeriodPart["part"]; quarter: number | null; value: string }[]; error: string };
 
 // ---------------------------------------------------------------- internal state (the old page's state object)
@@ -310,7 +330,15 @@ interface St {
   factErrors: ScreenFormError[];
   profileSave: NonNullable<ScreenFormOpened["profile_save"]>;
   profileEdited: Set<string>;
-  toProfile: Set<string>;
+  /** Fields whose "Save to profile?" answer is already remembered (host's `profile_asked`, plus this session's). */
+  profileAsked: Set<string>;
+  /** The shown-value signature last asked per field: a dismissed ask re-asks only on a changed value. */
+  profileAskSeen: Record<string, string>;
+  /** rowId → the answer's line under the box ("Saved to the tax profile…" / "Kept on this return only…"). */
+  profileAskMsg: Record<string, { text: string; ok: boolean }>;
+  /** Facts answered on this session's fact cards (F2): their cards stay, marked saved. */
+  askDone: Set<ScreenFormFact>;
+  askDoneRaw: Map<ScreenFormFact, ScreenFormAsk>;
   profileChanged: string[];
   errors: ScreenFormError[];
   messages: Record<string, string>;
@@ -366,7 +394,8 @@ function freshState(target: FormTarget): St {
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], notes: [], saved: false, quiet: null, kept: {},
     autoStops: [], stopEdits: {}, stopKeys: new Set(), stoppable: new Set(), passed: new Set(), stepAt: null,
     stepFromTop: false, asks: [], askAt: new Map(), askPick: {}, askText: {}, askSavedAt: new Map(), factErrors: [],
-    profileSave: {}, profileEdited: new Set(), toProfile: new Set(), profileChanged: [], errors: [], messages: {},
+    profileSave: {}, profileEdited: new Set(), profileAsked: new Set(), profileAskSeen: {}, profileAskMsg: {},
+    askDone: new Set(), askDoneRaw: new Map(), profileChanged: [], errors: [], messages: {},
     messageKeys: {}, messageCounts: {}, rejected: {}, unfixable: new Set(), dirtyBatch: null, boxMessages: {}, formErrors: [], checkable: {}, electionAt: null, electionPick: null, electionSavedAt: null,
     profileRefreshed: false, dateErrors: {}, datesEdited: new Set(), pending: {}, chosenFrom: {}, dirty: false,
     editSeq: 0, validateSeq: 0, checking: false, removal: null, queueWarn: null, openParts: new Set([0]), current: 0,
@@ -817,6 +846,11 @@ export class FormSession {
     s.stopKeys = effectiveStops(s.autoStops, s.stopEdits);
     s.stoppable = new Set(Array.isArray(r.stoppable) ? r.stoppable : []);
     s.profileSave = r.profile_save && typeof r.profile_save === "object" ? r.profile_save : {};
+    s.profileAsked = new Set(Array.isArray(r.profile_asked) ? r.profile_asked : []);
+    s.profileAskSeen = {};
+    s.profileAskMsg = {};
+    s.askDone = new Set();
+    s.askDoneRaw = new Map();
     s.profileChanged = Array.isArray(r.profile_changed) ? r.profile_changed : [];
     this.takeAsks(r.asks);
     s.factErrors = Array.isArray(r.fact_errors) ? r.fact_errors : [];
@@ -847,7 +881,11 @@ export class FormSession {
 
   private takeAsks(asks: ScreenFormAsk[] | undefined) {
     const s = this.st;
-    s.asks = !s.sample && s.editable && Array.isArray(asks) ? asks : [];
+    const host = !s.sample && s.editable && Array.isArray(asks) ? asks : [];
+    // F2: a fact answered on this session keeps its card (marked saved) so a wrong pick can be
+    // corrected; the host no longer lists it once set, so it is re-appended from the stored ask.
+    const done = [...s.askDoneRaw.values()].filter((a) => !host.some((h) => h.fact === a.fact));
+    s.asks = [...host, ...done];
     s.askAt = new Map();
     const first = this.schema?.parts[0]?.items.length ? "0:0" : null;
     for (const ask of s.asks) {
@@ -1272,6 +1310,8 @@ export class FormSession {
     this.cancelAutosave();
     this.markUnsaved();
     this.flush();
+    // Q1 P1b: a committed choice on a profile-backed box may raise "Save to profile?".
+    this.maybeProfileAskKeys(Object.keys(edits));
   }
 
   /** The save line says "Unsaved changes" the moment something is staged (an explicit-save return keeps its reason). */
@@ -1346,6 +1386,8 @@ export class FormSession {
     if (Object.keys(s.pending).length) this.flush();
     else this.publish();
     this.syncHostCase(k);
+    // Q1 P1b: leaving a profile-backed box with a new complete value asks "Save to profile?" once.
+    this.maybeProfileAskKeys([baseKey]);
   }
 
   /**
@@ -2051,53 +2093,6 @@ export class FormSession {
     this.publish();
   }
 
-  /** "Save to profile too" on a profile item: on, the next save writes its boxes to the profile. */
-  setToProfile(id: string, on: boolean) {
-    const s = this.st;
-    for (const k of this.saveableKeys(id)) {
-      if (on) s.toProfile.add(k);
-      else s.toProfile.delete(k);
-    }
-    if (on) {
-      s.dirty = true;
-      this.scheduleAutosave();
-    }
-    this.publish();
-  }
-
-  private saveableKeys(id: string): string[] {
-    const s = this.st;
-    const it = this.items.get(id);
-    if (!it || !s.editable || s.sample) return [];
-    return (it.f || []).map((f) => f.k).filter((k) => s.profileEdit.has(k) && s.profileSave[k]);
-  }
-
-  /** After a save: the switched-on profile boxes go to the tax profile. What it says, or null. */
-  private saveToProfile(): string | null {
-    const s = this.st;
-    const keys = [...s.toProfile].filter((k) => s.profileEdited.has(k));
-    if (!keys.length) return null;
-    let r;
-    try {
-      r = bir.screen_form_save_to_profile(s.target.formCode, s.target.year, s.target.period, s.draft!, keys);
-      this.wrote("screen_form_save_to_profile");
-    } catch (e) {
-      this.toast(plainRefusal(errorText(e)), "triangle-alert");
-      return null;
-    }
-    s.draft = r.draft;
-    const before = s.values;
-    s.values = this.shown({ ...s.values, ...(r.values || {}) });
-    if (r.pools) s.poolTexts = r.pools;
-    this.syncShown(before, {});
-    for (const k of keys) {
-      s.toProfile.delete(k);
-      s.profileEdited.delete(k);
-    }
-    s.electionReady = undefined;
-    return [`Saved to the tax profile too: ${(r.saved || []).join(", ")}.`, ...(r.notes || [])].join(" ");
-  }
-
   /** "Use profile values" on a draft that differs from the profile. */
   useProfileValues() {
     const s = this.st;
@@ -2253,9 +2248,258 @@ export class FormSession {
     return s.electionReady;
   }
 
+  // ------------------------------------------------- "Save to profile?" (Q1 P1b / Q1·a)
+
+  /** The `profile_save` keys of one profile field (a fact's box keys, or a profile box's). */
+  private profileSaveKeys(field: string): string[] {
+    const s = this.st;
+    return Object.keys(s.profileSave).filter((k) => s.profileSave[k].field === field);
+  }
+
+  /** A changed profile-backed box may raise the ask only on a return the filer can still change. */
+  private askAllowed(): boolean {
+    const s = this.st;
+    return s.target.mode === "return" && s.editable && !s.sample && s.status === "Draft" && !s.amends && !!s.draft;
+  }
+
+  /** The shown-value signature of a field's boxes: a dismissed ask re-asks only on a changed value. */
+  private askSignature(keys: string[]): string {
+    const s = this.st;
+    return keys.map((k) => String(s.values[k] ?? "")).join("");
+  }
+
+  /** Whether the field's boxes now show a value that differs from the profile's. */
+  private profileDiffers(keys: string[]): boolean {
+    const s = this.st;
+    return keys.some(
+      (k) => this.normProfileVal(s.values[k]) !== this.normProfileVal(s.profileSave[k]?.profile),
+    );
+  }
+
+  private normProfileVal(v: unknown): string {
+    return String(v ?? "").replace(/[,\s₱]/g, "").trim().toLowerCase();
+  }
+
+  /** After a box commit (choose) or a blur that flushed: ask once per field on a changed accepted value. */
+  private maybeProfileAskKeys(keys: string[]) {
+    const s = this.st;
+    if (!this.askAllowed()) return;
+    const fields = new Set<string>();
+    for (const k of keys) {
+      const e = s.profileSave[k];
+      if (e) fields.add(e.field);
+    }
+    for (const field of fields) this.maybeProfileAsk(field);
+  }
+
+  private maybeProfileAsk(field: string) {
+    const s = this.st;
+    if (s.profileAsked.has(field)) return;
+    if (s.overlay?.kind === "profile-ask") return;
+    const keys = this.profileSaveKeys(field);
+    if (!keys.length) return;
+    const ask = this.profileAskFor(field, keys);
+    if (!ask) return;
+    const sig = this.askSignature(ask.keys);
+    if (s.profileAskSeen[field] === sig) return;
+    s.profileAskSeen[field] = sig;
+    s.overlay = { kind: "profile-ask", ask };
+    this.publish();
+  }
+
+  /** The ask for one field, or null when its boxes do not hold a new complete accepted value. */
+  private profileAskFor(field: string, keys: string[]): ProfileAsk | null {
+    const s = this.st;
+    const entry = s.profileSave[keys[0]];
+    if (!entry) return null;
+    const name = this.taxpayerName();
+    const year = this.taxYear();
+    const personal = field === "birth_date" || field === "name";
+    const radio = keys.every((k) => this.kindOf.get(k) === "radio" || this.kindOf.get(k) === "chk");
+    if (radio) return this.profileAskRadio(field, keys, entry.label, name, year, personal);
+    const date = this.profileDateParts(keys);
+    if (date) return this.profileAskDate(field, keys, entry.label, date, name, year, personal);
+    return this.profileAskValue(field, keys, entry.label, name, year, personal);
+  }
+
+  /** A radio/select card's field: the pick the filer made this session, when it differs from the profile's. */
+  private profileAskRadio(
+    field: string,
+    keys: string[],
+    label: string,
+    name: string,
+    year: number,
+    personal: boolean,
+  ): ProfileAsk | null {
+    const s = this.st;
+    const picked = keys.filter((k) => String(s.values[k] ?? "") === "true" && s.typed.has(k));
+    if (!picked.length) return null;
+    const k = picked[picked.length - 1];
+    if (keys.some((x) => s.rejected[x] !== undefined || s.unfixable.has(x))) return null;
+    // The profile already shows this pick: nothing new to save.
+    if (String(s.profileSave[k]?.profile ?? "") === "true") return null;
+    const f = this.fieldOf.get(k);
+    const value = (f && choiceLabel(f)) || k;
+    if (!value.trim()) return null;
+    return { field, label, value, keys, name, year, personal };
+  }
+
+  /** A split or one-date field's month/day/year boxes as a date, when the keys form one. */
+  private profileDateParts(keys: string[]): DateParts | null {
+    const byItem = new Map<string, string[]>();
+    for (const k of keys) {
+      const id = this.keyIndex.get(k);
+      if (!id) continue;
+      const arr = byItem.get(id);
+      if (arr) arr.push(k);
+      else byItem.set(id, [k]);
+    }
+    for (const [id, ks] of byItem) {
+      const it = this.items.get(id);
+      if (!it) continue;
+      const d = dateParts(it.f || []);
+      if (!d) continue;
+      const partKeys = [d.month.k, d.day?.k, d.year.k].filter((x): x is string => Boolean(x));
+      if (partKeys.length > 0 && partKeys.every((pk) => keys.includes(pk))) return d;
+    }
+    return null;
+  }
+
+  /** A date field: every part filled (never half-typed), accepted, and different from the profile. */
+  private profileAskDate(
+    field: string,
+    keys: string[],
+    label: string,
+    date: DateParts,
+    name: string,
+    year: number,
+    personal: boolean,
+  ): ProfileAsk | null {
+    const s = this.st;
+    const partKeys = [date.month.k, date.day?.k, date.year.k].filter((x): x is string => Boolean(x));
+    if (partKeys.some((k) => this.isShut(k))) return null;
+    if (!partKeys.every((k) => String(s.values[k] ?? "").trim())) return null;
+    if (partKeys.some((k) => s.rejected[k] !== undefined || s.unfixable.has(k))) return null;
+    if (!partKeys.some((k) => s.typed.has(k))) return null;
+    if (!this.profileDiffers(partKeys)) return null;
+    const value = shownDate(oneDateText(s.values, date));
+    if (!value.trim()) return null;
+    return { field, label, value, keys, name, year, personal };
+  }
+
+  /** A text/money/select field: a complete accepted non-empty value that differs from the profile. */
+  private profileAskValue(
+    field: string,
+    keys: string[],
+    label: string,
+    name: string,
+    year: number,
+    personal: boolean,
+  ): ProfileAsk | null {
+    const s = this.st;
+    const primary = keys[0];
+    if (keys.some((k) => this.isShut(k))) return null;
+    if (keys.some((k) => s.rejected[k] !== undefined || s.unfixable.has(k))) return null;
+    if (!keys.some((k) => s.typed.has(k))) return null;
+    if (!this.profileDiffers(keys)) return null;
+    const value = keys.map((k) => this.shownText(k)).map((t) => t.trim()).filter(Boolean).join(", ");
+    if (!value || !this.shownText(primary).trim()) return null;
+    return { field, label, value, keys, name, year, personal };
+  }
+
+  /** The row a field's box sits on, for the answer's status line. */
+  private askRowId(keys: string[]): string | null {
+    for (const k of keys) {
+      const id = this.keyIndex.get(k);
+      if (id) return id;
+    }
+    return null;
+  }
+
+  /** The answer's line under the box: saved (ok) or kept on this return only (subtle). */
+  private profileAskResult(ask: ProfileAsk, ok: boolean) {
+    const id = this.askRowId(ask.keys);
+    if (!id) return;
+    this.st.profileAskMsg[id] = ok
+      ? { ok: true, text: "Saved to the tax profile. Later returns use it." }
+      : { ok: false, text: "Kept on this return only." };
+  }
+
+  /** "Only this return": nothing is written; the answer is remembered for this taxpayer and year. */
+  profileAskOnly() {
+    const s = this.st;
+    const o = s.overlay;
+    if (o?.kind !== "profile-ask") return;
+    const ask = o.ask;
+    s.overlay = null;
+    try {
+      bir.screen_form_profile_asked(s.target.tin, this.taxYear(), ask.field, "only");
+      this.wrote("screen_form_profile_asked");
+    } catch (_) {
+      // A refused record still keeps it off this session's asks.
+    }
+    s.profileAsked.add(ask.field);
+    this.profileAskResult(ask, false);
+    this.publish();
+  }
+
+  /** "Save to profile": the return is stored first (the host needs a saved draft), then the boxes go. */
+  profileAskSave() {
+    const s = this.st;
+    const o = s.overlay;
+    if (o?.kind !== "profile-ask") return;
+    const ask = o.ask;
+    s.overlay = null;
+    // The host writes a stored draft's boxes: save the return first when it is not stored yet.
+    if (s.dirty || Object.keys(s.pending).length || !s.saved) this.saveReturn(false);
+    const draftId = s.draft && (s.draft as { id?: number }).id;
+    if (!s.draft || !draftId) {
+      this.toast("Save the return first, then save to the tax profile.", "triangle-alert");
+      this.publish();
+      return;
+    }
+    try {
+      const r = bir.screen_form_save_to_profile(s.target.formCode, s.target.year, s.target.period, s.draft, ask.keys);
+      this.wrote("screen_form_save_to_profile");
+      s.draft = r.draft;
+      const before = s.values;
+      s.values = this.shown({ ...s.values, ...(r.values || {}) });
+      if (r.pools) s.poolTexts = r.pools;
+      this.syncShown(before, {});
+      for (const k of ask.keys) s.profileEdited.delete(k);
+      try {
+        bir.screen_form_profile_asked(s.target.tin, this.taxYear(), ask.field, "save");
+        this.wrote("screen_form_profile_asked");
+      } catch (_) {
+        // The profile write landed; a lost record only means a later return may ask again.
+      }
+      s.profileAsked.add(ask.field);
+      s.electionReady = undefined;
+      this.profileAskResult(ask, true);
+      const saved = (r.saved || []).join(", ");
+      this.toast(saved ? `Saved to the tax profile: ${saved}.` : "Saved to the tax profile.", "circle-check");
+    } catch (e) {
+      // Nothing was written and nothing remembered: the next changed leave asks again.
+      this.toast(plainRefusal(errorText(e)), "triangle-alert");
+    }
+    this.publish();
+  }
+
+  /** Escape, scrim or swipe-down: no answer — nothing saved, nothing remembered, asks again on a changed leave. */
+  dismissProfileAsk() {
+    const s = this.st;
+    if (s.overlay?.kind !== "profile-ask") return;
+    s.overlay = null;
+    this.publish();
+  }
+
   /** A choice card's answer picked. */
   pickAsk(fact: ScreenFormFact, value: unknown) {
-    this.st.askPick[fact] = value;
+    const s = this.st;
+    s.askPick[fact] = value;
+    const ask = s.asks.find((a) => a.fact === fact);
+    // F2: a choice card has no Save — the pick is the explicit answer and saves at once.
+    if (ask?.control === "choice") return this.saveAsk(fact);
     this.publish();
   }
 
@@ -2303,9 +2547,13 @@ export class FormSession {
       return this.toast(plainRefusal(errorText(e)), "triangle-alert");
     }
     s.electionReady = undefined;
+    // F2: the card stays for the session (a wrong pick can be corrected); the host no longer lists
+    // the fact once set, so its ask is re-appended by takeAsks and marked done for the "Saved" chip.
+    s.askDone.add(fact);
+    s.askDoneRaw.set(fact, ask);
     const r = this.applyUseProfile([fact]);
     this.takeAsks(r && Array.isArray(r.asks) ? r.asks : s.asks.filter((a) => a !== ask));
-    delete s.askPick[fact];
+    if (ask.control !== "choice") delete s.askPick[fact];
     s.factErrors = s.factErrors.filter((e) => e.field !== `tax_profile.${fact}`);
     this.setErrors(s.errors.filter((e) => !String(e.field).startsWith("tax_profile.")));
     if (at) s.askSavedAt.set(at, `${ask.label} saved to the tax profile. Later returns use it.`);
@@ -2731,9 +2979,7 @@ export class FormSession {
       if (Object.keys(s.rejected).some((k) => !s.unfixable.has(k))) s.dirty = true;
       s.saveState = s.dirty ? this.restingSaveState() : { state: "saved" };
       if (changed) this.hooks.onSaved?.(s.target);
-      const profiled = s.toProfile.size ? this.saveToProfile() : null;
-      if (profiled) this.toast(`Draft saved. ${profiled}`, "save");
-      else if (announce) this.toast("Draft saved.", "save");
+      if (announce) this.toast("Draft saved.", "save");
       this.validate();
       return true;
     } catch (e) {
@@ -3379,9 +3625,6 @@ export class FormSession {
     const penaltyOpen = Boolean(penalty) && (penalty!.edited || penalty!.keys.some((k) => s.penaltyOpen.has(k)));
     const stopBoxes = this.stopBoxes(it);
     const editingHere = editKeys.some((k) => s.editing.has(k));
-    const saveable = this.saveableKeys(id);
-    const toOn = saveable.some((k) => s.toProfile.has(k));
-    const entry = saveable.length ? s.profileSave[saveable[0]] : null;
     let from = "";
     if (it.from && s.editable && !this.isShut(it.from.to)) {
       const pesos = wholePesosOf(s.values[it.from.k]);
@@ -3437,6 +3680,7 @@ export class FormSession {
             control: a.control,
             choices: a.choices || [],
             pick: a.fact in s.askPick ? JSON.stringify(s.askPick[a.fact]) : null,
+            done: s.askDone.has(a.fact),
           }))
         : [];
     // B10: an "Additional details" fold stays open while the filer opened it or a shown message,
@@ -3463,10 +3707,7 @@ export class FormSession {
         : "",
       canEdit: editKeys.length > 0 && s.editable,
       editing: editingHere,
-      toProfile:
-        saveable.length && (editingHere || saveable.some((k) => s.profileEdited.has(k)))
-          ? { on: toOn, note: toOn ? `Your next save writes it to the tax profile too. ${entry?.note || ""}`.trim() : "Off: the change stays on this return." }
-          : null,
+      profileAsk: s.profileAskMsg[id] ?? null,
       penalty: penalty ? (penaltyOpen ? "computed" : "edit") : null,
       tucked,
       moreOpen: s.moreOpen.has(id) || pointed,
