@@ -1,5 +1,5 @@
 // "Export this profile" (old profileExportCard), drawn in Settings > Import / Export: a credential-free archive saved
-// through the host's save dialog (Android: Downloads/eBIRForms). A profile PIN clears after every attempt.
+// through the host's save dialog (Android: Downloads/eBIRForms; iOS: the system export sheet). A profile PIN clears after every attempt.
 import { signal, View } from "nsh";
 import { app, store } from "../../shell";
 import { AppButton, Card, PinCells, Text } from "../../ui";

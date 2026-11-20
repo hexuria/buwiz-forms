@@ -114,7 +114,7 @@ impl Hooks for NshHooks {
         true
     }
 
-    #[cfg(target_os = "android")]
+    #[cfg(any(target_os = "android", target_os = "ios"))]
     fn export_profile_download(
         &self,
         file_name: &str,
@@ -124,7 +124,10 @@ impl Hooks for NshHooks {
         let file_name = file_name.to_owned();
         Some(Box::pin(async move {
             let staged = staged?;
-            crate::export_android::save(staged, file_name).await
+            #[cfg(target_os = "android")]
+            return crate::export_android::save(staged, file_name).await;
+            #[cfg(target_os = "ios")]
+            return crate::export_ios::save(staged, file_name).await;
         }))
     }
 

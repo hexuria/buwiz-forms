@@ -50,6 +50,7 @@ impl Drop for Archive {
     }
 }
 
+#[cfg(any(test, target_os = "android"))]
 pub(crate) fn download_path(name: &str) -> Result<String, String> {
     if name.is_empty() || name.contains(['/', '\\']) || name == "." || name == ".." {
         return Err("Android Downloads returned an invalid archive name.".into());

@@ -17,8 +17,10 @@ mod dev_env;
 pub mod door;
 #[cfg(target_os = "android")]
 mod export_android;
-#[cfg(any(test, target_os = "android"))]
+#[cfg(any(test, target_os = "android", target_os = "ios"))]
 mod export_archive;
+#[cfg(target_os = "ios")]
+mod export_ios;
 pub mod guards;
 mod hooks;
 mod print;

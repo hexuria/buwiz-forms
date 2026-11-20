@@ -199,6 +199,12 @@ output stream, then `is_pending=0`. Errors delete the pending row; cleanup failu
 are logged. The provider chooses collision suffixes; its queried `_display_name`
 is returned as `Downloads/eBIRForms/<name>` and shown in the success toast.
 
+iOS has no save panel either: `nsh/src/export_ios.rs` stages the same private archive, copies it
+to `<tmp>/profile-exports/<name>` and presents `UIDocumentPickerViewController` in export mode
+(as a copy: Files, iCloud Drive or another provider). The call resolves when the user saves
+(`Files: <name>`) or dismisses the sheet (an error, "Export cancelled: nothing was saved.");
+the staged copy is deleted after either answer.
+
 NSH's share API exists but Android's outcome only reports selection of a target,
 not completion of its file read. It cannot establish a saved Downloads path or a
 safe point to delete this private ZIP, so this flow uses MediaStore, not sharing.
