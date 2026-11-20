@@ -6,7 +6,8 @@ import { signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, type DateRange, type OneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, tinWeights, type DateRange, type OneDate } from "./schema";
+import { tinSegment } from "./controls/model";
 import { PeriodField, RangeField } from "./periodField";
 import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
 import { dateRange, periodDay, splitDay } from "./dateRules";
@@ -225,16 +226,46 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
     ]),
   ] as string[]);
   if (isTinItem(it)) {
+    const weights = tinWeights(fs);
     return (
-      <View class="flex-row flex-wrap items-center gap-1.5">
-        {fs.map((f, j) => (
-          <If when={!hid().includes(f.k)}>
-            <View class="flex-row items-center gap-1.5">
-              {j ? <Text tone="fg3">-</Text> : null}
-              <FieldControl {...fieldProps(s, f, () => false, f.l, j === 3 ? 76 : 58)} />
+      <View class="gap-1.5">
+        <If
+          when={props.narrow()}
+          else={
+            <View class="flex-row flex-wrap items-center gap-1.5">
+              {fs.map((f, j) => (
+                <If when={!hid().includes(f.k)}>
+                  <View class="flex-row items-center gap-1.5">
+                    {j ? <Text testID={`fp-tin-sep-${props.id}-${j}`} tone="fg3">-</Text> : null}
+                    {/* The 76 pt box is the 5-digit branch code's (the grid's 1.4 weight); a lone whole-TIN box keeps
+                        its own width (14 digits do not fit 58 pt); every other box is 58. */}
+                    <FieldControl {...fieldProps(s, f, () => false, f.l, weights[j] > 1 ? 76 : fs.length === 1 ? controlWidth(f, 320) : 58)} />
+                  </View>
+                </If>
+              ))}
             </View>
-          </If>
-        ))}
+          }
+        >
+          {/* Under 600 pt the boxes are one grid that fills the row: equal columns, the last 1.4 only for the
+              5-digit branch code, 6 pt gaps, no dashes (PR 8). */}
+          <View testID={`fp-tin-grid-${props.id}`} class="flex-row gap-1.5">
+            {fs.map((f, j) => (
+              <If when={!hid().includes(f.k)}>
+                <View class="min-w-0" style={{ flexGrow: weights[j], flexBasis: 0 }}>
+                  <FieldControl {...fieldProps(s, f, props.narrow, f.l)} tinCell={tinSegment(f)} />
+                </View>
+              </If>
+            ))}
+          </View>
+        </If>
+        {/* A TIN the tax profile fills says so once, under the boxes, on both widths (RowInfo.tinLine: every box
+            locked); a typed TIN or one open for Edit gets no line, and the row's profile mark stays for those. */}
+        <If when={props.info().tinLine}>
+          <View testID={`fp-tin-from-${props.id}`} class="flex-row items-center gap-1.5">
+            <Icon name="lock" size={14} tone="fg3" />
+            <Text variant="meta" tone="fg3">From the tax profile</Text>
+          </View>
+        </If>
       </View>
     );
   }
@@ -569,7 +600,8 @@ export function ItemRow(props: RowProps) {
         <View class="mb-2.5 min-h-5.5 flex-row flex-wrap items-start gap-2">
           <Text variant="control" class="min-w-0 flex-1" testID={`fp-label-${id}`}>{label}</Text>
           {it.rows ? <Text variant="meta" tone="fg3" class="pt-0.5">{`${it.rows} rows`}</Text> : null}
-          <If when={info().fromProfile}>
+          {/* A profile TIN's own line under its boxes says it once; the row mark stays for every other profile row. */}
+          <If when={info().fromProfile && !info().tinLine}>
             <Mark icon="user" id={id} tip={info().fromProfile} />
           </If>
           {allCalc ? <Mark icon="lock" id={id} tip="Computed from other items" /> : null}

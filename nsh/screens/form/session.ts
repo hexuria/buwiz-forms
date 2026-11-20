@@ -169,6 +169,8 @@ export interface RowInfo {
   isStop: boolean;
   /** The tooltip of the "From tax profile" mark, or "" when the row is not from the profile. */
   fromProfile: string;
+  /** A TIN row whose boxes the profile holds locked draws its own "From the tax profile" line under them (PR 8); the row mark stays away then. */
+  tinLine: boolean;
   /** Edit is offered (profile boxes the filer may open), and they are open now. */
   canEdit: boolean;
   editing: boolean;
@@ -3767,6 +3769,10 @@ export class FormSession {
             ? "From tax profile. Change it in the tax profile."
             : "From tax profile. It repeats a box above; use Edit there."
         : "",
+      // The line under a TIN's boxes (PR 8): a TIN with every box locked — the profile's, not a typed party's
+      // (typed_tin) and not one still open for Edit (an open Edit box is not locked). s.profile lists only the
+      // profile boxes Edit may open, so the locked state itself is the test, not profile membership.
+      tinLine: tin && !it.typed_tin && fs.length > 0 && fs.every((x) => this.isLocked(x.k)),
       canEdit: editKeys.length > 0 && s.editable,
       editing: editingHere,
       profileAsk: s.profileAskMsg[id] ?? null,

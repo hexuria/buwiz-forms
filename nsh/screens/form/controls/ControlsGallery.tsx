@@ -101,6 +101,17 @@ function TinSection(props: { log: Reports }) {
     mockField(props.log, f("branch", "Branch code", "text", { m: 5 }), { value: "00000" }, { width: 76 }),
   ];
   const own = mockField(props.log, f("ownTin", "Taxpayer TIN", "text", { m: 3, a: 1 }), { value: "000", locked: true }, { width: 58 });
+  // The phone grid's cells (PR 8): tinCell only under 600 pt, as the form page passes it; centred digits, a locked
+  // cell without a lock of its own.
+  const cell = (k: string, l: string, m: number, value: string, locked = false) =>
+    mockField(props.log, f(k, l, "text", { m, ...(locked ? { a: 1 } : {}) }), { value, locked }, { tinCell: narrowNow() });
+  const grid = [
+    cell("gtin1", "TIN1", 3, "000"),
+    cell("gtin2", "TIN2", 3, "123"),
+    cell("gtin3", "TIN3", 3, "453"),
+    cell("gbranch", "Branch code", 5, "00000"),
+    cell("gtinL", "Taxpayer TIN", 3, "000", true),
+  ];
   return (
     <Section title="TIN" testID="controls-tin">
       <Row log={props.log} field={full.field} hint="One box, 14 digits"><FieldControl {...full} /></Row>
@@ -119,6 +130,18 @@ function TinSection(props: { log: Reports }) {
       <FieldRow label="Locked TIN box" narrow={narrowNow}>
         <View class="flex-row"><FieldControl {...own} /></View>
       </FieldRow>
+      {/* The phone grid exists only under 600 pt (the page passes tinCell then); a desktop window shows the dashed row above. */}
+      <If when={narrowNow()}>
+        <FieldRow label="TIN grid cells" hint="The phone row's grid: equal columns, the branch code's 1.4" narrow={narrowNow}>
+          <View class="flex-row gap-1.5">
+            {grid.map((c, i) => (
+              <View class="min-w-0" style={{ flexGrow: i === 3 ? 1.4 : 1, flexBasis: 0 }}>
+                <FieldControl {...c} />
+              </View>
+            ))}
+          </View>
+        </FieldRow>
+      </If>
     </Section>
   );
 }

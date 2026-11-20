@@ -47,8 +47,8 @@ export interface TextFieldProps {
    * in a row of its own (the command palette's, whose icon and Esc key are beside it); the row draws the frame.
    */
   bare?: boolean;
-  /** Right-aligned text (amounts, percents). */
-  align?: "left" | "right";
+  /** Right-aligned text (amounts, percents), centred (the phone TIN grid's digits). */
+  align?: "left" | "right" | "center";
   /** Tabular figures (TINs, amounts, dates). */
   tabular?: boolean;
   /** A leading icon. */
@@ -138,6 +138,7 @@ export function TextField(props: TextFieldProps) {
             props.bare ? "text-emph font-normal" : "text-body",
             flat() ? "text-muted-foreground" : "text-foreground",
             props.align === "right" && "text-right",
+            props.align === "center" && "text-center",
             props.tabular && "tabular-nums",
           )}
         />
@@ -190,7 +191,7 @@ interface MaskedProps {
   placeholder?: string;
   prefix?: string;
   suffix?: string;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 /**

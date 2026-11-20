@@ -1,5 +1,6 @@
 // Pure helpers over the form schema, ported from app/shell/form_page.js (no door, no signals).
 import type { ChoiceOption, FieldType, FormSchema, SchemaField, SchemaItem, SchemaPart } from "./contract";
+import { tinSegment } from "./controls/model";
 import { shortIsoDate } from "../../lib/dates";
 import type { ScreenFormExisting } from "../../bir";
 import { stripOtherError } from "./refusals";
@@ -17,11 +18,25 @@ export function optionOf(o: unknown): ChoiceOption | null {
   return m ? { value: m[1], label: text } : { value: text, label: text };
 }
 
-/** Items whose three to five text boxes are the TIN (3-3-3-5). */
+/**
+ * Items whose one to five boxes are all the TIN: the 3-3-3-5 four-box shape, a three-box shape, or a single
+ * whole-TIN box (PR 8). Every field must be TIN-named (tinSegment) — an item that merely mentions a TIN beside a
+ * name, a count or a phone number is not a TIN row and keeps the ordinary layout. The row draws them as the TIN
+ * grid — one cell per box — so the profile line and the phone proportions apply to every shape the schemas build.
+ */
 export function isTinItem(it: SchemaItem): boolean {
   const fs = it.f || [];
   const named = /\bTIN\b|Identification/i.test(it.l) || fs.some((x) => /\bTIN\d?\b|txtTIN/i.test(`${x.l} ${x.k}`));
-  return named && fs.length >= 3 && fs.length <= 5 && fs.every((x) => x.t === "text" || x.t === "int");
+  return named && fs.length >= 1 && fs.length <= 5 && fs.every(tinSegment);
+}
+
+/**
+ * The phone TIN grid's column weights (PR 8): every box an equal share of the row, but the last one 1.4 when it is the
+ * 5-digit branch code — the 3-3-3-5 TIN's 1 : 1 : 1 : 1.4. A shape with no 5-digit last box (three boxes, a whole-TIN
+ * box, a branch code of another length) gets equal columns.
+ */
+export function tinWeights(fs: readonly SchemaField[]): number[] {
+  return fs.map((f, i) => (i === fs.length - 1 && f.m === 5 ? 1.4 : 1));
 }
 
 /** Drops hidden fields, tables whose every column is hidden, and items left with no field (unless they carry a note). */
