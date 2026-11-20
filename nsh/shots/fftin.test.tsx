@@ -11,11 +11,15 @@ warmForms();
 
 const ENTRY = "../FormAnyShot.tsx";
 
-/** Parts are collapsible cards (only part 0 opens with the form) and the rows are a virtualized list: open the
- *  part, then scroll until the row's cell is drawn. */
+/** Parts are collapsible cards (only part 0 opens with the form) and the rows are a virtualized list: the pill's
+ *  sections list jumps to the part (opens it, folds the rest, scrolls its card up — and stays open when it
+ *  already is, so calling this twice is safe), then scroll until the row's cell is drawn. */
 async function showRow(app: App, part: number, row: string) {
   const id = `id:fp-item-${row}`;
-  if (part !== 0) await app.press(`id:fp-part-${part}-toggle`).catch(() => {});
+  await app.press("id:fp-pill-open").catch(() => {});
+  await app.waitFor(`id:fp-section-${part}`, { timeout: 15_000 }).catch(() => {});
+  await app.press(`id:fp-section-${part}`).catch(() => {});
+  await app.wait(400);
   for (let i = 0; i < 40 && !app.shows(id); i++) await app.scroll("id:form-scroll", 600).catch(() => {});
 }
 
@@ -79,7 +83,8 @@ test("fftin 1706 buyer TIN refusal", async () => {
   const app = await openForm("1706", 390, 844, "light", { year: 2025, period: 0, mode: "return" });
   await showRow(app, 1, "1:6");
   await app.press("id:fp-check");
-  await app.wait(800);
+  await app.waitFor("text:/items? need attention/", { timeout: 30_000 }).catch(() => {});
+  await app.wait(400);
   await showRow(app, 1, "1:6");
   await shoot(app, "tin-1706-refusal-390-light");
 }, 120_000);
