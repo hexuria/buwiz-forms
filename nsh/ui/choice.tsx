@@ -211,6 +211,8 @@ export interface SegmentedProps {
   wrap?: boolean;
   /** Reveals and focuses the selected choice (or the first when unset) on mount. */
   autoFocus?: boolean;
+  /** Receives the selected choice's ref (or the first when unset). */
+  focusRef?: (ref: ViewRef) => void;
   testID?: string;
 }
 
@@ -225,8 +227,9 @@ export function Segmented(props: SegmentedProps) {
         {(o) => (
           <Toggle
             ref={(r) => {
-              if (props.autoFocus && o().value === (props.value || props.options[0]?.value)) {
-                revealAndFocus(r);
+              if (o().value === (props.value || props.options[0]?.value)) {
+                props.focusRef?.(r);
+                if (props.autoFocus) revealAndFocus(r);
               }
             }}
             pressed={o().value === props.value}
