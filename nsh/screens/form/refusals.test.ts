@@ -22,6 +22,16 @@ test("B4: every refusal kind becomes a plain sentence on the item", () => {
   expect(refusalSentence(ctx("`k` is not one of the listed choices"))).toBe("Item 6: pick one of the listed choices.");
 });
 
+test("PR 2: a two-digit date year gets the four-digit example", () => {
+  expect(refusalSentence(ctx("two-digit date year", { item: "4", kind: "date" })))
+    .toBe("Item 4: type the four-digit year, for example 08/17/1988.");
+});
+
+test("PR 2: a bounded date names its allowed span without exposing keys", () => {
+  expect(refusalSentence(ctx("date outside allowed span 2025-05-01 2025-05-31", { item: "2", kind: "date" })))
+    .toBe("Item 2: choose a date from May 1, 2025 to May 31, 2025.");
+});
+
 test("R2: an impossible complete date beats the part rules; a non-range raw keeps its own sentence", () => {
   expect(refusalSentence(ctx("Date is not a real calendar date", { part: "year", item: "4" }))).toBe("Item 4: there is no such date. Check the day.");
   expect(refusalSentence(ctx("date is not a real calendar date", { part: "month" }))).toBe("Item 6: there is no such date. Check the day.");

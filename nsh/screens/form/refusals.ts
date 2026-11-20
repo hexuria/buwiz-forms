@@ -3,6 +3,8 @@
 // label. The raw host text (keys, JSON paths, backticks) is for the log only; it never reaches
 // the page. Pure: no signals, no door.
 
+import { formatLongDate, parseTypedDate } from "../../lib/dates";
+
 /** What a refusal sentence is built from. `item` is the printed item number ("4") or null. */
 export interface RefusalContext {
   /** The host's raw refusal or validation text. */
@@ -80,6 +82,16 @@ function gateSentence(ctx: RefusalContext, raw: string): string {
 export function refusalSentence(ctx: RefusalContext): string {
   const raw = String(ctx.raw ?? "").trim();
   const at = colon(ctx);
+
+  if (/two-digit date year/i.test(raw)) return `${at} type the four-digit year, for example 08/17/1988.`;
+  const span = /^date outside allowed span (\d{4}-\d{2}-\d{2}) (\d{4}-\d{2}-\d{2})$/.exec(raw);
+  if (span) {
+    const min = parseTypedDate(span[1]);
+    const max = parseTypedDate(span[2]);
+    if (min && max) return `${at} choose a date from ${formatLongDate(min)} to ${formatLongDate(max)}.`;
+  }
+  if (raw === "date conflicts with a locked part") return `${at} use the date set by the return.`;
+  if (raw === "calendar year ends in December") return "A calendar year ends in December. Choose Fiscal to pick another month.";
 
   // A gate: the box is shut by another answer ("Needs item 4 = Yes", the off tag).
   if (/^needs\b/i.test(raw) || /^item\s+\S+\s+is checked\.?$/i.test(raw)) return gateSentence(ctx, raw);
