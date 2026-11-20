@@ -21,7 +21,11 @@ const options = (look: (typeof LOOKS)[number], formCode: string, year: number, p
 /** Scroll until `sel` shows (the page virtualizes; a real window's press scrolls, headless stays put). */
 async function untilShown(app: App, sel: string, steps = 24) {
   for (let step = 0; step < steps && !app.shows(sel); step++) {
-    await app.scroll("id:form-scroll", 300);
+    try {
+      await app.scroll("id:form-scroll", 300);
+    } catch {
+      break;
+    }
     await app.wait(200);
   }
   await app.waitFor(sel, { timeout: 15_000 });
@@ -35,7 +39,11 @@ async function jumpUntil(app: App, sel: string, parts: number) {
     await app.press(`id:fp-section-${i}`);
     await app.wait(400);
     for (let step = 0; step < 10 && !app.shows(sel); step++) {
-      await app.scroll("id:form-scroll", 300);
+      try {
+        await app.scroll("id:form-scroll", 300);
+      } catch {
+        break;
+      }
       await app.wait(200);
     }
   }
