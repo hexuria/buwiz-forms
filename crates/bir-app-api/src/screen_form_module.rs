@@ -501,7 +501,6 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     }
     mark_radio_groups(form, code);
     rows_dst_pt_vat::mark_calendar_tables(form, code);
-    rows_income_q::mark_one_date(form, code);
     rows_annual_corporate::mark_whole_pesos(form, code);
     rows_as_needed::mark_calendar_tables(form, code);
     rows_donor_estate::mark_schema(form, code);
@@ -4899,6 +4898,9 @@ fn apply_screen_edits_here(
     // A one-date box's parts are judged whole, as the page reads a date
     // (PR 9's forms, rows_as_needed.rs).
     let date_refusals = rows_as_needed::refuse_dates(kind, &shown, &edits);
+    for month in date_refusals.values() {
+        rejected.insert(month.clone(), json!(rows_as_needed::DATE_ERROR));
+    }
     // 0605's split-date groups this batch touches (B1); judged and written
     // below, before the per-key loop.
     let split_groups = rows_as_needed::split_date_groups(kind, &shown, &edits);
@@ -4998,8 +5000,7 @@ fn apply_screen_edits_here(
         if split_done.contains(&key) {
             continue;
         }
-        if let Some(why) = date_refusals.get(&key) {
-            rejected.insert(key.clone(), why.clone());
+        if date_refusals.contains_key(&key) {
             continue;
         }
         if !editable {
@@ -5182,7 +5183,22 @@ fn apply_screen_edits_here(
                     lift(line)
                 })
             }
-            ChoiceStep::Fill(value) => catalogs::fill(kind, &mut next, &key, &value, lift(&key)),
+            ChoiceStep::Fill(value) => {
+                let numeric_date_clear = value.as_str().is_some_and(|s| s.trim().is_empty())
+                    && kind.form_code() != "1707"
+                    && kind.form_code() != "1801"
+                    && rows_as_needed::registered_date_part(kind.form_code(), &key)
+                    && def
+                        .bindings
+                        .get(&key)
+                        .is_some_and(|bound| matches!(bound.binding, Binding::Whole { .. }));
+                let value = if numeric_date_clear {
+                    json!("0")
+                } else {
+                    value
+                };
+                catalogs::fill(kind, &mut next, &key, &value, lift(&key))
+            }
             ChoiceStep::Set(sets) => {
                 for (path, value) in sets {
                     set_draft_path(&mut next, &path, value);

@@ -339,20 +339,7 @@ fn form_1701q_item_11_is_one_date_stored_as_three_boxes() {
             "frm1701q:txtBirthYear"
         ]
     );
-    // No other form's item is marked but 1801's item 1, the date of death
-    // (PR 10, rows_donor_estate::mark_schema), and 1706 Schedule 2 item 7
-    // and 1707's and 2552's item 1 (PR 9, rows_as_needed::mark_one_date).
-    for kind in AgentFormKind::all() {
-        if ![Q, "1801", "1706", "1707", "2552"].contains(&kind.form_code()) {
-            assert!(
-                items(kind.form_code())
-                    .iter()
-                    .all(|(_, item)| item.get("one_date").is_none()),
-                "{}",
-                kind.form_code()
-            );
-        }
-    }
+    assert_eq!(item["one_dates"], json!([keys]));
     let opened = open(Q, 1);
     let filled = fill(
         Q,

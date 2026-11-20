@@ -916,37 +916,6 @@ pub(super) fn removes(
     }))
 }
 
-/// 1701Q item 11's month, day and year boxes are one date on the page
-/// (`one_date`: the page shows "May 17, 1980" and writes the three boxes
-/// together); the draft and the upload keep the three.
-pub(super) fn mark_one_date(form: &mut Value, code: &str) {
-    if code != "1701Q" {
-        return;
-    }
-    let items = form["parts"]
-        .as_array_mut()
-        .into_iter()
-        .flatten()
-        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
-    for item in items {
-        let keys: Vec<&str> = item["f"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|field| field["k"].as_str())
-            .collect();
-        if keys
-            == [
-                "frm1701q:txtBirthMonth",
-                "frm1701q:txtBirthDay",
-                "frm1701q:txtBirthYear",
-            ]
-        {
-            item["one_date"] = Value::Bool(true);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

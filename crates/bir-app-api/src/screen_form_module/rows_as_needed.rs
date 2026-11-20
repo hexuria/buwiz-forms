@@ -103,7 +103,71 @@ pub(super) enum DatePart {
 
 /// The month, day and year keys of each one-date box (PR 5's page box,
 /// form_page.js `oneDate`): `(form, [month, day, year])`.
-const ONE_DATES: [(&str, [&str; 3]); 3] = [
+pub(super) const ONE_DATES: &[(&str, [&str; 3])] = &[
+    (
+        "0605",
+        [
+            "frm0605:txtDueDateMonth",
+            "frm0605:txtDueDateDay",
+            "frm0605:txtDueDateYear",
+        ],
+    ),
+    (
+        "0605",
+        [
+            "frm0605:txtReturnPeriodMonth",
+            "frm0605:txtReturnPeriodDay",
+            "frm0605:txtReturnPeriodYear",
+        ],
+    ),
+    (
+        "0619E",
+        [
+            "frm0619E:txtDueMonth",
+            "frm0619E:txtDueDay",
+            "frm0619E:txtDueYear",
+        ],
+    ),
+    (
+        "0619F",
+        [
+            "frm0619F:txtDueMonth",
+            "frm0619F:txtDueDay",
+            "frm0619F:txtDueYear",
+        ],
+    ),
+    (
+        "1604C",
+        [
+            "frm1604c:txtRefMonth",
+            "frm1604c:txtRefDate",
+            "frm1604c:txtRefYear",
+        ],
+    ),
+    (
+        "1606",
+        [
+            "frm1606:txtDateMonth",
+            "frm1606:txtDateDay",
+            "frm1606:txtDateYear",
+        ],
+    ),
+    (
+        "1701Q",
+        [
+            "frm1701q:txtBirthMonth",
+            "frm1701q:txtBirthDay",
+            "frm1701q:txtBirthYear",
+        ],
+    ),
+    (
+        "1706",
+        [
+            "frm1706:txtDateMonth",
+            "frm1706:txtDateDay",
+            "frm1706:txtDateYear",
+        ],
+    ),
     (
         "1706",
         [
@@ -128,10 +192,100 @@ const ONE_DATES: [(&str, [&str; 3]); 3] = [
             "frm2552:txtPg1I1Year",
         ],
     ),
+    (
+        "1707A",
+        [
+            "frm1707Av2021:txtI1YearEndMonth",
+            "frm1707Av2021:txtI1YearEndDay",
+            "frm1707Av2021:txtI1YearEndYear",
+        ],
+    ),
+    (
+        "1800",
+        [
+            "frm1800v2018:txtMonth",
+            "frm1800v2018:txtDate",
+            "frm1800v2018:txtYear",
+        ],
+    ),
+    (
+        "1801",
+        [
+            "frm1801v2018:txtDateMonth",
+            "frm1801v2018:txtDateDay",
+            "frm1801v2018:txtDateYear",
+        ],
+    ),
+    (
+        "2200A",
+        [
+            "frm2200Av2020:txtDateMonth",
+            "frm2200Av2020:txtDateDay",
+            "frm2200Av2020:txtDateYear",
+        ],
+    ),
+    (
+        "2200AN",
+        [
+            "frm2200ANv2018:txtMonth",
+            "frm2200ANv2018:txtDate",
+            "frm2200ANv2018:txtYear",
+        ],
+    ),
+    (
+        "2200C",
+        [
+            "frm2200C:txtPg1I1Month",
+            "frm2200C:txtPg1I1Day",
+            "frm2200C:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2200M",
+        [
+            "frm2200M:txtPg1I1Month",
+            "frm2200M:txtPg1I1Day",
+            "frm2200M:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2200P",
+        [
+            "frm2200P:txtPg1I1Month",
+            "frm2200P:txtPg1I1Day",
+            "frm2200P:txtPg1I1Year",
+        ],
+    ),
+    (
+        "2200S",
+        [
+            "frm2200S:txtMonth1",
+            "frm2200S:txtDate",
+            "frm2200S:txtForYr",
+        ],
+    ),
+    (
+        "2200T",
+        [
+            "frm2200Tv2020:txtDateMonth",
+            "frm2200Tv2020:txtDateDay",
+            "frm2200Tv2020:txtDateYear",
+        ],
+    ),
 ];
 
+pub(super) fn registered_date_part(code: &str, key: &str) -> bool {
+    ONE_DATES
+        .iter()
+        .any(|(form, keys)| *form == code && keys.contains(&key))
+}
+
 fn date_part(code: &str, key: &str) -> Option<DatePart> {
-    let (_, keys) = ONE_DATES.iter().find(|(form, _)| *form == code)?;
+    let (_, keys) = ONE_DATES.iter().find(|(form, keys)| {
+        *form == code
+            && keys.contains(&key)
+            && ((*form == "1706" && keys[0] == "frm1706:txtDateMonthI") || *form == "1707")
+    })?;
     let at = keys.iter().position(|k| *k == key)?;
     Some([DatePart::Month, DatePart::Day, DatePart::Year][at])
 }
@@ -140,26 +294,28 @@ fn date_part(code: &str, key: &str) -> Option<DatePart> {
 /// page shows the three boxes as one date ("Mar 15, 2026"), typed or picked,
 /// and sends the three parts together; the draft keeps them split.
 pub(super) fn mark_one_date(form: &mut Value, code: &str) {
-    let Some((_, keys)) = ONE_DATES.iter().find(|(form, _)| *form == code) else {
-        return;
-    };
     let items = form["parts"]
         .as_array_mut()
         .into_iter()
         .flatten()
         .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
     for item in items {
-        let mut fields: Vec<&str> = item["f"]
+        let fields: Vec<&str> = item["f"]
             .as_array()
             .into_iter()
             .flatten()
             .filter_map(|field| field["k"].as_str())
             .collect();
-        fields.sort_unstable();
-        let mut wanted = keys.to_vec();
-        wanted.sort_unstable();
-        if fields == wanted {
-            item["one_date"] = Value::Bool(true);
+        let triples: Vec<_> = ONE_DATES
+            .iter()
+            .filter(|(form, keys)| *form == code && keys.iter().all(|key| fields.contains(key)))
+            .map(|(_, keys)| *keys)
+            .collect();
+        if !triples.is_empty() {
+            if triples.len() == 1 && fields.len() == 3 {
+                item["one_date"] = Value::Bool(true);
+            }
+            item["one_dates"] = serde_json::json!(triples);
         }
     }
 }
@@ -219,40 +375,51 @@ pub(super) fn refuse_dates(
     kind: AgentFormKind,
     shown: &Value,
     edits: &[(String, Value)],
-) -> Map<String, Value> {
-    let mut out = Map::new();
+) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
     // 2552 is skipped on purpose: its item 1 date picks which return this is
     // (the identity lock refuses its writes before a date is judged), so a
     // date sentence would only ever pre-empt the lock's own reason.
-    let Some((_, keys)) = ONE_DATES
-        .iter()
-        .find(|(form, _)| *form == kind.form_code() && *form != "2552")
-    else {
-        return out;
-    };
-    if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
+    if matches!(kind.form_code(), "2552" | "0605") {
         return out;
     }
-    // A typed part is missing only when empty; a shown one also when it
-    // is the official zero blank ("00", 1707's "0").
-    let part = |key: &str| -> Option<String> {
-        match edits.iter().find(|(k, _)| k == key) {
-            Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty()),
-            None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
-                .filter(|v| !v.chars().all(|c| c == '0')),
+    for (_, keys) in ONE_DATES
+        .iter()
+        .filter(|(form, _)| *form == kind.form_code())
+    {
+        if !edits.iter().any(|(key, _)| keys.contains(&key.as_str())) {
+            continue;
         }
-    };
-    let [Some(month), Some(day), Some(year)] = keys.map(part) else {
-        return out;
-    };
-    let number = |v: &str| v.parse::<u32>().ok();
-    let fits = match (number(&month), number(&day), number(&year)) {
-        (Some(m), Some(d), Some(y)) => year.len() == 4 && real_date(m, d, y),
-        _ => false,
-    };
-    if !fits {
-        for (key, _) in edits.iter().filter(|(key, _)| keys.contains(&key.as_str())) {
-            out.insert(key.clone(), Value::from(DATE_ERROR));
+        let legacy = (kind.form_code() == "1706" && keys[0] == "frm1706:txtDateMonthI")
+            || kind.form_code() == "1707";
+        if !legacy
+            && !keys
+                .iter()
+                .all(|key| edits.iter().any(|(sent, _)| sent == key))
+        {
+            continue;
+        }
+        // A typed part is missing only when empty; a shown one also when it
+        // is the official zero blank ("00", 1707's "0").
+        let part = |key: &str| -> Option<String> {
+            match edits.iter().find(|(k, _)| k == key) {
+                Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty() && v != "0"),
+                None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
+                    .filter(|v| !v.chars().all(|c| c == '0')),
+            }
+        };
+        let [Some(month), Some(day), Some(year)] = keys.map(part) else {
+            continue;
+        };
+        let number = |v: &str| v.parse::<u32>().ok();
+        let fits = match (number(&month), number(&day), number(&year)) {
+            (Some(m), Some(d), Some(y)) => year.len() == 4 && real_date(m, d, y),
+            _ => false,
+        };
+        if !fits {
+            for (key, _) in edits.iter().filter(|(key, _)| keys.contains(&key.as_str())) {
+                out.insert(key.clone(), keys[0].to_string());
+            }
         }
     }
     out
@@ -329,12 +496,9 @@ pub(super) fn split_date_groups(
 /// What a stored one-date box holding only part of a date (a month with
 /// no day, a day with no month) says: the page shows it blank.
 fn partial_date(
-    kind: AgentFormKind,
+    [month, day, year]: [&str; 3],
     values: &std::collections::BTreeMap<String, String>,
 ) -> Option<String> {
-    let (_, [month, day, year]) = ONE_DATES
-        .iter()
-        .find(|(form, _)| *form == kind.form_code())?;
     let get = |key: &str| {
         values
             .get(key)
@@ -369,15 +533,14 @@ pub(super) fn notices(kind: AgentFormKind, draft: &Value) -> Vec<Value> {
     let Ok(map) = bir_core::forms::agent::field_map(kind, draft) else {
         return Vec::new();
     };
-    let Some(message) = partial_date(kind, &map) else {
-        return Vec::new();
-    };
-    let keys = ONE_DATES
+    ONE_DATES
         .iter()
-        .find(|(form, _)| *form == kind.form_code())
-        .map(|(_, keys)| keys.to_vec())
-        .unwrap_or_default();
-    vec![serde_json::json!({ "field": "one_date", "message": message, "keys": keys })]
+        .filter(|(form, _)| *form == kind.form_code())
+        .filter_map(|(_, keys)| {
+            partial_date(*keys, &map)
+                .map(|message| serde_json::json!({ "field": "one_date", "message": message, "keys": keys }))
+        })
+        .collect()
 }
 
 /// A column of 2552's Part V row 5.
@@ -1139,9 +1302,11 @@ pub(super) fn values(
 ) {
     // A one-date box whose month and day are both still the official blank
     // `00` (a return not yet dated) shows no date at all, never "00/00/2026".
-    if let Some((_, [month, day, year])) =
-        ONE_DATES.iter().find(|(form, _)| *form == kind.form_code())
-    {
+    if let Some((_, [month, day, year])) = ONE_DATES.iter().find(|(form, keys)| {
+        *form == kind.form_code()
+            && ((*form == "1706" && keys[0] == "frm1706:txtDateMonthI")
+                || matches!(*form, "1707" | "2552"))
+    }) {
         // Nor one holding only part of a date (03/00/2026): blank, with a
         // notice saying what is stored (`notices`, `waits`).
         let unset = |key: &str| map.get(key).is_some_and(|v| v.trim() == "00");
@@ -1330,14 +1495,19 @@ pub(super) fn waits(kind: AgentFormKind, draft: &Value) -> Map<String, Value> {
         }
         "2552" => {
             // Item 1 is the return's identity, set where it is started.
-            for key in ONE_DATES[2].1 {
+            let keys = ONE_DATES
+                .iter()
+                .find(|(form, _)| *form == "2552")
+                .expect("2552 date")
+                .1;
+            for key in keys {
                 out.insert(key.to_string(), Value::from(DATE_FROM_NEW_RETURN));
             }
             if let Some(why) = bir_core::forms::agent::field_map(kind, draft)
                 .ok()
-                .and_then(|map| partial_date(kind, &map))
+                .and_then(|map| partial_date(keys, &map))
             {
-                for key in ONE_DATES[2].1 {
+                for key in keys {
                     out.insert(key.to_string(), Value::from(why.clone()));
                 }
             }

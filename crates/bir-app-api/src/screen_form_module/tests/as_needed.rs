@@ -2082,7 +2082,7 @@ fn pr9_1707_schedule_1_date_is_a_date() {
 // ------------------------------------------------------- one-date boxes
 
 /// The one-date boxes (PR 5's page box): `(form, item, [month, day, year])`.
-const ONE_DATE_BOXES: [(&str, &str, [&str; 3]); 3] = [
+const ONE_DATE_BOXES: &[(&str, &str, [&str; 3])] = &[
     (
         "1706",
         "7",
@@ -2123,7 +2123,7 @@ const ONE_DATE_BOXES: [(&str, &str, [&str; 3]); 3] = [
 #[test]
 fn pr9_dates_over_three_boxes_are_one_date_box() {
     setup();
-    for (code, no, keys) in ONE_DATE_BOXES {
+    for &(code, no, keys) in ONE_DATE_BOXES {
         let items = items_numbered(code, no);
         let item = items
             .iter()
@@ -2163,14 +2163,19 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         );
     }
     let opened = open("2552", 1);
-    for key in ONE_DATE_BOXES[2].2 {
+    for key in ONE_DATE_BOXES
+        .iter()
+        .find(|(code, _, _)| *code == "2552")
+        .unwrap()
+        .2
+    {
         assert_eq!(opened["waits"][key], rows_as_needed::DATE_FROM_NEW_RETURN);
         assert!(opened["locks"][key].is_string());
     }
     // Review item 7: the host writes 1706's and 1707's date parts itself
     // (rows_as_needed.rs fill), so no "cannot be filled here" lock applies;
     // 2552's item 1 keeps its identity lock.
-    for (code, _, keys) in ONE_DATE_BOXES {
+    for &(code, _, keys) in ONE_DATE_BOXES {
         let kind = kind_of(code).unwrap();
         for key in keys {
             assert_eq!(
@@ -2181,7 +2186,7 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
         }
     }
     // Lesson 13 on 1706's and 1707's boxes, as the page sends them.
-    for (code, _, keys) in &ONE_DATE_BOXES[..2] {
+    for (code, _, keys) in ONE_DATE_BOXES.iter().filter(|(code, _, _)| *code != "2552") {
         let opened = open(code, 1);
         let date = fill(
             code,
@@ -2224,13 +2229,16 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
             json!({ keys[2]: "2101" }),
         ] {
             let refused = fill(code, &date["draft"], bad.clone());
-            for key in bad.as_object().unwrap().keys() {
-                assert_eq!(
-                    refused["rejected"][key],
-                    rows_as_needed::DATE_ERROR,
-                    "{code} {bad}"
-                );
-            }
+            let rejected = refused["rejected"].as_object().unwrap();
+            assert!(
+                rejected.get(keys[0]).or_else(|| bad
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .find_map(|key| rejected.get(key)))
+                    == Some(&json!(rows_as_needed::DATE_ERROR)),
+                "{code} {bad}: {rejected:?}"
+            );
             assert_eq!(
                 printed(code, &refused["draft"]),
                 printed(code, &date["draft"]),
@@ -2267,6 +2275,93 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
     }
 }
 
+#[test]
+fn pr2_0605_dates_are_independent_registered_triples() {
+    for (number, keys) in [
+        (
+            "4",
+            [
+                "frm0605:txtDueDateMonth",
+                "frm0605:txtDueDateDay",
+                "frm0605:txtDueDateYear",
+            ],
+        ),
+        (
+            "7",
+            [
+                "frm0605:txtReturnPeriodMonth",
+                "frm0605:txtReturnPeriodDay",
+                "frm0605:txtReturnPeriodYear",
+            ],
+        ),
+    ] {
+        let items = items_numbered("0605", number);
+        assert!(
+            items.iter().any(|item| item["one_dates"] == json!([keys])),
+            "0605 item {number}: expected registered month/day/year triple"
+        );
+    }
+}
+
+#[test]
+fn pr2_1606_rejects_an_impossible_transaction_date_as_one_batch() {
+    setup();
+    let opened = open("1606", 1);
+    let before = opened["draft"].clone();
+    let result = fill(
+        "1606",
+        &before,
+        json!({
+            "frm1606:txtDateMonth": "02",
+            "frm1606:txtDateDay": "30",
+            "frm1606:txtDateYear": "2026",
+        }),
+    );
+    assert!(
+        result["rejected"]["frm1606:txtDateMonth"].is_string(),
+        "1606: impossible date must be refused at the month: {}",
+        result["rejected"]
+    );
+    assert_eq!(result["draft"], before);
+}
+
+#[test]
+fn pr2_registered_date_keys_are_drawn_and_impossible_batches_do_not_land() {
+    setup();
+    for &(code, keys) in rows_as_needed::ONE_DATES {
+        let form = schema_entry(code).expect("registered form");
+        let items = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten());
+        assert!(
+            items.into_iter().any(|item| item["one_dates"]
+                .as_array()
+                .is_some_and(|dates| { dates.iter().any(|triple| *triple == json!(keys)) })),
+            "{code}: registered keys must occur together on a drawn item: {keys:?}"
+        );
+        let opened = open(code, page_period_of(code));
+        let edits = json!({ keys[0]: "02", keys[1]: "30", keys[2]: "2026" });
+        let filled = fill(code, &opened["draft"], edits);
+        let reason = filled["rejected"][keys[0]].as_str().unwrap_or("");
+        if code == "2552" {
+            assert!(
+                reason.contains("picks which return this is"),
+                "{code}: {reason}"
+            );
+        } else {
+            assert!(
+                !reason.is_empty(),
+                "{code} {keys:?}: impossible date not refused"
+            );
+        }
+        for key in keys {
+            assert_eq!(filled["values"][key], opened["values"][key], "{code} {key}");
+        }
+    }
+}
+
 /// Decision 6 (2552): its item 1 date is the return's identity — every write
 /// is refused by the identity lock, so refuse_dates skips it: an impossible
 /// date gets the lock's reason, never a date sentence that would pre-empt it.
@@ -2274,7 +2369,11 @@ fn pr9_dates_over_three_boxes_are_one_date_box() {
 fn pr9_2552_item_1_date_is_the_identity_lock_not_a_date_check() {
     setup();
     let opened = open("2552", 1);
-    let keys = ONE_DATE_BOXES[2].2;
+    let keys = ONE_DATE_BOXES
+        .iter()
+        .find(|(code, _, _)| *code == "2552")
+        .unwrap()
+        .2;
     for bad in [
         json!({ keys[0]: "02", keys[1]: "30", keys[2]: "2026" }),
         json!({ keys[0]: "03", keys[1]: "15", keys[2]: "2026" }),

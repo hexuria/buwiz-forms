@@ -2683,10 +2683,18 @@ fn p1_1800_day_of_donation_is_a_day_select() {
     assert!(date_errors(&fifth).is_empty(), "{:?}", date_errors(&fifth));
     // A leap day is a date; the same day in a common year is not.
     assert!(date_errors(&date("02", "29", "2024")).is_empty());
+    let opened = open(code, period).unwrap();
+    let refused = call(
+        "screen_form_fill",
+        vec![code.into(), json(opened["draft"].clone()), json(json!({
+            "frm1800v2018:txtMonth": "02", "frm1800v2018:txtDate": "29", "frm1800v2018:txtYear": "2023"
+        }))],
+    ).unwrap();
     assert_eq!(
-        date_errors(&date("02", "29", "2023")),
-        ["Please enter a valid date on Item 1."]
+        refused["rejected"]["frm1800v2018:txtMonth"],
+        super::rows_as_needed::DATE_ERROR
     );
+    assert_eq!(refused["draft"], opened["draft"]);
     // Blank is "not chosen" again.
     let cleared = date("03", "", "2024");
     assert_eq!(cleared["draft"]["donation_day"], 0);
