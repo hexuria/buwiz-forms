@@ -20,135 +20,40 @@ override those with the same variable names. The app does not ask for the
 address. It still prepares and files returns when that server is
 unreachable. Details: [docs/cloud-account.md](docs/cloud-account.md).
 
-## Platform status
+## Platforms
 
-| Platform | Status | Details |
-| --- | --- | --- |
-| macOS | Fully tested | [docs/platforms/macos.md](docs/platforms/macos.md) |
-| Linux | Fully tested | [docs/platforms/linux.md](docs/platforms/linux.md) |
-| Windows | Not yet verified. Tracked in [#90](https://github.com/hexuria/buwiz-forms/issues/90) | [docs/platforms/windows.md](docs/platforms/windows.md) |
+| Platform | Status | Setup script | Database | Details |
+| --- | --- | --- | --- | --- |
+| macOS | Fully tested | `scripts/setup-macos.sh` | `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db` | [macos.md](docs/platforms/macos.md) |
+| Linux | Fully tested | `scripts/setup-linux.sh` | `~/.taxman-ebir/bir_data.db` | [linux.md](docs/platforms/linux.md) |
+| Windows | Partly verified, on one Windows Server 2022 VM | `scripts\setup-windows.ps1` | `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db` | [windows.md](docs/platforms/windows.md) |
 
 Not every feature works the same on every platform. The full table is in
-[docs/FEATURES.md](docs/FEATURES.md).
+[docs/FEATURES.md](docs/FEATURES.md). Each platform page lists the packages,
+runtime requirements, key storage, close and quit behaviour, and known limits.
 
-## macOS
+## Install
 
-**Prerequisites (to build from source):** Xcode command line tools, Homebrew,
-and a Rust toolchain with both Apple targets. One idempotent script installs
-them all:
+Download from the [Releases](https://github.com/hexuria/buwiz-forms/releases)
+page:
 
-```bash
-scripts/setup-macos.sh           # install everything
-scripts/setup-macos.sh --check   # verify an existing install
-```
+- **macOS:** open the `.dmg` and drag `eBIRForms.app` to Applications.
+- **Linux:** `sudo apt install ./eBIRForms-Linux-x64-<version>.deb`. Other
+  package formats are in [linux.md](docs/platforms/linux.md).
+- **Windows:** run `eBIRForms-Windows-x64-<version>-Setup.exe`, or use the
+  `.msi`.
 
-OpenSSL compiles from vendored source, so the system perl and clang are
-enough. The app uses the system WebView for print preview. You need no other
-document renderer.
+## Build from source
 
-**Install:** download the `.dmg` from the
-[Releases](https://github.com/hexuria/buwiz-forms/releases) page and drag
-`eBIRForms.app` to Applications. The macOS release workflow signs and
-notarizes the DMG, and stops if the Apple secrets are missing. Maintainers
-provision those secrets once with `scripts/setup_macos_release_secrets.sh`.
-
-**Build and run from source:**
+Run the setup script for your platform from the table above (add `--check` on
+macOS and Linux to verify an existing install), then:
 
 ```bash
 just run                  # development build with diagnostics
-just _package-mac         # universal .app and .dmg in target/release-artifacts
 ```
 
-**Where data lives:** `~/Library/Group Containers/group.dev.goldcoders.bir/bir_data.db`.
-The database key is in the macOS Keychain.
-
-**Notes:**
-- The window's close button and Cmd+Q hide the app to the menu bar. Use the
-  tray menu's Quit to quit.
-- The global show/hide hotkey is off in Mac App Store builds.
-
-More in [docs/platforms/macos.md](docs/platforms/macos.md).
-
-## Windows
-
-Windows is not yet verified. Treat it as untested until
-[#90](https://github.com/hexuria/buwiz-forms/issues/90) is closed.
-
-**Prerequisites (to build from source):** Visual Studio 2022 Build Tools with
-the C++ workload and Windows 11 SDK, Rust, OpenSSL, Strawberry Perl, NASM, Inno
-Setup and Python.
-One script installs them and sets the `OPENSSL_*` variables:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
-```
-
-The script asks for administrator rights through UAC. Strawberry Perl must come
-before Git Bash's perl on `PATH`.
-
-**Install:** the release workflow builds `eBIRForms-Windows-x64-<version>-Setup.exe`
-and an `.msi`. Run the Setup program and start eBIRForms from the Start menu.
-
-**Build and run from source:**
-
-```powershell
-just run                  # development build with diagnostics
-just exe                  # Inno Setup installer
-just msix                 # MSIX package
-```
-
-**Where data lives:** `%LOCALAPPDATA%\Taxman\eBIRForms\bir_data.db`. The
-database key is meant to be kept in Windows Credential Manager (untested).
-
-**Notes:**
-- The close button and Alt+F4 hide the app to the tray. Use the tray menu's
-  Quit to quit.
-- Windows Hello unlock is built in but untested.
-
-More in [docs/platforms/windows.md](docs/platforms/windows.md).
-
-## Linux
-
-**Install the `.deb`** (Debian, Ubuntu and relatives). Download it from the
-[Releases](https://github.com/hexuria/buwiz-forms/releases) page and install:
-
-```bash
-sudo apt install ./eBIRForms-Linux-x64-<version>.deb
-```
-
-The package installs `/usr/bin/ebirforms`, the assets in
-`/usr/share/ebirforms/assets`, a desktop entry
-(`/usr/share/applications/dev.goldcoders.bir.desktop`) and hicolor icons
-(48, 64, 128, 256 and 512 px, `/usr/share/icons/hicolor/<size>/apps/dev.goldcoders.bir.png`). After install,
-eBIRForms appears in your application menu under Office. You can also run
-`ebirforms` from a terminal. It needs GTK 3, WebKitGTK 4.1, Vulkan,
-xkbcommon, Wayland client, fontconfig and freetype. `apt` pulls them in. Noto
-Sans must be installed, or the window shows as a blank frame.
-
-**Build from source:**
-
-```bash
-scripts/setup-linux.sh           # installs system libraries, Rust and just
-scripts/setup-linux.sh --check   # verify an existing install
-just run                         # development build with diagnostics
-just _package-linux              # .deb (or a tarball without cargo-deb)
-```
-
-The script supports apt, dnf, pacman and zypper. The full package list is in
-[docs/platforms/linux.md](docs/platforms/linux.md).
-
-**Where data lives:** `~/.taxman-ebir/bir_data.db`.
-
-**Notes:**
-- The window's X button, Ctrl+Q and Alt+F4 quit the app.
-- The tray icon needs a StatusNotifier host, which many desktops lack. The app
-  starts without a tray when none is found.
-- Print preview opens in your default browser.
-- Exports need `xdg-desktop-portal` or `zenity`. Without them files go to
-  `~/Documents/eBIRForms/exports`.
-- Blank window on a VM or software GPU: start with `VK_ICD_FILENAMES=/dev/null`.
-
-More in [docs/platforms/linux.md](docs/platforms/linux.md).
+Packaging recipes (`just _package-mac`, `just _package-linux`, `just exe`,
+`just msix`) are described on the platform pages.
 
 ## Headless command line (`bir`)
 
