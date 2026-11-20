@@ -504,6 +504,9 @@ fn build_form(form: &mut Value, fixes: Option<&Value>) {
     rows_annual_corporate::mark_whole_pesos(form, code);
     rows_as_needed::mark_calendar_tables(form, code);
     rows_donor_estate::mark_schema(form, code);
+    // PR 3: period pairs and from-to ranges join their boxes on one item
+    // first, so mark_one_date sees 1600WP's two triples together.
+    rows_as_needed::mark_periods(form, code);
     rows_as_needed::mark_one_date(form, code);
     combs::apply_combs(form, code);
     // 1701A's item 9, printed from `derived:` lines (PR 7).
@@ -4901,6 +4904,22 @@ fn apply_screen_edits_here(
     for month in date_refusals.values() {
         rejected.insert(month.clone(), json!(rows_as_needed::DATE_ERROR));
     }
+    // A period's month+year and a range's two ends are judged whole the
+    // same way (PR 3): the month's box carries the period's sentence, the
+    // To end's the range's.
+    let period_refusals = rows_as_needed::refuse_periods(kind, &shown, &edits);
+    for month in period_refusals.values() {
+        rejected.insert(month.clone(), json!(rows_as_needed::PERIOD_ERROR));
+    }
+    let range_refusals = rows_as_needed::refuse_ranges(kind, &shown, &edits);
+    for to in range_refusals.values() {
+        rejected.insert(to.clone(), json!(rows_as_needed::RANGE_ERROR));
+    }
+    let batch_refusals: std::collections::BTreeMap<String, String> = date_refusals
+        .into_iter()
+        .chain(period_refusals)
+        .chain(range_refusals)
+        .collect();
     // 0605's split-date groups this batch touches (B1); judged and written
     // below, before the per-key loop.
     let split_groups = rows_as_needed::split_date_groups(kind, &shown, &edits);
@@ -5000,7 +5019,7 @@ fn apply_screen_edits_here(
         if split_done.contains(&key) {
             continue;
         }
-        if date_refusals.contains_key(&key) {
+        if batch_refusals.contains_key(&key) {
             continue;
         }
         if !editable {

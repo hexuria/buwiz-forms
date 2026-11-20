@@ -2490,6 +2490,296 @@ fn pr2_registered_date_keys_are_drawn_and_impossible_batches_do_not_land() {
     }
 }
 
+/// PR 3 (P3a): every enumerated month+year pair is marked `one_periods` on
+/// the one item holding both boxes — 1701's month moved out of the hidden
+/// part, 2000's year out of Additional details, 1701MS's second To and
+/// 1600WP's To triple brought over — and drawn nowhere else.
+#[test]
+fn pr3_periods_are_registered_pairs_on_one_item() {
+    for period in rows_as_needed::ONE_PERIODS {
+        let [month, year] = period.keys;
+        let form = schema_entry(period.form).expect("registered form");
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+            .collect();
+        let marked = items
+            .iter()
+            .filter(|item| {
+                item["one_periods"].as_array().is_some_and(|marks| {
+                    marks.iter().any(|mark| *mark == json!([month, year]))
+                })
+            })
+            .count();
+        assert_eq!(marked, 1, "{}: one_periods [{month}, {year}]", period.form);
+        let item = items
+            .iter()
+            .find(|item| {
+                item["one_periods"].as_array().is_some_and(|marks| {
+                    marks.iter().any(|mark| *mark == json!([month, year]))
+                })
+            })
+            .unwrap();
+        let keys: Vec<&str> = item["f"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|f| f["k"].as_str())
+            .collect();
+        assert!(
+            keys.contains(&month) && keys.contains(&year),
+            "{}: the pair's boxes are not together: {keys:?}",
+            period.form
+        );
+        // The pair's two boxes are drawn on that item only.
+        for key in [month, year] {
+            let drawn = items
+                .iter()
+                .filter(|item| {
+                    item["f"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .any(|f| f["k"] == key)
+                })
+                .count();
+            assert_eq!(drawn, 1, "{} {key} drawn {drawn} times", period.form);
+        }
+    }
+}
+
+/// PR 3 (R1): every enumerated from-to pair is marked `date_ranges` on the
+/// one item holding both ends — 1701MS's second To and 1600WP's To triple
+/// moved over.
+#[test]
+fn pr3_ranges_are_registered_pairs_on_one_item() {
+    for range in rows_as_needed::DATE_RANGES {
+        let form = schema_entry(range.form).expect("registered form");
+        let items: Vec<&Value> = form["parts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|part| part["items"].as_array().into_iter().flatten())
+            .collect();
+        let item = items
+            .iter()
+            .find(|item| {
+                item["date_ranges"]
+                    .as_array()
+                    .is_some_and(|marks| marks.iter().any(|mark| *mark == json!(range.ends)))
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: no item marks date_ranges {:?}",
+                    range.form, range.ends
+                )
+            });
+        let keys: Vec<&str> = item["f"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|f| f["k"].as_str())
+            .collect();
+        for anchor in range.ends {
+            assert!(
+                keys.contains(&anchor),
+                "{}: range end {anchor} not on the marked item: {keys:?}",
+                range.form
+            );
+        }
+        // A one-date end's whole triple is drawn there too (1600WP).
+        if range.form == "1600WP" {
+            for key in [
+                "frm1600WP:DateWithholdingDay",
+                "frm1600WP:DateWithholdingYear",
+                "frm1600WP:DateWithholdingToMonth",
+                "frm1600WP:DateWithholdingToDay",
+                "frm1600WP:DateWithholdingToYear",
+            ] {
+                assert!(keys.contains(&key), "1600WP: {key} not on the range item");
+            }
+        }
+    }
+}
+
+/// The draft a refused batch leaves: `updated_at` moves on every fill
+/// (prepare_for_writes), so it is set aside; everything else is compared.
+fn draft_same(a: &Value, b: &Value) -> bool {
+    let mut a = a.clone();
+    let mut b = b.clone();
+    for draft in [&mut a, &mut b] {
+        if let Some(map) = draft.as_object_mut() {
+            map.remove("updated_at");
+        }
+    }
+    a == b
+}
+
+/// PR 3 (P3a): a period batch is judged whole — a month outside 01-12 or a
+/// year the box cannot hold refuses every part sent on the month's box,
+/// and nothing lands.
+#[test]
+fn pr3_period_batches_are_judged_whole() {
+    setup();
+    for period in rows_as_needed::ONE_PERIODS {
+        let [month, year] = period.keys;
+        let opened = open(period.form, page_period_of(period.form));
+        let bad = fill(
+            period.form,
+            &opened["draft"],
+            json!({ month: "13", year: "2026" }),
+        );
+        assert_eq!(
+            bad["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "{}: a month of 13 is not a period",
+            period.form
+        );
+        assert!(
+            draft_same(&bad["draft"], &opened["draft"]),
+            "{}: a refused period changed the draft",
+            period.form
+        );
+        // A year the box cannot spell (three digits) refuses the same way.
+        let bad_year = fill(
+            period.form,
+            &opened["draft"],
+            json!({ month: "06", year: "226" }),
+        );
+        assert_eq!(
+            bad_year["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "{}: a three-digit year is not a period",
+            period.form
+        );
+        // Where the parts are open a good pair lands.
+        let good = fill(
+            period.form,
+            &opened["draft"],
+            json!({ month: "06", year: "2026" }),
+        );
+        assert_ne!(
+            good["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "{}: a good period refused: {}",
+            period.form,
+            good["rejected"]
+        );
+    }
+}
+
+/// PR 3 (P3a): a two-digit year is the 20YY box's own form only where the
+/// box keeps it (1702Q's Year Ended prints MM/20YY); a four-digit-year box
+/// refuses it.
+#[test]
+fn pr3_period_year_forms() {
+    setup();
+    // 1702Q keeps 20YY: both spellings judge the same year.
+    let opened = open("1702Q", 3);
+    let month = "frm1702q:rbYrEndMonth";
+    let year = "frm1702q:txtYrEndYear";
+    for y in ["2025", "25"] {
+        let filled = fill("1702Q", &opened["draft"], json!({ month: "06", year: y }));
+        assert_ne!(
+            filled["rejected"][month],
+            json!(rows_as_needed::PERIOD_ERROR),
+            "1702Q year {y}: {}",
+            filled["rejected"]
+        );
+    }
+    // 0619E's year is a four-digit box: "25" is refused whole.
+    let opened = open("0619E", 1);
+    let month = "frm0619E:txtMonth";
+    let year = "frm0619E:txtYear";
+    let refused = fill("0619E", &opened["draft"], json!({ month: "06", year: "25" }));
+    assert_eq!(
+        refused["rejected"][month],
+        json!(rows_as_needed::PERIOD_ERROR),
+        "0619E two-digit year: {}",
+        refused["rejected"]
+    );
+    assert!(draft_same(&refused["draft"], &opened["draft"]));
+}
+
+/// PR 3 (R1): a from-to pair whose end precedes its start is refused on the
+/// To end's key with the page's sentence, the draft unchanged — whether
+/// both ends arrive in one batch or the far end is already stored.
+#[test]
+fn pr3_reversed_ranges_are_refused_on_the_to_end() {
+    setup();
+    // 1702EX item 17: two open date boxes.
+    let opened = open("1702EX", 0);
+    let from = "frm1702EX:txtPg1Pt1I17EffectivityFrom";
+    let to = "frm1702EX:txtPg1Pt1I17EffectivityTo";
+    let both = fill(
+        "1702EX",
+        &opened["draft"],
+        json!({ from: "06/01/2026", to: "05/01/2026" }),
+    );
+    assert_eq!(
+        both["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX reversed in one batch: {}",
+        both["rejected"]
+    );
+    assert!(draft_same(&both["draft"], &opened["draft"]));
+    // The stored far end counts too: a good From, then a To before it.
+    let good_from = fill("1702EX", &opened["draft"], json!({ from: "06/01/2026" }));
+    assert_ne!(
+        good_from["rejected"][from],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX from alone: {}",
+        good_from["rejected"]
+    );
+    let late_to = fill("1702EX", &good_from["draft"], json!({ to: "05/01/2026" }));
+    assert_eq!(
+        late_to["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX reversed against the stored end: {}",
+        late_to["rejected"]
+    );
+    // And a To after the stored From lands.
+    let good_to = fill("1702EX", &good_from["draft"], json!({ to: "07/01/2026" }));
+    assert_ne!(
+        good_to["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1702EX good order: {}",
+        good_to["rejected"]
+    );
+    // 2550Q item 4: the From box is a text box holding the same date.
+    let opened = open("2550Q", 1);
+    let from = "frm2550qv2024:RtnPeriodFromNo4";
+    let to = "frm2550qv2024:RtnPeriodToNo4";
+    let both = fill(
+        "2550Q",
+        &opened["draft"],
+        json!({ from: "06/01/2026", to: "05/01/2026" }),
+    );
+    assert_eq!(
+        both["rejected"][to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "2550Q reversed in one batch: {}",
+        both["rejected"]
+    );
+    // 1701MS item 16: two ranges in the one item; A reversed refuses on A To.
+    let opened = open("1701MS", 0);
+    let a_from = "frm1701MS:txtTaxpayerNo16a";
+    let a_to = "frm1701MS:txtTaxpayerNo16a1";
+    let both = fill(
+        "1701MS",
+        &opened["draft"],
+        json!({ a_from: "06/01/2026", a_to: "05/01/2026" }),
+    );
+    assert_eq!(
+        both["rejected"][a_to],
+        json!(rows_as_needed::RANGE_ERROR),
+        "1701MS A reversed: {}",
+        both["rejected"]
+    );
+}
+
 /// Decision 6 (2552): its item 1 date is the return's identity — every write
 /// is refused by the identity lock, so refuse_dates skips it: an impossible
 /// date gets the lock's reason, never a date sentence that would pre-empt it.

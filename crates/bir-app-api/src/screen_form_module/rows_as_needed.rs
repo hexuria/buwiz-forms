@@ -151,6 +151,166 @@ impl OneDate {
     }
 }
 
+/// A month and year the page shows as one MM/YYYY field (PR 3, P3a): the
+/// month's key and the year's, in that order. `two_digit` marks a year box
+/// that keeps 20YY (1600PT/1600VT's two-digit selects, 1702EX/1702MX/1702Q/
+/// 1702RT's year boxes): the field takes and shows four digits but writes
+/// the box's two-digit form.
+pub(super) struct OnePeriod {
+    pub(super) form: &'static str,
+    /// [month, year] keys.
+    pub(super) keys: [&'static str; 2],
+    /// Which key's item the pair is drawn on when they sit apart: 0 the
+    /// month's (2000), 1 the year's (1701, whose month the layout parked
+    /// under Not on the printed sheet).
+    at: usize,
+    two_digit: bool,
+}
+
+impl OnePeriod {
+    const fn new(form: &'static str, keys: [&'static str; 2]) -> Self {
+        Self {
+            form,
+            keys,
+            at: 0,
+            two_digit: false,
+        }
+    }
+    const fn year_item(mut self) -> Self {
+        self.at = 1;
+        self
+    }
+    const fn two_digit(mut self) -> Self {
+        self.two_digit = true;
+        self
+    }
+}
+
+/// Every enumerated month+year pair (briefs/pr3-enumeration.md, P3a).
+pub(super) const ONE_PERIODS: &[OnePeriod] = &[
+    OnePeriod::new(
+        "0605",
+        ["frm0605:itemYearEndMonth", "frm0605:txtYearEnded"],
+    ),
+    OnePeriod::new("0619E", ["frm0619E:txtMonth", "frm0619E:txtYear"]),
+    OnePeriod::new("0619F", ["frm0619F:txtMonth", "frm0619F:txtYear"]),
+    OnePeriod::new(
+        "1600PT",
+        ["frm1600PT:txtPg1I1Month", "frm1600PT:txtPg1I1Year"],
+    )
+    .two_digit(),
+    OnePeriod::new(
+        "1600VT",
+        ["frm1600VT:txtPg1I1Month", "frm1600VT:txtPg1I1Year"],
+    )
+    .two_digit(),
+    OnePeriod::new("1601C", ["frm1601c:txtMonth", "frm1601c:txtYear"]),
+    OnePeriod::new(
+        "1701",
+        ["frm1701:txtPg1I1Month", "frm1701:txtPg1I1Year"],
+    )
+    .year_item(),
+    OnePeriod::new("1701A", ["frm1701A:txtMonth", "frm1701A:txtYear"]),
+    OnePeriod::new(
+        "1701MS",
+        ["frm1701MS:txtMonthNo1", "frm1701MS:txtYearNo1"],
+    ),
+    OnePeriod::new("2000", ["frm2000:txtMonth", "frm2000:txtYear"]),
+    OnePeriod::new("2550M", ["frm2550m:RtnYear", "frm2550m:txtYear"]),
+    OnePeriod::new(
+        "2550Q",
+        ["frm2550qv2024:selectedMonthNo2", "frm2550qv2024:txtYearNo2"],
+    ),
+    OnePeriod::new(
+        "2551Q",
+        ["frm2551Qv2018:rtnMonth", "frm2551Qv2018:txtYear"],
+    ),
+    OnePeriod::new(
+        "2553",
+        ["frm2553:itemYearEndMonth", "frm2553:txtYearEnded"],
+    ),
+    OnePeriod::new(
+        "1702EX",
+        ["frm1702EX:ddlPg1I2Date", "frm1702EX:txtPg1I2YearEnd"],
+    )
+    .two_digit(),
+    OnePeriod::new(
+        "1702MX",
+        ["frm1702MX:ddlPg1I2Date", "frm1702MX:txtPg1I2YearEnd"],
+    )
+    .two_digit(),
+    OnePeriod::new(
+        "1702Q",
+        ["frm1702q:rbYrEndMonth", "frm1702q:txtYrEndYear"],
+    )
+    .two_digit(),
+    OnePeriod::new(
+        "1702RT",
+        ["frm1702RT:ddlPg1I2Month", "frm1702RT:txtPg1I2Year"],
+    )
+    .two_digit(),
+];
+
+/// A from-to pair of dates on one item (PR 3, R1). Each end is anchored by
+/// a whole-date box's key (`t: "date"`), or by a one-date's month key (its
+/// triple's first): 1600WP's two triples.
+pub(super) struct DateRange {
+    pub(super) form: &'static str,
+    /// [from, to] anchors.
+    pub(super) ends: [&'static str; 2],
+}
+
+/// Every enumerated range (briefs/pr3-enumeration.md, R1).
+pub(super) const DATE_RANGES: &[DateRange] = &[
+    DateRange {
+        form: "1600WP",
+        ends: [
+            "frm1600WP:DateWithholdingMonth",
+            "frm1600WP:DateWithholdingToMonth",
+        ],
+    },
+    DateRange {
+        form: "2550Q",
+        ends: [
+            "frm2550qv2024:RtnPeriodFromNo4",
+            "frm2550qv2024:RtnPeriodToNo4",
+        ],
+    },
+    DateRange {
+        form: "1702EX",
+        ends: [
+            "frm1702EX:txtPg1Pt1I17EffectivityFrom",
+            "frm1702EX:txtPg1Pt1I17EffectivityTo",
+        ],
+    },
+    DateRange {
+        form: "1701MS",
+        ends: [
+            "frm1701MS:txtTaxpayerNo16a",
+            "frm1701MS:txtTaxpayerNo16a1",
+        ],
+    },
+    DateRange {
+        form: "1701MS",
+        ends: [
+            "frm1701MS:txtTaxpayerNo16b",
+            "frm1701MS:txtTaxpayerNo16b1",
+        ],
+    },
+    DateRange {
+        form: "2551Q",
+        ends: ["txtDateIssue", "txtDateExpiry"],
+    },
+];
+
+/// The page's own message for a month+year that is not one (PR 3, P3a).
+pub(super) const PERIOD_ERROR: &str =
+    "Type the month and year as MM/YYYY, for example 12/2023.";
+
+/// The page's own message for a from-to pair whose end precedes its start
+/// (PR 3, R1): the To end carries it.
+pub(super) const RANGE_ERROR: &str = "The end date is before the start date.";
+
 /// The month, day and year keys and their host and old-shell behavior.
 pub(super) const ONE_DATES: &[OneDate] = &[
     OneDate::new(
@@ -335,6 +495,25 @@ pub(super) const ONE_DATES: &[OneDate] = &[
             "frm2200Tv2020:txtDateYear",
         ],
     ),
+    // 1600WP item 1's from-to pair: two triples the range row draws as its
+    // two ends (PR 3, R1). The To triple's boxes are the form's computed
+    // ones (`c`): shown, never typed.
+    OneDate::new(
+        "1600WP",
+        [
+            "frm1600WP:DateWithholdingMonth",
+            "frm1600WP:DateWithholdingDay",
+            "frm1600WP:DateWithholdingYear",
+        ],
+    ),
+    OneDate::new(
+        "1600WP",
+        [
+            "frm1600WP:DateWithholdingToMonth",
+            "frm1600WP:DateWithholdingToDay",
+            "frm1600WP:DateWithholdingToYear",
+        ],
+    ),
 ];
 
 fn registered_date(code: &str, key: &str) -> Option<&'static OneDate> {
@@ -381,6 +560,137 @@ pub(super) fn mark_one_date(form: &mut Value, code: &str) {
             }
             item["one_dates"] =
                 serde_json::json!(dates.iter().map(|date| date.keys).collect::<Vec<_>>());
+        }
+    }
+}
+
+/// Where each drawn field of the form sits: key -> (part, item).
+fn field_places(form: &Value) -> std::collections::BTreeMap<String, (usize, usize)> {
+    let mut out = std::collections::BTreeMap::new();
+    for (pi, part) in form["parts"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        for (ii, item) in part["items"].as_array().into_iter().flatten().enumerate() {
+            for field in item["f"].as_array().into_iter().flatten() {
+                if let Some(key) = field["k"].as_str() {
+                    out.insert(key.to_string(), (pi, ii));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The field object `key` of item `at`, taken out of its `f`.
+fn take_field(form: &mut Value, at: (usize, usize), key: &str) -> Option<Value> {
+    let fields = form["parts"][at.0]["items"][at.1]["f"].as_array_mut()?;
+    let index = fields.iter().position(|f| f["k"] == key)?;
+    Some(fields.remove(index))
+}
+
+/// The keys one range end writes: a one-date's whole triple, else the
+/// whole-date box itself.
+fn range_end_keys<'a>(code: &str, anchor: &'a str) -> Vec<&'a str> {
+    ONE_DATES
+        .iter()
+        .find(|date| date.form == code && date.keys[0] == anchor)
+        .map(|date| date.keys.to_vec())
+        .unwrap_or_else(|| vec![anchor])
+}
+
+/// PR 3: bring each registered period's two boxes and each range's two ends
+/// onto one item (1701's month out of Not on the printed sheet, 2000's year
+/// beside its month, 1701MS item 16's second To, 1600WP's To triple), then
+/// publish the `one_periods` and `date_ranges` marks the page draws the
+/// combined controls from. An item the moves empty is dropped by the
+/// page's withoutHidden.
+pub(super) fn mark_periods(form: &mut Value, code: &str) {
+    // (home key, the keys that join its item)
+    let mut moves: Vec<(&'static str, Vec<&'static str>)> = Vec::new();
+    for period in ONE_PERIODS.iter().filter(|p| p.form == code) {
+        moves.push((
+            period.keys[period.at],
+            vec![period.keys[1 - period.at]],
+        ));
+    }
+    for range in DATE_RANGES.iter().filter(|r| r.form == code) {
+        let mut keys = range_end_keys(code, range.ends[0]);
+        keys.extend(range_end_keys(code, range.ends[1]));
+        // The from anchor itself stays; every other key of both ends joins
+        // its item.
+        keys.retain(|key| *key != range.ends[0]);
+        if !keys.is_empty() {
+            moves.push((range.ends[0], keys));
+        }
+    }
+    if !moves.is_empty() {
+        let places = field_places(form);
+        for (home, keys) in moves {
+            let Some(&at) = places.get(home) else { continue };
+            for key in keys {
+                let Some(&from) = places.get(key) else { continue };
+                if from == at {
+                    continue;
+                }
+                if let Some(field) = take_field(form, from, key) {
+                    if let Some(fields) =
+                        form["parts"][at.0]["items"][at.1]["f"].as_array_mut()
+                    {
+                        fields.push(field);
+                    }
+                }
+            }
+        }
+    }
+    let items = form["parts"]
+        .as_array_mut()
+        .into_iter()
+        .flatten()
+        .flat_map(|part| part["items"].as_array_mut().into_iter().flatten());
+    for item in items {
+        let fields: Vec<(&str, &str)> = item["f"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|field| Some((field["k"].as_str()?, field["t"].as_str()?)))
+            .collect();
+        let keys: Vec<&str> = fields.iter().map(|(k, _)| *k).collect();
+        let periods: Vec<[&str; 2]> = ONE_PERIODS
+            .iter()
+            .filter(|p| {
+                p.form == code && keys.contains(&p.keys[0]) && keys.contains(&p.keys[1])
+            })
+            .map(|p| p.keys)
+            .collect();
+        let ranges: Vec<[&str; 2]> = DATE_RANGES
+            .iter()
+            .filter(|range| {
+                if range.form != code
+                    || !keys.contains(&range.ends[0])
+                    || !keys.contains(&range.ends[1])
+                {
+                    return false;
+                }
+                range.ends.iter().all(|anchor| {
+                    // A whole-date box, or a date kept in a text box
+                    // (2550Q's From), or a one-date's month key.
+                    fields.iter().any(|(k, t)| {
+                        k == anchor && matches!(*t, "date" | "text")
+                    }) || ONE_DATES
+                        .iter()
+                        .any(|date| date.form == code && date.keys[0] == *anchor)
+                })
+            })
+            .map(|range| range.ends)
+            .collect();
+        if !periods.is_empty() {
+            item["one_periods"] = serde_json::json!(periods);
+        }
+        if !ranges.is_empty() {
+            item["date_ranges"] = serde_json::json!(ranges);
         }
     }
 }
@@ -476,6 +786,162 @@ pub(super) fn refuse_dates(
             for (key, _) in edits.iter().filter(|(key, _)| keys.contains(&key.as_str())) {
                 out.insert(key.clone(), keys[0].to_string());
             }
+        }
+    }
+    out
+}
+
+/// A period year's text as the box keeps it: four digits for a year box,
+/// or the box's own 20YY/sel two-digit form (`two_digit`), which the page
+/// and the field map spell 2000+n.
+fn period_year_ok(value: &str, two_digit: bool) -> bool {
+    if !value.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    match value.len() {
+        4 => value.parse::<u32>().is_ok_and(|y| (1900..=2100).contains(&y)),
+        1..=2 if two_digit => value.parse::<u32>().is_ok_and(|n| n <= 99),
+        _ => false,
+    }
+}
+
+/// A batch's period writes judged whole (PR 3, P3a): once its month and
+/// year are all there (the batch's own, else what the boxes show), the
+/// month is 01-12 and the year the box's form; else every part of it the
+/// batch writes is refused with the page's message, keyed to the month's
+/// box, so no part lands alone. A blank (or a "00" month, 2553's empty
+/// choice) on either side clears or holds the pair unjudged.
+pub(super) fn refuse_periods(
+    kind: AgentFormKind,
+    shown: &Value,
+    edits: &[(String, Value)],
+) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for period in ONE_PERIODS
+        .iter()
+        .filter(|p| p.form == kind.form_code())
+    {
+        let [month_key, year_key] = period.keys;
+        if !edits
+            .iter()
+            .any(|(key, _)| key == month_key || key == year_key)
+        {
+            continue;
+        }
+        let resolve = |key: &str| -> Option<String> {
+            match edits.iter().find(|(k, _)| k == key) {
+                Some((_, v)) => Some(text(v)),
+                None => Some(shown[key].as_str().unwrap_or_default().trim().to_string()),
+            }
+        };
+        let (Some(month), Some(year)) = (resolve(month_key), resolve(year_key)) else {
+            continue;
+        };
+        let unset = |v: &str| v.is_empty() || v.chars().all(|c| c == '0');
+        if unset(&month) || unset(&year) {
+            continue;
+        }
+        let month_ok = month.len() <= 2
+            && month.chars().all(|c| c.is_ascii_digit())
+            && month.parse::<u32>().is_ok_and(|n| (1..=12).contains(&n));
+        if !(month_ok && period_year_ok(&year, period.two_digit)) {
+            for (key, _) in edits
+                .iter()
+                .filter(|(key, _)| key == month_key || key == year_key)
+            {
+                out.insert(key.clone(), month_key.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// One range end's date as (year, month, day): a one-date's triple from
+/// the batch's writes else what the boxes show, or a whole-date box's own
+/// MM/DD/YYYY text. None while either part is unset.
+fn range_end_date(
+    code: &str,
+    shown: &Value,
+    edits: &[(String, Value)],
+    anchor: &str,
+) -> Option<(u32, u32, u32)> {
+    if let Some(date) = ONE_DATES
+        .iter()
+        .find(|date| date.form == code && date.keys[0] == anchor)
+    {
+        let part = |key: &str| -> Option<String> {
+            match edits.iter().find(|(k, _)| k == key) {
+                Some((_, v)) => Some(text(v)).filter(|v| !v.is_empty() && v != "0"),
+                None => Some(shown[key].as_str().unwrap_or_default().trim().to_string())
+                    .filter(|v| !v.chars().all(|c| c == '0')),
+            }
+        };
+        let [Some(month), Some(day), Some(year)] = date.keys.map(part) else {
+            return None;
+        };
+        let number = |v: &str| v.parse::<u32>().ok();
+        let (m, d, y) = (number(&month)?, number(&day)?, number(&year)?);
+        return Some((if y < 100 { 2000 + y } else { y }, m, d));
+    }
+    let raw = match edits.iter().find(|(k, _)| k == anchor) {
+        Some((_, v)) => text(v),
+        None => shown[anchor].as_str().unwrap_or_default().trim().to_string(),
+    };
+    shown_ymd(&raw)
+}
+
+/// A shown whole date as (year, month, day): the draft's MM/DD/YYYY, or an
+/// ISO day.
+fn shown_ymd(text: &str) -> Option<(u32, u32, u32)> {
+    let parts: Vec<&str> = text
+        .trim()
+        .split(['/', '-', '.'])
+        .filter(|p| !p.is_empty())
+        .collect();
+    let (ys, ms, ds) = match parts.as_slice() {
+        [y, m, d] if y.len() == 4 => (*y, *m, *d),
+        [m, d, y] if y.len() == 4 => (*y, *m, *d),
+        _ => return None,
+    };
+    Some((ys.parse().ok()?, ms.parse().ok()?, ds.parse().ok()?))
+}
+
+/// A batch's range writes judged whole (PR 3, R1): when a touched from-to
+/// pair resolves both ends to dates — the batch's own writes else what the
+/// boxes show, so both ends in one batch and a stored far end both count —
+/// and the end precedes the start, every key of either end the batch
+/// writes is refused and the To anchor carries the page's message, so the
+/// assistant/agent path cannot store a reversed range either.
+pub(super) fn refuse_ranges(
+    kind: AgentFormKind,
+    shown: &Value,
+    edits: &[(String, Value)],
+) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for range in DATE_RANGES
+        .iter()
+        .filter(|range| range.form == kind.form_code())
+    {
+        let ends: Vec<Vec<&str>> = range
+            .ends
+            .iter()
+            .map(|anchor| range_end_keys(kind.form_code(), *anchor))
+            .collect();
+        let touched = |key: &str| ends.iter().flatten().any(|end| *end == key);
+        if !edits.iter().any(|(key, _)| touched(key)) {
+            continue;
+        }
+        let (Some(from), Some(to)) = (
+            range_end_date(kind.form_code(), shown, edits, range.ends[0]),
+            range_end_date(kind.form_code(), shown, edits, range.ends[1]),
+        ) else {
+            continue;
+        };
+        if from <= to {
+            continue;
+        }
+        for (key, _) in edits.iter().filter(|(key, _)| touched(key)) {
+            out.insert(key.clone(), range.ends[1].to_string());
         }
     }
     out
