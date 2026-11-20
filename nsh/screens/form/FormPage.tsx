@@ -524,7 +524,7 @@ function PartCard(props: PartCardProps) {
     if (!r) made.set(key, (r = { key, fold, ii }));
     return r;
   };
-  // The part's rows: the fold before its first profile item, then every item not folded into it.
+  // The part's rows: the fold before its first profile item, then every item not folded into it and not gated away (G1).
   const rows = computed<PartRow[]>(
     () => {
       const fold = info().fold;
@@ -532,7 +532,9 @@ function PartCard(props: PartCardProps) {
       const out: PartRow[] = [];
       p.items.forEach((_it, ii) => {
         if (fold?.first === ii) out.push(rowOf(true, ii));
-        if (!hidden?.has(ii)) out.push(rowOf(false, ii));
+        // A gated-away row is not a row of the list: it is not drawn and not counted.
+        if (hidden?.has(ii) || s.row(`${pi}:${ii}`)().hidden) return;
+        out.push(rowOf(false, ii));
       });
       return out;
     },
@@ -549,7 +551,7 @@ function PartCard(props: PartCardProps) {
         <ListRow testID={`fp-part-${pi}-toggle`} accessibilityLabel={partName(p, pi)} onPress={() => s.togglePart(pi)}>
           <Icon name={info().open ? "chevron-down" : "chevron-right"} tone="fg3" />
           <Text variant="control" class="min-w-0 flex-1 font-semibold">{partName(p, pi)}</Text>
-          <Text variant="meta" tone="fg3">{`${p.items.length} item${p.items.length > 1 ? "s" : ""}`}</Text>
+          <Text variant="meta" tone="fg3">{`${info().items} item${info().items === 1 ? "" : "s"}`}</Text>
         </ListRow>
       </View>
       <If when={info().open}>
@@ -652,7 +654,7 @@ function Navigator(props: { s: FormSession; edge: number }) {
               <If when={infos[i]().errors > 0}>
                 <Badge text={String(infos[i]().errors)} danger />
               </If>
-              <Badge text={String(p.items.length)} />
+              <Badge text={String(infos[i]().items)} />
             </View>
           </PressCell>
         ))}
@@ -705,7 +707,7 @@ function SectionsList(props: { s: FormSession; onPick: () => void; maxHeight: nu
                 <Text variant="meta" tone="fg2" lines={1}>{names.tag}</Text>
               </View>
               <Text variant="metaStrong" tone={info().errors > 0 ? "danger" : "fg2"}>
-                {info().errors > 0 ? `Fix · ${info().errors}` : info().todo > 0 ? `${info().todo} to do` : `${p.items.length} item${p.items.length > 1 ? "s" : ""}`}
+                {info().errors > 0 ? `Fix · ${info().errors}` : info().todo > 0 ? `${info().todo} to do` : `${info().items} item${info().items === 1 ? "" : "s"}`}
               </Text>
             </ListRow>
           );

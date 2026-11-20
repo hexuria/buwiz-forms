@@ -28,7 +28,10 @@ function barWidth(labels: string[]): number {
 
 /** One group of one-answer choices, by its size. */
 export function RadioGroupControl(props: RadioInput) {
-  const count = () => props.choices.length;
+  // G1: a choice another answer keeps shut draws nothing (its key sits in `hidden`).
+  const shut = () => read(props.hidden, [] as readonly string[]);
+  const visible = () => props.choices.filter((c) => !shut().includes(c.key));
+  const count = () => visible().length;
   const kind = () => radioKind(count());
   const locked = () => props.locked();
   const why = () => read(props.reason, "");
@@ -37,7 +40,7 @@ export function RadioGroupControl(props: RadioInput) {
     return r > 0 ? r : props.narrow() ? ROOM_NARROW : ROOM_WIDE;
   };
   // The bar stacks (full-width segments, one under another) when its labels cannot hold one line in its room.
-  const stacked = () => kind() === "segmented" && barWidth(props.choices.map((c) => c.label)) > room();
+  const stacked = () => kind() === "segmented" && barWidth(visible().map((c) => c.label)) > room();
   const clearable = () => props.clearable?.() ?? false;
   const value = () => props.selected() ?? "";
   const pick = (key: string) => props.onPick(key);
@@ -56,7 +59,7 @@ export function RadioGroupControl(props: RadioInput) {
           <Segmented
             testID={props.testID}
             label={props.label}
-            options={props.choices.map((c) => ({
+            options={visible().map((c) => ({
               value: c.key,
               label: c.label,
               testID: c.testID,
@@ -80,7 +83,7 @@ export function RadioGroupControl(props: RadioInput) {
             label={props.label}
             options={[
               ...(clearable() ? [{ value: "", label: "None" }] : []),
-              ...props.choices.map((c) => ({ value: c.key, label: c.label, disabled: props.choiceLocked(c.key) })),
+              ...visible().map((c) => ({ value: c.key, label: c.label, disabled: props.choiceLocked(c.key) })),
             ]}
             value={props.selected()}
             placeholder="Choose…"
@@ -96,7 +99,7 @@ export function RadioGroupControl(props: RadioInput) {
           <SearchPick
             testID={props.testID}
             label={props.label}
-            options={props.choices.map((c) => ({ value: c.key, label: c.label, disabled: props.choiceLocked(c.key) }))}
+            options={visible().map((c) => ({ value: c.key, label: c.label, disabled: props.choiceLocked(c.key) }))}
             value={value()}
             width={width()}
             disabled={locked()}

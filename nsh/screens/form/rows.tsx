@@ -6,7 +6,7 @@ import { signal, untracked, View } from "nsh";
 import { AppButton, CalendarButton, Chip, Code, DateField, DateTouchField, Dropdown, Icon, type IconName, ListRow, Segmented, Switch, Text, TextField, Tooltip } from "../../ui";
 import type { FieldControlProps, RadioGroupProps, ScheduleProps, SchemaField, SchemaItem } from "./contract";
 import { FieldControl, RadioGroupControl, ScheduleControl } from "./controls";
-import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, type OneDate } from "./schema";
+import { choiceLabel, controlWidth, dateParts, dateRanges, emptyCell, isTinItem, needsText, oneDates, onePeriods, radioGroups, type DateRange, type OneDate } from "./schema";
 import { PeriodField, RangeField } from "./periodField";
 import type { AskCard, ElectionCard, FormSession, RowInfo } from "./session";
 import { dateRange, periodDay, splitDay } from "./dateRules";
@@ -41,8 +41,9 @@ export function fieldProps(s: FormSession, f: SchemaField, narrow: Accessor<bool
 }
 
 /** The props of one radio group — `radios` is one host one-answer group of the item (see radioGroups), `id` its row id
- *  (exported for tests). `room` is the row's width in points, for the segmented bar's one-line fit. */
-export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>, room?: Accessor<number>): RadioGroupProps {
+ *  (exported for tests). `room` is the row's width in points, for the segmented bar's one-line fit; `hidden` names the
+ *  choice keys G1 keeps shut. */
+export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: SchemaField[], narrow: Accessor<boolean>, room?: Accessor<number>, hidden?: () => readonly string[]): RadioGroupProps {
   const keys = radios.map((f) => f.k);
   const boxes = keys.map((k) => s.box(k));
   // The way back to unanswered is the session's untick: a re-pick clears a group of three or more (rg >= 3) that is not the
@@ -58,7 +59,8 @@ export function radioProps(s: FormSession, id: string, it: SchemaItem, radios: S
     locked: () => boxes.every((b) => b.locked()),
     choiceLocked: (k) => s.box(k).locked(),
     hint: () => (boxes.every((b) => b.locked()) && !boxes.some((b) => b.value() === "true") ? boxes.map((b) => b.hint()).find(Boolean) || "" : ""),
-    off: () => boxes.map((b) => b.off()).find(Boolean) || "",
+    // A shut choice draws nothing, so its reason must not fade the choices that do draw.
+    off: () => boxes.filter((_, i) => !(hidden?.() ?? []).includes(keys[i])).map((b) => b.off()).find(Boolean) || "",
     narrow,
     room,
     clearable: () => untickable && optional,
@@ -201,6 +203,13 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   const s = props.s;
   const it = props.it;
   const fs = it.f || [];
+  // G1: a box another answer keeps shut is not drawn (RowInfo.hiddenBoxes); a schedule's cells always draw.
+  const hid = () => props.info().hiddenBoxes;
+  const shut = (keys: string[]) => keys.length > 0 && keys.every((k) => hid().includes(k));
+  // A range's drawn keys: each end's anchor plus its date parts.
+  const endKeys = (e: DateRange["from"]): string[] =>
+    e.date ? [e.date.month.k, e.date.day?.k, e.date.year.k].filter((k): k is string => Boolean(k)) : [e.anchor];
+  const rangeKeys = (r: DateRange): string[] => [...endKeys(r.from), ...endKeys(r.to)];
   if (it.rows) return <ScheduleControl {...scheduleProps(s, props.id, it, props.narrow)} />;
   if (!fs.length && it.note) return <Text variant="meta" tone="fg3" testID={`fp-note-${props.id}`}>{it.note}</Text>;
   const dates = oneDates(it);
@@ -219,10 +228,12 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
     return (
       <View class="flex-row flex-wrap items-center gap-1.5">
         {fs.map((f, j) => (
-          <View class="flex-row items-center gap-1.5">
-            {j ? <Text tone="fg3">-</Text> : null}
-            <FieldControl {...fieldProps(s, f, () => false, f.l, j === 3 ? 76 : 58)} />
-          </View>
+          <If when={!hid().includes(f.k)}>
+            <View class="flex-row items-center gap-1.5">
+              {j ? <Text tone="fg3">-</Text> : null}
+              <FieldControl {...fieldProps(s, f, () => false, f.l, j === 3 ? 76 : 58)} />
+            </View>
+          </If>
         ))}
       </View>
     );
@@ -256,11 +267,14 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         // take a "-g<i>" suffix, with a caption when their choices share a marker ("A.", "B.").
         const gid = groups.length > 1 && i > 0 ? `${props.id}-g${i}` : props.id;
         const cap = groups.length > 1 ? groupCaption(g) : "";
+        // G1: a group whose every choice is shut draws nothing (its caption too).
         return (
-          <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
-            {cap ? <Text variant="meta" tone="fg2">{cap}</Text> : null}
-            <RadioGroupControl {...radioProps(s, gid, it, g, props.narrow, () => rowW())} />
-          </View>
+          <If when={g.some((f) => !hid().includes(f.k))}>
+            <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
+              {cap ? <Text variant="meta" tone="fg2">{cap}</Text> : null}
+              <RadioGroupControl {...radioProps(s, gid, it, g, props.narrow, () => rowW(), () => hid())} hidden={() => hid()} />
+            </View>
+          </If>
         );
       })}
       {depBox ? (
@@ -272,15 +286,19 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
       {periods.map((p) => {
         const message = props.info().boxMessages.find((entry) => entry.key === p.month.k || entry.key === p.year.k)?.sentence || "";
         return (
-          <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
-            <PeriodField s={s} period={p} label={it.l} narrow={props.narrow} message={message} invalid={s.box(p.periodKey).invalid()} />
-          </View>
+          <If when={!shut([p.month.k, p.year.k])}>
+            <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+              <PeriodField s={s} period={p} label={it.l} narrow={props.narrow} message={message} invalid={s.box(p.periodKey).invalid()} />
+            </View>
+          </If>
         );
       })}
       {ranges.map((r) => (
-        <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
-          <RangeField s={s} range={r} label={it.l} narrow={props.narrow} />
-        </View>
+        <If when={!shut(rangeKeys(r))}>
+          <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+            <RangeField s={s} range={r} label={it.l} narrow={props.narrow} />
+          </View>
+        </If>
       ))}
       {boxes.map((f) => {
         if (depBox !== null && f.k === depBox.k) return null;
@@ -288,16 +306,20 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         const date = dates.find((candidate) => [candidate.month.k, candidate.day?.k, candidate.year.k].includes(f.k));
         if (date && date.month.k !== f.k) return null;
         if (date) return (
-          <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
-            <OneDateBox s={s} date={date} label={it.l} narrow={props.narrow} describedBy={() => props.describedBy(date)} errorDescription={() => props.errorDescription(date)} />
-          </View>
+          <If when={!shut([date.month.k, date.day?.k, date.year.k].filter((k): k is string => Boolean(k)))}>
+            <View class="min-w-0" style={{ width: props.narrow() ? "100%" : undefined }}>
+              <OneDateBox s={s} date={date} label={it.l} narrow={props.narrow} describedBy={() => props.describedBy(date)} errorDescription={() => props.errorDescription(date)} />
+            </View>
+          </If>
         );
         const sub = multi && f.l && f.l !== it.l && !/^\d+[A-Z]?$/.test(f.l);
         return (
-          <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
-            {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
-            <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
-          </View>
+          <If when={!hid().includes(f.k)}>
+            <View class="min-w-0 gap-1" style={{ width: props.narrow() ? "100%" : undefined }}>
+              {sub && f.t !== "chk" ? <Text variant="meta" tone="fg2">{f.l}</Text> : null}
+              <FieldControl {...fieldProps(s, f, props.narrow, f.t === "chk" ? f.l || it.l : f.l)} />
+            </View>
+          </If>
         );
       })}
       <If when={splitOpen()}>
@@ -519,7 +541,9 @@ export function ItemRow(props: RowProps) {
     return message ? messageRefs.get(message.key)?.() ?? null : info().message ? rowMessageRef() : null;
   };
   const errorDescription = (date: OneDate) => boxMessage(date)?.sentence || info().message;
+  // G1: a row whose every drawn box another answer keeps shut is not drawn at all (its number and title too).
   return (
+    <If when={!info().hidden}>
     <View
       ref={(r: ViewRef) => props.onRef(id, r)}
       testID={`fp-item-${id}`}
@@ -625,6 +649,7 @@ export function ItemRow(props: RowProps) {
         </Each>
       </View>
     </View>
+    </If>
   );
 }
 

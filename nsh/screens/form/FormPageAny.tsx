@@ -22,6 +22,8 @@ interface Params {
   seed?: boolean;
   /** Settings > Compact form sections on (the app pref compactFormNav). */
   compact?: boolean;
+  /** Parts to open once the page opened (the rest stay folded, as a fresh return leaves them); "all" opens every part. */
+  openParts?: number[] | "all";
 }
 
 async function seedParity(tin: string) {
@@ -62,6 +64,8 @@ function Fixture() {
           onSession={(s) =>
             void s.ready().then(() => {
               sessionFields.set(String(s.fieldCount()));
+              const openAll = p.openParts === "all" ? s.schema!.parts.map((_x, i) => i) : p.openParts || [];
+              for (const pi of openAll) if (!s.part(pi)().open) s.togglePart(pi);
               for (const [k, v] of Object.entries(p.edits || {})) s.edit(k, v);
               if (p.stepRow) s.jumpTo(Number(p.stepRow.split(":")[0]), p.stepRow);
             })

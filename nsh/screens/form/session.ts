@@ -152,6 +152,10 @@ export interface RowInfo {
   message: string;
   /** The box-home sentences of this row's split date parts and TIN boxes, in box order (B3/B4). */
   boxMessages: { key: string; sentence: string }[];
+  /** G1: every drawn box of the row is one another answer keeps shut — the whole row (number and title too) is not drawn. */
+  hidden: boolean;
+  /** G1: the row's drawn box keys that are gated away; the rest draw (a schedule's cells are never listed: its grid stays). */
+  hiddenBoxes: string[];
   /** Why the row's shut blank boxes show blank. */
   notes: string[];
   /** What turns the row's faded boxes on ("Needs item 13 = Yes"). */
@@ -193,6 +197,8 @@ export interface PartInfo {
   errors: number;
   /** Rows of the part on the to-do list. */
   todo: number;
+  /** Items drawn now (G1: a row whose every box is gated away is not counted). */
+  items: number;
   open: boolean;
   /** The part's "From tax profile" fold: its first item, its items, its label, how many need attention, open. */
   fold: { first: number; items: number[]; label: string; flagged: number; open: boolean } | null;
@@ -495,7 +501,7 @@ export class FormSession {
   private sInvalid = new SignalMap<boolean>(false);
   private sBoxMsg = new SignalMap<string>("");
   private sRow = new SignalMap<RowInfo>(null as unknown as RowInfo, sameJson);
-  private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, open: false, fold: null }, sameJson);
+  private sPart = new SignalMap<PartInfo>({ errors: 0, todo: 0, items: 0, open: false, fold: null }, sameJson);
   private sHeader = signal<HeaderInfo>(null as unknown as HeaderInfo, { equals: sameJson });
   private sTodo = signal<TodoRow[]>([], { equals: sameJson });
   private sSave = signal<SaveState>({ state: "idle" }, { equals: sameJson });
@@ -1984,6 +1990,52 @@ export class FormSession {
     const s = this.st;
     if (s.blank.has(k) && s.needs[k]) return s.needs[k];
     return s.whys[k] || s.waits[k] || "";
+  }
+
+  // ---------------------------------------------------------------- gated boxes (G1)
+
+  /** The host's is_blank on what the draft holds: "", "false", or only 0 . , - (conditions.rs). */
+  private blankShown(k: string): boolean {
+    const v = String(this.st.values[k] ?? "").trim();
+    return v === "" || v === "false" || [...v].every((c) => "0.,-".includes(c));
+  }
+
+  /**
+   * A box another answer keeps shut (s.off) draws nothing — unless it still holds something the filer must see:
+   * a value from an old draft, an import or a pre-B16 write stays drawn faded with its "Needs …" line, and a box
+   * carrying a sentence (its own, a row message's, or a to-do stop) stays too, so no text points at nothing.
+   */
+  private hiddenBox(k: string): boolean {
+    const s = this.st;
+    if (!s.off[k] || !this.blankShown(k) || s.boxMessages[k] || s.stopKeys.has(k)) return false;
+    const id = this.keyIndex.get(k);
+    return !(id && s.messages[id] && (s.messageKeys[id] || []).includes(k));
+  }
+
+  /** The cell keys a schedule draws (its hidden columns' cells are not drawn). */
+  private drawnCells(it: SchemaItem): string[] {
+    const cols = it.cols || [];
+    const out: string[] = [];
+    for (const row of it.keys || []) {
+      row.forEach((k, c) => {
+        const col = cols[c];
+        if (col && col.t !== "hidden") out.push(k);
+      });
+    }
+    return out;
+  }
+
+  /** The keys of the boxes a row draws: a schedule's cells, else its fields (a pooled line's head only). */
+  private drawnKeys(it: SchemaItem): string[] {
+    return it.rows ? this.drawnCells(it) : (it.f || []).map((f) => f.k);
+  }
+
+  /** G1: the whole row is gated away — every drawn box shut, and no message or to-do points at it. */
+  private rowHidden(id: string, it: SchemaItem, todoHere: boolean, said: boolean): boolean {
+    const s = this.st;
+    if (todoHere || said || s.dateErrors[id]) return false;
+    const drawn = this.drawnKeys(it);
+    return drawn.length > 0 && drawn.every((k) => this.hiddenBox(k));
   }
 
   /** Boxes of an edit batch the page has open (screen_form_fill's unlocked). */
@@ -3556,8 +3608,9 @@ export class FormSession {
     if (this.disposed) return;
     batch(() => {
       this.publishBoxes();
-      this.publishRows();
-      this.publishPage();
+      const todo = this.todoNow();
+      this.publishRows(todo);
+      this.publishPage(todo);
     });
   }
 
@@ -3605,22 +3658,26 @@ export class FormSession {
     }
   }
 
-  private publishRows() {
+  private publishRows(todo: TodoRow[]) {
     const s = this.st;
     if (!this.schema) return;
     const shown = this.shownMessages();
     const tucked = this.schema.parts.map((_p, pi) => (s.profileOpen.has(pi) ? [] : this.tuckedItems(pi)));
+    // A row on the to-do list is never gated away: the pill and the badges keep pointing at a drawn row.
+    const todoIds = new Set(todo.map((r) => r.id));
     for (const id of this.rowIds) {
       const [pi, ii] = id.split(":").map(Number);
-      this.sRow.get(id).set(this.rowInfo(id, this.items.get(id)!, shown, tucked[pi].includes(ii)));
+      this.sRow.get(id).set(this.rowInfo(id, this.items.get(id)!, shown, tucked[pi].includes(ii), todoIds.has(id)));
     }
   }
 
-  private rowInfo(id: string, it: SchemaItem, shown: Record<string, string>, tucked: boolean): RowInfo {
+  private rowInfo(id: string, it: SchemaItem, shown: Record<string, string>, tucked: boolean, todoHere: boolean): RowInfo {
     const s = this.st;
     const fs = it.f || [];
     const keys = keysOf(it);
     const tin = isTinItem(it);
+    // G1: the drawn box keys another answer keeps shut (a schedule's cells are never hidden on their own).
+    const hiddenBoxes = it.rows ? [] : this.drawnKeys(it).filter((k) => this.hiddenBox(k));
     const editKeys = fs.filter((x) => s.profileEdit.has(x.k)).map((x) => x.k);
     const fromProfile = (tin && !it.typed_tin) || fs.some((x) => s.profile.has(x.k));
     const kept = keys.map((k) => s.kept[k]).filter(Boolean);
@@ -3694,8 +3751,11 @@ export class FormSession {
     return {
       message: oneDateShown.length || periodShown.length ? "" : shown[id] || "",
       boxMessages: shownKeys.map((k) => ({ key: k, sentence: s.boxMessages[k] })),
+      hidden: this.rowHidden(id, it, todoHere, Boolean(shown[id])),
+      hiddenBoxes,
       notes: this.lockNotesFor(it),
-      needs: [...new Set(keys.map((k) => s.off[k]).filter(Boolean))],
+      // A gated-away box's "Needs …" line is not drawn either; a schedule keeps every cell's (its grid stays).
+      needs: [...new Set(keys.filter((k) => it.rows || !this.hiddenBox(k)).map((k) => s.off[k]).filter(Boolean))],
       kept: kept.includes("template") ? "template" : kept.includes("last") ? "last" : "",
       stepHere: s.stepAt === id,
       stoppable: s.editable && stopBoxes.length > 0,
@@ -3722,9 +3782,8 @@ export class FormSession {
     };
   }
 
-  private publishPage() {
+  private publishPage(todo: TodoRow[]) {
     const s = this.st;
-    const todo = this.todoNow();
     this.sTodo.set(todo);
     // The pill's red count (old drawPill): with rows to do, how many hold a message; else how many parts have one.
     const partsNeeding = this.schema ? this.schema.parts.filter((_p, i) => this.partErrors(i) > 0).length : 0;
@@ -3739,6 +3798,7 @@ export class FormSession {
         this.sPart.get(String(pi)).set({
           errors: this.partErrors(pi),
           todo: todo.filter((r) => r.id.startsWith(`${pi}:`)).length,
+          items: p.items.filter((_it, ii) => !this.sRow.get(`${pi}:${ii}`)().hidden).length,
           open: s.openParts.has(pi),
           fold: tucked.length
             ? {

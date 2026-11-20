@@ -26,7 +26,11 @@ export interface FieldExtras {
 export type FieldInput = FieldControlProps & FieldExtras;
 
 /** What RadioGroupControl takes. */
-export type RadioInput = RadioGroupProps & { reason?: Maybe<string> };
+export type RadioInput = RadioGroupProps & {
+  reason?: Maybe<string>;
+  /** Choice keys another answer keeps shut (G1): those choices are not drawn. */
+  hidden?: Maybe<readonly string[]>;
+};
 
 /** What ScheduleControl takes. */
 export type ScheduleInput = ScheduleProps & {
