@@ -19,15 +19,17 @@ test("F3-11 desktop: Cmd+Right inside a text box stays in the box; outside one i
   await app.waitFor("text:BIR Form 2551Q");
   await app.press("id:fp-check");
   await app.waitFor("id:fp-pill-count");
-  await app.press("id:fp-parts-toggle");
+  // Open and reveal Part II: Expand all need not mount its offscreen, virtualized amount rows.
+  await app.press("id:fp-nav-2");
+  await app.waitFor("id:fp-frm2551Qv2018:txt15");
   await app.type("id:fp-frm2551Qv2018:txt15", "5");
   await app.keyboard.press("mod+right");
   await app.wait(300);
-  expect(app.texts().some((t) => /^Item 13 · /.test(t))).toBe(false);
+  expect(app.texts().some((t) => /^Item \d+ · /.test(t))).toBe(false);
   // The return key leaves the box: now the shortcut steps.
   await app.submit("id:fp-frm2551Qv2018:txt15");
   await app.keyboard.press("mod+right");
-  await app.waitFor("text:/^Item 13 · /");
+  await app.waitFor("text:/^Item 20 · /");
 });
 
 test("F7-1 desktop: emptying an amount box shows the host's zero, not the old amount, and the save line says Saved", async () => {
@@ -35,7 +37,8 @@ test("F7-1 desktop: emptying an amount box shows the host's zero, not the old am
   const box = "id:fp-frm2551Qv2018:txt15";
   const app = await open(ENTRY, { ...DESKTOP, host: { params: { formCode: "2551Q", year: 2025, period: 3, edits: { "frm2551Qv2018:txt15": "100" } } } });
   await app.waitFor("text:BIR Form 2551Q");
-  await app.press("id:fp-parts-toggle");
+  await app.press("id:fp-nav-2");
+  await app.waitFor(box);
   await app.waitFor("text:✓ Saved", { timeout: 5000 });
   expect(app.value(box)).toContain("100");
   // Select-all and Backspace: the box reports "". The old amount does not come back, the zero does.
