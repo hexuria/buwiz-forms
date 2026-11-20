@@ -133,6 +133,53 @@ fn a_stored_2551q_refreshes_profile_prerequisites_on_return_to_the_form() {
 }
 
 #[test]
+fn a_2551q_keeps_its_return_only_email_when_reopened() {
+    setup_juana();
+    let key = "txtEmail#occurrence-1";
+    let opened = open_as(JUANA, "2551Q", 3);
+    let from_profile = opened["draft"]["email"].clone();
+    assert_ne!(from_profile, json!("books@example.com"));
+    let filled = fill_unlocked(
+        "2551Q",
+        &opened["draft"],
+        json!({ key: "books@example.com" }),
+        &[key],
+    );
+    let saved = save("2551Q", &filled["draft"]);
+    assert_eq!(saved["draft"]["email"], "books@example.com");
+    assert!(profile_edits(&saved["draft"]).contains(key));
+    // Reopening reconciles the profile context but keeps the edited box,
+    // and the next save does not write the profile's email over it.
+    let reopened = open_as(JUANA, "2551Q", 3);
+    assert_eq!(reopened["draft"]["email"], "books@example.com");
+    let refilled = fill_unlocked("2551Q", &reopened["draft"], json!({}), &[]);
+    let resaved = save("2551Q", &refilled["draft"]);
+    assert_eq!(resaved["draft"]["email"], "books@example.com");
+    assert_eq!(
+        open_as(JUANA, "2551Q", 3)["draft"]["email"],
+        "books@example.com"
+    );
+}
+
+#[test]
+fn a_calendar_2551q_saved_with_another_year_end_month_reopens_to_be_corrected() {
+    setup_juana();
+    let opened = open_as(JUANA, "2551Q", 3);
+    let mut draft = opened["draft"].clone();
+    draft["year_end_month"] = json!(6);
+    let saved = save("2551Q", &draft);
+    assert_eq!(saved["draft"]["year_end_month"], 6);
+    let reopened = open_as(JUANA, "2551Q", 3);
+    assert_eq!(reopened["draft"]["id"], saved["draft"]["id"]);
+    assert_eq!(reopened["draft"]["year_end_month"], 6);
+    let mut fixed = reopened["draft"].clone();
+    fixed["year_end_month"] = json!(12);
+    let resaved = save("2551Q", &fixed);
+    assert_eq!(resaved["draft"]["year_end_month"], 12);
+    assert_eq!(open_as(JUANA, "2551Q", 3)["draft"]["year_end_month"], 12);
+}
+
+#[test]
 fn profile_prerequisites_respect_commencement_pt010_and_taxpayer_applicability() {
     setup_juana();
     let kind = kind_of("2551Q").unwrap();

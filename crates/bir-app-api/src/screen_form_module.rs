@@ -1866,9 +1866,7 @@ pub fn load_draft(
                     None if exact.is_some() => return Err(NO_LONGER_STORED.to_string()),
                     None => form_2551q::Form2551QDraft::new_from_profile(profile, year, quarter),
                 };
-                if draft.status == FilingStatus::Draft {
-                    draft.reconcile_with_effective_profile(profile)?;
-                }
+                draft.refresh_profile_context(profile);
                 // A later quarter takes the Item 13 answer of its filed Q1
                 // in this app, and is locked to it (`draft_locks::item_13`).
                 if let Some(db) = store {
