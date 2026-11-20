@@ -46,8 +46,11 @@ Rebuild every screen to look and behave like today's app (source of truth: `app/
   Later-quarter 2551Q opening advice comes from the host's Item 13 applicability and annual-election validation,
   not a second TS predicate. Open/fill/use-profile return the missing profile context; links select the form's year,
   open the annual-election editor or focus the business start date, and return after a successful save. Reopening
-  and in-form profile saves replace the advice from host results. This adds no Queue requirement: a missing
-  commencement date remains advisory. Verification: `session.prerequisites`, `FormPagePrerequisites`, taxpayer
+  refreshes editable 2551Q profile snapshots from that return's year before deriving advice; in-form profile
+  saves replace the advice from host results. Linked editors use native ref reveal before focus, including
+  the selected (or first unset) annual-election choice. Queued/filed snapshots are not refreshed by this path.
+  This adds no Queue requirement: a missing commencement date remains advisory.
+  Verification: `session.prerequisites`, `FormPagePrerequisites`, `ui/focus`, taxpayer
   `yearEdit`, and the screen-form `fact_asks` Rust tests; native focus/scroll remains a device acceptance check.
 - **Print preview:** a second window on desktop, like today.
 - **Filings:** the board when wide (720 px and up), a list with status tabs when narrow.

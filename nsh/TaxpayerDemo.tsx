@@ -10,7 +10,7 @@
 import { host, mount, signal, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
-import { createDemoTaxpayer } from "./bir/testing";
+import { createDemoTaxpayer, warmForms } from "./bir/testing";
 import { ProfileExportCard } from "./screens/taxpayer";
 import { Shell } from "./shell/Shell";
 import { store } from "./shell/store";
@@ -27,16 +27,22 @@ interface Params {
   start?: string;
   card?: "export";
   exportDownload?: { name?: string; error?: string; cancelled?: boolean };
+  year?: number;
+  selfEmployed?: boolean;
+  savedReturn?: { formCode: string; year: number; period: number };
 }
 
+if (/form=/.test(String((host.params as Params)?.start ?? ""))) warmForms();
+
 function seed(p: Params) {
-  const year = new Date().getFullYear();
+  const year = p.year ?? new Date().getFullYear();
   const taxpayer = createDemoTaxpayer();
   const head = taxpayer.branches[0];
   if (p.years !== false && bir.list_tax_years(head.tin).length === 0) {
     bir.add_tax_year(head.tin, year, false);
     bir.set_yearly_forms(head.tin, year, p.conflict ? ["1601C", "2551Q", "1701", "1701A"] : ["1601C", "2551Q"]);
   }
+  if (p.selfEmployed) bir.set_year_facts(head.tin, year, { tax_classification: "SelfEmployed" });
   if (p.branch && !taxpayer.branches.some((b) => b.code === "00001")) bir.create_branch(taxpayer.tin_root, { branch_code: "00001", name: "Cebu branch" });
   if (p.peer && !bir.list_taxpayers().some((t) => t.tin_root === "000111237")) {
     const peer = bir.create_taxpayer({ tin_root: "000-111-237", name: "Sample Person", taxpayer_type: "Individual", head_office: { rdo_code: "050", registered_address: "Makati City", zip_code: "1226" } });
@@ -50,6 +56,15 @@ function seed(p: Params) {
 function Demo() {
   const p = host.params as Params;
   if (p.demo !== false) seed(p);
+  const ready = signal(!p.savedReturn);
+  if (p.savedReturn) {
+    const target = p.savedReturn;
+    const tin = createDemoTaxpayer().branches[0].tin;
+    void bir.screen_form_open(tin, target.formCode, target.year, target.period).then((opened) => {
+      bir.screen_form_save(target.formCode, opened.draft);
+      ready.set(true);
+    });
+  }
   if (p.card === "export") {
     const calls = signal(0);
     if (p.exportDownload) {
@@ -76,7 +91,7 @@ function Demo() {
   }
   return (
     <View class="flex-1">
-      <Shell start={p.start} polling={false} />
+      <If when={ready()}><Shell start={p.start} polling={false} /></If>
     </View>
   );
 }

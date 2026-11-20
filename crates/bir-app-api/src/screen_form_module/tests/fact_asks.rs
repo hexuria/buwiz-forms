@@ -107,6 +107,32 @@ fn later_2551q_profile_prerequisites_are_host_derived_and_disappear_after_profil
 }
 
 #[test]
+fn a_stored_2551q_refreshes_profile_prerequisites_on_return_to_the_form() {
+    setup_juana();
+    let opened = open_as(JUANA, "2551Q", 3);
+    let saved = save("2551Q", &opened["draft"]);
+    assert_eq!(saved["draft"]["annual_income_tax_election"], "unrecorded");
+    set_facts(
+        JUANA,
+        YearFactsPatch {
+            tax_classification: Some(Some(bir_core::profile::TaxClassification::SelfEmployed)),
+            business_start_date: Some(Some("2026-01-01".parse().unwrap())),
+            income_tax_election: Some(Some(
+                bir_core::profile::IncomeTaxElection::GraduatedUnspecified,
+            )),
+            ..YearFactsPatch::default()
+        },
+    );
+    let reopened = open_as(JUANA, "2551Q", 3);
+    assert_eq!(reopened["draft"]["id"], saved["draft"]["id"]);
+    assert_eq!(reopened["draft"]["business_start_date"], "2026-01-01");
+    assert_eq!(reopened["draft"]["annual_income_tax_election"], "graduated");
+    assert_eq!(reopened["profile_prerequisites"], json!([]));
+    let filled = fill_unlocked("2551Q", &reopened["draft"], json!({}), &[]);
+    assert_eq!(filled["profile_prerequisites"], json!([]));
+}
+
+#[test]
 fn profile_prerequisites_respect_commencement_pt010_and_taxpayer_applicability() {
     setup_juana();
     let kind = kind_of("2551Q").unwrap();

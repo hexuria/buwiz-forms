@@ -108,6 +108,7 @@ function FactRow(props: { s: PageState; fact: FactName }) {
               <Segmented
                 testID={`tp-fact-${fact}-choice`}
                 label={FACT_LABELS[fact]}
+                autoFocus
                 wrap
                 options={choices(fact).map(([v, label]) => ({ value: v, label }))}
                 value={selected()}
