@@ -1,4 +1,4 @@
-import { host, mount, View } from "nsh";
+import { host, mount, Scroll, View } from "nsh";
 import "./theme/fonts";
 import { bir } from "./bir";
 import { createDemoTaxpayer, DEMO } from "./bir/testing";
@@ -18,7 +18,10 @@ function Demo() {
   return (
     <View class="flex-1 bg-background">
       <If when={app.route().view === "profile"}>
-        <TaxpayerPage view="profile" params={params} />
+        {/* The shell's main scroll (Shell.tsx): a section below the fold is scrolled to, not clipped. */}
+        <Scroll testID="main-scroll" class="min-h-0 flex-1">
+          <TaxpayerPage view="profile" params={params} />
+        </Scroll>
       </If>
       <If when={app.route().view === "form"}><Text>Back on the return</Text></If>
       <Toaster />
