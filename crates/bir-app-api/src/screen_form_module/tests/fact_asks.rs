@@ -1589,3 +1589,26 @@ fn a_profile_ask_for_a_malformed_tin_is_refused() {
     let opened = open_as(JUANA, "0605", 1);
     assert_eq!(opened["profile_asked"], json!([]), "nothing was remembered");
 }
+
+/// Review F2: a failed read of the remembered answers is an error, not
+/// "nothing asked" (which would repeat every ask on every open); opening
+/// still works and logs it.
+#[test]
+fn a_failed_profile_ask_read_is_an_error() {
+    setup_juana();
+    let draft = open_as(JUANA, "0605", 1)["draft"].clone();
+    let Ok(kind) = kind_of("0605") else {
+        panic!("0605 kind")
+    };
+    with_database(|db| {
+        db.conn_for_tests()
+            .execute_batch("ALTER TABLE settings RENAME TO settings_gone")
+            .expect("rename settings");
+        assert!(crate::screen_form_module::fact_asks::profile_asked(db, kind, &draft).is_err());
+        db.conn_for_tests()
+            .execute_batch("ALTER TABLE settings_gone RENAME TO settings")
+            .expect("restore settings");
+        Ok(())
+    })
+    .unwrap();
+}
