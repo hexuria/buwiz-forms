@@ -12,7 +12,7 @@ LISTENER = SCRIPT[SCRIPT.index('function Assert-MockAccountListener'):SCRIPT.ind
 
 @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell'), 'Windows PowerShell required')
 class LauncherTests(unittest.TestCase):
-    def test_hardware_virtualization_requires_exposed_cpu_capabilities(self):
+    def test_hardware_virtualization_flags_only_provide_positive_evidence(self):
         function = SCRIPT[SCRIPT.index('function Test-HardwareVirtualization'):SCRIPT.index('function Test-WHPXRebootPending')]
         for processors, expected in (
             ("@([pscustomobject]@{VirtualizationFirmwareEnabled=$true; VMMonitorModeExtensions=$true})", True),
@@ -61,8 +61,9 @@ class LauncherTests(unittest.TestCase):
         for code, pending, virtualized, skip, expected, continues in (
             (0, False, False, False, 0, True), (0, True, False, True, 0, True),
             (1, True, True, False, 1, False), (1, True, True, True, 0, False),
-            (1, True, False, False, 1, False), (1, True, False, True, 1, False),
+            (1, True, False, False, 1, False), (1, True, False, True, 0, False),
             (1, False, True, False, 1, False), (1, False, True, True, 1, False),
+            (1, False, False, False, 1, False), (1, False, False, True, 1, False),
         ):
             with self.subTest(code=code, pending=pending, virtualized=virtualized, skip=skip):
                 result = subprocess.run(
@@ -80,12 +81,26 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual('launch continues' in result.stdout, continues)
                 if code:
                     output = result.stdout + result.stderr
-                    if pending and not virtualized:
-                        self.assertIn('Nested virtualization/VT-x is unavailable', output)
-                        self.assertIn('a reboot will not fix it', output)
-                        self.assertNotIn('Restart-Computer', output)
-                    else:
-                        self.assertIn('Restart-Computer' if pending else 'Hardware acceleration is required', output)
+                    self.assertIn('Restart-Computer' if pending else 'Hardware acceleration is required', output)
+                    self.assertEqual('VT-x could not be verified before the reboot' in output,
+                                     pending and not virtualized)
+
+    def test_devin_cpu_flags_do_not_block_pending_reboot_deferral(self):
+        function = SCRIPT[SCRIPT.index('function Test-HardwareVirtualization'):SCRIPT.index('function Test-WHPXRebootPending')]
+        block = SCRIPT[SCRIPT.index('& "$SdkRoot\\emulator\\emulator.exe" -accel-check'):SCRIPT.index('Assert-MockAccountListener (')]
+        block = block.replace('& "$SdkRoot\\emulator\\emulator.exe"', 'Fake-Emulator')
+        result = subprocess.run(
+            ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+             "$ErrorActionPreference='Stop'; $SkipIfRebootPending=$true; "
+             "function Get-CimInstance { [pscustomobject]@{VirtualizationFirmwareEnabled=$false; VMMonitorModeExtensions=$false; HypervisorPresent=$true} }; "
+             "function Fake-Emulator { $global:LASTEXITCODE=1 }; "
+             "function Test-WHPXRebootPending { $true }; "
+             + function + block + "; throw 'launch must be deferred'"],
+            text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('VT-x could not be verified before the reboot', result.stdout)
+        self.assertIn('Restart-Computer', result.stdout)
 
     def test_only_expected_avd_can_be_stopped(self):
         block = SCRIPT[SCRIPT.index('    $avdName ='):SCRIPT.index('    & $adb -s $serial emu kill')]

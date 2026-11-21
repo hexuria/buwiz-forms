@@ -116,7 +116,10 @@ It sets `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_NDK_HOME`, `JAVA_HOME` and 
 the Windows Hypervisor Platform feature, which the emulator needs for acceleration. That feature takes effect after a
 reboot. The blueprint's `initialize` steps run setup and launch during the same build boot, so the launch step
 uses `-SkipIfRebootPending`: when acceleration is unavailable and WHPX awaits a reboot, it prints a restart notice
-and succeeds without packaging or launching. Setup records the current Windows boot time, so this deferral expires
+and succeeds without packaging or launching. False or missing CPU virtualization flags are inconclusive under a
+hypervisor: the launcher warns that VT-x could not be verified before the reboot, rather than rejecting the build.
+`HypervisorPresent` alone does not prove nested virtualization is exposed. The post-reboot acceleration check remains
+mandatory; deferral is not proof that the emulator will work. Setup records the current Windows boot time, so this deferral expires
 after a reboot (including a session VM booting from the snapshot). Run the normal launcher from the startup knowledge
 after boot. For a direct launch on the setup machine, run `Restart-Computer` first, then rerun
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1`.
