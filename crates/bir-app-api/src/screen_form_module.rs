@@ -3516,12 +3516,23 @@ fn open_screen_form(
         (None, Vec::new())
     } else {
         with_database(|db| {
-            Ok((
-                fact_asks::context_of(db, kind, &draft),
-                fact_asks::profile_asked(db, kind, &draft),
-            ))
+            let asked = fact_asks::profile_asked(db, kind, &draft).unwrap_or_else(|error| {
+                tracing::warn!(
+                    "{}: reading the remembered profile asks failed: {error}",
+                    kind.form_code()
+                );
+                Vec::new()
+            });
+            Ok((fact_asks::context_of(db, kind, &draft), asked))
         })
-        .unwrap_or((None, Vec::new()))
+        .unwrap_or_else(|error| {
+            tracing::warn!(
+                "{}: reading the tax facts and profile asks failed: {}",
+                kind.form_code(),
+                error.message()
+            );
+            (None, Vec::new())
+        })
     };
     Ok(async move {
         let mut opened = on_large_stack(move || {
