@@ -158,11 +158,18 @@ if ($add) { [Environment]::SetEnvironmentVariable('Path', (($add -join ';') + ';
 Write-Step "Enabling Windows Hypervisor Platform"
 $feature = Get-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform
 $restartNeeded = $false
-if ($feature.State -ne 'Enabled') {
+if ($feature.State -eq 'EnablePending') {
+    $restartNeeded = $true
+} elseif ($feature.State -ne 'Enabled') {
     $r = Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All -NoRestart
     $restartNeeded = $r.RestartNeeded
     if ($r.RestartNeeded) { Write-Host "Reboot needed before the emulator can start." -ForegroundColor Yellow }
 } else { Write-Host "Already enabled." }
+if ($restartNeeded) {
+    $rebootState = "$env:USERPROFILE\BuwizNsh\android-windows"
+    New-Item -ItemType Directory -Force $rebootState | Out-Null
+    Set-Content "$rebootState\whpx-reboot-boot-time" (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+}
 & (Join-Path $SdkRoot 'emulator\emulator.exe') -accel-check
 
 if ($LASTEXITCODE -ne 0 -and $restartNeeded) {

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 import unittest
 
 
@@ -11,6 +12,55 @@ LISTENER = SCRIPT[SCRIPT.index('function Assert-MockAccountListener'):SCRIPT.ind
 
 @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell'), 'Windows PowerShell required')
 class LauncherTests(unittest.TestCase):
+    def test_whpx_pending_detection_expires_after_boot(self):
+        function = SCRIPT[SCRIPT.index('function Test-WHPXRebootPending'):SCRIPT.index('function Assert-MockAccountListener')]
+        for marker, feature, pending in (
+            (None, 'EnablePending', True), (None, 'Enabled', False), (None, 'error', False),
+            ('current', 'error', True), ('previous', 'Enabled', False), ('', 'Enabled', False),
+        ):
+            with self.subTest(marker=marker, feature=feature), tempfile.TemporaryDirectory() as directory:
+                if marker is not None:
+                    path = Path(directory) / 'BuwizNsh/android-windows/whpx-reboot-boot-time'
+                    path.parent.mkdir(parents=True)
+                    path.write_text({'current': '2026-01-01T00:00:00.0000000Z',
+                                     'previous': '2025-01-01T00:00:00.0000000Z', '': ''}[marker])
+                result = subprocess.run(
+                    ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                     "$ErrorActionPreference='Stop'; "
+                     "function Get-CimInstance { [pscustomobject]@{LastBootUpTime=[datetime]::Parse('2026-01-01T00:00:00Z').ToUniversalTime()} }; "
+                     "function Get-WindowsOptionalFeature { if ($env:TEST_FEATURE -eq 'error') { throw 'feature query unavailable' }; [pscustomobject]@{State=$env:TEST_FEATURE} }; "
+                     + function + '; Test-WHPXRebootPending'],
+                    env={**os.environ, 'USERPROFILE': directory, 'TEST_FEATURE': feature},
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), str(pending))
+
+    def test_acceleration_preflight_reports_or_defers_pending_reboot(self):
+        block = SCRIPT[SCRIPT.index('& "$SdkRoot\\emulator\\emulator.exe" -accel-check'):SCRIPT.index('Assert-MockAccountListener (')]
+        block = block.replace('& "$SdkRoot\\emulator\\emulator.exe"', 'Fake-Emulator')
+        for code, pending, skip, expected, continues in (
+            (0, False, False, 0, True), (0, True, True, 0, True),
+            (1, True, False, 1, False), (1, True, True, 0, False),
+            (1, False, False, 1, False), (1, False, True, 1, False),
+        ):
+            with self.subTest(code=code, pending=pending, skip=skip):
+                result = subprocess.run(
+                    ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                     "$ErrorActionPreference='Stop'; "
+                     f'function Fake-Emulator {{ $global:LASTEXITCODE={code} }}; '
+                     f'function Test-WHPXRebootPending {{ ${str(pending).lower()} }}; '
+                     f'$SkipIfRebootPending=${str(skip).lower()}; '
+                     "function Assert-Native($message) { throw $message }; "
+                     + block + "; Write-Output 'launch continues'"],
+                    text=True, capture_output=True,
+                )
+                self.assertEqual(result.returncode, expected, result.stderr)
+                self.assertEqual('launch continues' in result.stdout, continues)
+                if code:
+                    output = result.stdout + result.stderr
+                    self.assertIn('Restart-Computer' if pending else 'Hardware acceleration is required', output)
+
     def test_only_expected_avd_can_be_stopped(self):
         block = SCRIPT[SCRIPT.index('    $avdName ='):SCRIPT.index('    & $adb -s $serial emu kill')]
         for avd, expected in (('buwiz_api35', 0), ('unrelated_avd', 1), ('', 1)):

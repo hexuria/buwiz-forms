@@ -2,9 +2,20 @@
 .SYNOPSIS
     Package the x86_64 development APK and cold-boot buwiz_api35 against mock-account.
 #>
-param([string]$SdkRoot = 'C:\Android')
+param([string]$SdkRoot = 'C:\Android', [switch]$SkipIfRebootPending)
 $ErrorActionPreference = 'Stop'
 function Assert-Native($message) { if ($LASTEXITCODE -ne 0) { throw "$message (exit $LASTEXITCODE)" } }
+function Test-WHPXRebootPending {
+    $marker = "$env:USERPROFILE\BuwizNsh\android-windows\whpx-reboot-boot-time"
+    if (Test-Path $marker) {
+        $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToUniversalTime().ToString('o')
+        $recordedBoot = Get-Content $marker -Raw
+        if ($recordedBoot -and $recordedBoot.Trim() -eq $boot) { return $true }
+    }
+    try {
+        (Get-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -ErrorAction Stop).State -eq 'EnablePending'
+    } catch { return $false }
+}
 function Assert-MockAccountListener($listeners) {
     foreach ($listener in $listeners) {
         $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)"
@@ -17,6 +28,15 @@ $repo = Split-Path $PSScriptRoot -Parent
 $tools = "$env:USERPROFILE\BuwizNsh\tools"
 $work = "$env:USERPROFILE\BuwizNsh\android-windows"
 New-Item -ItemType Directory -Force $work | Out-Null
+& "$SdkRoot\emulator\emulator.exe" -accel-check
+if ($LASTEXITCODE -ne 0) {
+    if (Test-WHPXRebootPending) {
+        $message = 'WHPX was enabled during setup and Windows must restart first (Restart-Computer), then rerun scripts\run-android-windows.ps1.'
+        if ($SkipIfRebootPending) { Write-Warning $message; exit 0 }
+        throw $message
+    }
+    Assert-Native 'Hardware acceleration is required; enable nested virtualization and Windows Hypervisor Platform'
+}
 Assert-MockAccountListener (Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction SilentlyContinue)
 $env:Path = "$tools\bin;$env:USERPROFILE\.cargo\bin;$SdkRoot\jdk17\bin;$SdkRoot\platform-tools;" + [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
 foreach ($k in 'OPENSSL_DIR', 'OPENSSL_LIB_DIR') {
@@ -46,8 +66,6 @@ Copy-Item "$tools\android\bin-dev\*" "$tools\runtime\android\dev" -Recurse -Forc
 New-Item -ItemType Directory -Force "$tools\runtime\android\release" | Out-Null
 Copy-Item "$tools\android\bin\*" "$tools\runtime\android\release" -Recurse -Force
 $env:NSH_RUNTIME = "$tools\runtime"
-& "$SdkRoot\emulator\emulator.exe" -accel-check
-Assert-Native 'Hardware acceleration is required'
 Push-Location "$repo\nsh"
 try {
     nsh package --target android --abi x86_64 --out "$work\package"

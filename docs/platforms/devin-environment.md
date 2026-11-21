@@ -114,7 +114,14 @@ just mock-account &
 `buwiz_api35`, LLVM (libclang for bindgen), and the Rust targets `x86_64-linux-android` and `aarch64-linux-android`.
 It sets `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_NDK_HOME`, `JAVA_HOME` and `LIBCLANG_PATH` machine-wide and enables
 the Windows Hypervisor Platform feature, which the emulator needs for acceleration. That feature takes effect after a
-reboot: on a fresh snapshot it is active; on the machine that ran the script, reboot before starting the emulator.
+reboot. The blueprint's `initialize` steps run setup and launch during the same build boot, so the launch step
+uses `-SkipIfRebootPending`: when acceleration is unavailable and WHPX awaits a reboot, it prints a restart notice
+and succeeds without packaging or launching. Setup records the current Windows boot time, so this deferral expires
+after a reboot (including a session VM booting from the snapshot). Run the normal launcher from the startup knowledge
+after boot. For a direct launch on the setup machine, run `Restart-Computer` first, then rerun
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1`.
+Without the build-only switch, a pending reboot stops the launcher with that instruction; other acceleration failures
+remain errors, even with the switch.
 
 ```yaml
 runs-on: windows
@@ -130,7 +137,7 @@ initialize:
   - name: package and launch Android with the mock account server
     run: |
       $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
-      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1 -SkipIfRebootPending
       exit $LASTEXITCODE
 knowledge:
   - name: startup
