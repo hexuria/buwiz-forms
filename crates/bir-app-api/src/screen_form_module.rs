@@ -3604,8 +3604,7 @@ fn open_screen_form(
         }
         if let Some(facts) = &facts {
             if opened["status"] == "Draft" {
-                opened["guessed"] =
-                    json!(fact_asks::guessed_keys(kind, facts, &opened["draft"]));
+                opened["guessed"] = json!(fact_asks::guessed_keys(kind, facts, &opened["draft"]));
             }
         }
         Ok(json(opened))

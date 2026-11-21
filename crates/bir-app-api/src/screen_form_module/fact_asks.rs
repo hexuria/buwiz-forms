@@ -364,11 +364,7 @@ fn category_picked(draft: &Value, placed: &Placed) -> bool {
 
 /// The placed boxes whose opening values are guesses rather than the filer's
 /// answer to the withholding-category fact.
-pub(super) fn guessed_keys(
-    kind: AgentFormKind,
-    ctx: &FactContext,
-    draft: &Value,
-) -> Vec<String> {
+pub(super) fn guessed_keys(kind: AgentFormKind, ctx: &FactContext, draft: &Value) -> Vec<String> {
     if !unset(kind, ctx).contains(&Fact::IsGovernmentWithholdingEntity) {
         return Vec::new();
     }

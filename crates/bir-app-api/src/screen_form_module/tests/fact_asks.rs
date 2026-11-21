@@ -1160,8 +1160,11 @@ fn a_guessed_private_category_is_listed_until_the_filer_picks() {
         );
         assert_eq!(filled["rejected"], json!({}));
         assert!(
-            blocks_on(&queue_check("0619E", &filled["draft"]), "is_government_withholding_entity")
-                .is_none(),
+            blocks_on(
+                &queue_check("0619E", &filled["draft"]),
+                "is_government_withholding_entity"
+            )
+            .is_none(),
             "an explicit Private pick answers the category"
         );
         save("0619E", &filled["draft"]);
