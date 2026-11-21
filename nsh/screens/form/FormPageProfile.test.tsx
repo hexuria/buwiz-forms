@@ -41,7 +41,9 @@ test("phone: the ask is a bottom sheet with stacked buttons; 'Save to profile' s
   // The category sits in a collapsed part: open the parts until the radio is drawn.
   for (const pi of [1, 2, 3]) {
     if (app.shows(gov)) break;
-    await app.press(`id:fp-part-${pi}-toggle`).catch(() => {});
+    const toggle = `id:fp-part-${pi}-toggle`;
+    await app.waitFor(toggle);
+    await app.press(toggle);
     await app.wait(400);
   }
   for (let i = 0; i < 18 && !app.shows(gov); i++) await app.scroll("id:form-scroll", 300).catch(() => {});
