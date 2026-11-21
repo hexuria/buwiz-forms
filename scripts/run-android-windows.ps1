@@ -81,6 +81,11 @@ $serial = 'emulator-5554'
 $adb = "$SdkRoot\platform-tools\adb.exe"
 $devices = & $adb devices
 if ($devices -match "$serial\s") {
+    $avdName = & $adb -s $serial emu avd name
+    Assert-Native 'Could not identify the existing emulator AVD'
+    if (-not $avdName -or ($avdName | Select-Object -First 1).Trim() -ne 'buwiz_api35') {
+        throw "Refusing to stop $serial because it is not buwiz_api35. Close it or move it to another port before rerunning."
+    }
     & $adb -s $serial emu kill
     Assert-Native 'Could not stop existing emulator for cold boot'
     $deadline = (Get-Date).AddMinutes(2)
