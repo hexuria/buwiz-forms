@@ -110,7 +110,7 @@ pkgs_apt() {
         libwayland-dev libwayland-client0 libasound2-dev libudev-dev
         libvulkan-dev libfontconfig1-dev libfreetype-dev libssl-dev
         libpolkit-gobject-1-dev libgtk-3-dev libxdo-dev
-        mesa-vulkan-drivers libappindicator3-dev libayatana-appindicator3-dev librsvg2-dev
+        mesa-vulkan-drivers $(pick_pkg libayatana-appindicator3-dev libappindicator3-dev) librsvg2-dev
         patchelf xvfb fonts-noto-core fonts-noto-color-emoji
         $(pick_pkg libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev)
     "
