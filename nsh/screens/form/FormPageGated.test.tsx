@@ -62,12 +62,14 @@ for (const size of SIZES) {
     // whole row — number and title too — is not drawn.
     expect(app.count("id:fp-item-3:0")).toBe(0);
     expect(app.count("id:fp-frm0605:itemApprovedYN:_1")).toBe(0);
-    // "Others (Specify)" opens the specify box inside the same row.
-    await app.press("id:fp-item-1:8 >> text:/Others \\(Specify\\)/i");
+    // "Others (Specify)" opens the specify box inside the same row (seven choices: a dropdown).
+    await app.press("id:fp-radio-1:8-trigger");
+    await app.press("text:/Others \\(Specify\\)/i");
     await app.waitFor("id:fp-frm0605:txtOthersName", { timeout: 15000 });
     expect(app.count("id:fp-frm0605:txtOthersName")).toBe(1);
     // "Preliminary/Final Assessment" opens the approval row in its own part.
-    await app.press("id:fp-frm0605:itemMannerOfPaymentB:_1");
+    await app.press("id:fp-radio-1:8-trigger");
+    await app.press("text:/Deficiency Tax/");
     await reach(app, "id:fp-item-3:0");
     expect(app.count("id:fp-frm0605:itemApprovedYN:_1")).toBe(1);
     expect(app.count("id:fp-frm0605:itemApprovedYN:_2")).toBe(1);

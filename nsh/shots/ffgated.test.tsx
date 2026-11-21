@@ -103,13 +103,15 @@ for (const look of LOOKS) {
     await jump(app, 1, wide);
     await reach(app, "id:fp-item-1:8");
     await shoot(app, `g1-0605-17-closed-${look.name}`);
-    // Others (Specify) opens the specify box inside the same row.
-    await app.press("id:fp-frm0605:itemMannerOfPayment:_5");
+    // Others (Specify) opens the specify box inside the same row (seven choices: a dropdown).
+    await app.press("id:fp-radio-1:8-trigger");
+    await app.press("text:/Others \\(Specify\\)/i");
     await app.waitFor("id:fp-frm0605:txtOthersName", { timeout: 20_000 });
     await app.wait(300);
     await shoot(app, `g1-0605-17-others-${look.name}`);
     // A B-manner opens the Investigating Office approval pair — its own row in the last part.
-    await app.press("id:fp-frm0605:itemMannerOfPaymentB:_1");
+    await app.press("id:fp-radio-1:8-trigger");
+    await app.press("text:/Deficiency Tax/");
     await jump(app, 3, wide);
     await reach(app, "id:fp-item-3:0");
     await app.waitFor("id:fp-frm0605:itemApprovedYN:_1", { timeout: 20_000 });

@@ -255,7 +255,7 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
   // fills the parts that are open. Not when the item has a date box of its own (that box carries its calendar).
   const split = dates.length || periods.length || ranges.length || fs.some((f) => f.t === "date") ? null : dateParts(fs);
   const splitParts = split ? [split.month, split.day, split.year].filter((f): f is SchemaField => f !== null) : [];
-  const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked());
+  const splitOpen = () => split !== null && s.header().editable && !splitParts.every((f) => f.c || s.box(f.k).locked()) && !splitParts.every((f) => hid().includes(f.k));
   // What the boxes hold now, as the calendar's own day: the popup opens on its month.
   const splitIso = () => (split ? splitDay(s, split) : "");
   // What the calendar may offer: nothing outside the year (and month) that is locked.
@@ -278,10 +278,12 @@ function Controls(props: { s: FormSession; id: string; it: SchemaItem; narrow: A
         );
       })}
       {depBox ? (
-        <View class="min-w-0 gap-1" style={{ width: "100%" }}>
-          {depSub ? <Text variant="meta" tone="fg2">{depBox.l}</Text> : null}
-          <FieldControl {...fieldProps(s, depBox, props.narrow, depBox.l, depBox.t === "text" ? 480 : controlWidth(depBox, 480))} />
-        </View>
+        <If when={!hid().includes(depBox.k)}>
+          <View class="min-w-0 gap-1" style={{ width: "100%" }}>
+            {depSub ? <Text variant="meta" tone="fg2">{depBox.l}</Text> : null}
+            <FieldControl {...fieldProps(s, depBox, props.narrow, depBox.l, depBox.t === "text" ? 480 : controlWidth(depBox, 480))} />
+          </View>
+        </If>
       ) : null}
       {periods.map((p) => {
         const message = props.info().boxMessages.find((entry) => entry.key === p.month.k || entry.key === p.year.k)?.sentence || "";
