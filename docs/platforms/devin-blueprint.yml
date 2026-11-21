@@ -115,8 +115,7 @@ knowledge:
     contents: |
       pgrep xcompmgr || (DISPLAY=:0 xcompmgr &)   # no black border around GPUI windows
       GPUI app: DISPLAY=:0 VK_ICD_FILENAMES=/dev/null BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run   # VK_ICD_FILENAMES avoids stale llvmpipe frames
-      Account sign-in: just mock-account &   # mock Buwiz account server on 127.0.0.1:3008; start before the NSH app
-      NSH app: ~/BuwizNsh/nsh2404.sh nsh run --target linux   # real window on :0
+      NSH app: ~/BuwizNsh/nsh2404.sh nsh run --target linux   # real window on :0; sign-in bypassed, no account mock needed
   - name: android
     contents: |
       DISPLAY=:0 ~/Android/Sdk/emulator/emulator -avd buwiz -no-snapshot-save -no-audio -gpu swiftshader_indirect &
@@ -151,11 +150,10 @@ knowledge:
   - name: startup
     contents: |
       GPUI desktop app: BUWIZ_NO_KEYCHAIN=1 EBIR_TEST_ENV=1 BIR_AUTH_BYPASS=1 BIR_SFTP_DRY_RUN=1 just run
-      Account sign-in: just mock-account &   # mock Buwiz account server on 127.0.0.1:3008; start before the NSH app
-      NSH app on macOS: just nsh-run
+      NSH app on macOS: just nsh-run   # sign-in bypassed, no account mock needed
   - name: ios
     contents: |
-      just mock-account & just mock-bir & just mock-relay &   # the Simulator shares the host's localhost
+      just mock-bir & just mock-relay &   # sign-in bypassed, no account mock needed
       cd nsh; PATH=~/BuwizNsh/tools/bin:$PATH CARGO_TARGET_DIR=~/BuwizNsh/target-nsh SIMCTL_CHILD_BIR_RELAY_URL=http://127.0.0.1:8787 SIMCTL_CHILD_EBIR_TEST_ENV=1 SIMCTL_CHILD_BUWIZ_NO_KEYCHAIN=1 SIMCTL_CHILD_BIR_AUTH_BYPASS=1 nsh run --target ios
   - name: test
     contents: |
