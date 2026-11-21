@@ -48,12 +48,14 @@ for (const look of [
 
 // Row-height evidence (the brief's 420 and 640 pt): 0605 Item 9 (row 1:0) settled inside the viewport so its
 // top and bottom dividers are both in the picture; the heights are measured on the PNGs (shots/rowheights.py).
+// The window is tall so the row and its neighbours stay in view, and the extra scroll is best-effort: at the
+// page's end there is nothing left to scroll and the row is already as high as it goes.
 for (const width of [420, 640]) {
   test(`fftin 0605 TIN row height ${width}`, async () => {
-    const app = await openForm("0605", width, 1000, "light", { year: 2025, period: 1, mode: "return" });
+    const app = await openForm("0605", width, 1400, "light", { year: 2025, period: 1, mode: "return" });
     await showRow(app, 1, "1:0");
     // The row enters at the viewport's foot; one more scroll lifts it clear of the floating pill at the bottom.
-    await app.scroll("id:form-scroll", 200);
+    await app.scroll("id:form-scroll", 200).catch(() => {});
     await app.wait(400);
     await shoot(app, `tin-0605-rowh-${width}`);
   }, 120_000);
