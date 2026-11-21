@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node package="dev.goldcoders.bir.nsh" text="Welcome to eBIRForms" />
+  <node package="dev.goldcoders.bir.nsh" text="Prepare, print and track BIR returns for every taxpayer you handle. Everything stays on this device." />
+  <node package="dev.goldcoders.bir.nsh" content-desc="Add your first taxpayer" clickable="true" enabled="true" bounds="[48,1400][1032,1520]" />
+</hierarchy>

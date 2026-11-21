@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 function Get-AccountUiState([xml]$ui) {
     $package = 'dev.goldcoders.bir.nsh'
     if (-not $ui.SelectNodes("//node[@package='$package' and (@text!='' or @content-desc!='')]").Count) { return @{ State = 'blocked' } }
+    if ($ui.SelectSingleNode("//node[@package='$package' and (@text='Add your first taxpayer' or @content-desc='Add your first taxpayer')]")) { return @{ State = 'ready' } }
     if (-not $ui.SelectSingleNode("//node[@text='Welcome to eBIRForms']")) { return @{ State = 'ready' } }
     $button = $ui.SelectSingleNode("//node[@package='$package' and @content-desc='Sign in' and @clickable='true' and @enabled='true']")
     if (-not $button) { return @{ State = 'blocked' } }
