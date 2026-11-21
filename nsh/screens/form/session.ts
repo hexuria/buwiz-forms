@@ -1133,9 +1133,10 @@ export class FormSession {
       const key = range.to.anchor;
       const reversed = Boolean(from && to && from > to);
       const keys = [...this.rangeEndPendingKeys(range.from), ...this.rangeEndPendingKeys(range.to)];
-      const held = s.rejected[key] === "end before start" || keys.some((pk) => pk in s.rangeHeld);
+      const refused = s.rejected[key] === "end before start";
+      const hasHeld = keys.some((pk) => pk in s.rangeHeld);
       if (reversed) {
-        if (!held) {
+        if (!refused) {
           s.rejected[key] = "end before start";
           s.boxMessages[key] = this.refusalText(key, "end before start");
           s.touched.add(row);
@@ -1149,7 +1150,7 @@ export class FormSession {
             changed = true;
           }
         }
-      } else if (held) {
+      } else if (refused || hasHeld) {
         delete s.rejected[key];
         delete s.boxMessages[key];
         s.unfixable.delete(key);
