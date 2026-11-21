@@ -247,6 +247,77 @@ test("Sample: typing 06/2025 in 1601C's filing-period box looks up that period a
   s.dispose();
 });
 
+test("Sample: an unfinished 1702EX year holds its period edits; a complete year commits, and blur commits too", async () => {
+  createDemoTaxpayer();
+  const target = { tin: DEMO.tin, formCode: "1702EX", year: 0, period: 0, mode: "sample" } as FormTarget;
+
+  // Mid-typing "12/20" must not be read as December 2020: no lookup, no rebuilt or saved 2020 return, no autosave.
+  const s = await opened(target);
+  const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === "frm1702EX:txtPg1I2YearEnd")!;
+  s.edit(period.periodKey, "12/20");
+  await s.idle();
+  expect(s.box(period.periodKey).value()).toBe("12/20"); // the box keeps what was typed
+  expect(s.valueOf(period.year.k)).toBe("");
+  expect(s.overlay()).toBe(null);
+  expect(s.saveState()).toEqual({ state: "manual", message: "Sample · set its period to save" });
+  expect(bir.list_returns("saved").filter((r) => r.form_code === "1702EX" && r.taxable_year === 2020)).toEqual([]);
+
+  // A finished four-digit year commits at once: December 2025 is looked up (the two-digit box then holds "25").
+  s.edit(period.periodKey, "12/2025");
+  await s.idle();
+  expect(s.valueOf(period.year.k)).toBe("25");
+  s.saveNow();
+  expect(s.overlay()?.kind).not.toBe("sample-period");
+  s.dispose();
+
+  // Held edits also land when the box is left: "12/20" commits as December 2020 on blur.
+  const blurred = await opened(target);
+  blurred.edit(period.periodKey, "12/20");
+  blurred.blur(period.periodKey);
+  await blurred.idle();
+  expect(blurred.valueOf(period.year.k)).toBe("20");
+  blurred.saveNow();
+  expect(blurred.overlay()?.kind).not.toBe("sample-period");
+  blurred.dispose();
+});
+
+test("Sample: 1600PT and 1600VT take a four-digit year for their period, typed or picked on the month grid", async () => {
+  createDemoTaxpayer();
+  for (const [code, yearKey] of [
+    ["1600PT", "frm1600PT:txtPg1I1Year"],
+    ["1600VT", "frm1600VT:txtPg1I1Year"],
+  ] as const) {
+    const target: FormTarget = { tin: DEMO.tin, formCode: code, year: 0, period: 0, mode: "sample" };
+    const saved = await bir.screen_form_open(DEMO.tin, code, 2025, 6);
+    bir.screen_form_save(code, saved.draft);
+
+    // Typed: the stored 2025-06 return is offered.
+    let s = await opened(target);
+    const period = s.schema!.parts.flatMap((part) => part.items.flatMap(onePeriods)).find((p) => p.year.k === yearKey)!;
+    s.edit(period.periodKey, "06/2025");
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("existing");
+    s.dispose();
+
+    // The month-grid pick offers it too.
+    s = await opened(target);
+    s.pickPeriodMonth(period, 6, 2025);
+    await s.idle();
+    expect(s.overlay()?.kind).toBe("existing");
+    s.dispose();
+
+    // A period with no stored return prepares a fresh sample: Save goes on without the period dialog.
+    s = await opened(target);
+    s.edit(period.periodKey, "07/2025");
+    await s.idle();
+    expect(s.overlay()).toBe(null);
+    s.saveNow();
+    await s.idle();
+    expect(s.overlay()?.kind).not.toBe("sample-period");
+    s.dispose();
+  }
+});
+
 test("the three heaviest forms build a session without error", async () => {
   createDemoTaxpayer();
   const counts: Record<string, number> = {};

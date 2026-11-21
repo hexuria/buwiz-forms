@@ -303,6 +303,7 @@ interface St {
   periodParts: Map<string, ScreenFormPeriodPart>;
   periodSet: boolean;
   periodValues: Record<string, string>;
+  periodHeld: Record<string, string> | null;
   periodAsked: string | null;
   periodAnswered: string | null;
   periodComplete: boolean;
@@ -404,7 +405,7 @@ function freshState(target: FormTarget): St {
     values: {}, options: {}, locks: {}, lockNotes: {}, notesAlways: new Set(), profile: new Set(), profileEdit: new Set(),
     editing: new Set(), opened: new Set(), focusKey: null, profileOpen: new Set(), sample: target.mode === "sample",
     blank: new Set(), needs: {}, whys: {}, waits: {}, off: {}, penalties: [], penaltyOpen: new Set(), poolTexts: {},
-    typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodAsked: null,
+    typed: new Set(), typedEdits: {}, periodParts: new Map(), periodSet: false, periodValues: {}, periodHeld: null, periodAsked: null,
     periodAnswered: null, periodComplete: false, periodSeq: 0, periodToken: 0, periodInFlight: null, opens: null,
     existing: null, saveAfterAnswer: null, submittedAt: null, submittedDryRun: false, submittedViaRelay: false, confirmedAt: null, amends: null, filedOriginal: null,
     filedOriginalView: null, profileUpdates: [], profileDiffers: [], profilePrerequisites: [], notes: [], saved: false, quiet: null, kept: {},
@@ -1064,11 +1065,11 @@ export class FormSession {
       s.unfixable.delete(key);
     }
     const edits: Record<string, string> = {};
+    const year4 = typed ? (typed.yDigits <= 2 ? 2000 + typed.y : typed.y) : 0;
     if (!typed) {
       // A blank period clears both boxes in one batch.
       for (const field of [period.month, period.year]) if (!this.isShut(field.k)) edits[field.k] = "";
     } else {
-      const year4 = typed.yDigits <= 2 ? 2000 + typed.y : typed.y;
       const store = (field: SchemaField, year: boolean): string | null => {
         if (field.t !== "sel") {
           if (year) return this.periodTwoDigit(period) ? String(year4 - 2000).padStart(2, "0") : String(year4);
@@ -1093,15 +1094,33 @@ export class FormSession {
     const periodEdits: Record<string, string> = {};
     const ordinaryEdits: Record<string, string> = {};
     for (const [key, value] of Object.entries(edits)) {
-      if (s.periodParts.has(key)) periodEdits[key] = value;
+      // The period lookup needs the absolute year even on a two-digit box: a select year stores "25" the host cannot read.
+      if (s.periodParts.has(key)) periodEdits[key] = key === period.year.k && typed ? String(year4) : value;
       else ordinaryEdits[key] = value;
     }
-    if (Object.keys(periodEdits).length) this.setPeriodPart(periodEdits);
+    if (Object.keys(periodEdits).length) {
+      if (s.sample && typed && typed.yDigits <= 2) {
+        // A year still being typed on a sample: "12/20" is not December 2020 yet. Hold it until the year is whole or the box is left.
+        s.periodHeld = { ...s.periodHeld, ...periodEdits };
+      } else {
+        s.periodHeld = null;
+        this.setPeriodPart(periodEdits);
+      }
+    }
     if (Object.keys(ordinaryEdits).length) {
       this.stage(ordinaryEdits);
       this.checkRangeOrders();
     }
     this.publish();
+  }
+
+  /** Period edits held while a two-digit year was typed on a sample (editPeriod) are committed now: the year reads as typed. */
+  private commitHeldPeriod() {
+    const s = this.st;
+    if (!s.periodHeld) return;
+    const held = s.periodHeld;
+    s.periodHeld = null;
+    this.setPeriodPart(held);
   }
 
   /** The period rules a typed text must pass before anything is staged ("" when it may land). */
@@ -1433,6 +1452,7 @@ export class FormSession {
     const s = this.st;
     const one = this.oneDates.get(k);
     const period = this.onePeriods.get(k);
+    if (period) this.commitHeldPeriod();
     const baseKey = one ? one.date.month.k : period ? period.period.month.k : k;
     const id = this.keyIndex.get(baseKey);
     if (s.focusKey === k) s.focusKey = null;
@@ -3129,6 +3149,7 @@ export class FormSession {
    */
   private saveSample(then: (() => void) | null) {
     const s = this.st;
+    this.commitHeldPeriod();
     if (s.periodAsked && s.periodAnswered !== s.periodAsked && Object.keys(s.periodValues).length) {
       s.saveAfterAnswer = { then };
       if (s.periodInFlight !== s.periodAsked) {
@@ -3752,6 +3773,7 @@ export class FormSession {
   takeSamplePeriod(parts: Record<string, string>) {
     const s = this.st;
     const then = this.periodThen;
+    s.periodHeld = null;
     this.closeSamplePeriod();
     this.setPeriodPart(parts);
     if (s.periodAnswered === s.periodAsked) return this.afterPeriodForSave(then);
