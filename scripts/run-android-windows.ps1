@@ -5,10 +5,19 @@
 param([string]$SdkRoot = 'C:\Android')
 $ErrorActionPreference = 'Stop'
 function Assert-Native($message) { if ($LASTEXITCODE -ne 0) { throw "$message (exit $LASTEXITCODE)" } }
+function Assert-MockAccountListener($listeners) {
+    foreach ($listener in $listeners) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)"
+        if ($process.Name -ne 'mock_account.exe' -or $process.CommandLine -notmatch '(?:^|\s)--auto-approve(?:\s|$)') {
+            throw "Port 3008 is owned by PID $($listener.OwningProcess), not mock-account --auto-approve. Stop that listener and rerun this script, or restart it with just mock-account --auto-approve."
+        }
+    }
+}
 $repo = Split-Path $PSScriptRoot -Parent
 $tools = "$env:USERPROFILE\BuwizNsh\tools"
 $work = "$env:USERPROFILE\BuwizNsh\android-windows"
 New-Item -ItemType Directory -Force $work | Out-Null
+Assert-MockAccountListener (Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction SilentlyContinue)
 $env:Path = "$tools\bin;$env:USERPROFILE\.cargo\bin;$SdkRoot\jdk17\bin;$SdkRoot\platform-tools;" + [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
 foreach ($k in 'OPENSSL_DIR', 'OPENSSL_LIB_DIR') {
     [Environment]::SetEnvironmentVariable($k, [Environment]::GetEnvironmentVariable($k, 'User'), 'Process')
@@ -104,6 +113,7 @@ while (-not (Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction Sil
     if ((Get-Date) -gt $deadline) { throw "mock-account startup timed out; see $work\mock-account.err.log" }
     Start-Sleep 3
 }
+Assert-MockAccountListener (Get-NetTCPConnection -LocalPort 3008 -State Listen -ErrorAction SilentlyContinue)
 & $adb -s $serial reverse tcp:3008 tcp:3008
 Assert-Native 'adb reverse failed'
 & $adb -s $serial push $aligned /data/local/tmp/buwiz-x86_64.apk
