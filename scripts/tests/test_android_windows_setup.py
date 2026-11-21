@@ -25,10 +25,12 @@ class AndroidWindowsEnvrcTests(unittest.TestCase):
                 installs = [root / 'tools' / path for path in
                             ('android/bin-dev', 'runtime/android/dev', 'android/bin', 'runtime/android/release')]
                 sources = [root / 'checkout/target/android' / variant for variant in ('debug-dev', 'release')]
-                for path in installs + sources:
-                    (path / 'lib/x86_64').mkdir(parents=True)
-                    (path / 'lib/x86_64/libnsh.so').write_text('runtime')
-                    (path / 'classes.dex').write_text('java')
+                artifacts = ('lib/x86_64/libnsh.so', 'classes.dex')
+                for kind, paths in (('installed', installs), ('rebuilt', sources)):
+                    for index, path in enumerate(paths):
+                        (path / 'lib/x86_64').mkdir(parents=True)
+                        for artifact in artifacts:
+                            (path / artifact).write_text(f'{kind} {index} {artifact}')
                 for path in installs:
                     (path / 'nsh-ref').write_text('current\n')
                 if case == 'missing':
@@ -59,8 +61,14 @@ class AndroidWindowsEnvrcTests(unittest.TestCase):
                 else:
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(json.loads(result.stdout), expected)
-                    for path in installs:
+                    for index, path in enumerate(installs):
                         self.assertEqual((path / 'nsh-ref').read_text().strip(), 'current')
+                        variant = index // 2
+                        build = 'xtask android --dev' if variant == 0 else 'xtask android --release'
+                        for artifact in artifacts:
+                            contents = ((sources[variant] / artifact).read_text() if build in expected
+                                        else f'installed {index} {artifact}')
+                            self.assertEqual((path / artifact).read_text(), contents)
 
     def test_acceleration_failure_only_defers_for_pending_reboot(self):
         block = SCRIPT[SCRIPT.index('if ($LASTEXITCODE -ne 0 -and $restartNeeded)'):SCRIPT.index('$repo =')]
