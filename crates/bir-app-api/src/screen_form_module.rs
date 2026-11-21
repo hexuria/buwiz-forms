@@ -6720,6 +6720,15 @@ fn screen_form_queue_check(arguments: &HostArguments) -> HostResult {
 /// of a later tax year asks again.
 fn screen_form_profile_asked(arguments: &HostArguments) -> HostResult {
     let tin = arguments.string(0)?.to_owned();
+    // The key is `profile_ask:<tin>:…`, read back with the return's own
+    // compact TIN: anything else could never be asked again or could
+    // reach another taxpayer's prefix.
+    let is_tin = tin.chars().all(|c| c.is_ascii_digit())
+        && bir_core::naming::Tin::parse_digits(&tin)
+            .is_some_and(|parsed| bir_core::validation::validate_tin(&parsed));
+    if !is_tin {
+        return Err(host_error("tin is not a TIN of 12 to 14 digits"));
+    }
     let year =
         u16::try_from(arguments.integer(1)?).map_err(|_| host_error("year is out of range"))?;
     let field = arguments.string(2)?.to_owned();

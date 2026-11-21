@@ -1567,3 +1567,25 @@ fn a_card_facts_queue_sentence_names_the_item() {
         assert!(!message.contains("in the card"), "{message}");
     });
 }
+
+/// Review F4: the remembered answer's TIN must be a TIN (12-14 digits, no
+/// dashes or letters), so a bad one never forms a settings key.
+#[test]
+fn a_profile_ask_for_a_malformed_tin_is_refused() {
+    setup_juana();
+    for tin in [
+        "12AB",
+        "",
+        "000-123-453-00000",
+        "0001234530000:",
+        "123456789",
+    ] {
+        let answered = call(
+            "screen_form_profile_asked",
+            vec![tin.into(), 2026i64.into(), "rdo_code".into(), "save".into()],
+        );
+        assert!(answered.is_err(), "{tin:?} is refused");
+    }
+    let opened = open_as(JUANA, "0605", 1);
+    assert_eq!(opened["profile_asked"], json!([]), "nothing was remembered");
+}
