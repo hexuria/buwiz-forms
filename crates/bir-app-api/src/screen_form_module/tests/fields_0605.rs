@@ -454,3 +454,23 @@ fn the_line_of_business_prints_in_capitals() {
         agent::field_map(kind_of("0605").expect("0605 kind"), &draft).expect("0605 field map");
     assert_eq!(map["frm0605:txtLineBus"], "RETAIL");
 }
+
+/// Review F1: a day typed "0" in Item 4 is refused at its box and no part of
+/// the date lands.
+#[test]
+fn a_zero_day_in_item_4_is_refused() {
+    setup();
+    let draft = open("0605", 1)["draft"].clone();
+    let mut edits = Map::new();
+    for (key, value) in [(DUE[0], "08"), (DUE[1], "0"), (DUE[2], "2023")] {
+        edits.insert(key.to_string(), json!(value));
+    }
+    let filled = fill("0605", &draft, Value::Object(edits));
+    let rejected = filled["rejected"].as_object().expect("rejected map");
+    assert!(
+        rejected.contains_key(DUE[0]) || rejected.contains_key(DUE[1]),
+        "the zero day is refused: {:?}",
+        filled["rejected"]
+    );
+    assert!(date_of(&filled["draft"], "due_date").is_none());
+}
