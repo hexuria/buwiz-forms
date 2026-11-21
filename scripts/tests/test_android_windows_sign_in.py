@@ -13,6 +13,22 @@ PACKAGE = "dev.goldcoders.bir.nsh"
 
 @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows PowerShell required")
 class AndroidSignInTests(unittest.TestCase):
+    def test_emulator_lock_screen_is_disabled_before_dismissal(self):
+        block = SCRIPT[SCRIPT.index('& $adb -s $Serial shell locksettings'):SCRIPT.index('$deadline =')]
+        for code in (0, 1):
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                 "$ErrorActionPreference='Stop'; function Fake-Adb { $args -join ' '; $global:LASTEXITCODE=[int]$env:TEST_EXIT }; $adb='Fake-Adb'; $Serial='emulator-5554'; " + block],
+                env={**os.environ, 'TEST_EXIT': str(code)}, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, code, result.stderr)
+            if code:
+                self.assertIn('Could not disable the development emulator lock screen', result.stderr)
+                self.assertNotIn('dismiss-keyguard', result.stdout)
+            else:
+                self.assertIn('KEYCODE_WAKEUP', result.stdout)
+                self.assertIn('dismiss-keyguard', result.stdout)
+
     def test_system_ui_anr_waits_instead_of_closing_shell(self):
         block = SCRIPT[SCRIPT.index('        $systemUiAnr ='):SCRIPT.index("        } elseif ($state.State")]+ '        }'
         for button, bounds, tapped in (('aerr_wait', '[100,200][300,400]', True),

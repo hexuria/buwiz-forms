@@ -14,6 +14,8 @@ function Get-AccountUiState([xml]$ui) {
 
 $adb = "$SdkRoot\platform-tools\adb.exe"
 & $adb -s $Serial shell settings put system screen_off_timeout 1800000
+& $adb -s $Serial shell locksettings set-disabled true | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not disable the development emulator lock screen' }
 & $adb -s $Serial shell input keyevent KEYCODE_WAKEUP
 & $adb -s $Serial shell wm dismiss-keyguard
 $deadline = (Get-Date).AddMinutes(5)
