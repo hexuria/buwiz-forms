@@ -176,7 +176,7 @@ initialize:
   - name: package and launch Android with the mock account server
     run: |
       $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')
-      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1 -SkipIfRebootPending
       exit $LASTEXITCODE
 maintenance:
   - name: NSH checkout and nsh CLI at a new pin
@@ -211,6 +211,7 @@ knowledge:
   - name: android
     contents: |
       powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-android-windows.ps1
+      # If setup enabled WHPX during this boot, run Restart-Computer first, then rerun the launcher.
       # Repack/strip/sign x86_64, cold boot with WHPX, wait for sys.boot_completed, start mock-account --auto-approve,
       # adb reverse tcp:3008 tcp:3008, adb push + pm install, launch and sign in by accessibility label. No authentication bypass.
       # Setup provisions real development AND release runtimes. See docs/platforms/devin-environment.md.
