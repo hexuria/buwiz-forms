@@ -48,6 +48,10 @@ For `localhost`, startup probes IPv4 and IPv6 loopback, then replaces the config
 URL with the numeric address that passed. Worker health checks and uploads use
 that same address, never a fresh resolution of `localhost`.
 
+**Upgrading:** a relay still returning `{"ok":true,"mock":true}` is out of date
+and is refused. Stop it and run `just mock-relay` to rebuild and restart it, then
+restart the app so its startup guard can enable the submission worker.
+
 The app asks it before it claims a queued return: a relay that does not answer
 there leaves the return Queued, unclaimed, and retried after the back-off.
 

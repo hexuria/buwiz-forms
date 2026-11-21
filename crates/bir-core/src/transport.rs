@@ -943,12 +943,24 @@ pub(crate) async fn open_iaf_session(
 /// Service identity for the local development relay.
 pub const MOCK_RELAY_SERVICE: &str = "buwiz-mock-relay";
 
-/// The versioned identity returned by the local mock relay, not just any HTTP listener.
-pub fn is_mock_relay_health(body: &serde_json::Value) -> bool {
-    body["service"] == MOCK_RELAY_SERVICE
+/// Checks the versioned mock relay identity, with upgrade guidance for legacy relays.
+pub fn check_mock_relay_health(body: &serde_json::Value) -> Result<(), &'static str> {
+    if body["service"] == MOCK_RELAY_SERVICE
         && body["version"] == 1
         && body["ok"] == true
         && body["mock"] == true
+    {
+        Ok(())
+    } else if body.as_object().is_some_and(|fields| fields.len() == 2)
+        && body["ok"] == true
+        && body["mock"] == true
+    {
+        Err(
+            "The mock relay is out of date. Restart it with `just mock-relay`, then restart the app.",
+        )
+    } else {
+        Err("Health response did not identify the mock relay")
+    }
 }
 
 /// `GET {url}/v1/health` before a return is claimed: a relay that is down fails here, where the worker can retry
@@ -978,11 +990,7 @@ async fn relay_health(url: &str) -> Result<(), TransportError> {
     let body = serde_json::from_slice(&body).map_err(|_| {
         TransportError::RelayUnavailable("Invalid mock relay health response".into())
     })?;
-    if !is_mock_relay_health(&body) {
-        return Err(TransportError::RelayUnavailable(
-            "Health response did not identify the mock relay".into(),
-        ));
-    }
+    check_mock_relay_health(&body).map_err(|why| TransportError::RelayUnavailable(why.into()))?;
     Ok(())
 }
 
@@ -1332,12 +1340,22 @@ mod tests {
             "invalid",
             "",
             r#"{"ok":true,"mock":true}"#,
+            r#"{"ok":true,"mock":true,"version":0}"#,
+            r#"{"ok":"true","mock":true}"#,
             r#"{"service":"another-service","version":1,"ok":true,"mock":true}"#,
         ] {
-            assert!(matches!(
-                http_reply(200, body, true).await,
-                Err(TransportError::RelayUnavailable(_))
-            ));
+            let Err(TransportError::RelayUnavailable(why)) = http_reply(200, body, true).await
+            else {
+                panic!("invalid health must be unavailable");
+            };
+            if body == r#"{"ok":true,"mock":true}"# {
+                assert_eq!(
+                    why,
+                    "The mock relay is out of date. Restart it with `just mock-relay`, then restart the app."
+                );
+            } else {
+                assert!(!why.contains("out of date"), "{why}");
+            }
         }
         assert!(matches!(
             http_reply(503, "{}", true).await,
